@@ -1,0 +1,81 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 论文项目模型
+model Project {
+  id                String    @id @default(cuid())
+  title             String
+  authors           String?   @default("Lab Member")
+  affiliations      String?   @default("农业科学研究中心，北京 100083")
+  abstract          String?   @default("")
+  keywords          String?   @default("")
+  classification    String?   @default("")
+  researchDirection String?   @default("")
+  outline           String?   @default("")
+  template          String    @default("sci") // 'sci' | 'ieee' | 'gbt7713' | 'nature'
+  lastUpdated       DateTime  @updatedAt
+  createdAt         DateTime  @default(now())
+
+  // 章节内容
+  sections          Section[]
+  // 参考文献
+  references        Reference[]
+  // 分析结果 (存储为 JSON 或 关联表)
+  analysisResults   AnalysisResult[]
+}
+
+// 章节模型
+model Section {
+  id        String   @id @default(cuid())
+  key       String   // 'introduction', 'methods', 'results', 'conclusion'
+  content   String   @default("")
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, key])
+}
+
+// 参考文献模型
+model Reference {
+  id        String   @id @default(cuid())
+  content   String
+  order     Int      @default(0)
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+// 分析结果模型
+model AnalysisResult {
+  id        String   @id @default(cuid())
+  content   String
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+// 知识库文献模型 (用于同步文件系统和数据库)
+model KnowledgeFile {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  category  String   @default("未分类")
+  size      Int
+  mtime     DateTime
+  chunks    KnowledgeChunk[]
+}
+
+// 知识库分块模型 (存储向量 RAG 信息)
+model KnowledgeChunk {
+  id        String   @id @default(cuid())
+  content   String
+  embedding String?  // 存储为 JSON 字符串，因为 SQLite 不直接支持向量类型
+  fileId    String
+  file      KnowledgeFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+}
