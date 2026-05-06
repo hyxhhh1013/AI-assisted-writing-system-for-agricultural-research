@@ -10,10 +10,24 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// 用户模型
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  name      String
+  password  String    // bcrypt hash
+  role      String    @default("user") // "user" | "admin"
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  projects  Project[]
+}
+
 // 论文项目模型
 model Project {
   id                String    @id @default(cuid())
   title             String
+  userId            String
   authors           String?   @default("Lab Member")
   affiliations      String?   @default("农业科学研究中心，北京 100083")
   abstract          String?   @default("")
@@ -25,12 +39,18 @@ model Project {
   lastUpdated       DateTime  @updatedAt
   createdAt         DateTime  @default(now())
 
+  // 关联用户
+  owner             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   // 章节内容
   sections          Section[]
   // 参考文献
   references        Reference[]
   // 分析结果 (存储为 JSON 或 关联表)
   analysisResults   AnalysisResult[]
+  // 查重检测
+  plagiarismChecks  PlagiarismCheck[]
+
+  @@index([userId])
 }
 
 // 章节模型
@@ -78,4 +98,60 @@ model KnowledgeChunk {
   embedding String?  // 存储为 JSON 字符串，因为 SQLite 不直接支持向量类型
   fileId    String
   file      KnowledgeFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+}
+
+// ==================== 查重功能模型 ====================
+
+// 查重检测会话
+model PlagiarismCheck {
+  id            String             @id @default(cuid())
+  projectId     String?            // 关联项目（可选）
+  title         String             // 检测标题
+  content       String             // 检测内容全文
+  status        String             @default("pending") // pending | processing | completed | failed
+  maxSimilarity Float              @default(0)
+  overallRisk   String             @default("low") // high | medium | low
+  createdAt     DateTime           @default(now())
+  completedAt   DateTime?
+
+  project     Project?           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  matches     PlagiarismMatch[]
+  rewrites    RewriteSuggestion[]
+}
+
+// 查重匹配结果
+model PlagiarismMatch {
+  id           String   @id @default(cuid())
+  checkId      String
+  check        PlagiarismCheck @relation(fields: [checkId], references: [id], onDelete: Cascade)
+
+  // 原文段落
+  sourceText   String           // 论文中匹配的原文段落
+  sourceOffset Int              // 在原文中的起始位置
+
+  // 匹配来源
+  matchType    String           // local（本地库）| web（联网）| cross（项目间）
+  matchedText  String           // 匹配到的外部文本
+  matchedFrom  String           // 来源名称（论文标题/URL）
+  matchedUrl   String?          // 来源链接
+
+  similarity   Float            // 相似度 0-1
+  riskLevel    String           // high | medium | low
+  createdAt    DateTime         @default(now())
+  rewrites     RewriteSuggestion[]
+}
+
+// 降重改写建议
+model RewriteSuggestion {
+  id          String   @id @default(cuid())
+  checkId     String
+  check       PlagiarismCheck @relation(fields: [checkId], references: [id], onDelete: Cascade)
+  matchId     String?
+  match       PlagiarismMatch? @relation(fields: [matchId], references: [id], onDelete: SetNull)
+
+  originalText String            // 原文
+  suggestedText String           // 改写建议
+  strategy     String            // synonym（同义替换）| rephrase（改写语序）| summarize（概括）| expand（扩写）
+  status       String            @default("pending") // pending | accepted | rejected
+  createdAt    DateTime          @default(now())
 }

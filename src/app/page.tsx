@@ -4,19 +4,31 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { BookOpen, FileText, BarChart3, Settings, Layout, Clock, ChevronRight } from "lucide-react";
+import { BookOpen, FileText, BarChart3, Settings, Layout, Clock, ChevronRight, Search, LogOut, User, Loader2 } from "lucide-react";
 import { projectStore } from "@/lib/store";
+import { useAuth } from "@/lib/auth-context";
 
 export default function Home() {
+  const { user, loading, logout } = useAuth();
   const [recentProjects, setRecentProjects] = useState<{ id: string; title: string; lastUpdated: number }[]>([]);
 
   useEffect(() => {
-    const fetchRecent = async () => {
-      const list = await projectStore.list();
-      setRecentProjects(list.slice(0, 3));
-    };
-    fetchRecent();
-  }, []);
+    if (user) {
+      const fetchRecent = async () => {
+        const list = await projectStore.list();
+        setRecentProjects(list.slice(0, 3));
+      };
+      fetchRecent();
+    }
+  }, [user]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   const tools = [
     {
@@ -37,10 +49,40 @@ export default function Home() {
       icon: <Settings className="w-6 h-6 text-primary" />,
       href: "/knowledge",
     },
+    {
+      title: "论文查重与降重",
+      description: "检测论文重复率，AI 辅助降重改写，支持本地库 + 联网比对",
+      icon: <Search className="w-6 h-6 text-primary" />,
+      href: "/plagiarism",
+    },
   ];
 
   return (
     <main className="container mx-auto px-4 py-12 max-w-6xl">
+      {/* 顶部导航 */}
+      <div className="flex justify-end items-center mb-8 gap-4">
+        {user ? (
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <User className="h-4 w-4" />
+              {user.name}
+            </div>
+            <Button variant="ghost" size="sm" onClick={logout} className="gap-2">
+              <LogOut className="h-4 w-4" /> 退出
+            </Button>
+          </div>
+        ) : (
+          <div className="flex gap-3">
+            <Link href="/login">
+              <Button variant="outline" size="sm">登录</Button>
+            </Link>
+            <Link href="/register">
+              <Button size="sm">注册</Button>
+            </Link>
+          </div>
+        )}
+      </div>
+
       <header className="mb-16 text-center">
         <h1 className="text-4xl font-extrabold tracking-tight lg:text-6xl mb-6 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
           农业科研 AI 辅助写作系统

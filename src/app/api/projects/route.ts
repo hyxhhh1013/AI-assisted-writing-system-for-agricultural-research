@@ -1,17 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/auth";
 
 type SectionRecord = Record<string, string>;
 
-// 获取所有项目
+// 获取当前用户的 userId（由 middleware.ts 设置 header）
+function getUserId(req: NextRequest): string | null {
+  return req.headers.get("x-user-id") || null;
+}
+
+// 获取所有项目（仅当前用户）
 export async function GET(req: NextRequest) {
   try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return NextResponse.json({ error: "未登录" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
     if (id) {
-      const project = await prisma.project.findUnique({
-        where: { id },
+      const project = await prisma.project.findFirst({
+        where: { id, userId },
         include: {
           sections: true,
           references: true,
@@ -23,7 +34,6 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: "项目未找到" }, { status: 404 });
       }
 
-      // 格式化输出以匹配前端原本的 ProjectData 结构
       const formattedProject = {
         ...project,
         lastUpdated: project.lastUpdated.getTime(),
@@ -41,6 +51,7 @@ export async function GET(req: NextRequest) {
     }
 
     const projects = await prisma.project.findMany({
+      where: { userId },
       orderBy: { lastUpdated: 'desc' },
       select: { id: true, title: true, lastUpdated: true }
     });
@@ -58,6 +69,11 @@ export async function GET(req: NextRequest) {
 // 创建或更新项目
 export async function POST(req: NextRequest) {
   try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return NextResponse.json({ error: "未登录" }, { status: 401 });
+    }
+
     const data = await req.json();
     const {
       id,
@@ -79,6 +95,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "标题不能为空" }, { status: 400 });
     }
 
+    // 更新时校验所有权
+    if (id) {
+      const existing = await prisma.project.findFirst({
+        where: { id, userId },
+        select: { id: true },
+      });
+      if (!existing) {
+        return NextResponse.json({ error: "项目未找到" }, { status: 404 });
+      }
+    }
+
     // upsert 逻辑
     const project = await prisma.project.upsert({
       where: { id: id || 'new-id' },
@@ -93,7 +120,6 @@ export async function POST(req: NextRequest) {
         outline,
         template,
         lastUpdated: new Date(),
-        // 处理关联数据（先删除后创建以保持同步，或者使用更精细的逻辑）
         sections: {
           deleteMany: {},
           create: Object.entries(sections || {}).map(([key, content]) => ({
@@ -117,6 +143,7 @@ export async function POST(req: NextRequest) {
       },
       create: {
         id: id || undefined,
+        userId,
         title,
         authors,
         affiliations,
@@ -156,11 +183,24 @@ export async function POST(req: NextRequest) {
 // 删除项目
 export async function DELETE(req: NextRequest) {
   try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return NextResponse.json({ error: "未登录" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
     if (!id) {
       return NextResponse.json({ error: "未指定项目ID" }, { status: 400 });
+    }
+
+    const existing = await prisma.project.findFirst({
+      where: { id, userId },
+      select: { id: true },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: "项目未找到" }, { status: 404 });
     }
 
     await prisma.project.delete({ where: { id } });

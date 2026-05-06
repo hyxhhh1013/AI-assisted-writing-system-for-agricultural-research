@@ -57,12 +57,6 @@ export const projectStore = {
       });
       if (!res.ok) return null;
       const result = await res.json();
-      
-      // 兼容逻辑：在浏览器记录当前 ID
-      if (typeof window !== "undefined") {
-        localStorage.setItem("agri_ai_current_project_id", result.id);
-      }
-      
       return result.id;
     } catch (e) {
       console.error("Store save error:", e);
@@ -90,10 +84,9 @@ export const projectStore = {
     }
   },
 
-  // 获取当前正在编辑的项目ID (保留在本地以便刷新后找回)
+  // 获取当前正在编辑的项目ID（现在由 URL 参数管理）
   getCurrentId(): string | null {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem("agri_ai_current_project_id");
+    return null;
   },
 
   getDefault(id: string = ""): ProjectData {

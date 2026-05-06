@@ -5,21 +5,23 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { 
-  Plus, FileText, Trash2, Clock, 
-  ArrowLeft, Search, MoreVertical, Layout
+import {
+  Plus, FileText, Trash2, Clock,
+  ArrowLeft, Search, MoreVertical, Layout, User, LogOut
 } from "lucide-react";
 import { projectStore } from "@/lib/store";
 import { toast } from "sonner";
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
+import { useAuth } from "@/lib/auth-context";
 
 export default function ProjectsPage() {
   const router = useRouter();
+  const { user, logout } = useAuth();
   const [projects, setProjects] = useState<{ id: string; title: string; lastUpdated: number }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -80,6 +82,17 @@ export default function ProjectsPage() {
             项目中心
           </h1>
           <div className="flex-1" />
+          {user && (
+            <div className="flex items-center gap-3 mr-4">
+              <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+                <User className="h-4 w-4" />
+                {user.name}
+              </span>
+              <Button variant="ghost" size="sm" onClick={logout}>
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
           <Button onClick={handleCreate} className="gap-2">
             <Plus className="h-4 w-4" />
             新建论文项目
