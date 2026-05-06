@@ -33,17 +33,19 @@ def load_dataframe(data_path: str):
     """自动检测文件格式和编码加载数据，支持 CSV 和 Excel"""
     import io
 
-    # XLSX/XLS → pandas read_excel
-    lower = data_path.lower()
-    if lower.endswith(".xlsx") or lower.endswith(".xls"):
-        for eng in ["openpyxl", "xlrd", None]:
-            try:
-                return pd.read_excel(data_path, engine=eng)
-            except Exception:
-                continue
+    raw = open(data_path, "rb").read()
+
+    # 检测是否是 XLSX/Excel（ZIP 文件头 PK\x03\x04），不管扩展名
+    if raw[:4] == b"PK\x03\x04":
+        import zipfile
+        if zipfile.is_zipfile(data_path):
+            for eng in ["openpyxl", "xlrd", None]:
+                try:
+                    return pd.read_excel(data_path, engine=eng)
+                except Exception:
+                    continue
 
     # CSV/TXT → 先读二进制，再按编码解码为文本，最后解析 CSV
-    raw = open(data_path, "rb").read()
 
     # 尝试所有编码，先解码文本，再用 StringIO 解析
     encodings_to_try = []
