@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
       globalContext,
       mode = "full",
       verificationFeedback: manualFeedback,
+      retrievalMode = "balanced",
       researchDirection,
     } = await req.json();
 
@@ -46,11 +47,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 1. RAG 检索
+    // 1. 根据召回精度模式设置检索参数
+    const retrievalConfigs: Record<string, { limit: number; maxPerSource: number }> = {
+      precise: { limit: 10, maxPerSource: 2 },
+      balanced: { limit: 40, maxPerSource: 4 },
+      extensive: { limit: 100, maxPerSource: 8 },
+    };
+    const { limit: ragLimit, maxPerSource: ragMaxPerSource } = retrievalConfigs[retrievalMode] || retrievalConfigs.balanced;
+
+    // 2. RAG 检索
     const searchQuery = `${title} ${context}`;
-    let contextChunks = await localRAG.search(searchQuery, 20);
+    let contextChunks = await localRAG.search(searchQuery, { limit: ragLimit, maxPerSource: ragMaxPerSource });
     if (contextChunks.length === 0) {
-      contextChunks = await localRAG.search(title, 10);
+      contextChunks = await localRAG.search(title, { limit: ragLimit, maxPerSource: Math.max(1, Math.floor(ragMaxPerSource / 2)) });
     }
 
     const refMapping: Record<string, number> = {};
@@ -99,6 +108,9 @@ export async function POST(req: NextRequest) {
 - 其他章节进度：${Object.entries(globalContext.sectionPreviews || {})
           .map(([s, p]) => `[${s}]: ${p}`)
           .join("; ")}
+	- 实验数据分析：${Array.isArray(globalContext?.analysisResults)
+    ? globalContext.analysisResults.slice(0, 3).map((r: string) => r.slice(0, 300)).join("\n")
+    : "暂无"}
 `
       : "";
 

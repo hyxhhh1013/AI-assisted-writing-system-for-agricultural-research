@@ -10,6 +10,8 @@ export const maxDuration = 120;
 const CHARTS_DIR = path.join(process.cwd(), "public", "charts");
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
 
+const PYTHON_CMD = process.env.PYTHON_CMD || (process.platform === "win32" ? "python" : "python3");
+
 // 确保图表输出目录存在
 if (!fs.existsSync(CHARTS_DIR)) {
   fs.mkdirSync(CHARTS_DIR, { recursive: true });
@@ -63,15 +65,15 @@ export async function POST(req: NextRequest) {
     const scriptName = mode === "crd" ? "plot_crd.py" : "plot_generic.py";
     const scriptPath = path.join(SCRIPTS_DIR, scriptName);
 
-    // 调 Python
+    // 调 Python（使用 shell 确保 Windows 下能找到 PATH 中的 Python）
     const result = await new Promise<{ success: boolean; error?: string }>(
       (resolve) => {
-        const proc = spawn("python3", [
+        const proc = spawn(PYTHON_CMD, [
           scriptPath,
           "--data", dataPath,
           "--config", configPath,
           "--output", outputPath,
-        ]);
+        ], { shell: process.platform === "win32" });
 
         let stdout = "";
         let stderr = "";

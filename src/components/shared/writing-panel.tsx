@@ -67,6 +67,7 @@ export function WritingPanel({
   const [selectedSectionId, setSelectedSectionId] = useState<string>("");
   const [targetSectionKey, setTargetSectionKey] = useState<string>("introduction");
   const [language, setLanguage] = useState("zh");
+  const [retrievalMode, setRetrievalMode] = useState<"precise" | "balanced" | "extensive">("balanced");
   const [context, setContext] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState<"idle" | "writing" | "verifying" | "refining" | "completed">("idle");
@@ -277,10 +278,12 @@ export function WritingPanel({
           template: project.template,
           existingReferences: project.references || [],
           researchDirection: project.researchDirection,
+          retrievalMode,
           globalContext: {
             abstract: project.abstract,
             outline: project.outline,
-            sectionPreviews
+            sectionPreviews,
+            analysisResults: project.analysisResults || []
           }
         }),
       });
@@ -414,9 +417,9 @@ export function WritingPanel({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <div className="space-y-1.5">
-                <Label className="text-xs">存储至章节（随左侧结构同步，可改）</Label>
+                <Label className="text-xs">存储至章节</Label>
                 <Select onValueChange={(val) => setTargetSectionKey(val || "")} value={targetSectionKey}>
                   <SelectTrigger className="text-xs h-8">
                     <SelectValue placeholder="目标章节" />
@@ -440,6 +443,20 @@ export function WritingPanel({
                   <SelectContent>
                     <SelectItem value="zh" className="text-xs">中文</SelectItem>
                     <SelectItem value="en" className="text-xs">英文</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">文献召回精度</Label>
+                <Select onValueChange={(val) => setRetrievalMode(val as any || "balanced")} value={retrievalMode}>
+                  <SelectTrigger className="text-xs h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="precise" className="text-xs">精确（5篇 / 低成本）</SelectItem>
+                    <SelectItem value="balanced" className="text-xs">平衡（20篇 / ~¥0.02）</SelectItem>
+                    <SelectItem value="extensive" className="text-xs">广泛（50篇 / ~¥0.05）</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
