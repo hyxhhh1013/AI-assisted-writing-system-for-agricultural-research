@@ -49,6 +49,10 @@ model Project {
   analysisResults   AnalysisResult[]
   // 查重检测
   plagiarismChecks  PlagiarismCheck[]
+  // 引用-文献映射
+  referenceSources  ReferenceSource[]
+  // 图表元数据（JSON 字符串）
+  charts            String?
 
   @@index([userId])
 }
@@ -154,4 +158,22 @@ model RewriteSuggestion {
   strategy     String            // synonym（同义替换）| rephrase（改写语序）| summarize（概括）| expand（扩写）
   status       String            @default("pending") // pending | accepted | rejected
   createdAt    DateTime          @default(now())
+}
+
+// ==================== 引用-文献映射 ====================
+
+// 论文中 [N] 引用编号到知识库文献源的映射，用于前端溯源查看原文
+model ReferenceSource {
+  id            String   @id @default(cuid())
+  projectId     String
+  refIndex      Int      // 引用编号 [1], [2]...
+  sourceName    String   // RAG 源文件名（如 "2023_Zhang_et_al.pdf"）
+  category      String   // 文献分类
+  citation      String   // 格式化引用文字
+  createdAt     DateTime @default(now())
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@unique([projectId, refIndex])
 }

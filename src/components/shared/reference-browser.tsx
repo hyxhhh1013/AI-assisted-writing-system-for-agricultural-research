@@ -1,13 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import {
   Popover,
   PopoverPopup,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { BookOpen, ChevronDown, ChevronRight, Quote } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, Quote, FileText, Loader2 } from "lucide-react";
 
 const CITATION_GROUP_RE = /\[([0-9,\s\-–—]+)\]/g;
 
@@ -47,36 +47,16 @@ function collectUsedNumbers(text: string, refCount: number): Set<number> {
   return set;
 }
 
-/** 提取引用行预览：取前 60-70 字符展示作者+标题开头 */
 function getRefPreview(ref: string): string {
   const cleaned = ref.replace(/^\[\d+\]\s*/, "").trim();
-  // 按句子/逗号边界取前 65 字符
   const boundary = cleaned.search(/[。；;]\s*/);
   const cut = boundary > 10 && boundary < 65 ? boundary + 1 : 65;
   return cleaned.length > cut ? cleaned.slice(0, cut) + " ..." : cleaned;
 }
 
-/** 从章节内容中提取 [N] 所在段落及上下文 */
-function findCitationContexts(
-  content: string,
-  citeNum: number,
-): { paragraph: string; index: number }[] {
-  if (!content) return [];
-  const results: { paragraph: string; index: number }[] = [];
-  const paragraphs = content.split(/\n\n+/);
-  const re = new RegExp(`\\[${citeNum}(?:[,\\s\\-–—\\d]*)\\]`);
-  for (const para of paragraphs) {
-    if (re.test(para)) {
-      // 截取引用前后最多 200 字符作为上下文
-      const matchIdx = para.search(re);
-      if (matchIdx === -1) continue;
-      const start = Math.max(0, matchIdx - 80);
-      const end = Math.min(para.length, matchIdx + 120);
-      const snippet = (start > 0 ? "…" : "") + para.slice(start, end) + (end < para.length ? "…" : "");
-      results.push({ paragraph: snippet, index: results.length });
-    }
-  }
-  return results;
+interface LiteratureChunk {
+  content: string;
+  index: number;
 }
 
 interface ReferenceBrowserProps {
@@ -93,6 +73,8 @@ export function ReferenceBrowser({
   className,
 }: ReferenceBrowserProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [loadingSource, setLoadingSource] = useState<number | null>(null);
+  const [sourceChunks, setSourceChunks] = useState<Record<number, LiteratureChunk[]>>({});
 
   const usedInSection = useMemo(
     () => collectUsedNumbers(activeSectionContent || "", references.length),
@@ -101,11 +83,44 @@ export function ReferenceBrowser({
 
   const usedInPaper = useMemo(() => {
     if (!allContents) return usedInSection;
-    const all = Object.values(allContents)
-      .filter(Boolean)
-      .join("\n\n");
+    const all = Object.values(allContents).filter(Boolean).join("\n\n");
     return collectUsedNumbers(all, references.length);
   }, [allContents, references.length, usedInSection]);
+
+  const fetchSourceContent = useCallback(async (num: number, refText: string) => {
+    if (sourceChunks[num]) return; // 已加载
+
+    setLoadingSource(num);
+    try {
+      // 从引用文字中提取关键词，搜索知识库
+      const keywords = refText
+        .replace(/\[\d+\]\s*/, "")
+        .split(/[,;，；]/)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 5)
+        .slice(0, 3)
+        .join(" ");
+
+      if (!keywords) {
+        setSourceChunks((prev) => ({ ...prev, [num]: [] }));
+        return;
+      }
+
+      const res = await fetch(`/api/knowledge?q=${encodeURIComponent(keywords)}&type=semantic&pageSize=5`);
+      const data = await res.json();
+      const chunks: LiteratureChunk[] = (data.files || []).flatMap((f: any) =>
+        (f._snippets || []).map((s: string, i: number) => ({
+          content: s,
+          index: i + 1,
+        }))
+      );
+      setSourceChunks((prev) => ({ ...prev, [num]: chunks }));
+    } catch {
+      setSourceChunks((prev) => ({ ...prev, [num]: [] }));
+    } finally {
+      setLoadingSource(null);
+    }
+  }, [sourceChunks]);
 
   if (references.length === 0) {
     return (
@@ -141,11 +156,12 @@ export function ReferenceBrowser({
             const isUsedInSection = usedInSection.has(num);
             const isUsedInPaper = usedInPaper.has(num);
             const label = getRefPreview(ref);
-            const contexts = findCitationContexts(activeSectionContent || "", num);
+            const chunks = sourceChunks[num];
 
             return (
               <Popover key={idx}>
                 <PopoverTrigger
+                  onClick={() => fetchSourceContent(num, ref)}
                   className={cn(
                     "w-full text-left px-2 py-1.5 rounded-md text-[11px] leading-snug transition-colors flex items-start gap-2 border border-transparent",
                     isUsedInSection
@@ -165,7 +181,7 @@ export function ReferenceBrowser({
                   </span>
                   <span className="truncate">{label}</span>
                 </PopoverTrigger>
-                <PopoverPopup className="w-[28rem]">
+                <PopoverPopup className="w-[32rem]">
                   <div className="space-y-3 max-h-[70vh] overflow-y-auto">
                     {/* 引用来源 */}
                     <div>
@@ -173,58 +189,41 @@ export function ReferenceBrowser({
                         <span className="text-xs font-bold text-muted-foreground">
                           参考文献 [{num}]
                         </span>
-                        {isUsedInSection && (
-                          <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">
-                            当前章节引用
-                          </span>
-                        )}
                       </div>
                       <p className="text-xs leading-relaxed text-foreground bg-muted/20 p-2 rounded-md">
                         {ref}
                       </p>
                     </div>
 
-                    {/* 引用段落上下文 */}
-                    {contexts.length > 0 && (
-                      <div className="border-t pt-2">
-                        <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-1 mb-1.5">
-                          <Quote className="h-3 w-3" />
-                          文中引用位置
-                        </span>
+                    {/* 知识库原文 */}
+                    <div className="border-t pt-2">
+                      <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-1 mb-1.5">
+                        <FileText className="h-3 w-3" />
+                        知识库原文
+                      </span>
+
+                      {loadingSource === num ? (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground py-4">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          检索文献原文...
+                        </div>
+                      ) : chunks && chunks.length > 0 ? (
                         <div className="space-y-2">
-                          {contexts.map((ctx, ci) => (
+                          {chunks.map((chunk, ci) => (
                             <div
                               key={ci}
-                              className="text-[11px] leading-relaxed text-foreground bg-amber-50 border border-amber-200 rounded-md p-2.5"
+                              className="text-[11px] leading-relaxed text-foreground bg-green-50 border border-green-200 rounded-md p-2.5"
                             >
-                              {ctx.paragraph.split(/(\[[\d,\s\-–—]+\])/g).map((part, pi) => {
-                                const isCite = /^\[[\d,\s\-–—]+\]$/.test(part);
-                                const matchesOwn = new RegExp(`\\[${num}(?:[,\\s\\-–—\\d]*)\\]`).test(part);
-                                return isCite ? (
-                                  <span
-                                    key={pi}
-                                    className={cn(
-                                      "font-bold",
-                                      matchesOwn ? "text-blue-600" : "text-gray-400",
-                                    )}
-                                  >
-                                    {part}
-                                  </span>
-                                ) : (
-                                  <span key={pi}>{part}</span>
-                                );
-                              })}
+                              {chunk.content}
                             </div>
                           ))}
                         </div>
-                      </div>
-                    )}
-
-                    {!isUsedInSection && isUsedInPaper && contexts.length === 0 && (
-                      <p className="text-[10px] text-muted-foreground italic border-t pt-2">
-                        该文献在其他章节被引用
-                      </p>
-                    )}
+                      ) : (
+                        <p className="text-[10px] text-muted-foreground italic">
+                          暂未在知识库中找到匹配文献原文
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </PopoverPopup>
               </Popover>

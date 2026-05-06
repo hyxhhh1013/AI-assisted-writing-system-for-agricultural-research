@@ -6,11 +6,12 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Upload, FileSpreadsheet, Send, Copy, Table as TableIcon, BarChart3, Save } from "lucide-react";
+import { Loader2, Upload, FileSpreadsheet, Send, Copy, Table as TableIcon, BarChart3, Save, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
 import { projectStore, ProjectData } from "@/lib/store";
+import { ChartPanel } from "@/components/shared/chart-panel";
 
 interface AnalysisPanelProps {
   projectId: string;
@@ -223,6 +224,28 @@ export function AnalysisPanel({ projectId, project, onSave }: AnalysisPanelProps
             )}
           </CardContent>
         </Card>
+
+        {/* 图表生成 */}
+        {dataSummary && projectId && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-bold flex items-center">
+                <ImageIcon className="mr-2 h-4 w-4 text-primary" /> 数据可视化图表
+              </CardTitle>
+              <CardDescription className="text-xs">
+                基于上传数据生成图表，可插入论文章节。
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartPanel
+                projectId={projectId}
+                onInsertToPaper={(imageBase64, caption) => {
+                  toast.success(`图表「${caption}」已生成，可手动复制到论文章节`);
+                }}
+              />
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

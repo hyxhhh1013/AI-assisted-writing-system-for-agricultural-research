@@ -86,6 +86,19 @@ const renderMarkdown = (content: string, sectionNumber?: number, compact = false
       continue;
     }
 
+    // 图片标记 ![caption](base64data)
+    const imgMatch = line.match(/^!\[([^\]]*)\]\(data:image\/([^;]+);base64,([^)]+)\)$/);
+    if (imgMatch) {
+      flushParagraph();
+      flushList();
+      const caption = inlineMarkdown(imgMatch[1] || "");
+      html.push(`<figure style="text-align:center;margin:16px 0;">
+        <img src="data:image/${imgMatch[2]};base64,${imgMatch[3]}" alt="${caption}" style="max-width:90%;height:auto;border:1px solid #eee;border-radius:4px;" />
+        ${caption ? `<figcaption style="margin-top:6px;font-size:9pt;color:#555;">${caption}</figcaption>` : ""}
+      </figure>`);
+      continue;
+    }
+
     const bullet = line.match(/^[-*]\s+(.+)$/);
     if (bullet) {
       flushParagraph();
