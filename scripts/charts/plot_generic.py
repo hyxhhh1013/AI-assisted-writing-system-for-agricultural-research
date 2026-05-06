@@ -36,14 +36,27 @@ def load_dataframe(data_path: str):
     raw = open(data_path, "rb").read()
 
     # 检测是否是 XLSX/Excel（ZIP 文件头 PK\x03\x04），不管扩展名
-    if raw[:4] == b"PK\x03\x04":
+    if raw[:2] == b"PK":
         import zipfile
-        if zipfile.is_zipfile(data_path):
-            for eng in ["openpyxl", "xlrd", None]:
-                try:
-                    return pd.read_excel(data_path, engine=eng)
-                except Exception:
-                    continue
+        # 直接尝试所有 Excel 引擎
+        for eng in ["openpyxl", "xlrd", None]:
+            try:
+                return pd.read_excel(data_path, engine=eng)
+            except Exception:
+                continue
+        # 如果 read_excel 都失败，尝试从 ZIP 中提取 CSV
+        try:
+            with zipfile.ZipFile(data_path) as z:
+                csv_files = [n for n in z.namelist() if n.endswith(".csv")]
+                if csv_files:
+                    with z.open(csv_files[0]) as f:
+                        return pd.read_csv(f)
+        except Exception:
+            pass
+        # 确实是 ZIP 但无法解析，继续尝试 CSV 路径可能浪费，先报错
+        raise ValueError(
+            f"文件是 ZIP/Excel 格式但无法解析，请确认文件为有效的 .xlsx 文件"
+        )
 
     # CSV/TXT → 先读二进制，再按编码解码为文本，最后解析 CSV
 
