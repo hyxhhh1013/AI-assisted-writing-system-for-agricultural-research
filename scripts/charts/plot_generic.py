@@ -32,19 +32,19 @@ plt.rcParams["axes.unicode_minus"] = False
 def load_dataframe(data_path: str):
     """自动检测文件格式和编码加载数据，支持 CSV 和 Excel"""
     import io
+    import zipfile
 
     raw = open(data_path, "rb").read()
 
-    # 检测是否是 XLSX/Excel（ZIP 文件头 PK\x03\x04），不管扩展名
-    if raw[:2] == b"PK":
-        import zipfile
-        # 直接尝试所有 Excel 引擎
+    # ===== 策略 1: 作为 Excel 打开 =====
+    is_zip = raw[:2] == b"PK"
+    if is_zip:
         for eng in ["openpyxl", "xlrd", None]:
             try:
                 return pd.read_excel(data_path, engine=eng)
             except Exception:
                 continue
-        # 如果 read_excel 都失败，尝试从 ZIP 中提取 CSV
+        # Excel 引擎失败，从 ZIP 提 CSV
         try:
             with zipfile.ZipFile(data_path) as z:
                 csv_files = [n for n in z.namelist() if n.endswith(".csv")]
@@ -53,51 +53,49 @@ def load_dataframe(data_path: str):
                         return pd.read_csv(f)
         except Exception:
             pass
-        # 确实是 ZIP 但无法解析，继续尝试 CSV 路径可能浪费，先报错
-        raise ValueError(
-            f"文件是 ZIP/Excel 格式但无法解析，请确认文件为有效的 .xlsx 文件"
-        )
 
-    # CSV/TXT → 先读二进制，再按编码解码为文本，最后解析 CSV
+    # ===== 策略 2: 作为 CSV/文本 =====
+    # 先尝试用 latin-1 解码（可以解码任何字节，保证后续 CSV 解析能看到原始内容）
+    text = raw.decode("latin-1")
 
-    # 尝试所有编码，先解码文本，再用 StringIO 解析
-    encodings_to_try = []
-    # 检测 BOM
-    if raw[:3] == b"\xef\xbb\xbf":
-        encodings_to_try = ["utf-8-sig", "gbk", "gb2312", "latin-1"]
-    elif raw[:2] in (b"\xff\xfe", b"\xfe\xff"):
-        encodings_to_try = ["utf-16", "utf-8", "gbk"]
-    else:
-        encodings_to_try = ["utf-8", "gbk", "gb2312", "latin-1", "utf-16"]
-
-    for encoding in encodings_to_try:
+    # 多个分隔符自动检测
+    for sep in [",", "\t", ";", "|", " "]:
         try:
-            text = raw.decode(encoding)
-        except (UnicodeDecodeError, LookupError):
-            continue
-
-        # 对已正确解码的文本，尝试多种分隔符
-        for sep in [",", "\t", ";", "|", " "]:
-            try:
-                df = pd.read_csv(io.StringIO(text), sep=sep)
-                if len(df.columns) >= 1 and len(df) > 0:
-                    return df
-            except Exception:
-                continue
-
-        # 如果编码对了但分隔符都不行，再试无头模式
-        try:
-            df = pd.read_csv(io.StringIO(text), sep=None, engine="python")
+            df = pd.read_csv(io.StringIO(text), sep=sep)
             if len(df.columns) >= 1 and len(df) > 0:
                 return df
         except Exception:
             continue
 
-    # 全部失败 → 输出文件头信息帮助诊断
-    preview = raw[:200]
+    # 自动检测分隔符
+    try:
+        df = pd.read_csv(io.StringIO(text), sep=None, engine="python")
+        if len(df.columns) >= 1 and len(df) > 0:
+            return df
+    except Exception:
+        continue
+
+    # ===== 策略 3: 按编码解码重试（针对非 latin-1 编码的文本） =====
+    for encoding in ["utf-8-sig", "utf-8", "gbk", "gb2312", "utf-16"]:
+        try:
+            decoded = raw.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+        if decoded == text:
+            continue  # 和 latin-1 结果一样，跳过
+        for sep in [",", "\t", ";", "|", " "]:
+            try:
+                df = pd.read_csv(io.StringIO(decoded), sep=sep)
+                if len(df.columns) >= 1 and len(df) > 0:
+                    return df
+            except Exception:
+                continue
+
+    # ===== 全部失败 =====
+    hint = "ZIP/Excel" if is_zip else "CSV"
+    preview = raw[:120]
     raise ValueError(
-        f"无法读取数据文件。已尝试编码: {encodings_to_try}。"
-        f"文件前200字节: {preview!r}"
+        f"无法以 {hint} 格式读取文件。前120字节: {preview!r}"
     )
 
 
