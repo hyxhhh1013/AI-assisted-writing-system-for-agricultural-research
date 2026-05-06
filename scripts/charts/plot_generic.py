@@ -31,6 +31,8 @@ plt.rcParams["axes.unicode_minus"] = False
 
 def load_dataframe(data_path: str):
     """自动检测文件格式和编码加载数据，支持 CSV 和 Excel"""
+    import io
+
     # XLSX/XLS → pandas read_excel
     lower = data_path.lower()
     if lower.endswith(".xlsx") or lower.endswith(".xls"):
@@ -40,42 +42,52 @@ def load_dataframe(data_path: str):
             except Exception:
                 continue
 
-    # CSV/TXT → 尝试多种编码和分隔符
-    import io
+    # CSV/TXT → 先读二进制，再按编码解码为文本，最后解析 CSV
     raw = open(data_path, "rb").read()
 
-    # 检测 BOM 并解码
-    for bom, encoding in [(b"\xef\xbb\xbf", "utf-8-sig"), (b"\xff\xfe", "utf-16"), (b"\xfe\xff", "utf-16-be")]:
-        if raw.startswith(bom):
-            text = raw.decode(encoding)
-            for sep in [",", "\t", ";"]:
-                try:
-                    df = pd.read_csv(io.StringIO(text), sep=sep)
-                    if len(df.columns) >= 1:
-                        return df
-                except Exception:
-                    continue
+    # 尝试所有编码，先解码文本，再用 StringIO 解析
+    encodings_to_try = []
+    # 检测 BOM
+    if raw[:3] == b"\xef\xbb\xbf":
+        encodings_to_try = ["utf-8-sig", "gbk", "gb2312", "latin-1"]
+    elif raw[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        encodings_to_try = ["utf-16", "utf-8", "gbk"]
+    else:
+        encodings_to_try = ["utf-8", "gbk", "gb2312", "latin-1", "utf-16"]
 
-    # 尝试多种编码 + 分隔符组合
-    for encoding in ["utf-8", "gbk", "gb2312", "latin-1", "utf-16"]:
-        for sep in [",", "\t", ";"]:
+    for encoding in encodings_to_try:
+        try:
+            text = raw.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+
+        # 对已正确解码的文本，尝试多种分隔符
+        for sep in [",", "\t", ";", "|"]:
             try:
-                df = pd.read_csv(data_path, encoding=encoding, sep=sep)
-                if len(df.columns) >= 1:
-                    return df
+                df = pd.read_csv(io.StringIO(text), sep=sep)
+                # 验证：至少有一列且行数 > 0
+                if len(df.columns) >= 1 and len(df) > 0:
+                    # 额外检查：至少有一个数值列或有明确的标题行
+                    numeric_count = sum(
+                        pd.api.types.is_numeric_dtype(df[c]) for c in df.columns
+                    )
+                    if numeric_count >= 1 or len(df.columns) >= 2:
+                        return df
             except Exception:
                 continue
 
-    # 最后尝试：读取为无头 CSV
-    for encoding in ["utf-8", "gbk", "latin-1"]:
+        # 如果编码对了但分隔符都不行，再试无头模式
         try:
-            df = pd.read_csv(data_path, encoding=encoding, header=None)
-            if len(df.columns) >= 1:
+            df = pd.read_csv(io.StringIO(text), sep=None, engine="python")
+            if len(df.columns) >= 1 and len(df) > 0:
                 return df
         except Exception:
             continue
 
-    raise ValueError(f"无法读取数据文件，请确认文件为 CSV 或 Excel 格式（支持 UTF-8/GBK 编码）")
+    raise ValueError(
+        f"无法读取数据文件。已尝试编码: {encodings_to_try}。"
+        "请确认文件为 CSV 或 Excel 格式（支持 UTF-8/GBK 编码）"
+    )
 
 
 def plot_chart(data_path: str, config: dict, output_path: str):
