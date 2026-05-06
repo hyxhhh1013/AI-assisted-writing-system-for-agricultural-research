@@ -62,17 +62,11 @@ def load_dataframe(data_path: str):
             continue
 
         # 对已正确解码的文本，尝试多种分隔符
-        for sep in [",", "\t", ";", "|"]:
+        for sep in [",", "\t", ";", "|", " "]:
             try:
                 df = pd.read_csv(io.StringIO(text), sep=sep)
-                # 验证：至少有一列且行数 > 0
                 if len(df.columns) >= 1 and len(df) > 0:
-                    # 额外检查：至少有一个数值列或有明确的标题行
-                    numeric_count = sum(
-                        pd.api.types.is_numeric_dtype(df[c]) for c in df.columns
-                    )
-                    if numeric_count >= 1 or len(df.columns) >= 2:
-                        return df
+                    return df
             except Exception:
                 continue
 
@@ -84,9 +78,11 @@ def load_dataframe(data_path: str):
         except Exception:
             continue
 
+    # 全部失败 → 输出文件头信息帮助诊断
+    preview = raw[:200]
     raise ValueError(
         f"无法读取数据文件。已尝试编码: {encodings_to_try}。"
-        "请确认文件为 CSV 或 Excel 格式（支持 UTF-8/GBK 编码）"
+        f"文件前200字节: {preview!r}"
     )
 
 
