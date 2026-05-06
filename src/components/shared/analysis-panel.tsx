@@ -40,17 +40,30 @@ export function AnalysisPanel({ projectId, project, onSave }: AnalysisPanelProps
 
     if (file.name.endsWith(".csv")) {
       reader.onload = (event) => {
-        const text = event.target?.result as string;
+        // 用 TextDecoder 检测编码（支持 UTF-8 BOM 和 GBK）
+        const buf = event.target?.result as ArrayBuffer;
+        const bytes = new Uint8Array(buf);
+        let text: string;
+        if (bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+          text = new TextDecoder("utf-8").decode(bytes); // UTF-8 BOM
+        } else {
+          try {
+            text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+          } catch {
+            // 尝试 GBK 解码
+            text = new TextDecoder("gbk").decode(bytes);
+          }
+        }
         Papa.parse(text, {
           header: true,
           complete: (results) => {
             const summary = JSON.stringify(results.data.slice(0, 15), null, 2);
             setDataSummary(summary);
-            toast.success("CSV 解析成功，已提取数据摘要");
+            toast.success("CSV 解析成功（" + (text.includes("�") ? "GBK" : "UTF-8") + " 编码）");
           },
         });
       };
-      reader.readAsText(file);
+      reader.readAsArrayBuffer(file);
     } else if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
       reader.onload = (event) => {
         const data = new Uint8Array(event.target?.result as ArrayBuffer);

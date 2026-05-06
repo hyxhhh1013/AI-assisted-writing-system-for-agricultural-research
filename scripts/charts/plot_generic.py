@@ -29,21 +29,57 @@ plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
 
-def plot_chart(data_path: str, config: dict, output_path: str):
-    # 尝试多种编码和分隔符
-    df = None
-    for encoding in ["utf-8", "utf-8-sig", "gbk", "gb2312", "latin-1"]:
+def load_dataframe(data_path: str):
+    """自动检测文件格式和编码加载数据，支持 CSV 和 Excel"""
+    # XLSX/XLS → pandas read_excel
+    lower = data_path.lower()
+    if lower.endswith(".xlsx") or lower.endswith(".xls"):
+        for eng in ["openpyxl", "xlrd", None]:
+            try:
+                return pd.read_excel(data_path, engine=eng)
+            except Exception:
+                continue
+
+    # CSV/TXT → 尝试多种编码和分隔符
+    import io
+    raw = open(data_path, "rb").read()
+
+    # 检测 BOM 并解码
+    for bom, encoding in [(b"\xef\xbb\xbf", "utf-8-sig"), (b"\xff\xfe", "utf-16"), (b"\xfe\xff", "utf-16-be")]:
+        if raw.startswith(bom):
+            text = raw.decode(encoding)
+            for sep in [",", "\t", ";"]:
+                try:
+                    df = pd.read_csv(io.StringIO(text), sep=sep)
+                    if len(df.columns) >= 1:
+                        return df
+                except Exception:
+                    continue
+
+    # 尝试多种编码 + 分隔符组合
+    for encoding in ["utf-8", "gbk", "gb2312", "latin-1", "utf-16"]:
         for sep in [",", "\t", ";"]:
             try:
                 df = pd.read_csv(data_path, encoding=encoding, sep=sep)
-                if len(df.columns) > 1:
-                    break
+                if len(df.columns) >= 1:
+                    return df
             except Exception:
                 continue
-        if df is not None and len(df.columns) > 1:
-            break
-    if df is None or len(df.columns) == 0:
-        df = pd.read_csv(data_path)  # 最后尝试默认方式
+
+    # 最后尝试：读取为无头 CSV
+    for encoding in ["utf-8", "gbk", "latin-1"]:
+        try:
+            df = pd.read_csv(data_path, encoding=encoding, header=None)
+            if len(df.columns) >= 1:
+                return df
+        except Exception:
+            continue
+
+    raise ValueError(f"无法读取数据文件，请确认文件为 CSV 或 Excel 格式（支持 UTF-8/GBK 编码）")
+
+
+def plot_chart(data_path: str, config: dict, output_path: str):
+    df = load_dataframe(data_path)
     chart_type = config.get("chart_type", "bar")
     title = config.get("title", "")
     x_col = config.get("x_column")
