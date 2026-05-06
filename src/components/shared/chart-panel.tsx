@@ -49,6 +49,13 @@ export function ChartPanel({ projectId, onInsertToPaper }: ChartPanelProps) {
   } | null>(null);
   const [columns, setColumns] = useState<string[]>([]);
 
+  /** 检测是否是 XRD 数据（Angle + Intensity 列） */
+  const detectXRD = (cols: string[]): boolean => {
+    const hasAngle = cols.some(c => /^angle|2theta|2θ|twotheta/i.test(c.trim()));
+    const hasIntensity = cols.some(c => /^intensity|counts|强度/i.test(c.trim()));
+    return hasAngle && hasIntensity;
+  };
+
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -57,23 +64,33 @@ export function ChartPanel({ projectId, onInsertToPaper }: ChartPanelProps) {
     setResult(null);
     setTitle(f.name.replace(/\.[^.]+$/, ""));
 
-    // 尝试读取 CSV 列名以填充 X/Y 下拉
-    if (f.name.endsWith(".csv")) {
-      try {
+    // 尝试读取列名
+    let cols: string[] = [];
+    try {
+      // 支持 CSV 和 XLSX 的列名读取
+      if (f.name.match(/\.(csv|tsv|txt)$/i)) {
         const text = await f.text();
         const firstLine = text.split("\n")[0];
         if (firstLine) {
-          const cols = firstLine
-            .split(/[,\t]/)
-            .map((c) => c.trim().replace(/^"|"$/g, ""))
-            .filter(Boolean);
-          if (cols.length >= 2) {
-            setColumns(cols);
-            setXCol(cols[0]);
-            setYCol(cols[1]);
-          }
+          cols = firstLine.split(/[,\t]/).map((c) => c.trim().replace(/^"|"$/g, "")).filter(Boolean);
         }
-      } catch {}
+      }
+    } catch {}
+
+    if (cols.length >= 2) {
+      setColumns(cols);
+      const isXRD = detectXRD(cols);
+      // XRD 数据：自动切到 CRD 模式
+      if (isXRD) {
+        setMode("crd");
+        setChartType("line");
+        setXCol("");
+        setYCol("");
+      } else {
+        setChartType("line");
+        setXCol(cols[0]);
+        setYCol(cols[1]);
+      }
     }
   };
 

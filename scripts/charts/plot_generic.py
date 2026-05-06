@@ -103,7 +103,7 @@ def load_dataframe(data_path: str):
 
 def plot_chart(data_path: str, config: dict, output_path: str):
     df = load_dataframe(data_path)
-    chart_type = config.get("chart_type", "bar")
+    chart_type = config.get("chart_type", "line")
     title = config.get("title", "")
     x_col = config.get("x_column")
     y_col = config.get("y_column")
