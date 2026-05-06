@@ -73,7 +73,7 @@ def load_dataframe(data_path: str):
         if len(df.columns) >= 1 and len(df) > 0:
             return df
     except Exception:
-        continue
+        pass
 
     # ===== 策略 3: 按编码解码重试（针对非 latin-1 编码的文本） =====
     for encoding in ["utf-8-sig", "utf-8", "gbk", "gb2312", "utf-16"]:
