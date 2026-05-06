@@ -17,6 +17,7 @@ config JSON 格式:
 import argparse
 import json
 import sys
+import traceback
 
 import matplotlib
 matplotlib.use("Agg")
@@ -29,7 +30,20 @@ plt.rcParams["axes.unicode_minus"] = False
 
 
 def plot_chart(data_path: str, config: dict, output_path: str):
-    df = pd.read_csv(data_path)
+    # 尝试多种编码和分隔符
+    df = None
+    for encoding in ["utf-8", "utf-8-sig", "gbk", "gb2312", "latin-1"]:
+        for sep in [",", "\t", ";"]:
+            try:
+                df = pd.read_csv(data_path, encoding=encoding, sep=sep)
+                if len(df.columns) > 1:
+                    break
+            except Exception:
+                continue
+        if df is not None and len(df.columns) > 1:
+            break
+    if df is None or len(df.columns) == 0:
+        df = pd.read_csv(data_path)  # 最后尝试默认方式
     chart_type = config.get("chart_type", "bar")
     title = config.get("title", "")
     x_col = config.get("x_column")
@@ -96,5 +110,8 @@ if __name__ == "__main__":
     try:
         plot_chart(args.data, cfg, args.output)
     except Exception as e:
-        print(json.dumps({"status": "error", "message": str(e)}))
+        err_msg = json.dumps({"status": "error", "message": str(e)})
+        print(err_msg)  # to stdout (captured by API)
+        print(err_msg, file=sys.stderr)  # to stderr (also captured)
+        sys.stderr.flush()
         sys.exit(1)

@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
           if (code !== 0) {
             resolve({
               success: false,
-              error: stderr || `Python 进程退出码 ${code}`,
+              error: stderr || stdout || `Python 进程退出码 ${code}`,
             });
           } else {
             resolve({ success: true });
