@@ -46,6 +46,11 @@ next-env.d.ts
 /data/
 prisma/dev.db
 prisma/dev.db-journal
+prisma/dev.db-shm
+prisma/dev.db-wal
+
+# python
+__pycache__/
 
 # PDF knowledge base (large binaries)
 /热化学小组文章-2024.12.27/
