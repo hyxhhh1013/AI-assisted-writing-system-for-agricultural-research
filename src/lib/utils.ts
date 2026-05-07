@@ -94,5 +94,20 @@ export function parseOutline(markdown: string): OutlineSection[] {
     sections.push(currentSection);
   }
 
+  // 如果标题解析失败（可能纯文本格式），按空行分段作为任务
+  if (sections.length === 0 && markdown.trim()) {
+    const paragraphs = markdown.split(/\n\s*\n/).filter(p => p.trim().length > 20);
+    paragraphs.forEach((p, i) => {
+      const firstLine = p.trim().split("\n")[0].replace(/^[#*\-\s]+/, "").slice(0, 60);
+      sections.push({
+        id: `para-${i}`,
+        title: firstLine || `章节 ${i + 1}`,
+        level: 2,
+        content: p.trim(),
+        fullPath: firstLine || `章节 ${i + 1}`,
+      });
+    });
+  }
+
   return sections;
 }

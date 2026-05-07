@@ -1,26 +1,19 @@
 "use client";
 
-import { useState, useEffect, Suspense, useRef } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { 
-  ArrowLeft, Languages, Loader2, Copy, Sparkles, 
-  BookOpen, Search, RefreshCw, ChevronLeft, ChevronRight 
+import {
+  ArrowLeft, Languages, Loader2, Copy, Sparkles,
+  ChevronLeft, ChevronRight
 } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
-} from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { ChatPanel } from "@/components/shared/chat-panel";
+import { AnnotatedText } from "@/components/shared/annotated-text";
+import { loadAnnotations, type Annotation } from "@/lib/annotations-store";
 
 // 动态导入 PDFViewer，关闭 SSR 以避免 pdfjs-dist 的 Node.js 依赖问题
 const PDFViewer = dynamic(() => import("@/components/pdf-viewer"), {
@@ -43,22 +36,17 @@ function ReaderContent() {
   const [currentTranslationIndex, setCurrentTranslationIndex] = useState(-1);
   const [isTranslating, setIsTranslating] = useState(false);
 
-  // 文献分析相关状态
-  const [activeTab, setActiveTab] = useState("translate");
-  const [analysisResult, setAnalysisResult] = useState("");
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisMode, setAnalysisMode] = useState<"full" | "chunk">("full");
-  const [currentChunk, setCurrentChunk] = useState(0);
-  const [totalChunks, setTotalChunks] = useState(0);
+  const [activeTab, setActiveTab] = useState("chat");
   const [currentPage, setCurrentPage] = useState(1);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  // 标注状态
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
 
-  // 自动滚动到底部
+  // 加载标注（按文件名分组）
   useEffect(() => {
-    if (scrollRef.current && isAnalyzing) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (filename) {
+      setAnnotations(loadAnnotations(filename));
     }
-  }, [analysisResult, isAnalyzing]);
+  }, [filename]);
 
   useEffect(() => {
     if (filename) {
@@ -133,68 +121,6 @@ function ReaderContent() {
     }
   };
 
-  const handleAnalyze = async (chunkIdx = 0, modeOverride?: "full" | "chunk") => {
-    if (!filename) return;
-    const mode = modeOverride || analysisMode;
-    setIsAnalyzing(true);
-    setAnalysisResult("");
-    setCurrentChunk(chunkIdx);
-    setAnalysisMode(mode);
-
-    try {
-      const response = await fetch("/api/knowledge/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename, chunkIndex: chunkIdx, mode }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "分析失败");
-      }
-
-      // 获取分页信息
-      const total = response.headers.get('X-Total-Chunks');
-      if (total) setTotalChunks(parseInt(total));
-      const respMode = response.headers.get('X-Analysis-Mode') as "full" | "chunk";
-      if (respMode) setAnalysisMode(respMode);
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            const trimmedLine = line.trim();
-            if (!trimmedLine || trimmedLine === "data: [DONE]") continue;
-
-            if (trimmedLine.startsWith("data:")) {
-              try {
-                const data = JSON.parse(trimmedLine.slice(5).trim());
-                const content = data.choices[0]?.delta?.content || "";
-                setAnalysisResult((prev) => prev + content);
-              } catch (e) {
-                console.error("Error parsing analysis chunk:", e);
-              }
-            }
-          }
-        }
-      }
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
   if (!filename) return <div>未找到文件</div>;
 
   return (
@@ -228,8 +154,8 @@ function ReaderContent() {
                 <TabsTrigger value="translate" className="gap-2">
                   <Languages className="h-3.5 w-3.5" /> 划词翻译
                 </TabsTrigger>
-                <TabsTrigger value="analysis" className="gap-2">
-                  <Sparkles className="h-3.5 w-3.5" /> 文献洞察
+                <TabsTrigger value="chat" className="gap-2">
+                  <Sparkles className="h-3.5 w-3.5" /> 文献对话
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -304,123 +230,26 @@ function ReaderContent() {
                             <Copy className="h-3.5 w-3.5" />
                           </Button>
                         </div>
-                        <div className="p-4 bg-primary/5 border border-primary/10 rounded-lg text-sm leading-relaxed text-foreground/90 shadow-sm">
-                          {translation}
-                        </div>
+                        <AnnotatedText
+                          text={translation}
+                          filename={filename || "unknown"}
+                          annotations={annotations}
+                          onAnnotationsChange={setAnnotations}
+                        />
                       </div>
                     )}
                   </div>
                 </div>
               </TabsContent>
 
-              <TabsContent value="analysis" className="flex-1 flex flex-col h-full m-0 data-[state=active]:flex overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 border-b shrink-0 bg-card z-10">
-                  <div className="flex flex-col gap-0.5">
-                    <Label className="text-[11px] uppercase tracking-wider text-muted-foreground font-bold flex items-center gap-2">
-                      <Sparkles className="h-3.5 w-3.5 text-primary" /> 
-                      {analysisMode === "full" ? "整篇文献深度分析" : "文献片段分析报告"}
-                    </Label>
-                    <div className="flex items-center gap-2">
-                      {analysisMode === "chunk" && totalChunks > 1 && (
-                        <span className="text-[10px] text-muted-foreground">
-                          第 {currentChunk + 1} / {totalChunks} 部分
-                        </span>
-                      )}
-                      <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded-full">
-                        PDF 第 {currentPage} 页
-                      </span>
-                    </div>
+              <TabsContent value="chat" className="flex-1 flex flex-col h-full m-0 data-[state=active]:flex overflow-hidden">
+                {filename ? (
+                  <ChatPanel filename={filename} />
+                ) : (
+                  <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                    正在加载文献...
                   </div>
-                  <div className="flex items-center gap-1">
-                    {analysisMode === "chunk" && totalChunks > 1 && (
-                      <div className="flex items-center mr-2 border rounded-md h-7 overflow-hidden">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-full w-7 rounded-none border-r"
-                          disabled={currentChunk === 0 || isAnalyzing}
-                          onClick={() => handleAnalyze(currentChunk - 1, "chunk")}
-                        >
-                          <ChevronLeft className="h-3 w-3" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-full w-7 rounded-none"
-                          disabled={currentChunk >= totalChunks - 1 || isAnalyzing}
-                          onClick={() => handleAnalyze(currentChunk + 1, "chunk")}
-                        >
-                          <ChevronRight className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
-                    {analysisResult && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
-                        navigator.clipboard.writeText(analysisResult);
-                        toast.success("已复制分析结果");
-                      }}>
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger render={
-                        <Button variant="ghost" size="icon" className="h-7 w-7" disabled={isAnalyzing}>
-                          <RefreshCw className={`h-3.5 w-3.5 ${isAnalyzing ? "animate-spin" : ""}`} />
-                        </Button>
-                      } />
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleAnalyze(0, "full")}>
-                          重新进行整篇解析
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleAnalyze(0, "chunk")}>
-                          切换为分段解析模式
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-
-                <div 
-                  ref={scrollRef}
-                  className="flex-1 overflow-y-auto scroll-smooth" 
-                  style={{ 
-                    overscrollBehavior: "contain",
-                    WebkitOverflowScrolling: "touch"
-                  }}
-                >
-                  <div className="p-4 min-h-full">
-                    {!analysisResult && !isAnalyzing ? (
-                      <div className="py-20 flex flex-col items-center justify-center text-center space-y-4 opacity-60">
-                        <div className="p-4 rounded-full bg-primary/10">
-                          <BookOpen className="h-8 w-8 text-primary" />
-                        </div>
-                        <div className="space-y-2">
-                          <h3 className="text-sm font-bold">文献整篇深度洞察</h3>
-                          <p className="text-xs max-w-[280px]">AI 将自动阅读并理解整篇文献，为您全方位提取核心目标、研究发现及逻辑脉络。</p>
-                        </div>
-                        <div className="flex flex-col gap-2 w-full max-w-[200px]">
-                          <Button size="sm" onClick={() => handleAnalyze(0, "full")} className="gap-2">
-                            <Sparkles className="h-4 w-4" /> 开始整篇解析
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => handleAnalyze(0, "chunk")} className="gap-2 text-[10px]">
-                            分段解析 (针对超长文献)
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="prose prose-sm prose-slate dark:prose-invert max-w-none pb-8">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {analysisResult}
-                        </ReactMarkdown>
-                        {isAnalyzing && (
-                          <div className="flex items-center gap-2 text-primary text-xs font-medium animate-pulse mt-4">
-                            <Loader2 className="h-3 w-3 animate-spin" /> AI 正在深度思考并梳理脉络...
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                )}
               </TabsContent>
             </div>
           </Tabs>

@@ -126,16 +126,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 读取生成的图片并转 base64
+    // 读取生成的图片（保留文件供插入论文使用）
     const imageBuffer = fs.readFileSync(outputPath);
     const base64 = imageBuffer.toString("base64");
     const mimeType = "image/png";
 
-    // 清理生成的图片文件（已转为 base64）
-    fs.unlinkSync(outputPath);
-
     return NextResponse.json({
       imageBase64: `data:${mimeType};base64,${base64}`,
+      imageUrl: `/charts/${outputName}`,
       fileName: outputName,
     });
   } catch (error: any) {

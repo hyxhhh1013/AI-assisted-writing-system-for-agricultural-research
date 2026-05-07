@@ -46,6 +46,22 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Presentation Theme Colors */
+  --agri-bg: #020617;
+  --agri-glass: rgba(15, 23, 42, 0.65);
+  --agri-emerald: #10b981;
+  --agri-cyan: #22d3ee;
+
+  /* Custom Animations */
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2.5s infinite linear;
 }
 
 :root {

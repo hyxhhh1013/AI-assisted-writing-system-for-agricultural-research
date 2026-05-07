@@ -26,22 +26,42 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: "system",
-          content: "你是一名严谨的学术论文一致性审查专家。严格按照输出格式返回 JSON。",
+          content: "你是一名严谨的学术论文一致性审查专家。严格按照输出格式返回 JSON，不要包含任何其他内容。",
         },
         { role: "user", content: prompt },
       ],
       stream: false,
     });
 
-    const rawText = await response.text();
+    // 解析 OpenAI 格式的非流式响应：{ choices: [{ message: { content: "..." } }] }
+    const rawJson = await response.json();
+    const rawText: string =
+      rawJson?.choices?.[0]?.message?.content || "";
+
+    if (!rawText) {
+      return new Response(
+        JSON.stringify({
+          passed: false,
+          issues: [
+            {
+              type: "logic",
+              severity: "medium",
+              sections: [],
+              description: "AI 未返回有效响应",
+              suggestion: "请重试一致性检查",
+            },
+          ],
+          summary: "空响应",
+        }),
+        { headers: { "Content-Type": "application/json" } },
+      );
+    }
 
     // 尝试从 AI 响应中提取 JSON
     let report: ConsistencyReport;
     try {
-      // 先尝试直接解析
-      report = JSON.parse(rawText);
+      report = JSON.parse(rawText.trim());
     } catch {
-      // 如果 AI 返回了 markdown 包裹的 JSON，提取代码块
       const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
       if (jsonMatch) {
         try {
@@ -54,7 +74,7 @@ export async function POST(req: NextRequest) {
                 type: "logic",
                 severity: "medium",
                 sections: [],
-                description: "AI 响应格式异常",
+                description: "AI 返回的 JSON 格式异常",
                 suggestion: "请重试一致性检查",
               },
             ],
@@ -69,7 +89,7 @@ export async function POST(req: NextRequest) {
               type: "logic",
               severity: "medium",
               sections: [],
-              description: "未能解析 AI 响应",
+              description: "AI 未按 JSON 格式返回，请重试",
               suggestion: "请重试一致性检查",
             },
           ],

@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Send, Copy, Eraser, FileText, Database, ScrollText, CheckCircle2, ChevronRight, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { projectStore, ProjectData } from "@/lib/store";
-import { parseOutline, OutlineSection, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 const WRITING_SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -54,6 +54,7 @@ interface WritingPanelProps {
   editorActiveSection?: string;
   onGenerate?: (content: string, section: string) => void;
   onUpdateProject?: (updates: Partial<ProjectData>) => void;
+  onAutoReorder?: () => void;
 }
 
 export function WritingPanel({
@@ -62,6 +63,7 @@ export function WritingPanel({
   editorActiveSection,
   onGenerate,
   onUpdateProject,
+  onAutoReorder,
 }: WritingPanelProps) {
   const [title, setTitle] = useState(project.title || "");
   const [selectedSectionId, setSelectedSectionId] = useState<string>("");
@@ -75,11 +77,23 @@ export function WritingPanel({
   const [verificationFeedback, setVerificationFeedback] = useState("");
   const [detectedRefs, setDetectedRefs] = useState<string[]>([]);
   const [citationWarnings, setCitationWarnings] = useState<{ num: number; overlap: number; context: string }[]>([]);
+  const [pendingFigures, setPendingFigures] = useState<{ spec: string; tool: string; config: string; caption: string; status: string; imageUrl?: string }[]>([]);
+  const figureCountRef = useRef(0);
+  const figureAbortRef = useRef<AbortController | null>(null);
+  const resultRef = useRef("");
 
   const restoredRef = useRef(false);
 
-  // 1. 解析大纲为结构化任务
-  const [outlineTasks, setOutlineTasks] = useState<OutlineSection[]>([]);
+  // 固定 5 个章节任务
+  const FIVE_TASKS: { id: string; title: string; sectionKey: string }[] = [
+    { id: "sec-abstract", title: "摘要 (Abstract)", sectionKey: "abstract" },
+    { id: "sec-intro", title: "引言 (Introduction)", sectionKey: "introduction" },
+    { id: "sec-methods", title: "材料与方法 (Methods)", sectionKey: "methods" },
+    { id: "sec-results", title: "结果与讨论 (Results & Discussion)", sectionKey: "results" },
+    { id: "sec-conclusion", title: "结论 (Conclusion)", sectionKey: "conclusion" },
+  ];
+  const outlineTasks = FIVE_TASKS;
+  const outlineVersionRef = useRef(0);
 
   // 先随工作台左侧 IMRaD 章节同步「存储至章节」；再由下方 session 覆盖（若有草稿）
   useEffect(() => {
@@ -134,33 +148,6 @@ export function WritingPanel({
     restoredRef.current = true;
   }, [projectId]);
 
-  useEffect(() => {
-    const loadOutline = async () => {
-      // 优先使用当前 project 对象的 outline，如果没有则尝试从 store 获取最新值
-      let currentOutline = project.outline;
-      if (!currentOutline) {
-        const latest = await projectStore.get(projectId);
-        currentOutline = latest?.outline || "";
-      }
-      
-      const parsed = parseOutline(currentOutline);
-      
-      // 兜底逻辑：如果解析不到任何章节，但大纲确实有内容，则将整篇大纲作为一个任务
-      if (parsed.length === 0 && currentOutline.trim().length > 0) {
-        setOutlineTasks([{
-          id: "fallback-outline",
-          title: "全篇大纲扩写任务",
-          level: 1,
-          content: currentOutline,
-          fullPath: "大纲概览"
-        }]);
-      } else {
-        setOutlineTasks(parsed);
-      }
-    };
-    
-    loadOutline();
-  }, [project.outline, projectId]);
 
   // 持久化当前扩写 UI（防抖），便于离开工作台/刷新后恢复
   useEffect(() => {
@@ -186,7 +173,10 @@ export function WritingPanel({
         /* quota / private mode */
       }
     }, 400);
-    return () => window.clearTimeout(t);
+    return () => {
+      window.clearTimeout(t);
+      figureAbortRef.current?.abort();
+    };
   }, [
     projectId,
     title,
@@ -201,34 +191,67 @@ export function WritingPanel({
     isGenerating,
   ]);
 
-  const handleSelectTask = useCallback((task: OutlineSection) => {
+  const handleSelectTask = useCallback((task: { id: string; title: string; sectionKey: string }) => {
     setSelectedSectionId(task.id);
-
-    const titleLower = task.fullPath.toLowerCase();
-    let bestKey = "introduction";
-    if (titleLower.includes("摘要") || titleLower.includes("abstract")) bestKey = "abstract";
-    else if (titleLower.includes("方法") || titleLower.includes("method")) bestKey = "methods";
-    else if (titleLower.includes("结果") || titleLower.includes("讨论") || titleLower.includes("result")) bestKey = "results";
-    else if (titleLower.includes("结论") || titleLower.includes("conclu")) bestKey = "conclusion";
-
-    setTargetSectionKey(bestKey);
-
-    const taskContext = `【章节标题】：${task.fullPath}\n【写作要求】：\n${task.content || "请根据标题展开学术论述。"}`;
+    setTargetSectionKey(task.sectionKey);
+    const taskContext = `【章节标题】：${task.title}\n【写作要求】：请根据以下大纲展开学术论述。\n${project.outline || ""}`;
     setContext(taskContext);
-  }, []);
+  }, [project.outline]);
 
-  // 3. 自动选中逻辑：如果列表刷新且当前未选中，则自动选中第一个有效任务
+  // 3. 自动选中逻辑 + 从大纲页一键扩写
   useEffect(() => {
-    if (outlineTasks.length > 0 && !selectedSectionId) {
+    if (outlineTasks.length === 0) return;
+
+    // 检查是否有从大纲页传来的待扩写任务
+    let autoStart = false;
+    try {
+      const pending = sessionStorage.getItem("pending_expand_task");
+      if (pending) {
+        sessionStorage.removeItem("pending_expand_task");
+        const task = JSON.parse(pending) as { title: string; sectionKey: string };
+        if (task.sectionKey) {
+          setTargetSectionKey(task.sectionKey);
+          const taskContext = `【章节标题】：${task.title}\n【写作要求】：请根据以下大纲展开学术论述。\n${project.outline || ""}`;
+          setContext(taskContext);
+          autoStart = true;
+        }
+      }
+    } catch { /* ignore */ }
+
+    if (!autoStart && !selectedSectionId) {
       handleSelectTask(outlineTasks[0]);
     }
-  }, [outlineTasks, selectedSectionId, handleSelectTask]);
+  }, [outlineTasks, selectedSectionId, handleSelectTask, project.outline]);
+
+  // 4. 如果从大纲页一键扩写，自动开始生成
+  const autoStartRef = useRef(false);
+  useEffect(() => {
+    if (!autoStartRef.current && selectedSectionId && context && !isGenerating && result.length === 0) {
+      autoStartRef.current = true;
+      const timer = setTimeout(() => handleGenerate(), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedSectionId, context]);
 
   useEffect(() => {
     if (project.title && title !== project.title && !isGenerating && result.length === 0) {
       setTitle(project.title);
     }
   }, [project.title, project.id, title, isGenerating, result.length]);
+
+  // 5. 生成完成后自动应用内容到编辑器
+  const autoAppliedRef = useRef(false);
+  useEffect(() => {
+    if (!isGenerating && result && targetSectionKey && !autoAppliedRef.current) {
+      autoAppliedRef.current = true;
+      if (onGenerate) {
+        onGenerate(result, targetSectionKey);
+        toast.success(`内容已自动应用到 ${targetSectionKey} 章节`);
+        setTimeout(() => onAutoReorder?.(), 300);
+      }
+    }
+    if (isGenerating) autoAppliedRef.current = false;
+  }, [isGenerating, result, targetSectionKey]);
 
   const handleTitleBlur = () => {
     if (title !== project.title && onUpdateProject) {
@@ -314,12 +337,15 @@ export function WritingPanel({
                 if (data.status) {
                   setGenerationStatus(data.status);
                   if (data.status === "writing") toast.info("AI 正在起草内容...");
-                  else if (data.status === "verifying") toast.info("学术核核代理审计中...");
+                  else if (data.status === "verifying") toast.info("学术核查代理审计中...");
                   else if (data.status === "refining") toast.info("正在根据意见全自动修正终稿...");
                 }
                 if (data.action === "clear_result") setResult("");
                 const content = data.choices?.[0]?.delta?.content || data.answer || "";
-                if (content) setResult((prev) => prev + content);
+                if (content) {
+                  // 流式期间直接累积原文（不做逐 chunk 的 FIGURE 正则匹配，避免跨 chunk 漏检）
+                  setResult((prev) => { const next = prev + content; resultRef.current = next; return next; });
+                }
                 if (data.verification) setVerificationFeedback((prev) => prev + data.verification);
                 if (data.citation_warnings) setCitationWarnings(data.citation_warnings);
               } catch (e) {}
@@ -327,9 +353,106 @@ export function WritingPanel({
           }
         }
       }
-      setGenerationStatus("completed");
-    } catch (error: any) {
-      toast.error(error.message);
+
+      // 流结束后：扫描完整结果文本中的 FIGURE 标记（解决跨 chunk 截断问题）
+      const fullText = resultRef.current;
+      const figureRegex = /【FIGURE:\{.*?"tool"\s*:\s*"([^"]+)".*?"config"\s*:\s*(\{.*?\}).*?"caption"\s*:\s*"([^"]+)".*?}】/g;
+      const detectedFigures: { tool: string; config: string; caption: string }[] = [];
+      let processedText = fullText;
+      let fm: RegExpExecArray | null;
+      const freshRegex = new RegExp(figureRegex.source, figureRegex.flags);
+      while ((fm = freshRegex.exec(fullText)) !== null) {
+        const tool = fm[1];
+        const config = fm[2];
+        const caption = fm[3];
+        detectedFigures.push({ tool, config, caption });
+        processedText = processedText.replace(fm[0], `\n\n*[正在生成 ${caption}...]*\n\n`);
+        figureCountRef.current++;
+      }
+
+      if (detectedFigures.length > 0) {
+        setResult(processedText);
+        resultRef.current = processedText;
+        setPendingFigures(prev => [...prev, ...detectedFigures.map(f => ({ ...f, spec: "", status: "pending" as const }))]);
+
+        setGenerationStatus("completed");
+        toast.info(`正在自动生成 ${detectedFigures.length} 张配图...`);
+        const _abort = new AbortController();
+        figureAbortRef.current = _abort;
+        (async () => {
+          const _figs = await new Promise<typeof pendingFigures>(r => setPendingFigures(p => { r(p); return p; }));
+          for (let i = 0; i < _figs.length; i++) {
+            if (_abort.signal.aborted) break;
+            setPendingFigures(prev => prev.map((f, j) => j === i ? { ...f, status: "generating" } : f));
+            try {
+              const fig = _figs[i];
+              if (!fig) continue;
+              let imgUrl = "";
+              const cfg = JSON.parse(fig.config);
+
+              if (fig.tool === "chart") {
+                const fd = new FormData();
+                // 支持内联数据（Chart.js 风格）
+                if (cfg.data?.labels && cfg.data?.datasets) {
+                  const labels = cfg.data.labels as string[];
+                  const datasets = cfg.data.datasets as Array<{ label?: string; data: number[] }>;
+                  let csv = labels.join(",") + "\n";
+                  for (let r = 0; r < labels.length; r++) {
+                    csv += datasets.map(d => d.data[r] ?? "").join(",") + "\n";
+                  }
+                  fd.append("dataFile", new Blob([csv], { type: "text/csv" }), "data.csv");
+                } else if (cfg.data_file) {
+                  const resp = await fetch(cfg.data_file);
+                  const blob = await resp.blob();
+                  fd.append("dataFile", blob, "data.csv");
+                }
+                if (fd.has("dataFile")) {
+                  fd.append("config", JSON.stringify({ title: fig.caption, chart_type: cfg.chart_type || cfg.type || "bar", data: cfg.data }));
+                  const r = await fetch("/api/chart", { method: "POST", body: fd });
+                  const j = await r.json();
+                  imgUrl = j.imageUrl || "";
+                }
+              } else if (fig.tool === "xrd_peakfit" && cfg.data_file) {
+                const fd = new FormData();
+                const resp = await fetch(cfg.data_file);
+                const blob = await resp.blob();
+                fd.append("dataFile", blob, "data.csv");
+                fd.append("config", JSON.stringify({ title: fig.caption, bg_params: {}, peak_params: { max_peaks: 15 } }));
+                const r = await fetch("/api/xrd/peakfit", { method: "POST", body: fd });
+                const j = await r.json();
+                imgUrl = j.imageUrl || "";
+              } else if (fig.tool === "flow") {
+                const r = await fetch("/api/flow-diagram", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
+                const j = await r.json();
+                imgUrl = j.imageUrl || "";
+              }
+
+              if (imgUrl) {
+                const md = `\n\n![${fig.caption}](${imgUrl})\n\n`;
+                setResult(prev => prev.replace(`*[正在生成 ${fig.caption}...]*`, md));
+                setPendingFigures(prev => prev.map((f, j) => j === i ? { ...f, status: "done", imageUrl: imgUrl } : f));
+              } else {
+                // 失败时替换占位符为可读提示，避免残留 raw placeholder
+                const fallback = `\n\n> 📊 **${fig.caption}**（未能自动生成，请手动补充图表）\n\n`;
+                setResult(prev => prev.replace(`*[正在生成 ${fig.caption}...]*`, fallback));
+                setPendingFigures(prev => prev.map((f, j) => j === i ? { ...f, status: "failed" } : f));
+              }
+            } catch {
+              // 异常时同样替换占位符（用 _figs[i] 而非 pendingFigures，避免异步状态不一致）
+              const caption = _figs[i]?.caption || "图表";
+              const fallback = `\n\n> 📊 **${caption}**（生成异常，请手动补充）\n\n`;
+              setResult(prev => prev.replace(`*[正在生成 ${caption}...]*`, fallback));
+              setPendingFigures(prev => prev.map((f, j) => j === i ? { ...f, status: "failed" } : f));
+            }
+          }
+          toast.success("配图生成完成");
+          handleApplyToEditor();
+        })();
+      } else {
+        setGenerationStatus("completed");
+      }
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "写作生成失败");
       setGenerationStatus("idle");
     } finally {
       setIsGenerating(false);
@@ -337,9 +460,11 @@ export function WritingPanel({
   };
 
   const handleApplyToEditor = () => {
-    if (onGenerate && result && targetSectionKey) {
-      onGenerate(result, targetSectionKey);
+    const content = resultRef.current || result;
+    if (onGenerate && content && targetSectionKey) {
+      onGenerate(content, targetSectionKey);
       toast.success(`内容已应用到 ${targetSectionKey} 章节`);
+      setTimeout(() => onAutoReorder?.(), 300);
     }
   };
 
@@ -398,11 +523,9 @@ export function WritingPanel({
                         className={cn(
                           "flex items-center justify-between p-2 cursor-pointer transition-colors hover:bg-primary/10",
                           selectedSectionId === task.id ? "bg-primary/15 border-l-2 border-primary" : "",
-                          task.level === 1 ? "font-bold" : "pl-6 text-[11px]"
                         )}
                       >
                         <div className="flex items-center gap-2 overflow-hidden">
-                          <span className="text-[10px] text-muted-foreground shrink-0">{task.level === 1 ? "H1" : "H2"}</span>
                           <span className="truncate">{task.title}</span>
                         </div>
                         <ChevronRight className="h-3 w-3 text-muted-foreground" />
@@ -419,7 +542,7 @@ export function WritingPanel({
 
             <div className="grid grid-cols-3 gap-2">
               <div className="space-y-1.5">
-                <Label className="text-xs">存储至章节</Label>
+                <Label className="text-xs">目标章节</Label>
                 <Select onValueChange={(val) => setTargetSectionKey(val || "")} value={targetSectionKey}>
                   <SelectTrigger className="text-xs h-8">
                     <SelectValue placeholder="目标章节" />
@@ -433,30 +556,23 @@ export function WritingPanel({
                   </SelectContent>
                 </Select>
               </div>
-
               <div className="space-y-1.5">
-                <Label className="text-xs">输出语言</Label>
-                <Select onValueChange={(val) => setLanguage(val || "zh")} value={language}>
-                  <SelectTrigger className="text-xs h-8">
-                    <SelectValue placeholder="语言" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="zh" className="text-xs">中文</SelectItem>
-                    <SelectItem value="en" className="text-xs">英文</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label className="text-xs">语言</Label>
+                <div className="flex h-8 border rounded-md overflow-hidden">
+                  <button className={`flex-1 text-xs ${language === "zh" ? "bg-primary text-primary-foreground" : "bg-background"}`} onClick={() => setLanguage("zh")}>中文</button>
+                  <button className={`flex-1 text-xs ${language === "en" ? "bg-primary text-primary-foreground" : "bg-background"}`} onClick={() => setLanguage("en")}>EN</button>
+                </div>
               </div>
-
               <div className="space-y-1.5">
-                <Label className="text-xs">文献召回精度</Label>
+                <Label className="text-xs">检索精度</Label>
                 <Select onValueChange={(val) => setRetrievalMode(val as any || "balanced")} value={retrievalMode}>
                   <SelectTrigger className="text-xs h-8">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="precise" className="text-xs">精确（5篇 / 低成本）</SelectItem>
-                    <SelectItem value="balanced" className="text-xs">平衡（20篇 / ~¥0.02）</SelectItem>
-                    <SelectItem value="extensive" className="text-xs">广泛（50篇 / ~¥0.05）</SelectItem>
+                    <SelectItem value="precise" className="text-xs">精确（5篇）</SelectItem>
+                    <SelectItem value="balanced" className="text-xs">平衡（20篇）</SelectItem>
+                    <SelectItem value="extensive" className="text-xs">广泛（50篇）</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

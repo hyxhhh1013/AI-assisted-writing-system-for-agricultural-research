@@ -11,10 +11,10 @@ import { cn } from "@/lib/utils";
 import {
   buildReorderedReferences,
   collectCitationFirstAppearance,
-  collectInvalidCitationNumbers,
   remapBracketCitations,
 } from "@/lib/reference-reorder";
 import { mergeEditorIntoProject, stripHtmlToPlainForDocx } from "@/lib/export-content";
+import { ensureSubsectionNumbering } from "@/lib/academic-numbering";
 import { formatKeywords } from "@/lib/paper-metadata";
 import {
   ArrowLeft, Loader2, Send, Copy, Save,
@@ -22,7 +22,7 @@ import {
   Languages, CheckCircle2, Menu, ChevronLeft, ChevronRight,
   Eye, EyeOff, Download, Settings2, FileCode, Printer,
   GripVertical, FileType, BarChart3, Search, FileSearch,
-  AlertTriangle, CheckCheck, XCircle, RefreshCw
+  AlertTriangle, CheckCheck, XCircle, RefreshCw, Radar
 } from "lucide-react";
 import { toast } from "sonner";
 import { projectStore, ProjectData } from "@/lib/store";
@@ -58,6 +58,10 @@ import { AnalysisPanel } from "@/components/shared/analysis-panel";
 import { OutlinePanel } from "@/components/shared/outline-panel";
 import { WritingPanel } from "@/components/shared/writing-panel";
 import { ReaderPanel } from "@/components/shared/reader-panel";
+import { PlagiarismPanel } from "@/components/shared/plagiarism-panel";
+import { XrdPanel } from "@/components/shared/xrd-panel";
+import { EditorImageGallery } from "@/components/shared/editor-image-gallery";
+import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { ReferenceBrowser } from "@/components/shared/reference-browser";
 import dynamic from "next/dynamic";
 
@@ -83,7 +87,7 @@ const SECTIONS = [
   { id: "conclusion", label: "4. Conclusion", placeholder: "结论部分..." },
 ];
 
-type WorkbenchTab = "structure" | "analysis" | "outline" | "writing" | "reader";
+type WorkbenchTab = "structure" | "analysis" | "outline" | "writing" | "reader" | "plagiarism" | "xrd";
 
 const WORKBENCH_TABS: WorkbenchTab[] = [
   "structure",
@@ -91,6 +95,8 @@ const WORKBENCH_TABS: WorkbenchTab[] = [
   "outline",
   "writing",
   "reader",
+  "plagiarism",
+  "xrd",
 ];
 
 const isWorkbenchTab = (value: string | null): value is WorkbenchTab =>
@@ -150,6 +156,13 @@ function WorkbenchContent() {
     referencesText: "",
   });
   const previewRef = useRef<HTMLDivElement>(null);
+  // 使用 ref 存储最新值，避免 setTimeout/stale closure 中读到旧状态
+  const projectRef = useRef(project);
+  projectRef.current = project;
+  const editingContentRef = useRef(editingContent);
+  editingContentRef.current = editingContent;
+  const activeSectionRef = useRef(activeSection);
+  activeSectionRef.current = activeSection;
 
   const metaPreviewProject = useMemo<ProjectData>(() => {
     const merged = mergeEditorIntoProject(project, activeSection, editingContent);
@@ -237,16 +250,18 @@ function WorkbenchContent() {
   }, [activeSection, project.id, project.abstract]); // 增加 project.abstract 监听
 
   // 核心优化：实时将编辑内容同步到 project 状态，确保预览和导出始终是最新的
+  // 使用 ref 读取最新 project，避免闭包中读到旧状态导致误覆盖
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (!project.id) return; // 还没加载完
+      const latestProject = projectRef.current;
+      if (!latestProject.id) return;
 
       if (activeSection === "abstract") {
-        if (project.abstract !== editingContent) {
+        if (latestProject.abstract !== editingContent) {
           setProject(prev => ({ ...prev, abstract: editingContent }));
         }
       } else {
-        if (project.sections[activeSection] !== editingContent) {
+        if (latestProject.sections[activeSection] !== editingContent) {
           setProject(prev => ({
             ...prev,
             sections: {
@@ -256,7 +271,7 @@ function WorkbenchContent() {
           }));
         }
       }
-    }, 500); // 500ms 防抖
+    }, 500);
     return () => clearTimeout(timer);
   }, [editingContent, activeSection]);
 
@@ -279,32 +294,29 @@ function WorkbenchContent() {
   }, [project, projectId]);
 
   const handleApplyAiContent = (content: string, sectionId: string) => {
+    // 对「结果与讨论」和「结论」章节，如果 AI 没有自行添加子节编号，
+    // 则自动补上递增的「X.Y.Z」编号
+    let processedContent = content;
+    if (sectionId === "results" || sectionId === "conclusion") {
+      const currentProject = projectRef.current;
+      const existingText = currentProject?.sections?.[sectionId] || "";
+      processedContent = ensureSubsectionNumbering(content, sectionId, existingText);
+    }
+
     setProject(prev => {
       if (!prev) return prev;
-      
-      let updated: ProjectData;
+
       if (sectionId === "abstract") {
-        updated = {
-          ...prev,
-          abstract: content
-        };
-      } else {
-        updated = {
-          ...prev,
-          sections: {
-            ...prev.sections,
-            [sectionId]: content
-          }
-        };
+        return { ...prev, abstract: processedContent };
       }
-      
-      // 同步到编辑器
-      if (sectionId === activeSection) {
-        setEditingContent(content);
-      }
-      
-      return updated;
+      return { ...prev, sections: { ...prev.sections, [sectionId]: processedContent } };
     });
+    // 始终同步编辑器内容
+    setEditingContent(processedContent);
+    // 切换到对应章节
+    if (sectionId !== activeSection) {
+      setActiveSection(sectionId);
+    }
 
     toast.success(`内容已应用到 ${sectionId} 章节`);
   };
@@ -393,12 +405,15 @@ function WorkbenchContent() {
    * 合并当前编辑器未保存内容与各章已保存内容；替换编号用占位符避免互换代号错乱。
    */
   const handleReorderReferences = async () => {
-    if (!project || !project.references || project.references.length === 0) {
+    const currentProject = projectRef.current;
+    const currentEditingContent = editingContentRef.current;
+    const currentActiveSection = activeSectionRef.current;
+    if (!currentProject || !currentProject.references || currentProject.references.length === 0) {
       toast.error("暂无参考文献可重排");
       return;
     }
 
-    const merged = mergeEditorIntoProject(project, activeSection, editingContent);
+    const merged = mergeEditorIntoProject(currentProject, currentActiveSection, currentEditingContent);
     const abstractScan = merged.abstract || "";
     const sectionScan = (id: string) => merged.sections[id] || "";
 
@@ -410,20 +425,9 @@ function WorkbenchContent() {
       sectionScan("conclusion"),
     ].join("\n\n");
 
-    const invalidCitations = collectInvalidCitationNumbers(
-      allContent,
-      project.references.length,
-    );
-    if (invalidCitations.length > 0) {
-      toast.error(
-        `存在超出参考文献列表范围的引用编号：[${invalidCitations.join(", ")}]，请先修正后再重排`,
-      );
-      return;
-    }
-
     const appearanceOrder = collectCitationFirstAppearance(
       allContent,
-      project.references.length,
+      currentProject.references.length,
     );
 
     if (appearanceOrder.length === 0) {
@@ -431,8 +435,8 @@ function WorkbenchContent() {
       return;
     }
 
-    const built = buildReorderedReferences(appearanceOrder, project.references, {
-      includeUncited: false,
+    const built = buildReorderedReferences(appearanceOrder, currentProject.references, {
+      includeUncited: true,
     });
     if (!built) {
       toast.error("重排计算失败");
@@ -442,14 +446,14 @@ function WorkbenchContent() {
     const { references: newRefs, indexMap } = built;
 
     const nextAbstract = remapBracketCitations(abstractScan, indexMap);
-    const updatedSections = { ...project.sections };
+    const updatedSections = { ...currentProject.sections };
     (["introduction", "methods", "results", "conclusion"] as const).forEach((id) => {
       const src = sectionScan(id);
       updatedSections[id] = remapBracketCitations(src, indexMap);
     });
 
     const updatedProject: ProjectData = {
-      ...project,
+      ...currentProject,
       abstract: nextAbstract,
       references: newRefs,
       sections: updatedSections,
@@ -457,13 +461,13 @@ function WorkbenchContent() {
 
     setProject(updatedProject);
     setEditingContent(
-      activeSection === "abstract"
+      currentActiveSection === "abstract"
         ? nextAbstract
-        : updatedSections[activeSection as keyof typeof updatedSections] || "",
+        : updatedSections[currentActiveSection as keyof typeof updatedSections] || "",
     );
     await projectStore.save(updatedProject);
 
-    toast.success(`已按正文引用保留并重排 ${newRefs.length} 条参考文献`);
+    toast.success(`已按正文引用顺序重排 ${newRefs.length} 条参考文献`);
   };
 
   /**
@@ -492,17 +496,22 @@ function WorkbenchContent() {
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let fullText = "";
+      let buffer = "";
 
       if (reader) {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split("\n");
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+          
           for (const line of lines) {
-            if (line.trim().startsWith("data:")) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine || trimmedLine === "data: [DONE]") continue;
+            if (trimmedLine.startsWith("data:")) {
               try {
-                const data = JSON.parse(line.trim().slice(5));
+                const data = JSON.parse(trimmedLine.slice(5));
                 if (data.references && Array.isArray(data.references) && data.references.length > 0) {
                   // 同步新文献
                   setProject(prev => ({
@@ -568,7 +577,7 @@ function WorkbenchContent() {
             
             if (trimmedLine.startsWith("data:")) {
               try {
-                const data = JSON.parse(trimmedLine.slice(5).trim());
+                const data = JSON.parse(trimmedLine.slice(5));
                 if (data.verification) {
                   auditReport += data.verification;
                 }
@@ -630,7 +639,7 @@ function WorkbenchContent() {
 
             if (trimmedLine.startsWith("data:")) {
               try {
-                const data = JSON.parse(trimmedLine.slice(5).trim());
+                const data = JSON.parse(trimmedLine.slice(5));
                 const content = data.choices?.[0]?.delta?.content || data.answer || "";
                 if (content) fixedText += content;
               } catch (e) {
@@ -670,33 +679,24 @@ function WorkbenchContent() {
     };
 
     // 辅助函数：将 Markdown 文本转换为 docx TextRun 数组
-    const parseMarkdownToRuns = (text: string, options: { font?: string; size?: number; color?: string } = {}) => {
+    const parseMarkdownToRuns = (text: string, options: { font?: string; size?: number; color?: string } = {}): TextRun[] => {
       if (!text) return [new TextRun({ text: "", ...options })];
-      
+
+      // 图片标记：docx 不支持直接嵌入图片，显示为说明文字
+      const imgMatch = text.match(/^!\[([^\]]*)\]\([^)]+\)$/);
+      if (imgMatch) return [new TextRun({ text: `[图片: ${imgMatch[1] || "chart"}]`, italics: true, color: "888888", ...options })];
+
       const runs: TextRun[] = [];
       const parts = text.split(/(\*\*.*?\*\*)/g);
-      
+
       parts.forEach(part => {
         if (part.startsWith("**") && part.endsWith("**")) {
-          runs.push(new TextRun({
-            text: part.slice(2, -2),
-            bold: true,
-            font: options.font || config.fontMain,
-            size: options.size || config.bodySize,
-            color: options.color
-          }));
+          runs.push(new TextRun({ text: part.slice(2, -2), bold: true, font: options.font || config.fontMain, size: options.size || config.bodySize, color: options.color }));
         } else {
           const lines = part.split("\n");
           lines.forEach((line, i) => {
-            runs.push(new TextRun({
-              text: line,
-              font: options.font || config.fontMain,
-              size: options.size || config.bodySize,
-              color: options.color
-            }));
-            if (i < lines.length - 1) {
-              runs.push(new TextRun({ text: "", break: 1 }));
-            }
+            runs.push(new TextRun({ text: line, font: options.font || config.fontMain, size: options.size || config.bodySize, color: options.color }));
+            if (i < lines.length - 1) runs.push(new TextRun({ text: "", break: 1 }));
           });
         }
       });
@@ -863,23 +863,13 @@ function WorkbenchContent() {
               }
               return stanzas.map((para, i) =>
                 new Paragraph({
-                  children:
-                    i === 0
-                      ? [
-                          new TextRun({
-                            text: isChinese ? "摘要：" : "Abstract: ",
-                            bold: true,
-                            size: config.bodySize,
-                            font: config.fontHeading,
-                          }),
-                          ...parseMarkdownToRuns(para),
-                        ]
-                      : parseMarkdownToRuns(para),
+                  children: i === 0
+                    ? [new TextRun({ text: isChinese ? "摘要：" : "Abstract: ", bold: true, size: config.bodySize, font: config.fontHeading }), ...parseMarkdownToRuns(para)]
+                    : parseMarkdownToRuns(para),
                   alignment: AlignmentType.JUSTIFIED,
                   spacing: { line: config.lineSpacing, before: i === 0 ? 200 : 0, after: 200 },
                   indent: isChinese ? { firstLine: config.indent } : undefined,
-                }),
-              );
+                }));
             })(),
 
             // Keywords
@@ -1069,6 +1059,7 @@ ${(p.references && p.references.length > 0)
 
 
   return (
+    <ErrorBoundary>
     <div className="flex h-screen bg-background overflow-hidden relative">
       {/* Far Left: Tab Switcher */}
       <div className="w-14 border-r bg-card flex flex-col items-center py-4 gap-4 shrink-0">
@@ -1084,17 +1075,25 @@ ${(p.references && p.references.length > 0)
           >
             <Layout className="h-5 w-5" />
           </Button>
-          <Button 
-            variant={activeTab === "analysis" ? "default" : "ghost"} 
-            size="icon" 
+          <Button
+            variant={activeTab === "analysis" ? "default" : "ghost"}
+            size="icon"
             onClick={() => setActiveTab("analysis")}
             title="实验数据摘要与趋势描述"
           >
             <BarChart3 className="h-5 w-5" />
           </Button>
-          <Button 
-            variant={activeTab === "outline" ? "default" : "ghost"} 
-            size="icon" 
+          <Button
+            variant={activeTab === "xrd" ? "default" : "ghost"}
+            size="icon"
+            onClick={() => setActiveTab("xrd")}
+            title="XRD 分析：峰分解 / 背景扣除 / 晶胞可视化"
+          >
+            <Radar className="h-5 w-5" />
+          </Button>
+          <Button
+            variant={activeTab === "outline" ? "default" : "ghost"}
+            size="icon"
             onClick={() => setActiveTab("outline")}
             title="论证提纲：AI 生成目录树（与左侧 IMRaD 并列，非同一套）"
           >
@@ -1120,6 +1119,14 @@ ${(p.references && p.references.length > 0)
           >
             <FileSearch className="h-5 w-5" />
           </Button>
+          <Button
+            variant={activeTab === "plagiarism" ? "default" : "ghost"}
+            size="icon"
+            onClick={() => setActiveTab("plagiarism")}
+            title="论文查重与 AI 降重"
+          >
+            <Search className="h-5 w-5" />
+          </Button>
         </div>
         <Button variant="ghost" size="icon" onClick={handleSave} title="保存项目">
           <Save className="h-5 w-5" />
@@ -1141,6 +1148,8 @@ ${(p.references && p.references.length > 0)
                 {activeTab === "outline" && "论证提纲"}
                 {activeTab === "writing" && "侧栏扩写"}
                 {activeTab === "reader" && "文献库"}
+                {activeTab === "plagiarism" && "查重与降重"}
+                {activeTab === "xrd" && "XRD 分析"}
               </span>
               {activeTab === "structure" && (
                 <span className="text-[10px] text-muted-foreground font-normal normal-case leading-tight mt-0.5 line-clamp-2">
@@ -1217,17 +1226,27 @@ ${(p.references && p.references.length > 0)
               </div>
             )}
             {activeTab === "analysis" && projectId && (
-              <AnalysisPanel 
-                projectId={projectId} 
-                project={project} 
+              <AnalysisPanel
+                projectId={projectId}
+                project={project}
                 onSave={(updates) => setProject(prev => ({ ...prev, ...updates }))}
+                onInsertToPaper={(imageUrl, caption) => {
+                  const mdImage = `\n\n![${caption}](${imageUrl})\n\n`;
+                  handleApplyAiContent(editingContent + mdImage, activeSection);
+                }}
               />
             )}
             {activeTab === "outline" && projectId && (
-              <OutlinePanel 
-                projectId={projectId} 
-                project={project} 
-                onSave={(updates) => setProject(prev => ({ ...prev, ...updates }))}
+              <OutlinePanel
+                projectId={projectId}
+                project={project}
+                onSave={(updates) => {
+                  setProject(prev => {
+                    const next = { ...prev, ...updates };
+                    projectStore.save(next).catch(() => {});
+                    return next;
+                  });
+                }}
                 onTabChange={setActiveTab}
               />
             )}
@@ -1244,6 +1263,7 @@ ${(p.references && p.references.length > 0)
                   project={project}
                   editorActiveSection={activeSection}
                   onGenerate={handleApplyAiContent}
+                  onAutoReorder={handleReorderReferences}
                   onUpdateProject={(updates) => {
                     setProject((prev) => {
                       if (!prev) return prev;
@@ -1265,6 +1285,31 @@ ${(p.references && p.references.length > 0)
             )}
             {activeTab === "reader" && (
               <ReaderPanel onOpenFile={handleOpenFile} />
+            )}
+            {activeTab === "plagiarism" && (
+              <div className="h-full overflow-y-auto pr-2 custom-scrollbar">
+                <PlagiarismPanel
+                  projectId={projectId ?? undefined}
+                  projectTitle={project.title}
+                />
+              </div>
+            )}
+            {activeTab === "xrd" && projectId && (
+              <div className="h-full overflow-y-auto pr-2 custom-scrollbar">
+                <XrdPanel
+                  projectId={projectId}
+                  activeSection={activeSection}
+                  onInsertToPaper={(imageBase64, caption) => {
+                    // 插入 Markdown 图片到当前编辑章节
+                    const mdImage = `\n\n![${caption}](${imageBase64})\n\n`;
+                    handleApplyAiContent(
+                      editingContent + mdImage,
+                      activeSection
+                    );
+                    toast.success(`图表「${caption}」已插入到 ${activeSection} 章节`);
+                  }}
+                />
+              </div>
             )}
           </div>
         </div>
@@ -1387,23 +1432,35 @@ ${(p.references && p.references.length > 0)
                 editorMode === "classic" ? "bg-card rounded-2xl shadow-xl border overflow-hidden" : ""
               )}>
                 {editorMode === "classic" ? (
-                  <Textarea
-                    className="flex-1 border-none focus-visible:ring-0 resize-none p-10 md:p-16 text-lg leading-relaxed font-serif bg-transparent"
-                    placeholder={SECTIONS.find(s => s.id === activeSection)?.placeholder}
-                    value={editingContent}
-                    onChange={e => setEditingContent(e.target.value)}
-                  />
+                  <>
+                    <Textarea
+                      className="flex-1 border-none focus-visible:ring-0 resize-none p-10 md:p-16 text-lg leading-relaxed font-serif bg-transparent"
+                      placeholder={SECTIONS.find(s => s.id === activeSection)?.placeholder}
+                      value={editingContent}
+                      onChange={e => setEditingContent(e.target.value)}
+                    />
+                    <EditorImageGallery
+                      content={editingContent}
+                      onChange={setEditingContent}
+                    />
+                  </>
                 ) : (
-                  <ParagraphEditor 
-                    key={activeSection}
-                    content={editingContent} 
-                    onChange={setEditingContent}
-                    onExpand={handleExpandParagraph}
-                    onAudit={handleAuditParagraph}
-                    onFix={handleFixParagraph}
-                    projectId={projectId || "default"}
-                    activeSection={activeSection}
-                  />
+                  <>
+                    <ParagraphEditor
+                      key={activeSection}
+                      content={editingContent}
+                      onChange={setEditingContent}
+                      onExpand={handleExpandParagraph}
+                      onAudit={handleAuditParagraph}
+                      onFix={handleFixParagraph}
+                      projectId={projectId || "default"}
+                      activeSection={activeSection}
+                    />
+                    <EditorImageGallery
+                      content={editingContent}
+                      onChange={setEditingContent}
+                    />
+                  </>
                 )}
               </div>
             </main>
@@ -1418,7 +1475,7 @@ ${(p.references && p.references.length > 0)
                 <header className="h-14 border-b bg-card flex items-center px-6 shrink-0 justify-between">
                   <span className="font-bold text-sm flex items-center gap-2">
                     {rightPanelMode === "preview" ? (
-                      <><Eye className="h-4 w-4 text-primary" /> SCI 实时预览</>
+                      <><Eye className="h-4 w-4 text-primary shrink-0" /><span className="truncate max-w-[200px]">{project.title || "未命名论文"}</span></>
                     ) : (
                       <><FileSearch className="h-4 w-4 text-primary" /> 文献详情</>
                     )}
@@ -1721,5 +1778,6 @@ ${(p.references && p.references.length > 0)
         </DialogContent>
       </Dialog>
     </div>
+    </ErrorBoundary>
   );
 }

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { BookOpen, FileText, BarChart3, Settings, Layout, Clock, ChevronRight, Search, LogOut, User, Loader2 } from "lucide-react";
+import { BookOpen, FileText, BarChart3, Settings, Layout, Clock, ChevronRight, Search, LogOut, User, Loader2, Play } from "lucide-react";
 import { projectStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth-context";
 
@@ -54,6 +54,12 @@ export default function Home() {
       description: "检测论文重复率，AI 辅助降重改写，支持本地库 + 联网比对",
       icon: <Search className="w-6 h-6 text-primary" />,
       href: "/plagiarism",
+    },
+    {
+      title: "项目演示文档",
+      description: "快速了解项目核心功能、技术架构与科学依据的网页版演示稿",
+      icon: <Play className="w-6 h-6 text-primary" />,
+      href: "/presentation",
     },
   ];
 

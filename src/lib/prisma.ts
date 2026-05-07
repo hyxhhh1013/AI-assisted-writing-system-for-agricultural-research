@@ -6,8 +6,8 @@ const prismaClientSingleton = () => {
   })
 
   // 启用 SQLite WAL 模式，提升并发读性能
-  client.$executeRawUnsafe('PRAGMA journal_mode=WAL').catch(() => {})
-  client.$executeRawUnsafe('PRAGMA busy_timeout=5000').catch(() => {})
+  client.$queryRawUnsafe('PRAGMA journal_mode=WAL').catch(() => {})
+  client.$queryRawUnsafe('PRAGMA busy_timeout=5000').catch(() => {})
 
   return client
 }

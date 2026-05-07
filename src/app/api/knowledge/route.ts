@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import { exec } from "child_process";
@@ -14,42 +14,78 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category");
     const query = searchParams.get("q")?.toLowerCase();
+    const searchType = searchParams.get("type") || "name"; // name | semantic
     const page = parseInt(searchParams.get("page") || "1");
     const pageSize = parseInt(searchParams.get("pageSize") || "10");
 
+    // RAG 语义搜索
+    if (searchType === "semantic" && query) {
+      const cat = category && category !== "全部" ? category : undefined;
+      const results = await localRAG.search(query, { limit: 20, category: cat });
+      const total = results.length;
+      const start = (page - 1) * pageSize;
+      const paged = results.slice(start, start + pageSize);
+
+      // 按 source 汇总，方便前端展示
+      const grouped = new Map<string, { name: string; category: string; chunks: typeof results; chunkCount: number }>();
+      for (const r of paged) {
+        const key = r.metadata.source;
+        if (!grouped.has(key)) {
+          grouped.set(key, { name: key, category: r.metadata.category, chunks: [], chunkCount: 0 });
+        }
+        const g = grouped.get(key)!;
+        g.chunks.push(r);
+        g.chunkCount++;
+      }
+
+      return NextResponse.json({
+        files: Array.from(grouped.values()).map(g => ({
+          name: g.name,
+          category: g.category,
+          chunkCount: g.chunkCount,
+          size: 0,
+          mtime: "",
+          _snippets: g.chunks.slice(0, 3).map(c => c.content.slice(0, 150)),
+        })),
+        total,
+        page,
+        pageSize,
+        searchType: "semantic",
+        categories: [],
+      });
+    }
+
+    // 原有文件名搜索
     if (!fs.existsSync(METADATA_PATH)) {
       return NextResponse.json({ files: [], total: 0, categories: ["全部"] });
     }
 
     const metadata = JSON.parse(fs.readFileSync(METADATA_PATH, "utf-8"));
-    
-    // 获取所有分类
     const categories = Array.from(new Set(metadata.map((m: any) => m.category)));
 
-    // 过滤逻辑
     let filtered = metadata;
     if (category && category !== "全部") {
       filtered = filtered.filter((m: any) => m.category === category);
     }
     if (query) {
-      filtered = filtered.filter((m: any) => 
-        m.name.toLowerCase().includes(query) || 
+      filtered = filtered.filter((m: any) =>
+        m.name.toLowerCase().includes(query) ||
         m.category.toLowerCase().includes(query)
       );
     }
 
-    // 分页逻辑
     const total = filtered.length;
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
     const paginatedFiles = filtered.slice(start, end);
 
-    return NextResponse.json({ 
-      files: paginatedFiles, 
+    return NextResponse.json({
+      files: paginatedFiles,
       total,
       page,
       pageSize,
-      categories: ["全部", ...categories] 
+      categories: ["全部", ...categories],
+      searchType: "name",
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -94,9 +130,25 @@ export async function POST(req: NextRequest) {
     const filePath = path.join(targetDir, file.name);
     fs.writeFileSync(filePath, buffer);
 
-    // 上传后自动触发索引更新（可选，为了效率可以手动触发）
-    // 这里我们先不自动触发，让用户在界面点击“重新构建索引”
-    
+    // 同步更新 metadata.json，使文件立即可见于列表
+    if (fs.existsSync(METADATA_PATH)) {
+      const metadata = JSON.parse(fs.readFileSync(METADATA_PATH, "utf-8"));
+      const existingIdx = metadata.findIndex((m: any) => m.name === file.name);
+      const entry = {
+        name: file.name,
+        category,
+        chunkCount: 0,
+        size: buffer.length,
+        mtime: new Date().toISOString(),
+      };
+      if (existingIdx >= 0) {
+        metadata[existingIdx] = entry;
+      } else {
+        metadata.push(entry);
+      }
+      fs.writeFileSync(METADATA_PATH, JSON.stringify(metadata, null, 2), "utf-8");
+    }
+
     return NextResponse.json({ message: "文件上传成功", name: file.name });
 
   } catch (error: any) {
@@ -138,6 +190,16 @@ export async function PATCH(req: NextRequest) {
         }
       }
 
+      // 同步更新 metadata.json
+      if (fs.existsSync(METADATA_PATH)) {
+        const metadata = JSON.parse(fs.readFileSync(METADATA_PATH, "utf-8"));
+        for (const file of files) {
+          const entry = metadata.find((m: any) => m.name === file.name);
+          if (entry) entry.category = newCategory;
+        }
+        fs.writeFileSync(METADATA_PATH, JSON.stringify(metadata, null, 2), "utf-8");
+      }
+
       return NextResponse.json({ message: `批量移动完成：成功 ${results.success}，失败 ${results.failed}` });
     }
 
@@ -147,7 +209,22 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "参数不完整" }, { status: 400 });
     }
 
-    const oldPath = path.join(ARTICLES_DIR, oldCategory === "未分类" ? "" : oldCategory, name);
+    // 在所有子目录中查找源文件（metadata 可能跟实际目录不一致）
+    let oldPath = path.join(ARTICLES_DIR, oldCategory === "未分类" ? "" : oldCategory, name);
+    if (!fs.existsSync(oldPath)) {
+      // 搜索所有子目录
+      const found: string[] = [];
+      for (const entry of fs.readdirSync(ARTICLES_DIR, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue;
+        const candidate = path.join(ARTICLES_DIR, entry.name, name);
+        if (fs.existsSync(candidate)) found.push(candidate);
+      }
+      if (found.length === 0) {
+        return NextResponse.json({ error: `文件不存在: ${name}` }, { status: 404 });
+      }
+      oldPath = found[0];
+    }
+
     const newDir = path.join(ARTICLES_DIR, newCategory === "未分类" ? "" : newCategory);
     const newPath = path.join(newDir, name);
 
@@ -160,6 +237,14 @@ export async function PATCH(req: NextRequest) {
     }
 
     fs.renameSync(oldPath, newPath);
+
+    // 同步更新 metadata.json
+    if (fs.existsSync(METADATA_PATH)) {
+      const metadata = JSON.parse(fs.readFileSync(METADATA_PATH, "utf-8"));
+      const entry = metadata.find((m: any) => m.name === name);
+      if (entry) entry.category = newCategory;
+      fs.writeFileSync(METADATA_PATH, JSON.stringify(metadata, null, 2), "utf-8");
+    }
 
     return NextResponse.json({ message: "分类更新成功" });
   } catch (error: any) {

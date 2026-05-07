@@ -16,6 +16,7 @@ config JSON 格式:
 
 import argparse
 import json
+import os
 import sys
 
 import matplotlib
@@ -23,6 +24,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+
+# 确保能导入同目录下的共享模块
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from plot_utils import load_dataframe  # noqa: E402
 
 plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
@@ -45,7 +50,7 @@ def find_peaks(x: np.ndarray, y: np.ndarray, prominence: float = 0.05):
 
 
 def plot_xrd(data_path: str, config: dict, output_path: str):
-    df = pd.read_csv(data_path)
+    df = load_dataframe(data_path)
 
     title = config.get("title", "XRD Pattern")
     x_label = config.get("x_label", "2θ (degree)")

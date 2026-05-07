@@ -1,6 +1,8 @@
 import { chromium } from "playwright";
 import type { ProjectData } from "@/lib/store";
 import { formatClassification, formatKeywords } from "@/lib/paper-metadata";
+import fs from "fs";
+import path from "path";
 
 type PdfTemplate = "sci" | "ieee" | "gbt7713" | "nature" | "cas";
 type SectionKey = "introduction" | "methods" | "results" | "conclusion";
@@ -86,16 +88,41 @@ const renderMarkdown = (content: string, sectionNumber?: number, compact = false
       continue;
     }
 
-    // 图片标记 ![caption](base64data)
-    const imgMatch = line.match(/^!\[([^\]]*)\]\(data:image\/([^;]+);base64,([^)]+)\)$/);
-    if (imgMatch) {
+    // 图片标记 ![caption](data:image/...;base64,...)
+    const imgB64Match = line.match(/^!\[([^\]]*)\]\(data:image\/([^;]+);base64,([^)]+)\)$/);
+    if (imgB64Match) {
       flushParagraph();
       flushList();
-      const caption = inlineMarkdown(imgMatch[1] || "");
+      const caption = inlineMarkdown(imgB64Match[1] || "");
       html.push(`<figure style="text-align:center;margin:16px 0;">
-        <img src="data:image/${imgMatch[2]};base64,${imgMatch[3]}" alt="${caption}" style="max-width:90%;height:auto;border:1px solid #eee;border-radius:4px;" />
+        <img src="data:image/${imgB64Match[2]};base64,${imgB64Match[3]}" alt="${caption}" style="max-width:90%;height:auto;border:1px solid #eee;border-radius:4px;" />
         ${caption ? `<figcaption style="margin-top:6px;font-size:9pt;color:#555;">${caption}</figcaption>` : ""}
       </figure>`);
+      continue;
+    }
+
+    // 图片标记 ![caption](/charts/xxx.png) — 从本地文件读取
+    const imgUrlMatch = line.match(/^!\[([^\]]*)\]\((\/charts\/[^)]+)\)$/);
+    if (imgUrlMatch) {
+      flushParagraph();
+      flushList();
+      const caption = inlineMarkdown(imgUrlMatch[1] || "");
+      const filePath = path.join(process.cwd(), "public", imgUrlMatch[2]);
+      let imgSrc = "";
+      try {
+        const buf = fs.readFileSync(filePath);
+        imgSrc = `data:image/png;base64,${buf.toString("base64")}`;
+      } catch {
+        imgSrc = ""; // 文件不存在，跳过
+      }
+      if (imgSrc) {
+        html.push(`<figure style="text-align:center;margin:16px 0;">
+          <img src="${imgSrc}" alt="${caption}" style="max-width:90%;height:auto;border:1px solid #eee;border-radius:4px;" />
+          ${caption ? `<figcaption style="margin-top:6px;font-size:9pt;color:#555;">${caption}</figcaption>` : ""}
+        </figure>`);
+      } else {
+        html.push(`<p style="color:#999;font-style:italic;">[图片: ${caption}]</p>`);
+      }
       continue;
     }
 
@@ -140,10 +167,18 @@ const referencesHtml = (references: string[] | undefined, isChinese: boolean): s
   `;
 };
 
-const baseCss = `
+const pageMargins: Record<string, string> = {
+  sci: "16mm 20mm",
+  ieee: "14mm 15mm",
+  gbt7713: "20mm 22mm 20mm 28mm",
+  nature: "12mm 15mm",
+  cas: "16mm 20mm",
+};
+
+const baseCss = (template: string) => `
   @page {
     size: A4;
-    margin: 0;
+    margin: ${pageMargins[template] || "25mm 30mm"};
   }
 
   * {
@@ -727,7 +762,7 @@ export function renderProjectPdfHtml(project: ProjectData): string {
     <html lang="${isChinese ? "zh-CN" : "en"}">
       <head>
         <meta charset="utf-8" />
-        <style>${baseCss}${templateCss}</style>
+        <style>${baseCss(template)}${templateCss}</style>
       </head>
       <body>${renderTemplate(project, template)}</body>
     </html>`;

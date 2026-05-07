@@ -4,6 +4,20 @@ import path from "path";
 
 const ARTICLES_DIR = path.join(process.cwd(), "热化学小组文章-2024.12.27");
 
+function findFileInDir(dir: string, targetName: string): string | null {
+  if (!fs.existsSync(dir)) return null;
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      const found = findFileInDir(path.join(dir, entry.name), targetName);
+      if (found) return found;
+    } else if (entry.name === targetName) {
+      return path.join(dir, entry.name);
+    }
+  }
+  return null;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -15,7 +29,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "File name is required" }, { status: 400 });
     }
 
-    const filePath = path.join(ARTICLES_DIR, filename);
+    // 递归搜索所有子目录（文件可能存储在 ARTICLES_DIR 或子目录中）
+    let filePath = path.join(ARTICLES_DIR, filename);
+    if (!fs.existsSync(filePath)) {
+      const found = findFileInDir(ARTICLES_DIR, filename);
+      if (found) {
+        filePath = found;
+      }
+    }
     console.log("Resolved path:", filePath);
 
     if (!fs.existsSync(filePath)) {

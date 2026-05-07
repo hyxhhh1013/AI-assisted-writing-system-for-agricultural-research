@@ -1,92 +1,40 @@
 "use client";
 
-export interface ProjectData {
-  id: string;
-  title: string;
-  authors: string;
-  affiliations: string;
-  abstract: string;
-  keywords: string;
-  classification: string;
-  researchDirection: string;
-  outline: string;
-  template: string; // 'sci' | 'ieee' | 'gbt7713' | 'nature'
-  sections: Record<string, string>;
-  analysisResults: string[];
-  references: string[];
-  lastUpdated: number;
-}
+import { listProjects, getProject, saveProject, deleteProject } from "@/services/project";
+import type { ProjectData, SectionRecord } from "@/services/project";
 
-/**
- * ProjectStore 现在作为后端 API 的封装
- * 所有的持久化逻辑都迁移到了服务器端数据库
- */
+export type { ProjectData } from "@/services/project";
+
+const DEFAULT_SECTIONS: SectionRecord = {
+  introduction: "",
+  methods: "",
+  results: "",
+  conclusion: "",
+};
+
 export const projectStore = {
-  // 获取所有项目列表
   async list(): Promise<{ id: string; title: string; lastUpdated: number }[]> {
-    try {
-      const res = await fetch("/api/projects");
-      if (!res.ok) return [];
-      return await res.json();
-    } catch (e) {
-      console.error("Store list error:", e);
-      return [];
-    }
+    return listProjects();
   },
 
-  // 获取特定项目数据
   async get(id: string): Promise<ProjectData | null> {
-    if (!id) return null;
-    try {
-      const res = await fetch(`/api/projects?id=${id}`);
-      if (!res.ok) return null;
-      return await res.json();
-    } catch (e) {
-      console.error("Store get error:", e);
-      return null;
-    }
+    return getProject(id);
   },
 
-  // 保存项目数据
   async save(data: ProjectData): Promise<string | null> {
-    try {
-      const res = await fetch("/api/projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) return null;
-      const result = await res.json();
-      return result.id;
-    } catch (e) {
-      console.error("Store save error:", e);
-      return null;
-    }
+    return saveProject(data);
   },
 
-  // 创建新项目
+  async delete(id: string): Promise<boolean> {
+    return deleteProject(id);
+  },
+
   async create(title: string = "新论文项目"): Promise<ProjectData | null> {
     const newProject = this.getDefault("");
     newProject.title = title;
-    const id = await this.save(newProject);
+    const id = await saveProject(newProject);
     if (!id) return null;
-    return await this.get(id);
-  },
-
-  // 删除项目
-  async delete(id: string): Promise<boolean> {
-    try {
-      const res = await fetch(`/api/projects?id=${id}`, { method: "DELETE" });
-      return res.ok;
-    } catch (e) {
-      console.error("Store delete error:", e);
-      return false;
-    }
-  },
-
-  // 获取当前正在编辑的项目ID（现在由 URL 参数管理）
-  getCurrentId(): string | null {
-    return null;
+    return getProject(id);
   },
 
   getDefault(id: string = ""): ProjectData {
@@ -101,15 +49,24 @@ export const projectStore = {
       researchDirection: "",
       outline: "",
       template: "sci",
-      sections: {
-        introduction: "",
-        methods: "",
-        results: "",
-        conclusion: "",
-      },
+      sections: { ...DEFAULT_SECTIONS },
       analysisResults: [],
       references: [],
       lastUpdated: Date.now(),
     };
+  },
+
+  getCurrentId(): string | null {
+    // 已废弃 — 改用 useSearchParams
+    return null;
+  },
+
+  async update(id: string, updates: Partial<ProjectData>): Promise<ProjectData | null> {
+    const existing = await getProject(id);
+    if (!existing) return null;
+    const merged = { ...existing, ...updates, id };
+    const savedId = await saveProject(merged);
+    if (!savedId) return null;
+    return getProject(savedId);
   },
 };

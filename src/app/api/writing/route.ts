@@ -1,4 +1,6 @@
 import { NextRequest } from "next/server";
+import fs from "fs";
+import path from "path";
 import { formatRagCitation, localRAG } from "@/lib/rag";
 import { collectCitationFirstAppearance } from "@/lib/reference-reorder";
 import { validateCitations } from "@/lib/citation-validator";
@@ -12,6 +14,32 @@ import {
   buildRefinerSystemPrompt,
   buildRefinerPrompt,
 } from "@/lib/prompts";
+
+const METADATA_PATH = path.join(process.cwd(), "data/metadata.json");
+
+function matchCategory(direction: string): string | null {
+  if (!direction || !fs.existsSync(METADATA_PATH)) return null;
+  try {
+    const metadata = JSON.parse(fs.readFileSync(METADATA_PATH, "utf-8")) as {
+      category: string;
+    }[];
+    const categories = Array.from(new Set(metadata.map((m) => m.category))).filter(
+      (c) => c && c !== "未分类",
+    );
+    if (categories.length === 0) return null;
+    const kw = direction.toLowerCase();
+    const matches = categories
+      .map((cat) => ({
+        cat,
+        score: cat.split(/[\s\-_]/).filter((w) => kw.includes(w.toLowerCase())).length,
+      }))
+      .filter((m) => m.score > 0)
+      .sort((a, b) => b.score - a.score);
+    return matches[0]?.cat || null;
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -57,9 +85,37 @@ export async function POST(req: NextRequest) {
 
     // 2. RAG 检索
     const searchQuery = `${title} ${context}`;
-    let contextChunks = await localRAG.search(searchQuery, { limit: ragLimit, maxPerSource: ragMaxPerSource });
+    // 按章节类型注入检索关键词，提升文献相关性
+    const sectionKeywords: Record<string, string> = {
+      abstract: "综述 研究背景 研究目的 主要结果 结论",
+      introduction: "研究背景 综述 研究现状 存在问题 研究进展",
+      methods: "实验方法 制备 表征 测试 合成 优化",
+      results: "实验数据 结果分析 性能对比 机理 影响因素",
+      conclusion: "结论 展望 应用前景 创新点 贡献",
+    };
+    const sectionBoost = sectionKeywords[section] || "";
+    // 将用户研究方向注入检索 query，提升多方向文献库中的检索准确性
+    const directionBoost = researchDirection || "";
+    const enhancedQuery = [sectionBoost, directionBoost, title, context]
+      .filter(Boolean)
+      .join(" ");
+    const matchedCategory = matchCategory(researchDirection || "");
+
+    let contextChunks = await localRAG.search(enhancedQuery, {
+      limit: ragLimit,
+      maxPerSource: ragMaxPerSource,
+      category: matchedCategory || undefined,
+    });
     if (contextChunks.length === 0) {
-      contextChunks = await localRAG.search(title, { limit: ragLimit, maxPerSource: Math.max(1, Math.floor(ragMaxPerSource / 2)) });
+      // 降级：只用 title + sectionBoost + direction 重试
+      const fallbackQuery = [sectionBoost, directionBoost, title]
+        .filter(Boolean)
+        .join(" ");
+      contextChunks = await localRAG.search(fallbackQuery, {
+        limit: ragLimit,
+        maxPerSource: Math.max(1, Math.floor(ragMaxPerSource / 2)),
+        category: matchedCategory || undefined,
+      });
     }
 
     const refMapping: Record<string, number> = {};
@@ -225,10 +281,30 @@ export async function POST(req: NextRequest) {
           // Agent 2: Verifier (使用智谱AI，独立验证)
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "verifying" })}\n\n`));
 
+          // 为 Verifier 收集被引用文献的完整原文 chunk
+          const citedIndices = collectCitationFirstAppearance(
+            initialDraft,
+            referencesByIndex.length,
+          );
+          const fullSourceChunks: string[] = [];
+          for (const idx of citedIndices) {
+            const sourceName = referencesByIndex[idx - 1];
+            if (!sourceName) continue;
+            const fullText = localRAG.getFullText(sourceName);
+            if (fullText) {
+              // 如果全文太长（>3000字），取前后各 1500 字
+              const trimmed = fullText.length > 3000
+                ? fullText.slice(0, 1500) + "\n…[省略中间部分]…\n" + fullText.slice(-1500)
+                : fullText;
+              fullSourceChunks.push(`=== [${idx}] ${sourceName} 完整原文 ===\n${trimmed}`);
+            }
+          }
+
           const verifierPrompt = buildVerifierPrompt({
             contextText,
             content: initialDraft,
             globalReferenceInfo,
+            fullSourceTexts: fullSourceChunks.length > 0 ? fullSourceChunks.join("\n\n") : undefined,
           });
 
           let verificationReport = "";
@@ -267,8 +343,9 @@ export async function POST(req: NextRequest) {
             }
           }
 
-          // Agent 3: Refiner (条件触发)
-          if (verificationReport && !verificationReport.includes("PASS") && verificationReport.length > 10) {
+          // Agent 3: Refiner (条件触发 — 仅当核查发现实际问题时）
+          const isPass = verificationReport.trim().toUpperCase().startsWith("PASS");
+          if (verificationReport && !isPass && verificationReport.length > 20) {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: "refining" })}\n\n`));
 
             const refinerPrompt = buildRefinerPrompt({

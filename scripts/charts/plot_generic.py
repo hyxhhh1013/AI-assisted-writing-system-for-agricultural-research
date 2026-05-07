@@ -16,6 +16,7 @@ config JSON 格式:
 
 import argparse
 import json
+import os
 import sys
 import traceback
 
@@ -24,82 +25,77 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
+# 确保能导入同目录下的共享模块
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from plot_utils import load_dataframe  # noqa: E402
+
 # 中文字体支持
 plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
 
-def load_dataframe(data_path: str):
-    """自动检测文件格式和编码加载数据，支持 CSV 和 Excel"""
-    import io
-    import zipfile
+def _rgba_to_mpl(rgba_str):
+    """将 Chart.js rgba() 转为 matplotlib 可识别的颜色"""
+    if not isinstance(rgba_str, str) or not rgba_str.startswith("rgba"):
+        return rgba_str
+    import re
+    m = re.match(r"rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)", rgba_str)
+    if not m:
+        return rgba_str
+    return (int(m.group(1)) / 255, int(m.group(2)) / 255, int(m.group(3)) / 255, float(m.group(4)))
 
-    raw = open(data_path, "rb").read()
 
-    # ===== 策略 1: 作为 Excel 打开 =====
-    is_zip = raw[:2] == b"PK"
-    if is_zip:
-        for eng in ["openpyxl", "xlrd", None]:
-            try:
-                return pd.read_excel(data_path, engine=eng)
-            except Exception:
-                continue
-        # Excel 引擎失败，从 ZIP 提 CSV
-        try:
-            with zipfile.ZipFile(data_path) as z:
-                csv_files = [n for n in z.namelist() if n.endswith(".csv")]
-                if csv_files:
-                    with z.open(csv_files[0]) as f:
-                        return pd.read_csv(f)
-        except Exception:
-            pass
+def _plot_inline(labels, datasets, config, output_path):
+    """处理内联数据（Chart.js 风格）"""
+    chart_type = config.get("chart_type") or config.get("type", "bar")
+    title = config.get("title", "")
+    x_label = config.get("x_label", "")
+    y_label = config.get("y_label", "")
+    colors = ["#4A90D9", "#E57373", "#81C784", "#FFB74D", "#64B5F6", "#BA68C8", "#4DB6AC", "#FF8A65"]
 
-    # ===== 策略 2: 作为 CSV/文本 =====
-    # 先尝试用 latin-1 解码（可以解码任何字节，保证后续 CSV 解析能看到原始内容）
-    text = raw.decode("latin-1")
+    fig, ax = plt.subplots(figsize=(8, 5))
+    x_pos = range(len(labels))
 
-    # 多个分隔符自动检测
-    for sep in [",", "\t", ";", "|", " "]:
-        try:
-            df = pd.read_csv(io.StringIO(text), sep=sep)
-            if len(df.columns) >= 1 and len(df) > 0:
-                return df
-        except Exception:
-            continue
+    n_datasets = len(datasets)
+    bar_width = 0.8 / max(n_datasets, 1)
 
-    # 自动检测分隔符
-    try:
-        df = pd.read_csv(io.StringIO(text), sep=None, engine="python")
-        if len(df.columns) >= 1 and len(df) > 0:
-            return df
-    except Exception:
-        pass
+    for i, ds in enumerate(datasets):
+        c = colors[i % len(colors)]
+        d = ds.get("data", [])
+        label = ds.get("label", "")
+        ds_color = _rgba_to_mpl(ds.get("backgroundColor", c))
 
-    # ===== 策略 3: 按编码解码重试（针对非 latin-1 编码的文本） =====
-    for encoding in ["utf-8-sig", "utf-8", "gbk", "gb2312", "utf-16"]:
-        try:
-            decoded = raw.decode(encoding)
-        except (UnicodeDecodeError, LookupError):
-            continue
-        if decoded == text:
-            continue  # 和 latin-1 结果一样，跳过
-        for sep in [",", "\t", ";", "|", " "]:
-            try:
-                df = pd.read_csv(io.StringIO(decoded), sep=sep)
-                if len(df.columns) >= 1 and len(df) > 0:
-                    return df
-            except Exception:
-                continue
+        if chart_type == "line":
+            ax.plot(x_pos, d, color=c, marker="o", linewidth=2, markersize=6, label=label or None)
+            ax.fill_between(x_pos, d, alpha=0.1, color=c)
+        elif chart_type == "scatter":
+            ax.scatter(x_pos, d, c=c, s=60, alpha=0.7, label=label or None)
+        else:
+            offset = (i - (n_datasets - 1) / 2) * bar_width
+            ax.bar([p + offset for p in x_pos], d, width=bar_width * 0.9,
+                   color=ds_color, edgecolor="white", linewidth=0.5,
+                   label=label or None, alpha=0.85)
 
-    # ===== 全部失败 =====
-    hint = "ZIP/Excel" if is_zip else "CSV"
-    preview = raw[:120]
-    raise ValueError(
-        f"无法以 {hint} 格式读取文件。前120字节: {preview!r}"
-    )
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels(labels, fontsize=9, rotation=20, ha="right")
+    if x_label: ax.set_xlabel(x_label, fontsize=12)
+    if y_label: ax.set_ylabel(y_label, fontsize=12)
+    ax.set_title(title, fontsize=14)
+    if len(datasets) > 1: ax.legend(fontsize=10)
+    ax.grid(axis="y", alpha=0.3)
+    plt.tight_layout()
+    fig.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
 
 
 def plot_chart(data_path: str, config: dict, output_path: str):
+    # 支持内联数据（Chart.js 风格）和 CSV 文件两种模式
+    inline_data = config.get("data")
+    if inline_data and "labels" in inline_data and "datasets" in inline_data:
+        labels = inline_data["labels"]
+        datasets = inline_data["datasets"]
+        return _plot_inline(labels, datasets, config, output_path)
+
     df = load_dataframe(data_path)
     chart_type = config.get("chart_type", "line")
     title = config.get("title", "")

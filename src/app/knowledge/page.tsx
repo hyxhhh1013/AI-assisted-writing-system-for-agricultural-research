@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
@@ -39,6 +40,7 @@ interface KnowledgeFile {
   chunkCount: number;
   size: number;
   mtime: string;
+  _snippets?: string[];
 }
 
 export default function KnowledgePage() {
@@ -49,6 +51,7 @@ export default function KnowledgePage() {
   const [isIndexing, setIsIndexing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("全部");
+  const [searchType, setSearchType] = useState<"name" | "semantic">("name");
   
   // 分页状态
   const [currentPage, setCurrentPage] = useState(1);
@@ -57,19 +60,23 @@ export default function KnowledgePage() {
 
   // 多选与批量操作状态
   const [selectedFiles, setSelectedFiles] = useState<KnowledgeFile[]>([]);
+  const [selectAllPages, setSelectAllPages] = useState(false);
   const [isBatchMoveOpen, setIsBatchMoveOpen] = useState(false);
   const [batchCategoryName, setBatchCategoryName] = useState("");
+  const [batchNewInput, setBatchNewInput] = useState("");
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
 
   // 上传相关状态
   const [isUploadOpen, setIsUploadOpen] = useState(false);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadCategory, setUploadCategory] = useState("未分类");
+  const [uploadNewInput, setUploadNewInput] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
   // 修改分类相关状态
   const [editingFile, setEditingFile] = useState<KnowledgeFile | null>(null);
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryInput, setNewCategoryInput] = useState("");
   const [isUpdatingCategory, setIsUpdatingCategory] = useState(false);
 
   const fetchFiles = async () => {
@@ -78,6 +85,7 @@ export default function KnowledgePage() {
       const params = new URLSearchParams();
       if (selectedCategory !== "全部") params.append("category", selectedCategory);
       if (searchQuery) params.append("q", searchQuery);
+      if (searchType !== "name") params.append("type", "semantic");
       params.append("page", currentPage.toString());
       params.append("pageSize", pageSize.toString());
 
@@ -99,12 +107,12 @@ export default function KnowledgePage() {
       fetchFiles();
     }, 300); // 防抖
     return () => clearTimeout(timer);
-  }, [searchQuery, selectedCategory, currentPage]);
+  }, [searchQuery, selectedCategory, currentPage, searchType]);
 
   // 当搜索或分类改变时，重置页码
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedCategory]);
+  }, [searchQuery, selectedCategory, searchType]);
 
   const handleReindex = async () => {
     setIsIndexing(true);
@@ -118,18 +126,37 @@ export default function KnowledgePage() {
       } else {
         throw new Error(data.error);
       }
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "操作失败");
     } finally {
       setIsIndexing(false);
     }
   };
 
   const toggleSelectAll = () => {
-    if (selectedFiles.length === files.length) {
+    if (selectedFiles.length === files.length || selectAllPages) {
       setSelectedFiles([]);
+      setSelectAllPages(false);
     } else {
       setSelectedFiles([...files]);
+    }
+  };
+
+  const selectAllAcrossPages = async () => {
+    // 获取所有页的文件
+    try {
+      const params = new URLSearchParams();
+      if (selectedCategory !== "全部") params.append("category", selectedCategory);
+      if (searchQuery) params.append("q", searchQuery);
+      params.append("pageSize", totalFiles.toString());
+      const res = await fetch(`/api/knowledge?${params}`);
+      const json = await res.json();
+      if (json.files) {
+        setSelectedFiles(json.files);
+        setSelectAllPages(true);
+      }
+    } catch {
+      toast.error("全选失败");
     }
   };
 
@@ -142,7 +169,8 @@ export default function KnowledgePage() {
   };
 
   const handleBatchMove = async () => {
-    if (selectedFiles.length === 0 || !batchCategoryName) return;
+    const catName = batchCategoryName === "batch_new" ? batchNewInput : batchCategoryName;
+    if (selectedFiles.length === 0 || !catName) return;
     setIsBatchProcessing(true);
 
     try {
@@ -152,7 +180,7 @@ export default function KnowledgePage() {
         body: JSON.stringify({
           action: "batch_move",
           files: selectedFiles.map(f => ({ name: f.name, category: f.category })),
-          newCategory: batchCategoryName,
+          newCategory: catName,
         }),
       });
 
@@ -165,8 +193,8 @@ export default function KnowledgePage() {
         const data = await res.json();
         throw new Error(data.error);
       }
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "操作失败");
     } finally {
       setIsBatchProcessing(false);
     }
@@ -194,8 +222,8 @@ export default function KnowledgePage() {
         const data = await res.json();
         throw new Error(data.error);
       }
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "操作失败");
     } finally {
       setIsBatchProcessing(false);
     }
@@ -216,43 +244,47 @@ export default function KnowledgePage() {
         const data = await res.json();
         throw new Error(data.error);
       }
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "操作失败");
     }
   };
 
   const handleUpload = async () => {
-    if (!uploadFile) return;
-    setIsUploading(true);
-    
-    const formData = new FormData();
-    formData.append("file", uploadFile);
-    formData.append("category", uploadCategory);
-
-    try {
-      const res = await fetch("/api/knowledge", {
-        method: "POST",
-        body: formData,
-      });
-      
-      if (res.ok) {
-        toast.success("文件上传成功！请记得更新索引。");
-        setIsUploadOpen(false);
-        setUploadFile(null);
-        fetchFiles();
-      } else {
-        const data = await res.json();
-        throw new Error(data.error);
-      }
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setIsUploading(false);
+    if (uploadFiles.length === 0) return;
+    const catName = uploadCategory === "new_upload" ? uploadNewInput : uploadCategory;
+    if (!catName) {
+      toast.error("请输入分类名称");
+      return;
     }
+    setIsUploading(true);
+    let successCount = 0;
+    for (const file of uploadFiles) {
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("category", catName);
+
+        const res = await fetch("/api/knowledge", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (res.ok) successCount++;
+      } catch (e) {
+        console.error(`上传失败: ${file.name}`, e);
+      }
+    }
+
+    toast.success(`上传完成：${successCount}/${uploadFiles.length} 个文件`);
+    setIsUploadOpen(false);
+    setUploadFiles([]);
+    fetchFiles();
+    setIsUploading(false);
   };
 
   const handleUpdateCategory = async () => {
-    if (!editingFile || !newCategoryName) return;
+    const catName = newCategoryName === "new_cat" ? newCategoryInput : newCategoryName;
+    if (!editingFile || !catName) return;
     setIsUpdatingCategory(true);
 
     try {
@@ -262,7 +294,7 @@ export default function KnowledgePage() {
         body: JSON.stringify({
           name: editingFile.name,
           oldCategory: editingFile.category,
-          newCategory: newCategoryName,
+          newCategory: catName,
         }),
       });
 
@@ -274,8 +306,8 @@ export default function KnowledgePage() {
         const data = await res.json();
         throw new Error(data.error);
       }
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "操作失败");
     } finally {
       setIsUpdatingCategory(false);
     }
@@ -360,14 +392,26 @@ export default function KnowledgePage() {
         )}
 
         <div className="flex flex-col md:flex-row gap-4 items-end md:items-center">
-          <div className="relative flex-1 w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="搜索文件名、分类或内容关键字..."
-              className="pl-9"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+          <div className="relative flex-1 w-full flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder={searchType === "semantic" ? "搜索文献内容（语义检索）..." : "搜索文件名或分类..."}
+                className="pl-9"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <Button
+              variant={searchType === "semantic" ? "default" : "outline"}
+              size="sm"
+              className="shrink-0 gap-1.5"
+              onClick={() => setSearchType(searchType === "semantic" ? "name" : "semantic")}
+              title={searchType === "semantic" ? "切换到文件名搜索" : "切换到内容语义搜索"}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              {searchType === "semantic" ? "语义" : "文件名"}
+            </Button>
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
             <Database className="h-4 w-4" />
@@ -375,7 +419,30 @@ export default function KnowledgePage() {
           </div>
         </div>
 
-        <div className="w-full">
+        {/* 索引状态提示 */}
+        <Card className="bg-muted/30 border-dashed">
+          <CardContent className="py-3 px-4">
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-4">
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <Database className="h-3.5 w-3.5" />
+                  共 <strong>{totalFiles}</strong> 篇文献
+                </span>
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <FileText className="h-3.5 w-3.5" />
+                  <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={handleReindex} disabled={isIndexing}>
+                    {isIndexing ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> 索引中...</> : "重建索引"}
+                  </Button>
+                </span>
+              </div>
+              <Badge variant="outline" className="text-xs">
+                {searchType === "semantic" ? "语义搜索" : "文件名搜索"}
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="w-full mt-4">
           <div className="flex items-center justify-between mb-4 overflow-x-auto gap-4">
             <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="bg-muted/50 rounded-lg p-1">
               <TabsList className="bg-transparent">
@@ -388,18 +455,26 @@ export default function KnowledgePage() {
             </Tabs>
             
             <div className="flex items-center gap-2 shrink-0">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="text-xs h-8 gap-2"
-                onClick={toggleSelectAll}
-              >
-                {selectedFiles.length === files.length && files.length > 0 ? (
-                  <><CheckSquare className="h-3.5 w-3.5" /> 取消全选</>
-                ) : (
-                  <><Square className="h-3.5 w-3.5" /> 全选</>
-                )}
-              </Button>
+              {selectAllPages ? (
+                <Button variant="ghost" size="sm" className="text-xs h-8 gap-2" onClick={toggleSelectAll}>
+                  <CheckSquare className="h-3.5 w-3.5" /> 取消全选（{totalFiles} 篇）
+                </Button>
+              ) : (
+                <>
+                  <Button variant="ghost" size="sm" className="text-xs h-8 gap-2" onClick={toggleSelectAll}>
+                    {selectedFiles.length === files.length && files.length > 0 ? (
+                      <><CheckSquare className="h-3.5 w-3.5" /> 取消全选</>
+                    ) : (
+                      <><Square className="h-3.5 w-3.5" /> 全选本页</>
+                    )}
+                  </Button>
+                  {totalPages > 1 && (
+                    <Button variant="ghost" size="sm" className="text-xs h-8 gap-1 text-muted-foreground" onClick={selectAllAcrossPages}>
+                      <Square className="h-3 w-3" /> 全选所有 {totalFiles} 篇
+                    </Button>
+                  )}
+                </>
+              )}
             </div>
           </div>
 
@@ -453,9 +528,18 @@ export default function KnowledgePage() {
                               </span>
                             </div>
                           </div>
-                        </Link>
-                        
-                        <div className="flex items-center justify-between mt-3 md:mt-0 shrink-0 gap-4 pl-8 md:pl-0">
+                          {file._snippets && file._snippets.length > 0 && (
+                            <div className="mt-2 space-y-1">
+                              {file._snippets.map((s, i) => (
+                                <p key={i} className="text-xs text-muted-foreground line-clamp-2 italic border-l-2 border-primary/30 pl-2">
+                                  {s}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                      </Link>
+
+                      <div className="flex items-center justify-between mt-3 md:mt-0 shrink-0 gap-4 pl-8 md:pl-0">
                           <span className="text-xs text-muted-foreground">
                             {formatSize(file.size)}
                           </span>
@@ -541,22 +625,26 @@ export default function KnowledgePage() {
           </DialogHeader>
           <div className="py-4">
             <Label htmlFor="batch-category">目标分类</Label>
-            <Select value={batchCategoryName} onValueChange={(v) => setBatchCategoryName(v || "")}>
+            <Select value={batchCategoryName === "batch_new" ? "batch_new" : batchCategoryName} onValueChange={(v) => {
+              if (v === "batch_new") { setBatchCategoryName("batch_new"); setBatchNewInput(""); }
+              else setBatchCategoryName(v || "");
+            }}>
               <SelectTrigger className="mt-2">
                 <SelectValue placeholder="选择目标分类" />
               </SelectTrigger>
               <SelectContent>
-                {categories.map(cat => (
+                {categories.filter(c => c !== "全部").map(cat => (
                   <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                 ))}
                 <SelectItem value="batch_new">+ 新增分类</SelectItem>
               </SelectContent>
             </Select>
             {batchCategoryName === "batch_new" && (
-              <Input 
+              <Input
                 className="mt-2"
-                placeholder="输入新分类名称" 
-                onChange={(e) => setBatchCategoryName(e.target.value)}
+                placeholder="输入新分类名称"
+                value={batchNewInput}
+                onChange={(e) => setBatchNewInput(e.target.value)}
               />
             )}
           </div>
@@ -574,49 +662,59 @@ export default function KnowledgePage() {
       <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>上传新文献</DialogTitle>
+            <DialogTitle>上传文献</DialogTitle>
             <DialogDescription>
-              选择 PDF 文件并指定分类。上传后请手动触发索引重建以供 AI 检索。
+              可选择多个 PDF 文件，上传后请手动触发索引重建以供 AI 检索。
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="file">PDF 文件</Label>
-              <Input 
-                id="file" 
-                type="file" 
-                accept=".pdf" 
-                onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+              <Label htmlFor="file">PDF 文件（支持多选）</Label>
+              <Input
+                id="file"
+                type="file"
+                accept=".pdf"
+                multiple
+                onChange={(e) => setUploadFiles(Array.from(e.target.files || []))}
               />
+              {uploadFiles.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  已选择 {uploadFiles.length} 个文件
+                </p>
+              )}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="category">所属分类</Label>
               <div className="flex gap-2">
-                <Select value={uploadCategory} onValueChange={(v) => setUploadCategory(v || "")}>
+                <Select value={uploadCategory === "new_upload" ? "new_upload" : uploadCategory} onValueChange={(v) => {
+                  if (v === "new_upload") { setUploadCategory("new_upload"); setUploadNewInput(""); }
+                  else setUploadCategory(v || "");
+                }}>
                   <SelectTrigger className="flex-1">
                     <SelectValue placeholder="选择分类" />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map(cat => (
+                    {categories.filter(c => c !== "全部").map(cat => (
                       <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                     ))}
-                    <SelectItem value="new">+ 新增分类</SelectItem>
+                    <SelectItem value="new_upload">+ 新增分类</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              {uploadCategory === "new" && (
-                <Input 
-                  placeholder="输入新分类名称" 
-                  onChange={(e) => setUploadCategory(e.target.value)}
+              {uploadCategory === "new_upload" && (
+                <Input
+                  placeholder="输入新分类名称"
+                  value={uploadNewInput}
+                  onChange={(e) => setUploadNewInput(e.target.value)}
                 />
               )}
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsUploadOpen(false)}>取消</Button>
-            <Button onClick={handleUpload} disabled={isUploading || !uploadFile}>
+            <Button onClick={handleUpload} disabled={isUploading || uploadFiles.length === 0}>
               {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-              开始上传
+              上传 {uploadFiles.length > 0 ? `(${uploadFiles.length}个)` : ""}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -640,21 +738,25 @@ export default function KnowledgePage() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="new-category">目标分类</Label>
-              <Select value={newCategoryName} onValueChange={(v) => setNewCategoryName(v || "")}>
+              <Select value={newCategoryName === "new_cat" ? "new_cat" : newCategoryName} onValueChange={(v) => {
+                if (v === "new_cat") { setNewCategoryName("new_cat"); setNewCategoryInput(""); }
+                else setNewCategoryName(v || "");
+              }}>
                 <SelectTrigger>
                   <SelectValue placeholder="选择新分类" />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map(cat => (
+                  {categories.filter(c => c !== "全部").map(cat => (
                     <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                   ))}
                   <SelectItem value="new_cat">+ 新增分类</SelectItem>
                 </SelectContent>
               </Select>
               {newCategoryName === "new_cat" && (
-                <Input 
-                  placeholder="输入新分类名称" 
-                  onChange={(e) => setNewCategoryName(e.target.value)}
+                <Input
+                  placeholder="输入新分类名称"
+                  value={newCategoryInput}
+                  onChange={(e) => setNewCategoryInput(e.target.value)}
                 />
               )}
             </div>

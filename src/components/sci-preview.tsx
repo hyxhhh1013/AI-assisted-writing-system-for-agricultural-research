@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
-import { Quote } from "lucide-react";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { Quote, BookOpen } from "lucide-react";
 import { ProjectData } from "@/lib/store";
 import { formatClassification, formatKeywords } from "@/lib/paper-metadata";
 import { cn } from "@/lib/utils";
@@ -239,9 +239,17 @@ const ReferencesSection = ({ references, isChinese }: { references?: string[], i
   </section>
 );
 
+interface RagSnippet {
+  content: string;
+  source: string;
+  score?: number;
+}
+
 export default function SCIPreview({ project }: SCIPreviewProps) {
   const [citeDialogOpen, setCiteDialogOpen] = useState(false);
   const [selectedCiteNums, setSelectedCiteNums] = useState<number[]>([]);
+  const [ragResults, setRagResults] = useState<Record<number, RagSnippet[]>>({});
+  const [ragLoading, setRagLoading] = useState(false);
 
   const refs = project.references || [];
 
@@ -249,6 +257,36 @@ export default function SCIPreview({ project }: SCIPreviewProps) {
     setSelectedCiteNums(nums);
     setCiteDialogOpen(true);
   }, []);
+
+  // 打开引用对话框时，搜索 RAG 获取原文片段
+  useEffect(() => {
+    if (!citeDialogOpen || selectedCiteNums.length === 0) return;
+    setRagLoading(true);
+    const fetchResults = async () => {
+      const results: Record<number, RagSnippet[]> = {};
+      for (const n of selectedCiteNums) {
+        const ref = refs[n - 1];
+        if (!ref) continue;
+        try {
+          // 使用引用文字搜索 RAG 索引（前 50 个字作为关键词）
+          const query = ref.slice(0, 100);
+          const res = await fetch(`/api/knowledge?q=${encodeURIComponent(query)}&type=semantic&pageSize=5`);
+          const json = await res.json();
+          if (json?.files) {
+            results[n] = json.files.flatMap((f: any) =>
+              (f._snippets || []).map((s: string) => ({
+                content: s,
+                source: f.name,
+              }))
+            );
+          }
+        } catch { /* RAG search is optional */ }
+      }
+      setRagResults(results);
+      setRagLoading(false);
+    };
+    fetchResults();
+  }, [citeDialogOpen, selectedCiteNums]);
 
   const citeDialogContent = selectedCiteNums
     .map((n) => {
@@ -303,6 +341,28 @@ export default function SCIPreview({ project }: SCIPreviewProps) {
                   <div className="p-3 rounded-lg bg-muted/30 border text-xs leading-relaxed">
                     <span className="font-bold text-primary font-mono">[{n}]</span> {ref}
                   </div>
+
+                  {/* RAG 原文片段 */}
+                  {ragLoading && (
+                    <div className="text-[11px] text-muted-foreground animate-pulse">正在检索原文...</div>
+                  )}
+                  {!ragLoading && ragResults[n] && ragResults[n].length > 0 && (
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-1">
+                        <BookOpen className="h-3 w-3" />
+                        原文出处
+                      </span>
+                      {ragResults[n].map((s, i) => (
+                        <div key={i} className="pl-3 border-l-2 border-green-500/40 text-[11px] leading-relaxed">
+                          <span className="text-[9px] font-medium text-green-600/70 block mb-0.5">{s.source}</span>
+                          {s.content}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {!ragLoading && ragResults[n] && ragResults[n].length === 0 && (
+                    <div className="text-[11px] text-muted-foreground italic">未在已索引文献中找到匹配原文</div>
+                  )}
 
                   {/* 引用位置 */}
                   {contexts.length > 0 && (

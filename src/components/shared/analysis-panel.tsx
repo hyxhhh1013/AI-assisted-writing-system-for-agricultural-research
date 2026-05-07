@@ -17,9 +17,10 @@ interface AnalysisPanelProps {
   projectId: string;
   project: ProjectData;
   onSave?: (updates: Partial<ProjectData>) => void;
+  onInsertToPaper?: (imageUrl: string, caption: string) => void;
 }
 
-export function AnalysisPanel({ projectId, project, onSave }: AnalysisPanelProps) {
+export function AnalysisPanel({ projectId, project, onSave, onInsertToPaper }: AnalysisPanelProps) {
   const [researchDirection, setResearchDirection] = useState(project.researchDirection || "");
   const [dataSummary, setDataSummary] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -252,9 +253,9 @@ export function AnalysisPanel({ projectId, project, onSave }: AnalysisPanelProps
             <CardContent>
               <ChartPanel
                 projectId={projectId}
-                onInsertToPaper={(imageBase64, caption) => {
+                onInsertToPaper={onInsertToPaper || ((imageUrl, caption) => {
                   toast.success(`图表「${caption}」已生成，可手动复制到论文章节`);
-                }}
+                })}
               />
             </CardContent>
           </Card>
