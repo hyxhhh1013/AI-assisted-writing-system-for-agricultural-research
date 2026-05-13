@@ -26,6 +26,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
+from _shared import normalize_label
+
 warnings.filterwarnings("ignore")
 
 from rdkit import Chem
@@ -51,8 +53,8 @@ def draw_molecule(smiles: str, label: str = "", size: int = 300):
 
 def draw_reaction(config: dict):
     """绘制反应式：反应物 → 产物"""
-    title = config.get("title", "")
-    conditions = config.get("conditions", "")
+    title = normalize_label(config.get("title", ""))
+    conditions = normalize_label(config.get("conditions", ""))
     reactants_cfg = config.get("reactants", [])
     products_cfg = config.get("products", [])
 

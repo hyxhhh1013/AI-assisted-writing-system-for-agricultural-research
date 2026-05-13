@@ -27,9 +27,10 @@ import pandas as pd
 
 # 确保能导入同目录下的共享模块
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from plot_utils import load_dataframe  # noqa: E402
+from plot_utils import load_dataframe, _normalize_label  # noqa: E402
 
 # 中文字体支持
+# 中文字体
 plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
@@ -45,108 +46,120 @@ def _rgba_to_mpl(rgba_str):
     return (int(m.group(1)) / 255, int(m.group(2)) / 255, int(m.group(3)) / 255, float(m.group(4)))
 
 
-def _plot_inline(labels, datasets, config, output_path):
-    """处理内联数据（Chart.js 风格）"""
+# 旧 chart_type → 注册表 ID 映射（向后兼容）
+_CHART_TYPE_MAP = {
+    "bar": "bar_grouped",
+    "bar_grouped": "bar_grouped",
+    "stacked_bar": "bar_stacked",
+    "bar_stacked": "bar_stacked",
+    "pct_stacked": "bar_pct_stacked",
+    "bar_pct_stacked": "bar_pct_stacked",
+    "line": "line",
+    "scatter": "scatter",
+    "pie": "pie",
+}
+
+# 惰性加载模块映射
+_module_map = None
+
+
+def _get_module_map():
+    global _module_map
+    if _module_map is None:
+        from chart_base import get_module_map
+        _module_map = get_module_map()
+    return _module_map
+
+
+def _dispatch_chart(chart_type: str, labels, datasets, config, output_path):
+    """根据注册表分发图表生成"""
+    # 映射旧名称 → 注册 ID
+    chart_id = _CHART_TYPE_MAP.get(chart_type, chart_type)
+    modules = _get_module_map()
+
+    if chart_id in modules:
+        mod_class = modules[chart_id]
+        mod = mod_class()
+        err = mod.validate(labels, datasets, config)
+        if err:
+            print(json.dumps({"status": "error", "message": f"数据验证失败: {err}"}))
+            sys.exit(1)
+        mod.plot(labels, datasets, config, output_path)
+        return
+
+    # 降级：注册表中找不到，用旧的 _plot_inline_legacy
+    _plot_inline_legacy(labels, datasets, config, output_path)
+
+
+def _plot_inline_legacy(labels, datasets, config, output_path):
+    """旧版内联数据绘制（注册表中找不到对应模块时的降级方案）"""
+    import matplotlib.pyplot as plt
     chart_type = config.get("chart_type") or config.get("type", "bar")
-    title = config.get("title", "")
-    x_label = config.get("x_label", "")
-    y_label = config.get("y_label", "")
-    colors = ["#4A90D9", "#E57373", "#81C784", "#FFB74D", "#64B5F6", "#BA68C8", "#4DB6AC", "#FF8A65"]
+    title = _normalize_label(config.get("title", ""))
+    x_label = _normalize_label(config.get("x_label", ""))
+    y_label = _normalize_label(config.get("y_label", ""))
 
-    fig, ax = plt.subplots(figsize=(8, 5))
-    x_pos = range(len(labels))
+    labels = [_normalize_label(str(lbl)) for lbl in labels]
+    academic_colors = [
+        "#2C3E50", "#C0392B", "#2980B9", "#27AE60",
+        "#8E44AD", "#D35400", "#16A085", "#E67E22",
+    ]
 
-    n_datasets = len(datasets)
-    bar_width = 0.8 / max(n_datasets, 1)
+    fig, ax = plt.subplots(figsize=(8, 4.8))
 
-    for i, ds in enumerate(datasets):
-        c = colors[i % len(colors)]
-        d = ds.get("data", [])
-        label = ds.get("label", "")
-        ds_color = _rgba_to_mpl(ds.get("backgroundColor", c))
+    if chart_type == "line":
+        for i, ds in enumerate(datasets):
+            c = academic_colors[i % len(academic_colors)]
+            d = list(ds.get("data", []))[:len(labels)]
+            ax.plot(range(len(labels)), d, color=c, marker="o", linewidth=2, label=ds.get("label", ""))
+    else:
+        n = len(datasets)
+        bar_w = 0.75 / max(n, 1)
+        for i, ds in enumerate(datasets):
+            c = academic_colors[i % len(academic_colors)]
+            d = list(ds.get("data", []))[:len(labels)]
+            offset = (i - (n - 1) / 2) * bar_w
+            ax.bar([p + offset for p in range(len(labels))], d, width=bar_w * 0.88, color=c, label=ds.get("label", ""))
 
-        if chart_type == "line":
-            ax.plot(x_pos, d, color=c, marker="o", linewidth=2, markersize=6, label=label or None)
-            ax.fill_between(x_pos, d, alpha=0.1, color=c)
-        elif chart_type == "scatter":
-            ax.scatter(x_pos, d, c=c, s=60, alpha=0.7, label=label or None)
-        else:
-            offset = (i - (n_datasets - 1) / 2) * bar_width
-            ax.bar([p + offset for p in x_pos], d, width=bar_width * 0.9,
-                   color=ds_color, edgecolor="white", linewidth=0.5,
-                   label=label or None, alpha=0.85)
-
-    ax.set_xticks(x_pos)
-    ax.set_xticklabels(labels, fontsize=9, rotation=20, ha="right")
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels, fontsize=9)
     if x_label: ax.set_xlabel(x_label, fontsize=12)
     if y_label: ax.set_ylabel(y_label, fontsize=12)
-    ax.set_title(title, fontsize=14)
-    if len(datasets) > 1: ax.legend(fontsize=10)
-    ax.grid(axis="y", alpha=0.3)
+    ax.set_title(title, fontsize=13, fontweight="bold")
+    if len(datasets) > 1: ax.legend(fontsize=9)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.grid(axis="y", alpha=0.25)
     plt.tight_layout()
-    fig.savefig(output_path, dpi=200, bbox_inches="tight")
+    fig.savefig(output_path, dpi=200, bbox_inches="tight", facecolor="white")
     plt.close(fig)
 
 
 def plot_chart(data_path: str, config: dict, output_path: str):
-    # 支持内联数据（Chart.js 风格）和 CSV 文件两种模式
+    chart_type = config.get("chart_type") or config.get("type", "bar")
+
+    # 内联数据模式（Chart.js 风格 JSON）
     inline_data = config.get("data")
     if inline_data and "labels" in inline_data and "datasets" in inline_data:
         labels = inline_data["labels"]
         datasets = inline_data["datasets"]
-        return _plot_inline(labels, datasets, config, output_path)
+        _dispatch_chart(chart_type, labels, datasets, config, output_path)
+        print(json.dumps({"status": "ok", "output": output_path}))
+        return
 
+    # CSV 文件模式 — 转成内联格式后统一调度
     df = load_dataframe(data_path)
-    chart_type = config.get("chart_type", "line")
-    title = config.get("title", "")
-    x_col = config.get("x_column")
-    y_col = config.get("y_column")
-    x_label = config.get("x_label", x_col or "")
-    y_label = config.get("y_label", y_col or "")
-    color = config.get("color", "#4A90D9")
+    if df.empty:
+        print(json.dumps({"status": "error", "message": "数据文件为空或无法解析"}))
+        sys.exit(1)
 
-    if not x_col or x_col not in df.columns:
-        x_col = df.columns[0]
-    if not y_col or y_col not in df.columns:
-        y_col = df.columns[1] if len(df.columns) > 1 else df.columns[0]
+    labels = df.iloc[:, 0].astype(str).tolist()
+    datasets = []
+    for col_idx in range(1, len(df.columns)):
+        vals = pd.to_numeric(df.iloc[:, col_idx], errors="coerce").fillna(0).tolist()
+        datasets.append({"label": df.columns[col_idx], "data": vals})
 
-    x_data = df[x_col].astype(str).tolist()
-    y_data = pd.to_numeric(df[y_col], errors="coerce").tolist()
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-
-    if chart_type == "pie":
-        wedges, texts, autotexts = ax.pie(
-            y_data,
-            labels=x_data,
-            autopct="%1.1f%%",
-            colors=[color],
-            startangle=90,
-        )
-        ax.set_title(title, fontsize=14, pad=20)
-    elif chart_type == "scatter":
-        x_num = pd.to_numeric(df[x_col], errors="coerce").tolist()
-        ax.scatter(x_num, y_data, c=color, s=60, alpha=0.7, edgecolors="black", linewidth=0.5)
-        ax.set_xlabel(x_label, fontsize=12)
-        ax.set_ylabel(y_label, fontsize=12)
-        ax.set_title(title, fontsize=14)
-        ax.grid(True, alpha=0.3)
-    else:
-        bars = ax.bar(x_data, y_data, color=color, edgecolor="white", linewidth=0.5) if chart_type == "bar" else None
-        if chart_type == "line":
-            ax.plot(x_data, y_data, color=color, marker="o", linewidth=2, markersize=6)
-            ax.fill_between(range(len(x_data)), y_data, alpha=0.1, color=color)
-        elif chart_type == "bar":
-            bars = ax.bar(x_data, y_data, color=color, edgecolor="white", linewidth=0.5)
-        ax.set_xlabel(x_label, fontsize=12)
-        ax.set_ylabel(y_label, fontsize=12)
-        ax.set_title(title, fontsize=14)
-        ax.tick_params(axis="x", rotation=45 if len(x_data) > 5 else 0)
-        ax.grid(axis="y", alpha=0.3)
-
-    plt.tight_layout()
-    fig.savefig(output_path, dpi=200, bbox_inches="tight")
-    plt.close(fig)
+    _dispatch_chart(chart_type, labels, datasets, config, output_path)
     print(json.dumps({"status": "ok", "output": output_path}))
 
 

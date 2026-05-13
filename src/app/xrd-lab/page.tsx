@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,14 @@ import { XpsCard } from "@/components/shared/xrd/xps-card";
 import { MolDiagramPanel } from "@/components/shared/mol-diagram-panel";
 
 export default function XrdLabPage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center">加载中...</div>}>
+      <XrdLabContent />
+    </Suspense>
+  );
+}
+
+function XrdLabContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeTool, setActiveTool] = useState<"simulation" | "xps" | "mol">("simulation");
@@ -50,6 +58,7 @@ export default function XrdLabPage() {
   };
 
   return (
+    <Suspense fallback={<div className="h-screen flex items-center justify-center text-muted-foreground">加载中...</div>}>
     <div className="h-screen flex flex-col bg-background">
       <header className="h-14 border-b bg-card flex items-center px-4 shrink-0 gap-3">
         <Button variant="ghost" size="icon" onClick={() => router.push(projectId ? `/workbench?id=${projectId}` : "/projects")}>
@@ -93,6 +102,7 @@ export default function XrdLabPage() {
         </div>
       </main>
     </div>
+    </Suspense>
   );
 }
 

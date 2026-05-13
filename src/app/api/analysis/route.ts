@@ -2,28 +2,30 @@ import { NextRequest } from "next/server";
 import { formatRagCitation, localRAG } from "@/lib/rag";
 import { callAI, getAgentModelConfig, streamAIResponse } from "@/lib/ai";
 import { buildAnalysisPrompt } from "@/lib/prompts";
+import { analysisSchema } from "@/lib/validations";
+import { validateBody } from "@/lib/api-validate";
+import { errorResponse } from "@/lib/api-response";
 
 export async function POST(req: NextRequest) {
   try {
-    const { dataSummary, researchDirection } = await req.json();
+    const validated = await validateBody(analysisSchema, await req.json());
+    if (validated.errorResponse) return validated.errorResponse;
+    if (!validated.data) return errorResponse("未知错误");
 
-    if (!dataSummary || !researchDirection) {
-      return new Response(JSON.stringify({ error: "Data summary and research direction are required" }), {
-        status: 400,
-      });
-    }
+    const { dataSummary, researchDirection } = validated.data;
+    const direction = researchDirection ?? dataSummary;
 
     const { provider, keyError } = getAgentModelConfig("writer");
     if (keyError) {
-      return new Response(JSON.stringify({ error: keyError }), { status: 500 });
+      return errorResponse(keyError);
     }
 
-    const contextChunks = await localRAG.search(researchDirection, 5);
+    const contextChunks = await localRAG.search(direction, 5);
     const contextText = contextChunks
       .map((c) => `[参考: ${formatRagCitation(c)}]\n${c.content}`)
       .join("\n\n");
 
-    const prompt = buildAnalysisPrompt({ dataSummary, researchDirection, contextText });
+    const prompt = buildAnalysisPrompt({ dataSummary, researchDirection: direction, contextText });
 
     const response = await callAI({
       provider,
@@ -49,7 +51,7 @@ export async function POST(req: NextRequest) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: error.message })}\n\n`));
           controller.close();
         }
-      }
+      },
     });
 
     return new Response(stream, {
@@ -60,6 +62,6 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    return errorResponse(error.message);
   }
 }

@@ -55,6 +55,8 @@ export async function POST(req: NextRequest) {
       verificationFeedback: manualFeedback,
       retrievalMode = "balanced",
       researchDirection,
+      subsectionTitle,
+      figureStart,
     } = await req.json();
 
     if (!title || !section || !context) {
@@ -78,8 +80,8 @@ export async function POST(req: NextRequest) {
     // 1. 根据召回精度模式设置检索参数
     const retrievalConfigs: Record<string, { limit: number; maxPerSource: number }> = {
       precise: { limit: 10, maxPerSource: 2 },
-      balanced: { limit: 40, maxPerSource: 4 },
-      extensive: { limit: 100, maxPerSource: 8 },
+      balanced: { limit: 20, maxPerSource: 3 },
+      extensive: { limit: 60, maxPerSource: 6 },
     };
     const { limit: ragLimit, maxPerSource: ragMaxPerSource } = retrievalConfigs[retrievalMode] || retrievalConfigs.balanced;
 
@@ -144,17 +146,24 @@ export async function POST(req: NextRequest) {
                 newSources.push(source);
               }
 
-              return `[参考来源 [${globalIndex}]: ${formatRagCitation(c)}]\n${c.content}`;
+              // 清理原文中的引用标记，避免 AI 误将其当作可引用的编号
+              const cleanedContent = c.content.replace(/\[(\d+[\d,\s\-–—]*)\]/g, "[文献$1]");
+              return `[参考来源 [${globalIndex}]: ${formatRagCitation(c)}]\n${cleanedContent}`;
             })
             .join("\n\n")
         : "（未找到直接相关的文献参考，请根据通用学术知识扩写）";
 
     const isGBT = template === "gbt7713";
     const sectionInstruction = WRITING_SECTION_PROMPTS[section];
-    const resolvedSectionPrompt =
+    const basePrompt =
       typeof sectionInstruction === "function"
         ? (sectionInstruction as (isGBT: boolean) => string)(isGBT)
         : sectionInstruction || "请根据以上信息进行专业扩写。";
+
+    // 子任务扩写：聚焦到具体子节，而非整个章节
+    const resolvedSectionPrompt = subsectionTitle
+      ? `请针对「${subsectionTitle}」这一子节进行扩写。只写这一小节的内容，不要扩写到该章节的其他子节。` + basePrompt.replace(/请(撰写|描述|总结)/, "请针对该子节$1")
+      : basePrompt;
 
     const globalReferenceInfo = globalContext
       ? `
@@ -180,6 +189,7 @@ export async function POST(req: NextRequest) {
       language,
       contextText,
       sectionInstruction: resolvedSectionPrompt,
+      figureStart: typeof figureStart === "number" ? figureStart : 1,
     });
 
     // 2. 多代理工作流
@@ -276,6 +286,13 @@ export async function POST(req: NextRequest) {
                 ),
               );
             }
+          }
+
+          // 快速模式：只跑 Writer，跳过 Verifier 和 Refiner
+          if (mode === "fast") {
+            controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+            controller.close();
+            return;
           }
 
           // Agent 2: Verifier (使用智谱AI，独立验证)
@@ -381,9 +398,24 @@ export async function POST(req: NextRequest) {
             }
           }
 
+          // 后处理：过滤超范围引用 + 发送修正后文本给前端
+          const maxRefIndex = referencesByIndex.length;
+          const correctedDraft = (finalDraft || initialDraft).replace(
+            /\[(\d+)\]/g,
+            (_match: string, num: string) => {
+              const n = parseInt(num, 10);
+              return n >= 1 && n <= maxRefIndex ? _match : `[文献${n}]`;
+            }
+          );
+          if (correctedDraft !== (finalDraft || initialDraft)) {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ corrected_text: correctedDraft })}\n\n`)
+            );
+          }
+
           // 后处理：引用收集 + 校验
           const usedCitationIndexes = collectCitationFirstAppearance(
-            finalDraft || initialDraft,
+            correctedDraft,
             referencesByIndex.length,
           );
           const usedNewSources = usedCitationIndexes
@@ -398,7 +430,7 @@ export async function POST(req: NextRequest) {
             );
           }
 
-          const citationChecks = validateCitations(finalDraft || initialDraft, contextText);
+          const citationChecks = validateCitations(correctedDraft, contextText);
           const failedChecks = citationChecks.filter((c) => !c.passed);
           if (failedChecks.length > 0) {
             controller.enqueue(

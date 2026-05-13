@@ -22,6 +22,8 @@ import math
 import warnings
 from contextlib import redirect_stdout, redirect_stderr
 
+from _shared import normalize_label
+
 warnings.filterwarnings("ignore")
 
 import matplotlib
@@ -104,7 +106,7 @@ def run_bragg_optimization(config):
 
 def plot_bragg_result(exp_angles, init_angles, opt_angles, hkl, config, output_path):
     """生成优化对比图"""
-    title = config.get("title", "Bragg Optimization")
+    title = normalize_label(config.get("title", "Bragg Optimization"))
     crystal_sys = config["crystal_system"]
     lattice_init = config["lattice_init"]
     sys_name = CRYSTAL_SYSTEMS.get(crystal_sys, f"System {crystal_sys}")

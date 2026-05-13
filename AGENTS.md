@@ -4,27 +4,68 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
-# 农业科研 AI 辅助系统 - 开发与协作规范
+# 禾书耕文 (GrainScript) — AI 开发协作规范
 
-为了确保项目在 AI 辅助编程（Vibecoding）模式下的可维护性与一致性，所有 AI 代理必须遵循以下规则：
+## 项目概述
 
-## 1. 代码架构规范
-*   **彻底解耦**：禁止在页面或组件中直接编写数据请求逻辑。所有 API 调用必须封装在 `src/services` 中。
-*   **原子化组件**：UI 组件必须保持单一职责。严禁编写超过 200 行的超大组件文件。
-*   **严格类型约束**：严禁使用 `any`。所有数据流转（API 返回值、组件 Props、Store 状态）必须定义显式的 TypeScript Interface 或 Type。
-*   **流式输出 (Streaming)**：所有 AI 生成相关的接口必须支持 Stream 模式，前端需实现对应的流式解析逻辑。
+农业科研 AI 辅助写作平台。用户为实验室大二学生，单人维护，不会读代码，完全通过 Claude Code 交互开发。
 
-## 2. 目录结构约定
-*   `src/services`: 存放所有外部 API（如 Dify）的调用逻辑。
-*   `src/store`: 使用 Zustand 进行全局状态管理。
-*   `src/components/ui`: 存放 Shadcn UI 原始组件。
-*   `src/components/shared`: 存放业务通用的复用组件。
-*   `src/app/api`: 存放 Next.js Route Handlers。
+## 真实技术栈（勿用训练数据猜测）
 
-## 3. 环境变量与安全
-*   严禁将 `.env` 或 `.env.local` 提交至 Git 仓库。
-*   敏感配置（API Key, Base URL）统一通过 `process.env` 在服务端读取。
+| 层 | 技术 |
+|----|------|
+| 框架 | Next.js 16 (App Router, Turbopack) |
+| 样式 | Tailwind CSS v4 + Shadcn UI |
+| 编辑器 | TipTap (段落模式) / Textarea (经典模式) |
+| 数据库 | Prisma + SQLite (WAL, `prisma/dev.db`) |
+| 认证 | JWT (jose + bcryptjs), HTTP-only cookie |
+| AI | DeepSeek API (主), Zhipu GLM-4-plus (审查代理) |
+| RAG | 自研 BM25 + 向量余弦混合检索, RRF 融合 |
+| PDF | Playwright (服务端导出), PDF.js (阅读器) |
+| 图表 | Python (matplotlib) 子进程调用 |
 
-## 4. Dify 集成规范
-*   使用 `DifyService` 类处理通信。
-*   所有业务 Prompt 必须在 Dify 后台编排，前端仅传递变量（Inputs）。
+## 核心架构约定
+
+### 目录职责
+- `src/services/` — API 调用封装（纯函数，不操作 DOM）
+- `src/lib/` — 纯逻辑工具（prompts.ts, rag.ts, utils.ts, ai.ts, store.ts...）
+- `src/components/ui/` — Shadcn 原装组件
+- `src/components/shared/` — 业务组件（writing-panel, outline-panel, sci-preview...）
+- `src/app/api/` — Next.js Route Handlers
+- `src/app/` — 页面入口
+- `scripts/charts/` — Python 图表生成脚本
+- `data/` — RAG 索引文件
+- `prisma/` — 数据库 schema + 迁移
+
+### 关键文件（改动前必读）
+- `src/lib/prompts.ts` — 所有 AI prompt 模板
+- `src/lib/rag.ts` — RAG 检索引擎
+- `src/lib/utils.ts` — parseOutline, buildExpansionContext, buildOutlineTasks 等
+- `src/app/workbench/page.tsx` — 核心工作台（1785 行，待拆分）
+
+### AI 写作管道
+```
+Writer (DeepSeek) → Verifier (Zhipu) → Refiner (DeepSeek)
+        ↓                    ↓                    ↓
+   SSE 流式输出          逐条核实引用         根据意见修正
+```
+
+### FIGURE 配图管道
+```
+AI 输出 【FIGURE:{...}】 → findFigureBlocks 解析 → API 调用 → Python 渲染 → 替换为 ![](url)
+```
+
+### 分类 RAG 索引
+- 主索引：`data/index.json`
+- 分类索引：`data/index_{category}.json`
+- 元数据：`data/metadata.json`
+- 懒加载：`ensureCategoryLoaded()` 按需加载，`getFullText()` 遍历所有分类
+
+## 开发铁律
+
+1. **改前扫描**：修改任何功能前，先 grep 相关引用，确认影响范围
+2. **改后验证**：`tsc --noEmit` 必须通过，然后追踪完整数据流
+3. **不要重复**：新功能前先搜索项目是否已有类似实现
+4. **类型严格**：禁止 `any`，所有接口必须有显式类型
+5. **流式优先**：AI 生成接口必须支持 SSE streaming
+6. **大文件不新增代码**：workbench/page.tsx（1785行）、sci-preview.tsx（707行）待拆分，新逻辑优先放到独立组件

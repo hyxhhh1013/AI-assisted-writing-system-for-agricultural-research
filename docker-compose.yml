@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    container_name: grainscript
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local
+    volumes:
+      - ./data:/app/data
+      - ./prisma/dev.db:/app/prisma/dev.db
+    restart: unless-stopped

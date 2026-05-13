@@ -168,18 +168,16 @@ export function AnnotatedText({
       >
         {segments.map((seg, i) =>
           seg.annotation ? (
-            <Popover key={i} trigger="click">
-              <PopoverTrigger asChild>
-                <span
-                  id={`ann-${seg.annotation.id}`}
-                  className={cn(
-                    COLOR_CLASSES[seg.annotation.color] || COLOR_CLASSES.yellow,
-                    "cursor-pointer rounded-sm px-0.5 transition-colors hover:opacity-80",
-                    activeAnnotationId === seg.annotation.id && "ring-2 ring-primary/50",
-                  )}
-                >
-                  {seg.text}
-                </span>
+            <Popover key={i}>
+              <PopoverTrigger
+                id={`ann-${seg.annotation.id}`}
+                className={cn(
+                  COLOR_CLASSES[seg.annotation.color] || COLOR_CLASSES.yellow,
+                  "cursor-pointer rounded-sm px-0.5 transition-colors hover:opacity-80 inline border-0 bg-transparent text-inherit text-sm font-inherit",
+                  activeAnnotationId === seg.annotation.id && "ring-2 ring-primary/50",
+                )}
+              >
+                {seg.text}
               </PopoverTrigger>
               <PopoverPopup className="w-72">
                 <div className="space-y-3 p-1">

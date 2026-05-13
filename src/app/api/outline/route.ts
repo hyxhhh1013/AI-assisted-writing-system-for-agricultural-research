@@ -38,7 +38,7 @@ function matchCategory(direction: string): string | null {
 
 export async function POST(req: NextRequest) {
   try {
-    const { title, researchDirection, language = "zh" } = await req.json();
+    const { title, researchDirection, language = "zh", category } = await req.json();
 
     if (!title || !researchDirection) {
       return new Response(JSON.stringify({ error: "Title and Research Direction are required" }), {
@@ -51,14 +51,17 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: keyError }), { status: 500 });
     }
 
-    // 匹配研究方向到知识库分类，精准检索相关文献
-    const matchedCategory = matchCategory(researchDirection);
+    // 手动指定分类优先，否则自动匹配研究方向到知识库分类
+    const targetCategory = category && category !== "全部" ? category : matchCategory(researchDirection);
     const contextChunks = await localRAG.search(`${title} ${researchDirection}`, {
       limit: 10,
-      category: matchedCategory || undefined,
+      category: targetCategory || undefined,
     });
     const contextText = contextChunks
-      .map((c) => `[来自文献: ${formatRagCitation(c)}]\n${c.content}`)
+      .map((c) => {
+        const cleaned = c.content.replace(/\[(\d+[\d,\s\-–—]*)\]/g, "[文献$1]");
+        return `[来自文献: ${formatRagCitation(c)}]\n${cleaned}`;
+      })
       .join("\n\n");
 
     const systemPrompt = buildOutlinePrompt({ title, researchDirection, language, contextText });

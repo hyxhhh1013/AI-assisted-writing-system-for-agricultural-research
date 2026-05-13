@@ -35,7 +35,8 @@ export function XpsCard({ onInsertToPaper }: XpsCardProps) {
   const [energyMax, setEnergyMax] = useState("");
   const [iterMax, setIterMax] = useState("300");
   const [atoms, setAtoms] = useState<AtomRow[]>([
-    { id: 1, element: "Cu", orbital: "2p3/2", energy: "932.6" },
+    { id: 1, element: "N", orbital: "1s1/2", energy: "398.5" },
+    { id: 2, element: "N", orbital: "1s1/2", energy: "400.0" },
   ]);
   const [nextId, setNextId] = useState(2);
 
@@ -56,8 +57,8 @@ export function XpsCard({ onInsertToPaper }: XpsCardProps) {
     if (!file) { toast.error("请上传 XPS 数据文件"); return; }
 
     const validAtoms = atoms.filter(a => a.element && a.orbital && a.energy);
-    if (validAtoms.length === 0) {
-      toast.error("请至少添加一个原子标识符");
+    if (validAtoms.length < 2) {
+      toast.error("请至少添加两个原子标识符（XPS 峰拟合需要 ≥2 个峰）");
       return;
     }
 
@@ -103,7 +104,7 @@ export function XpsCard({ onInsertToPaper }: XpsCardProps) {
             <CardContent className="space-y-3">
               <div>
                 <Label className="text-xs">XPS 数据 (CSV: 结合能, 强度)</Label>
-                <Input type="file" accept=".csv,.txt" className="text-xs h-8 mt-1"
+                <Input type="file" accept=".csv,.txt,.xlsx,.xls" className="text-xs h-8 mt-1"
                   onChange={e => { const f = e.target.files?.[0]; if (f) { setFile(f); setResult(null); setTitle(f.name.replace(/\.[^.]+$/, "")); } }} />
               </div>
               <div><Label className="text-xs">分析标题</Label><Input value={title} onChange={e => setTitle(e.target.value)} className="text-xs h-7 mt-0.5" /></div>

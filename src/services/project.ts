@@ -32,6 +32,7 @@ export interface ProjectData {
   references: string[];
   analysisResults: string[];
   charts?: string;
+  expandedOutlineSections?: string[];
 }
 
 export async function listProjects(): Promise<ProjectListItem[]> {

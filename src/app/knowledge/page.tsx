@@ -37,6 +37,7 @@ import Link from "next/link";
 interface KnowledgeFile {
   name: string;
   category: string;
+  documentType?: string;
   chunkCount: number;
   size: number;
   mtime: string;
@@ -70,6 +71,7 @@ export default function KnowledgePage() {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadCategory, setUploadCategory] = useState("未分类");
+  const [uploadDocumentType, setUploadDocumentType] = useState("paper");
   const [uploadNewInput, setUploadNewInput] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
@@ -77,7 +79,11 @@ export default function KnowledgePage() {
   const [editingFile, setEditingFile] = useState<KnowledgeFile | null>(null);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryInput, setNewCategoryInput] = useState("");
+  const [editDocumentType, setEditDocumentType] = useState("paper");
   const [isUpdatingCategory, setIsUpdatingCategory] = useState(false);
+
+  // 片段预览弹窗
+  const [snippetFile, setSnippetFile] = useState<KnowledgeFile | null>(null);
 
   const fetchFiles = async () => {
     setIsLoading(true);
@@ -263,6 +269,7 @@ export default function KnowledgePage() {
         const formData = new FormData();
         formData.append("file", file);
         formData.append("category", catName);
+        formData.append("documentType", uploadDocumentType);
 
         const res = await fetch("/api/knowledge", {
           method: "POST",
@@ -295,6 +302,7 @@ export default function KnowledgePage() {
           name: editingFile.name,
           oldCategory: editingFile.category,
           newCategory: catName,
+          documentType: editDocumentType,
         }),
       });
 
@@ -502,42 +510,51 @@ export default function KnowledgePage() {
                           />
                         </div>
 
-                        <Link
-                          href={`/reader?file=${encodeURIComponent(file.name)}`}
-                          className="flex items-center flex-1 min-w-0 mr-4 cursor-pointer"
+                        <div
+                          onClick={() => {
+                            if (searchType === "semantic" && file._snippets?.length) {
+                              setSnippetFile(file);
+                            } else {
+                              router.push(`/reader?file=${encodeURIComponent(file.name)}`);
+                            }
+                          }}
+                          className="flex flex-col flex-1 min-w-0 mr-4 cursor-pointer"
                         >
-                          <div className="p-2 rounded bg-primary/10 mr-3 shrink-0">
-                            <FileText className="h-5 w-5 text-primary" />
-                          </div>
-                          <div className="min-w-0">
-                            <h3 className="font-medium truncate group-hover:text-primary transition-colors">
-                              {file.name}
-                            </h3>
-                            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                              <span className="flex items-center">
-                                <Tag className="mr-1 h-3 w-3" />
-                                {file.category}
-                              </span>
-                              <span className="flex items-center">
-                                <Database className="mr-1 h-3 w-3" />
-                                {file.chunkCount} 知识片段
-                              </span>
-                              <span className="hidden md:flex items-center">
-                                <Calendar className="mr-1 h-3 w-3" />
-                                {new Date(file.mtime).toLocaleDateString()}
-                              </span>
+                          <div className="flex items-center min-w-0">
+                            <div className="p-2 rounded bg-primary/10 mr-3 shrink-0">
+                              <FileText className="h-5 w-5 text-primary" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <h3 className="font-medium truncate group-hover:text-primary transition-colors">
+                                {file.name}
+                              </h3>
+                              <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                                <span className="flex items-center">
+                                  <Tag className="mr-1 h-3 w-3" />
+                                  {file.category}
+                                </span>
+                                {file.documentType === "patent" ? (
+                                  <Badge variant="outline" className="text-xs py-0 px-1.5 border-green-400 text-green-600">专利</Badge>
+                                ) : file.documentType === "other" ? (
+                                  <Badge variant="outline" className="text-xs py-0 px-1.5 border-orange-400 text-orange-600">其他</Badge>
+                                ) : null}
+                                <span className="flex items-center">
+                                  <Database className="mr-1 h-3 w-3" />
+                                  {file.chunkCount} 匹配片段
+                                </span>
+                              </div>
                             </div>
                           </div>
                           {file._snippets && file._snippets.length > 0 && (
-                            <div className="mt-2 space-y-1">
+                            <div className="mt-2 space-y-1.5 pl-10">
                               {file._snippets.map((s, i) => (
-                                <p key={i} className="text-xs text-muted-foreground line-clamp-2 italic border-l-2 border-primary/30 pl-2">
+                                <p key={i} className="text-xs text-muted-foreground line-clamp-2 italic border-l-2 border-primary/30 pl-2.5 py-0.5">
                                   {s}
                                 </p>
                               ))}
                             </div>
                           )}
-                      </Link>
+                      </div>
 
                       <div className="flex items-center justify-between mt-3 md:mt-0 shrink-0 gap-4 pl-8 md:pl-0">
                           <span className="text-xs text-muted-foreground">
@@ -554,8 +571,9 @@ export default function KnowledgePage() {
                               <DropdownMenuItem onClick={() => {
                                 setEditingFile(file);
                                 setNewCategoryName(file.category);
+                                setEditDocumentType(file.documentType || "paper");
                               }}>
-                                <Edit3 className="mr-2 h-4 w-4" /> 修改分类
+                                <Edit3 className="mr-2 h-4 w-4" /> 修改分类/类型
                               </DropdownMenuItem>
                               <DropdownMenuItem render={
                                 <Link href={`/reader?file=${encodeURIComponent(file.name)}`}>
@@ -709,6 +727,19 @@ export default function KnowledgePage() {
                 />
               )}
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="doc-type">文档类型</Label>
+              <Select value={uploadDocumentType} onValueChange={(v) => v && setUploadDocumentType(v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="选择文档类型" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="paper">论文</SelectItem>
+                  <SelectItem value="patent">专利</SelectItem>
+                  <SelectItem value="other">其他</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsUploadOpen(false)}>取消</Button>
@@ -760,12 +791,63 @@ export default function KnowledgePage() {
                 />
               )}
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-doc-type">文档类型</Label>
+              <Select value={editDocumentType} onValueChange={(v) => v && setEditDocumentType(v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="选择文档类型" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="paper">论文</SelectItem>
+                  <SelectItem value="patent">专利</SelectItem>
+                  <SelectItem value="other">其他</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingFile(null)}>取消</Button>
             <Button onClick={handleUpdateCategory} disabled={isUpdatingCategory}>
               {isUpdatingCategory ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
               确认变更
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 片段预览弹窗 — 语义搜索点击后展示相关文献片段 */}
+      <Dialog open={!!snippetFile} onOpenChange={(open) => { if (!open) setSnippetFile(null); }}>
+        <DialogContent className="w-[calc(100vw-4rem)] max-w-5xl h-[92vh] max-h-[92vh] overflow-hidden flex flex-col">
+          <DialogHeader className="shrink-0 pb-2">
+            <DialogTitle className="text-lg truncate pr-8">{snippetFile?.name}</DialogTitle>
+            <DialogDescription className="flex items-center gap-3">
+              <Badge variant="outline" className="text-xs">{snippetFile?.category}</Badge>
+              <span className="text-xs text-muted-foreground">{snippetFile?.chunkCount} 个匹配片段</span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto py-2 space-y-4 px-0.5">
+            {snippetFile?._snippets?.map((snippet, i) => (
+              <div key={i} className="p-5 rounded-xl bg-muted/30 border border-border/40 hover:border-primary/20 transition-colors">
+                <div className="flex items-center gap-2 mb-3">
+                  <Badge variant="secondary" className="text-xs h-6 px-2.5">匹配片段 {i + 1}</Badge>
+                </div>
+                <p className="text-[15px] leading-relaxed whitespace-pre-wrap text-foreground/85">{snippet}</p>
+              </div>
+            ))}
+            {(!snippetFile?._snippets || snippetFile._snippets.length === 0) && (
+              <p className="text-base text-muted-foreground text-center py-16">暂无可预览的片段</p>
+            )}
+          </div>
+          <DialogFooter className="shrink-0 pt-3 border-t gap-3">
+            <Button variant="outline" onClick={() => setSnippetFile(null)}>关闭</Button>
+            <Button
+              onClick={() => {
+                if (snippetFile) {
+                  router.push(`/reader?file=${encodeURIComponent(snippetFile.name)}`);
+                }
+              }}
+            >
+              <ExternalLink className="mr-2 h-4 w-4" /> 在阅读器中打开完整文献
             </Button>
           </DialogFooter>
         </DialogContent>

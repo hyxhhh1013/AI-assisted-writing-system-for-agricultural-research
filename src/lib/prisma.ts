@@ -5,9 +5,11 @@ const prismaClientSingleton = () => {
     log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
   })
 
-  // 启用 SQLite WAL 模式，提升并发读性能
-  client.$queryRawUnsafe('PRAGMA journal_mode=WAL').catch(() => {})
-  client.$queryRawUnsafe('PRAGMA busy_timeout=5000').catch(() => {})
+  // SQLite 专用：启用 WAL 模式，提升并发读性能
+  if (process.env.DATABASE_URL?.startsWith('file:')) {
+    client.$queryRawUnsafe('PRAGMA journal_mode=WAL').catch(() => {})
+    client.$queryRawUnsafe('PRAGMA busy_timeout=5000').catch(() => {})
+  }
 
   return client
 }

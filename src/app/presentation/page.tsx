@@ -22,7 +22,8 @@ import {
   ArrowRight,
   Target,
   Users,
-  Sparkles
+  Sparkles,
+  BookOpen
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,26 +35,26 @@ import Link from "next/link";
 
 const slideVariants = {
   initial: { opacity: 0, scale: 0.98 },
-  animate: { 
-    opacity: 1, 
+  animate: {
+    opacity: 1,
     scale: 1,
     transition: {
       duration: 0.6,
-      ease: [0.22, 1, 0.36, 1],
+      ease: [0.22, 1, 0.36, 1] as const,
       staggerChildren: 0.1
     }
   },
-  exit: { 
-    opacity: 0, 
-    scale: 0.98, 
-    transition: { duration: 0.3, ease: "easeInOut" } 
+  exit: {
+    opacity: 0,
+    scale: 0.98,
+    transition: { duration: 0.3, ease: "easeInOut" as const }
   }
-};
+} as const;
 
 const itemVariants = {
   initial: { opacity: 0, y: 15 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } }
-};
+  animate: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" as const } }
+} as const;
 
 // --- Types ---
 
@@ -82,8 +83,11 @@ const slides: SlideContent[] = [
         </motion.div>
         
         <div className="space-y-4">
-          <motion.h1 variants={itemVariants} className="text-6xl md:text-7xl font-bold tracking-tight text-slate-900">
-            项目演示介绍稿
+          <motion.h1 
+            variants={itemVariants} 
+            className="text-7xl md:text-8xl font-black tracking-tighter text-slate-900 h-[155px] flex items-center"
+          >
+            禾书耕文 | GrainScript
           </motion.h1>
           <motion.p variants={itemVariants} className="text-xl md:text-2xl text-slate-500 font-normal">
             基于 RAG 的农业科研论文全生命周期辅助系统
@@ -371,6 +375,11 @@ const slides: SlideContent[] = [
               进入工作台 <ArrowRight className="ml-2 w-5 h-5" />
             </Button>
           </Link>
+          <Link href="/guide">
+            <Button size="lg" variant="outline" className="h-14 px-8 border-emerald-200 text-emerald-700 rounded-2xl hover:bg-emerald-50 transition-all">
+              <BookOpen className="mr-2 w-5 h-5" /> 使用指南
+            </Button>
+          </Link>
           <Link href="/">
             <Button size="lg" variant="outline" className="h-14 px-8 border-slate-200 text-slate-600 rounded-2xl hover:bg-slate-50 transition-all">
               返回首页
@@ -379,7 +388,7 @@ const slides: SlideContent[] = [
         </motion.div>
 
         <motion.div variants={itemVariants} className="pt-20">
-          <p className="text-slate-400 font-mono text-[10px] tracking-[0.4em] uppercase">Agri-AI Research Assistant • v2.1.0</p>
+          <p className="text-slate-400 font-mono text-[10px] tracking-[0.4em] uppercase">GrainScript Research Assistant • v2.1.0</p>
         </motion.div>
       </div>
     ),

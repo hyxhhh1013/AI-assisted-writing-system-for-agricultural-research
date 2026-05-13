@@ -61,6 +61,12 @@ export default function Home() {
       icon: <Play className="w-6 h-6 text-primary" />,
       href: "/presentation",
     },
+    {
+      title: "使用指南",
+      description: "写给实验室同学的快速上手指南，包含每一步的详细操作说明",
+      icon: <BookOpen className="w-6 h-6 text-primary" />,
+      href: "/guide",
+    },
   ];
 
   return (
@@ -90,8 +96,8 @@ export default function Home() {
       </div>
 
       <header className="mb-16 text-center">
-        <h1 className="text-4xl font-extrabold tracking-tight lg:text-6xl mb-6 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-          农业科研 AI 辅助写作系统
+        <h1 className="text-4xl font-extrabold tracking-tight lg:text-6xl mb-6 text-slate-900">
+          禾书耕文 | GrainScript
         </h1>
         <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
           让 AI 懂农业，让科研更高效。基于实验室私有知识库的垂直领域写作助手。

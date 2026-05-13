@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Send, Copy, Eraser, FileText, Database, ScrollText, CheckCircle2, ChevronRight, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { projectStore, ProjectData } from "@/lib/store";
-import { cn } from "@/lib/utils";
+import { cn, parseOutline, mapToIMRADSection, buildExpansionContext, buildOutlineTasks, countProjectFigures } from "@/lib/utils";
+import type { OutlineTask } from "@/lib/utils";
 
 const WRITING_SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -50,11 +51,18 @@ const IMRAD_SECTION_IDS = new Set([
 interface WritingPanelProps {
   projectId: string;
   project: ProjectData;
-  /** 工作台左侧「结构」里当前选中的论文章节，变化时同步「存储至章节」 */
   editorActiveSection?: string;
-  onGenerate?: (content: string, section: string) => void;
+  onGenerate?: (content: string, section: string, subsectionTitle?: string) => void;
   onUpdateProject?: (updates: Partial<ProjectData>) => void;
-  onAutoReorder?: () => void;
+  onGeneratingChange?: (generating: boolean) => void;
+  /** 从大纲面板传入的待扩写任务 ID，替代 sessionStorage */
+  preselectedTaskId?: string | null;
+  /** 已扩写的子节 ID 列表 */
+  expandedSections?: string[];
+  /** 扩写完成后回调，通知父组件标记该子节已扩写 */
+  onTaskExpanded?: (taskId: string) => void;
+  /** 清除 preselectedTaskId */
+  onClearPreselected?: () => void;
 }
 
 export function WritingPanel({
@@ -63,37 +71,44 @@ export function WritingPanel({
   editorActiveSection,
   onGenerate,
   onUpdateProject,
-  onAutoReorder,
+  onGeneratingChange,
+  preselectedTaskId,
+  expandedSections,
+  onTaskExpanded,
+  onClearPreselected,
 }: WritingPanelProps) {
   const [title, setTitle] = useState(project.title || "");
   const [selectedSectionId, setSelectedSectionId] = useState<string>("");
   const [targetSectionKey, setTargetSectionKey] = useState<string>("introduction");
   const [language, setLanguage] = useState("zh");
-  const [retrievalMode, setRetrievalMode] = useState<"precise" | "balanced" | "extensive">("balanced");
+  const [retrievalMode, setRetrievalMode] = useState<"precise" | "balanced" | "extensive">("precise");
+  const [fastMode, setFastMode] = useState(true); // 快速模式：跳过审查，只跑 Writer
   const [context, setContext] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState<"idle" | "writing" | "verifying" | "refining" | "completed">("idle");
+
+  // 通知父组件生成状态变化（用于 tab 图标脉冲提示）
+  useEffect(() => {
+    onGeneratingChange?.(isGenerating);
+  }, [isGenerating, onGeneratingChange]);
+  const [subsectionTitle, setSubsectionTitle] = useState<string | undefined>();
   const [result, setResult] = useState("");
   const [verificationFeedback, setVerificationFeedback] = useState("");
   const [detectedRefs, setDetectedRefs] = useState<string[]>([]);
   const [citationWarnings, setCitationWarnings] = useState<{ num: number; overlap: number; context: string }[]>([]);
   const [pendingFigures, setPendingFigures] = useState<{ spec: string; tool: string; config: string; caption: string; status: string; imageUrl?: string }[]>([]);
   const figureCountRef = useRef(0);
+  const detectedFiguresRef = useRef<{ tool: string; config: string; caption: string }[]>([]);
   const figureAbortRef = useRef<AbortController | null>(null);
   const resultRef = useRef("");
 
   const restoredRef = useRef(false);
 
-  // 固定 5 个章节任务
-  const FIVE_TASKS: { id: string; title: string; sectionKey: string }[] = [
-    { id: "sec-abstract", title: "摘要 (Abstract)", sectionKey: "abstract" },
-    { id: "sec-intro", title: "引言 (Introduction)", sectionKey: "introduction" },
-    { id: "sec-methods", title: "材料与方法 (Methods)", sectionKey: "methods" },
-    { id: "sec-results", title: "结果与讨论 (Results & Discussion)", sectionKey: "results" },
-    { id: "sec-conclusion", title: "结论 (Conclusion)", sectionKey: "conclusion" },
-  ];
-  const outlineTasks = FIVE_TASKS;
-  const outlineVersionRef = useRef(0);
+  // 从真实大纲解析任务列表（替代硬编码的 FIVE_TASKS）
+  const outlineTasks: OutlineTask[] = useMemo(() => {
+    if (!project.outline) return [];
+    return buildOutlineTasks(project.outline);
+  }, [project.outline]);
 
   // 先随工作台左侧 IMRaD 章节同步「存储至章节」；再由下方 session 覆盖（若有草稿）
   useEffect(() => {
@@ -191,67 +206,44 @@ export function WritingPanel({
     isGenerating,
   ]);
 
-  const handleSelectTask = useCallback((task: { id: string; title: string; sectionKey: string }) => {
+  const handleSelectTask = useCallback((task: OutlineTask) => {
     setSelectedSectionId(task.id);
     setTargetSectionKey(task.sectionKey);
-    const taskContext = `【章节标题】：${task.title}\n【写作要求】：请根据以下大纲展开学术论述。\n${project.outline || ""}`;
-    setContext(taskContext);
+    // 使用 buildExpansionContext 构建精准上下文（仅相关子节，非整个大纲）
+    const allSections = parseOutline(project.outline || "");
+    const currentSection = allSections.find((s) => s.id === task.id);
+    if (currentSection) {
+      setContext(buildExpansionContext(currentSection, allSections, project.outline || ""));
+    } else {
+      // fallback：parseOutline 出来的 ID 对不上时用 task 自身信息
+      setContext(`【扩写目标子节】：${task.fullPath}\n【写作要求】：请针对此主题展开学术论述。\n\n【论文大纲参考】：\n${(project.outline || "").slice(0, 400)}`);
+    }
   }, [project.outline]);
 
-  // 3. 自动选中逻辑 + 从大纲页一键扩写
+  // 3. 自动选中逻辑：优先处理从大纲面板传来的预选任务
   useEffect(() => {
     if (outlineTasks.length === 0) return;
 
-    // 检查是否有从大纲页传来的待扩写任务
-    let autoStart = false;
-    try {
-      const pending = sessionStorage.getItem("pending_expand_task");
-      if (pending) {
-        sessionStorage.removeItem("pending_expand_task");
-        const task = JSON.parse(pending) as { title: string; sectionKey: string };
-        if (task.sectionKey) {
-          setTargetSectionKey(task.sectionKey);
-          const taskContext = `【章节标题】：${task.title}\n【写作要求】：请根据以下大纲展开学术论述。\n${project.outline || ""}`;
-          setContext(taskContext);
-          autoStart = true;
-        }
+    if (preselectedTaskId) {
+      const task = outlineTasks.find((t) => t.id === preselectedTaskId);
+      if (task) {
+        handleSelectTask(task);
+        onClearPreselected?.();
+        return;
       }
-    } catch { /* ignore */ }
+    }
 
-    if (!autoStart && !selectedSectionId) {
+    // 无预选任务时默认选中第一个
+    if (!selectedSectionId) {
       handleSelectTask(outlineTasks[0]);
     }
-  }, [outlineTasks, selectedSectionId, handleSelectTask, project.outline]);
-
-  // 4. 如果从大纲页一键扩写，自动开始生成
-  const autoStartRef = useRef(false);
-  useEffect(() => {
-    if (!autoStartRef.current && selectedSectionId && context && !isGenerating && result.length === 0) {
-      autoStartRef.current = true;
-      const timer = setTimeout(() => handleGenerate(), 300);
-      return () => clearTimeout(timer);
-    }
-  }, [selectedSectionId, context]);
+  }, [outlineTasks, preselectedTaskId, selectedSectionId, handleSelectTask, onClearPreselected]);
 
   useEffect(() => {
     if (project.title && title !== project.title && !isGenerating && result.length === 0) {
       setTitle(project.title);
     }
   }, [project.title, project.id, title, isGenerating, result.length]);
-
-  // 5. 生成完成后自动应用内容到编辑器
-  const autoAppliedRef = useRef(false);
-  useEffect(() => {
-    if (!isGenerating && result && targetSectionKey && !autoAppliedRef.current) {
-      autoAppliedRef.current = true;
-      if (onGenerate) {
-        onGenerate(result, targetSectionKey);
-        toast.success(`内容已自动应用到 ${targetSectionKey} 章节`);
-        setTimeout(() => onAutoReorder?.(), 300);
-      }
-    }
-    if (isGenerating) autoAppliedRef.current = false;
-  }, [isGenerating, result, targetSectionKey]);
 
   const handleTitleBlur = () => {
     if (title !== project.title && onUpdateProject) {
@@ -290,18 +282,29 @@ export function WritingPanel({
         }
       });
 
+      const selectedTask = outlineTasks.find(t => t.id === selectedSectionId);
+      const subTitle = selectedTask && selectedTask.level > 1 ? selectedTask.title : undefined;
+      setSubsectionTitle(subTitle);
+
+      // 统计之前章节已有图表数，按论文章节顺序编号（非写作顺序）
+      const existingFigures = countProjectFigures(project, targetSectionKey);
+      const figureStart = existingFigures + 1;
+
       const response = await fetch("/api/writing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          title, 
-          section: targetSectionKey, 
-          context, 
+        body: JSON.stringify({
+          title,
+          section: targetSectionKey,
+          context,
           language,
           template: project.template,
           existingReferences: project.references || [],
           researchDirection: project.researchDirection,
           retrievalMode,
+          mode: fastMode ? "fast" : "full",
+          subsectionTitle: subTitle,
+          figureStart,
           globalContext: {
             abstract: project.abstract,
             outline: project.outline,
@@ -348,39 +351,102 @@ export function WritingPanel({
                 }
                 if (data.verification) setVerificationFeedback((prev) => prev + data.verification);
                 if (data.citation_warnings) setCitationWarnings(data.citation_warnings);
+                if (data.corrected_text) {
+                  setResult(data.corrected_text);
+                  resultRef.current = data.corrected_text;
+                }
               } catch (e) {}
             }
           }
         }
       }
 
-      // 流结束后：扫描完整结果文本中的 FIGURE 标记（解决跨 chunk 截断问题）
+      // 流结束后：扫描完整结果文本中的 FIGURE 标记和插图占位
       const fullText = resultRef.current;
-      const figureRegex = /【FIGURE:\{.*?"tool"\s*:\s*"([^"]+)".*?"config"\s*:\s*(\{.*?\}).*?"caption"\s*:\s*"([^"]+)".*?}】/g;
+
+      // 工具函数：找到 【FIG***:{JSON}】 块（容错 FIGURE/FIGURA/FIGUER 等拼写变体）
+      const findFigureBlocks = (text: string): { json: Record<string, unknown>; raw: string }[] => {
+        const results: { json: Record<string, unknown>; raw: string }[] = [];
+        // 匹配 【FIG 开头（不区分大小写），后跟任意字母，然后是 :{ 开始 JSON
+        const blockRegex = /【FIG([A-Z]*):(\{)/gi;
+        let match: RegExpExecArray | null;
+        while ((match = blockRegex.exec(text)) !== null) {
+          const jsonStart = match.index + match[0].length - 1; // 指向 {
+          // 括号计数找到匹配的 }
+          let depth = 0;
+          let jsonEnd = -1;
+          for (let i = jsonStart; i < text.length; i++) {
+            if (text[i] === "{") depth++;
+            else if (text[i] === "}") {
+              depth--;
+              if (depth === 0) { jsonEnd = i; break; }
+            }
+          }
+          if (jsonEnd === -1) continue;
+          // 检查后面是否紧跟 】
+          if (text[jsonEnd + 1] !== "】") continue;
+          const raw = text.slice(match.index, jsonEnd + 2);
+          try {
+            const json = JSON.parse(text.slice(jsonStart, jsonEnd + 1)) as Record<string, unknown>;
+            if (json.tool && json.config && json.caption) {
+              results.push({ json, raw });
+            }
+          } catch {
+            // JSON 解析失败，跳过
+          }
+        }
+        return results;
+      };
+
+      // 1. 处理插图占位符（无数据 chart 的轻量标记）
+      const placeholderRegex = /【插图占位：([^】]+)】/g;
+      let phm: RegExpExecArray | null;
+      let phText = fullText;
+      let placeholderCount = 0;
+      const phRegex = new RegExp(placeholderRegex.source, placeholderRegex.flags);
+      while ((phm = phRegex.exec(fullText)) !== null) {
+        const caption = phm[1].trim();
+        if (caption) {
+          phText = phText.replace(
+            phm[0],
+            `\n\n> 📊 **建议插图**：${caption}\n> *（此处为系统根据上下文自动标记的建议图位。请提供数据后点击重新生成，或手动替换为实际图表。）*\n\n`,
+          );
+          placeholderCount++;
+        }
+      }
+      if (placeholderCount > 0) {
+        setResult(phText);
+        resultRef.current = phText;
+      }
+
+      // 2. 处理可执行 FIGURE 标记（用括号计数定位，支持嵌套 JSON）
+      const figureBlocks = findFigureBlocks(placeholderCount > 0 ? phText : fullText);
       const detectedFigures: { tool: string; config: string; caption: string }[] = [];
-      let processedText = fullText;
-      let fm: RegExpExecArray | null;
-      const freshRegex = new RegExp(figureRegex.source, figureRegex.flags);
-      while ((fm = freshRegex.exec(fullText)) !== null) {
-        const tool = fm[1];
-        const config = fm[2];
-        const caption = fm[3];
-        detectedFigures.push({ tool, config, caption });
-        processedText = processedText.replace(fm[0], `\n\n*[正在生成 ${caption}...]*\n\n`);
+      let processedText = placeholderCount > 0 ? phText : fullText;
+      for (const block of figureBlocks) {
+        const json = block.json;
+        const tool = json.tool as string | undefined;
+        const config = json.config as Record<string, unknown> | undefined;
+        const caption = json.caption as string | undefined;
+        if (!tool || !config || !caption) continue;
+        detectedFigures.push({ tool, config: JSON.stringify(config), caption });
+        processedText = processedText.replace(block.raw, `\n\n*[正在生成 ${caption}...]*\n\n`);
         figureCountRef.current++;
       }
 
       if (detectedFigures.length > 0) {
         setResult(processedText);
         resultRef.current = processedText;
-        setPendingFigures(prev => [...prev, ...detectedFigures.map(f => ({ ...f, spec: "", status: "pending" as const }))]);
+        // 直接存 ref，彻底绕开 React state batch 时序问题
+        detectedFiguresRef.current = detectedFigures;
+        setPendingFigures(detectedFigures.map(f => ({ ...f, spec: "", status: "pending" as const })));
 
         setGenerationStatus("completed");
         toast.info(`正在自动生成 ${detectedFigures.length} 张配图...`);
         const _abort = new AbortController();
         figureAbortRef.current = _abort;
         (async () => {
-          const _figs = await new Promise<typeof pendingFigures>(r => setPendingFigures(p => { r(p); return p; }));
+          const _figs = detectedFiguresRef.current;
           for (let i = 0; i < _figs.length; i++) {
             if (_abort.signal.aborted) break;
             setPendingFigures(prev => prev.map((f, j) => j === i ? { ...f, status: "generating" } : f));
@@ -390,15 +456,27 @@ export function WritingPanel({
               let imgUrl = "";
               const cfg = JSON.parse(fig.config);
 
+              // 带超时的 fetch（12 秒，避免单张图卡死整个流程）
+              const fetchWithTimeout = async (url: string, init: RequestInit, timeoutMs = 12000): Promise<Response> => {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), timeoutMs);
+                try {
+                  return await fetch(url, { ...init, signal: controller.signal });
+                } finally {
+                  clearTimeout(timer);
+                }
+              };
+
               if (fig.tool === "chart") {
                 const fd = new FormData();
                 // 支持内联数据（Chart.js 风格）
                 if (cfg.data?.labels && cfg.data?.datasets) {
                   const labels = cfg.data.labels as string[];
                   const datasets = cfg.data.datasets as Array<{ label?: string; data: number[] }>;
-                  let csv = labels.join(",") + "\n";
-                  for (let r = 0; r < labels.length; r++) {
-                    csv += datasets.map(d => d.data[r] ?? "").join(",") + "\n";
+                  // 构建标准 CSV：第一列 X，后续列为各 dataset
+                  let csv = "X," + labels.join(",") + "\n";
+                  for (const ds of datasets) {
+                    csv += (ds.label || "data") + "," + ds.data.join(",") + "\n";
                   }
                   fd.append("dataFile", new Blob([csv], { type: "text/csv" }), "data.csv");
                 } else if (cfg.data_file) {
@@ -408,40 +486,69 @@ export function WritingPanel({
                 }
                 if (fd.has("dataFile")) {
                   fd.append("config", JSON.stringify({ title: fig.caption, chart_type: cfg.chart_type || cfg.type || "bar", data: cfg.data }));
-                  const r = await fetch("/api/chart", { method: "POST", body: fd });
+                  const r = await fetchWithTimeout("/api/chart", { method: "POST", body: fd });
                   const j = await r.json();
                   imgUrl = j.imageUrl || "";
                 }
               } else if (fig.tool === "xrd_peakfit" && cfg.data_file) {
                 const fd = new FormData();
-                const resp = await fetch(cfg.data_file);
+                const resp = await fetchWithTimeout(cfg.data_file, {});
                 const blob = await resp.blob();
                 fd.append("dataFile", blob, "data.csv");
                 fd.append("config", JSON.stringify({ title: fig.caption, bg_params: {}, peak_params: { max_peaks: 15 } }));
-                const r = await fetch("/api/xrd/peakfit", { method: "POST", body: fd });
+                const r = await fetchWithTimeout("/api/xrd/peakfit", { method: "POST", body: fd });
                 const j = await r.json();
                 imgUrl = j.imageUrl || "";
               } else if (fig.tool === "flow") {
-                const r = await fetch("/api/flow-diagram", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
+                console.log(`[FIGURE] Generating flow diagram: ${fig.caption}`);
+                const r = await fetchWithTimeout("/api/flow-diagram", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
+                const j = await r.json();
+                if (j.imageUrl) {
+                  imgUrl = j.imageUrl;
+                  console.log(`[FIGURE] Flow diagram OK: ${imgUrl}`);
+                } else {
+                  console.warn(`[FIGURE] Flow diagram failed: ${j.error || "unknown"}`);
+                }
+              } else if (fig.tool === "mechanism") {
+                // 兼容旧版 mechanism token：转为 flow 格式
+                const mechanismCfg = {
+                  title: cfg.title || cfg.description || "反应机理",
+                  direction: "vertical",
+                  nodes: [{ id: "1", label: cfg.description?.slice(0, 20) || "机理过程" }, { id: "2", label: "产物" }],
+                  edges: [{ from: "1", to: "2" }],
+                };
+                const r = await fetchWithTimeout("/api/flow-diagram", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(mechanismCfg) });
                 const j = await r.json();
                 imgUrl = j.imageUrl || "";
               }
 
               if (imgUrl) {
                 const md = `\n\n![${fig.caption}](${imgUrl})\n\n`;
-                setResult(prev => prev.replace(`*[正在生成 ${fig.caption}...]*`, md));
+                setResult(prev => {
+                  const next = prev.replace(`*[正在生成 ${fig.caption}...]*`, md);
+                  resultRef.current = next;
+                  return next;
+                });
                 setPendingFigures(prev => prev.map((f, j) => j === i ? { ...f, status: "done", imageUrl: imgUrl } : f));
               } else {
                 // 失败时替换占位符为可读提示，避免残留 raw placeholder
                 const fallback = `\n\n> 📊 **${fig.caption}**（未能自动生成，请手动补充图表）\n\n`;
-                setResult(prev => prev.replace(`*[正在生成 ${fig.caption}...]*`, fallback));
+                setResult(prev => {
+                  const next = prev.replace(`*[正在生成 ${fig.caption}...]*`, fallback);
+                  resultRef.current = next;
+                  return next;
+                });
                 setPendingFigures(prev => prev.map((f, j) => j === i ? { ...f, status: "failed" } : f));
               }
             } catch {
               // 异常时同样替换占位符（用 _figs[i] 而非 pendingFigures，避免异步状态不一致）
               const caption = _figs[i]?.caption || "图表";
               const fallback = `\n\n> 📊 **${caption}**（生成异常，请手动补充）\n\n`;
-              setResult(prev => prev.replace(`*[正在生成 ${caption}...]*`, fallback));
+              setResult(prev => {
+                const next = prev.replace(`*[正在生成 ${caption}...]*`, fallback);
+                resultRef.current = next;
+                return next;
+              });
               setPendingFigures(prev => prev.map((f, j) => j === i ? { ...f, status: "failed" } : f));
             }
           }
@@ -450,6 +557,10 @@ export function WritingPanel({
         })();
       } else {
         setGenerationStatus("completed");
+      }
+      // 标记当前任务已扩写
+      if (selectedSectionId && onTaskExpanded) {
+        onTaskExpanded(selectedSectionId);
       }
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "写作生成失败");
@@ -462,9 +573,8 @@ export function WritingPanel({
   const handleApplyToEditor = () => {
     const content = resultRef.current || result;
     if (onGenerate && content && targetSectionKey) {
-      onGenerate(content, targetSectionKey);
-      toast.success(`内容已应用到 ${targetSectionKey} 章节`);
-      setTimeout(() => onAutoReorder?.(), 300);
+      onGenerate(content, targetSectionKey, subsectionTitle);
+      toast.success(`内容已应用到 ${targetSectionKey} 章节，可点击工具栏"引用重排"整理引用`);
     }
   };
 
@@ -492,16 +602,15 @@ export function WritingPanel({
               />
             </div>
 
-            {/* 大纲任务列表 */}
+            {/* 大纲任务列表 — 按 IMRaD 大类分组 */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label className="text-xs">选择大纲任务</Label>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
+                <Label className="text-xs">选择大纲任务（按子节扩写）</Label>
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="h-5 w-5 text-muted-foreground hover:text-primary"
                   onClick={async () => {
-                    // 强制从存储中重新读取大纲
                     const latest = await projectStore.get(projectId);
                     if (latest && onUpdateProject) {
                       onUpdateProject({ outline: latest.outline });
@@ -513,25 +622,58 @@ export function WritingPanel({
                   <RefreshCw className="h-3 w-3" />
                 </Button>
               </div>
-              <div className="border rounded-md max-h-[200px] overflow-y-auto bg-muted/20">
+              <div className="border rounded-md max-h-[240px] overflow-y-auto bg-muted/20">
                 {outlineTasks.length > 0 ? (
-                  <div className="divide-y">
-                    {outlineTasks.map((task) => (
-                      <div 
-                        key={task.id}
-                        onClick={() => handleSelectTask(task)}
-                        className={cn(
-                          "flex items-center justify-between p-2 cursor-pointer transition-colors hover:bg-primary/10",
-                          selectedSectionId === task.id ? "bg-primary/15 border-l-2 border-primary" : "",
-                        )}
-                      >
-                        <div className="flex items-center gap-2 overflow-hidden">
-                          <span className="truncate">{task.title}</span>
+                  (() => {
+                    // 按 IMRaD 大节分组
+                    const IMRAD_ORDER = ["abstract", "introduction", "methods", "results", "conclusion"];
+                    const IMRAD_LABELS: Record<string, string> = {
+                      abstract: "摘要 (Abstract)",
+                      introduction: "引言 (Introduction)",
+                      methods: "材料与方法 (Methods)",
+                      results: "结果与讨论 (Results & Discussion)",
+                      conclusion: "结论 (Conclusion)",
+                    };
+                    const grouped = new Map<string, OutlineTask[]>();
+                    for (const t of outlineTasks) {
+                      const key = t.sectionKey;
+                      if (!grouped.has(key)) grouped.set(key, []);
+                      grouped.get(key)!.push(t);
+                    }
+
+                    const rows: React.ReactNode[] = [];
+                    for (const key of IMRAD_ORDER) {
+                      const tasks = grouped.get(key);
+                      if (!tasks || tasks.length === 0) continue;
+                      rows.push(
+                        <div key={`hdr-${key}`} className="px-2 py-1 text-[10px] font-bold text-muted-foreground bg-muted/40 uppercase tracking-wider border-b">
+                          {IMRAD_LABELS[key] || key}
                         </div>
-                        <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                      </div>
-                    ))}
-                  </div>
+                      );
+                      for (const task of tasks) {
+                        const isExpanded = expandedSections?.includes(task.id);
+                        rows.push(
+                          <div
+                            key={task.id}
+                            onClick={() => handleSelectTask(task)}
+                            className={cn(
+                              "flex items-center justify-between p-2 cursor-pointer transition-colors hover:bg-primary/10",
+                              selectedSectionId === task.id ? "bg-primary/15 border-l-2 border-primary" : "",
+                            )}
+                          >
+                            <div className="flex items-center gap-2 overflow-hidden min-w-0">
+                              <span className="truncate text-xs">{task.title}</span>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {isExpanded && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
+                              <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                            </div>
+                          </div>
+                        );
+                      }
+                    }
+                    return <div className="divide-y">{rows}</div>;
+                  })()
                 ) : (
                   <div className="p-4 text-center text-xs text-muted-foreground italic">
                     请先生成论文大纲
@@ -561,6 +703,13 @@ export function WritingPanel({
                 <div className="flex h-8 border rounded-md overflow-hidden">
                   <button className={`flex-1 text-xs ${language === "zh" ? "bg-primary text-primary-foreground" : "bg-background"}`} onClick={() => setLanguage("zh")}>中文</button>
                   <button className={`flex-1 text-xs ${language === "en" ? "bg-primary text-primary-foreground" : "bg-background"}`} onClick={() => setLanguage("en")}>EN</button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">快速模式</Label>
+                <div className="flex h-8 border rounded-md overflow-hidden">
+                  <button className={`flex-1 text-xs ${fastMode ? "bg-primary text-primary-foreground" : "bg-background"}`} onClick={() => setFastMode(true)}>快速</button>
+                  <button className={`flex-1 text-xs ${!fastMode ? "bg-primary text-primary-foreground" : "bg-background"}`} onClick={() => setFastMode(false)}>完整</button>
                 </div>
               </div>
               <div className="space-y-1.5">

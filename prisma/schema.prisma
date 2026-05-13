@@ -87,12 +87,13 @@ model AnalysisResult {
 
 // 知识库文献模型 (用于同步文件系统和数据库)
 model KnowledgeFile {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  category  String   @default("未分类")
-  size      Int
-  mtime     DateTime
-  chunks    KnowledgeChunk[]
+  id           String   @id @default(cuid())
+  name         String   @unique
+  category     String   @default("未分类")
+  documentType String   @default("paper") // "paper" | "patent" | "other"
+  size         Int
+  mtime        DateTime
+  chunks       KnowledgeChunk[]
 }
 
 // 知识库分块模型 (存储向量 RAG 信息)

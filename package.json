@@ -7,6 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "index-docs": "node scripts/index-pdfs.mjs",
     "create-admin": "node scripts/create-admin.mjs"
   },
@@ -39,6 +42,7 @@
     "framer-motion": "^12.38.0",
     "html2pdf.js": "^0.14.0",
     "jose": "^6.2.3",
+    "katex": "^0.16.45",
     "langchain": "^1.3.5",
     "lucide-react": "^1.14.0",
     "mermaid": "^11.14.0",
@@ -53,8 +57,10 @@
     "react-hook-form": "^7.74.0",
     "react-markdown": "^10.1.0",
     "react-resizable-panels": "^4.11.0",
+    "rehype-katex": "^7.0.1",
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
     "shadcn": "^4.6.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
@@ -74,10 +80,13 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^6.0.1",
+    "@vitest/coverage-v8": "^4.1.5",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
     "prisma": "^5.22.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.5"
   }
 }

@@ -29,6 +29,8 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from plot_utils import load_dataframe  # noqa: E402
 
+from _shared import normalize_label
+
 plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
@@ -52,7 +54,7 @@ def find_peaks(x: np.ndarray, y: np.ndarray, prominence: float = 0.05):
 def plot_xrd(data_path: str, config: dict, output_path: str):
     df = load_dataframe(data_path)
 
-    title = config.get("title", "XRD Pattern")
+    title = normalize_label(config.get("title", "XRD Pattern"))
     x_label = config.get("x_label", "2θ (degree)")
     y_label = config.get("y_label", "Intensity (a.u.)")
     patterns = config.get("patterns", [])

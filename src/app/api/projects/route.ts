@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/auth";
+import { unauthorizedResponse, notFoundResponse, errorResponse } from "@/lib/api-response";
 
 type SectionRecord = Record<string, string>;
 
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   try {
     const userId = getUserId(req);
     if (!userId) {
-      return NextResponse.json({ error: "未登录" }, { status: 401 });
+      return unauthorizedResponse();
     }
 
     const { searchParams } = new URL(req.url);
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
       });
 
       if (!project) {
-        return NextResponse.json({ error: "项目未找到" }, { status: 404 });
+        return notFoundResponse("项目未找到");
       }
 
       const formattedProject = {
@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
     })));
   } catch (error: unknown) {
     console.error("Projects GET error:", error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Projects GET failed" }, { status: 500 });
+    return errorResponse(error instanceof Error ? error.message : "Projects GET failed");
   }
 }
 
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
   try {
     const userId = getUserId(req);
     if (!userId) {
-      return NextResponse.json({ error: "未登录" }, { status: 401 });
+      return unauthorizedResponse();
     }
 
     const data = await req.json();
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
     } = data;
 
     if (!title) {
-      return NextResponse.json({ error: "标题不能为空" }, { status: 400 });
+      return errorResponse("标题不能为空", 400);
     }
 
     // 更新时校验所有权
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
         select: { id: true },
       });
       if (!existing) {
-        return NextResponse.json({ error: "项目未找到" }, { status: 404 });
+        return notFoundResponse("项目未找到");
       }
     }
 
@@ -176,7 +176,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ id: project.id, message: "保存成功" });
   } catch (error: unknown) {
     console.error("Projects POST error:", error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Projects POST failed" }, { status: 500 });
+    return errorResponse(error instanceof Error ? error.message : "Projects POST failed");
   }
 }
 
@@ -185,14 +185,14 @@ export async function DELETE(req: NextRequest) {
   try {
     const userId = getUserId(req);
     if (!userId) {
-      return NextResponse.json({ error: "未登录" }, { status: 401 });
+      return unauthorizedResponse();
     }
 
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
     if (!id) {
-      return NextResponse.json({ error: "未指定项目ID" }, { status: 400 });
+      return errorResponse("未指定项目ID", 400);
     }
 
     const existing = await prisma.project.findFirst({
@@ -200,13 +200,13 @@ export async function DELETE(req: NextRequest) {
       select: { id: true },
     });
     if (!existing) {
-      return NextResponse.json({ error: "项目未找到" }, { status: 404 });
+      return notFoundResponse("项目未找到");
     }
 
     await prisma.project.delete({ where: { id } });
     return NextResponse.json({ message: "删除成功" });
   } catch (error: unknown) {
     console.error("Projects DELETE error:", error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Projects DELETE failed" }, { status: 500 });
+    return errorResponse(error instanceof Error ? error.message : "Projects DELETE failed");
   }
 }

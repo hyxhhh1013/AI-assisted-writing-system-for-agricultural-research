@@ -35,15 +35,32 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.patches import FancyBboxPatch
 
+# 中文字体
+plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "DejaVu Sans"]
+plt.rcParams["axes.unicode_minus"] = False
+
+# Unicode 上下标 → ASCII（SimHei 字体的 Unicode 上标覆盖不全）
+_SUP_MAP = str.maketrans({"²":"2","³":"3","¹":"1","⁰":"0","⁴":"4","⁵":"5","⁶":"6","⁷":"7","⁸":"8","⁹":"9","⁺":"+","⁻":"-","⁼":"="})
+_SUB_MAP = str.maketrans({"₂":"2","₃":"3","₁":"1","₀":"0","₄":"4","₅":"5","₆":"6","₇":"7","₈":"8","₉":"9"})
+
+def _nl(text: str) -> str:
+    return text.translate(_SUP_MAP).translate(_SUB_MAP)
+
 warnings.filterwarnings("ignore")
 
 
 def draw_flow_chart(config: dict, output_path: str):
     """绘制流程图"""
-    title = config.get("title", "Flow Chart")
+    title = _nl(config.get("title", "Flow Chart"))
     direction = config.get("direction", "vertical")
     nodes = config.get("nodes", [])
     edges = config.get("edges", [])
+    # 归一化节点和边标签
+    for nd in nodes:
+        nd["label"] = _nl(nd.get("label", ""))
+    for ed in edges:
+        if ed.get("label"):
+            ed["label"] = _nl(ed["label"])
 
     if not nodes:
         raise ValueError("至少需要一个节点")

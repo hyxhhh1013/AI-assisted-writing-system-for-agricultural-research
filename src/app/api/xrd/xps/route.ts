@@ -43,7 +43,8 @@ export async function POST(req: NextRequest) {
     const tmpDir = path.join(process.cwd(), ".tmp", randomUUID());
     fs.mkdirSync(tmpDir, { recursive: true });
 
-    const ext = dataFile.name.toLowerCase().endsWith(".csv") ? ".csv" : ".csv";
+    const fname = dataFile.name.toLowerCase();
+    const ext = fname.endsWith(".xlsx") ? ".xlsx" : fname.endsWith(".xls") ? ".xls" : ".csv";
     const dataPath = path.join(tmpDir, `data${ext}`);
     const buffer = Buffer.from(await dataFile.arrayBuffer());
     fs.writeFileSync(dataPath, buffer);
@@ -79,8 +80,19 @@ export async function POST(req: NextRequest) {
     }
 
     let pyResult: any = {};
-    try { pyResult = JSON.parse(stdout.trim()); }
-    catch { return NextResponse.json({ error: "解析 Python 输出失败" }, { status: 500 }); }
+    try {
+      // 从 stdout 提取最后一段完整 JSON（容忍前缀调试输出）
+      const lines = stdout.trim().split("\n");
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i].trim();
+        if (line.startsWith("{")) {
+          pyResult = JSON.parse(line);
+          break;
+        }
+      }
+      if (!pyResult.status) throw new Error("未找到有效 JSON 输出");
+    }
+    catch { return NextResponse.json({ error: "解析 Python 输出失败", detail: stdout.slice(-500) }, { status: 500 }); }
 
     if (pyResult.status !== "ok") {
       return NextResponse.json({ error: pyResult.message || "分析失败" }, { status: 500 });

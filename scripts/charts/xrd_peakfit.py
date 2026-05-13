@@ -34,6 +34,8 @@ import shutil
 import warnings
 from contextlib import redirect_stdout, redirect_stderr
 
+from _shared import normalize_label
+
 warnings.filterwarnings("ignore")
 
 import matplotlib
@@ -131,10 +133,10 @@ def find_xrd_peaks(x, y, params):
 
 def plot_xrd_result(x, y_orig, bg_intensity, bg_curve, peaks, config, output_path):
     """生成出版级 XRD 双面板图"""
-    title = config.get("title", "XRD Pattern")
-    x_label = config.get("x_label", "2θ (degree)")
-    y_label = config.get("y_label", "Intensity (a.u.)")
-    phase_label = config.get("phase_label", "")
+    title = normalize_label(config.get("title", "XRD Pattern"))
+    x_label = normalize_label(config.get("x_label", "2θ (degree)"))
+    y_label = normalize_label(config.get("y_label", "Intensity (a.u.)"))
+    phase_label = normalize_label(config.get("phase_label", ""))
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True,
                                     gridspec_kw={"height_ratios": [1.5, 1]})

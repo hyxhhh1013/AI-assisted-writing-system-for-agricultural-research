@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { fetchWithRetry } from "@/lib/fetch-with-retry";
+import { cosineSimilarity } from "./similarity";
 
 /** 单条索引块（与 data/index.json 一致，metadata 可扩展） */
 export interface RagChunk {
@@ -10,6 +11,7 @@ export interface RagChunk {
     source: string;
     category: string;
     id: string;
+    documentType?: string; // "paper" | "patent" | "other"
     /** 索引进度：起始页（1-based），可选 */
     pageStart?: number;
     pageEnd?: number;
@@ -166,26 +168,60 @@ function diversifyBySource(
   return out;
 }
 
-function cosineSimilarity(vecA: number[], vecB: number[]): number {
-  if (vecA.length === 0 || vecB.length === 0 || vecA.length !== vecB.length) return 0;
-  let dot = 0;
-  let na = 0;
-  let nb = 0;
-  for (let i = 0; i < vecA.length; i++) {
-    dot += vecA[i] * vecB[i];
-    na += vecA[i] * vecA[i];
-    nb += vecB[i] * vecB[i];
-  }
-  const denom = Math.sqrt(na) * Math.sqrt(nb);
-  return denom === 0 ? 0 : dot / denom;
-}
-
 export class LocalRAG {
   private chunks: RagChunk[] | null = null;
+  private categoryChunks = new Map<string, RagChunk[]>();
   private indexPath = path.join(process.cwd(), "data/index.json");
+  private metadataPath = path.join(process.cwd(), "data/metadata.json");
+
+  private getCategoryIndexPath(category: string): string {
+    return path.join(process.cwd(), `data/index_${category}.json`);
+  }
+
+  /** 列出所有可用的分类（从 metadata.json 读取，不加载大索引） */
+  getCategories(): string[] {
+    if (!fs.existsSync(this.metadataPath)) return [];
+    try {
+      const meta = JSON.parse(fs.readFileSync(this.metadataPath, "utf-8")) as { category: string }[];
+      return Array.from(new Set(meta.map((m) => m.category))).filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+
+  /** 按需加载单个分类的索引（懒加载，不重复解析） */
+  private ensureCategoryLoaded(category: string) {
+    if (this.categoryChunks.has(category)) return;
+    const catPath = this.getCategoryIndexPath(category);
+    // 尝试分类拆分索引，不存在则回退到主索引中过滤
+    if (fs.existsSync(catPath)) {
+      try {
+        const raw = fs.readFileSync(catPath, "utf-8");
+        const parsed = JSON.parse(raw) as RagChunk[];
+        this.categoryChunks.set(category, parsed.filter((c) => c?.content && String(c.content).trim().length > 0));
+        return;
+      } catch (e) {
+        console.error(`Failed to load category index [${category}]:`, e);
+      }
+    }
+    // 回退：从主索引中过滤出对应分类
+    this.ensureLoaded();
+    if (this.chunks) {
+      const filtered = this.chunks.filter((c) => c.metadata.category === category);
+      this.categoryChunks.set(category, filtered);
+    }
+  }
 
   private ensureLoaded() {
     if (this.chunks) return;
+    // 优先尝试加载分类拆分索引的元数据
+    const cats = this.getCategories();
+    if (cats.length > 0) {
+      // 有分类拆分索引时，不加载主索引，按需加载各分类
+      this.chunks = []; // 标记已初始化，走懒加载路径
+      return;
+    }
+    // 回退：加载单体 index.json
     if (fs.existsSync(this.indexPath)) {
       try {
         const raw = fs.readFileSync(this.indexPath, "utf-8");
@@ -267,13 +303,30 @@ export class LocalRAG {
     const q = query.trim();
     if (!q) return [];
 
-    this.ensureLoaded();
-    if (!this.chunks || this.chunks.length === 0) return [];
+    let pool: RagChunk[];
 
-    let pool = this.chunks;
+    // 有分类过滤 → 懒加载对应分类索引（大幅提速）
     if (category && category !== "全部") {
-      pool = this.chunks.filter((c) => c.metadata.category === category);
+      this.ensureCategoryLoaded(category);
+      pool = this.categoryChunks.get(category) || [];
+    } else {
+      // 无分类过滤 → 优先用分类拆分索引的并集，否则回退主索引
+      const cats = this.getCategories();
+      if (cats.length > 0) {
+        // 有分类拆分索引：合并所有分类的 chunk 作为检索池
+        const allChunks: RagChunk[] = [];
+        for (const cat of cats) {
+          this.ensureCategoryLoaded(cat);
+          const c = this.categoryChunks.get(cat);
+          if (c) allChunks.push(...c);
+        }
+        pool = allChunks;
+      } else {
+        this.ensureLoaded();
+        pool = this.chunks || [];
+      }
     }
+
     if (pool.length === 0) return [];
 
     const terms = extractQueryTerms(q);
@@ -310,6 +363,27 @@ export class LocalRAG {
 
   /** 按页码 / chunkIndex 拼接，便于全文分析顺序正确 */
   getFullText(fileName: string): string {
+    // 优先从分类拆分索引中查找（支持按分类拆分的索引结构）
+    const cats = this.getCategories();
+    if (cats.length > 0) {
+      for (const cat of cats) {
+        this.ensureCategoryLoaded(cat);
+        const catChunks = this.categoryChunks.get(cat);
+        if (!catChunks) continue;
+        const match = catChunks.filter((c) => c.metadata.source === fileName);
+        if (match.length > 0) {
+          const sorted = match.sort((a, b) => {
+            const pa = a.metadata.pageStart ?? 0;
+            const pb = b.metadata.pageStart ?? 0;
+            if (pa !== pb) return pa - pb;
+            return (a.metadata.chunkIndex ?? 0) - (b.metadata.chunkIndex ?? 0);
+          });
+          return sorted.map((c) => c.content).join("\n\n");
+        }
+      }
+      return "";
+    }
+    // 回退：主索引
     this.ensureLoaded();
     if (!this.chunks) return "";
     const list = this.chunks
@@ -325,15 +399,21 @@ export class LocalRAG {
 
   reload() {
     this.chunks = null;
+    this.categoryChunks.clear();
     this.ensureLoaded();
   }
 }
 
 export const localRAG = new LocalRAG();
 
-/** 供 API 拼上下文：带文献名与可选页码 */
+/** 供 API 拼上下文：按文档类型区分引用格式 */
 export function formatRagCitation(chunk: RagChunk): string {
   const src = chunk.metadata.source;
+  const docType = chunk.metadata.documentType;
+  // 专利用专利号格式，不用页码
+  if (docType === "patent") {
+    return `专利: ${src}`;
+  }
   const p = chunk.metadata.pageStart;
   if (p != null && chunk.metadata.pageEnd != null && chunk.metadata.pageEnd !== p) {
     return `${src} (pp. ${p}-${chunk.metadata.pageEnd})`;

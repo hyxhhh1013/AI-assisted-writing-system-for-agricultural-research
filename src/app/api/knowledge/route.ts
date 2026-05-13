@@ -21,14 +21,12 @@ export async function GET(req: NextRequest) {
     // RAG 语义搜索
     if (searchType === "semantic" && query) {
       const cat = category && category !== "全部" ? category : undefined;
-      const results = await localRAG.search(query, { limit: 20, category: cat });
-      const total = results.length;
-      const start = (page - 1) * pageSize;
-      const paged = results.slice(start, start + pageSize);
+      // 检索更多 chunk，确保分页后有足够的来源多样性
+      const results = await localRAG.search(query, { limit: 50, category: cat });
 
-      // 按 source 汇总，方便前端展示
+      // 先按 source 分组（不分页 chunk），每个 source 收集其全部匹配 chunk
       const grouped = new Map<string, { name: string; category: string; chunks: typeof results; chunkCount: number }>();
-      for (const r of paged) {
+      for (const r of results) {
         const key = r.metadata.source;
         if (!grouped.has(key)) {
           grouped.set(key, { name: key, category: r.metadata.category, chunks: [], chunkCount: 0 });
@@ -38,14 +36,24 @@ export async function GET(req: NextRequest) {
         g.chunkCount++;
       }
 
+      // 按匹配 chunk 数量降序排列（最相关的文献排前面）
+      const sources = Array.from(grouped.values())
+        .sort((a, b) => b.chunkCount - a.chunkCount);
+
+      const total = sources.length;
+      const start = (page - 1) * pageSize;
+      const paged = sources.slice(start, start + pageSize);
+
       return NextResponse.json({
-        files: Array.from(grouped.values()).map(g => ({
+        files: paged.map(g => ({
           name: g.name,
           category: g.category,
+          documentType: g.chunks[0]?.metadata?.documentType || "paper",
           chunkCount: g.chunkCount,
           size: 0,
           mtime: "",
-          _snippets: g.chunks.slice(0, 3).map(c => c.content.slice(0, 150)),
+          // 返回完整 chunk 内容（截断到 300 字），方便前端展示相关片段
+          _snippets: g.chunks.map(c => c.content.slice(0, 300)),
         })),
         total,
         page,
@@ -113,6 +121,7 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get("file") as File;
     const category = formData.get("category") as string || "未分类";
+    const documentType = formData.get("documentType") as string || "paper";
 
     if (!file) {
       return NextResponse.json({ error: "未发现上传文件" }, { status: 400 });
@@ -137,6 +146,7 @@ export async function POST(req: NextRequest) {
       const entry = {
         name: file.name,
         category,
+        documentType,
         chunkCount: 0,
         size: buffer.length,
         mtime: new Date().toISOString(),
@@ -204,7 +214,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     // 原有的单文件修改逻辑
-    const { name, oldCategory } = body;
+    const { name, oldCategory, documentType } = body;
     if (!name || !oldCategory || !newCategory) {
       return NextResponse.json({ error: "参数不完整" }, { status: 400 });
     }
@@ -242,7 +252,10 @@ export async function PATCH(req: NextRequest) {
     if (fs.existsSync(METADATA_PATH)) {
       const metadata = JSON.parse(fs.readFileSync(METADATA_PATH, "utf-8"));
       const entry = metadata.find((m: any) => m.name === name);
-      if (entry) entry.category = newCategory;
+      if (entry) {
+        entry.category = newCategory;
+        if (documentType) entry.documentType = documentType;
+      }
       fs.writeFileSync(METADATA_PATH, JSON.stringify(metadata, null, 2), "utf-8");
     }
 

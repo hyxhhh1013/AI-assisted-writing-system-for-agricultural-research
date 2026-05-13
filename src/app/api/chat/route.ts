@@ -31,14 +31,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 截断以适配上下文窗口
+    // 截断以适配上下文窗口，同时清理原文献中的引用编号避免混淆
+    const cleanedText = fullText.replace(/\[(\d+[\d,\s\-–—]*)\]/g, "[文献$1]");
     const maxChars = 80000;
     const paperContext =
-      fullText.length > maxChars
-        ? fullText.slice(0, maxChars / 2) +
+      cleanedText.length > maxChars
+        ? cleanedText.slice(0, maxChars / 2) +
           "\n…[省略中间部分]…\n" +
-          fullText.slice(-maxChars / 2)
-        : fullText;
+          cleanedText.slice(-maxChars / 2)
+        : cleanedText;
 
     const systemMessage = {
       role: "system",

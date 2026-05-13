@@ -1,30 +1,84 @@
-# 技术架构选型文档
+# 架构文档：禾书耕文 (GrainScript)
 
-## 1. 架构总览
-本系统采用 **“现代前端 (Next.js) + 低代码 AI 中台 (Dify) + 云端大模型 (DeepSeek/Qwen)”** 的三层架构，兼顾开发速度与运维成本。
+## 项目定位
 
-## 2. 技术栈清单 (Tech Stack)
+面向农业/热化学/生物质能科研领域的 AI 辅助 SCI 论文写作平台。利用实验室自有 167 篇 PDF 文献构建私有知识库，驱动 LLM 撰写符合实验室行文风格和学术规范的论文。
 
-### 2.1 前端展示层 (Frontend)
-*   **框架**：Next.js 14+ (App Router) —— 提供极佳的 SEO（虽然本项目内网用不到，但为了路由规范）和 SSR 性能。
-*   **样式**：Tailwind CSS —— 快速构建响应式 UI。
-*   **组件库**：Shadcn UI —— 现代、简洁的 UI 组件。
-*   **状态管理**：Zustand —— 轻量级状态同步。
+**一人全栈开发，132 个源文件，10 个数据模型，32 个 API 端点。**
 
-### 2.2 核心业务层 (BFF/AI Orchestration)
-*   **平台**：Dify (Self-hosted via Docker) —— 负责 RAG 工作流、知识库管理、Prompt 编排。完全免费且确保数据隐私。
-*   **后端逻辑**：Next.js Route Handlers —— 处理前端与本地 Dify API 的对接。
+## 技术栈
 
-### 2.3 数据与 AI 层 (Data & LLM)
-*   **大语言模型**：DeepSeek-V3 / Qwen-Max —— 负责高阶推理与文本生成。
-*   **向量数据库**：Qdrant / Milvus (由 Dify 内置管理) —— 存储文献向量。
-*   **关系型数据库**：PostgreSQL (由 Dify 依赖) —— 存储对话记录与配置。
+| 层级 | 技术 | 选型理由 |
+|------|------|---------|
+| 框架 | Next.js 16 App Router | 同构架构——页面渲染和 API 共享一套代码，单人开发不用拆前后端 |
+| 语言 | TypeScript 5 | 类型安全，尤其在 AI 输出不确定性的场景下 |
+| 样式 | Tailwind CSS v4 + Shadcn UI | 开箱即用，不需要自己维护设计系统 |
+| 数据库 | Prisma + SQLite WAL | 零部署运维。WAL 模式支持并发读写，实验室 20 人以内够用 |
+| 认证 | JWT (jose + bcryptjs) | 轻量，HTTP-only cookie 防 XSS |
+| AI 调用 | 自研 fetch 封装 | 绕过 LangChain 抽象层，直接调 API，可控性更高 |
+| RAG | 自研 BM25 + 向量混合检索 + RRF 融合 | 专为中文+英文学术文献检索引擎调优 |
 
-## 3. 核心设计原则
-*   **AI 逻辑下沉**：前端不写 Prompt，所有 Prompt 固化在 Dify 或后端 Service 中。
-*   **流式响应 (Streaming)**：所有生成接口必须支持 Stream 输出，提升用户体验。
-*   **API 抽象层**：前端通过统一的 `/api/ai` 接口调用，屏蔽底层 Dify 或 LLM 的变更。
+## 核心架构决策
 
-## 4. 部署方案
-*   **开发环境**：本地 Docker Compose 快速启动 Dify + 前端开发服务器。
-*   **生产环境**：实验室轻量云服务器 (4核16G)，Docker 容器化部署。
+### 1. 多 Agent 写作管道（Writer → Verifier → Refiner）
+
+```
+Writer (DeepSeek) ──→ Verifier (智谱 GLM-4-Plus) ──→ Refiner (DeepSeek)
+      ↓                         ↓                         ↓
+ SSE 流式输出              逐条核实引用真实性          根据审查意见修正
+```
+
+**为什么是三段式？**
+
+单一 LLM 写论文有两个致命问题：
+- **幻觉引用**：AI 编造不存在的参考文献
+- **自我审查无效**：同一个模型无法有效审查自己的输出
+
+**设计决策：Writer 和 Verifier 用不同厂商的模型**（DeepSeek vs 智谱）。只有不同模型才能真正实现独立验证。如果智谱 API 不可用，自动降级回 DeepSeek（用不同的 temperature）。
+
+### 2. 混合 RAG 检索引擎
+
+```
+查询 ──→ BM25 词汇检索 ──┐
+         (单字/双字/三字分词)  │
+                             ├──→ RRF 融合排序 ──→ 去重 ──→ 分类过滤 ──→ Top-K 结果
+查询 ──→ 向量语义检索 ──┘
+         (DeepSeek Embedding)
+```
+
+**为什么不直接用 Pinecone/Milvus/Chroma？**
+1. 零部署成本：本地 JSON 索引，不需要运维向量数据库
+2. 混合检索：纯向量检索对中文专业术语（"热重分析"、"比表面积"）效果差——BM25 的精确匹配更准
+3. 来源去重：每篇文献最多 4 条——防止某一篇文献垄断检索结果
+
+### 3. 引用真实性验证
+
+不是简单的"检查格式"，而是**比对被引用文献的完整原文**：
+
+1. 正则提取正文中所有 `[n]` 引用标记
+2. 对每条引用，从 RAG 知识库检索被引用文献的完整原文
+3. Verifier 逐条比对：引用表述 vs 原文实际内容
+4. 输出：✅ 通过 / ⚠️ 归属错误 / ❌ 疑似虚构
+
+## 数据模型（10 个表）
+
+```
+User ──→ Project ──→ Section (IMRaD 章节)
+                 ├──→ Reference (参考文献列表)
+                 ├──→ AnalysisResult (数据分析结果)
+                 ├──→ PlagiarismCheck ──→ PlagiarismMatch (查重匹配)
+                 │                   └──→ RewriteSuggestion (降重建议)
+                 └──→ ReferenceSource (引用编号→文献源映射)
+
+KnowledgeFile ──→ KnowledgeChunk (文献分块+向量)
+```
+
+## 面试要点速查
+
+被问到项目时按这个路径讲：
+
+1. **问题**：实验室 SCI 论文——查重难、引用管理乱、AI 写出来不符合规范
+2. **方案**：私有知识库 RAG + 多 Agent 写作管道 + 引用真实性验证
+3. **技术亮点**：混合检索（BM25+向量+RRF）、不同模型独立审查、SSE 流式管道、DOCX 多模板导出
+4. **工程能力**：TypeScript 全栈、一人交付 132 源文件、自研 RAG 引擎、12 个 AI 端点限流+认证
+5. **用户意识**：为实验室真实需求而建，不是 demo——在有人用之前暂停加新功能

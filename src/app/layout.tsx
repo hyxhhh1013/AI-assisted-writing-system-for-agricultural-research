@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "农业科研 AI 辅助写作系统",
+  title: "禾书耕文 | GrainScript - 农业科研 AI 辅助写作系统",
   description: "基于 RAG 技术的实验室专属农业论文辅助平台",
 };
 

@@ -38,6 +38,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from _shared import normalize_label
+
 warnings.filterwarnings("ignore")
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -50,25 +52,88 @@ def run_xps_analysis(data_path, config, output_path):
     from PyXplore.Background.BacDeduct import TwiceFilter
     from PyXplore.WPEMXPS.XPSEM import XPSsolver
 
-    title = config.get("title", "XPS Analysis")
+    title = normalize_label(config.get("title", "XPS Analysis"))
     atom_identifiers = config.get("atom_identifiers", [])
     satellite_peaks = config.get("satellite_peaks", [])
     energy_range = config.get("energy_range")
     bg_params = config.get("bg_params", {})
     iter_max = config.get("iter_max", 500)
 
+    # PyXplore SLCoupling 按 (元素名, 量子数) 分组做自旋轨道耦合。
+    # s 轨道 (1s, 2s, 3s) 的 j 值只有一种 (l+s = 0.5)，无法形成二重态对 →
+    # 每个 s 轨道峰给唯一元素名，阻止被分入同一耦合组。
+    for i, ident in enumerate(atom_identifiers):
+        try:
+            orbital_str = str(ident[1])
+            # 判断是否 s 轨道：如 "1s1/2", "2s1/2" → 提取 "1s" 或 "2s"
+            if orbital_str.startswith(("1s", "2s", "3s", "4s", "5s")):
+                ident[0] = f"{ident[0]}_{i}"  # N_0, N_1, ...
+        except Exception:
+            pass
+
     # 加载 XPS 数据
     df = load_dataframe(data_path)
 
-    # 自动检测列：结合能 (eV) 和强度
-    be_col = df.columns[0]
-    int_col = df.columns[1] if len(df.columns) > 1 else df.columns[0]
+    # —— 自动检测数据格式 ——
+    # 机器导出格式（如 Avantage/Thermo）：含元数据头 + 多列（BE, Scan A-E, Bkg, Envelope, Residuals）
+    # 简单格式：两列 CSV（BE, Intensity）
+    is_machine_format = False
+    data_start_row = 0
 
-    be = pd.to_numeric(df[be_col], errors="coerce").values
-    intensity = pd.to_numeric(df[int_col], errors="coerce").values
+    # 检测是否机器导出格式：搜索 "Binding Energy" 所在行
+    for row_idx in range(min(30, len(df))):
+        row_vals = [str(v).strip() for v in df.iloc[row_idx].values if pd.notna(v)]
+        row_text = " ".join(row_vals)
+        if "Binding Energy" in row_text or "binding energy" in row_text.lower():
+            is_machine_format = True
+            # 数据从标题行的下一行开始（跳过单位行）
+            data_start_row = row_idx + 2  # 标题行 + 单位行
+            break
 
-    mask = ~(np.isnan(be) | np.isnan(intensity))
-    be, intensity = be[mask], intensity[mask]
+    if is_machine_format:
+        # 提取标题行确定哪些列有用
+        header_row = None
+        for r in range(data_start_row - 2, min(data_start_row, len(df))):
+            vals = [str(v).strip() for v in df.iloc[r].values]
+            if "Binding Energy" in " ".join(vals):
+                header_row = vals
+                break
+
+        # 取第一列作为 BE（应为 "Binding Energy (E)" 或类似）
+        be_col_idx = 0
+        # 找第一个 Scan/Intensity 列（跳过单位列、NaN 列）
+        int_col_idx = None
+        for ci in range(1, len(df.columns)):
+            val = str(df.iloc[data_start_row, ci]) if data_start_row < len(df) else ""
+            header_val = str(header_row[ci]) if header_row and ci < len(header_row) else ""
+            # 跳过全是 NaN 的列
+            col_data = df.iloc[data_start_row:, ci]
+            if col_data.apply(lambda x: pd.notna(x) and isinstance(x, (int, float))).sum() < 3:
+                continue
+            int_col_idx = ci
+            break
+
+        if int_col_idx is None:
+            int_col_idx = 2  # 机器格式通常 col 2 是 Scan A
+
+        # 从数据起始行提取数据
+        data_df = df.iloc[data_start_row:].copy()
+        be_vals = pd.to_numeric(data_df.iloc[:, be_col_idx], errors="coerce").values
+        int_vals = pd.to_numeric(data_df.iloc[:, int_col_idx], errors="coerce").values
+        mask = ~(np.isnan(be_vals) | np.isnan(int_vals))
+        be = be_vals[mask]
+        intensity = int_vals[mask]
+        sys.stderr.write(f"[XPS] Machine format detected: BE col={be_col_idx}, Int col={int_col_idx}, data points={len(be)}\n")
+    else:
+        # 简单格式：前两列
+        be_col = df.columns[0]
+        int_col = df.columns[1] if len(df.columns) > 1 else df.columns[0]
+
+        be = pd.to_numeric(df[be_col], errors="coerce").values
+        intensity = pd.to_numeric(df[int_col], errors="coerce").values
+
+        mask = ~(np.isnan(be) | np.isnan(intensity))
+        be, intensity = be[mask], intensity[mask]
 
     # XPS 数据通常是递减的结合能（高能到低能），需要递增
     if be[0] < be[-1]:
@@ -105,6 +170,64 @@ def run_xps_analysis(data_path, config, output_path):
         raise ValueError("背景扣除失败，请检查数据")
 
     # 2. 运行 XPS 求解器
+    # PyXplore SLCoupling 完全不能处理 s 轨道单峰（无自旋分裂）。
+    # line 827 的 `OriPeaks[k]==1` 永远走不到，line 829 list.append 语法错误。
+    # 完整重写 SLCoupling：单峰组跳过 calib_energy_fun 直接传递。
+    import PyXplore.WPEMXPS.XPSEM as _xpsem
+    from PyXplore.WPEMXPS.XPSEM import calib_energy_fun, cal_SatPeaks
+
+    def _fixed_SLCoupling(_mu_list, _ori_mu_list, _w_list, OriPeaks, SatPeaks,
+                          tao, ratio, p2_list):
+        import copy
+        new_mu_list = copy.deepcopy(_mu_list)
+        new_w_list = copy.deepcopy(_w_list)
+        ori_mu_list = copy.deepcopy(_ori_mu_list)
+        # fine-tuning (原 line 815-820)
+        for peak in range(len(new_mu_list)):
+            if abs(new_mu_list[peak] - ori_mu_list[peak]) >= tao:
+                new_mu_list[peak] = ratio * ori_mu_list[peak] + (1 - ratio) * _mu_list[peak]
+
+        total_index = 0
+        orbit_names = []
+        for k in range(len(OriPeaks)):
+            group = OriPeaks[k]
+            # 单峰或标记为1 → 不耦合
+            if not isinstance(group, list) or len(group) <= 1:
+                if isinstance(group, list) and len(group) == 1:
+                    orbit_names.append([group[0][0], group[0][1]])
+                total_index += 1
+            else:
+                related_peaks, quantum_num = [], []
+                for v in range(len(group)):
+                    orbit_names.append([group[v][0], group[v][1]])
+                    related_peaks.append(total_index)
+                    quantum_num.append(group[v][3])
+                    total_index += 1
+                    atom_name = group[v][0]
+                if len(quantum_num) >= 2:
+                    new_mu_list, new_w_list = calib_energy_fun(
+                        new_mu_list, new_w_list, related_peaks, quantum_num, atom_name)
+
+        for k in range(len(SatPeaks)):
+            group = SatPeaks[k]
+            if not isinstance(group, list) or len(group) <= 1:
+                if isinstance(group, list) and len(group) == 1:
+                    orbit_names.append([group[0][0], group[0][1]])
+                total_index += 1
+            else:
+                _orbit_name_list, SatPeaks_loc = [], []
+                for v in range(len(group)):
+                    _orbit_name_list.append([group[v][0], group[v][1]])
+                    SatPeaks_loc.append(total_index)
+                    total_index += 1
+                new_w_list, _child_peaks = cal_SatPeaks(
+                    new_mu_list, new_w_list, orbit_names, _orbit_name_list,
+                    SatPeaks_loc, p2_list)
+
+        return new_mu_list, new_w_list, []
+
+    _xpsem.SLCoupling = _fixed_SLCoupling
+
     with open(os.devnull, "w") as null, redirect_stdout(null), redirect_stderr(null):
         # s_energy 应设为能量区间而非单个浮点数（PyXplore 类型要求）
         s_energy_val = energy_range if energy_range else [float(be.min()), float(be.max())]

@@ -73,9 +73,11 @@ function OutlineContent() {
     toast.success("大纲已保存到项目");
   };
 
-  const handleGoToWriting = () => {
-    handleSaveProject();
-    router.push(`/workbench?id=${projectId}`);
+  const handleGoToWriting = async () => {
+    await handleSaveProject();
+    // 将大纲存入 sessionStorage，工作台 WritingPanel 可立即读取
+    try { sessionStorage.setItem("pending_outline", result); } catch {}
+    router.push(`/workbench?id=${projectId}&tab=writing`);
   };
 
   const handleGenerate = async () => {

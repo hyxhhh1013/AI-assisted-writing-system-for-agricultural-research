@@ -257,11 +257,13 @@ async function indexPDFs() {
   // 5. 批量填充 embedding（DeepSeek 一次可提交多条）
   if (pendingEmbeddings.length > 0) {
     console.log(`\nBatch-embedding ${pendingEmbeddings.length} chunks...`);
-    const BATCH_SIZE = 20;
+    const BATCH_SIZE = 50; // DeepSeek embedding 单次最多 100，50 在安全范围内
     for (let i = 0; i < pendingEmbeddings.length; i += BATCH_SIZE) {
       const batch = pendingEmbeddings.slice(i, i + BATCH_SIZE);
       const texts = batch.map((p) => p.chunk.content);
-      process.stdout.write(`  batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(pendingEmbeddings.length / BATCH_SIZE)} (${batch.length} chunks)... `);
+      const totalBatches = Math.ceil(pendingEmbeddings.length / BATCH_SIZE);
+      const currentBatch = Math.floor(i / BATCH_SIZE) + 1;
+      process.stdout.write(`  batch ${currentBatch}/${totalBatches} (${batch.length} chunks)... `);
       const embs = await getEmbeddingsBatch(texts);
       // 获取当前批次 chunk 的旧 embedding map 引用
       for (let j = 0; j < batch.length; j++) {
@@ -277,7 +279,7 @@ async function indexPDFs() {
     console.log("\nNo new embeddings needed (all cached).");
   }
 
-  // 6. 写出
+  // 6. 写出（主索引 + 按分类拆分索引）
   console.log(`\nTotal chunks: ${allChunks.length}`);
 
   const dataDir = path.dirname(OUTPUT_INDEX);
@@ -285,10 +287,26 @@ async function indexPDFs() {
     fs.mkdirSync(dataDir, { recursive: true });
   }
 
+  // 6a. 主索引（保留兼容）
   fs.writeFileSync(OUTPUT_INDEX, JSON.stringify(allChunks, null, 2));
   fs.writeFileSync(OUTPUT_METADATA, JSON.stringify(metadata, null, 2));
+  console.log(`Main index saved to ${OUTPUT_INDEX}`);
 
-  console.log(`Index saved to ${OUTPUT_INDEX}`);
+  // 6b. 按分类拆分索引（大幅提升定向检索速度）
+  const categoryMap = new Map();
+  for (const chunk of allChunks) {
+    const cat = chunk.metadata.category || "未分类";
+    if (!categoryMap.has(cat)) categoryMap.set(cat, []);
+    categoryMap.get(cat).push(chunk);
+  }
+
+  for (const [cat, chunks] of categoryMap) {
+    const catFile = path.join(dataDir, `index_${cat}.json`);
+    fs.writeFileSync(catFile, JSON.stringify(chunks, null, 2));
+    const sizeMB = (Buffer.byteLength(JSON.stringify(chunks)) / 1024 / 1024).toFixed(1);
+    console.log(`  index_${cat}.json: ${chunks.length} chunks (${sizeMB} MB)`);
+  }
+
   console.log(`Metadata saved to ${OUTPUT_METADATA}`);
 }
 

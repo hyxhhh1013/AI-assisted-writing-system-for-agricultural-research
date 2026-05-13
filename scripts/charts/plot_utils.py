@@ -1,10 +1,31 @@
 """
-共享工具函数：自动检测文件编码和格式加载 DataFrame
+共享工具函数：自动检测文件编码和格式加载 DataFrame + Unicode 归一化
 """
 import io
 import zipfile
 
 import pandas as pd
+
+
+# Unicode 上下标 → ASCII（SimHei 字体 Unicode 上标覆盖不全）
+_SUPERSCRIPT_MAP = str.maketrans({
+    "²": "2", "³": "3", "¹": "1", "⁰": "0",
+    "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9",
+    "⁺": "+", "⁻": "-", "⁼": "=",
+})
+_SUBSCRIPT_MAP = str.maketrans({
+    "₂": "2", "₃": "3", "₁": "1", "₀": "0",
+    "₄": "4", "₅": "5", "₆": "6", "₇": "7", "₈": "8", "₉": "9",
+})
+
+
+def _normalize_label(text: str) -> str:
+    """将 Unicode 上下标归一化为 ASCII，避免字体缺字"""
+    if not text:
+        return text
+    out = text.translate(_SUPERSCRIPT_MAP)
+    out = out.translate(_SUBSCRIPT_MAP)
+    return out
 
 
 def load_dataframe(data_path: str) -> pd.DataFrame:

@@ -1,0 +1,16 @@
+node_modules
+.next
+.env.local
+.env
+*.db
+*.db-journal
+data/
+public/charts/
+output_xrd/
+.git
+.gitignore
+README.md
+docs/
+__pycache__
+*.pyc
+scripts/

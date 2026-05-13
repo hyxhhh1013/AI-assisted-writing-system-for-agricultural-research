@@ -1,0 +1,199 @@
+{
+  "version": "2.0",
+  "description": "禾书耕文 — 科学图形统一注册表。加新图形类型只需在此文件加一条记录。",
+  "categories": [
+    {"id": "chart", "name": "数据图表", "icon": "BarChart3", "order": 1},
+    {"id": "diagram", "name": "示意图", "icon": "Workflow", "order": 2},
+    {"id": "xrd", "name": "XRD 分析", "icon": "Radar", "order": 3},
+    {"id": "table", "name": "表格", "icon": "Table2", "order": 4}
+  ],
+  "figures": [
+    {
+      "id": "bar_grouped",
+      "name": "分组柱状图",
+      "category": "chart",
+      "description": "多组数据并列对比，X 轴为分类，每个分类下多个柱子",
+      "endpoint": "/api/chart",
+      "input_type": "tabular",
+      "example": "温度,N₂产率,CO₂产率\n500,44,44\n600,35,32\n700,30,30",
+      "config_fields": [
+        {"key": "title", "label": "图表标题", "type": "text"},
+        {"key": "x_label", "label": "X 轴标签", "type": "text"},
+        {"key": "y_label", "label": "Y 轴标签", "type": "text"}
+      ]
+    },
+    {
+      "id": "bar_stacked",
+      "name": "堆积柱状图",
+      "category": "chart",
+      "description": "展示各部分绝对值的堆叠构成",
+      "endpoint": "/api/chart",
+      "input_type": "tabular",
+      "example": "样品,组分A,组分B,组分C\nS1,20,30,50\nS2,25,35,40",
+      "config_fields": [
+        {"key": "title", "label": "图表标题", "type": "text"},
+        {"key": "x_label", "label": "X 轴标签", "type": "text"},
+        {"key": "y_label", "label": "Y 轴标签", "type": "text"}
+      ]
+    },
+    {
+      "id": "bar_pct_stacked",
+      "name": "百分比堆积柱状图",
+      "category": "chart",
+      "description": "各部分相对比例变化，自动归一化到 100%",
+      "endpoint": "/api/chart",
+      "input_type": "tabular",
+      "example": "条件,Pyridinic-N,Pyrrolic-N,Quaternary-N\n300N₂,35,40,25\n500N₂,25,35,40",
+      "config_fields": [
+        {"key": "title", "label": "图表标题", "type": "text"},
+        {"key": "x_label", "label": "X 轴标签", "type": "text"}
+      ]
+    },
+    {
+      "id": "line",
+      "name": "折线图",
+      "category": "chart",
+      "description": "展示数值随变量变化的连续趋势",
+      "endpoint": "/api/chart",
+      "input_type": "tabular",
+      "example": "时间,处理A,处理B,对照\n0,10,10,10\n7,15,12,11\n14,22,16,12",
+      "config_fields": [
+        {"key": "title", "label": "图表标题", "type": "text"},
+        {"key": "x_label", "label": "X 轴标签", "type": "text"},
+        {"key": "y_label", "label": "Y 轴标签", "type": "text"}
+      ]
+    },
+    {
+      "id": "scatter",
+      "name": "散点图",
+      "category": "chart",
+      "description": "展示两个变量之间的相关关系",
+      "endpoint": "/api/chart",
+      "input_type": "tabular",
+      "example": "温度,产率\n25,45\n30,52\n35,58\n40,55\n45,48",
+      "config_fields": [
+        {"key": "title", "label": "图表标题", "type": "text"},
+        {"key": "x_label", "label": "X 轴标签", "type": "text"},
+        {"key": "y_label", "label": "Y 轴标签", "type": "text"}
+      ]
+    },
+    {
+      "id": "pie",
+      "name": "饼图",
+      "category": "chart",
+      "description": "展示各分类占总体的百分比",
+      "endpoint": "/api/chart",
+      "input_type": "tabular",
+      "example": "组分,比例\n生物炭,35\n生物油,30\n热解气,35",
+      "config_fields": [
+        {"key": "title", "label": "图表标题", "type": "text"}
+      ]
+    },
+    {
+      "id": "flow",
+      "name": "流程图 / 机理图",
+      "category": "diagram",
+      "description": "绘制实验流程图或反应机理图，节点 + 连线",
+      "endpoint": "/api/flow-diagram",
+      "input_type": "json",
+      "example": "{\"nodes\":[{\"id\":\"1\",\"label\":\"原料预处理\"},{\"id\":\"2\",\"label\":\"热解反应\"},{\"id\":\"3\",\"label\":\"产物收集\"}],\"edges\":[{\"from\":\"1\",\"to\":\"2\"},{\"from\":\"2\",\"to\":\"3\"}]}",
+      "config_fields": [
+        {"key": "title", "label": "图标题", "type": "text"},
+        {"key": "direction", "label": "方向", "type": "select", "options": ["vertical", "horizontal"]}
+      ]
+    },
+    {
+      "id": "molecule",
+      "name": "分子结构图",
+      "category": "diagram",
+      "description": "从 SMILES 表达式生成分子结构图",
+      "endpoint": "/api/mol-diagram",
+      "input_type": "json",
+      "example": "{\"smiles\":\"CC(=O)OC1=CC=CC=C1C(=O)O\",\"label\":\"阿司匹林\"}",
+      "config_fields": [
+        {"key": "smiles", "label": "SMILES 表达式", "type": "text"},
+        {"key": "label", "label": "分子名称", "type": "text"}
+      ]
+    },
+    {
+      "id": "xrd_peakfit",
+      "name": "XRD 峰拟合",
+      "category": "xrd",
+      "description": "XRD 图谱峰分解 + 背景扣除",
+      "endpoint": "/api/xrd/peakfit",
+      "input_type": "form",
+      "config_fields": [
+        {"key": "title", "label": "图标题", "type": "text"}
+      ]
+    },
+    {
+      "id": "xrd_unitcell",
+      "name": "晶胞可视化",
+      "category": "xrd",
+      "description": "3D 晶胞结构可视化",
+      "endpoint": "/api/xrd/unitcell",
+      "input_type": "json",
+      "example": "{\"a\":5.4,\"b\":5.4,\"c\":5.4,\"alpha\":90,\"beta\":90,\"gamma\":90}",
+      "config_fields": [
+        {"key": "title", "label": "图标题", "type": "text"}
+      ]
+    },
+    {
+      "id": "xrd_amorphous",
+      "name": "XRD 非晶分析",
+      "category": "xrd",
+      "description": "非晶态 XRD 图谱分析",
+      "endpoint": "/api/xrd/amorphous",
+      "input_type": "form",
+      "config_fields": [
+        {"key": "title", "label": "图标题", "type": "text"}
+      ]
+    },
+    {
+      "id": "xrd_bragg",
+      "name": "Bragg 方程计算器",
+      "category": "xrd",
+      "description": "Bragg 方程参数计算与可视化",
+      "endpoint": "/api/xrd/bragg",
+      "input_type": "json",
+      "example": "{\"wavelength\":1.5406,\"two_theta\":[20,30,40]}",
+      "config_fields": [
+        {"key": "wavelength", "label": "波长 (Å)", "type": "text"}
+      ]
+    },
+    {
+      "id": "xrd_simulate",
+      "name": "XRD 图谱模拟",
+      "category": "xrd",
+      "description": "从晶体结构模拟 XRD 图谱",
+      "endpoint": "/api/xrd/simulate",
+      "input_type": "json",
+      "config_fields": [
+        {"key": "title", "label": "图标题", "type": "text"}
+      ]
+    },
+    {
+      "id": "xrd_xps",
+      "name": "XPS 分析",
+      "category": "xrd",
+      "description": "XPS 光谱分析与峰拟合",
+      "endpoint": "/api/xrd/xps",
+      "input_type": "form",
+      "config_fields": [
+        {"key": "title", "label": "图标题", "type": "text"}
+      ]
+    },
+    {
+      "id": "table_three_line",
+      "name": "三线表 (GB/T 7714)",
+      "category": "table",
+      "description": "生成 GB/T 7714 规范三线表，含字母上标和统计文字",
+      "endpoint": "/api/table",
+      "input_type": "json",
+      "example": "{\"groups\":[{\"label\":\"处理A\",\"n\":30,\"mean\":12.3,\"sd\":1.2},{\"label\":\"处理B\",\"n\":30,\"mean\":15.7,\"sd\":0.9}],\"anova\":{\"F\":8.43,\"df1\":2,\"df2\":87,\"p\":0.0004},\"posthoc\":[{\"pair\":[\"A\",\"B\"],\"p\":0.023}]}",
+      "config_fields": [
+        {"key": "title", "label": "表标题", "type": "text"}
+      ]
+    }
+  ]
+}

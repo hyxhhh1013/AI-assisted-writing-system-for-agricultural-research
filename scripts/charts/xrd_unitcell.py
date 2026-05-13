@@ -19,6 +19,7 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ase_compat  # noqa: E402, F401
+from _shared import normalize_label
 
 plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False

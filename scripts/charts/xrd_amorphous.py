@@ -23,6 +23,8 @@ import shutil
 import warnings
 from contextlib import redirect_stdout, redirect_stderr
 
+from _shared import normalize_label
+
 warnings.filterwarnings("ignore")
 
 import matplotlib
@@ -112,7 +114,7 @@ def run_amorphous_fitting(x, y, config, work_dir):
 
 def plot_amorphous_result(x, y, fit_x, fit_y, components, config, output_path):
     """生成非晶态分解图"""
-    title = config.get("title", "Amorphous Decomposition")
+    title = normalize_label(config.get("title", "Amorphous Decomposition"))
     x_label = config.get("x_label", "2θ (degree)")
     y_label = config.get("y_label", "Intensity (a.u.)")
 

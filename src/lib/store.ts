@@ -53,6 +53,7 @@ export const projectStore = {
       analysisResults: [],
       references: [],
       lastUpdated: Date.now(),
+      expandedOutlineSections: [],
     };
   },
 

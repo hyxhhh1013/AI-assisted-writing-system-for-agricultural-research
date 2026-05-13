@@ -3,6 +3,7 @@
 export interface KnowledgeFile {
   name: string;
   category: string;
+  documentType?: string; // "paper" | "patent" | "other"
   chunkCount: number;
   size: number;
   mtime: string;
@@ -45,10 +46,11 @@ export async function reindexKnowledge(): Promise<string> {
   return data.message;
 }
 
-export async function uploadKnowledgeFile(file: File, category: string): Promise<void> {
+export async function uploadKnowledgeFile(file: File, category: string, documentType?: string): Promise<void> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("category", category);
+  if (documentType) formData.append("documentType", documentType);
   const res = await fetch("/api/knowledge", { method: "POST", body: formData });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));

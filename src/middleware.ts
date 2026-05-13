@@ -12,7 +12,35 @@ const TOKEN_COOKIE = "token";
 
 // 需要登录的路由
 const protectedPages = ["/workbench", "/projects"];
-const protectedApis = ["/api/projects", "/api/writing", "/api/analysis", "/api/outline", "/api/export"];
+const protectedApis = [
+  "/api/projects", "/api/writing", "/api/analysis", "/api/outline", "/api/export",
+  "/api/plagiarism", "/api/knowledge", "/api/chat", "/api/translate",
+  "/api/consistency", "/api/chart", "/api/flow-diagram", "/api/mol-diagram",
+  "/api/save-chart", "/api/references", "/api/xrd", "/api/pdf",
+];
+
+// AI 端点限流
+const aiEndpoints = ["/api/writing", "/api/analysis", "/api/outline", "/api/chat", "/api/translate"];
+const RL_WINDOW = 60_000;
+const RL_MAX = 10;
+const rlStore = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(key: string): NextResponse | null {
+  const now = Date.now();
+  const entry = rlStore.get(key);
+  if (!entry || now > entry.resetAt) {
+    rlStore.set(key, { count: 1, resetAt: now + RL_WINDOW });
+    return null;
+  }
+  entry.count++;
+  if (entry.count > RL_MAX) {
+    return NextResponse.json(
+      { success: false, error: "请求过于频繁，请稍后再试" },
+      { status: 429, headers: { "Retry-After": String(Math.ceil((entry.resetAt - now) / 1000)) } }
+    );
+  }
+  return null;
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -32,6 +60,13 @@ export async function middleware(request: NextRequest) {
   const isApiRoute = pathname.startsWith("/api/");
   const isProtectedPage = protectedPages.some((p) => pathname.startsWith(p));
   const isProtectedApi = protectedApis.some((p) => pathname.startsWith(p));
+
+  // AI 端点限流
+  if (aiEndpoints.some((p) => pathname.startsWith(p))) {
+    const limitKey = userId ?? request.headers.get("x-forwarded-for") ?? "anonymous";
+    const rlResponse = checkRateLimit(limitKey);
+    if (rlResponse) return rlResponse;
+  }
 
   // 受保护页面 — 未登录重定向到登录页
   if (isProtectedPage && !userId) {
@@ -63,5 +98,17 @@ export const config = {
     "/api/analysis/:path*",
     "/api/outline/:path*",
     "/api/export/:path*",
+    "/api/plagiarism/:path*",
+    "/api/knowledge/:path*",
+    "/api/chat/:path*",
+    "/api/translate/:path*",
+    "/api/consistency/:path*",
+    "/api/chart/:path*",
+    "/api/flow-diagram/:path*",
+    "/api/mol-diagram/:path*",
+    "/api/save-chart/:path*",
+    "/api/references/:path*",
+    "/api/xrd/:path*",
+    "/api/pdf/:path*",
   ],
 };
