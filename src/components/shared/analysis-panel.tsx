@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
 import { projectStore, ProjectData } from "@/lib/store";
-import { ChartPanel } from "@/components/shared/chart-panel";
+
 
 interface AnalysisPanelProps {
   projectId: string;
@@ -244,19 +244,16 @@ export function AnalysisPanel({ projectId, project, onSave, onInsertToPaper }: A
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-bold flex items-center">
-                <ImageIcon className="mr-2 h-4 w-4 text-primary" /> 数据可视化图表
+                <BarChart3 className="mr-2 h-4 w-4 text-primary" /> 数据绘图
               </CardTitle>
               <CardDescription className="text-xs">
-                基于上传数据生成图表，可插入论文章节。
+                生成分组柱状图、堆积图、折线图、三线表等。现已独立为专属页面。
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ChartPanel
-                projectId={projectId}
-                onInsertToPaper={onInsertToPaper || ((imageUrl, caption) => {
-                  toast.success(`图表「${caption}」已生成，可手动复制到论文章节`);
-                })}
-              />
+              <a href={`/plot?id=${projectId}`} target="_blank" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                <BarChart3 className="h-3 w-3" /> 打开数据绘图页面 →
+              </a>
             </CardContent>
           </Card>
         )}

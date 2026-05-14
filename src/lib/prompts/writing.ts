@@ -130,7 +130,7 @@ ${contextText}
     ? "使用多级编号子标题组织内容（如 \"2.1 温度的影响\"、\"2.1.1 低温范围\"），子标题独占一行。⚠️ 严禁使用 Markdown 标题语法（###、####、##### 等），直接用纯文本编号。"
     : "禁止输出一级章节大标题（如 \"1. 引言\"、\"Introduction\"），直接输出正文。"}
 
-—— 证据强度分级（选择准确的动词）——
+${isChinese ? `—— 证据强度分级（选择准确的动词）——
 · 强证据（有显著差异、大样本、可重复）："表明""显示""证实""揭示"
 · 中等证据（有趋势、样本有限、单次试验）："提示""支持…观点""与…一致""指向"
 · 推测性（需要更多验证）："可能反映""似乎表明""或许可解释为""尚需验证"
@@ -139,18 +139,37 @@ ${contextText}
 —— 句子与段落控制 ——
 · 每段一个核心观点 + 支撑材料。新观点 = 新段落。
 · 一句一个命题，不堆砌。超过40字的句子考虑拆分。
-· ${section === "results" ? "Results 句式（过去时）: \"检测到\"\"增加了\"\"观察到\"\"达到\"。禁止使用 Discussion 句式（\"可能反映\"\"提示\"\"或许由于\"）。" : section === "discussion" ? "Discussion 句式: \"可能反映\"\"提示\"\"或许由于\"\"支持了…的观点\"\"与…报道不同，可能原因是…\"" : ""}
+· ${section === "results" ? "Results 句式（过去时）: \"检测到\"\"增加了\"\"观察到\"\"达到\"。禁止使用 Discussion 句式。" : section === "discussion" ? "Discussion 句式: \"可能反映\"\"提示\"\"或许由于\"\"支持了…的观点\"\"" : ""}
 · 禁止使用 em dash（—），用逗号或短句替代。
-· 段落间禁止用重复句式开头（如连续三个段落都以"本研究"开头）。
+· 段落间禁止用重复句式开头。
 
 —— 引文铁律 ——
-· 严禁虚构引用！文献库中找不到依据的观点，直接陈述即可，不得强行加 [n]。
+· 严禁虚构引用！文献库中找不到依据的观点，直接陈述即可。
 · 文献库中的 [n] 编号必须与引用处严格一致。
-· 禁止输出任何解释、道歉、前言后记等"元文字"。只输出正文。
+· 禁止输出解释、道歉、前言后记等"元文字"。只输出正文。
 · ${isAbstract ? "摘要一个段落到底，不分点。" : "段落间用空行分隔，逻辑清晰。"}
-· 结尾不加"以上是本章内容"等收尾语。
+· 结尾不加收尾语。
 
-${section === "introduction" ? "—— Gap 语言规范 ——\n· 精准用法: \"尚不清楚\"\"在…中研究有限\"\"缺乏…的证据\"\"…的结果不一致\"\n· 禁止用法: \"从未有人研究过\"\"完全未知\"\"被所有研究忽视\"\n" : ""}${section === "discussion" || section === "conclusion" || section === "abstract" ? "—— Limitation 要求 ——\n· 必须至少有一处明确写出研究局限或结论边界\n· " + (section === "conclusion" ? "结论中必须包含边界陈述（如\"本结论基于…条件\"\"在…条件下尚需进一步验证\"）" : "讨论中必须包含至少一条实质性局限（样本量/试验条件/方法局限/推广边界）") + "\n" : ""}
+${section === "introduction" ? "—— Gap 语言规范 ——\n· 精准: \"尚不清楚\"\"在…中研究有限\"\"缺乏…的证据\"\"…的结果不一致\"\n· 禁止: \"从未有人研究过\"\"完全未知\"\n" : ""}${section === "discussion" || section === "conclusion" || section === "abstract" ? "—— Limitation 要求 ——\n· 必须至少有一处明确写出研究局限或结论边界\n" : ""}`
+: `—— Evidence Strength (choose verbs carefully) ——
+· Strong (significant, large sample, reproducible): "demonstrate" "show" "reveal" "establish"
+· Moderate (trend, limited sample, single trial): "suggest" "indicate" "support the view that" "are consistent with"
+· Speculative (needs validation): "may reflect" "could arise from" "appears to" "might be explained by"
+
+—— Sentence & Paragraph Control ——
+· One core idea + supporting material per paragraph. New idea = new paragraph.
+· One proposition per sentence. Split sentences >30 words.
+· ${section === "results" ? "Results: use PAST tense (\"was detected\" \"increased\" \"showed\"). Do NOT use Discussion language (\"may reflect\" \"suggests\")." : section === "discussion" ? "Discussion: use SPECULATIVE language (\"may reflect\" \"suggests that\" \"could indicate\" \"is likely due to\")." : ""}
+· No em dashes. Use commas or shorter sentences instead.
+· Vary paragraph openings; avoid repetitive sentence starters.
+
+—— Citation Rules ——
+· Never fabricate citations! If a claim has no support in the reference library, state it directly without [n].
+· [n] numbers must match the reference library exactly.
+· Output ONLY the body text. No meta-commentary, no introductions, no summaries at the end.
+· ${isAbstract ? "Single paragraph, no bullet points." : "Separate paragraphs with blank lines."}
+
+${section === "introduction" ? "—— Gap Language ——\n· Use: \"remains poorly understood\" \"has not been examined in\" \"few studies have addressed\"\n· Avoid: \"no one has ever studied\" \"completely unknown\"\n" : ""}${section === "discussion" || section === "conclusion" || section === "abstract" ? "—— Limitation Requirement ——\n· Must include at least one substantive limitation or boundary statement\n" : ""}`}
 —— 插图规则 ——
 ⚠️ 本章图表编号从「图${figureStart}」开始，按出现顺序递增（图${figureStart}、图${figureStart + 1}、图${figureStart + 2}…）。严禁从图1重新开始！
 你可以并且应该在正文中插入配图标记。系统会自动根据标记生成图片。
