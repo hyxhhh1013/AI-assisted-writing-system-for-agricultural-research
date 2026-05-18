@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useEffect, Suspense, useRef, useMemo } from "react";
+import { useState, useEffect, Suspense, useRef, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { IMRAD_SECTION_KEYS, IMRAD_ORDER, IMRAD_LABELS_EN } from "@/lib/imrad";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
+import { cn, cleanDraftArtifacts, deduplicateParagraphs } from "@/lib/utils";
 import { mergeEditorIntoProject } from "@/lib/export-content";
-import { ensureSubsectionNumbering } from "@/lib/academic-numbering";
+import { ensureSubsectionNumbering, majorNumberFromSectionId, maxSecondLevelInText } from "@/lib/academic-numbering";
 import { useDocxExport } from "@/hooks/use-docx-export";
 import { useReferenceReorder } from "@/hooks/use-reference-reorder";
 import { useEditorSync } from "@/hooks/use-editor-sync";
@@ -42,6 +43,8 @@ import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { ReferenceBrowser } from "@/components/shared/reference-browser";
 import { WorkbenchMetaDialog } from "@/components/shared/workbench-meta-dialog";
 import { WorkbenchConsistencyDialog } from "@/components/shared/workbench-consistency-dialog";
+import { WorkbenchTabSwitcher } from "@/components/shared/workbench-tab-switcher";
+import { useAiParagraph } from "@/hooks/use-ai-paragraph";
 import { WorkbenchEditorArea } from "@/components/shared/workbench-editor-area";
 
 const PDFViewer = dynamic(() => import("@/components/pdf-viewer"), {
@@ -53,15 +56,16 @@ const PDFViewer = dynamic(() => import("@/components/pdf-viewer"), {
   ),
 });
 
-const SECTIONS = [
-  { id: "abstract", label: "Abstract", placeholder: "摘要内容..." },
-  { id: "introduction", label: "1. Introduction", placeholder: "引言部分..." },
-  { id: "methods", label: "2. Materials and Methods", placeholder: "材料与方法..." },
-  { id: "results", label: "3. Results and Discussion", placeholder: "结果与讨论..." },
-  { id: "conclusion", label: "4. Conclusion", placeholder: "结论部分..." },
-];
+const SECTIONS = IMRAD_SECTION_KEYS.map((key) => {
+  const num = IMRAD_ORDER[key];
+  return {
+    id: key,
+    label: num > 0 ? `${num}. ${IMRAD_LABELS_EN[key]}` : IMRAD_LABELS_EN[key],
+    placeholder: "",
+  };
+});
 
-type WorkbenchTab = "structure" | "analysis" | "outline" | "writing" | "reader" | "plagiarism" | "xrd";
+export type WorkbenchTab = "structure" | "analysis" | "outline" | "writing" | "reader" | "plagiarism" | "xrd";
 
 const WORKBENCH_TABS: WorkbenchTab[] = [
   "structure",
@@ -92,8 +96,6 @@ function WorkbenchContent() {
   const [project, setProject] = useState<ProjectData>(projectStore.getDefault());
   const [activeSection, setActiveSection] = useState("introduction");
   const [editingContent, setEditingContent] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [language, setLanguage] = useState("zh");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<WorkbenchTab>("structure");
   const [isPreviewOpen, setIsPreviewOpen] = useState(true);
@@ -101,6 +103,17 @@ function WorkbenchContent() {
   const [editorMode, setEditorMode] = useState<"classic" | "paragraph">("classic");
   const [currentPdf, setCurrentPdf] = useState<string | null>(null);
   const [isWritingGenerating, setIsWritingGenerating] = useState(false);
+  const [aiPreview, setAiPreview] = useState<{
+    content: string;
+    pipelineSteps: import("@/hooks/use-writing-stream").PipelineStep[];
+    verification: string;
+    citationWarnings: { num: number; overlap: number; context: string }[];
+    dataClaimWarnings: { claimId: string; claimText: string; found: boolean; citedCorrectly: boolean; issue?: string }[];
+    detectedRefs: string[];
+    isStreaming: boolean;
+    targetSection: string;
+    subsectionTitle?: string;
+  } | null>(null);
   const [isMetaDialogOpen, setIsMetaDialogOpen] = useState(false);
   const [isConsistencyOpen, setIsConsistencyOpen] = useState(false);
   const [expandedOutlineSections, setExpandedOutlineSections] = useState<string[]>([]);
@@ -166,13 +179,12 @@ function WorkbenchContent() {
   // 核心优化：实时将编辑内容同步到 project 状态（提取至 useEditorSync）
   useEditorSync(editingContent, activeSection, setProject, projectRef);
 
-  const handleSave = async () => {
-    // 始终使用当前内存中的 project 状态，确保摘要和各章节都能正确更新
-    const updatedProject = mergeEditorIntoProject(project, activeSection, editingContent);
-    setProject(updatedProject);
+  const handleSave = useCallback(async () => {
+    const updatedProject = mergeEditorIntoProject(projectRef.current, activeSectionRef.current, editingContentRef.current);
     await projectStore.save(updatedProject);
+    setProject(updatedProject);
     toast.success("项目已保存到云端");
-  };
+  }, []);
 
   // 自动保存（提取至 useAutoSave）
   useAutoSave(project, projectId);
@@ -187,48 +199,80 @@ function WorkbenchContent() {
   }, [expandedOutlineSections]);
 
   const handleApplyAiContent = (content: string, sectionId: string, subsectionTitle?: string) => {
+    const currentProject = projectRef.current;
+    const existingText = sectionId === "abstract"
+      ? (currentProject?.abstract || "")
+      : (currentProject?.sections?.[sectionId] || "");
+
+    // 统一标题格式：所有 body section（非 abstract）都走 ensureSubsectionNumbering
     let processedContent = content;
-    if (sectionId === "results" || sectionId === "conclusion") {
-      const currentProject = projectRef.current;
-      const existingText = currentProject?.sections?.[sectionId] || "";
-      processedContent = ensureSubsectionNumbering(content, sectionId, existingText);
+    const isBodySection = sectionId !== "abstract";
+    if (isBodySection) {
+      processedContent = ensureSubsectionNumbering(processedContent, sectionId, existingText);
     }
 
     // 子任务扩写：合并到现有章节内容中，而非覆盖
     if (subsectionTitle) {
-      const currentProject = projectRef.current;
-      const existingText = sectionId === "abstract"
-        ? (currentProject?.abstract || "")
-        : (currentProject?.sections?.[sectionId] || "");
+      // 检测 AI 输出首行是否已经是匹配该子节的标题（如 "2.1 温度对发芽率的影响"）
+      // 若是则不再重复添加标题，避免 ### 和 2.1 双重标题
+      const firstLine = processedContent.trim().split("\n")[0]?.trim() || "";
+      const firstLineBody = firstLine.replace(/^\d+(?:\.\d+)*\s*/, "").trim();
+      const aiStartsWithMatchingHeading = firstLineBody === subsectionTitle.trim();
 
       // 尝试在现有内容中定位该子节并替换；若找不到则追加
       const escapedTitle = subsectionTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      // 匹配 ### Title / ## Title / X.Y Title 三种格式
       const headingPattern = new RegExp(
-        `(?:^|\\n)([#]*\\s*)?(?:\\d+\\.?\\d*\\.?\\s*)?${escapedTitle}\\s*\\n`,
+        `(?:^|\\n)(?:#{1,3}\\s*)?(?:\\d+\\.?\\d*(?:\\.?\\d+)?\\s*)?${escapedTitle}\\s*\\n`,
         "i"
       );
       const match = existingText.match(headingPattern);
 
       let merged: string;
       if (match && match.index !== undefined) {
-        // 找到该子节 → 替换到下一个同级/上级标题前
-        const startIdx = match.index! + match[0].length;
-        const afterMatch = existingText.slice(startIdx);
-        const nextHeadingMatch = afterMatch.match(/\n(?:#+ |\d+\.\d*\s|#{1,3}\s)/);
+        // 找到该子节 → 保留原标题行，替换标题后的内容到下一个标题前
+        const headingEnd = match.index! + match[0].length;
+        const afterMatch = existingText.slice(headingEnd);
+        const nextHeadingMatch = afterMatch.match(/\n(?:#{1,3} |\d+\.\d+(?:\.\d+)?\s)/);
         const endIdx = nextHeadingMatch
-          ? startIdx + nextHeadingMatch.index!
+          ? headingEnd + nextHeadingMatch.index!
           : existingText.length;
-        merged = existingText.slice(0, match.index! + match[0].length) + processedContent + "\n\n" + existingText.slice(endIdx);
+        merged = existingText.slice(0, headingEnd) + processedContent + "\n\n" + existingText.slice(endIdx);
       } else {
-        // 未找到 → 追加到章节末尾
-        const heading = `### ${subsectionTitle}`;
-        merged = existingText
-          ? `${existingText}\n\n${heading}\n${processedContent}`
-          : `${heading}\n${processedContent}`;
+        // 未找到 → 追加到章节末尾，使用统一编号标题格式
+        const major = majorNumberFromSectionId(sectionId);
+        let heading: string;
+        if (major != null) {
+          const nextSub = maxSecondLevelInText(existingText, major) + 1;
+          heading = aiStartsWithMatchingHeading
+            ? ""  // AI 首行已经是编号标题，不重复加
+            : `${major}.${nextSub} ${subsectionTitle}`;
+        } else {
+          heading = aiStartsWithMatchingHeading ? "" : `### ${subsectionTitle}`;
+        }
+        const newBlock = heading ? `${heading}\n${processedContent}` : processedContent;
+        merged = existingText.trim()
+          ? `${existingText}\n\n${newBlock}`
+          : newBlock;
       }
 
       processedContent = merged;
+    } else {
+      // 没有子节标题 → 合并到现有内容末尾
+      if (existingText.trim()) {
+        processedContent = existingText + "\n\n" + processedContent;
+      }
     }
+
+    // 最终再跑一次 ensureSubsectionNumbering：修正因合并导致的编号不一致
+    // （例如旧 ### 标题未被 normalize 的情况）
+    if (isBodySection) {
+      processedContent = ensureSubsectionNumbering(processedContent, sectionId, "");
+    }
+
+    // 清理草稿痕迹 + 去重后再写入
+    processedContent = cleanDraftArtifacts(processedContent);
+    processedContent = deduplicateParagraphs(processedContent);
 
     setProject(prev => {
       if (!prev) return prev;
@@ -250,7 +294,7 @@ function WorkbenchContent() {
     setIsPreviewOpen(true);
   };
 
-  const handleSaveMeta = async (draft: { title: string; authors: string; affiliations: string; abstract: string; keywords: string; classification: string; researchDirection: string; outline: string; template: string; referencesText: string }) => {
+  const handleSaveMeta = async (draft: { title: string; authors: string; affiliations: string; abstract: string; keywords: string; classification: string; researchDirection: string; outline: string; template: string; referencesText: string; mode?: "review" | "research" }) => {
     const updated: ProjectData = {
       ...project,
       title: draft.title,
@@ -262,6 +306,7 @@ function WorkbenchContent() {
       researchDirection: draft.researchDirection,
       outline: draft.outline,
       template: draft.template,
+      mode: draft.mode || "review",
       references: draft.referencesText.split(/\n+/).map((ref) => ref.trim()).filter(Boolean),
     };
     setProject(updated);
@@ -274,191 +319,10 @@ function WorkbenchContent() {
     projectRef, editingContentRef, activeSectionRef, setProject, setEditingContent,
   });
 
-  /**
-   * 处理单个段落的 AI 扩写
-   */
-  const handleExpandParagraph = async (paragraphContent: string) => {
-    if (!project || !activeSection) return "";
-
-    try {
-      const response = await fetch("/api/writing", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: project.title,
-          section: activeSection,
-          context: paragraphContent,
-          language: "zh",
-          template: project.template,
-          existingReferences: project.references || [],
-          researchDirection: project.researchDirection
-        }),
-      });
-
-      if (!response.ok) throw new Error("扩写失败");
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let fullText = "";
-      let buffer = "";
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-          
-          for (const line of lines) {
-            const trimmedLine = line.trim();
-            if (!trimmedLine || trimmedLine === "data: [DONE]") continue;
-            if (trimmedLine.startsWith("data:")) {
-              try {
-                const data = JSON.parse(trimmedLine.slice(5));
-                if (data.references && Array.isArray(data.references) && data.references.length > 0) {
-                  // 同步新文献
-                  setProject(prev => ({
-                    ...prev,
-                    references: Array.from(new Set([...(prev.references || []), ...data.references]))
-                  }));
-                }
-                const content = data.choices?.[0]?.delta?.content || "";
-                fullText += content;
-              } catch (e) {}
-            }
-          }
-        }
-      }
-      return fullText;
-    } catch (error) {
-      console.error("Expand Error:", error);
-      throw error;
-    }
-  };
-
-  /**
-   * 处理单个段落的 AI 审查
-   */
-  const handleAuditParagraph = async (paragraphContent: string) => {
-    if (!project || !activeSection) return "";
-
-    try {
-      const response = await fetch("/api/writing", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: project.title,
-          section: activeSection,
-          context: paragraphContent,
-          language: "zh",
-          template: project.template,
-          existingReferences: project.references || [],
-          researchDirection: project.researchDirection,
-          mode: "audit_only"
-        }),
-      });
-
-      if (!response.ok) throw new Error("审查失败");
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let auditReport = "";
-      let buffer = "";
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            const trimmedLine = line.trim();
-            if (!trimmedLine || trimmedLine === "data: [DONE]") continue;
-            
-            if (trimmedLine.startsWith("data:")) {
-              try {
-                const data = JSON.parse(trimmedLine.slice(5));
-                if (data.verification) {
-                  auditReport += data.verification;
-                }
-              } catch (e) {
-                console.error("Parse Error:", e);
-              }
-            }
-          }
-        }
-      }
-      return auditReport;
-    } catch (error) {
-      console.error("Audit Error:", error);
-      throw error;
-    }
-  };
-
-  /**
-   * 处理单个段落的 AI 自动修正
-   */
-  const handleFixParagraph = async (paragraphContent: string, feedback: string) => {
-    if (!project || !activeSection) return "";
-
-    try {
-      const response = await fetch("/api/writing", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: project.title,
-          section: activeSection,
-          context: paragraphContent,
-          language: "zh",
-          template: project.template,
-          existingReferences: project.references || [],
-          mode: "fix_only", // 新增模式，直接根据意见修正
-          verificationFeedback: feedback
-        }),
-      });
-
-      if (!response.ok) throw new Error("修正失败");
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let fixedText = "";
-      let buffer = "";
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            const trimmedLine = line.trim();
-            if (!trimmedLine || trimmedLine === "data: [DONE]") continue;
-
-            if (trimmedLine.startsWith("data:")) {
-              try {
-                const data = JSON.parse(trimmedLine.slice(5));
-                const content = data.choices?.[0]?.delta?.content || data.answer || "";
-                if (content) fixedText += content;
-              } catch (e) {
-                console.error("Parse Error:", e);
-              }
-            }
-          }
-        }
-      }
-      return fixedText;
-    } catch (error) {
-      console.error("Fix Error:", error);
-      throw error;
-    }
-  };
+  const aiParagraph = useAiParagraph({ project, activeSection, setProject });
+  const handleExpandParagraph = (content: string) => aiParagraph.run("expand", content);
+  const handleAuditParagraph = (content: string) => aiParagraph.run("audit", content);
+  const handleFixParagraph = (content: string, feedback: string) => aiParagraph.run("fix", content, feedback);
 
   const handleExportDoc = useDocxExport({
     project, activeSection, editingContent, saveProject: handleSave,
@@ -467,88 +331,54 @@ function WorkbenchContent() {
   const handleExportMarkdown = useMarkdownExport(project, activeSection, editingContent);
   const handleExportPDF = usePdfExport(project, activeSection, editingContent);
 
+  // 稳定的回调引用，防止 WritingPanel 的 useEffect 无限重渲染
+  const handleGeneratingChange = useCallback((generating: boolean) => {
+    setIsWritingGenerating(generating);
+    if (!generating) {
+      setAiPreview(prev => prev ? { ...prev, isStreaming: false } : null);
+    }
+  }, []);
+  const handlePreviewUpdate = useCallback((data: {
+    content: string;
+    pipelineSteps: import("@/hooks/use-writing-stream").PipelineStep[];
+    verification: string;
+    citationWarnings: { num: number; overlap: number; context: string }[];
+    dataClaimWarnings: { claimId: string; claimText: string; found: boolean; citedCorrectly: boolean; issue?: string }[];
+    detectedRefs: string[];
+    targetSection: string;
+    subsectionTitle?: string;
+    isStreaming?: boolean;
+  }) => {
+    setAiPreview({ ...data, isStreaming: data.isStreaming ?? true });
+  }, []);
+  const handleUpdateProject = useCallback((updates: Partial<ProjectData>) => {
+    setProject((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...updates };
+      if (updates.references && Array.isArray(updates.references)) {
+        next.references = Array.from(new Set([...(prev.references || []), ...updates.references]));
+      }
+      return next;
+    });
+  }, []);
+  const handleTaskExpanded = useCallback((taskId: string) => {
+    setExpandedOutlineSections(prev => {
+      if (prev.includes(taskId)) return prev;
+      return [...prev, taskId];
+    });
+  }, []);
+  const handleClearPreselected = useCallback(() => setPendingExpandTask(null), []);
 
   return (
     <ErrorBoundary>
     <div className="flex h-screen bg-background overflow-hidden relative">
-      {/* Far Left: Tab Switcher */}
-      <div className="w-14 border-r bg-card flex flex-col items-center py-4 gap-4 shrink-0">
-        <Button variant="ghost" size="icon" onClick={() => router.push("/projects")} title="返回项目列表">
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div className="flex-1 flex flex-col gap-2">
-          <Button 
-            variant={activeTab === "structure" ? "default" : "ghost"} 
-            size="icon" 
-            onClick={() => setActiveTab("structure")}
-            title="IMRaD 章节：摘要 / 引言 / 方法 / 结果 / 结论"
-          >
-            <Layout className="h-5 w-5" />
-          </Button>
-          <Button
-            variant={activeTab === "analysis" ? "default" : "ghost"}
-            size="icon"
-            onClick={() => setActiveTab("analysis")}
-            title="实验数据摘要与趋势描述"
-          >
-            <BarChart3 className="h-5 w-5" />
-          </Button>
-          <Button
-            variant={activeTab === "xrd" ? "default" : "ghost"}
-            size="icon"
-            onClick={() => setActiveTab("xrd")}
-            title="XRD 分析：峰分解 / 背景扣除 / 晶胞可视化"
-          >
-            <Radar className="h-5 w-5" />
-          </Button>
-          <Button
-            variant={activeTab === "outline" ? "default" : "ghost"}
-            size="icon"
-            onClick={() => setActiveTab("outline")}
-            title="论证提纲：AI 生成目录树（与左侧 IMRaD 并列，非同一套）"
-          >
-            <BookOpen className="h-5 w-5" />
-          </Button>
-          <Button
-            variant={activeTab === "writing" ? "default" : "ghost"}
-            size="icon"
-            onClick={() => setActiveTab("writing")}
-            title="侧栏整章扩写（RAG + 多阶段），应用后写入所选章"
-            className={cn(isWritingGenerating && activeTab !== "writing" && "ring-2 ring-primary animate-pulse")}
-          >
-            <FileText className={cn("h-5 w-5", isWritingGenerating && "text-primary")} />
-          </Button>
-          <Button 
-            variant={activeTab === "reader" ? "default" : "ghost"} 
-            size="icon" 
-            onClick={() => {
-              setActiveTab("reader");
-              setRightPanelMode("reader");
-              setIsPreviewOpen(true);
-            }}
-            title="本地文献库 PDF"
-          >
-            <FileSearch className="h-5 w-5" />
-          </Button>
-          <Button
-            variant={activeTab === "plagiarism" ? "default" : "ghost"}
-            size="icon"
-            onClick={() => setActiveTab("plagiarism")}
-            title="论文查重与 AI 降重"
-          >
-            <Search className="h-5 w-5" />
-          </Button>
-        </div>
-        <Button variant="ghost" size="icon"
-          onClick={() => router.push(`/plot?id=${projectId}`)}
-          title="数据绘图—分组柱状图、堆积图、折线图、三线表"
-        >
-          <BarChart3 className="h-5 w-5" />
-        </Button>
-        <Button variant="ghost" size="icon" onClick={handleSave} title="保存项目">
-          <Save className="h-5 w-5" />
-        </Button>
-      </div>
+      <WorkbenchTabSwitcher
+        activeTab={activeTab} setActiveTab={setActiveTab}
+        isWritingGenerating={isWritingGenerating}
+        handleSave={handleSave} projectId={projectId}
+        setRightPanelMode={setRightPanelMode}
+        setIsPreviewOpen={setIsPreviewOpen}
+      />
 
       {/* Second Left: Dynamic Panel */}
       <div 
@@ -650,6 +480,10 @@ function WorkbenchContent() {
                     const mdImage = `\n\n![${caption}](${imageUrl})\n\n`;
                     handleApplyAiContent(editingContent + mdImage, activeSection);
                   }}
+                  onInsertClaim={(claimText, claimId) => {
+                    const md = `\n\n${claimText}\n\n`;
+                    handleApplyAiContent(editingContent + md, activeSection);
+                  }}
                 />
               </div>
             )}
@@ -688,31 +522,12 @@ function WorkbenchContent() {
                   editorActiveSection={activeSection}
                   preselectedTaskId={pendingExpandTask}
                   expandedSections={expandedOutlineSections}
-                  onTaskExpanded={(taskId: string) => {
-                    setExpandedOutlineSections(prev => {
-                      if (prev.includes(taskId)) return prev;
-                      return [...prev, taskId];
-                    });
-                  }}
-                  onClearPreselected={() => setPendingExpandTask(null)}
+                  onTaskExpanded={handleTaskExpanded}
+                  onClearPreselected={handleClearPreselected}
                   onGenerate={handleApplyAiContent}
-                  onGeneratingChange={setIsWritingGenerating}
-                  onUpdateProject={(updates) => {
-                    setProject((prev) => {
-                      if (!prev) return prev;
-
-                      const next = { ...prev, ...updates };
-
-                      if (updates.references && Array.isArray(updates.references)) {
-                        const existingRefs = prev.references || [];
-                        const newRefs = updates.references;
-                        const mergedRefs = Array.from(new Set([...existingRefs, ...newRefs]));
-                        next.references = mergedRefs;
-                      }
-
-                      return next;
-                    });
-                  }}
+                  onGeneratingChange={handleGeneratingChange}
+                  onPreviewUpdate={handlePreviewUpdate}
+                  onUpdateProject={handleUpdateProject}
                 />
               </div>
             )}
@@ -774,6 +589,16 @@ function WorkbenchContent() {
             onExpandParagraph={handleExpandParagraph}
             onAuditParagraph={handleAuditParagraph}
             onFixParagraph={handleFixParagraph}
+            aiPreview={aiPreview}
+            onApplyAiOutput={() => {
+              if (aiPreview?.content) {
+                handleApplyAiContent(aiPreview.content, aiPreview.targetSection, aiPreview.subsectionTitle);
+              }
+              setAiPreview(null);
+            }}
+            onCancelAiOutput={() => {
+              setAiPreview(null);
+            }}
             projectId={projectId || "default"}
           />
         </ResizablePanel>
@@ -838,6 +663,8 @@ function WorkbenchContent() {
         project={project}
         activeSection={activeSection}
         editingContent={editingContent}
+        onApplyFix={(content, sectionKey) => handleApplyAiContent(content, sectionKey)}
+        onJumpToSection={(sectionKey) => setActiveSection(sectionKey)}
       />
     </div>
     </ErrorBoundary>

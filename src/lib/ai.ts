@@ -6,6 +6,8 @@ export interface AICallOptions {
   provider: ModelProviderKey;
   messages: { role: string; content: string }[];
   stream?: boolean;
+  timeoutMs?: number;
+  signal?: AbortSignal;
 }
 
 export class AIError extends Error {
@@ -35,6 +37,7 @@ export async function callAI(options: AICallOptions): Promise<Response> {
     throw new AIError(`${config.name} API Key 未配置`);
   }
 
+  const timeoutMs = options.timeoutMs ?? (options.stream ? 300_000 : 30_000);
   const response = await fetchWithRetry(
     config.baseUrl,
     {
@@ -48,7 +51,10 @@ export async function callAI(options: AICallOptions): Promise<Response> {
         messages: options.messages,
         stream: options.stream ?? true,
       }),
+      signal: options.signal,
     },
+    1,             // retries: 只重试 1 次（避免叠加等待过长）
+    timeoutMs,
   );
 
   if (!response.ok) {
@@ -65,6 +71,8 @@ export async function callAI(options: AICallOptions): Promise<Response> {
 
 export async function* streamAIResponse(
   response: Response,
+  signal?: AbortSignal,
+  idleTimeoutMs = 30_000,
 ): AsyncGenerator<{ content?: string }> {
   if (!response.body) return;
 
@@ -72,25 +80,60 @@ export async function* streamAIResponse(
   const decoder = new TextDecoder();
   let buffer = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  // 静默超时：如果 N 毫秒内没收到新 chunk，主动 abort
+  let idleTimer: ReturnType<typeof setTimeout> | null = null;
+  const clearIdle = () => { if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; } };
+  const resetIdle = () => {
+    clearIdle();
+    idleTimer = setTimeout(() => {
+      reader.cancel("Stream idle timeout");
+    }, idleTimeoutMs);
+  };
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
+  // 如果外部信号触发，取消 reader
+  const onExternalAbort = () => {
+    clearIdle();
+    reader.cancel("Aborted");
+  };
+  if (signal) {
+    if (signal.aborted) { reader.cancel("Aborted"); return; }
+    signal.addEventListener("abort", onExternalAbort, { once: true });
+  }
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith("data:") && trimmed !== "data: [DONE]") {
-        try {
-          const data = JSON.parse(trimmed.slice(5).trim());
-          const content = data.choices?.[0]?.delta?.content || "";
-          if (content) yield { content };
-        } catch {}
+  try {
+    resetIdle();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      resetIdle();
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("data:") && trimmed !== "data: [DONE]") {
+          try {
+            const data = JSON.parse(trimmed.slice(5).trim());
+            const content = data.choices?.[0]?.delta?.content || "";
+            if (content) yield { content };
+          } catch {}
+        }
       }
     }
+  } finally {
+    clearIdle();
+    if (signal) signal.removeEventListener("abort", onExternalAbort);
   }
+}
+
+/** 非流式 AI 调用 — 发送 prompt，等待完整回复后返回文本 */
+export async function callAINonStreaming(options: AICallOptions): Promise<string> {
+  const response = await callAI({ ...options, stream: false });
+  const body = await response.json();
+  const content = body?.choices?.[0]?.message?.content || "";
+  return content;
 }
 
 export function getStreamingResponse(response: Response): Response {

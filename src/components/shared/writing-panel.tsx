@@ -10,7 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Send, Copy, Eraser, FileText, Database, ScrollText, CheckCircle2, ChevronRight, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { projectStore, ProjectData } from "@/lib/store";
-import { cn, parseOutline, mapToIMRADSection, buildExpansionContext, buildOutlineTasks, countProjectFigures } from "@/lib/utils";
+import { MarkdownContent } from "@/components/shared/previews/shared";
+import { useWritingStream } from "@/hooks/use-writing-stream";
+import { PipelineTimeline } from "@/components/shared/pipeline-timeline";
+import { findFigureBlocks, generateSingleFigure, replacePlaceholders } from "@/hooks/use-figure-pipeline";
+import { cn, parseOutline, mapToIMRADSection, buildExpansionContext, buildOutlineTasks, countProjectFigures, cleanDraftArtifacts, deduplicateParagraphs } from "@/lib/utils";
 import type { OutlineTask } from "@/lib/utils";
 
 const WRITING_SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -27,26 +31,15 @@ interface PersistedWritingSession {
   context: string;
   result: string;
   verificationFeedback: string;
-  generationStatus: "idle" | "writing" | "verifying" | "refining" | "completed";
+  generationStatus: string;
   detectedRefs: string[];
   wasGenerating: boolean;
 }
 
-const DEFAULT_SECTIONS = [
-  { value: "abstract", label: "摘要 (Abstract)" },
-  { value: "introduction", label: "引言 (Introduction)" },
-  { value: "methods", label: "材料与方法 (Methods)" },
-  { value: "results", label: "结果与讨论 (Results & Discussion)" },
-  { value: "conclusion", label: "结论 (Conclusion)" },
-];
+import { buildSectionOptions, IMRAD_SECTION_KEYS, IMRAD_LABELS_ZH, SectionKey } from "@/lib/imrad";
 
-const IMRAD_SECTION_IDS = new Set([
-  "abstract",
-  "introduction",
-  "methods",
-  "results",
-  "conclusion",
-]);
+const DEFAULT_SECTIONS = buildSectionOptions();
+const IMRAD_SECTION_IDS = new Set<string>(IMRAD_SECTION_KEYS);
 
 interface WritingPanelProps {
   projectId: string;
@@ -55,6 +48,7 @@ interface WritingPanelProps {
   onGenerate?: (content: string, section: string, subsectionTitle?: string) => void;
   onUpdateProject?: (updates: Partial<ProjectData>) => void;
   onGeneratingChange?: (generating: boolean) => void;
+  onPreviewUpdate?: (data: { content: string; pipelineSteps: import("@/hooks/use-writing-stream").PipelineStep[]; verification: string; citationWarnings: { num: number; overlap: number; context: string }[]; dataClaimWarnings: { claimId: string; claimText: string; found: boolean; citedCorrectly: boolean; issue?: string }[]; detectedRefs: string[]; targetSection: string; subsectionTitle?: string; isStreaming?: boolean }) => void;
   /** 从大纲面板传入的待扩写任务 ID，替代 sessionStorage */
   preselectedTaskId?: string | null;
   /** 已扩写的子节 ID 列表 */
@@ -72,6 +66,7 @@ export function WritingPanel({
   onGenerate,
   onUpdateProject,
   onGeneratingChange,
+  onPreviewUpdate,
   preselectedTaskId,
   expandedSections,
   onTaskExpanded,
@@ -82,10 +77,10 @@ export function WritingPanel({
   const [targetSectionKey, setTargetSectionKey] = useState<string>("introduction");
   const [language, setLanguage] = useState("zh");
   const [retrievalMode, setRetrievalMode] = useState<"precise" | "balanced" | "extensive">("precise");
-  const [fastMode, setFastMode] = useState(true); // 快速模式：跳过审查，只跑 Writer
+  const [fastMode, setFastMode] = useState(false); // 默认完整模式：Writer + Verifier + Refiner + 引用核查
   const [context, setContext] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generationStatus, setGenerationStatus] = useState<"idle" | "writing" | "verifying" | "refining" | "completed">("idle");
+  const [generationStatus, setGenerationStatus] = useState<"idle" | "retrieving" | "building_context" | "writing" | "verifying" | "refining" | "checking_citations" | "generating_figures" | "completed">("idle");
 
   // 通知父组件生成状态变化（用于 tab 图标脉冲提示）
   useEffect(() => {
@@ -96,11 +91,68 @@ export function WritingPanel({
   const [verificationFeedback, setVerificationFeedback] = useState("");
   const [detectedRefs, setDetectedRefs] = useState<string[]>([]);
   const [citationWarnings, setCitationWarnings] = useState<{ num: number; overlap: number; context: string }[]>([]);
+  const [dataClaimWarnings, setDataClaimWarnings] = useState<{ claimId: string; claimText: string; found: boolean; citedCorrectly: boolean; issue?: string }[]>([]);
   const [pendingFigures, setPendingFigures] = useState<{ spec: string; tool: string; config: string; caption: string; status: string; imageUrl?: string }[]>([]);
   const figureCountRef = useRef(0);
   const detectedFiguresRef = useRef<{ tool: string; config: string; caption: string }[]>([]);
   const figureAbortRef = useRef<AbortController | null>(null);
+  const writingAbortRef = useRef<AbortController | null>(null);
   const resultRef = useRef("");
+  const writingStream = useWritingStream();
+
+  // 扩写过程中将输出推送到中间编辑器（节流：最多每 250ms 更新一次，避免逐字重渲染）
+  // 关键：isGenerating 变 false 时必须立即推送最终状态，否则 pipelineSteps 最后几步丢失
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevGeneratingRef = useRef(isGenerating);
+  useEffect(() => {
+    if (!onPreviewUpdate) return;
+
+    // isGenerating 从 true → false：立即推送最终状态（含所有 pipelineSteps）
+    if (prevGeneratingRef.current && !isGenerating) {
+      if (previewTimerRef.current) { clearTimeout(previewTimerRef.current); previewTimerRef.current = null; }
+      onPreviewUpdate({
+        content: writingStream.result,
+        pipelineSteps: writingStream.pipelineSteps,
+        verification: writingStream.verificationFeedback,
+        citationWarnings: writingStream.citationWarnings,
+        dataClaimWarnings: writingStream.dataClaimWarnings,
+        detectedRefs: writingStream.detectedRefs,
+        targetSection: targetSectionKey,
+        subsectionTitle,
+        isStreaming: false,
+      });
+      prevGeneratingRef.current = isGenerating;
+      return;
+    }
+    prevGeneratingRef.current = isGenerating;
+
+    if (!isGenerating) return;
+    if (previewTimerRef.current) return; // 已有待处理的更新，跳过
+    previewTimerRef.current = setTimeout(() => {
+      previewTimerRef.current = null;
+      onPreviewUpdate({
+        content: writingStream.result,
+        pipelineSteps: writingStream.pipelineSteps,
+        verification: writingStream.verificationFeedback,
+        citationWarnings: writingStream.citationWarnings,
+        dataClaimWarnings: writingStream.dataClaimWarnings,
+        detectedRefs: writingStream.detectedRefs,
+        targetSection: targetSectionKey,
+        subsectionTitle,
+      });
+    }, 250);
+    return () => {
+      if (previewTimerRef.current) { clearTimeout(previewTimerRef.current); previewTimerRef.current = null; }
+    };
+  }, [isGenerating, writingStream.result, writingStream.pipelineSteps, writingStream.verificationFeedback, writingStream.citationWarnings, writingStream.dataClaimWarnings, writingStream.detectedRefs, targetSectionKey, subsectionTitle, onPreviewUpdate]);
+
+  // 仅在组件卸载时 abort 生图，避免资源泄漏
+  useEffect(() => {
+    return () => {
+      figureAbortRef.current?.abort();
+      writingAbortRef.current?.abort();
+    };
+  }, []);
 
   const restoredRef = useRef(false);
 
@@ -110,11 +162,13 @@ export function WritingPanel({
     return buildOutlineTasks(project.outline);
   }, [project.outline]);
 
-  // 先随工作台左侧 IMRaD 章节同步「存储至章节」；再由下方 session 覆盖（若有草稿）
+  // 仅在未选中大纲任务时，随编辑器当前章节同步「存储至章节」
+  // 有选中任务时以任务映射的 IMRaD 章节为准，避免被编辑器默认值覆盖
   useEffect(() => {
     if (!editorActiveSection || !IMRAD_SECTION_IDS.has(editorActiveSection)) return;
+    if (selectedSectionId) return; // 有任务选中时不覆盖
     setTargetSectionKey(editorActiveSection);
-  }, [editorActiveSection]);
+  }, [editorActiveSection, selectedSectionId]);
 
   // 离开页面/刷新后恢复扩写草稿（sessionStorage）
   useEffect(() => {
@@ -148,7 +202,7 @@ export function WritingPanel({
       if (typeof s.context === "string") setContext(s.context);
       if (typeof s.result === "string") setResult(s.result);
       if (typeof s.verificationFeedback === "string") setVerificationFeedback(s.verificationFeedback);
-      if (s.generationStatus) setGenerationStatus(s.generationStatus);
+      if (s.generationStatus) setGenerationStatus(s.generationStatus as "idle" | "retrieving" | "building_context" | "writing" | "verifying" | "refining" | "checking_citations" | "generating_figures" | "completed");
       if (Array.isArray(s.detectedRefs)) setDetectedRefs(s.detectedRefs);
       if (s.wasGenerating) {
         setIsGenerating(false);
@@ -190,7 +244,7 @@ export function WritingPanel({
     }, 400);
     return () => {
       window.clearTimeout(t);
-      figureAbortRef.current?.abort();
+      // 不在此处 abort 生图——result 更新会触发 cleanup，把后续图全杀掉
     };
   }, [
     projectId,
@@ -261,11 +315,20 @@ export function WritingPanel({
     }
   };
 
+  const handleCancel = () => {
+    writingStream.cancel();
+    figureAbortRef.current?.abort();
+    setIsGenerating(false);
+    setGenerationStatus("idle");
+  };
+
   const handleGenerate = async () => {
     if (!title || !context) {
       toast.error("请填写完整信息");
       return;
     }
+
+    // writingStream 内部管理 AbortController，自动取消前一个请求
 
     setIsGenerating(true);
     setGenerationStatus("writing");
@@ -273,6 +336,7 @@ export function WritingPanel({
     setVerificationFeedback("");
     setDetectedRefs([]);
     setCitationWarnings([]);
+    setDataClaimWarnings([]);
 
     try {
       const sectionPreviews: Record<string, string> = {};
@@ -286,140 +350,60 @@ export function WritingPanel({
       const subTitle = selectedTask && selectedTask.level > 1 ? selectedTask.title : undefined;
       setSubsectionTitle(subTitle);
 
-      // 统计之前章节已有图表数，按论文章节顺序编号（非写作顺序）
       const existingFigures = countProjectFigures(project, targetSectionKey);
-      const figureStart = existingFigures + 1;
 
-      const response = await fetch("/api/writing", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          section: targetSectionKey,
-          context,
-          language,
-          template: project.template,
-          existingReferences: project.references || [],
-          researchDirection: project.researchDirection,
-          retrievalMode,
-          mode: fastMode ? "fast" : "full",
-          subsectionTitle: subTitle,
-          figureStart,
-          globalContext: {
-            abstract: project.abstract,
-            outline: project.outline,
-            sectionPreviews,
-            analysisResults: project.analysisResults || []
-          }
-        }),
+      // 构建数据证据声明列表（从 project.dataClaims JSON 解析）
+      const dataClaims = (() => {
+        try {
+          return project.dataClaims ? JSON.parse(project.dataClaims) : [];
+        } catch { return []; }
+      })();
+
+      // 使用统一的 SSE hook
+      const streamResult = await writingStream.start({
+        title,
+        section: targetSectionKey,
+        context,
+        language: language as "zh" | "en",
+        template: project.template,
+        existingReferences: project.references || [],
+        researchDirection: project.researchDirection,
+        retrievalMode,
+        mode: fastMode ? "fast" : "full",
+        subsectionTitle: subTitle,
+        figureStart: existingFigures + 1,
+        projectMode: project.mode || "review",
+        dataClaims,
+        globalContext: {
+          abstract: project.abstract,
+          outline: project.outline,
+          sectionPreviews,
+          analysisResults: project.analysisResults || []
+        }
       });
 
-      if (!response.ok) throw new Error("生成失败");
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-          for (const line of lines) {
-            const trimmedLine = line.trim();
-            if (!trimmedLine || trimmedLine === "data: [DONE]") continue;
-            if (trimmedLine.startsWith("data:")) {
-              try {
-                const data = JSON.parse(trimmedLine.slice(5).trim());
-                if (data.references && Array.isArray(data.references) && data.references.length > 0 && onUpdateProject) {
-                  setDetectedRefs((prev) => Array.from(new Set([...prev, ...data.references])));
-                  onUpdateProject({ references: data.references });
-                }
-                if (data.status) {
-                  setGenerationStatus(data.status);
-                  if (data.status === "writing") toast.info("AI 正在起草内容...");
-                  else if (data.status === "verifying") toast.info("学术核查代理审计中...");
-                  else if (data.status === "refining") toast.info("正在根据意见全自动修正终稿...");
-                }
-                if (data.action === "clear_result") setResult("");
-                const content = data.choices?.[0]?.delta?.content || data.answer || "";
-                if (content) {
-                  // 流式期间直接累积原文（不做逐 chunk 的 FIGURE 正则匹配，避免跨 chunk 漏检）
-                  setResult((prev) => { const next = prev + content; resultRef.current = next; return next; });
-                }
-                if (data.verification) setVerificationFeedback((prev) => prev + data.verification);
-                if (data.citation_warnings) setCitationWarnings(data.citation_warnings);
-                if (data.corrected_text) {
-                  setResult(data.corrected_text);
-                  resultRef.current = data.corrected_text;
-                }
-              } catch (e) {}
-            }
-          }
-        }
+      // Sync stream results back to component state (use return value, not hook state)
+      setResult(streamResult.content);
+      resultRef.current = streamResult.content;
+      setVerificationFeedback(streamResult.verification);
+      setDetectedRefs(streamResult.references);
+      setCitationWarnings(streamResult.citationWarnings);
+      setDataClaimWarnings(streamResult.dataClaimWarnings);
+      if (streamResult.references.length > 0 && onUpdateProject) {
+        onUpdateProject({ references: streamResult.references });
       }
 
       // 流结束后：扫描完整结果文本中的 FIGURE 标记和插图占位
       const fullText = resultRef.current;
 
-      // 工具函数：找到 【FIG***:{JSON}】 块（容错 FIGURE/FIGURA/FIGUER 等拼写变体）
-      const findFigureBlocks = (text: string): { json: Record<string, unknown>; raw: string }[] => {
-        const results: { json: Record<string, unknown>; raw: string }[] = [];
-        // 匹配 【FIG 开头（不区分大小写），后跟任意字母，然后是 :{ 开始 JSON
-        const blockRegex = /【FIG([A-Z]*):(\{)/gi;
-        let match: RegExpExecArray | null;
-        while ((match = blockRegex.exec(text)) !== null) {
-          const jsonStart = match.index + match[0].length - 1; // 指向 {
-          // 括号计数找到匹配的 }
-          let depth = 0;
-          let jsonEnd = -1;
-          for (let i = jsonStart; i < text.length; i++) {
-            if (text[i] === "{") depth++;
-            else if (text[i] === "}") {
-              depth--;
-              if (depth === 0) { jsonEnd = i; break; }
-            }
-          }
-          if (jsonEnd === -1) continue;
-          // 检查后面是否紧跟 】
-          if (text[jsonEnd + 1] !== "】") continue;
-          const raw = text.slice(match.index, jsonEnd + 2);
-          try {
-            const json = JSON.parse(text.slice(jsonStart, jsonEnd + 1)) as Record<string, unknown>;
-            if (json.tool && json.config && json.caption) {
-              results.push({ json, raw });
-            }
-          } catch {
-            // JSON 解析失败，跳过
-          }
-        }
-        return results;
-      };
-
-      // 1. 处理插图占位符（无数据 chart 的轻量标记）
-      const placeholderRegex = /【插图占位：([^】]+)】/g;
-      let phm: RegExpExecArray | null;
-      let phText = fullText;
-      let placeholderCount = 0;
-      const phRegex = new RegExp(placeholderRegex.source, placeholderRegex.flags);
-      while ((phm = phRegex.exec(fullText)) !== null) {
-        const caption = phm[1].trim();
-        if (caption) {
-          phText = phText.replace(
-            phm[0],
-            `\n\n> 📊 **建议插图**：${caption}\n> *（此处为系统根据上下文自动标记的建议图位。请提供数据后点击重新生成，或手动替换为实际图表。）*\n\n`,
-          );
-          placeholderCount++;
-        }
-      }
+      // 1. 处理插图占位符
+      const { processedText: phText, count: placeholderCount } = replacePlaceholders(fullText);
       if (placeholderCount > 0) {
         setResult(phText);
         resultRef.current = phText;
       }
 
-      // 2. 处理可执行 FIGURE 标记（用括号计数定位，支持嵌套 JSON）
+      // 2. 处理可执行 FIGURE 标记
       const figureBlocks = findFigureBlocks(placeholderCount > 0 ? phText : fullText);
       const detectedFigures: { tool: string; config: string; caption: string }[] = [];
       let processedText = placeholderCount > 0 ? phText : fullText;
@@ -434,10 +418,16 @@ export function WritingPanel({
         figureCountRef.current++;
       }
 
+      // 2.5 检查是否有未被成功解析的 FIGURE 标记
+      const rawFigureCount = (processedText.match(/[【\[]FIG(?:URE)?:\{/gi) || []).length;
+      if (rawFigureCount > 0) {
+        toast.warning(`发现 ${rawFigureCount} 个图表标记格式异常，已保留原文标记，请手动处理`);
+        // 不清除这些标记，让用户看到原始内容
+      }
+
       if (detectedFigures.length > 0) {
         setResult(processedText);
         resultRef.current = processedText;
-        // 直接存 ref，彻底绕开 React state batch 时序问题
         detectedFiguresRef.current = detectedFigures;
         setPendingFigures(detectedFigures.map(f => ({ ...f, spec: "", status: "pending" as const })));
 
@@ -450,109 +440,48 @@ export function WritingPanel({
           for (let i = 0; i < _figs.length; i++) {
             if (_abort.signal.aborted) break;
             setPendingFigures(prev => prev.map((f, j) => j === i ? { ...f, status: "generating" } : f));
+            const fig = _figs[i];
+            if (!fig) continue;
             try {
-              const fig = _figs[i];
-              if (!fig) continue;
-              let imgUrl = "";
               const cfg = JSON.parse(fig.config);
-
-              // 带超时的 fetch（12 秒，避免单张图卡死整个流程）
-              const fetchWithTimeout = async (url: string, init: RequestInit, timeoutMs = 12000): Promise<Response> => {
-                const controller = new AbortController();
-                const timer = setTimeout(() => controller.abort(), timeoutMs);
-                try {
-                  return await fetch(url, { ...init, signal: controller.signal });
-                } finally {
-                  clearTimeout(timer);
-                }
-              };
-
-              if (fig.tool === "chart") {
-                const fd = new FormData();
-                // 支持内联数据（Chart.js 风格）
-                if (cfg.data?.labels && cfg.data?.datasets) {
-                  const labels = cfg.data.labels as string[];
-                  const datasets = cfg.data.datasets as Array<{ label?: string; data: number[] }>;
-                  // 构建标准 CSV：第一列 X，后续列为各 dataset
-                  let csv = "X," + labels.join(",") + "\n";
-                  for (const ds of datasets) {
-                    csv += (ds.label || "data") + "," + ds.data.join(",") + "\n";
-                  }
-                  fd.append("dataFile", new Blob([csv], { type: "text/csv" }), "data.csv");
-                } else if (cfg.data_file) {
-                  const resp = await fetch(cfg.data_file);
-                  const blob = await resp.blob();
-                  fd.append("dataFile", blob, "data.csv");
-                }
-                if (fd.has("dataFile")) {
-                  fd.append("config", JSON.stringify({ title: fig.caption, chart_type: cfg.chart_type || cfg.type || "bar", data: cfg.data }));
-                  const r = await fetchWithTimeout("/api/chart", { method: "POST", body: fd });
-                  const j = await r.json();
-                  imgUrl = j.imageUrl || "";
-                }
-              } else if (fig.tool === "xrd_peakfit" && cfg.data_file) {
-                const fd = new FormData();
-                const resp = await fetchWithTimeout(cfg.data_file, {});
-                const blob = await resp.blob();
-                fd.append("dataFile", blob, "data.csv");
-                fd.append("config", JSON.stringify({ title: fig.caption, bg_params: {}, peak_params: { max_peaks: 15 } }));
-                const r = await fetchWithTimeout("/api/xrd/peakfit", { method: "POST", body: fd });
-                const j = await r.json();
-                imgUrl = j.imageUrl || "";
-              } else if (fig.tool === "flow") {
-                console.log(`[FIGURE] Generating flow diagram: ${fig.caption}`);
-                const r = await fetchWithTimeout("/api/flow-diagram", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg) });
-                const j = await r.json();
-                if (j.imageUrl) {
-                  imgUrl = j.imageUrl;
-                  console.log(`[FIGURE] Flow diagram OK: ${imgUrl}`);
-                } else {
-                  console.warn(`[FIGURE] Flow diagram failed: ${j.error || "unknown"}`);
-                }
-              } else if (fig.tool === "mechanism") {
-                // 兼容旧版 mechanism token：转为 flow 格式
-                const mechanismCfg = {
-                  title: cfg.title || cfg.description || "反应机理",
-                  direction: "vertical",
-                  nodes: [{ id: "1", label: cfg.description?.slice(0, 20) || "机理过程" }, { id: "2", label: "产物" }],
-                  edges: [{ from: "1", to: "2" }],
-                };
-                const r = await fetchWithTimeout("/api/flow-diagram", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(mechanismCfg) });
-                const j = await r.json();
-                imgUrl = j.imageUrl || "";
-              }
-
-              if (imgUrl) {
-                const md = `\n\n![${fig.caption}](${imgUrl})\n\n`;
-                setResult(prev => {
-                  const next = prev.replace(`*[正在生成 ${fig.caption}...]*`, md);
-                  resultRef.current = next;
-                  return next;
-                });
-                setPendingFigures(prev => prev.map((f, j) => j === i ? { ...f, status: "done", imageUrl: imgUrl } : f));
+              const genResult = await generateSingleFigure(fig.tool, cfg, fig.caption, _abort.signal);
+              const tag = `*[正在生成 ${fig.caption}...]*`;
+              if (genResult.url) {
+                const md = `\n\n![${fig.caption}](${genResult.url})\n\n`;
+                resultRef.current = resultRef.current.replace(tag, md);
+                setResult(resultRef.current);
+                setPendingFigures(prev => prev.map((f, j) => j === i ? { ...f, status: "done", imageUrl: genResult.url } : f));
               } else {
-                // 失败时替换占位符为可读提示，避免残留 raw placeholder
-                const fallback = `\n\n> 📊 **${fig.caption}**（未能自动生成，请手动补充图表）\n\n`;
-                setResult(prev => {
-                  const next = prev.replace(`*[正在生成 ${fig.caption}...]*`, fallback);
-                  resultRef.current = next;
-                  return next;
-                });
+                const reason = genResult.error || "生成失败";
+                const fallback = `\n\n> 📊 **${fig.caption}**（${reason}，请手动补充）\n\n`;
+                resultRef.current = resultRef.current.replace(tag, fallback);
+                setResult(resultRef.current);
                 setPendingFigures(prev => prev.map((f, j) => j === i ? { ...f, status: "failed" } : f));
               }
-            } catch {
-              // 异常时同样替换占位符（用 _figs[i] 而非 pendingFigures，避免异步状态不一致）
-              const caption = _figs[i]?.caption || "图表";
-              const fallback = `\n\n> 📊 **${caption}**（生成异常，请手动补充）\n\n`;
-              setResult(prev => {
-                const next = prev.replace(`*[正在生成 ${caption}...]*`, fallback);
-                resultRef.current = next;
-                return next;
-              });
+            } catch (e) {
+              console.warn("[Figure] Generation failed for", fig.caption, e);
+              const tag = `*[正在生成 ${fig.caption}...]*`;
+              const fallback = `\n\n> 📊 **${fig.caption}**（生成异常，请手动补充）\n\n`;
+              resultRef.current = resultRef.current.replace(tag, fallback);
+              setResult(resultRef.current);
               setPendingFigures(prev => prev.map((f, j) => j === i ? { ...f, status: "failed" } : f));
             }
           }
           toast.success("配图生成完成");
+          // 同步最终结果到父组件的 aiPreview，确保编辑器工具栏"应用"也拿到图片版内容
+          if (onPreviewUpdate) {
+            onPreviewUpdate({
+              content: resultRef.current,
+              pipelineSteps: writingStream.pipelineSteps,
+              verification: writingStream.verificationFeedback,
+              citationWarnings: writingStream.citationWarnings,
+              dataClaimWarnings: writingStream.dataClaimWarnings,
+              detectedRefs: writingStream.detectedRefs,
+              targetSection: targetSectionKey,
+              subsectionTitle,
+              isStreaming: false,
+            });
+          }
           handleApplyToEditor();
         })();
       } else {
@@ -563,7 +492,10 @@ export function WritingPanel({
         onTaskExpanded(selectedSectionId);
       }
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "写作生成失败");
+      // AbortError 由 writingStream 内部处理
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        toast.error(error instanceof Error ? error.message : "写作生成失败");
+      }
       setGenerationStatus("idle");
     } finally {
       setIsGenerating(false);
@@ -571,7 +503,11 @@ export function WritingPanel({
   };
 
   const handleApplyToEditor = () => {
-    const content = resultRef.current || result;
+    let content = resultRef.current || result;
+    content = cleanDraftArtifacts(content);
+    content = deduplicateParagraphs(content);
+    resultRef.current = content;
+    setResult(content);
     if (onGenerate && content && targetSectionKey) {
       onGenerate(content, targetSectionKey, subsectionTitle);
       toast.success(`内容已应用到 ${targetSectionKey} 章节，可点击工具栏"引用重排"整理引用`);
@@ -626,14 +562,8 @@ export function WritingPanel({
                 {outlineTasks.length > 0 ? (
                   (() => {
                     // 按 IMRaD 大节分组
-                    const IMRAD_ORDER = ["abstract", "introduction", "methods", "results", "conclusion"];
-                    const IMRAD_LABELS: Record<string, string> = {
-                      abstract: "摘要 (Abstract)",
-                      introduction: "引言 (Introduction)",
-                      methods: "材料与方法 (Methods)",
-                      results: "结果与讨论 (Results & Discussion)",
-                      conclusion: "结论 (Conclusion)",
-                    };
+                    const IMRAD_ORDER = IMRAD_SECTION_KEYS as readonly string[];
+                    const IMRAD_LABELS: Record<string, string> = IMRAD_LABELS_ZH;
                     const grouped = new Map<string, OutlineTask[]>();
                     for (const t of outlineTasks) {
                       const key = t.sectionKey;
@@ -730,9 +660,25 @@ export function WritingPanel({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="context" className="text-xs">任务上下文</Label>
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={injectAnalysis} title="注入实验数据">
-                  <Database className="h-3 w-3" />
-                </Button>
+                <div className="flex items-center gap-1">
+                  {/* 证据可用性指示 */}
+                  {(() => {
+                    const dataClaims = (() => { try { return project.dataClaims ? JSON.parse(project.dataClaims) : []; } catch { return []; } })();
+                    const refCount = (project.references || []).length;
+                    if (dataClaims.length === 0 && refCount === 0) return null;
+                    return (
+                      <span className="text-[9px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <Database className="h-2.5 w-2.5" />
+                        {dataClaims.length > 0 && <span>{dataClaims.length} 数据证据</span>}
+                        {dataClaims.length > 0 && refCount > 0 && <span>·</span>}
+                        {refCount > 0 && <span>{refCount} 文献</span>}
+                      </span>
+                    );
+                  })()}
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={injectAnalysis} title="注入实验数据">
+                    <Database className="h-3 w-3" />
+                  </Button>
+                </div>
               </div>
               <Textarea
                 id="context"
@@ -744,10 +690,13 @@ export function WritingPanel({
             </div>
           </CardContent>
           <CardFooter className="flex gap-2">
-            <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={() => {
+            <Button variant="outline" size="sm" className="flex-1 text-xs" disabled={isGenerating} onClick={() => {
               setContext(""); setResult(""); setSelectedSectionId("");
               setVerificationFeedback("");
               setDetectedRefs([]);
+              setCitationWarnings([]);
+              setDataClaimWarnings([]);
+              writingStream.reset();
               setGenerationStatus("idle");
               try {
                 sessionStorage.removeItem(writingSessionKey(projectId));
@@ -757,14 +706,20 @@ export function WritingPanel({
             }}>
               <Eraser className="mr-1 h-3 w-3" /> 重置
             </Button>
-            <Button size="sm" className="flex-[2] text-xs" onClick={handleGenerate} disabled={isGenerating || !selectedSectionId}>
-              {isGenerating ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Send className="mr-1 h-3 w-3" />}
-              {selectedSectionId ? "扩写选定章节" : "请先选择任务"}
-            </Button>
+            {isGenerating ? (
+              <Button size="sm" variant="destructive" className="flex-[2] text-xs" onClick={handleCancel}>
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" /> 取消扩写
+              </Button>
+            ) : (
+              <Button size="sm" className="flex-[2] text-xs" onClick={handleGenerate} disabled={!selectedSectionId}>
+                <Send className="mr-1 h-3 w-3" />
+                {selectedSectionId ? "扩写选定章节" : "请先选择任务"}
+              </Button>
+            )}
           </CardFooter>
         </Card>
 
-        {result && (
+        {result && !onPreviewUpdate && (
           <Card className="flex flex-col min-h-[300px] bg-primary/5 border-primary/20">
             <CardHeader className="flex flex-row items-center justify-between py-3 border-b">
               <CardTitle className="text-sm font-bold">AI 生成内容</CardTitle>
@@ -800,6 +755,29 @@ export function WritingPanel({
                 </div>
               )}
 
+              {dataClaimWarnings.length > 0 && (
+                <div className="bg-orange-50 p-3 rounded-md border border-orange-200 mb-2">
+                  <div className="text-[10px] font-bold text-orange-700 mb-1 flex items-center gap-1 uppercase">
+                    <Database className="h-3 w-3" /> 数据证据核查警告
+                  </div>
+                  <p className="text-[9px] text-orange-600 mb-2">
+                    以下数据证据声明在生成文本中未正确引用或数值不一致：
+                  </p>
+                  <ul className="space-y-1">
+                    {dataClaimWarnings.map((w, i) => (
+                      <li key={i} className="text-[9px] text-orange-700 bg-orange-100/50 p-1.5 rounded">
+                        <span className="font-bold">[{w.claimId}]</span>{" "}
+                        {!w.found ? "未引用" : "数值不一致"}
+                        <span className="block text-orange-500 truncate mt-0.5">
+                          {w.claimText}
+                          {w.issue && <span className="block text-red-500">{w.issue}</span>}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {detectedRefs.length > 0 && (
                 <div className="bg-background/50 p-2 rounded-md border border-dashed border-primary/30">
                   <div className="text-[10px] font-bold text-primary mb-1 flex items-center gap-1 uppercase">
@@ -813,18 +791,8 @@ export function WritingPanel({
                 </div>
               )}
 
-              {generationStatus === "verifying" && (
-                <div className="flex items-center gap-2 p-3 bg-blue-50 text-blue-700 rounded-md border border-blue-100 animate-pulse">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-xs font-medium">学术核查代理正在审计正文严谨性...</span>
-                </div>
-              )}
-
-              {generationStatus === "refining" && (
-                <div className="flex items-center gap-2 p-3 bg-green-50 text-green-700 rounded-md border border-green-100 animate-pulse">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-xs font-medium">核查意见已采纳，正在自动修正终稿内容...</span>
-                </div>
+              {writingStream.pipelineSteps.length > 0 && (
+                <PipelineTimeline steps={writingStream.pipelineSteps} className="mb-3" />
               )}
 
               {verificationFeedback && (
@@ -838,8 +806,8 @@ export function WritingPanel({
                 </div>
               )}
 
-              <div className="whitespace-pre-wrap leading-relaxed text-[11px]">
-                {result}
+              <div className="leading-relaxed text-[11px]">
+                <MarkdownContent content={result} />
               </div>
             </CardContent>
           </Card>
