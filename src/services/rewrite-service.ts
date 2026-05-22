@@ -50,16 +50,23 @@ export async function generateRewriteSuggestions(
     results.push({ strategy, suggestedText: resultText });
   }
 
-  // 批量保存到数据库
-  await prisma.rewriteSuggestion.createMany({
-    data: results.map((r) => ({
-      checkId: options.checkId,
-      matchId: options.matchId ?? null,
-      originalText: options.originalText,
-      suggestedText: r.suggestedText,
-      strategy: r.strategy,
-    })),
-  });
+  // 批量保存到数据库（checkId 不存在时跳过持久化，仅返回生成结果）
+  try {
+    const checkExists = await prisma.plagiarismCheck.count({ where: { id: options.checkId } });
+    if (checkExists > 0) {
+      await prisma.rewriteSuggestion.createMany({
+        data: results.map((r) => ({
+          checkId: options.checkId,
+          matchId: options.matchId ?? null,
+          originalText: options.originalText,
+          suggestedText: r.suggestedText,
+          strategy: r.strategy,
+        })),
+      });
+    }
+  } catch {
+    // 静默跳过持久化失败，不影响返回结果
+  }
 
   return results;
 }

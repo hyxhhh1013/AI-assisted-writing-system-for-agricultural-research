@@ -42,8 +42,17 @@ function checkRateLimit(key: string): NextResponse | null {
   return null;
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // TODO: 临时关闭认证 — 所有请求注入默认用户 ID
+  const BYPASS_AUTH = true;
+  if (BYPASS_AUTH) {
+    const response = NextResponse.next();
+    response.headers.set(USER_ID_HEADER, "cmotoc1u50000iey3u6ju4zia");
+    return response;
+  }
+
   const token = request.cookies.get(TOKEN_COOKIE)?.value;
 
   let userId: string | null = null;

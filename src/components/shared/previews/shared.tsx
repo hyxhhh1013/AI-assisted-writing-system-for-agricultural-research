@@ -9,16 +9,14 @@ import rehypeRaw from "rehype-raw";
 import "katex/dist/katex.min.css";
 import { cn } from "@/lib/utils";
 import { ProjectData } from "@/lib/store";
+import { CITATION_GROUP_RE, expandCiteGroup, processCitations, handleCiteClick } from "@/lib/citation";
 
-export const CITATION_RE = /\[([0-9,\s\-–—]+)\]/g;
+export const CITATION_RE = CITATION_GROUP_RE;
+export { expandCiteGroup };
 
-export const SECTION_LABELS: Record<string, string> = {
-  abstract: "摘要",
-  introduction: "引言",
-  methods: "材料与方法",
-  results: "结果与讨论",
-  conclusion: "结论",
-};
+import { IMRAD_LABELS_SHORT_ZH } from "@/lib/imrad";
+
+export const SECTION_LABELS: Record<string, string> = IMRAD_LABELS_SHORT_ZH;
 
 /** 在项目所有章节中查找 [N] 的引用上下文 */
 export function findCiteContextsInProject(
@@ -26,7 +24,7 @@ export function findCiteContextsInProject(
   citeNum: number,
 ): { sectionLabel: string; snippet: string }[] {
   const results: { sectionLabel: string; snippet: string }[] = [];
-  const re = new RegExp(`\\[${citeNum}(?:[,\\s\\-–—\\d]*)\\]`);
+  const re = new RegExp(`\\[${citeNum}(?:[,\\s\\-–—\\d，、]*)\\]`);
   const entries: [string, string][] = [["abstract", project.abstract || ""]];
   for (const [key, label] of Object.entries(SECTION_LABELS)) {
     if (key === "abstract") continue;
@@ -48,65 +46,8 @@ export function findCiteContextsInProject(
   return results;
 }
 
-/** 将正文中的 [n] 替换为可点击的 HTML 标签 */
-export function processCitations(text: string): string {
-  return text.replace(
-    CITATION_RE,
-    (match, raw: string) =>
-      `<sup class="ref-cite" data-cite="${raw.replace(/\s/g, "")}" style="cursor:pointer;color:#2563eb;font-weight:600;transition:color 0.15s">${match}</sup>`,
-  );
-}
-
-/** 将引用组 "1,2,3-5" 展开为数字数组 */
-export function expandCiteGroup(raw: string): number[] {
-  const nums: number[] = [];
-  const parts = raw.split(",");
-  for (const part of parts) {
-    const token = part.trim();
-    if (!token) continue;
-    const range = token.match(/^(\d+)\s*[-–—]\s*(\d+)$/);
-    if (range) {
-      const start = Math.max(1, parseInt(range[1], 10));
-      const end = Math.max(start, parseInt(range[2], 10));
-      for (let n = start; n <= end; n++) { if (!nums.includes(n)) nums.push(n); }
-    } else {
-      const n = parseInt(token, 10);
-      if (!isNaN(n) && n > 0 && !nums.includes(n)) nums.push(n);
-    }
-  }
-  return nums;
-}
-
-/** 将 LaTeX 风格数学定界符 [ ... ] 转为 $$ ... $$ */
-export function normalizeMathDelimiters(text: string): string {
-  if (!text) return text;
-  let out = text;
-  out = out.replace(/^\[\s*$/gm, "$$");
-  out = out.replace(/^\s*\]\s*$/gm, "$$");
-  out = out.replace(/\[\s*(\\[a-zA-Z]+[\s\S]*?)\s*\]/g, (_m: string, inner: string) => {
-    const t = inner.trim();
-    if (/^[\d\s,.\-–—;一-龥a-zA-Z()（）]+$/.test(t)) return _m;
-    const cmdCount = (t.match(/\\[a-zA-Z]+/g) || []).length;
-    if (cmdCount < 2) return _m;
-    return `$$ ${t} $$`;
-  });
-  out = out.replace(/\\\(\s*/g, "$").replace(/\s*\\\)/g, "$");
-  return out;
-}
-
-/** 创建点击事件处理器，从 DOM 事件代理检测引用点击 */
-export function handleCiteClick(onCiteClick: (nums: number[]) => void) {
-  return (e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    const cite = target.closest(".ref-cite") as HTMLElement | null;
-    if (!cite) return;
-    const raw = cite.getAttribute("data-cite");
-    if (!raw) return;
-    e.preventDefault();
-    e.stopPropagation();
-    onCiteClick(expandCiteGroup(raw));
-  };
-}
+import { normalizeMathDelimiters } from "@/lib/math-delimiter";
+export { normalizeMathDelimiters };
 
 // ==================== Shared Components ====================
 
@@ -143,8 +84,8 @@ export const MarkdownContent = ({
   content: string; sectionNumber?: number; onCiteClick?: (nums: number[]) => void;
 }) => {
   const processedContent = sectionNumber ? processContent(content, sectionNumber) : content;
-  const citationContent = onCiteClick ? processCitations(processedContent) : processedContent;
-  const mathContent = normalizeMathDelimiters(citationContent);
+  const mathContent = normalizeMathDelimiters(processedContent);
+  const citationContent = onCiteClick ? processCitations(mathContent) : mathContent;
   return (
     <div onClick={onCiteClick ? handleCiteClick(onCiteClick) : undefined}>
       <ReactMarkdown
@@ -168,8 +109,8 @@ export const MarkdownContent = ({
 };
 
 export const CompactMarkdown = ({ content, onCiteClick }: { content: string; onCiteClick?: (nums: number[]) => void }) => {
-  const citationContent = onCiteClick ? processCitations(content) : content;
-  const mathContent = normalizeMathDelimiters(citationContent);
+  const mathContent = normalizeMathDelimiters(content);
+  const citationContent = onCiteClick ? processCitations(mathContent) : mathContent;
   return (
     <span onClick={onCiteClick ? handleCiteClick(onCiteClick) : undefined}>
       <ReactMarkdown

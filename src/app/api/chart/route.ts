@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
           "--data", dataPath,
           "--config", configPath,
           "--output", outputPath,
-        ], { shell: process.platform === "win32" });
+        ], { shell: false, env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" } });
 
         let stdout = "";
         let stderr = "";

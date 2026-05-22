@@ -8,38 +8,14 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { BookOpen, ChevronDown, ChevronRight, Quote, FileText, Loader2 } from "lucide-react";
-
-const CITATION_GROUP_RE = /\[([0-9,\s\-–—]+)\]/g;
-
-function expandCitationGroup(raw: string, refCount: number): number[] {
-  const nums: number[] = [];
-  const parts = raw.split(",");
-  for (const part of parts) {
-    const token = part.trim();
-    if (!token) continue;
-    const range = token.match(/^(\d+)\s*[-–—]\s*(\d+)$/);
-    if (range) {
-      const start = Math.max(1, parseInt(range[1], 10));
-      const end = Math.min(refCount, parseInt(range[2], 10));
-      for (let n = Math.min(start, end); n <= Math.max(start, end); n++) {
-        if (!nums.includes(n)) nums.push(n);
-      }
-      continue;
-    }
-    const single = token.match(/^\d+$/);
-    if (single) {
-      const n = parseInt(token, 10);
-      if (n >= 1 && n <= refCount && !nums.includes(n)) nums.push(n);
-    }
-  }
-  return nums;
-}
+import { CITATION_GROUP_RE, FULLWIDTH_CITATION_RE, expandCitationGroup } from "@/lib/citation";
 
 function collectUsedNumbers(text: string, refCount: number): Set<number> {
   const set = new Set<number>();
   if (!text) return set;
+  const normalized = text.replace(FULLWIDTH_CITATION_RE, (_m, inner) => `[${inner}]`);
   let m: RegExpExecArray | null;
-  while ((m = CITATION_GROUP_RE.exec(text)) !== null) {
+  while ((m = CITATION_GROUP_RE.exec(normalized)) !== null) {
     for (const num of expandCitationGroup(m[1], refCount)) {
       set.add(num);
     }

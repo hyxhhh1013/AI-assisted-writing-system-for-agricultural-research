@@ -8,24 +8,26 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Upload, FileSpreadsheet, Send, Copy, Table as TableIcon, BarChart3, Save, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
-import Papa from "papaparse";
 import { projectStore, ProjectData } from "@/lib/store";
-
+import type { EvidenceClaim, ChartConfig } from "@/contracts/data-source";
 
 interface AnalysisPanelProps {
   projectId: string;
   project: ProjectData;
   onSave?: (updates: Partial<ProjectData>) => void;
   onInsertToPaper?: (imageUrl: string, caption: string) => void;
+  onInsertClaim?: (claimText: string, claimId: string) => void;
 }
 
-export function AnalysisPanel({ projectId, project, onSave, onInsertToPaper }: AnalysisPanelProps) {
+export function AnalysisPanel({ projectId, project, onSave, onInsertToPaper, onInsertClaim }: AnalysisPanelProps) {
   const [researchDirection, setResearchDirection] = useState(project.researchDirection || "");
   const [dataSummary, setDataSummary] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState("");
   const [fileName, setFileName] = useState("");
+  const [claims, setClaims] = useState<EvidenceClaim[]>([]);
+  const [chartConfigs, setChartConfigs] = useState<ChartConfig[]>([]);
+  const [rawFile, setRawFile] = useState<ArrayBuffer | null>(null);
 
   useEffect(() => {
     // 同步来自项目的最新数据（仅在项目 ID 变化时）
@@ -43,6 +45,7 @@ export function AnalysisPanel({ projectId, project, onSave, onInsertToPaper }: A
       reader.onload = (event) => {
         // 用 TextDecoder 检测编码（支持 UTF-8 BOM 和 GBK）
         const buf = event.target?.result as ArrayBuffer;
+        setRawFile(buf);
         const bytes = new Uint8Array(buf);
         let text: string;
         if (bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
@@ -55,25 +58,30 @@ export function AnalysisPanel({ projectId, project, onSave, onInsertToPaper }: A
             text = new TextDecoder("gbk").decode(bytes);
           }
         }
-        Papa.parse(text, {
-          header: true,
-          complete: (results) => {
-            const summary = JSON.stringify(results.data.slice(0, 15), null, 2);
-            setDataSummary(summary);
-            toast.success("CSV 解析成功（" + (text.includes("�") ? "GBK" : "UTF-8") + " 编码）");
-          },
+        import("papaparse").then(Papa => {
+          Papa.default.parse(text, {
+            header: true,
+            complete: (results) => {
+              const summary = JSON.stringify(results.data.slice(0, 15), null, 2);
+              setDataSummary(summary);
+              toast.success("CSV 解析成功（" + (text.includes("�") ? "GBK" : "UTF-8") + " 编码）");
+            },
+          });
         });
       };
       reader.readAsArrayBuffer(file);
     } else if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
       reader.onload = (event) => {
         const data = new Uint8Array(event.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: "array" });
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(firstSheet);
-        const summary = JSON.stringify(jsonData.slice(0, 15), null, 2);
-        setDataSummary(summary);
-        toast.success("Excel 解析成功，已提取数据摘要");
+        setRawFile(event.target?.result as ArrayBuffer);
+        import("xlsx").then(XLSX => {
+          const workbook = XLSX.read(data, { type: "array" });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+          const summary = JSON.stringify(jsonData.slice(0, 15), null, 2);
+          setDataSummary(summary);
+          toast.success("Excel 解析成功，已提取数据摘要");
+        });
       };
       reader.readAsArrayBuffer(file);
     } else {
@@ -238,6 +246,137 @@ export function AnalysisPanel({ projectId, project, onSave, onInsertToPaper }: A
             )}
           </CardContent>
         </Card>
+
+        {/* 数据证据提取 */}
+        {fileName && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-bold flex items-center">
+                <BarChart3 className="mr-2 h-4 w-4 text-primary" /> 数据证据提取
+              </CardTitle>
+              <CardDescription className="text-xs">
+                自动识别数据结构，生成可引用的证据声明和图表
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button size="sm" variant="outline" className="w-full text-xs"
+                onClick={async () => {
+                  try {
+                    let d: { claims?: unknown[]; chartConfigs?: unknown[]; analysis?: unknown };
+                    if (rawFile) {
+                      const fd = new FormData();
+                      fd.append("file", new Blob([rawFile]), fileName);
+                      const res = await fetch("/api/data/analyze", { method: "POST", body: fd });
+                      d = await res.json();
+                    } else {
+                      const res = await fetch("/api/data/analyze", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ data: dataSummary, fileName }),
+                      });
+                      d = await res.json();
+                    }
+                    if (d.claims) {
+                      setClaims(d.claims as EvidenceClaim[]);
+                      if (d.chartConfigs) setChartConfigs(d.chartConfigs as ChartConfig[]);
+                      // 持久化到 project
+                      if (onSave && projectId) {
+                        onSave({
+                          dataClaims: JSON.stringify(d.claims),
+                          dataSources: JSON.stringify(d.analysis || { fileName, rowCount: 0, columns: [], stats: [], generatedAt: Date.now() }),
+                        });
+                      }
+                      toast.success(`提取 ${d.claims.length} 条证据${d.chartConfigs?.length ? `、${d.chartConfigs.length} 个推荐图表` : ""}，已保存`);
+                    }
+                  } catch { toast.error("证据提取失败"); }
+                }}
+              >提取数据证据</Button>
+
+              {claims.length > 0 && (
+                <div className="space-y-3 max-h-[350px] overflow-y-auto">
+                  {/* 按证据类型分组 */}
+                  {(["comparison", "mean", "trend", "correlation"] as const).map(type => {
+                    const typeClaims = claims.filter(c => c.type === type);
+                    if (typeClaims.length === 0) return null;
+                    const typeLabel = { comparison: "组间比较", mean: "均值统计", trend: "趋势分析", correlation: "相关性" }[type];
+                    const typeIcon = { comparison: "📊", mean: "📈", trend: "📉", correlation: "🔗" }[type];
+                    return (
+                      <div key={type} className="border rounded-md overflow-hidden">
+                        <div className="bg-muted/40 px-2.5 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase flex items-center gap-1.5">
+                          <span>{typeIcon}</span> {typeLabel}
+                          <span className="text-[9px] font-normal ml-auto">{typeClaims.length} 条</span>
+                        </div>
+                        <div className="divide-y">
+                          {typeClaims.map((c, i) => (
+                            <div key={i} className="flex items-start justify-between gap-2 p-2.5 hover:bg-muted/20 transition-colors">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                  <span className="text-[10px] font-mono font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">{c.id}</span>
+                                  {c.pValue !== undefined && c.pValue < 0.05 && (
+                                    <span className="text-[9px] text-green-700 bg-green-100 px-1 rounded">显著</span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] leading-relaxed">{c.text}</p>
+                              </div>
+                              <div className="flex gap-1 shrink-0">
+                                <Button size="sm" variant="ghost" className="h-6 text-[10px]"
+                                  onClick={() => {
+                                    const md = `${c.text} [${c.id}]`;
+                                    onInsertClaim?.(md, c.id);
+                                    toast.success(`已插入 ${c.id}`);
+                                  }}
+                                >插入</Button>
+                                <Button size="sm" variant="ghost" className="h-6 text-[10px]"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(`[${c.id}] ${c.text}`);
+                                    toast.success("已复制");
+                                  }}
+                                >复制</Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* 推荐图表 */}
+              {chartConfigs.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase flex items-center gap-1">
+                    <BarChart3 className="h-3 w-3" /> 推荐图表
+                  </p>
+                  {chartConfigs.map((cfg, i) => (
+                    <div key={i} className="flex items-center gap-2.5 p-2.5 bg-muted/20 rounded-md hover:bg-muted/40 transition-colors">
+                      <span className="text-lg shrink-0">
+                        {cfg.type === "bar" || cfg.type === "grouped_bar" ? "📊" :
+                         cfg.type === "line" ? "📈" :
+                         cfg.type === "scatter" ? "📍" : "📦"}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-medium truncate">{cfg.title}</p>
+                        <p className="text-[9px] text-muted-foreground">
+                          {cfg.type === "bar" ? "柱状图" : cfg.type === "line" ? "折线图" : cfg.type === "scatter" ? "散点图" : cfg.type}
+                          {" · "}{cfg.xLabel} vs {cfg.yLabel}
+                          {" · "}{cfg.labels.length} 个数据点
+                        </p>
+                      </div>
+                      <a
+                        href={`/plot?id=${projectId}`}
+                        target="_blank"
+                        className="text-[10px] text-primary hover:underline shrink-0"
+                      >
+                        打开绘图 →
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* 图表生成 */}
         {dataSummary && projectId && (

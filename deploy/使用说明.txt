@@ -1,0 +1,42 @@
+============================================
+  禾书耕文 (GrainScript) — 部署使用说明
+============================================
+
+【系统要求】
+  - Windows 10 / 11 (64 位)
+  - Node.js 18+ (必须) → https://nodejs.org/zh-cn/download/
+  - Python 3.9+ (可选，图表生成需要)
+
+【首次安装（无需网络）】
+  1. 安装 Node.js（下载 LTS 版本，一路点下一步）
+  2. 解压 grainscript-deploy.zip 到任意目录
+  3. 双击 setup.bat → 输入 DeepSeek API Key
+  4. 双击 start.bat → 浏览器访问 http://localhost:3000
+
+【日常使用】
+  双击 start.bat 即可启动
+
+【关于认证】
+  已关闭用户认证，无需登录注册，所有功能直接使用。
+
+【功能模块】
+  ✓ 全能科研工作台（写作、分析、大纲生成）
+  ✓ 项目管理中心
+  ✓ 文献库管理（RAG 检索、PDF 阅读）
+  ✓ 论文查重与降重
+  △ 图表生成（需要 Python + matplotlib + numpy）
+
+【需要图表功能？】
+  安装 Python 3.9+，然后命令行运行：
+  pip install matplotlib numpy
+
+【端口被占用？】
+  编辑 app\.env，添加 PORT=3001 一行
+
+【数据备份】
+  - 数据库: app\prisma\dev.db
+  - RAG 索引: app\data\
+  建议定期备份。
+
+【停止服务】
+  在命令行窗口中按 Ctrl+C 停止。

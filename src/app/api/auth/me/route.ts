@@ -2,31 +2,33 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
+// 认证临时关闭 — 默认访客用户
+const GUEST_USER = {
+  id: "cmotoc1u50000iey3u6ju4zia",
+  email: "guest@grainscript.local",
+  name: "访客用户",
+  createdAt: new Date().toISOString(),
+};
+
 export async function GET(req: NextRequest) {
   try {
-    // 直接从 Cookie 读取 JWT（本路由不在 middleware 保护范围内）
     const token = req.cookies.get("token")?.value;
-    if (!token) {
-      return NextResponse.json({ error: "未登录" }, { status: 401 });
+    if (token) {
+      const userId = await verifyToken(token);
+      if (userId) {
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { id: true, email: true, name: true, createdAt: true },
+        });
+        if (user) {
+          return NextResponse.json(user);
+        }
+      }
     }
-
-    const userId = await verifyToken(token);
-    if (!userId) {
-      return NextResponse.json({ error: "未登录" }, { status: 401 });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, email: true, name: true, createdAt: true },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: "用户不存在" }, { status: 404 });
-    }
-
-    return NextResponse.json(user);
+    // 认证临时关闭 — 无有效 token 时返回默认访客用户
+    return NextResponse.json(GUEST_USER);
   } catch (error) {
     console.error("Me error:", error);
-    return NextResponse.json({ error: "获取用户信息失败" }, { status: 500 });
+    return NextResponse.json(GUEST_USER);
   }
 }

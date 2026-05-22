@@ -5,12 +5,14 @@ import type { ProjectData, SectionRecord } from "@/services/project";
 
 export type { ProjectData } from "@/services/project";
 
-const DEFAULT_SECTIONS: SectionRecord = {
+import { IMRAD_BODY_KEYS } from "@/lib/imrad";
+
+const DEFAULT_SECTIONS = {
   introduction: "",
   methods: "",
   results: "",
   conclusion: "",
-};
+} satisfies SectionRecord;
 
 export const projectStore = {
   async list(): Promise<{ id: string; title: string; lastUpdated: number }[]> {
@@ -41,7 +43,7 @@ export const projectStore = {
     return {
       id,
       title: "",
-      authors: "Lab Member",
+      authors: "【请填写作者姓名】",
       affiliations: "农业科学研究中心，北京 100083",
       abstract: "",
       keywords: "",
@@ -49,6 +51,7 @@ export const projectStore = {
       researchDirection: "",
       outline: "",
       template: "sci",
+      mode: "review",
       sections: { ...DEFAULT_SECTIONS },
       analysisResults: [],
       references: [],

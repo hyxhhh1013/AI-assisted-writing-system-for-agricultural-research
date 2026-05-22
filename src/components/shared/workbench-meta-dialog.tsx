@@ -27,6 +27,7 @@ interface ProjectMetaDraft {
   outline: string;
   template: string;
   referencesText: string;
+  mode?: "review" | "research";
 }
 
 interface WorkbenchMetaDialogProps {
@@ -48,6 +49,7 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
     outline: project.outline || "",
     template: project.template || "sci",
     referencesText: (project.references || []).join("\n"),
+    mode: project.mode || "review",
   });
 
   useEffect(() => {
@@ -63,6 +65,7 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
         outline: project.outline || "",
         template: project.template || "sci",
         referencesText: (project.references || []).join("\n"),
+        mode: project.mode || "review",
       });
     }
   }, [open, project.id]);
@@ -110,6 +113,19 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="meta-mode">写作模式</Label>
+                <Select value={tempMeta.mode || "review"} onValueChange={(val) => setTempMeta({ ...tempMeta, mode: val as "review" | "research" })}>
+                  <SelectTrigger id="meta-mode">
+                    <SelectValue placeholder="选择写作模式" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="review">综述模式 — 文献驱动，适合撰写文献综述</SelectItem>
+                    <SelectItem value="research">研究论文 — 数据驱动，定量结论需引用实验数据</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">

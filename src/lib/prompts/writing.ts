@@ -2,11 +2,11 @@ import { buildDomainExpertise } from "./domain";
 
 export { buildDomainExpertise };
 
-type SectionPrompt = string | ((isGBT: boolean) => string);
+type SectionPrompt = string | ((params: { isGBT: boolean; isChinese: boolean }) => string);
 
 export const WRITING_SECTION_PROMPTS: Record<string, SectionPrompt> = {
-  abstract: (isGBT: boolean) =>
-    isGBT
+  abstract: ({ isChinese }: { isGBT: boolean; isChinese: boolean }) =>
+    isChinese
       ? `请撰写中文摘要。必须是一个完整段落，按以下逻辑组织：
 1. 研究背景（1-2句，点明领域重要性）
 2. 研究缺口或问题
@@ -54,14 +54,19 @@ Keep it selective: if a detail does not affect editorial triage, omit it.`,
 2. 报告主要观察——使用过去时（"检测到""增加了""观察到"）
 3. 给出量化数据——均值±标准差、P值、效应量
 4. 标记预期/意外模式
-5. 按主题分为子节（如"2.1 温度对发芽率的影响"），子节间逻辑递进
+5. 按主题分为子节（如"2.1 处理因素对观测指标的影响"），子节间逻辑递进
 
 ⚠️ Results vs Discussion 铁律 —— 严格区分：
 · Results 只回答"观察到了什么"——报告数据，不解释深层原因
 · Results 用过去时动词："显示""检测到""增加""降低""达到"
 · Discussion 用推测句式："可能反映""提示""或许由于""尚需进一步验证"
 · Discussion 内容（机制解释、与文献对比、深层含义）请留到 Discussion 章节，Results 中不得出现
-· 唯一例外：引用对比文献时可用 1-2 句简短对比（"与XX的结果一致[5]"），不做深入讨论`,
+· 唯一例外：引用对比文献时可用 1-2 句简短对比（"与XX的结果一致[5]"），不做深入讨论
+
+⚠️ Results 中严禁重复 Methods 内容：
+· 不得列出材料来源、试剂厂家、仪器型号、操作步骤
+· 提及方法时简化为 "采用 2.1 节所述方法" 或引用章节编号
+· 不要写 "3.1 材料与方法" 这类子标题`,
 
   discussion:
     `请撰写讨论（Discussion）部分。按以下五步推进：
@@ -109,12 +114,15 @@ export function buildWriterSystemPrompt(params: {
   contextText: string;
   sectionInstruction: string;
   figureStart?: number;
+  evidenceSummary?: string;
+  projectMode?: "review" | "research";
+  sectionNumber?: number;
 }): string {
-  const { section, domainExpertise, globalReferenceInfo, template, language, contextText, sectionInstruction, figureStart = 1 } = params;
+  const { section, domainExpertise, globalReferenceInfo, template, language, contextText, sectionInstruction, figureStart = 1, evidenceSummary, projectMode, sectionNumber } = params;
   const isGBT = template === "gbt7713";
   const isChinese = language !== "en";
   const isAbstract = section === "abstract";
-  const isResultsOrConclusion = section === "results" || section === "conclusion";
+  const major = sectionNumber ?? 2; // 默认值 2 兼容旧调用
 
   return `${domainExpertise}
 你的任务是协助撰写论文【${section}】章节。模板：${isGBT ? "GB/T 7713 国标" : "SCI 国际期刊"}。输出语言：${isChinese ? "中文" : "英文"}。
@@ -122,13 +130,11 @@ ${globalReferenceInfo}
 
 —— 可供引用的文献库 ——
 ${contextText}
-
+${evidenceSummary ? `\n—— 实验数据证据（定量结论必须引用编号） ——\n${evidenceSummary}\n` : ""}
 —— 核心写作原则 ——
 原则1·学术质量：使用专业术语，逻辑层层递进。${isGBT ? "遵循 GB/T 7713 学术表达习惯。" : "遵循 SCI 学术论文规范。"}${isAbstract ? "摘要必须是一个紧凑段落，禁止分点。" : ""}
-原则2·深度结合文献：每个主要观点应从文献库中寻找支撑或对比。正文中用 [n] 标注引用，编号须与文献库中 [参考来源 [n]] 严格对应。
-原则3·结构与配图：${isResultsOrConclusion
-    ? "使用多级编号子标题组织内容（如 \"2.1 温度的影响\"、\"2.1.1 低温范围\"），子标题独占一行。⚠️ 严禁使用 Markdown 标题语法（###、####、##### 等），直接用纯文本编号。"
-    : "禁止输出一级章节大标题（如 \"1. 引言\"、\"Introduction\"），直接输出正文。"}
+原则2·深度结合文献：每个主要观点应从文献库中寻找支撑或对比。正文中用 [n] 标注引用，编号须与文献库中 [参考来源 [n]] 严格对应。${projectMode === "research" ? `\n原则2b·数据驱动写作：所有定量结论（数字、趋势、显著性）必须引用实验数据证据编号（如 [D1-C3]）。不得编造、修改证据声明中的数值。数据声明中的 text 字段可以直接改写为学术语言，但数值不可改变。` : ""}
+原则3·结构与配图：使用多级编号子标题组织内容（如 "${major}.1 关键因素的影响"、"${major}.1.1 某一水平下的表现"），子标题独占一行。⚠️ 严禁使用 Markdown 标题语法（###、####、##### 等），直接用纯文本编号。禁止输出一级章节大标题（如 "1. 引言"、"Introduction"）。子标题编号以 ${major} 开头（本节属于第 ${major} 章），第一小节从 ${major}.1 开始计数。
 
 ${isChinese ? `—— 证据强度分级（选择准确的动词）——
 · 强证据（有显著差异、大样本、可重复）："表明""显示""证实""揭示"
@@ -182,10 +188,12 @@ ${section === "introduction" ? "—— Gap Language ——\n· Use: \"remains po
   格式（独占一行）：
     【FIGURE:{"tool":"flow","config":{"title":"图表标题","direction":"vertical","nodes":[{"id":"1","label":"步骤1"},{"id":"2","label":"步骤2"},{"id":"3","label":"步骤3"}],"edges":[{"from":"1","to":"2"},{"from":"2","to":"3"}]},"caption":"图X 实验流程图 / 反应机理图"}】
   · 节点 label 控制在 2-6 个字，nodes 建议 3-8 个
+  ⚠️ nodes 和 edges 必须是数组 [...{...},{...}...]，绝不能漏掉最外层的方括号
 
 【类型B：数据图表 — 有数据生成，没数据放占位框】
   · 有具体数值 → 用 chart 格式（独占一行）：
-    【FIGURE:{"tool":"chart","config":{"type":"bar","data":{"labels":["CK","处理1","处理2"],"datasets":[{"label":"产量(kg/ha)","data":[5000,6200,7100]}]}},"caption":"图X 不同处理对产量的影响"}】
+    【FIGURE:{"tool":"chart","config":{"type":"bar","data":{"labels":["对照组","处理组A","处理组B"],"datasets":[{"label":"观测指标","data":[100,135,160]}]}},"caption":"图X 不同处理对产量的影响"}】
+  ⚠️ datasets / nodes / edges 必须是数组 [{...},{...}]，绝对不能写成 {...},{...} 或 "id":"1","label":"xx" 这种缺少[]包裹的格式（这会导致 JSON 解析失败，图表无法生成）
   · 没有具体数值、但此处需要配图 → 用占位格式（独占一行）：
     【插图占位：图X 此处建议配图的标题和简要说明】
     系统会将其渲染为醒目的待补充图位。
@@ -195,7 +203,17 @@ ${section === "introduction" ? "—— Gap Language ——\n· Use: \"remains po
 
 —— 一致性约束 ——
 · 术语须与论文大纲及摘要保持一致。
-· 若摘要或已写章节提到具体数据，扩写内容须与之匹配，不得矛盾。`;
+· 若摘要或已写章节提到具体数据，扩写内容须与之匹配，不得矛盾。
+
+—— 科学严谨性约束 ——
+· 结论只能基于当前实验的实际数据点做推断。禁止在未测试的取值区间声称"最优""最佳"等结论（例如实验只设置了 3 个梯度，就只能在 3 个实测点之间比较，不得推断未测区间的表现）。若需讨论趋势，使用"本实验条件下呈上升/下降趋势""推测在…范围内可能…"等审慎表达，并明确区分"实测结果"与"推测"。
+· 避免 overclaim 措辞：不得使用"首次""证明""最优""彻底解决""完全阐明"等夸张用语。
+· 若引用前人文献的数据做对比，必须明确标注"据文献[×]报道"，与本文实验数据区分。不得将文献结论当作本文实验结论。
+
+—— 参考文献格式约束 ——
+· 引用参考文献时严禁使用 ".pdf" 后缀（如"Title of paper,.pdf"）。每条文献必须包含：作者. 标题. 期刊, 年份, 卷(期): 页码.
+· 若无法确定某条文献的完整信息，使用标记 [文献×待补充] 而非编造不完整引用。
+· 参考文献列表中的 [n] 编号必须与正文引用一一对应，不得出现正文未引用的文献。`;
 }
 
 export function buildVerifierSystemPrompt(role: "audit" | "full"): string {
@@ -251,7 +269,14 @@ ${content}
 }
 
 export function buildRefinerSystemPrompt(): string {
-  return "你是农业学术主编，根据审稿人的逐条意见精准修正稿件。严禁为了'通过审查'而直接删除引用——必须对照原文修正。严禁删除 overclaim 措辞来逃避检查——必须替换为准确的学术表述。";
+  return `你是农业学术主编，根据审稿人的逐条意见精准修正稿件。
+
+严禁为了'通过审查'而直接删除引用——必须对照原文修正。
+严禁删除 overclaim 措辞来逃避检查——必须替换为准确的学术表述。
+
+⚠️ 引用缺失说明：
+- 如果稿件中某处原文缺少引用编号（即该处应该引用文献但未标注 [n]），
+  请从文献库中找到正确的引用来源，用正确的 [n] 编号在适当位置补充。`;
 }
 
 export function buildRefinerPrompt(params: {

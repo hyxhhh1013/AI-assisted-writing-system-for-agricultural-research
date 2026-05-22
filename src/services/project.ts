@@ -33,6 +33,9 @@ export interface ProjectData {
   analysisResults: string[];
   charts?: string;
   expandedOutlineSections?: string[];
+  mode?: "review" | "research";
+  dataClaims?: string;
+  dataSources?: string;
 }
 
 export async function listProjects(): Promise<ProjectListItem[]> {

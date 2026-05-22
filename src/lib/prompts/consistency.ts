@@ -2,10 +2,15 @@ export function buildConsistencyPrompt(params: {
   title: string;
   sections: { key: string; content: string }[];
   outline: string;
+  dataClaims?: { id: string; text: string; values: Record<string, number | string> }[];
 }): string {
   const sectionsText = params.sections
     .map((s) => `=== ${s.key} ===\n${s.content}`)
     .join("\n\n");
+
+  const dataClaimsText = params.dataClaims && params.dataClaims.length > 0
+    ? `\n已提取的数据证据声明（必须引用编号）：\n${params.dataClaims.map(c => `[${c.id}] ${c.text}`).join("\n")}\n`
+    : "";
 
   return `你是农业学术论文一致性审查专家。检查论文各章节之间的逻辑一致性和术语连贯性。
 
@@ -13,7 +18,7 @@ export function buildConsistencyPrompt(params: {
 
 论文大纲：
 ${params.outline || "未提供"}
-
+${dataClaimsText}
 各章节内容：
 ${sectionsText}
 
@@ -33,6 +38,8 @@ ${sectionsText}
    - 如有 → 标记位置并建议替换
 
 6. **引用一致性**：各章节的引用标注风格是否统一，引用编号是否与文献列表对应。
+
+7. **数据溯源检查**：文中所有定量结论（数字、百分比、统计值）是否标注了数据来源编号（如 [D1-C3]）。如果存在没有数据编号的数值声明，标记为"未溯源数据"。如果证据声明列表中存在编号但正文中缺失该编号，标记为"缺失数据引用"。
 
 【输出格式】—— 严格 JSON，不要其他内容：
 {

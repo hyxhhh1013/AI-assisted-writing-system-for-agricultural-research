@@ -51,8 +51,14 @@ model Project {
   plagiarismChecks  PlagiarismCheck[]
   // 引用-文献映射
   referenceSources  ReferenceSource[]
+  // 写作模式
+  mode              String?   @default("review") // "review" | "research"
   // 图表元数据（JSON 字符串）
   charts            String?
+  // 数据证据声明（JSON 数组 EvidenceClaim[]）
+  dataClaims        String?
+  // 数据源分析结果（JSON 数组 DataSourceAnalysis[]）
+  dataSources       String?
 
   @@index([userId])
 }

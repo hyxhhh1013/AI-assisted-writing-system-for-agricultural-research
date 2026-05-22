@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn, cleanDraftArtifacts, deduplicateParagraphs } from "@/lib/utils";
+import { cleanDraftArtifacts, deduplicateParagraphs, cleanMarkdownArtifacts } from "@/lib/utils";
 import { mergeEditorIntoProject } from "@/lib/export-content";
 import { ensureSubsectionNumbering, majorNumberFromSectionId, maxSecondLevelInText } from "@/lib/academic-numbering";
 import { useDocxExport } from "@/hooks/use-docx-export";
 import { useReferenceReorder } from "@/hooks/use-reference-reorder";
+import { pruneUncitedReferences, collectAllCitedIndices, stripOutOfRangeCitations, remapPrunedCitations } from "@/lib/reference-reorder";
 import { useEditorSync } from "@/hooks/use-editor-sync";
 import { useAutoSave } from "@/hooks/use-auto-save";
 import { useMarkdownExport } from "@/hooks/use-markdown-export";
@@ -26,26 +27,84 @@ import {
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
 import { projectStore, ProjectData } from "@/lib/store";
-import SCIPreview from "@/components/sci-preview";
 import {
-  ResizableHandle, 
-  ResizablePanel, 
-  ResizablePanelGroup 
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup
 } from "@/components/ui/resizable";
-import { AnalysisPanel } from "@/components/shared/analysis-panel";
-import { OutlinePanel } from "@/components/shared/outline-panel";
-import { WritingPanel } from "@/components/shared/writing-panel";
-import { ReaderPanel } from "@/components/shared/reader-panel";
-import { PlagiarismPanel } from "@/components/shared/plagiarism-panel";
-import { XrdPanel } from "@/components/shared/xrd-panel";
 import { EditorImageGallery } from "@/components/shared/editor-image-gallery";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { ReferenceBrowser } from "@/components/shared/reference-browser";
-import { WorkbenchMetaDialog } from "@/components/shared/workbench-meta-dialog";
-import { WorkbenchConsistencyDialog } from "@/components/shared/workbench-consistency-dialog";
 import { WorkbenchTabSwitcher } from "@/components/shared/workbench-tab-switcher";
 import { useAiParagraph } from "@/hooks/use-ai-paragraph";
 import { WorkbenchEditorArea } from "@/components/shared/workbench-editor-area";
+
+// === Lazy-loaded panels: 首屏不加载，仅在对应 tab 激活时按需加载 ===
+
+function TabPanelLoading() {
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-3 p-8 animate-pulse">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/40" />
+      <div className="space-y-2 w-full">
+        <div className="h-3 bg-muted rounded w-3/4" />
+        <div className="h-3 bg-muted rounded w-1/2" />
+        <div className="h-3 bg-muted rounded w-2/3" />
+      </div>
+    </div>
+  );
+}
+
+function PreviewLoading() {
+  return (
+    <div className="flex items-center justify-center h-full">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
+
+const SCIPreview = dynamic(() => import("@/components/sci-preview"), {
+  ssr: false, loading: () => <PreviewLoading />,
+});
+
+const WorkbenchMetaDialog = dynamic(
+  () => import("@/components/shared/workbench-meta-dialog").then(m => m.WorkbenchMetaDialog),
+  { ssr: false, loading: () => null }
+);
+
+const WorkbenchConsistencyDialog = dynamic(
+  () => import("@/components/shared/workbench-consistency-dialog").then(m => m.WorkbenchConsistencyDialog),
+  { ssr: false, loading: () => null }
+);
+
+const LazyAnalysisPanel = dynamic(
+  () => import("@/components/shared/analysis-panel").then(m => m.AnalysisPanel),
+  { ssr: false, loading: () => <TabPanelLoading /> }
+);
+
+const LazyOutlinePanel = dynamic(
+  () => import("@/components/shared/outline-panel").then(m => m.OutlinePanel),
+  { ssr: false, loading: () => <TabPanelLoading /> }
+);
+
+const LazyWritingPanel = dynamic(
+  () => import("@/components/shared/writing-panel").then(m => m.WritingPanel),
+  { ssr: false, loading: () => <TabPanelLoading /> }
+);
+
+const LazyReaderPanel = dynamic(
+  () => import("@/components/shared/reader-panel").then(m => m.ReaderPanel),
+  { ssr: false, loading: () => <TabPanelLoading /> }
+);
+
+const LazyPlagiarismPanel = dynamic(
+  () => import("@/components/shared/plagiarism-panel").then(m => m.PlagiarismPanel),
+  { ssr: false, loading: () => <TabPanelLoading /> }
+);
+
+const LazyXrdPanel = dynamic(
+  () => import("@/components/shared/xrd-panel").then(m => m.XrdPanel),
+  { ssr: false, loading: () => <TabPanelLoading /> }
+);
 
 const PDFViewer = dynamic(() => import("@/components/pdf-viewer"), {
   ssr: false,
@@ -264,13 +323,17 @@ function WorkbenchContent() {
       }
     }
 
+    // 保存合并前的现有内容，供最终编号时参考计数器起点
+    const existingBeforeMerge = isBodySection ? existingText : "";
+
     // 最终再跑一次 ensureSubsectionNumbering：修正因合并导致的编号不一致
     // （例如旧 ### 标题未被 normalize 的情况）
     if (isBodySection) {
-      processedContent = ensureSubsectionNumbering(processedContent, sectionId, "");
+      processedContent = ensureSubsectionNumbering(processedContent, sectionId, existingBeforeMerge);
     }
 
-    // 清理草稿痕迹 + 去重后再写入
+    // 清理草稿痕迹 + 去重 + 越界引用剥离后再写入
+    processedContent = stripOutOfRangeCitations(processedContent, currentProject.references.length);
     processedContent = cleanDraftArtifacts(processedContent);
     processedContent = deduplicateParagraphs(processedContent);
 
@@ -318,6 +381,35 @@ function WorkbenchContent() {
   const handleReorderReferences = useReferenceReorder({
     projectRef, editingContentRef, activeSectionRef, setProject, setEditingContent,
   });
+
+  // 清理未被正文引用的参考文献
+  const handleCleanReferences = useCallback(() => {
+    const p = projectRef.current;
+    if (!p || !p.references || p.references.length === 0) {
+      toast.info("暂无参考文献可清理");
+      return;
+    }
+    const { references: cleaned, removed, indexMap } = pruneUncitedReferences(p);
+    if (removed === 0) {
+      toast.info("所有参考文献均在正文中被引用，无需清理");
+      return;
+    }
+    // 重映射所有章节正文中的引用编号
+    const remappedAbstract = remapPrunedCitations(p.abstract || "", indexMap);
+    const remappedSections: Record<string, string> = {};
+    for (const [key, content] of Object.entries(p.sections)) {
+      remappedSections[key] = remapPrunedCitations(content || "", indexMap);
+    }
+    const updated = {
+      ...p,
+      abstract: remappedAbstract,
+      sections: remappedSections as typeof p.sections,
+      references: cleaned,
+    };
+    setProject(updated);
+    projectStore.save(updated);
+    toast.success(`已移除 ${removed} 条未引用文献，剩余 ${cleaned.length} 条（正文引用号已同步更新）`);
+  }, [projectRef, setProject]);
 
   const aiParagraph = useAiParagraph({ project, activeSection, setProject });
   const handleExpandParagraph = (content: string) => aiParagraph.run("expand", content);
@@ -470,87 +562,98 @@ function WorkbenchContent() {
               </div>
             )}
             {/* 所有面板保持挂载，切换不销毁状态 */}
-            {projectId && (
-              <div className={cn("h-full min-h-0 flex flex-col overflow-hidden", activeTab !== "analysis" && "hidden")}>
-                <AnalysisPanel
-                  projectId={projectId}
-                  project={project}
-                  onSave={(updates) => setProject(prev => ({ ...prev, ...updates }))}
-                  onInsertToPaper={(imageUrl, caption) => {
-                    const mdImage = `\n\n![${caption}](${imageUrl})\n\n`;
-                    handleApplyAiContent(editingContent + mdImage, activeSection);
-                  }}
-                  onInsertClaim={(claimText, claimId) => {
-                    const md = `\n\n${claimText}\n\n`;
-                    handleApplyAiContent(editingContent + md, activeSection);
-                  }}
-                />
+            {activeTab === "analysis" && projectId && (
+              <div className="h-full min-h-0 flex flex-col overflow-hidden">
+                <ErrorBoundary>
+                  <LazyAnalysisPanel
+                    projectId={projectId}
+                    project={project}
+                    onSave={(updates) => setProject(prev => ({ ...prev, ...updates }))}
+                    onInsertToPaper={(imageUrl, caption) => {
+                      const mdImage = `\n\n![${caption}](${imageUrl})\n\n`;
+                      handleApplyAiContent(editingContent + mdImage, activeSection);
+                    }}
+                    onInsertClaim={(claimText, claimId) => {
+                      const md = `\n\n${claimText}\n\n`;
+                      handleApplyAiContent(editingContent + md, activeSection);
+                    }}
+                  />
+                </ErrorBoundary>
               </div>
             )}
-            {projectId && (
-              <div className={cn("h-full min-h-0 flex flex-col overflow-hidden", activeTab !== "outline" && "hidden")}>
-                <OutlinePanel
-                  projectId={projectId}
-                  project={project}
-                  expandedSections={expandedOutlineSections}
-                  onExpandTask={(taskId: string) => {
-                    setPendingExpandTask(taskId);
-                    setActiveTab("writing");
-                  }}
-                  onSave={(updates) => {
-                    setProject(prev => {
-                      const next = { ...prev, ...updates };
-                      projectStore.save(next).catch(() => {});
-                      return next;
-                    });
-                  }}
-                  onTabChange={setActiveTab}
-                />
+            {activeTab === "outline" && projectId && (
+              <div className="h-full min-h-0 flex flex-col overflow-hidden">
+                <ErrorBoundary>
+                  <LazyOutlinePanel
+                    projectId={projectId}
+                    project={project}
+                    expandedSections={expandedOutlineSections}
+                    onExpandTask={(taskId: string) => {
+                      setPendingExpandTask(taskId);
+                      setActiveTab("writing");
+                    }}
+                    onSave={(updates) => {
+                      setProject(prev => {
+                        const next = { ...prev, ...updates };
+                        projectStore.save(next).catch(() => {});
+                        return next;
+                      });
+                    }}
+                    onTabChange={setActiveTab}
+                  />
+                </ErrorBoundary>
               </div>
             )}
-            {/* 保持挂载：切换侧栏标签时扩写流与状态不丢失（仅隐藏，不卸载） */}
-            {projectId && (
-              <div
-                className={cn(
-                  "h-full min-h-0 flex flex-col overflow-hidden",
-                  activeTab !== "writing" && "hidden",
-                )}
-              >
-                <WritingPanel
-                  projectId={projectId}
-                  project={project}
-                  editorActiveSection={activeSection}
-                  preselectedTaskId={pendingExpandTask}
-                  expandedSections={expandedOutlineSections}
-                  onTaskExpanded={handleTaskExpanded}
-                  onClearPreselected={handleClearPreselected}
-                  onGenerate={handleApplyAiContent}
-                  onGeneratingChange={handleGeneratingChange}
-                  onPreviewUpdate={handlePreviewUpdate}
-                  onUpdateProject={handleUpdateProject}
-                />
+            {/* Writing tab: 切换时通过 sessionStorage 自动恢复写作状态 */}
+            {activeTab === "writing" && projectId && (
+              <div className="h-full min-h-0 flex flex-col overflow-hidden">
+                <ErrorBoundary>
+                  <LazyWritingPanel
+                    projectId={projectId}
+                    project={project}
+                    editorActiveSection={activeSection}
+                    preselectedTaskId={pendingExpandTask}
+                    expandedSections={expandedOutlineSections}
+                    onTaskExpanded={handleTaskExpanded}
+                    onClearPreselected={handleClearPreselected}
+                    onGenerate={handleApplyAiContent}
+                    onGeneratingChange={handleGeneratingChange}
+                    onPreviewUpdate={handlePreviewUpdate}
+                    onUpdateProject={handleUpdateProject}
+                  />
+                </ErrorBoundary>
               </div>
             )}
-            <div className={cn("h-full min-h-0 flex flex-col overflow-hidden", activeTab !== "reader" && "hidden")}>
-              <ReaderPanel onOpenFile={handleOpenFile} />
-            </div>
-            <div className={cn("h-full min-h-0 flex flex-col overflow-hidden", activeTab !== "plagiarism" && "hidden")}>
-              <PlagiarismPanel
-                projectId={projectId ?? undefined}
-                projectTitle={project.title}
-              />
-            </div>
-            {projectId && (
-              <div className={cn("h-full min-h-0 flex flex-col overflow-hidden", activeTab !== "xrd" && "hidden")}>
-                <XrdPanel
-                  projectId={projectId}
-                  activeSection={activeSection}
-                  onInsertToPaper={(imageBase64, caption) => {
-                    const mdImage = `\n\n![${caption}](${imageBase64})\n\n`;
-                    handleApplyAiContent(editingContent + mdImage, activeSection);
-                    toast.success(`图表「${caption}」已插入到 ${activeSection} 章节`);
-                  }}
-                />
+            {activeTab === "reader" && (
+              <div className="h-full min-h-0 flex flex-col overflow-hidden">
+                <ErrorBoundary>
+                  <LazyReaderPanel onOpenFile={handleOpenFile} />
+                </ErrorBoundary>
+              </div>
+            )}
+            {activeTab === "plagiarism" && (
+              <div className="h-full min-h-0 flex flex-col overflow-hidden">
+                <ErrorBoundary>
+                  <LazyPlagiarismPanel
+                    projectId={projectId ?? undefined}
+                    projectTitle={project.title}
+                  />
+                </ErrorBoundary>
+              </div>
+            )}
+            {activeTab === "xrd" && projectId && (
+              <div className="h-full min-h-0 flex flex-col overflow-hidden">
+                <ErrorBoundary>
+                  <LazyXrdPanel
+                    projectId={projectId}
+                    activeSection={activeSection}
+                    onInsertToPaper={(imageBase64, caption) => {
+                      const mdImage = `\n\n![${caption}](${imageBase64})\n\n`;
+                      handleApplyAiContent(editingContent + mdImage, activeSection);
+                      toast.success(`图表「${caption}」已插入到 ${activeSection} 章节`);
+                    }}
+                  />
+                </ErrorBoundary>
               </div>
             )}
           </div>
@@ -583,6 +686,7 @@ function WorkbenchContent() {
             onOpenMetaDialog={() => setIsMetaDialogOpen(true)}
             onConsistencyCheck={() => { setIsConsistencyOpen(true); }}
             onReorderReferences={handleReorderReferences}
+            onCleanReferences={handleCleanReferences}
             onExportDoc={handleExportDoc}
             onExportMarkdown={handleExportMarkdown}
             onExportPDF={handleExportPDF}

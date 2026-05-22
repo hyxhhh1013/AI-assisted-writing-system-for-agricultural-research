@@ -5,7 +5,7 @@ import type { ConsistencyIssue, ConsistencyReport } from "@/types/consistency";
 
 export async function POST(req: NextRequest) {
   try {
-    const { title, sections, outline } = await req.json();
+    const { title, sections, outline, dataClaims } = await req.json();
 
     if (!sections || !Array.isArray(sections) || sections.length < 2) {
       return new Response(
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: keyError }), { status: 500 });
     }
 
-    const prompt = buildConsistencyPrompt({ title, sections, outline });
+    const prompt = buildConsistencyPrompt({ title, sections, outline, dataClaims });
 
     const response = await callAI({
       provider: "deepseek",

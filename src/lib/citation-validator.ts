@@ -1,7 +1,5 @@
 /**
- * 引用真实性校验：检查 draft 中的 [n] 引用是否在对应的 source 中有文本依据。
- * 使用关键词重叠作为代理指标（不调用 LLM，零开销）。
- * 搜索全部 contextText 而非依赖编号映射。
+ * 引用真实性校验 + 数据证据核实（确定性检查，不调 AI）
  */
 
 interface CitationCheckResult {
@@ -54,7 +52,6 @@ export function validateCitations(draftText: string, contextText: string): Citat
       continue;
     }
 
-    // 在全部 contextText 中搜索关键词重叠率最高的段落
     const paragraphs = contextText.split(/\n\n+/);
     let bestOverlap = 0;
     let bestSource = `[${num}]`;
@@ -69,7 +66,6 @@ export function validateCitations(draftText: string, contextText: string): Citat
       const overlap = overlapCount / draftTerms.size;
       if (overlap > bestOverlap) {
         bestOverlap = overlap;
-        // 提取来源名（中括号前的文字）
         const nameMatch = para.match(/^(.+?)(?:\n|$)/);
         if (nameMatch) bestSource = nameMatch[1].trim();
       }
@@ -82,6 +78,55 @@ export function validateCitations(draftText: string, contextText: string): Citat
       overlap: bestOverlap,
       passed: bestOverlap >= OVERLAP_THRESHOLD,
     });
+  }
+
+  return results;
+}
+
+// === 数据证据核实 ===
+
+export interface DataClaimCheckResult {
+  claimId: string;
+  claimText: string;
+  found: boolean;
+  citedCorrectly: boolean;
+  issue?: string;
+}
+
+export function validateDataClaims(
+  text: string,
+  evidenceClaims: { id: string; text: string; values: Record<string, number | string>; tolerance: number }[],
+): DataClaimCheckResult[] {
+  const results: DataClaimCheckResult[] = [];
+
+  for (const claim of evidenceClaims) {
+    const escapedId = claim.id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const idPattern = new RegExp("\\[" + escapedId + "\\]", "i");
+    const found = idPattern.test(text);
+
+    let citedCorrectly = found;
+    let issue: string | undefined;
+
+    if (found) {
+      for (const [key, expected] of Object.entries(claim.values)) {
+        if (typeof expected !== "number") continue;
+        const idx = text.search(idPattern);
+        if (idx >= 0) {
+          const nearby = text.slice(Math.max(0, idx - 150), idx + 50);
+          const expectedStr = String(Math.round(expected * 100) / 100);
+          const numPattern = new RegExp(expectedStr.replace(/\./g, "\\."));
+          if (!numPattern.test(nearby)) {
+            citedCorrectly = false;
+            issue = `${key} expected ${expectedStr}, not found near citation`;
+            break;
+          }
+        }
+      }
+    } else {
+      issue = `Data claim [${claim.id}] not cited in text`;
+    }
+
+    results.push({ claimId: claim.id, claimText: claim.text, found, citedCorrectly, issue });
   }
 
   return results;

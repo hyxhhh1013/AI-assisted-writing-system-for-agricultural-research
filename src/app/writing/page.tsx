@@ -11,14 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Loader2, Send, Copy, Eraser, FileText, Database, ScrollText } from "lucide-react";
 import { toast } from "sonner";
 import { projectStore, ProjectData } from "@/lib/store";
+import { buildSectionOptions } from "@/lib/imrad";
 
-const SECTIONS = [
-  { value: "abstract", label: "摘要 (Abstract)" },
-  { value: "introduction", label: "引言 (Introduction)" },
-  { value: "methods", label: "材料与方法 (Methods)" },
-  { value: "results", label: "结果与讨论 (Results & Discussion)" },
-  { value: "conclusion", label: "结论 (Conclusion)" },
-];
+const SECTIONS = buildSectionOptions();
 
 export default function WritingPage() {
   return (

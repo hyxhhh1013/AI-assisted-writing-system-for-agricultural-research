@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { IMRAD_LABELS_ZH, IMRAD_ORDER } from "@/lib/imrad"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -102,13 +103,7 @@ export function buildExpansionContext(
   return ctx;
 }
 
-const IMRAD_LABELS: Record<string, string> = {
-  abstract: "摘要 (Abstract)",
-  introduction: "引言 (Introduction)",
-  methods: "材料与方法 (Methods)",
-  results: "结果与讨论 (Results & Discussion)",
-  conclusion: "结论 (Conclusion)",
-};
+const IMRAD_LABELS: Record<string, string> = IMRAD_LABELS_ZH;
 
 // ==================== Outline Parser ====================
 
@@ -269,13 +264,7 @@ export function buildOutlineTasks(outlineText: string): OutlineTask[] {
 }
 
 /** 论文章节的标准顺序（用于跨章节图表全局编号） */
-export const SECTION_ORDER: Record<string, number> = {
-  abstract: 0,
-  introduction: 1,
-  methods: 2,
-  results: 3,
-  conclusion: 4,
-};
+export const SECTION_ORDER: Record<string, number> = IMRAD_ORDER;
 
 function countFiguresInText(text: string): number {
   const imgMatches = text.match(/!\[[^\]]*\]\([^)]+\)/g);
@@ -315,4 +304,115 @@ export function countProjectFigures(
 
   // 取两者中较大值：既尊重论文顺序，又确保不和其他已有章节编号重叠
   return Math.max(beforeCount, otherCount);
+}
+
+// ==================== Content Cleanup ====================
+
+/**
+ * 清理 AI 生成的草稿痕迹：
+ * - 系统生成的插图占位提示语
+ * - 未渲染的 LaTeX 标记碎片
+ * - "Lab Member" 等占位署名
+ */
+export function cleanDraftArtifacts(text: string): string {
+  let cleaned = text;
+  // 移除系统生成的插图占位提示（含多行变体）
+  cleaned = cleaned.replace(
+    />\s*📊\s*\*?\*?建议插图\*?\*?[：:][^>\n]*(?:\([^)]*此处为系统[^)]*\))?\s*\n?/g,
+    ""
+  );
+  cleaned = cleaned.replace(
+    />\s*\*[^*]*此处为系统根据上下文自动标记[^*]*\*\s*\n?/g,
+    ""
+  );
+  cleaned = cleaned.replace(
+    />\s*\*[^*]*请提供数据后点击重新生成[^*]*\*\s*\n?/g,
+    ""
+  );
+  // 清理纯占位署名
+  cleaned = cleaned.replace(/\bLab\s*Member\b/gi, "【作者信息待填写】");
+  cleaned = cleaned.replace(/【请填写作者姓名】/g, "【作者信息待填写】");
+  return cleaned;
+}
+
+/**
+ * 清理 Markdown 残余语法和系统标记，确保输出文本干净。
+ * 用于 PDF/DOCX 导出前的最终文本处理。
+ */
+export function cleanMarkdownArtifacts(text: string): string {
+  let t = text;
+  // blockquote 残余（> 开头的行）
+  t = t.replace(/^>\s*/gm, "");
+  // 图表 emoji 残余（📊 📈 📉）
+  t = t.replace(/[📊📈📉]\s*/g, "");
+  // 系统占位符
+  t = t.replace(/\[引用\?\]/g, "");
+  return t;
+}
+
+/**
+ * 检测并移除重复段落。
+ * 将文本按双换行分段，段落长度 > minChars 才参与去重。
+ * 保留第一次出现，后续相同/高度相似的段落被移除。
+ */
+export function deduplicateParagraphs(text: string, minChars = 60): string {
+  const paragraphs = text.split(/\n\n+/);
+  const seen: { text: string; normalized: string }[] = [];
+  const result: string[] = [];
+
+  for (const para of paragraphs) {
+    const trimmed = para.trim();
+    if (trimmed.length < minChars) {
+      result.push(para);
+      continue;
+    }
+    // 规范化用于比较：去空白、去标点、小写
+    const normalized = trimmed
+      .replace(/\s+/g, " ")
+      .replace(/[，,。\.！!？?：:；;、""''（）()【】\[\]{}#\*\-–—]/g, "")
+      .toLowerCase();
+
+    // 检查是否与已有段落相似（完全相同或高度重叠 > 80%）
+    let isDuplicate = false;
+    for (const s of seen) {
+      if (normalized === s.normalized) { isDuplicate = true; break; }
+      // 长段落做包含检测
+      if (normalized.length > 120 && s.normalized.length > 120) {
+        const overlap = longestCommonSubstring(normalized, s.normalized);
+        if (overlap.length > normalized.length * 0.8 || overlap.length > s.normalized.length * 0.8) {
+          isDuplicate = true;
+          break;
+        }
+      }
+    }
+    if (isDuplicate) continue;
+    seen.push({ text: trimmed, normalized });
+    result.push(para);
+  }
+  return result.join("\n\n");
+}
+
+function longestCommonSubstring(a: string, b: string): string {
+  const shorter = a.length < b.length ? a : b;
+  const longer = a.length < b.length ? b : a;
+  let maxLen = 0;
+  let endIdx = 0;
+  // 动态规划，但只保留两行节省内存
+  let prev = new Uint16Array(shorter.length + 1);
+  let curr = new Uint16Array(shorter.length + 1);
+  for (let i = 0; i < longer.length; i++) {
+    for (let j = 0; j < shorter.length; j++) {
+      if (longer[i] === shorter[j]) {
+        curr[j + 1] = prev[j] + 1;
+        if (curr[j + 1] > maxLen) {
+          maxLen = curr[j + 1];
+          endIdx = i + 1;
+        }
+      } else {
+        curr[j + 1] = 0;
+      }
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return longer.slice(endIdx - maxLen, endIdx);
 }

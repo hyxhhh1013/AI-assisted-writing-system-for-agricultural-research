@@ -322,6 +322,10 @@ def make_table(config_path: str, output_dir: str):
         "latex": latex,
         "html": html,
     }
+    out_path = os.path.join(output_dir, "result.json")
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(result, f, ensure_ascii=False)
+    sys.stdout.reconfigure(encoding='utf-8')
     print(json.dumps(result, ensure_ascii=False))
 
 

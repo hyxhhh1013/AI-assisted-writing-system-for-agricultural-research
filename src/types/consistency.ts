@@ -1,5 +1,5 @@
 export interface ConsistencyIssue {
-  type: "terminology" | "data" | "logic" | "conclusion" | "citation";
+  type: "terminology" | "data" | "logic" | "conclusion" | "citation" | "overclaim";
   severity: "high" | "medium" | "low";
   sections: string[];
   description: string;

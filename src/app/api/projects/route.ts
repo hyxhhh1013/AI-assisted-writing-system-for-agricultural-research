@@ -45,6 +45,9 @@ export async function GET(req: NextRequest) {
           .sort((a, b) => a.order - b.order)
           .map(r => r.content),
         analysisResults: project.analysisResults.map(r => r.content),
+        mode: project.mode || "review",
+        dataClaims: project.dataClaims || undefined,
+        dataSources: project.dataSources || undefined,
       };
 
       return NextResponse.json(formattedProject);
@@ -86,19 +89,23 @@ export async function POST(req: NextRequest) {
       researchDirection,
       outline,
       template,
+      mode,
       sections,
       references,
       analysisResults,
+      dataClaims,
+      dataSources,
     } = data;
 
     if (!title) {
       return errorResponse("标题不能为空", 400);
     }
 
-    // 更新时校验所有权
-    if (id) {
+    // 校验所有权（仅更新时）
+    let projectId = id || undefined;
+    if (projectId) {
       const existing = await prisma.project.findFirst({
-        where: { id, userId },
+        where: { id: projectId, userId },
         select: { id: true },
       });
       if (!existing) {
@@ -106,72 +113,57 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // upsert 逻辑
-    const project = await prisma.project.upsert({
-      where: { id: id || 'new-id' },
-      update: {
-        title,
-        authors,
-        affiliations,
-        abstract,
-        keywords,
-        classification,
-        researchDirection,
-        outline,
-        template,
-        lastUpdated: new Date(),
-        sections: {
-          deleteMany: {},
-          create: Object.entries(sections || {}).map(([key, content]) => ({
-            key,
-            content: content as string,
-          })),
-        },
-        references: {
-          deleteMany: {},
-          create: (references || []).map((content: string, index: number) => ({
-            content,
-            order: index,
-          })),
-        },
-        analysisResults: {
-          deleteMany: {},
-          create: (analysisResults || []).map((content: string) => ({
-            content,
-          })),
-        },
-      },
-      create: {
-        id: id || undefined,
-        userId,
-        title,
-        authors,
-        affiliations,
-        abstract,
-        keywords,
-        classification,
-        researchDirection,
-        outline,
-        template,
-        sections: {
-          create: Object.entries(sections || {}).map(([key, content]) => ({
-            key,
-            content: content as string,
-          })),
-        },
-        references: {
-          create: (references || []).map((content: string, index: number) => ({
-            content,
-            order: index,
-          })),
-        },
-        analysisResults: {
-          create: (analysisResults || []).map((content: string) => ({
-            content,
-          })),
-        },
-      },
-    });
+    // 创建或更新主记录
+    const project = projectId
+      ? await prisma.project.update({
+          where: { id: projectId },
+          data: {
+            title, authors, affiliations, abstract, keywords,
+            classification, researchDirection, outline, template, mode,
+            dataClaims, dataSources,
+            lastUpdated: new Date(),
+          },
+        })
+      : await prisma.project.create({
+          data: {
+            userId, title, authors, affiliations, abstract, keywords,
+            classification, researchDirection, outline, template, mode,
+            dataClaims, dataSources,
+          },
+        });
+
+    projectId = project.id;
+
+    // 增量保存 sections（逐条 upsert，不 deleteMany）
+    if (sections) {
+      for (const [key, content] of Object.entries(sections)) {
+        await prisma.section.upsert({
+          where: { projectId_key: { projectId, key } },
+          update: { content: content as string },
+          create: { projectId, key, content: content as string },
+        });
+      }
+    }
+
+    // 增量保存 references（删除旧+插入新，保持顺序）
+    if (references !== undefined) {
+      await prisma.reference.deleteMany({ where: { projectId } });
+      for (let i = 0; i < references.length; i++) {
+        await prisma.reference.create({
+          data: { projectId, content: references[i], order: i },
+        });
+      }
+    }
+
+    // 增量保存 analysisResults
+    if (analysisResults !== undefined) {
+      await prisma.analysisResult.deleteMany({ where: { projectId } });
+      for (const content of analysisResults) {
+        await prisma.analysisResult.create({
+          data: { projectId, content },
+        });
+      }
+    }
 
     return NextResponse.json({ id: project.id, message: "保存成功" });
   } catch (error: unknown) {

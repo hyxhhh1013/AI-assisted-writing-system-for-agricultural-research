@@ -1,13 +1,86 @@
 import { chromium } from "playwright";
 import type { ProjectData } from "@/lib/store";
 import { formatClassification, formatKeywords } from "@/lib/paper-metadata";
+import { parseMarkdownBlocks, MarkdownBlock } from "@/lib/markdown-parser";
+import { normalizeMathDelimiters } from "@/lib/math-delimiter";
+import katex from "katex";
 import fs from "fs";
 import path from "path";
 
+import { BodySectionKey } from "@/lib/imrad";
+import { pruneUncitedReferences, remapPrunedCitations, stripOutOfRangeCitations } from "@/lib/reference-reorder";
+import { cleanMarkdownArtifacts } from "@/lib/utils";
+
 type PdfTemplate = "sci" | "ieee" | "gbt7713" | "nature" | "cas";
-type SectionKey = "introduction" | "methods" | "results" | "conclusion";
 
 const CHINESE_TEMPLATES = new Set<PdfTemplate>(["gbt7713", "cas"]);
+
+// 最小 KaTeX/MathML 样式（不依赖外部字体，Playwright PDF 安全）
+const katexCss = `
+  .katex { font-size: 1em !important; }
+  .katex-display { display: block; margin: 0.5em 0; text-align: center; }
+  .katex-display > .katex { display: inline-block; white-space: nowrap; }
+  .katex .mathnormal { font-style: italic; }
+  .katex .mathit { font-style: italic; }
+  .katex .mathrm { font-style: normal; }
+  .katex .mathbf { font-weight: bold; }
+  .katex .amsrm { font-style: normal; }
+  .katex .mathbb { font-style: normal; }
+  .katex .mathcal { font-style: normal; }
+  .katex .mathfrak { font-style: normal; }
+  .katex .mathtt { font-style: normal; font-family: monospace; }
+  .katex .mathsf { font-style: normal; }
+  .katex .mainit { font-style: italic; }
+  .katex .text { font-style: normal; }
+  .katex .boldsymbol { font-weight: bold; font-style: italic; }
+  .katex .overline { border-top: 1px solid; }
+  .katex .underline { border-bottom: 1px solid; }
+  .katex .stretchy { width: 100%; }
+  .katex .rule { border: 1px solid; position: relative; }
+  .katex .sqrt { border-top: 1px solid; }
+  .katex .widehat { border-bottom: 1px solid; }
+  .katex .widetilde { border-bottom: 1px solid; }
+  .katex .llap, .katex .rlap, .katex .clap { position: absolute; }
+  .katex .accent-body { position: relative; }
+  .katex .cjk_fallback { font-style: normal; }
+  .katex .base { display: inline-block; }
+  .katex .strut { display: inline-block; }
+  .katex .op-symbol { position: relative; }
+  .katex .mord { display: inline; }
+  .katex .mbin { display: inline; }
+  .katex .mrel { display: inline; }
+  .katex .mopen { display: inline; }
+  .katex .mclose { display: inline; }
+  .katex .mpunct { display: inline; }
+  .katex .minner { display: inline; }
+  .katex .mfrac { display: inline-block; text-align: center; vertical-align: middle; }
+  .katex .mfrac .numerator { display: block; border-bottom: 1px solid; padding-bottom: 1px; }
+  .katex .mfrac .denominator { display: block; padding-top: 1px; }
+  .katex .msupsub { display: inline-block; text-align: left; }
+  .katex .msup { display: inline-block; text-align: left; }
+  .katex .msub { display: inline-block; text-align: left; }
+  .katex .vlist-t { display: inline-table; table-layout: fixed; border-collapse: collapse; }
+  .katex .vlist-r { display: table-row; }
+  .katex .vlist { display: table-cell; vertical-align: bottom; position: relative; }
+  .katex .vlist > span { display: block; text-align: center; }
+  .katex .overline .overline-line { display: inline-block; border-top: 1px solid; }
+  .katex .underline .underline-line { display: inline-block; border-bottom: 1px solid; }
+  .katex .sqrt .sqrt-sign { position: relative; }
+  .katex .delimsizing { display: inline-block; }
+  .katex .nulldelimiter { display: inline-block; width: 0.12em; }
+  .katex .delimcenter { position: relative; }
+  .katex .op-limits { display: inline-table; }
+  .katex .accent { display: inline-block; }
+  .katex .accent .accent-body { position: relative; }
+  .katex .accent .accent-body:not(.accent-full) { width: 0; }
+  .katex .overlay { display: block; }
+  .katex .mtable .vertical-separator { display: inline-block; margin: 0 -0.025em; border-right: 0.05em solid; }
+  .katex .mtable .col-align-l > .vlist { text-align: left; }
+  .katex .mtable .col-align-c > .vlist { text-align: center; }
+  .katex .mtable .col-align-r > .vlist { text-align: right; }
+  .katex .html { display: inline-block; }
+  mark > .katex { color: inherit; }
+`;
 
 const escapeHtml = (value: string): string =>
   value
@@ -27,132 +100,173 @@ const normalizeTemplate = (template: string): PdfTemplate => {
 const stripLeadingEnumeration = (line: string): string =>
   line.replace(/^([\d.]+|[一二三四五六七八九十]+[、.\s])\s*/, "");
 
-const inlineMarkdown = (text: string): string =>
-  escapeHtml(text)
+/**
+ * 将 $$...$$（显示）和 $...$（行内）公式渲染为 KaTeX HTML。
+ * Tokenize 策略：先提取所有公式 → 替换为占位符 → HTML-escape 文本 → 替换回 KaTeX。
+ * 避免 KaTeX HTML 被 escapeHtml 二次转义。
+ */
+const renderMathInline = (text: string): string => {
+  const mathTokens: string[] = [];
+  const TK = (i: number) => `%%M${i}%%`;
+
+  let t = text;
+
+  // Step 1: $$...$$ 显示公式
+  t = t.replace(/(\$\$[\s\S]*?\$\$)/g, (_m, formula: string) => {
+    const inner = formula.slice(2, -2).trim();
+    if (!inner) return _m;
+    try {
+      mathTokens.push(katex.renderToString(inner, { output: "mathml", displayMode: true, throwOnError: false, strict: false }));
+    } catch {
+      mathTokens.push(`<code>${escapeHtml(inner)}</code>`);
+    }
+    return TK(mathTokens.length - 1);
+  });
+
+  // Step 2: $...$ 行内公式（跳过纯数字）
+  t = t.replace(/\$([^$]+)\$/g, (_m: string, formula: string) => {
+    const inner = formula.trim();
+    if (!inner || /^\d+$/.test(inner)) return _m;
+    try {
+      mathTokens.push(katex.renderToString(inner, { output: "mathml", displayMode: false, throwOnError: false, strict: false }));
+    } catch {
+      mathTokens.push(`<code>${escapeHtml(inner)}</code>`);
+    }
+    return TK(mathTokens.length - 1);
+  });
+
+  // Step 3: HTML-escape 非公式文本
+  t = escapeHtml(t);
+
+  // Step 4: 替换占位符回 KaTeX HTML
+  t = t.replace(/%%M(\d+)%%/g, (_m, idx: string) => mathTokens[parseInt(idx, 10)] || _m);
+
+  // Step 5: 基础 Markdown 格式化
+  return t
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/_([^_]+)_/g, "<em>$1</em>");
+};
 
-const paragraphHtml = (lines: string[]): string =>
-  `<p>${inlineMarkdown(lines.join("<br />"))}</p>`;
+const inlineMarkdown = (text: string): string => renderMathInline(text);
+
+const paragraphHtml = (lines: string[]): string => {
+  // 使用占位符避免 <br /> 被 renderMathInline 内的 escapeHtml 转义
+  const joined = inlineMarkdown(lines.join("§§BR§§"));
+  return `<p>${joined.replace(/§§BR§§/g, "<br />")}</p>`;
+};
+
+const renderTableBlock = (block: MarkdownBlock): string => {
+  const cells = block.lines.map(l => l.split("|").map(c => c.trim()));
+  const hasHeader = cells.length >= 2 && /^[\s|:\-]+$/.test(cells[1].join("|"));
+  const headerRow = hasHeader ? 0 : -1;
+  const dataStart = hasHeader ? 2 : 0;
+  let html = '<table style="border-collapse:collapse;width:100%;margin:10px 0;font-size:9pt;">';
+  if (headerRow >= 0) {
+    html += '<thead><tr>';
+    for (const cell of cells[headerRow]) {
+      html += `<th style="border:1px solid #333;padding:4px 8px;text-align:left;background:#f0f0f0;font-weight:600;">${inlineMarkdown(cell)}</th>`;
+    }
+    html += '</tr></thead>';
+  }
+  html += '<tbody>';
+  for (let i = dataStart; i < cells.length; i++) {
+    html += '<tr>';
+    for (const cell of cells[i]) {
+      html += `<td style="border:1px solid #ccc;padding:4px 8px;text-align:left;">${inlineMarkdown(cell)}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  return html;
+};
+
+const renderImageBlock = (block: MarkdownBlock): string => {
+  const caption = inlineMarkdown(block.caption || "");
+  const url = block.url || "";
+
+  // File-based chart image
+  if (url.startsWith("/charts/")) {
+    const filePath = path.join(process.cwd(), "public", url);
+    try {
+      const buf = fs.readFileSync(filePath);
+      const imgSrc = `data:image/png;base64,${buf.toString("base64")}`;
+      return `<figure style="text-align:center;margin:16px 0;"><img src="${imgSrc}" alt="${caption}" style="max-width:90%;height:auto;border:1px solid #eee;border-radius:4px;" />${caption ? `<figcaption style="margin-top:6px;font-size:9pt;color:#555;">${caption}</figcaption>` : ""}</figure>`;
+    } catch {
+      return `<p style="color:#999;font-style:italic;">[图片: ${caption}]</p>`;
+    }
+  }
+
+  // Base64 inline image
+  const imgB64Match = url.match(/^data:image\/([^;]+);base64,(.+)$/);
+  if (imgB64Match) {
+    return `<figure style="text-align:center;margin:16px 0;"><img src="${url}" alt="${caption}" style="max-width:90%;height:auto;border:1px solid #eee;border-radius:4px;" />${caption ? `<figcaption style="margin-top:6px;font-size:9pt;color:#555;">${caption}</figcaption>` : ""}</figure>`;
+  }
+
+  return `<p style="color:#999;font-style:italic;">[图片: ${caption}]</p>`;
+};
 
 const renderMarkdown = (content: string, sectionNumber?: number, compact = false): string => {
-  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  // 剥离系统内部占位符（越界引用标记），不输出到 PDF
+  const cleaned = content.replace(/\[引用\?\]/g, "");
+  const normalized = normalizeMathDelimiters(cleaned);
+  const blocks = parseMarkdownBlocks(normalized);
   const html: string[] = [];
-  let paragraph: string[] = [];
-  let listItems: string[] = [];
-  let ordered = false;
   let h2Counter = 0;
   let h3Counter = 0;
 
-  const flushParagraph = () => {
-    if (paragraph.length === 0) return;
-    html.push(compact ? `<span>${inlineMarkdown(paragraph.join(" "))}</span>` : paragraphHtml(paragraph));
-    paragraph = [];
-  };
+  for (const block of blocks) {
+    switch (block.type) {
+      case "blank":
+        break;
 
-  const flushList = () => {
-    if (listItems.length === 0) return;
-    html.push(`<${ordered ? "ol" : "ul"}>${listItems.join("")}</${ordered ? "ol" : "ul"}>`);
-    listItems = [];
-  };
+      case "paragraph":
+        html.push(compact
+          ? `<span>${inlineMarkdown(block.lines.join(" "))}</span>`
+          : paragraphHtml(block.lines));
+        break;
 
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line) {
-      flushParagraph();
-      flushList();
-      continue;
-    }
-
-    const heading = line.match(/^(#{1,6})\s+(.+)$/);
-    if (heading) {
-      flushParagraph();
-      flushList();
-
-      const level = heading[1].length;
-      let title = stripLeadingEnumeration(heading[2].trim());
-      if (sectionNumber && (level === 2 || level === 3)) {
-        h2Counter += 1;
-        h3Counter = 0;
-        title = `${sectionNumber}.${h2Counter} ${title}`;
-        html.push(`<h3>${inlineMarkdown(title)}</h3>`);
-      } else if (sectionNumber && level === 4) {
-        h3Counter += 1;
-        title = `${sectionNumber}.${h2Counter}.${h3Counter} ${title}`;
-        html.push(`<h4>${inlineMarkdown(title)}</h4>`);
-      } else if (!compact) {
-        html.push(`<p><strong>${inlineMarkdown(title)}</strong></p>`);
-      } else {
-        html.push(`<span>${inlineMarkdown(title)}</span>`);
+      case "heading": {
+        const level = block.level ?? 2;
+        let title = stripLeadingEnumeration(block.title ?? "");
+        if (sectionNumber && (level === 2 || level === 3)) {
+          h2Counter += 1;
+          h3Counter = 0;
+          title = `${sectionNumber}.${h2Counter} ${title}`;
+          html.push(`<h3>${inlineMarkdown(title)}</h3>`);
+        } else if (sectionNumber && level === 4) {
+          h3Counter += 1;
+          title = `${sectionNumber}.${h2Counter}.${h3Counter} ${title}`;
+          html.push(`<h4>${inlineMarkdown(title)}</h4>`);
+        } else if (!compact) {
+          html.push(`<p><strong>${inlineMarkdown(title)}</strong></p>`);
+        } else {
+          html.push(`<span>${inlineMarkdown(title)}</span>`);
+        }
+        break;
       }
-      continue;
-    }
 
-    // 图片标记 ![caption](data:image/...;base64,...)
-    const imgB64Match = line.match(/^!\[([^\]]*)\]\(data:image\/([^;]+);base64,([^)]+)\)$/);
-    if (imgB64Match) {
-      flushParagraph();
-      flushList();
-      const caption = inlineMarkdown(imgB64Match[1] || "");
-      html.push(`<figure style="text-align:center;margin:16px 0;">
-        <img src="data:image/${imgB64Match[2]};base64,${imgB64Match[3]}" alt="${caption}" style="max-width:90%;height:auto;border:1px solid #eee;border-radius:4px;" />
-        ${caption ? `<figcaption style="margin-top:6px;font-size:9pt;color:#555;">${caption}</figcaption>` : ""}
-      </figure>`);
-      continue;
-    }
+      case "bullet-list":
+        html.push(`<ul>${block.lines.map(l => `<li>${inlineMarkdown(l)}</li>`).join("")}</ul>`);
+        break;
 
-    // 图片标记 ![caption](/charts/xxx.png) — 从本地文件读取
-    const imgUrlMatch = line.match(/^!\[([^\]]*)\]\((\/charts\/[^)]+)\)$/);
-    if (imgUrlMatch) {
-      flushParagraph();
-      flushList();
-      const caption = inlineMarkdown(imgUrlMatch[1] || "");
-      const filePath = path.join(process.cwd(), "public", imgUrlMatch[2]);
-      let imgSrc = "";
-      try {
-        const buf = fs.readFileSync(filePath);
-        imgSrc = `data:image/png;base64,${buf.toString("base64")}`;
-      } catch {
-        imgSrc = ""; // 文件不存在，跳过
-      }
-      if (imgSrc) {
-        html.push(`<figure style="text-align:center;margin:16px 0;">
-          <img src="${imgSrc}" alt="${caption}" style="max-width:90%;height:auto;border:1px solid #eee;border-radius:4px;" />
-          ${caption ? `<figcaption style="margin-top:6px;font-size:9pt;color:#555;">${caption}</figcaption>` : ""}
-        </figure>`);
-      } else {
-        html.push(`<p style="color:#999;font-style:italic;">[图片: ${caption}]</p>`);
-      }
-      continue;
-    }
+      case "ordered-list":
+        html.push(`<ol>${block.lines.map(l => `<li>${inlineMarkdown(l)}</li>`).join("")}</ol>`);
+        break;
 
-    const bullet = line.match(/^[-*]\s+(.+)$/);
-    if (bullet) {
-      flushParagraph();
-      if (listItems.length > 0 && ordered) flushList();
-      ordered = false;
-      listItems.push(`<li>${inlineMarkdown(bullet[1])}</li>`);
-      continue;
-    }
+      case "table":
+        html.push(renderTableBlock(block));
+        break;
 
-    const numbered = line.match(/^\d+[.)]\s+(.+)$/);
-    if (numbered) {
-      flushParagraph();
-      if (listItems.length > 0 && !ordered) flushList();
-      ordered = true;
-      listItems.push(`<li>${inlineMarkdown(numbered[1])}</li>`);
-      continue;
+      case "image":
+        html.push(renderImageBlock(block));
+        break;
     }
-
-    paragraph.push(line);
   }
 
-  flushParagraph();
-  flushList();
   return html.join("\n");
 };
 
-const section = (project: ProjectData, key: SectionKey): string => project.sections[key] || "";
+const section = (project: ProjectData, key: BodySectionKey): string => project.sections[key] || "";
 
 const referencesHtml = (references: string[] | undefined, isChinese: boolean): string => {
   const body = references?.length
@@ -204,6 +318,8 @@ const baseCss = (template: string) => `
   p {
     margin: 0 0 10px;
     text-align: justify;
+    text-justify: inter-ideograph;
+    word-break: break-all;
     orphans: 3;
     widows: 3;
   }
@@ -217,6 +333,7 @@ const baseCss = (template: string) => `
   li {
     margin: 0 0 4px;
     text-align: justify;
+    text-justify: inter-ideograph;
   }
 
   h1,
@@ -274,6 +391,8 @@ const standardSciHtml = (project: ProjectData): string => `
       <div>${renderMarkdown(project.abstract || "Abstract content will appear here after generation.")}</div>
     </section>
 
+    <p class="keywords"><strong>Keywords: </strong>${inlineMarkdown(formatKeywords(project, "en") || "Keywords will appear here after generation.")}</p>
+
     ${sciSection(1, "Introduction", section(project, "introduction"))}
     ${sciSection(2, "Materials and Methods", section(project, "methods"))}
     ${sciSection(3, "Results and Discussion", section(project, "results"))}
@@ -302,19 +421,19 @@ const ieeeHtml = (project: ProjectData): string => `
     </section>
 
     <div class="columns">
-      ${ieeeSection("I.", "Introduction", section(project, "introduction"))}
-      ${ieeeSection("II.", "Materials and Methods", section(project, "methods"))}
-      ${ieeeSection("III.", "Results", section(project, "results"))}
-      ${ieeeSection("IV.", "Conclusion", section(project, "conclusion"))}
+      ${ieeeSection("I.", "Introduction", section(project, "introduction"), 1)}
+      ${ieeeSection("II.", "Materials and Methods", section(project, "methods"), 2)}
+      ${ieeeSection("III.", "Results", section(project, "results"), 3)}
+      ${ieeeSection("IV.", "Conclusion", section(project, "conclusion"), 4)}
     </div>
     ${referencesHtml(project.references, false)}
   </article>
 `;
 
-const ieeeSection = (number: string, title: string, content: string): string => `
+const ieeeSection = (number: string, title: string, content: string, secNum: number): string => `
   <section>
     <h2>${number} ${title}</h2>
-    <div>${renderMarkdown(content)}</div>
+    <div>${renderMarkdown(content, secNum)}</div>
   </section>
 `;
 
@@ -401,6 +520,7 @@ const casHtml = (project: ProjectData): string => `
     ${casSection(1, "引言", section(project, "introduction"))}
     ${casSection(2, "研究方法", section(project, "methods"))}
     ${casSection(3, "结果与讨论", section(project, "results"))}
+    ${casSection(4, "结论", section(project, "conclusion"))}
     ${referencesHtml(project.references, true)}
   </article>
 `;
@@ -418,6 +538,8 @@ const templateCss = `
     font-family: "Times New Roman", Georgia, serif;
     font-size: 10.5pt;
     line-height: 1.68;
+    word-spacing: normal;
+    letter-spacing: normal;
   }
 
   .sci header {
@@ -491,6 +613,8 @@ const templateCss = `
     font-family: "Times New Roman", Georgia, serif;
     font-size: 9pt;
     line-height: 1.18;
+    word-spacing: normal;
+    letter-spacing: normal;
   }
 
   .ieee header {
@@ -758,13 +882,39 @@ export function renderProjectPdfHtml(project: ProjectData): string {
   const template = normalizeTemplate(project.template);
   const isChinese = CHINESE_TEMPLATES.has(template);
 
+  // Step 1: 清理未引用文献，同时获取 old→new 索引映射
+  const { references: cleanRefs, indexMap } = pruneUncitedReferences({
+    abstract: project.abstract,
+    sections: project.sections,
+    references: project.references || [],
+  });
+  const refCount = cleanRefs.length;
+
+  // Step 2: 重映射正文引用号 → Step 3: 剥离残存越界引用 + Markdown 残余
+  const cleanSections: Record<string, string> = {};
+  for (const [key, content] of Object.entries(project.sections)) {
+    cleanSections[key] = cleanMarkdownArtifacts(
+      stripOutOfRangeCitations(remapPrunedCitations(content || "", indexMap), refCount)
+    );
+  }
+
+  const cleanProject: ProjectData = {
+    ...project,
+    abstract: cleanMarkdownArtifacts(
+      stripOutOfRangeCitations(remapPrunedCitations(project.abstract || "", indexMap), refCount)
+    ),
+    sections: cleanSections as ProjectData["sections"],
+    references: cleanRefs,
+  };
+
   return `<!doctype html>
     <html lang="${isChinese ? "zh-CN" : "en"}">
       <head>
         <meta charset="utf-8" />
+        <style>${katexCss}</style>
         <style>${baseCss(template)}${templateCss}</style>
       </head>
-      <body>${renderTemplate(project, template)}</body>
+      <body>${renderTemplate(cleanProject, template)}</body>
     </html>`;
 }
 

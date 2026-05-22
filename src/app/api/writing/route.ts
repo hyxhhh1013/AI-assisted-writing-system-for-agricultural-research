@@ -3,7 +3,7 @@ import type { WritingSSEEvent } from "@/contracts/sse";
 import type { EvidenceClaim } from "@/contracts/data-source";
 import { localRAG } from "@/lib/rag";
 import { retrieveWritingContext } from "@/services/writing-context";
-import { collectCitationFirstAppearance } from "@/lib/reference-reorder";
+import { collectCitationFirstAppearance, collectInvalidCitationNumbers, stripOutOfRangeCitations } from "@/lib/reference-reorder";
 import { validateCitations, validateDataClaims } from "@/lib/citation-validator";
 import { buildEvidencePack } from "@/services/evidence-pack";
 import { callAI, callAINonStreaming, getAgentModelConfig, streamAIResponse } from "@/lib/ai";
@@ -16,6 +16,7 @@ import {
   buildRefinerSystemPrompt,
   buildRefinerPrompt,
 } from "@/lib/prompts";
+import { IMRAD_SECTION_NUMBER, type SectionKey } from "@/lib/imrad";
 
 export async function POST(req: NextRequest) {
   try {
@@ -134,6 +135,7 @@ export async function POST(req: NextRequest) {
             figureStart: typeof figureStart === "number" ? figureStart : 1,
             evidenceSummary,
             projectMode,
+            sectionNumber: IMRAD_SECTION_NUMBER[section as SectionKey] ?? undefined,
           });
 
           // ====== 阶段 1：模式路由 ======
@@ -308,27 +310,16 @@ export async function POST(req: NextRequest) {
 
           // ====== 阶段 4：Refiner（根据核查报告修正，修正后的文本再送引用核查） ======
           const maxRefIndex = referencesByIndex.length;
-          const filterOutOfRangeRefs = (text: string) =>
-            text.replace(/\[([0-9,\s\-–—]+)\]/g, (_match: string, nums: string) => {
-              const parts = nums.split(",").map(p => p.trim());
-              const fixed = parts.map(part => {
-                const range = part.match(/^(\d+)\s*[-–—]\s*(\d+)$/);
-                if (range) {
-                  const a = parseInt(range[1], 10);
-                  const b = parseInt(range[2], 10);
-                  if (a < 1 || a > maxRefIndex || b < 1 || b > maxRefIndex) return `文献${part}`;
-                  return part;
-                }
-                const n = parseInt(part, 10);
-                if (isNaN(n) || n < 1 || n > maxRefIndex) return `文献${part}`;
-                return part;
-              });
-              return `[${fixed.join(", ")}]`;
-            });
 
-          const correctedDraft = filterOutOfRangeRefs(finalDraft || initialDraft);
+          const correctedDraft = stripOutOfRangeCitations(finalDraft || initialDraft, maxRefIndex);
           if (correctedDraft !== (finalDraft || initialDraft)) {
             emit({ type: "corrected_text", text: correctedDraft });
+          }
+
+          // 检测过滤后仍残留的越界引用（正则盲区：非常见标点等），上报前端
+          const lingeringInvalid = collectInvalidCitationNumbers(correctedDraft, maxRefIndex);
+          if (lingeringInvalid.length > 0) {
+            emit({ type: "info", info: `检测到 ${lingeringInvalid.length} 处越界引用 [${lingeringInvalid.join(", ")}]，已替换为占位标记。请检查修正后的文本。` });
           }
 
           let refinedDraft = correctedDraft;
@@ -359,7 +350,7 @@ export async function POST(req: NextRequest) {
               });
 
               if (correctedText && correctedText.trim().length > 10) {
-                refinedDraft = filterOutOfRangeRefs(correctedText.trim());
+                refinedDraft = stripOutOfRangeCitations(correctedText.trim(), maxRefIndex);
                 // 用 corrected_text 事件一次性替换前端内容
                 emit({ type: "corrected_text", text: refinedDraft });
                 emit({ type: "pipeline_step", step: "refining", status: "done", detail: "已修正" });
@@ -376,6 +367,12 @@ export async function POST(req: NextRequest) {
           }
 
           await new Promise(r => setTimeout(r, 40));
+
+          // Refiner 后再次检测越界引用（Refiner 可能重新引入）
+          const lingeringAfterRefine = collectInvalidCitationNumbers(refinedDraft, maxRefIndex);
+          if (lingeringAfterRefine.length > 0) {
+            emit({ type: "info", info: `修正后发现 ${lingeringAfterRefine.length} 处越界引用 [${lingeringAfterRefine.join(", ")}]，已处理。` });
+          }
 
           // ====== 阶段 5：引用校验 & 数据核查（基于修正后文本） ======
           emit({ type: "pipeline_step", step: "checking_citations", status: "running", detail: "正在校验引用真实性..." });

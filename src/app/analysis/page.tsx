@@ -9,8 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Loader2, Upload, FileSpreadsheet, Send, Copy, Table as TableIcon, BarChart3, Save } from "lucide-react";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
-import Papa from "papaparse";
 import { projectStore, ProjectData } from "@/lib/store";
 
 export default function AnalysisPage() {
@@ -64,26 +62,30 @@ function AnalysisContent() {
     if (file.name.endsWith(".csv")) {
       reader.onload = (event) => {
         const text = event.target?.result as string;
-        Papa.parse(text, {
-          header: true,
-          complete: (results) => {
-            // 仅提取前 10 行作为摘要，避免 Token 过大
-            const summary = JSON.stringify(results.data.slice(0, 15), null, 2);
-            setDataSummary(summary);
-            toast.success("CSV 解析成功，已提取数据摘要");
-          },
+        import("papaparse").then(Papa => {
+          Papa.default.parse(text, {
+            header: true,
+            complete: (results) => {
+              // 仅提取前 10 行作为摘要，避免 Token 过大
+              const summary = JSON.stringify(results.data.slice(0, 15), null, 2);
+              setDataSummary(summary);
+              toast.success("CSV 解析成功，已提取数据摘要");
+            },
+          });
         });
       };
       reader.readAsText(file);
     } else if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
       reader.onload = (event) => {
         const data = new Uint8Array(event.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: "array" });
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(firstSheet);
-        const summary = JSON.stringify(jsonData.slice(0, 15), null, 2);
-        setDataSummary(summary);
-        toast.success("Excel 解析成功，已提取数据摘要");
+        import("xlsx").then(XLSX => {
+          const workbook = XLSX.read(data, { type: "array" });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+          const summary = JSON.stringify(jsonData.slice(0, 15), null, 2);
+          setDataSummary(summary);
+          toast.success("Excel 解析成功，已提取数据摘要");
+        });
       };
       reader.readAsArrayBuffer(file);
     } else {

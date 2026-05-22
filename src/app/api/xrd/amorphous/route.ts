@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
@@ -9,7 +9,7 @@ export const maxDuration = 120;
 
 const CHARTS_DIR = path.join(process.cwd(), "public", "charts");
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
-const PYTHON_CMD = "C:\\Users\\20908\\anaconda3\\envs\\pyxplore\\python.exe";
+import { PYTHON_CMD } from "@/services/xrd-runner";
 
 if (!fs.existsSync(CHARTS_DIR)) {
   fs.mkdirSync(CHARTS_DIR, { recursive: true });
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
       const proc = spawn(PYTHON_CMD, [
         scriptPath, "--data", dataPath,
         "--config", configPath, "--output", outputPath,
-      ], { shell: false });
+      ], { shell: false, env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" } });
       proc.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
       proc.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
       proc.on("close", resolve);

@@ -1,19 +1,11 @@
+import { IMRAD_SECTION_NUMBER, SectionKey } from "@/lib/imrad";
+
 /**
  * 论文章节 → 国标式一级章序号（用于 1.1.1 三级编号的首段）
  */
 export function majorNumberFromSectionId(sectionId: string): number | null {
-  switch (sectionId) {
-    case "introduction":
-      return 1;
-    case "methods":
-      return 2;
-    case "results":
-      return 3;
-    case "conclusion":
-      return 4;
-    default:
-      return null;
-  }
+  const num = IMRAD_SECTION_NUMBER[sectionId as SectionKey];
+  return num != null && num > 0 ? num : null;
 }
 
 /**
@@ -150,7 +142,31 @@ export function ensureSubsectionNumbering(
   const hasThirdLevel = cleanedLines.some((l) => /^\d+\.\d+\.\d+\b/.test(l));
 
   if (hasSecondLevel || hasThirdLevel) {
-    // AI 已自行编号 → 只去掉 Markdown 标记，保留其编号
+    // AI 已自行编号 → 检查一级编号是否正确（如 results 章节 AI 不应输出 2.1）
+    // 若错误则批量替换为正确的 major 编号
+    const firstSecondLevel = cleanedLines.find((l) => /^\d+\.\d+\b/.test(l) && !/^\d+\.\d+\.\d+/.test(l));
+    if (firstSecondLevel) {
+      const aiMajor = parseInt(firstSecondLevel, 10);
+      if (aiMajor !== major && aiMajor > 0 && aiMajor < 10) {
+        // 修正所有同级编号：将 "aiMajor.X" 替换为 "major.X"
+        return cleanedLines
+          .map((l) => {
+            // 二级标题: 2.1 → major.1
+            const secMatch = l.match(/^(\d+)\.(\d+)\b(.*)/);
+            if (secMatch && parseInt(secMatch[1], 10) === aiMajor && !/^\d+\.\d+\.\d+/.test(l)) {
+              return `${major}.${secMatch[2]}${secMatch[3]}`;
+            }
+            // 三级标题: 2.1.1 → major.1.1
+            const terMatch = l.match(/^(\d+)\.(\d+)\.(\d+)\b(.*)/);
+            if (terMatch && parseInt(terMatch[1], 10) === aiMajor) {
+              return `${major}.${terMatch[2]}.${terMatch[3]}${terMatch[4]}`;
+            }
+            return l;
+          })
+          .join("\n");
+      }
+    }
+    // AI 编号正确 → 只去掉 Markdown 标记，保留其编号
     return cleanedLines.join("\n");
   }
 
@@ -165,27 +181,8 @@ export function ensureSubsectionNumbering(
   const hasHeadings = headingLines.some((h) => h.headingLevel > 0);
 
   if (!hasHeadings) {
-    // 没有标题结构 → 按段落自动编号（旧逻辑，flat numbering）
-    const paragraphs = content
-      .split(/\n\n+/)
-      .map((p) => p.trim())
-      .filter(Boolean);
-
-    if (paragraphs.length <= 1) return content;
-
-    let { sub, ter } = maxThirdLevelInText(existingText, major);
-
-    return paragraphs
-      .map((p) => {
-        const pLines = p.split("\n");
-        if (pLines.length > 0) pLines[0] = stripLeadingEnumeration(pLines[0]);
-        const body = pLines.join("\n").trim();
-        if (!body) return "";
-        ter += 1;
-        return `${major}.${sub}.${ter} ${body}`;
-      })
-      .filter(Boolean)
-      .join("\n\n");
+    // 没有标题结构 → 保持原文，不做编号
+    return content;
   }
 
   // 有 Markdown 标题 → 层级编号

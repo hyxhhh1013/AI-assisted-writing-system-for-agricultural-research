@@ -40,66 +40,41 @@ export async function POST(req: NextRequest) {
     // 调 Python
     const scriptPath = path.join(SCRIPTS_DIR, "make_table.py");
 
-    const result = await new Promise<{ success: boolean; data?: any; error?: string }>(
-      (resolve) => {
-        const proc = spawn(PYTHON_CMD, [
-          scriptPath,
-          "--config", configPath,
-          "--output", tmpDir,
-        ], { shell: process.platform === "win32" });
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn(PYTHON_CMD, [
+        scriptPath,
+        "--config", configPath,
+        "--output", tmpDir,
+      ], { shell: false, env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" } });
 
-        let stdout = "";
-        let stderr = "";
+      let stderr = "";
+      proc.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
+      proc.on("close", (code) => {
+        if (code !== 0) reject(new Error(stderr || `Python 进程退出码 ${code}`));
+        else resolve();
+      });
+      proc.on("error", reject);
+    });
 
-        proc.stdout.on("data", (chunk: Buffer) => {
-          stdout += chunk.toString();
-        });
-
-        proc.stderr.on("data", (chunk: Buffer) => {
-          stderr += chunk.toString();
-        });
-
-        proc.on("close", (code) => {
-          if (code !== 0) {
-            resolve({
-              success: false,
-              error: stderr || stdout || `Python 进程退出码 ${code}`,
-            });
-          } else {
-            try {
-              const data = JSON.parse(stdout.trim());
-              if (data.status === "ok") {
-                resolve({ success: true, data });
-              } else {
-                resolve({ success: false, error: data.message || "未知错误" });
-              }
-            } catch {
-              resolve({ success: false, error: stdout || "无法解析 Python 输出" });
-            }
-          }
-        });
-
-        proc.on("error", (err) => {
-          resolve({ success: false, error: err.message });
-        });
-      }
-    );
+    // 从文件读取结果，绕开管道编码问题
+    const resultPath = path.join(tmpDir, "result.json");
+    const resultJson = JSON.parse(fs.readFileSync(resultPath, "utf-8"));
 
     // 清理临时文件
     fs.rmSync(tmpDir, { recursive: true, force: true });
 
-    if (!result.success || !result.data) {
+    if (resultJson.status !== "ok") {
       return NextResponse.json(
-        { error: `三线表生成失败: ${result.error}` },
+        { error: resultJson.message || "三线表生成失败" },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
-      latex: result.data.latex,
-      html: result.data.html,
-      statsText: result.data.stats_text,
-      letters: result.data.letters,
+      latex: resultJson.latex,
+      html: resultJson.html,
+      statsText: resultJson.stats_text,
+      letters: resultJson.letters,
     });
   } catch (error: any) {
     console.error("Table API error:", error);

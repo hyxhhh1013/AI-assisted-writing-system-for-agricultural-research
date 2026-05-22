@@ -30,6 +30,7 @@ export function CASPreview({ project, onCiteClick }: TemplateProps) {
           ["引言", "introduction"],
           ["研究方法", "methods"],
           ["结果与讨论", "results"],
+          ["结论", "conclusion"],
         ] as const).map(([label, key], i) => (
           <section key={key} className="break-inside-avoid">
             <h2 className="text-[14pt] font-bold mb-4 border-l-4 border-primary pl-3">{i + 1} {label}</h2>

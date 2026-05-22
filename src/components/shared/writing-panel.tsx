@@ -431,7 +431,7 @@ export function WritingPanel({
         detectedFiguresRef.current = detectedFigures;
         setPendingFigures(detectedFigures.map(f => ({ ...f, spec: "", status: "pending" as const })));
 
-        setGenerationStatus("completed");
+        setGenerationStatus("generating_figures");
         toast.info(`正在自动生成 ${detectedFigures.length} 张配图...`);
         const _abort = new AbortController();
         figureAbortRef.current = _abort;
@@ -468,6 +468,7 @@ export function WritingPanel({
             }
           }
           toast.success("配图生成完成");
+          setGenerationStatus("completed");
           // 同步最终结果到父组件的 aiPreview，确保编辑器工具栏"应用"也拿到图片版内容
           if (onPreviewUpdate) {
             onPreviewUpdate({
@@ -724,8 +725,9 @@ export function WritingPanel({
             <CardHeader className="flex flex-row items-center justify-between py-3 border-b">
               <CardTitle className="text-sm font-bold">AI 生成内容</CardTitle>
               <div className="flex gap-1">
-                <Button variant="default" size="sm" className="h-7 text-[10px]" onClick={handleApplyToEditor}>
-                  应用到编辑器
+                <Button variant="default" size="sm" className="h-7 text-[10px]" onClick={handleApplyToEditor}
+                  disabled={generationStatus === "generating_figures"}>
+                  {generationStatus === "generating_figures" ? "配图生成中..." : "应用到编辑器"}
                 </Button>
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
                   navigator.clipboard.writeText(result);

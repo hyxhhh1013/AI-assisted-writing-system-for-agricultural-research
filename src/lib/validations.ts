@@ -1,13 +1,14 @@
 import { z } from "zod";
+import { IMRAD_SECTION_KEYS } from "@/lib/imrad";
 
 // === Writing ===
 export const writingSchema = z.object({
   title: z.string().min(1, "标题不能为空"),
-  section: z.enum(["abstract", "introduction", "methods", "results", "conclusion"]),
+  section: z.enum(IMRAD_SECTION_KEYS),
   context: z.string().optional(),
   language: z.enum(["zh", "en"]).optional().default("zh"),
   template: z.enum(["sci", "ieee", "gbt7713", "nature"]).optional().default("sci"),
-  existingReferences: z.string().optional(),
+  existingReferences: z.array(z.string()).optional(),
   globalContext: z.string().optional(),
   mode: z.enum(["full", "fast", "audit_only", "fix_only"]).optional().default("full"),
   verificationFeedback: z.string().optional(),

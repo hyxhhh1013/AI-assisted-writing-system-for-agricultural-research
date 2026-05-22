@@ -406,9 +406,18 @@ export class LocalRAG {
 
 export const localRAG = new LocalRAG();
 
+/** 清理 RAG 来源文件名，去除 .pdf 等后缀，生成可读的引用标识 */
+export function cleanSourceName(raw: string): string {
+  return raw
+    .replace(/\.pdf$/i, "")
+    .replace(/[_-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** 供 API 拼上下文：按文档类型区分引用格式 */
 export function formatRagCitation(chunk: RagChunk): string {
-  const src = chunk.metadata.source;
+  const src = cleanSourceName(chunk.metadata.source);
   const docType = chunk.metadata.documentType;
   // 专利用专利号格式，不用页码
   if (docType === "patent") {

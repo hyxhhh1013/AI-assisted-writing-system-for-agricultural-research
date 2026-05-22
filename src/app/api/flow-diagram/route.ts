@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
@@ -9,7 +9,11 @@ export const maxDuration = 30;
 
 const CHARTS_DIR = path.join(process.cwd(), "public", "charts");
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
-const PYTHON_CMD = "C:\\Users\\20908\\anaconda3\\envs\\pyxplore\\python.exe";
+import { PYTHON_CMD } from "@/services/xrd-runner";
+
+const GRAPHVIZ_BIN = process.platform === "win32"
+  ? "C:\\Program Files\\Graphviz\\bin"
+  : "/usr/bin";
 
 if (!fs.existsSync(CHARTS_DIR)) {
   fs.mkdirSync(CHARTS_DIR, { recursive: true });
@@ -35,6 +39,7 @@ interface FlowConfig {
   cols?: number;
   colors?: Record<string, string>;
   default_color?: string;
+  renderer?: "matplotlib" | "graphviz";
 }
 
 export async function POST(req: NextRequest) {
@@ -53,7 +58,9 @@ export async function POST(req: NextRequest) {
 
     const outputName = `${randomUUID()}.png`;
     const outputPath = path.join(CHARTS_DIR, outputName);
-    const scriptPath = path.join(SCRIPTS_DIR, "flow_diagram.py");
+    const renderer = body.renderer || "graphviz";
+    const scriptName = renderer === "matplotlib" ? "flow_diagram.py" : "flow_diagram_v2.py";
+    const scriptPath = path.join(SCRIPTS_DIR, scriptName);
 
     let stdout = "";
     let stderr = "";
@@ -61,7 +68,7 @@ export async function POST(req: NextRequest) {
     const exitCode = await new Promise<number>((resolve, reject) => {
       const proc = spawn(PYTHON_CMD, [
         scriptPath, "--config", configPath, "--output", outputPath,
-      ], { shell: false });
+      ], { shell: false, env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1", PATH: `${process.env.PATH};${GRAPHVIZ_BIN}` } });
       proc.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
       proc.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
       proc.on("close", resolve);
