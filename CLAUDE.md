@@ -28,41 +28,49 @@
 交付：说明数据流 UI → service → API → DB/AI → UI
 ```
 
-## 当前工程状态 (2026-05-16)
+## 当前工程状态 (2026-05-24)
 
 ### 架构 v2 重构完成（2026-05-15 ~ 2026-05-16）
 
-**契约层**：`src/contracts/` — SSE/Writing/Project/Figure 类型，前后端共享
-**保存模型**：增量 upsert，不再 deleteMany 全量覆盖
+**契约层**：`src/contracts/` — SSE/Writing/Project/Figure/DataSource/Consistency 类型，前后端共享
+**保存模型**：sections 增量 upsert；references/analysisResults 仍全量覆盖（待 P2-1 补增量 PATCH）
 **SSE 统一**：/api/writing 全部 20+ 排放点改为 `{type, ...}` 格式，前端用类型守卫解析
 **Python 路径**：8 路由从硬编码改为 `process.env.PYTHON_CMD`
-**middleware → proxy**：Next 16 迁移完成，零警告
-**质量闸门**：`npm run check`、`.gitignore`、`empty.js`
+**middleware → proxy**：中间件已迁移为 `src/proxy.ts`（Next.js 16 App Router 兼容），`proxy()` 从 `src/middleware.ts` 导出
+**质量闸门**：`npm run check`（typecheck + test + lint）、`.gitignore`、`empty.js`
 
-**新增文件**（本轮 12 个）：
-```
-src/contracts/{sse,writing,project,figure,index}.ts
-src/hooks/{use-writing-stream,use-figure-pipeline}.ts
-src/services/{writing-context,xrd-runner}.ts
-src/lib/{imrad,citation,math-delimiter,markdown-parser,content-pipeline,sse-client}.ts
-empty.js
-```
-
-**关键行数变化**：
-| 文件 | 重构前 | 重构后 |
-|------|--------|--------|
-| /api/writing/route.ts | 495 | 312 |
-| writing-panel.tsx | 865 | 761 |
-| workbench/page.tsx | 846 | 784 |
+**关键文件当前行数**：
+| 文件 | 当前行数 | 备注 |
+|------|----------|------|
+| workbench/page.tsx | 776 | 已从 1200+ 拆到 776 |
+| writing-panel.tsx | 826 | 仍偏大，待 P3-3 继续拆 |
+| /api/writing/route.ts | 436 | 五阶段流水线，待 P3-3 拆 |
+| sci-preview.tsx | 153 | 已精简 |
 
 **TypeScript**：0 errors | **Dev server**：零警告启动
 
-### 明天待续
+### 已完成事项
 
-1. **lint 修复**：159 errors，大部分是旧代码历史债务
-2. **useFigurePipeline 接入 WritingPanel**：hook 已写，旧 FIGURE 代码还在 WritingPanel 里
-3. **测试已有功能**：扩写流程（Writer→Verifier→Refiner→引用修正）、PDF/Word 导出、公式渲染
-4. **打包部署**：重新 build + 更新部署包
+- [x] useFigurePipeline 接入 WritingPanel（`findFigureBlocks / generateSingleFigure / replacePlaceholders`）
+- [x] 扩写流程（Writer→Verifier→Refiner→引用修正）正常运行
+- [x] ESLint `no-console: warn` 已启用（2026-05-24）
+- [x] `src/services/writing.ts` 已删除（死代码）
+- [x] `scripts/misc/` 整理了无关的 gen-*.mjs 脚本
+
+### 待处理技术债（改进计划）
+
+| 优先级 | 编号 | 说明 |
+|--------|------|------|
+| P1 | p1-1 | `@typescript-eslint/no-explicit-any: warn` + 修 shared.tsx 13 个 any |
+| P1 | p1-2 | 8 个 zod schema 接入对应 API 路由 validateBody |
+| P1 | p1-3 | 组件层直接 fetch() 迁移到 services/（9 处） |
+| P2 | p2-1 | references/analysisResults 改增量 PATCH |
+| P2 | p2-3 | 统一 ProjectData 类型（以 contracts/project.ts 为准） |
+| P3 | p3-1 | Prisma 补 3 条 @@index |
+| P3 | p3-2 | lib/utils.ts 8 个核心函数补单测 |
+| P3 | p3-3 | 拆 writing-panel.tsx + api/writing/route.ts |
+| P3 | p3-4 | 统一 logger 封装 |
+| P3 | p3-5 | 补 .env.example + pre-commit hook |
 
 ### Prompt 系统
 - 所有 AI prompt 已注入 nature-polishing 学术写作原则（Section move order、Evidence strength 分级、Results/Discussion 分离、Overclaim 防护、Limitation 要求）

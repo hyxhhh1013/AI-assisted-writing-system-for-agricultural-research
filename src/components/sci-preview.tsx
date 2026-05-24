@@ -34,16 +34,13 @@ export default function SCIPreview({ project }: SCIPreviewProps) {
   const [ragLoading, setRagLoading] = useState(false);
 
   const refs = project.references || [];
-  console.log("[cite-dialog] SCIPreview loaded, refs:", refs.length, "intro has citations:", /\[\d+\]/.test(project.sections.introduction || ""));
 
   const handleCiteClick = useCallback((nums: number[]) => {
-    console.log("[cite-dialog] clicked nums:", nums, "refs count:", refs.length, "first ref:", refs[0]?.slice(0, 50));
     setSelectedCiteNums(nums);
     setCiteDialogOpen(true);
-  }, [refs]);
+  }, []);
 
   useEffect(() => {
-    console.log("[cite-dialog] dialog open:", citeDialogOpen, "nums:", selectedCiteNums, "refs count:", refs.length, "first ref:", refs[0]?.slice(0, 80));
     if (!citeDialogOpen || selectedCiteNums.length === 0) return;
     setRagLoading(true);
     const fetchResults = async () => {

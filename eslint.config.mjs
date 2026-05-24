@@ -12,7 +12,16 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Scripts are plain Node.js, not subject to src rules
+    "scripts/**",
   ]),
+  {
+    rules: {
+      // Prevent accidental console output in production bundles.
+      // Use a dedicated logger (src/lib/logger.ts) instead.
+      "no-console": "warn",
+    },
+  },
 ]);
 
 export default eslintConfig;

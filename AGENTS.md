@@ -38,10 +38,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - `prisma/` — 数据库 schema + 迁移
 
 ### 关键文件（改动前必读）
-- `src/lib/prompts.ts` — 所有 AI prompt 模板
-- `src/lib/rag.ts` — RAG 检索引擎
-- `src/lib/utils.ts` — parseOutline, buildExpansionContext, buildOutlineTasks 等
-- `src/app/workbench/page.tsx` — 核心工作台（1785 行，待拆分）
+- `src/lib/prompts.ts` — 所有 AI prompt 的统一出口（re-export from `src/lib/prompts/`）
+- `src/lib/rag.ts` — RAG 检索引擎（BM25 + 向量 RRF 混合）
+- `src/lib/utils.ts` — parseOutline, buildExpansionContext, buildOutlineTasks 等核心工具
+- `src/app/workbench/page.tsx` — 核心工作台（当前 776 行，待继续拆分）
+- `src/components/shared/writing-panel.tsx` — AI 扩写面板（当前 826 行，待拆分）
+- `src/proxy.ts` — Next.js 16 中间件入口（原 middleware.ts，含认证/限流逻辑）
 
 ### AI 写作管道
 ```
@@ -68,4 +70,4 @@ AI 输出 【FIGURE:{...}】 → findFigureBlocks 解析 → API 调用 → Pyth
 3. **不要重复**：新功能前先搜索项目是否已有类似实现
 4. **类型严格**：禁止 `any`，所有接口必须有显式类型
 5. **流式优先**：AI 生成接口必须支持 SSE streaming
-6. **大文件不新增代码**：workbench/page.tsx（1785行）、sci-preview.tsx（707行）待拆分，新逻辑优先放到独立组件
+6. **大文件不新增代码**：workbench/page.tsx（776行）、writing-panel.tsx（826行）、api/writing/route.ts（436行）待拆分，新逻辑优先放到独立组件/服务

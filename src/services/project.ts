@@ -1,4 +1,9 @@
-/** 项目 API 类型定义与服务封装 */
+/** 项目 API 服务封装 — 类型定义已统一到 src/contracts/project.ts */
+
+import type { ProjectData } from "@/contracts/project";
+
+// Re-export so existing importers of services/project don't break
+export type { ProjectData, ProjectDTO } from "@/contracts/project";
 
 export interface ProjectListItem {
   id: string;
@@ -12,30 +17,6 @@ export interface SectionRecord {
   results: string;
   conclusion: string;
   [key: string]: string | undefined;
-}
-
-export interface ProjectData {
-  id: string;
-  title: string;
-  userId?: string;
-  authors: string;
-  affiliations: string;
-  abstract: string;
-  keywords: string;
-  classification: string;
-  researchDirection: string;
-  outline: string;
-  template: string;
-  lastUpdated: number;
-  createdAt?: number;
-  sections: SectionRecord;
-  references: string[];
-  analysisResults: string[];
-  charts?: string;
-  expandedOutlineSections?: string[];
-  mode?: "review" | "research";
-  dataClaims?: string;
-  dataSources?: string;
 }
 
 export async function listProjects(): Promise<ProjectListItem[]> {

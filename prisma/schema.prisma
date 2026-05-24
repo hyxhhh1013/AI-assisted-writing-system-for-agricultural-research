@@ -81,6 +81,8 @@ model Reference {
   order     Int      @default(0)
   projectId String
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, order])
 }
 
 // 分析结果模型
@@ -109,6 +111,8 @@ model KnowledgeChunk {
   embedding String?  // 存储为 JSON 字符串，因为 SQLite 不直接支持向量类型
   fileId    String
   file      KnowledgeFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([fileId])
 }
 
 // ==================== 查重功能模型 ====================
@@ -128,6 +132,8 @@ model PlagiarismCheck {
   project     Project?           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   matches     PlagiarismMatch[]
   rewrites    RewriteSuggestion[]
+
+  @@index([projectId])
 }
 
 // 查重匹配结果
@@ -150,6 +156,8 @@ model PlagiarismMatch {
   riskLevel    String           // high | medium | low
   createdAt    DateTime         @default(now())
   rewrites     RewriteSuggestion[]
+
+  @@index([checkId])
 }
 
 // 降重改写建议
