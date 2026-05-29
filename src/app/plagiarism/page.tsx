@@ -3,26 +3,24 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
-  Search, Shuffle, FileText, Loader2, AlertTriangle, CheckCircle2,
-  Globe, BookOpen, ArrowLeft, Sparkles, ChevronDown, ChevronUp, RefreshCw
+  Search, Shuffle, Loader2, CheckCircle2,
+  Globe, ArrowLeft, Sparkles, ChevronDown, ChevronUp, RefreshCw,
+  FileText, FolderOpen, Clock, Check, X,
 } from "lucide-react";
 import { projectStore } from "@/lib/store";
 import type { ProjectData } from "@/lib/store";
 
-// ==== 类型定义 ====
+// ==================== 类型 ====================
+
 interface MatchResult {
   id: string;
   sourceText: string;
   sourceOffset: number;
-  matchType: "self" | "local" | "web" | "cross";
+  matchType: "self" | "local" | "web" | "cross" | "ai";
   matchedText: string;
   matchedFrom: string;
   matchedUrl?: string;
@@ -41,317 +39,212 @@ interface CheckResult {
 interface RewriteSuggestion {
   strategy: string;
   suggestedText: string;
+  similarityAfter?: number;
+  id?: string;
 }
 
-// ==== 主页面 ====
+const MATCH_ICONS: Record<MatchResult["matchType"], string> = { self: "📄", cross: "📚", local: "📖", web: "🌐", ai: "🤖" };
+const STRATEGY_LABELS: Record<string, string> = { synonym: "同义替换", rephrase: "改写语序", summarize: "概括精简", expand: "扩写重组" };
+
+// ==================== 页面 ====================
+
 export default function PlagiarismPage() {
-  return (
-    <Suspense fallback={<div className="flex h-screen items-center justify-center">正在加载...</div>}>
-      <PlagiarismContent />
-    </Suspense>
-  );
+  return <Suspense fallback={<div className="flex h-screen items-center justify-center text-sm text-muted-foreground">加载中...</div>}><Content /></Suspense>;
 }
 
-function PlagiarismContent() {
+function Content() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const projectId = searchParams.get("id");
+  const sp = useSearchParams();
+  const pid = sp.get("id");
 
   const [project, setProject] = useState<ProjectData | null>(null);
-  const [checkTitle, setCheckTitle] = useState("");
-  const [checkContent, setCheckContent] = useState("");
-  const [webSearch, setWebSearch] = useState(true);
-  const [isChecking, setIsChecking] = useState(false);
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [web, setWeb] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<CheckResult | null>(null);
-  const [activeTab, setActiveTab] = useState("check");
+  const [tab, setTab] = useState<"check" | "result" | "rewrite" | "history">("check");
+
+  const [plist, setPlist] = useState<{ id: string; title: string }[]>([]);
+  const [selPid, setSelPid] = useState(pid || "");
+  const [loadingP, setLoadingP] = useState(false);
+
+  useEffect(() => { fetch("/api/projects").then(r => r.json()).then(d => { if (Array.isArray(d)) setPlist(d); }).catch(() => {}); }, []);
 
   useEffect(() => {
-    const init = async () => {
-      if (projectId) {
-        const data = await projectStore.get(projectId);
-        if (data) {
-          setProject(data);
-          setCheckTitle(data.title || "");
-        }
-      }
-    };
-    init();
-  }, [projectId]);
+    if (!pid) return;
+    projectStore.get(pid).then(d => {
+      if (!d) return;
+      setProject(d); setTitle(d.title || ""); setSelPid(pid);
+      const l: Record<string, string> = { introduction: "引言", methods: "材料与方法", results: "结果与讨论", conclusion: "结论" };
+      const p: string[] = [];
+      if (d.abstract) p.push(`摘要：${d.abstract}`);
+      for (const [k, c] of Object.entries(d.sections || {})) if (c && typeof c === "string" && c.trim()) p.push(`${l[k] || k}：${c}`);
+      setContent(p.join("\n\n"));
+    }).catch(() => {});
+  }, [pid]);
 
-  // 运行查重
-  const handleCheck = async () => {
-    if (!checkContent.trim()) {
-      toast.error("请先输入或粘贴要检测的论文内容");
-      return;
-    }
-
-    setIsChecking(true);
-    setResult(null);
-
+  const loadP = async (id: string) => {
+    if (!id) return;
+    setLoadingP(true);
     try {
-      const res = await fetch("/api/plagiarism/check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId: projectId || undefined,
-          title: checkTitle || "未命名检测",
-          content: checkContent,
-          webSearch,
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "查重请求失败");
-      }
-
-      const data: CheckResult = await res.json();
-      setResult(data);
-      setActiveTab("result");
-      toast.success("查重完成！");
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setIsChecking(false);
-    }
+      const r = await fetch(`/api/projects?id=${id}`);
+      if (!r.ok) throw new Error("加载失败");
+      const d = await r.json();
+      setSelPid(id); setProject(d); setTitle(d.title || "");
+      const l: Record<string, string> = { introduction: "引言", methods: "材料与方法", results: "结果与讨论", conclusion: "结论" };
+      const p: string[] = [];
+      if (d.abstract) p.push(`摘要：${d.abstract}`);
+      for (const [k, c] of Object.entries(d.sections || {})) if (c && typeof c === "string" && c.trim()) p.push(`${l[k] || k}：${c}`);
+      setContent(p.join("\n\n")); setResult(null); setTab("check");
+      toast.success(`已导入「${d.title}」`);
+    } catch { toast.error("加载失败"); }
+    finally { setLoadingP(false); }
   };
+
+  const doCheck = async () => {
+    if (!content.trim()) { toast.error("请输入内容"); return; }
+    setChecking(true); setResult(null);
+    try {
+      const r = await fetch("/api/plagiarism/check", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId: selPid || pid || undefined, title: title || "未命名", content, webSearch: web }) });
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || "查重失败"); }
+      const d: CheckResult = await r.json();
+      setResult(d); setTab("result");
+      toast.success(`检测完成，${d.totalMatches} 处匹配`);
+    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "查重失败"); }
+    finally { setChecking(false); }
+  };
+
+  const tabs = [
+    { k: "check" as const, l: "查重检测", i: Search },
+    { k: "result" as const, l: "检测结果", i: FileText, dis: !result },
+    { k: "rewrite" as const, l: "AI 降重", i: Shuffle, dis: !result },
+    { k: "history" as const, l: "历史记录", i: Clock },
+  ];
 
   return (
     <div className="min-h-screen bg-background">
-      {/* 顶部导航 */}
-      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="container mx-auto px-4 h-14 flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="flex items-center gap-2 font-semibold">
-            <Search className="h-5 w-5 text-primary" />
-            论文查重与降重
-          </div>
-          {project && (
-            <span className="text-sm text-muted-foreground ml-auto truncate">
-              {project.title}
-            </span>
-          )}
+      <header className="sticky top-0 z-10 border-b bg-card/80 backdrop-blur-sm">
+        <div className="container mx-auto px-4 h-12 flex items-center gap-3">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.back()}><ArrowLeft className="h-4 w-4" /></Button>
+          <span className="text-sm font-semibold flex items-center gap-1.5"><Search className="h-4 w-4 text-primary/60" />论文查重与降重</span>
+          {project && <span className="text-xs text-muted-foreground ml-auto truncate">{project.title}</span>}
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-6 max-w-5xl">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6">
-            <TabsTrigger value="check" className="gap-2">
-              <Search className="h-4 w-4" /> 查重检测
-            </TabsTrigger>
-            <TabsTrigger value="result" className="gap-2" disabled={!result}>
-              <FileText className="h-4 w-4" /> 检测结果
-            </TabsTrigger>
-            <TabsTrigger value="rewrite" className="gap-2" disabled={!result}>
-              <Shuffle className="h-4 w-4" /> AI 降重
-            </TabsTrigger>
-            <TabsTrigger value="history" className="gap-2">
-              <RefreshCw className="h-4 w-4" /> 历史记录
-            </TabsTrigger>
-          </TabsList>
+      <main className="container mx-auto px-4 py-4 max-w-3xl">
+        {/* Tab */}
+        <div className="flex gap-1 p-1 bg-muted/40 rounded-lg mb-3">
+          {tabs.map(t => (
+            <button key={t.k} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all flex-1 justify-center ${tab === t.k ? "bg-background text-foreground shadow-sm" : t.dis ? "text-muted-foreground/40 cursor-not-allowed" : "text-muted-foreground hover:text-foreground"}`} onClick={() => !t.dis && setTab(t.k)} disabled={t.dis}>
+              <t.i className="h-3.5 w-3.5" />{t.l}
+            </button>
+          ))}
+        </div>
 
-          {/* 查重检测页 */}
-          <TabsContent value="check">
-            <Card>
-              <CardHeader>
-                <CardTitle>论文查重检测</CardTitle>
-                <CardDescription>
-                  输入或粘贴论文内容，系统将进行本地知识库比对{webSearch && "和联网学术搜索"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium mb-1 block">检测标题</label>
-                  <input
-                    className="w-full px-3 py-2 border rounded-md text-sm"
-                    placeholder="例如：基于深度学习的作物病害检测"
-                    value={checkTitle}
-                    onChange={(e) => setCheckTitle(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium mb-1 block">论文内容</label>
-                  <Textarea
-                    className="min-h-[300px] font-mono text-sm"
-                    placeholder="在此粘贴你要检测的论文内容..."
-                    value={checkContent}
-                    onChange={(e) => setCheckContent(e.target.value)}
-                  />
-                  <div className="text-xs text-muted-foreground mt-1 text-right">
-                    {checkContent.length} 字符
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={webSearch}
-                      onChange={(e) => setWebSearch(e.target.checked)}
-                      className="rounded"
-                    />
-                    <Globe className="h-4 w-4" />
-                    联网查重（Semantic Scholar + CrossRef）
-                  </label>
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={() => { setCheckContent(""); setResult(null); }}>
-                  清空
-                </Button>
-                <Button onClick={handleCheck} disabled={isChecking || !checkContent.trim()}>
-                  {isChecking ? (
-                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> 检测中...</>
-                  ) : (
-                    <><Search className="h-4 w-4 mr-2" /> 开始查重</>
-                  )}
-                </Button>
-              </CardFooter>
-            </Card>
-          </TabsContent>
-
-          {/* 检测结果页 */}
-          <TabsContent value="result">
-            {result && <ResultPanel result={result} />}
-          </TabsContent>
-
-          {/* 降重页 */}
-          <TabsContent value="rewrite">
-            {result && <RewritePanel checkId={result.checkId} matches={result.matches} />}
-          </TabsContent>
-
-          {/* 历史记录页 */}
-          <TabsContent value="history">
-            <HistoryPanel projectId={projectId} onViewResult={(r) => { setResult(r); setActiveTab("result"); }} />
-          </TabsContent>
-        </Tabs>
+        {/* 内容 */}
+        <div className="rounded-xl border bg-card p-4">
+          {tab === "check" && <CheckView title={title} setTitle={setTitle} content={content} setContent={setContent} web={web} setWeb={setWeb} checking={checking} onCheck={doCheck} plist={plist} selPid={selPid} loadingP={loadingP} onLoad={loadP} onClear={() => { setContent(""); setResult(null); setSelPid(""); }} />}
+          {tab === "result" && result && <ResultView result={result} onRewrite={() => setTab("rewrite")} onReCheck={() => setTab("check")} />}
+          {tab === "rewrite" && result && <RewriteView checkId={result.checkId} matches={result.matches} onReCheck={c => { setContent(c); setResult(null); setTab("check"); toast.success("已应用改写，点击「查重」验证"); }} />}
+          {tab === "history" && <HistoryView projectId={pid} onViewResult={r => { setResult(r); setTab("result"); }} />}
+        </div>
       </main>
     </div>
   );
 }
 
-// ==== 查重结果面板 ====
-function ResultPanel({ result }: { result: CheckResult }) {
-  const riskColor = result.overallRisk === "high" ? "text-red-500" : result.overallRisk === "medium" ? "text-yellow-500" : "text-green-500";
-  const riskBg = result.overallRisk === "high" ? "bg-red-50" : result.overallRisk === "medium" ? "bg-yellow-50" : "bg-green-50";
+// ==================== 输入 ====================
 
+function CheckView({ title, setTitle, content, setContent, web, setWeb, checking, onCheck, plist, selPid, loadingP, onLoad, onClear }: {
+  title: string; setTitle: (v: string) => void; content: string; setContent: (v: string) => void;
+  web: boolean; setWeb: (v: boolean) => void; checking: boolean; onCheck: () => void;
+  plist: { id: string; title: string }[]; selPid: string; loadingP: boolean; onLoad: (id: string) => void; onClear: () => void;
+}) {
   return (
-    <div className="space-y-6">
-      {/* 总体概况 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            检测结果概览
-            <Badge variant={result.overallRisk === "high" ? "destructive" : result.overallRisk === "medium" ? "default" : "secondary"}>
-              {result.overallRisk === "high" ? "高风险" : result.overallRisk === "medium" ? "中风险" : "低风险"}
-            </Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-3 gap-4 mb-4">
-            <div className={`p-4 rounded-lg ${riskBg}`}>
-              <div className={`text-2xl font-bold ${riskColor}`}>
-                {(result.maxSimilarity * 100).toFixed(1)}%
-              </div>
-              <div className="text-sm text-muted-foreground">最高相似度</div>
-            </div>
-            <div className="p-4 rounded-lg bg-muted/50">
-              <div className="text-2xl font-bold">{result.totalMatches}</div>
-              <div className="text-sm text-muted-foreground">匹配段落数</div>
-            </div>
-            <div className="p-4 rounded-lg bg-muted/50">
-              <div className="text-2xl font-bold">{result.matches.filter(m => m.matchType === "web").length}</div>
-              <div className="text-sm text-muted-foreground">联网匹配</div>
-            </div>
-          </div>
-          <Progress value={result.maxSimilarity * 100} className="h-2" />
-        </CardContent>
-      </Card>
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border bg-muted/30">
+        <FolderOpen className="h-4 w-4 text-muted-foreground shrink-0" />
+        <select className="flex-1 text-sm bg-transparent outline-none" value={selPid} onChange={e => onLoad(e.target.value)} disabled={loadingP}>
+          <option value="">选择已有项目导入内容...</option>
+          {plist.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+        </select>
+        {loadingP && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+      </div>
 
-      {/* 匹配详情 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">匹配详情</CardTitle>
-          <CardDescription>共发现 {result.totalMatches} 处相似内容</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ScrollArea className="max-h-[500px]">
-            <div className="space-y-3">
-              {result.matches.map((match, i) => (
-                <MatchCard key={match.id} match={match} index={i} />
-              ))}
-              {result.matches.length === 0 && (
-                <div className="text-center py-12 text-muted-foreground">
-                  <CheckCircle2 className="h-12 w-12 mx-auto mb-3 text-green-500" />
-                  <p>未发现明显的相似内容</p>
-                </div>
-              )}
-            </div>
-          </ScrollArea>
-        </CardContent>
-      </Card>
+      <input type="text" className="w-full text-sm px-3 py-2.5 rounded-lg border bg-background outline-none focus:ring-1 focus:ring-primary/20" placeholder="检测标题（选填）" value={title} onChange={e => setTitle(e.target.value)} />
+
+      <div className="relative">
+        <Textarea className="w-full h-64 text-sm leading-relaxed resize-none pr-16" placeholder="在此粘贴论文内容，或从上方选择项目导入..." value={content} onChange={e => setContent(e.target.value)} />
+        <span className="absolute bottom-3 right-4 text-[10px] text-muted-foreground tabular-nums">{content.length.toLocaleString()}</span>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <label className="flex items-center gap-2 text-sm cursor-pointer text-muted-foreground"><input type="checkbox" checked={web} onChange={e => setWeb(e.target.checked)} className="rounded" /><Globe className="h-3.5 w-3.5" />联网搜索</label>
+        <div className="flex gap-2">
+          <Button variant="ghost" size="sm" onClick={onClear}>清空</Button>
+          <Button size="sm" onClick={onCheck} disabled={checking || !content.trim()}>{checking ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />检测中...</> : <><Search className="h-4 w-4 mr-1.5" />开始查重</>}</Button>
+        </div>
+      </div>
     </div>
   );
 }
 
-// ==== 单个匹配卡片 ====
-function MatchCard({ match, index }: { match: MatchResult; index: number }) {
-  const [expanded, setExpanded] = useState(false);
+// ==================== 结果 ====================
 
-  const riskBadge = match.riskLevel === "high"
-    ? <Badge variant="destructive">高危</Badge>
-    : match.riskLevel === "medium"
-    ? <Badge variant="default">中危</Badge>
-    : <Badge variant="secondary">低危</Badge>;
-
-  const typeIcon = match.matchType === "web"
-    ? <Globe className="h-3 w-3" />
-    : <BookOpen className="h-3 w-3" />;
+function ResultView({ result, onRewrite, onReCheck }: { result: CheckResult; onRewrite: () => void; onReCheck: () => void }) {
+  const riskLabel = result.overallRisk === "high" ? "高风险" : result.overallRisk === "medium" ? "中风险" : "低风险";
+  const riskCls = result.overallRisk === "high" ? "text-red-600 bg-red-50" : result.overallRisk === "medium" ? "text-amber-600 bg-amber-50" : "text-green-600 bg-green-50";
+  const typeStats = result.matches.reduce((a, m) => { a[m.matchType] = (a[m.matchType] || 0) + 1; return a; }, {} as Record<string, number>);
 
   return (
-    <div className="border rounded-lg p-4 space-y-2 hover:bg-muted/30 transition-colors">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          #{index + 1} {typeIcon}
-          <span className="text-muted-foreground">
-            {match.matchType === "web" ? "联网匹配" : "本地库匹配"}
-          </span>
-          {riskBadge}
-          <Badge variant="outline">{(match.similarity * 100).toFixed(0)}%</Badge>
-        </div>
-        <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)}>
-          {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </Button>
-      </div>
-
-      <div className="text-sm">
-        <span className="font-medium text-muted-foreground">匹配来源：</span>
-        {match.matchedUrl ? (
-          <a href={match.matchedUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-            {match.matchedFrom}
-          </a>
-        ) : (
-          <span>{match.matchedFrom}</span>
-        )}
-      </div>
-
-      {expanded && (
-        <div className="space-y-2 pt-2 border-t">
-          <div>
-            <div className="text-xs text-muted-foreground mb-1">原文段落：</div>
-            <div className="text-sm bg-red-50 dark:bg-red-950/30 p-2 rounded border border-red-200 dark:border-red-800">
-              {match.sourceText}
-            </div>
+    <div className="flex flex-col gap-3">
+      <div className="p-3 rounded-lg bg-muted/30 border">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <span className={`text-2xl font-bold tabular-nums ${result.overallRisk === "high" ? "text-red-600" : result.overallRisk === "medium" ? "text-amber-600" : "text-green-600"}`}>{(result.maxSimilarity * 100).toFixed(1)}%</span>
+            <div><Badge variant="secondary" className={`text-[10px] ${riskCls}`}>{riskLabel}</Badge><p className="text-[10px] text-muted-foreground mt-0.5">{result.totalMatches} 处匹配</p></div>
           </div>
-          <div>
-            <div className="text-xs text-muted-foreground mb-1">匹配内容：</div>
-            <div className="text-sm bg-yellow-50 dark:bg-yellow-950/30 p-2 rounded border border-yellow-200 dark:border-yellow-800">
-              {match.matchedText}
-            </div>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={onReCheck}><RefreshCw className="h-3.5 w-3.5 mr-1" />重新检测</Button>
+            {result.matches.length > 0 && <Button size="sm" onClick={onRewrite}><Sparkles className="h-3.5 w-3.5 mr-1" />AI 降重</Button>}
+          </div>
+        </div>
+        <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-2"><div className={`h-full rounded-full transition-all duration-500 ${result.overallRisk === "high" ? "bg-red-500" : result.overallRisk === "medium" ? "bg-amber-500" : "bg-green-500"}`} style={{ width: `${result.maxSimilarity * 100}%` }} /></div>
+        <div className="flex flex-wrap gap-3 text-[10px] text-muted-foreground">
+          {Object.entries(typeStats).map(([t, n]) => <span key={t}>{MATCH_ICONS[t as MatchResult["matchType"]]} {n}</span>)}
+        </div>
+      </div>
+
+      {result.matches.length > 0 ? (
+        <div className="space-y-1.5">{result.matches.map((m, i) => <MatchRow key={m.id} match={m} index={i} />)}</div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground"><CheckCircle2 className="h-8 w-8 mb-2 text-green-500" /><p className="text-sm">未发现相似内容</p></div>
+      )}
+    </div>
+  );
+}
+
+function MatchRow({ match, index }: { match: MatchResult; index: number }) {
+  const [open, setOpen] = useState(false);
+  const dot = match.riskLevel === "high" ? "bg-red-500" : match.riskLevel === "medium" ? "bg-amber-500" : "bg-green-500";
+
+  return (
+    <div className="rounded-lg border bg-card">
+      <div className="flex items-center gap-2 px-3 py-2 cursor-pointer select-none hover:bg-muted/30 transition-colors" onClick={() => setOpen(!open)}>
+        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
+        <span className="text-xs text-muted-foreground w-5 shrink-0">{index + 1}</span>
+        <p className="flex-1 text-sm truncate">{match.sourceText.slice(0, 70)}...</p>
+        <Badge variant="outline" className="text-xs tabular-nums shrink-0">{(match.similarity * 100).toFixed(0)}%</Badge>
+        <span className="text-xs shrink-0">{MATCH_ICONS[match.matchType]} <span className="text-muted-foreground text-[10px]">{match.matchType === "web" ? "联网" : match.matchType === "self" ? "自引" : match.matchType === "cross" ? "跨项目" : match.matchType === "local" ? "知识库" : "AI"}</span></span>
+        {open ? <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground/50" /> : <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground/50" />}
+      </div>
+      {open && (
+        <div className="px-3 pb-3 pt-2 border-t space-y-2">
+          <p className="text-xs text-muted-foreground">来源：{match.matchedUrl ? <a href={match.matchedUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{match.matchedFrom}</a> : match.matchedFrom}</p>
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="p-3 rounded-lg bg-red-50 border border-red-100"><span className="text-[10px] text-red-400 block mb-1">原文</span><p className="text-foreground/70 leading-relaxed">{match.sourceText}</p></div>
+            <div className="p-3 rounded-lg bg-amber-50 border border-amber-100"><span className="text-[10px] text-amber-400 block mb-1">匹配内容</span><p className="text-foreground/70 leading-relaxed">{match.matchedText}</p></div>
           </div>
         </div>
       )}
@@ -359,192 +252,123 @@ function MatchCard({ match, index }: { match: MatchResult; index: number }) {
   );
 }
 
-// ==== 降重改写面板 ====
-function RewritePanel({ checkId, matches }: { checkId: string; matches: MatchResult[] }) {
+// ==================== 降重 ====================
+
+function RewriteView({ checkId, matches, onReCheck }: { checkId: string; matches: MatchResult[]; onReCheck: (c: string) => void }) {
   const [rewriting, setRewriting] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Record<string, RewriteSuggestion[]>>({});
+  const [accepted, setAccepted] = useState<Record<string, boolean>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const handleRewrite = async (match: MatchResult) => {
-    setRewriting(match.id);
+  const doRewrite = async (m: MatchResult) => {
+    setRewriting(m.id);
     try {
-      const res = await fetch("/api/plagiarism/rewrite", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          checkId,
-          matchId: match.id,
-          originalText: match.sourceText,
-        }),
-      });
-
-      if (!res.ok) throw new Error("改写请求失败");
-
-      const data = await res.json();
-      setSuggestions((prev) => ({ ...prev, [match.id]: data.suggestions }));
+      const r = await fetch("/api/plagiarism/rewrite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ checkId, matchId: m.id, originalText: m.sourceText }) });
+      if (!r.ok) throw new Error("改写失败");
+      const d = await r.json();
+      setSuggestions(p => ({ ...p, [m.id]: d.suggestions }));
       toast.success("改写建议已生成");
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setRewriting(null);
-    }
+    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "改写失败"); }
+    finally { setRewriting(null); }
   };
 
-  if (matches.length === 0) {
-    return (
-      <Card>
-        <CardContent className="py-12 text-center">
-          <CheckCircle2 className="h-12 w-12 mx-auto mb-3 text-green-500" />
-          <p className="text-muted-foreground">没有需要降重的内容</p>
-        </CardContent>
-      </Card>
-    );
-  }
+  const accept = (mid: string, s: RewriteSuggestion) => {
+    if (s.id) fetch("/api/plagiarism/rewrite", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ suggestionId: s.id, status: "accepted" }) }).catch(() => {});
+    navigator.clipboard.writeText(s.suggestedText).then(() => { setCopiedId(`${mid}-${s.strategy}`); setTimeout(() => setCopiedId(null), 1500); }).catch(() => {});
+    setAccepted(p => ({ ...p, [`${mid}-${s.strategy}`]: true }));
+    toast.success("已采纳并复制");
+  };
+
+  const reject = (mid: string, s: RewriteSuggestion) => {
+    if (s.id) fetch("/api/plagiarism/rewrite", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ suggestionId: s.id, status: "rejected" }) }).catch(() => {});
+    setAccepted(p => ({ ...p, [`${mid}-${s.strategy}`]: false }));
+  };
+
+  const hr = matches.filter(m => m.riskLevel !== "low");
+  const hasA = Object.values(accepted).some(v => v === true);
+
+  if (hr.length === 0) return <div className="flex flex-col items-center justify-center py-16 text-muted-foreground"><CheckCircle2 className="h-8 w-8 mb-2 text-green-500" /><p className="text-sm">没有需要降重的内容</p></div>;
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            AI 降重改写
-          </CardTitle>
-          <CardDescription>
-            选择需要降重的段落，AI 会生成多种改写方案供你选择确认
-          </CardDescription>
-        </CardHeader>
-      </Card>
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-muted-foreground"><Sparkles className="h-4 w-4 inline mr-1 text-primary/60" />{hr.length} 处需要降重</span>
+        {hasA && <Button size="sm" onClick={() => { let c = ""; for (const m of hr) { const s = suggestions[m.id]?.find(s => accepted[`${m.id}-${s.strategy}`] === true); c += (s?.suggestedText || m.sourceText) + "\n\n"; } onReCheck(c.trim()); }}><Search className="h-3.5 w-3.5 mr-1" />应用改写并重新查重</Button>}
+      </div>
 
-      {matches.filter(m => m.riskLevel !== "low").map((match, i) => (
-        <Card key={match.id}>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                段落 #{i + 1}
-                <Badge variant={match.riskLevel === "high" ? "destructive" : "default"}>
-                  {(match.similarity * 100).toFixed(0)}% 重复
-                </Badge>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleRewrite(match)}
-                disabled={rewriting === match.id}
-              >
-                {rewriting === match.id ? (
-                  <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> 生成中</>
-                ) : (
-                  <><Sparkles className="h-3 w-3 mr-1" /> AI 降重</>
-                )}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="text-sm p-3 bg-red-50 dark:bg-red-950/30 rounded border text-muted-foreground">
-              {match.sourceText}
-            </div>
-
-            {suggestions[match.id] && (
-              <div className="space-y-2">
-                {suggestions[match.id].map((s, si) => (
-                  <div key={si} className="p-3 bg-green-50 dark:bg-green-950/30 rounded border border-green-200 dark:border-green-800">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge variant="outline" className="text-xs">
-                        {s.strategy === "synonym" ? "同义替换" :
-                         s.strategy === "rephrase" ? "改写语序" :
-                         s.strategy === "summarize" ? "概括精简" : "扩写重组"}
-                      </Badge>
-                    </div>
-                    <p className="text-sm">{s.suggestedText}</p>
+      {hr.map((m, i) => (
+        <div key={m.id} className="rounded-lg border bg-card">
+          <div className="flex items-center gap-2 px-3 py-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+            <span className="text-xs text-muted-foreground">#{i + 1}</span>
+            <p className="flex-1 text-sm text-muted-foreground truncate">{m.sourceText.slice(0, 60)}...</p>
+            <Badge variant="outline" className="text-xs tabular-nums text-red-500">{(m.similarity * 100).toFixed(0)}%</Badge>
+            <Button variant="ghost" size="sm" onClick={() => doRewrite(m)} disabled={rewriting === m.id}>{rewriting === m.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Sparkles className="h-3 w-3 mr-1" />}{rewriting === m.id ? "生成中" : "降重"}</Button>
+          </div>
+          {suggestions[m.id]?.map((s, si) => {
+            const k = `${m.id}-${s.strategy}`, isA = accepted[k] === true, isR = accepted[k] === false, isC = copiedId === k;
+            return (
+              <div key={si} className={`mx-2 mb-2 p-2.5 rounded-lg border text-sm leading-relaxed transition-colors ${isA ? "bg-green-50 border-green-200" : isR ? "bg-muted/20 border-border opacity-40" : "bg-muted/20 border-border"}`}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-[10px]">{STRATEGY_LABELS[s.strategy]}</Badge>
+                    {s.similarityAfter != null && s.similarityAfter < 1 && <span className="text-[10px] text-green-600 tabular-nums">→ {(s.similarityAfter * 100).toFixed(0)}%</span>}
                   </div>
-                ))}
-                <div className="text-xs text-muted-foreground text-center pt-1">
-                  AI 生成建议，请人工核对后使用
+                  <div className="flex items-center gap-1">
+                    {!isA && !isR && <>
+                      <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px] text-green-600" onClick={() => accept(m.id, s)}><Check className="h-3 w-3 mr-0.5" />采纳</Button>
+                      <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px] text-muted-foreground" onClick={() => reject(m.id, s)}><X className="h-3 w-3 mr-0.5" />忽略</Button>
+                    </>}
+                    {isA && <span className="text-[10px] text-green-600">{isC ? "已复制 ✓" : "已采纳"}</span>}
+                    {isR && <span className="text-[10px] text-muted-foreground">已忽略</span>}
+                  </div>
                 </div>
+                <p className={isR ? "line-through text-muted-foreground" : ""}>{s.suggestedText}</p>
               </div>
-            )}
-          </CardContent>
-        </Card>
+            );
+          })}
+        </div>
       ))}
     </div>
   );
 }
 
-// ==== 历史记录面板 ====
-function HistoryPanel({ projectId, onViewResult }: { projectId?: string | null; onViewResult: (r: CheckResult) => void }) {
-  const [checks, setChecks] = useState<any[]>([]);
+// ==================== 历史 ====================
+
+interface HC { id: string; title: string; maxSimilarity: number; overallRisk: string; createdAt: string; _count?: { matches: number } }
+
+function HistoryView({ projectId, onViewResult }: { projectId?: string | null; onViewResult: (r: CheckResult) => void }) {
+  const [checks, setChecks] = useState<HC[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchHistory = async () => {
-      setLoading(true);
-      try {
-        const params = new URLSearchParams();
-        if (projectId) params.append("projectId", projectId);
-        const res = await fetch(`/api/plagiarism/history?${params}`);
-        const data = await res.json();
-        setChecks(data.checks || []);
-      } catch { setChecks([]); }
-      finally { setLoading(false); }
-    };
-    fetchHistory();
+    const p = new URLSearchParams(); if (projectId) p.append("projectId", projectId);
+    fetch(`/api/plagiarism/history?${p}`).then(r => r.json()).then(d => setChecks(d.checks || [])).catch(() => setChecks([])).finally(() => setLoading(false));
   }, [projectId]);
 
-  const loadCheck = async (checkId: string) => {
+  const load = async (id: string) => {
     try {
-      const res = await fetch(`/api/plagiarism/history?checkId=${checkId}`);
-      const data = await res.json();
-      if (data.check) {
-        onViewResult({
-          checkId: data.check.id,
-          totalMatches: data.check._count?.matches || 0,
-          maxSimilarity: data.check.maxSimilarity || 0,
-          overallRisk: (data.check.overallRisk || "low") as "high" | "medium" | "low",
-          matches: data.check.matches?.map((m: any) => ({
-            id: m.id, sourceText: m.sourceText, sourceOffset: m.sourceOffset,
-            matchType: m.matchType, matchedText: m.matchedText,
-            matchedFrom: m.matchedFrom, matchedUrl: m.matchedUrl,
-            similarity: m.similarity, riskLevel: m.riskLevel,
-          })) || [],
-        });
-      }
-    } catch { toast.error("加载检测详情失败"); }
+      const r = await fetch(`/api/plagiarism/history?checkId=${id}`);
+      const d = await r.json();
+      if (d.check) onViewResult({ checkId: d.check.id, totalMatches: d.check._count?.matches || 0, maxSimilarity: d.check.maxSimilarity || 0, overallRisk: (d.check.overallRisk || "low") as "high" | "medium" | "low", matches: d.check.matches?.map((m: Record<string, unknown>) => ({ id: m.id, sourceText: m.sourceText, sourceOffset: m.sourceOffset, matchType: m.matchType, matchedText: m.matchedText, matchedFrom: m.matchedFrom, matchedUrl: m.matchedUrl, similarity: m.similarity, riskLevel: m.riskLevel })) || [] });
+    } catch { toast.error("加载详情失败"); }
   };
 
-  if (loading) return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>;
-
-  if (checks.length === 0) {
-    return (
-      <Card>
-        <CardContent className="py-12 text-center text-muted-foreground">
-          <RefreshCw className="h-8 w-8 mx-auto mb-3 opacity-50" />
-          <p>暂无查重记录</p>
-        </CardContent>
-      </Card>
-    );
-  }
+  if (loading) return <div className="flex justify-center py-16"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
+  if (checks.length === 0) return <div className="flex flex-col items-center justify-center py-16 text-muted-foreground"><Clock className="h-8 w-8 mb-2 opacity-30" /><p className="text-sm">暂无查重记录</p></div>;
 
   return (
-    <div className="space-y-3">
-      {checks.map((c: any) => {
-        const riskColor = c.maxSimilarity > 0.35 ? "destructive" : c.maxSimilarity > 0.15 ? "default" : "secondary";
-        const riskLabel = c.maxSimilarity > 0.35 ? "高风险" : c.maxSimilarity > 0.15 ? "中风险" : "低风险";
+    <div className="space-y-2">
+      {checks.map(c => {
+        const risk = c.maxSimilarity > 0.35 ? "high" : c.maxSimilarity > 0.15 ? "medium" : "low";
+        const dot = risk === "high" ? "bg-red-500" : risk === "medium" ? "bg-amber-500" : "bg-green-500";
         return (
-          <Card key={c.id} className="hover:border-primary/30 transition-colors cursor-pointer" onClick={() => loadCheck(c.id)}>
-            <CardHeader className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-sm">{c.title}</CardTitle>
-                  <CardDescription className="text-xs mt-0.5">
-                    {new Date(c.createdAt).toLocaleString("zh-CN")}
-                  </CardDescription>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant={riskColor}>{riskLabel}</Badge>
-                  <span className="text-sm font-mono">{(c.maxSimilarity * 100).toFixed(1)}%</span>
-                </div>
-              </div>
-            </CardHeader>
-          </Card>
+          <div key={c.id} className="flex items-center gap-3 px-4 py-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => load(c.id)}>
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
+            <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{c.title}</p><p className="text-[10px] text-muted-foreground">{new Date(c.createdAt).toLocaleString("zh-CN")}</p></div>
+            <Badge variant="outline" className="text-xs tabular-nums">{(c.maxSimilarity * 100).toFixed(1)}%</Badge>
+            <span className="text-xs text-muted-foreground">{c._count?.matches || 0} 处</span>
+          </div>
         );
       })}
     </div>

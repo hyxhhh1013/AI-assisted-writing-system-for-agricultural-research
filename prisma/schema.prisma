@@ -57,6 +57,8 @@ model Project {
   charts            String?
   // 数据证据声明（JSON 数组 EvidenceClaim[]）
   dataClaims        String?
+  // 引用格式标准（gbt7714 | vancouver | apa7 | ieee）
+  citationStyle     String?   @default("gbt7714")
   // 数据源分析结果（JSON 数组 DataSourceAnalysis[]）
   dataSources       String?
 
@@ -172,10 +174,58 @@ model RewriteSuggestion {
   suggestedText String           // 改写建议
   strategy     String            // synonym（同义替换）| rephrase（改写语序）| summarize（概括）| expand（扩写）
   status       String            @default("pending") // pending | accepted | rejected
+  rewrittenSimilarity Float?     // 改写后预期相似度
   createdAt    DateTime          @default(now())
+
+  @@index([checkId])
 }
 
 // ==================== 引用-文献映射 ====================
+
+// ==================== 论文审查模型 ====================
+
+model ReviewCheck {
+  id            String   @id @default(cuid())
+  projectId     String?
+  title         String
+  content       String   // 审查的完整文本
+  status        String   @default("pending") // pending | running | done | failed
+  overallScore  Float?
+  overallGrade  String?  // A/B/C/D
+  summary       String?  // 总体评价
+  synopsis      String?  // 论文概要
+  dimensions    String?  // JSON: 各维度得分和统计
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  issues        ReviewIssue[]
+
+  @@index([projectId])
+  @@index([createdAt])
+}
+
+model ReviewIssue {
+  id          String   @id @default(cuid())
+  checkId     String
+  check       ReviewCheck @relation(fields: [checkId], references: [id], onDelete: Cascade)
+
+  dimension   String   // "academic" | "argument" | "structure" | "integrity"
+  type        String   // 具体问题类型
+  severity    String   // "high" | "medium" | "low"
+  location    String?  // 问题所在位置
+  evidence    String?  // 证据锚点
+  description String   // 问题描述
+  suggestion  String?  // 改进建议
+  originalText String? // 原文片段
+
+  status      String   @default("open")  // open | fixing | fixed | dismissed
+  fixedContent String? // AI 修复后的内容
+  createdAt   DateTime @default(now())
+
+  @@index([checkId])
+  @@index([dimension])
+  @@index([severity])
+}
 
 // 论文中 [N] 引用编号到知识库文献源的映射，用于前端溯源查看原文
 model ReferenceSource {

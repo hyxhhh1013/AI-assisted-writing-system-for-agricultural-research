@@ -9,11 +9,19 @@ export const writingSchema = z.object({
   language: z.enum(["zh", "en"]).optional().default("zh"),
   template: z.enum(["sci", "ieee", "gbt7713", "nature"]).optional().default("sci"),
   existingReferences: z.array(z.string()).optional(),
-  globalContext: z.string().optional(),
+  // globalContext 是前端传来的包含 abstract/outline/sectionPreviews 的复杂对象
+  globalContext: z.unknown().optional(),
   mode: z.enum(["full", "fast", "audit_only", "fix_only"]).optional().default("full"),
   verificationFeedback: z.string().optional(),
-  retrievalMode: z.string().optional(),
+  retrievalMode: z.enum(["balanced", "precise", "extensive"]).optional().default("balanced"),
   researchDirection: z.string().optional(),
+  // 扩展字段（子章节 / 图表 / 数据核查）
+  subsectionTitle: z.string().optional(),
+  figureStart: z.number().int().optional(),
+  evidenceSummary: z.string().optional(),
+  projectMode: z.enum(["review", "research"]).optional(),
+  dataClaims: z.array(z.unknown()).optional().default([]),
+  citationStyle: z.enum(["gbt7714", "vancouver", "apa7", "ieee"]).optional().default("gbt7714"),
 });
 export type WritingInput = z.infer<typeof writingSchema>;
 
@@ -22,6 +30,7 @@ export const outlineSchema = z.object({
   title: z.string().min(1, "标题不能为空"),
   researchDirection: z.string().optional(),
   language: z.enum(["zh", "en"]).optional().default("zh"),
+  category: z.string().optional(),
 });
 export type OutlineInput = z.infer<typeof outlineSchema>;
 
@@ -42,8 +51,10 @@ export type AnalysisInput = z.infer<typeof analysisSchema>;
 // === Consistency Check ===
 export const consistencySchema = z.object({
   title: z.string().min(1, "标题不能为空"),
-  sections: z.array(z.string()).min(1, "至少需要一个章节"),
-  outline: z.string().optional(),
+  // sections 是 { key: string; content: string }[] 对象数组
+  sections: z.array(z.object({ key: z.string(), content: z.string() })).min(1, "至少需要一个章节"),
+  outline: z.string().optional().default(""),
+  dataClaims: z.array(z.unknown()).optional(),
 });
 export type ConsistencyInput = z.infer<typeof consistencySchema>;
 
@@ -66,6 +77,7 @@ export const plagiarismCheckSchema = z.object({
   projectId: z.string().optional(),
   title: z.string().min(1, "标题不能为空"),
   content: z.string().min(50, "内容至少需要50个字符"),
+  webSearch: z.boolean().optional().default(false),
 });
 export type PlagiarismCheckInput = z.infer<typeof plagiarismCheckSchema>;
 
@@ -85,3 +97,18 @@ export const knowledgeAnalyzeSchema = z.object({
   mode: z.enum(["chunk", "full"]).optional().default("full"),
 });
 export type KnowledgeAnalyzeInput = z.infer<typeof knowledgeAnalyzeSchema>;
+
+// === Review (论文审查) ===
+export const reviewSchema = z.object({
+  projectId: z.string().optional(),
+  title: z.string().min(1, "标题不能为空"),
+  sections: z
+    .array(z.object({ key: z.string(), content: z.string() }))
+    .min(1, "至少需要一个章节"),
+  outline: z.string().optional(),
+  dimensions: z
+    .array(z.enum(["academic", "argument", "structure", "integrity"]))
+    .optional(),
+  target: z.string().optional(),
+});
+export type ReviewInput = z.infer<typeof reviewSchema>;

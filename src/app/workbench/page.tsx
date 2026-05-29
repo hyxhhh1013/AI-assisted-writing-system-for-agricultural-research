@@ -296,7 +296,13 @@ function WorkbenchContent() {
         const endIdx = nextHeadingMatch
           ? headingEnd + nextHeadingMatch.index!
           : existingText.length;
-        merged = existingText.slice(0, headingEnd) + processedContent + "\n\n" + existingText.slice(endIdx);
+        // AI 输出首行已是该标题 → 剥掉重复标题行，避免双重标题
+        let contentToInsert = processedContent;
+        if (aiStartsWithMatchingHeading) {
+          const firstNl = contentToInsert.indexOf("\n");
+          contentToInsert = firstNl !== -1 ? contentToInsert.slice(firstNl + 1).trimStart() : "";
+        }
+        merged = existingText.slice(0, headingEnd) + contentToInsert + "\n\n" + existingText.slice(endIdx);
       } else {
         // 未找到 → 追加到章节末尾，使用统一编号标题格式
         const major = majorNumberFromSectionId(sectionId);
@@ -309,9 +315,22 @@ function WorkbenchContent() {
         } else {
           heading = aiStartsWithMatchingHeading ? "" : `### ${subsectionTitle}`;
         }
-        const newBlock = heading ? `${heading}\n${processedContent}` : processedContent;
-        merged = existingText.trim()
-          ? `${existingText}\n\n${newBlock}`
+        // AI 输出首行已是该标题 → 剥掉重复标题行（与 "found" 分支保持一致）
+        let appendContent = processedContent;
+        if (aiStartsWithMatchingHeading) {
+          const firstNl = appendContent.indexOf("\n");
+          appendContent = firstNl !== -1 ? appendContent.slice(firstNl + 1).trimStart() : "";
+        }
+        const newBlock = heading ? `${heading}\n${appendContent}` : appendContent;
+        // 如果 existingText 末尾残留了相同小节的大纲占位标题（无正文），先剥掉再追加
+        // 这样可避免"末尾占位行 + AI 输出首行"形成双标题
+        const trailingStubRe = new RegExp(
+          `(?:\\n|^)(?:#{1,3}\\s*)?(?:\\d+\\.?\\d*(?:\\.\\d+)?\\s*)?${escapedTitle}\\s*$`,
+          "i"
+        );
+        const baseText = existingText.trim().replace(trailingStubRe, "").trim();
+        merged = baseText
+          ? `${baseText}\n\n${newBlock}`
           : newBlock;
       }
 
@@ -332,23 +351,38 @@ function WorkbenchContent() {
       processedContent = ensureSubsectionNumbering(processedContent, sectionId, existingBeforeMerge);
     }
 
+    // 归一化非标准引用格式：[参考来源N] / [文献N] → [N]
+    processedContent = processedContent
+      .replace(/\[参考来源\s*\[?(\d+)\]?\s*\]/g, "[$1]")
+      .replace(/\[文献\s*(\d+)\]/g, "[$1]")
+      .replace(/\[[Rr]ef\s*(\d+)\]/g, "[$1]");
     // 清理草稿痕迹 + 去重 + 越界引用剥离后再写入
-    processedContent = stripOutOfRangeCitations(processedContent, currentProject.references.length);
+    const refCount = currentProject.references?.length || 0;
+    processedContent = stripOutOfRangeCitations(processedContent, refCount);
     processedContent = cleanDraftArtifacts(processedContent);
     processedContent = deduplicateParagraphs(processedContent);
 
+    // 构建应用后的完整项目快照
+    const newSectionsSnapshot = sectionId !== "abstract"
+      ? { ...currentProject.sections, [sectionId]: processedContent }
+      : currentProject.sections;
+    const newAbstractSnapshot = sectionId === "abstract" ? processedContent : (currentProject.abstract || "");
+
+    // 引用只增不减：apply 时不自动剪枝，由用户手动"清理文献"触发
     setProject(prev => {
       if (!prev) return prev;
-      if (sectionId === "abstract") {
-        return { ...prev, abstract: processedContent };
-      }
-      return { ...prev, sections: { ...prev.sections, [sectionId]: processedContent } };
+      return {
+        ...prev,
+        abstract: newAbstractSnapshot,
+        sections: newSectionsSnapshot,
+        references: prev.references || [],
+      };
     });
     setEditingContent(processedContent);
     if (sectionId !== activeSection) {
       setActiveSection(sectionId);
     }
-    toast.success(`内容已应用到 ${sectionId} 章节`);
+    toast.success(`内容已应用到 ${sectionId} 章节。引用列表已保留，可通过侧栏"清理文献"按钮整理`);
   };
 
   const handleOpenFile = (fileName: string) => {
@@ -357,7 +391,7 @@ function WorkbenchContent() {
     setIsPreviewOpen(true);
   };
 
-  const handleSaveMeta = async (draft: { title: string; authors: string; affiliations: string; abstract: string; keywords: string; classification: string; researchDirection: string; outline: string; template: string; referencesText: string; mode?: "review" | "research" }) => {
+  const handleSaveMeta = async (draft: { title: string; authors: string; affiliations: string; abstract: string; keywords: string; classification: string; researchDirection: string; outline: string; template: string; referencesText: string; mode?: "review" | "research"; citationStyle?: "gbt7714" | "vancouver" | "apa7" | "ieee" }) => {
     const updated: ProjectData = {
       ...project,
       title: draft.title,
@@ -370,6 +404,7 @@ function WorkbenchContent() {
       outline: draft.outline,
       template: draft.template,
       mode: draft.mode || "review",
+      citationStyle: draft.citationStyle || "gbt7714",
       references: draft.referencesText.split(/\n+/).map((ref) => ref.trim()).filter(Boolean),
     };
     setProject(updated);
@@ -502,6 +537,34 @@ function WorkbenchContent() {
           </header>
           
           <div className="flex-1 overflow-hidden p-4">
+            {activeTab === "plagiarism" && (
+              <div className="h-full min-h-0 flex flex-col overflow-y-auto px-2 py-2">
+                <ErrorBoundary>
+                  <LazyPlagiarismPanel
+                    projectId={projectId ?? undefined}
+                    projectTitle={project.title}
+                    initialContent={
+                      [
+                        project.abstract ? `摘要：${project.abstract}` : "",
+                        ...Object.entries(project.sections || {})
+                          .filter(([, content]) => content?.trim())
+                          .map(([key, content]) => {
+                            const labels: Record<string, string> = {
+                              introduction: "引言",
+                              methods: "材料与方法",
+                              results: "结果与讨论",
+                              conclusion: "结论",
+                            };
+                            return `${labels[key] || key}：${content}`;
+                          }),
+                      ]
+                        .filter(Boolean)
+                        .join("\n\n")
+                    }
+                  />
+                </ErrorBoundary>
+              </div>
+            )}
             {activeTab === "structure" && (
               <div className="h-full overflow-y-auto pr-2 custom-scrollbar space-y-1">
                 <p className="text-[10px] text-muted-foreground px-1 pb-2 border-b mb-2 leading-relaxed">
@@ -628,16 +691,6 @@ function WorkbenchContent() {
               <div className="h-full min-h-0 flex flex-col overflow-hidden">
                 <ErrorBoundary>
                   <LazyReaderPanel onOpenFile={handleOpenFile} />
-                </ErrorBoundary>
-              </div>
-            )}
-            {activeTab === "plagiarism" && (
-              <div className="h-full min-h-0 flex flex-col overflow-hidden">
-                <ErrorBoundary>
-                  <LazyPlagiarismPanel
-                    projectId={projectId ?? undefined}
-                    projectTitle={project.title}
-                  />
                 </ErrorBoundary>
               </div>
             )}
