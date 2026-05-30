@@ -26,7 +26,7 @@ const TABS: { id: WorkbenchTab; icon: typeof Layout; title: string }[] = [
   { id: "outline", icon: BookOpen, title: "论证提纲：AI 生成目录树（与左侧 IMRaD 并列，非同一套）" },
   { id: "writing", icon: FileText, title: "侧栏整章扩写（RAG + 多阶段），应用后写入所选章" },
   { id: "reader", icon: FileSearch, title: "本地文献库 PDF" },
-  { id: "plagiarism", icon: Search, title: "论文查重与 AI 降重" },
+  { id: "plagiarism", icon: Search, title: "论文质量检测：查重 / 降重 / 审查" },
 ];
 
 export function WorkbenchTabSwitcher({
@@ -47,10 +47,15 @@ export function WorkbenchTabSwitcher({
             variant={activeTab === tab.id ? "default" : "ghost"}
             size="icon"
             onClick={() => {
-              setActiveTab(tab.id);
-              if (tab.id === "reader") {
-                setRightPanelMode("reader");
-                setIsPreviewOpen(true);
+              if (tab.id === "plagiarism") {
+                // 跳转到质量检测页面
+                router.push(`/plagiarism?id=${projectId}`);
+              } else {
+                setActiveTab(tab.id);
+                if (tab.id === "reader") {
+                  setRightPanelMode("reader");
+                  setIsPreviewOpen(true);
+                }
               }
             }}
             title={tab.title}

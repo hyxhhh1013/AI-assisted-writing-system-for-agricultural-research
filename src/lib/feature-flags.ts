@@ -26,6 +26,7 @@ export const featureFlags = {
   get xrd() { return isEnabled("XRD"); },
   get pdf() { return isEnabled("PDF"); },
   get experimentalDataInjection() { return isEnabled("EXPERIMENTAL_DATA_INJECTION"); },
+  get review() { return isEnabled("REVIEW"); },
   /** 返回所有当前开启的功能 */
   all(): Record<string, FlagValue> {
     return {
@@ -40,6 +41,7 @@ export const featureFlags = {
       xrd: this.xrd,
       pdf: this.pdf,
       experimentalDataInjection: this.experimentalDataInjection,
+      review: this.review,
     };
   },
 };

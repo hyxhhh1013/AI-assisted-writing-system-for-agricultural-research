@@ -522,7 +522,7 @@ function WorkbenchContent() {
                 {activeTab === "outline" && "论证提纲"}
                 {activeTab === "writing" && "侧栏扩写"}
                 {activeTab === "reader" && "文献库"}
-                {activeTab === "plagiarism" && "查重与降重"}
+                {activeTab === "plagiarism" && "论文质量检测"}
                 {activeTab === "xrd" && "XRD 分析"}
               </span>
               {activeTab === "structure" && (
