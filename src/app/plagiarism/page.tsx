@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { projectStore } from "@/lib/store";
 import type { ProjectData } from "@/lib/store";
+import { ReviewTab } from "@/components/shared/review-tab";
 
 // ==================== 类型 ====================
 
@@ -63,7 +64,7 @@ function Content() {
   const [web, setWeb] = useState(false);
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<CheckResult | null>(null);
-  const [tab, setTab] = useState<"check" | "result" | "rewrite" | "history">("check");
+  const [tab, setTab] = useState<"check" | "result" | "rewrite" | "review" | "history">("check");
 
   const [plist, setPlist] = useState<{ id: string; title: string }[]>([]);
   const [selPid, setSelPid] = useState(pid || "");
@@ -119,6 +120,7 @@ function Content() {
     { k: "check" as const, l: "查重检测", i: Search },
     { k: "result" as const, l: "检测结果", i: FileText, dis: !result },
     { k: "rewrite" as const, l: "AI 降重", i: Shuffle, dis: !result },
+    { k: "review" as const, l: "论文审查", i: FileText },
     { k: "history" as const, l: "历史记录", i: Clock },
   ];
 
@@ -127,7 +129,7 @@ function Content() {
       <header className="sticky top-0 z-10 border-b bg-card/80 backdrop-blur-sm">
         <div className="container mx-auto px-4 h-12 flex items-center gap-3">
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.back()}><ArrowLeft className="h-4 w-4" /></Button>
-          <span className="text-sm font-semibold flex items-center gap-1.5"><Search className="h-4 w-4 text-primary/60" />论文查重与降重</span>
+          <span className="text-sm font-semibold flex items-center gap-1.5"><Search className="h-4 w-4 text-primary/60" />论文质量检测</span>
           {project && <span className="text-xs text-muted-foreground ml-auto truncate">{project.title}</span>}
         </div>
       </header>
@@ -147,6 +149,18 @@ function Content() {
           {tab === "check" && <CheckView title={title} setTitle={setTitle} content={content} setContent={setContent} web={web} setWeb={setWeb} checking={checking} onCheck={doCheck} plist={plist} selPid={selPid} loadingP={loadingP} onLoad={loadP} onClear={() => { setContent(""); setResult(null); setSelPid(""); }} />}
           {tab === "result" && result && <ResultView result={result} onRewrite={() => setTab("rewrite")} onReCheck={() => setTab("check")} />}
           {tab === "rewrite" && result && <RewriteView checkId={result.checkId} matches={result.matches} onReCheck={c => { setContent(c); setResult(null); setTab("check"); toast.success("已应用改写，点击「查重」验证"); }} />}
+          {tab === "review" && (
+            <ReviewTab
+              title={title || "未命名论文"}
+              sections={[
+                { key: "abstract", title: "摘要", content: content.slice(0, 500) },
+                { key: "introduction", title: "引言", content: content.slice(500, 1500) || "" },
+                { key: "methods", title: "材料与方法", content: content.slice(1500, 3000) || "" },
+                { key: "results", title: "结果与讨论", content: content.slice(3000, 5000) || "" },
+                { key: "conclusion", title: "结论", content: content.slice(5000) || "" },
+              ].filter(s => s.content.trim())}
+            />
+          )}
           {tab === "history" && <HistoryView projectId={pid} onViewResult={r => { setResult(r); setTab("result"); }} />}
         </div>
       </main>
