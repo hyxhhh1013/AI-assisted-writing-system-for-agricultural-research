@@ -125,6 +125,51 @@ export function buildNumberedParagraphBlocks(
  * 2. 检查是否已有层级编号（如 "3.1 xxx"、"3.1.1 xxx"）→ 有则直接返回
  * 3. 否则按层级自动编号：二级标题 → major.sub，三级标题 → major.sub.ter
  */
+/** 判断一行是否像编号标题（如 "2.1 标题" 或 "### 2.1 标题"）且无正文内容 */
+function isHeadingLine(line: string): boolean {
+  const t = line.trim();
+  if (!t) return false;
+  // Markdown heading
+  if (/^#{1,6}\s/.test(t)) return true;
+  // 纯文本编号标题（2.1 / 2.1.1）
+  if (/^\d+\.\d+(?:\.\d+)?\s+\S/.test(t)) return true;
+  return false;
+}
+
+/** 去掉正文末尾连续出现的目录式标题行（≥2 行纯标题，无正文间隔） */
+function stripTrailingTOC(content: string): string {
+  const lines = content.split("\n");
+  // 从末尾向前找连续的非空行
+  let end = lines.length - 1;
+  while (end >= 0 && lines[end].trim() === "") end--;
+  if (end < 0) return content;
+
+  // 从末尾向前，收集连续的标题行
+  let headingCount = 0;
+  let idx = end;
+  while (idx >= 0 && isHeadingLine(lines[idx])) {
+    headingCount++;
+    idx--;
+    // 跳过标题行之间的空行
+    while (idx >= 0 && lines[idx].trim() === "") idx--;
+  }
+
+  // ≥ 2 个连续标题在末尾 → 判定为目录，删除
+  if (headingCount >= 2) {
+    // 找到最后一个标题行之前的内容截止点
+    let cutIdx = end;
+    for (let i = 0; i < headingCount; i++) {
+      while (cutIdx >= 0 && lines[cutIdx].trim() === "") cutIdx--;
+      while (cutIdx >= 0 && isHeadingLine(lines[cutIdx])) cutIdx--;
+    }
+    // 删除之后的所有空行
+    while (cutIdx >= 0 && lines[cutIdx].trim() === "") cutIdx--;
+    return lines.slice(0, cutIdx + 1).join("\n");
+  }
+
+  return content;
+}
+
 export function ensureSubsectionNumbering(
   content: string,
   sectionId: string,
@@ -132,6 +177,9 @@ export function ensureSubsectionNumbering(
 ): string {
   const major = majorNumberFromSectionId(sectionId);
   if (major == null) return content;
+
+  // 步骤0：去掉末尾的目录结构
+  content = stripTrailingTOC(content);
 
   // 步骤1：去掉所有行首的 Markdown 标题标记
   const lines = content.split("\n");
@@ -197,14 +245,17 @@ export function ensureSubsectionNumbering(
       continue;
     }
 
-    if (h.headingLevel === 1 || h.headingLevel === 2 || h.headingLevel === 3) {
-      // 二级标题 → major.X
+    if (h.headingLevel === 1) {
+      // h1 = 章节主标题（编辑器已有 IMRaD 章节标题），保留文本但不编号
+      result.push(stripLeadingEnumeration(h.cleaned));
+    } else if (h.headingLevel === 2 || h.headingLevel === 3) {
+      // h2/h3 = 二级子节 → major.X
       secCounter++;
       subCounter = 0;
       const body = stripLeadingEnumeration(h.cleaned);
       result.push(`${major}.${secCounter} ${body}`);
     } else if (h.headingLevel >= 4 && h.headingLevel <= 6) {
-      // 三级标题 → major.X.Y（但如果还没有二级标题，先默认 secCounter=1）
+      // h4/h5/h6 = 三级子节 → major.X.Y
       if (secCounter === 0) secCounter = 1;
       subCounter++;
       const body = stripLeadingEnumeration(h.cleaned);

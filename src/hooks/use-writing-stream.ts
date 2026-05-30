@@ -21,6 +21,7 @@ export interface WritingStreamResult {
   content: string;
   verification: string;
   references: string[];
+  refMapping?: Record<string, number>;
   citationWarnings: { num: number; overlap: number; context: string }[];
   dataClaimWarnings: { claimId: string; claimText: string; found: boolean; citedCorrectly: boolean; issue?: string }[];
   pipelineSteps: PipelineStep[];
@@ -52,13 +53,19 @@ export function useWritingStream(): UseWritingStreamReturn {
 
   const abortRef = useRef<AbortController | null>(null);
   const resultRef = useRef("");
+  const renderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const verificationRef = useRef("");
   const refsRef = useRef<string[]>([]);
+  const refMappingRef = useRef<Record<string, number>>({});
   const warningsRef = useRef<{ num: number; overlap: number; context: string }[]>([]);
   const dcWarningsRef = useRef<{ claimId: string; claimText: string; found: boolean; citedCorrectly: boolean; issue?: string }[]>([]);
   const stepsRef = useRef<PipelineStep[]>([]);
 
   const reset = useCallback(() => {
+    if (renderTimerRef.current) {
+      clearTimeout(renderTimerRef.current);
+      renderTimerRef.current = null;
+    }
     setResult("");
     setVerificationFeedback("");
     setDetectedRefs([]);
@@ -69,6 +76,7 @@ export function useWritingStream(): UseWritingStreamReturn {
     resultRef.current = "";
     verificationRef.current = "";
     refsRef.current = [];
+    refMappingRef.current = {};
     warningsRef.current = [];
     dcWarningsRef.current = [];
     stepsRef.current = [];
@@ -142,7 +150,14 @@ export function useWritingStream(): UseWritingStreamReturn {
               else if (event.status === "verifying") toast.info("学术核查代理审计中...");
               else if (event.status === "refining") toast.info("主编根据审稿意见修正中...");
             } else if (isDeltaEvent(event)) {
-              setResult(prev => { const next = prev + event.content; resultRef.current = next; return next; });
+              resultRef.current = resultRef.current + event.content;
+              // 节流：最多每 150ms 触发一次 React 重渲染，避免逐字卡顿
+              if (!renderTimerRef.current) {
+                renderTimerRef.current = setTimeout(() => {
+                  renderTimerRef.current = null;
+                  setResult(resultRef.current);
+                }, 150);
+              }
             } else if (isVerificationEvent(event)) {
               verificationRef.current += event.verification;
               setVerificationFeedback(verificationRef.current);
@@ -156,6 +171,9 @@ export function useWritingStream(): UseWritingStreamReturn {
               if (event.references.length > 0) {
                 refsRef.current = Array.from(new Set([...refsRef.current, ...event.references]));
                 setDetectedRefs(refsRef.current);
+              }
+              if (event.refMapping) {
+                refMappingRef.current = { ...refMappingRef.current, ...event.refMapping };
               }
             } else if (isCitationWarningsEvent(event)) {
               warningsRef.current = event.warnings;
@@ -172,7 +190,11 @@ export function useWritingStream(): UseWritingStreamReturn {
             } else if (isErrorEvent(event)) {
               toast.error(event.error);
             } else if (isInfoEvent(event)) {
-              toast.info(event.info);
+              if (event.refMapping) {
+                refMappingRef.current = { ...refMappingRef.current, ...event.refMapping };
+              } else {
+                toast.info(event.info);
+              }
             }
           } catch { /* skip malformed */ }
         }
@@ -185,9 +207,18 @@ export function useWritingStream(): UseWritingStreamReturn {
       if (error instanceof DOMException && error.name === "AbortError") {
         // user cancelled
       } else {
-        toast.error(error instanceof Error ? error.message : "写作生成失败");
+        const raw = error instanceof Error ? error.message : "写作生成失败";
+        // 超长消息（如 HTML 504 页面）截断并显示友好提示
+        const msg = raw.length > 80 ? "AI 服务暂时不可用，请稍后重试" : raw;
+        toast.error(msg);
       }
     } finally {
+      // 清除节流定时器，立刻将最终内容刷入 state
+      if (renderTimerRef.current) {
+        clearTimeout(renderTimerRef.current);
+        renderTimerRef.current = null;
+      }
+      setResult(resultRef.current);
       abortRef.current = null;
       setIsGenerating(false);
       setGenerationStatus("completed");
@@ -197,6 +228,7 @@ export function useWritingStream(): UseWritingStreamReturn {
       content: resultRef.current,
       verification: verificationRef.current,
       references: refsRef.current,
+      refMapping: refMappingRef.current,
       citationWarnings: warningsRef.current,
       dataClaimWarnings: dcWarningsRef.current,
       pipelineSteps: stepsRef.current,

@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { NextRequest } from "next/server";
 import { renderProjectPdf } from "@/services/server-pdf";
 import type { ProjectData } from "@/lib/store";
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    console.error("Server PDF Export Error:", error);
+    logger.error("Server PDF Export Error:", error);
     const message = error instanceof Error ? error.message : "未知错误";
     return new Response(`PDF 服务端导出失败: ${message}`, { status: 500 });
   }

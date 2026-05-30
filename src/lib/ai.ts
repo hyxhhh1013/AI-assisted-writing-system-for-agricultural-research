@@ -58,6 +58,10 @@ export async function callAI(options: AICallOptions): Promise<Response> {
   );
 
   if (!response.ok) {
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType.includes("text/html") || response.status === 504 || response.status === 502 || response.status === 503) {
+      throw new AIError(`AI 服务暂时繁忙（${response.status}），请稍后重试`, response.status);
+    }
     let errorMsg = `${config.name} API 请求失败`;
     try {
       const err = await response.text();
@@ -72,7 +76,7 @@ export async function callAI(options: AICallOptions): Promise<Response> {
 export async function* streamAIResponse(
   response: Response,
   signal?: AbortSignal,
-  idleTimeoutMs = 30_000,
+  idleTimeoutMs = 120_000,
 ): AsyncGenerator<{ content?: string }> {
   if (!response.body) return;
 
@@ -116,10 +120,26 @@ export async function* streamAIResponse(
         if (trimmed.startsWith("data:") && trimmed !== "data: [DONE]") {
           try {
             const data = JSON.parse(trimmed.slice(5).trim());
-            const content = data.choices?.[0]?.delta?.content || "";
+            const content = data.choices?.[0]?.delta?.content
+              || data.choices?.[0]?.delta?.reasoning_content
+              || "";
             if (content) yield { content };
           } catch {}
         }
+      }
+    }
+
+    // 处理 buffer 中残留的最后一行数据
+    if (buffer.trim()) {
+      const trimmed = buffer.trim();
+      if (trimmed.startsWith("data:") && trimmed !== "data: [DONE]") {
+        try {
+          const data = JSON.parse(trimmed.slice(5).trim());
+          const content = data.choices?.[0]?.delta?.content
+            || data.choices?.[0]?.delta?.reasoning_content
+            || "";
+          if (content) yield { content };
+        } catch {}
       }
     }
   } finally {

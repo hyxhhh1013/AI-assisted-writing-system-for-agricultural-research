@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeFile } from "@/services/data-analysis";
 
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest) {
       chartConfigs: result.chartConfigs,
     });
   } catch (error: any) {
-    console.error("Data analyze error:", error);
+    logger.error("Data analyze error:", error);
     return NextResponse.json({ error: error.message || "分析失败" }, { status: 500 });
   }
 }

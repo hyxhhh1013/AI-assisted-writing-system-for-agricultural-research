@@ -67,7 +67,7 @@ npx prisma db push
 
 ### 5. 初始化知识库
 
-将 PDF 文献放入 `热化学小组文章-2024.12.27` 目录后：
+将 PDF 文献放入 `papers` 目录后：
 
 ```bash
 npm run index-docs
@@ -157,6 +157,19 @@ npm run index-docs   # 重建文献索引
 - dev server 运行时 `prisma generate` 可能因文件锁失败，需先停服
 - `.env` 不提交 Git，已配置 `.gitignore`
 - 运行时数据 (dev.db、RAG 索引、PDF 文献) 不入 Git
+
+## 文档索引
+
+| 文档 | 内容 |
+|------|------|
+| [ARCHITECTURE](docs/ARCHITECTURE.md) | 系统架构、ERD、技术决策 |
+| [DATABASE](docs/DATABASE.md) | 数据模型、字段说明、索引、常见查询 |
+| [WORKFLOWS](docs/WORKFLOWS.md) | 核心业务流程（写作/RAG/图表） |
+| [CODE_MAP](docs/CODE_MAP.md) | 功能→文件映射，改哪里看这里 |
+| [CONVENTIONS](docs/CONVENTIONS.md) | 代码规范 |
+| [DEPLOY](docs/DEPLOY.md) | Docker 部署指南 |
+| [PRD](docs/PRD.md) | 产品需求文档 |
+| [AGENTS](AGENTS.md) | AI 协作契约 |
 
 ## 许可
 

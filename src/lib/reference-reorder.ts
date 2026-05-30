@@ -4,6 +4,7 @@
  */
 
 import { CITATION_GROUP_RE, FULLWIDTH_CITATION_RE, expandCitationGroup } from "@/lib/citation";
+import { normalizeAllCitationFormats } from "@/lib/citation-bounds";
 
 const PH = (old: number) => `§§CITEOLD${old}§§`;
 
@@ -16,7 +17,9 @@ export function collectCitationFirstAppearance(
   fullText: string,
   refCount: number,
 ): number[] {
-  const normalized = fullText.replace(FULLWIDTH_CITATION_RE, (_m, inner) => `[${inner}]`);
+  const normalized = normalizeCitationFormat(
+    fullText.replace(FULLWIDTH_CITATION_RE, (_m, inner) => `[${inner}]`)
+  );
   const order: number[] = [];
   let m: RegExpExecArray | null;
   while ((m = CITATION_GROUP_RE.exec(normalized)) !== null) {
@@ -28,7 +31,9 @@ export function collectCitationFirstAppearance(
 }
 
 export function collectInvalidCitationNumbers(fullText: string, refCount: number): number[] {
-  const normalized = fullText.replace(FULLWIDTH_CITATION_RE, (_m, inner) => `[${inner}]`);
+  const normalized = normalizeCitationFormat(
+    fullText.replace(FULLWIDTH_CITATION_RE, (_m, inner) => `[${inner}]`)
+  );
   const invalid: number[] = [];
   let m: RegExpExecArray | null;
   while ((m = CITATION_GROUP_RE.exec(normalized)) !== null) {
@@ -121,6 +126,9 @@ export function collectUsedReferences(text: string, references: string[]): strin
  * 扫描项目所有章节文本，收集实际被引用的参考文献编号集合。
  * 返回所有在正文中出现过的引用编号（1-based）。
  */
+/** 已迁移至 citation-bounds.ts 的 normalizeAllCitationFormats，此处保留别名 */
+const normalizeCitationFormat = normalizeAllCitationFormats;
+
 export function collectAllCitedIndices(project: {
   abstract?: string | null;
   sections: Record<string, string | undefined>;
@@ -129,10 +137,12 @@ export function collectAllCitedIndices(project: {
   const refCount = project.references.length;
   if (refCount === 0) return new Set();
 
-  const allText = [
+  const rawText = [
     project.abstract || "",
     ...Object.values(project.sections || {}).filter((v): v is string => typeof v === "string"),
   ].join("\n\n");
+
+  const allText = normalizeCitationFormat(rawText);
 
   const cited = new Set<number>();
   for (const idx of collectCitationFirstAppearance(allText, refCount)) {
@@ -218,8 +228,9 @@ export function remapPrunedCitations(text: string, indexMap: Record<number, numb
 export function stripOutOfRangeCitations(text: string, refCount: number): string {
   if (!text || refCount <= 0) return text;
 
-  // 全角方括号标准化
-  let t = text.replace(/［([0-9,\s\-–—，、]+)］/g, (_m: string, inner: string) => `[${inner}]`);
+  // 归一化非标准引用格式 + 全角方括号标准化
+  let t = normalizeCitationFormat(text);
+  t = t.replace(/［([0-9,\s\-–—，、]+)］/g, (_m: string, inner: string) => `[${inner}]`);
 
   t = t.replace(/\[([0-9,\s\-–—，、]+)\]/g, (_match: string, nums: string) => {
     const parts = nums.split(/[,，、]\s*/).map((p: string) => p.trim()).filter(Boolean);

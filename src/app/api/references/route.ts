@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { formatReference } from "@/lib/ref-format";
 
 /**
  * 引用-文献映射管理
  *
  * GET /api/references?projectId=xxx
  *   返回项目的所有引用-文献映射
+ *
+ * GET /api/references?format=true&filenames=a,b,c
+ *   批量格式化文件名 → GB/T 7714 引用
  *
  * POST /api/references
  *   Body: { projectId, refIndex, sourceName, category, citation }
@@ -20,6 +24,20 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const projectId = searchParams.get("projectId");
     const refIndex = searchParams.get("refIndex");
+
+    // 批量格式化引用
+    if (searchParams.get("format") === "true") {
+      const filenamesParam = searchParams.get("filenames");
+      if (!filenamesParam) {
+        return NextResponse.json({ error: "缺少 filenames" }, { status: 400 });
+      }
+      const filenames = filenamesParam.split(",").map(f => f.trim()).filter(Boolean);
+      const formatted: Record<string, string> = {};
+      for (const filename of filenames) {
+        formatted[filename] = formatFilenameToCitation(filename);
+      }
+      return NextResponse.json({ formatted });
+    }
 
     if (!projectId) {
       return NextResponse.json({ error: "缺少 projectId" }, { status: 400 });
@@ -39,6 +57,10 @@ export async function GET(req: NextRequest) {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+}
+
+function formatFilenameToCitation(filename: string): string {
+  return formatReference(filename, { style: "gbt7714" });
 }
 
 export async function POST(req: NextRequest) {

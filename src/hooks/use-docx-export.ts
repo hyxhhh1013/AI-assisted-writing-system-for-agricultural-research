@@ -8,6 +8,29 @@ import { formatKeywords } from "@/lib/paper-metadata";
 import { IMRAD_LABELS_SHORT_ZH, IMRAD_LABELS_EN } from "@/lib/imrad";
 import { parseMarkdownBlocks, MarkdownBlock } from "@/lib/markdown-parser";
 
+/** 清理文件名用于兜底显示 */
+function cleanRefForDocx(raw: string): string {
+  return raw
+    .replace(/^\[\d+\]\s*/, "")
+    .replace(/\.pdf$/i, "")
+    .replace(/[_-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** 批量获取 GB/T 7714 格式化引用 */
+async function fetchFormattedRefs(references: string[]): Promise<Record<string, string>> {
+  if (references.length === 0) return {};
+  try {
+    const filenames = references.join(",");
+    const res = await fetch(`/api/references?format=true&filenames=${encodeURIComponent(filenames)}`);
+    const data = await res.json();
+    return data.formatted || {};
+  } catch {
+    return {};
+  }
+}
+
 interface UseDocxExportOptions {
   project: ProjectData;
   activeSection: string;
@@ -175,14 +198,23 @@ export function useDocxExport({ project, activeSection, editingContent, saveProj
       return runs;
     };
 
+    // 批量获取格式化引用
+    const formattedRefs = p.references && p.references.length > 0
+      ? await fetchFormattedRefs(p.references)
+      : {};
+
     const refParagraphs = (p.references && p.references.length > 0)
-      ? p.references.map((ref, idx) =>
-          new Paragraph({
-            children: [new TextRun({ text: `[${idx + 1}] ${ref}`, size: isChinese ? 18 : 16, font: config.fontMain })],
+      ? p.references.map((ref, idx) => {
+          const citation = formattedRefs[ref];
+          const display = citation
+            ? `[${idx + 1}] ${citation}`
+            : `[${idx + 1}] ${cleanRefForDocx(ref)}`;
+          return new Paragraph({
+            children: [new TextRun({ text: display, size: isChinese ? 18 : 16, font: config.fontMain })],
             spacing: { after: 100 },
             alignment: AlignmentType.LEFT,
-          })
-        )
+          });
+        })
       : [
           new Paragraph({
             children: [new TextRun({

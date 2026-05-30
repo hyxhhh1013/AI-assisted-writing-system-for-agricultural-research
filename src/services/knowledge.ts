@@ -1,7 +1,10 @@
 /** 知识库 API 类型定义与服务封装 */
 
+import type { ReindexProgressEvent } from "@/contracts/reindex";
+
 export interface KnowledgeFile {
   name: string;
+  path?: string;
   category: string;
   documentType?: string; // "paper" | "patent" | "other"
   chunkCount: number;
@@ -40,10 +43,60 @@ export async function searchKnowledge(params: KnowledgeSearchParams): Promise<Kn
 }
 
 export async function reindexKnowledge(): Promise<string> {
-  const res = await fetch("/api/knowledge?action=reindex", { method: "POST" });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "索引失败");
-  return data.message;
+  let message = "索引更新成功";
+  await reindexKnowledgeStream((event) => {
+    if (event.type === "complete") {
+      message = `索引完成：${event.fileCount} 篇文献，${event.totalChunks} 个文本块`;
+    }
+    if (event.type === "error") {
+      throw new Error(event.message);
+    }
+  });
+  return message;
+}
+
+/** SSE 流式重建索引，实时推送进度 */
+export async function reindexKnowledgeStream(
+  onEvent: (event: ReindexProgressEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await fetch("/api/knowledge/reindex", { method: "POST", signal });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(data.error || "索引请求失败");
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("索引响应无内容");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let sawComplete = false;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed === "data: [DONE]") continue;
+      if (!trimmed.startsWith("data:")) continue;
+
+      const event = JSON.parse(trimmed.slice(5).trim()) as ReindexProgressEvent;
+      onEvent(event);
+
+      if (event.type === "complete") sawComplete = true;
+      if (event.type === "error") throw new Error(event.message);
+    }
+  }
+
+  if (!sawComplete) {
+    throw new Error("索引流意外结束");
+  }
 }
 
 export async function uploadKnowledgeFile(file: File, category: string, documentType?: string): Promise<void> {

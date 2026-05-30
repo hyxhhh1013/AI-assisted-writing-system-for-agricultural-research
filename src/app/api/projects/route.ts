@@ -1,6 +1,8 @@
+import { logger } from "@/lib/logger";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { unauthorizedResponse, notFoundResponse, errorResponse } from "@/lib/api-response";
+import type { ProjectDTO } from "@/contracts/project";
 
 type SectionRecord = Record<string, string>;
 
@@ -46,6 +48,7 @@ export async function GET(req: NextRequest) {
           .map(r => r.content),
         analysisResults: project.analysisResults.map(r => r.content),
         mode: project.mode || "review",
+        citationStyle: (project.citationStyle as ProjectDTO["citationStyle"]) || "gbt7714",
         dataClaims: project.dataClaims || undefined,
         dataSources: project.dataSources || undefined,
       };
@@ -64,7 +67,7 @@ export async function GET(req: NextRequest) {
       lastUpdated: p.lastUpdated.getTime()
     })));
   } catch (error: unknown) {
-    console.error("Projects GET error:", error);
+    logger.error("Projects GET error:", error);
     return errorResponse(error instanceof Error ? error.message : "Projects GET failed");
   }
 }
@@ -90,6 +93,7 @@ export async function POST(req: NextRequest) {
       outline,
       template,
       mode,
+      citationStyle,
       sections,
       references,
       analysisResults,
@@ -119,7 +123,7 @@ export async function POST(req: NextRequest) {
           where: { id: projectId },
           data: {
             title, authors, affiliations, abstract, keywords,
-            classification, researchDirection, outline, template, mode,
+            classification, researchDirection, outline, template, mode, citationStyle,
             dataClaims, dataSources,
             lastUpdated: new Date(),
           },
@@ -127,7 +131,7 @@ export async function POST(req: NextRequest) {
       : await prisma.project.create({
           data: {
             userId, title, authors, affiliations, abstract, keywords,
-            classification, researchDirection, outline, template, mode,
+            classification, researchDirection, outline, template, mode, citationStyle,
             dataClaims, dataSources,
           },
         });
@@ -167,7 +171,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ id: project.id, message: "保存成功" });
   } catch (error: unknown) {
-    console.error("Projects POST error:", error);
+    logger.error("Projects POST error:", error);
     return errorResponse(error instanceof Error ? error.message : "Projects POST failed");
   }
 }
@@ -198,7 +202,7 @@ export async function DELETE(req: NextRequest) {
     await prisma.project.delete({ where: { id } });
     return NextResponse.json({ message: "删除成功" });
   } catch (error: unknown) {
-    console.error("Projects DELETE error:", error);
+    logger.error("Projects DELETE error:", error);
     return errorResponse(error instanceof Error ? error.message : "Projects DELETE failed");
   }
 }

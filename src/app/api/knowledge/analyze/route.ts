@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { localRAG } from "@/lib/rag";
 import { callAI, getAIError } from "@/lib/ai";
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error: any) {
-    console.error("Analysis API error:", error);
+    logger.error("Analysis API error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

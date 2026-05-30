@@ -87,49 +87,47 @@ function DoneItem({ label, detail }: { label: string; detail?: string }) {
 
 const phase1Weeks = [
   {
-    label: "5/19 – 5/31（2 周）· 三大优先项",
+    label: "6/1 – 6/14（2 周）· 部署 + 批量扩写",
     tasks: [
-      "AI 痕迹检测器：Verifier 新增扫描——高频禁用词（delve/crucial/robust/comprehensive 等）、em dash 过度使用、段落开头重复句式（「此外…」「值得注意的是…」）、等长段落检测",
-      "投前自检报告：导出前自动跑 Overclaim 扫描、Methods 完整性（统计方法名/软件版本/P值）、Results vs Discussion 边界扫描、引用完整性（正文 [n] 与文献列表一致）",
+      "VPS 公网部署：配置域名 + HTTPS，实验室同学可访问，48h 稳定性验证",
       "批量扩写：选中大纲多个子节 → 排队依次扩写，每完成一节自动合入编辑器",
+      "扩写进度可恢复：扩写 session 跨刷新保持，刷新后从断点继续",
     ],
   },
   {
-    label: "6/1 – 6/21（3 周）· 部署 + 图表联动",
+    label: "6/15 – 7/5（3 周）· 真课题验证",
     tasks: [
-      "公网部署：VPS 配置域名 + HTTPS，实验室同学可访问，48h 稳定性验证",
-      "图表-正文联动：每张图表绑定 DataClaim ID，Verifier 检查正文数值与图表原始数据一致性",
-      "图表自动插入：数据分析完成 → 推荐图表列表 → 一键插入到对应章节位置",
-      "3~5 个真实课题全流程验证，收集实验室同学反馈，修复 P0/P1 问题",
-    ],
-  },
-  {
-    label: "6/22 – 7/15（3 周）· 体验打磨",
-    tasks: [
-      "写作进度可恢复：扩写 session 跨刷新保持，刷新后从断点继续",
+      "3~5 个真实课题全流程验证（不同农业子方向）",
+      "收集实验室同学反馈，修复 P0/P1 问题",
       "撤销/重做：扩写后不满意 → 一键回退到扩写前版本",
-      "风格校准（初版）：用户上传 3 篇已发表论文 → 提取句式特征（句长分布、转折词偏好）→ Writer 模仿",
       "根据真实课题反馈，针对性优化各环节 prompt",
+    ],
+  },
+  {
+    label: "7/6 – 7/19（2 周）· 体验打磨",
+    tasks: [
+      "投前自检报告：导出前自动跑 Overclaim 扫描、Methods 完整性、引用完整性",
+      "图表-正文联动：Verifier 检查正文数值与图表原始数据一致性",
+      "风格校准（初版）：上传已发表论文 → 提取句式特征 → Writer 模仿",
     ],
   },
 ];
 
 const phase2Weeks = [
   {
-    label: "7/16 – 8/15（4 周）· 数据证据层",
+    label: "7/20 – 8/16（4 周）· 数据证据层",
     tasks: [
       "多文件分析：上传多个 CSV → 自动关联变量 → 跨文件对比分析（当前只支持单文件）",
       "DataClaim 体系完善：图表数据 ↔ 正文数值 ↔ 统计结果 三方交叉校验",
       "引文事实核查升级：从关键词重叠率改为 NLI 语义比对模型，降低误报率",
-      "风格校准（完整版）：支持多作者风格保存、切换、对比",
     ],
   },
   {
-    label: "8/16 – 9/15（4 周）· 基础设施加固",
+    label: "8/17 – 9/20（5 周）· 基础设施加固",
     tasks: [
       "Prisma 迁移规范化：db push → 正式 migration，消除 shadow db 不一致风险",
       "API 请求队列：快速连续点扩写时取消前一个请求，避免双管道并行",
-      "离线降级：DeepSeek 不可用时提示保存 + 降级到本地模板填充",
+      "图表自动插入：数据分析完成 → 推荐图表列表 → 一键插入到对应章节位置",
       "使用统计面板：记录每次扩写的 token 消耗、耗时、成功率",
     ],
   },
@@ -137,20 +135,19 @@ const phase2Weeks = [
 
 const phase3Weeks = [
   {
-    label: "9/16 – 10/15（4 周）· 多期刊 + 体验细节",
+    label: "9/21 – 10/31（6 周）· 多期刊 + 模板扩展",
     tasks: [
       "多期刊模板适配：在现有 4 种基础上新增 1~2 种农业领域常用期刊格式",
-      "夜间模式 / 专注模式",
       "领域写作规则细化：控释肥、茶学、热解等方向定制专属 prompt 惯例",
+      "风格校准（完整版）：支持多作者风格保存、切换、对比",
     ],
   },
   {
-    label: "10/16 – 11/15（4 周）· 整体打磨 + 发布",
+    label: "11/1 – 12/20（7 周）· 整体打磨 + 试用",
     tasks: [
       "全流程回归测试：用 5 个不同方向课题跑通「大纲→扩写→审查→导出」",
       "bug 修复 + 性能优化 + 文档更新",
-      "v3.0 正式发布，编写 release notes",
-      "实验室内部培训 + 持续收集反馈迭代",
+      "实验室内部试用 + 培训 + 持续收集反馈迭代",
     ],
   },
 ];
@@ -178,7 +175,7 @@ export default function RoadmapPage() {
         </p>
         <div className="flex items-center justify-center gap-2 mt-4 text-xs text-slate-400">
           <Wheat className="w-3.5 h-3.5" />
-          <span>最后更新：2026-05-18</span>
+          <span>最后更新：2026-05-27</span>
         </div>
       </motion.div>
 
@@ -200,10 +197,10 @@ export default function RoadmapPage() {
           <GlassCard className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <DoneItem label="多 Agent 写作管道" detail="Writer (DeepSeek) → Verifier (智谱) → Refiner，SSE 流式输出" />
-              <DoneItem label="RAG 混合检索引擎" detail="BM25 + 向量语义 + RRF 融合，910 篇论文 / 6 个领域 / 2.6GB" />
+              <DoneItem label="RAG 混合检索引擎" detail="BM25 + 向量语义 + RRF 融合，910 篇论文 / 7 个领域 / 12K+ 知识块" />
               <DoneItem label="引用真实性逐条验证" detail="Verifier 拿到原文比对，标记「归属错误」和「疑似虚构」" />
               <DoneItem label="AI 降重（4 策略）" detail="同义替换 / 改语序 / 概括 / 扩写，保持学术原意" />
-              <DoneItem label="15 种专业图表" detail="分组柱状/折线/散点/饼/流程图/分子结构/XRD 分析/三线表" />
+              <DoneItem label="14 种专业图表" detail="分组柱状/折线/散点/饼/流程图/分子结构/XRD 分析/三线表" />
               <DoneItem label="DOCX / PDF 多模板导出" detail="SCI、GB/T 7713、Nature、IEEE 四种模板" />
               <DoneItem label="PDF 文献阅读器" detail="划词翻译（农业术语）、全文检索、分类管理" />
               <DoneItem label="项目管理系统" detail="多项目管理、章节编辑、自动保存、版本记录" />
@@ -226,16 +223,16 @@ export default function RoadmapPage() {
             <div className="h-0.5 w-8 bg-emerald-500 rounded-full" />
             <span className="text-emerald-600 font-mono text-[10px] font-bold tracking-[0.3em] uppercase">Phase 1</span>
           </div>
-          <h2 className="text-2xl font-bold text-slate-900 mb-1">第一阶段：从「能写」到「能投」</h2>
+          <h2 className="text-2xl font-bold text-slate-900 mb-1">第一阶段：部署上线 + 真课题验证</h2>
           <p className="text-slate-500 text-sm mb-6">
-            优先做投入产出比最高的：AI 痕迹检测 + 投前自检 + 批量扩写。然后补齐图表联动和体验短板。
+            核心目标：让系统从「本地能跑」变成「实验室能用」。部署上线、真课题验证、补齐体验短板。
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             {[
-              { icon: ShieldCheck, label: "AI 痕迹检测", desc: "Verifier 新增扫描规则，不改架构，几天可上线" },
-              { icon: Sparkles, label: "投前自检报告", desc: "整合散落检查规则 → 统一 pre-export 报告" },
-              { icon: Zap, label: "批量扩写", desc: "选中多子节 → 排队生成，实验室最高频需求" },
+              { icon: Zap, label: "VPS 部署", desc: "配置域名 + HTTPS，实验室同学可访问" },
+              { icon: Sparkles, label: "真课题验证", desc: "3-5 个不同方向课题跑通全流程" },
+              { icon: ShieldCheck, label: "批量扩写", desc: "选中多子节 → 排队生成，实验室最高频需求" },
             ].map((p, i) => (
               <motion.div key={i} variants={item} className="p-4 bg-white rounded-xl border border-emerald-100 text-center">
                 <p.icon className="w-6 h-6 text-emerald-500 mx-auto mb-2" />
@@ -246,9 +243,9 @@ export default function RoadmapPage() {
           </div>
 
           <PhaseCard
-            phase="写作质量 + 核心体验"
-            date="5/19 – 7/15（8 周）"
-            goal="系统从「能写」升级到「能投」，实验室同学可日常使用"
+            phase="部署上线 + 真课题验证"
+            date="6/1 – 7/19（7 周）"
+            goal="系统从「本地能跑」升级到「实验室能用」"
             color={{
               bg: "bg-emerald-50/50",
               border: "border-emerald-200",
@@ -274,13 +271,13 @@ export default function RoadmapPage() {
           </div>
           <h2 className="text-2xl font-bold text-slate-900 mb-1">第二阶段：数据证据 + 基础设施</h2>
           <p className="text-slate-500 text-sm mb-6">
-            图表-正文数据闭环 + 系统稳定性加固。让系统既准确又可靠。
+            图表-正文数据闭环 + 系统稳定性加固。根据第一阶段反馈调整优先级。
           </p>
 
           <PhaseCard
             phase="数据 + 基础设施"
-            date="7/16 – 9/15（8 周）"
-            goal="图表-正文数据闭环验证、系统稳定可靠、风格校准完整版上线"
+            date="7/20 – 9/20（9 周）"
+            goal="图表-正文数据闭环验证、系统稳定可靠"
             color={{
               bg: "bg-blue-50/50",
               border: "border-blue-200",
@@ -304,15 +301,15 @@ export default function RoadmapPage() {
             <div className="h-0.5 w-8 bg-purple-500 rounded-full" />
             <span className="text-purple-600 font-mono text-[10px] font-bold tracking-[0.3em] uppercase">Phase 3</span>
           </div>
-          <h2 className="text-2xl font-bold text-slate-900 mb-1">第三阶段：打磨发布</h2>
+          <h2 className="text-2xl font-bold text-slate-900 mb-1">第三阶段：打磨 + 试用</h2>
           <p className="text-slate-500 text-sm mb-6">
-            多期刊适配、体验细节、全流程回归测试，正式发布 v3.0。
+            多期刊模板扩展、全流程回归测试、实验室内部试用培训。
           </p>
 
           <PhaseCard
-            phase="打磨 + 发布"
-            date="9/16 – 11/15（8 周）"
-            goal="多期刊模板、夜间模式、领域规则细化、v3.0 正式发布"
+            phase="打磨 + 试用"
+            date="9/21 – 12/20（13 周）"
+            goal="多期刊模板、全流程验证、实验室内部试用"
             color={{
               bg: "bg-purple-50/50",
               border: "border-purple-200",

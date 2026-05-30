@@ -1,12 +1,9 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { logger } from "@/lib/logger";
+import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
-import { exec } from "child_process";
-import { promisify } from "util";
 import { localRAG } from "@/lib/rag";
-
-const execPromise = promisify(exec);
-const ARTICLES_DIR = path.join(process.cwd(), "热化学小组文章-2024.12.27");
+const ARTICLES_DIR = path.join(process.cwd(), process.env.RAG_ARTICLES_DIR || "papers");
 const METADATA_PATH = path.join(process.cwd(), "data/metadata.json");
 
 export async function GET(req: NextRequest) {
@@ -106,15 +103,11 @@ export async function POST(req: NextRequest) {
     const action = searchParams.get("action");
 
     if (action === "reindex") {
-      // 运行索引脚本
-      const { stdout, stderr } = await execPromise("node scripts/index-pdfs.mjs");
-      console.log("Indexing output:", stdout);
-      if (stderr) console.error("Indexing stderr:", stderr);
-      
-      // 强制重新加载 RAG 索引以清除缓存
-      localRAG.reload();
-      
-      return NextResponse.json({ message: "索引更新成功", details: stdout });
+      // 兼容旧调用：重定向到流式接口说明
+      return NextResponse.json(
+        { error: "请使用 POST /api/knowledge/reindex 获取流式进度" },
+        { status: 410 },
+      );
     }
 
     // 处理文件上传
@@ -162,7 +155,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: "文件上传成功", name: file.name });
 
   } catch (error: any) {
-    console.error("Knowledge API error:", error);
+    logger.error("Knowledge API error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

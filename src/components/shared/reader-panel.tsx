@@ -7,6 +7,7 @@ import { Loader2, RefreshCw, FileText, CheckCircle2, ExternalLink, Search } from
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { reindexKnowledgeStream } from "@/services/knowledge";
 
 interface ReaderPanelProps {
   onOpenFile: (fileName: string) => void;
@@ -42,15 +43,17 @@ export function ReaderPanel({ onOpenFile }: ReaderPanelProps) {
 
   const handleReindex = async () => {
     setIsIndexing(true);
-    toast.info("正在重新扫描并索引文献...");
+    toast.info("正在重新扫描并索引文献…");
     try {
-      const res = await fetch("/api/knowledge?action=reindex", { method: "POST" });
-      if (res.ok) {
-        toast.success("知识库已更新");
-        fetchFiles();
-      }
+      await reindexKnowledgeStream((event) => {
+        if (event.type === "file" && event.status === "processing") {
+          toast.info(`正在处理: ${event.name}`, { id: "reindex-progress" });
+        }
+      });
+      toast.success("知识库已更新");
+      fetchFiles();
     } catch (error) {
-      toast.error("更新失败");
+      toast.error(error instanceof Error ? error.message : "更新失败");
     } finally {
       setIsIndexing(false);
     }

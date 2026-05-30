@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -33,6 +33,14 @@ import {
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
+import {
+  reindexKnowledgeStream,
+} from "@/services/knowledge";
+import {
+  applyReindexEvent,
+  INITIAL_REINDEX_PROGRESS,
+  type ReindexProgressState,
+} from "@/contracts/reindex";
 
 interface KnowledgeFile {
   name: string;
@@ -50,6 +58,8 @@ export default function KnowledgePage() {
   const [categories, setCategories] = useState<string[]>(["全部"]);
   const [isLoading, setIsLoading] = useState(true);
   const [isIndexing, setIsIndexing] = useState(false);
+  const [indexProgress, setIndexProgress] = useState<ReindexProgressState>(INITIAL_REINDEX_PROGRESS);
+  const reindexAbortRef = useRef<AbortController | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("全部");
   const [searchType, setSearchType] = useState<"name" | "semantic">("name");
@@ -121,22 +131,37 @@ export default function KnowledgePage() {
   }, [searchQuery, selectedCategory, searchType]);
 
   const handleReindex = async () => {
+    if (isIndexing) return;
+
+    reindexAbortRef.current?.abort();
+    const controller = new AbortController();
+    reindexAbortRef.current = controller;
+
     setIsIndexing(true);
-    toast.info("正在重新扫描并索引文献，请稍候...");
+    setIndexProgress(INITIAL_REINDEX_PROGRESS);
+    toast.info("正在重新扫描并索引文献…");
+
     try {
-      const res = await fetch("/api/knowledge?action=reindex", { method: "POST" });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success("本地知识库索引已更新！");
-        fetchFiles();
-      } else {
-        throw new Error(data.error);
-      }
+      await reindexKnowledgeStream((event) => {
+        setIndexProgress((prev) => applyReindexEvent(prev, event));
+      }, controller.signal);
+
+      toast.success("本地知识库索引已更新！");
+      fetchFiles();
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "操作失败");
+      if (controller.signal.aborted) {
+        toast.info("索引任务已取消");
+      } else {
+        toast.error(error instanceof Error ? error.message : "操作失败");
+      }
     } finally {
       setIsIndexing(false);
+      reindexAbortRef.current = null;
     }
+  };
+
+  const handleCancelReindex = () => {
+    reindexAbortRef.current?.abort();
   };
 
   const toggleSelectAll = () => {
@@ -358,12 +383,41 @@ export default function KnowledgePage() {
 
         {isIndexing && (
           <Card className="border-primary/50 bg-primary/5">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium">正在解析 PDF 并构建向量索引...</span>
-                <span className="text-sm text-muted-foreground">处理中，请勿离开</span>
+            <CardContent className="pt-6 space-y-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1 min-w-0">
+                  <span className="text-sm font-medium">{indexProgress.phase || "正在构建索引…"}</span>
+                  {indexProgress.currentFile && (
+                    <p className="text-xs text-muted-foreground truncate">
+                      当前文件：{indexProgress.currentFile}
+                    </p>
+                  )}
+                  {indexProgress.totalFiles > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      文献进度 {indexProgress.processedFiles}/{indexProgress.totalFiles}
+                      {indexProgress.changedCount > 0 && ` · ${indexProgress.changedCount} 个需更新`}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-sm font-mono text-muted-foreground">
+                    {indexProgress.percent}%
+                  </span>
+                  <Button variant="outline" size="sm" onClick={handleCancelReindex}>
+                    取消
+                  </Button>
+                </div>
               </div>
-              <Progress value={65} className="h-2" />
+              <Progress value={indexProgress.percent} className="h-2" />
+              {indexProgress.logs.length > 0 && (
+                <div className="rounded-md border bg-background/70 p-3 max-h-36 overflow-y-auto">
+                  <ul className="space-y-1 text-xs text-muted-foreground font-mono">
+                    {indexProgress.logs.map((line, i) => (
+                      <li key={`${line}-${i}`}>{line}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}

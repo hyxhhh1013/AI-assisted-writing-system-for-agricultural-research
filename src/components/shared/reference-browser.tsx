@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import {
   Popover,
@@ -30,6 +30,16 @@ function getRefPreview(ref: string): string {
   return cleaned.length > cut ? cleaned.slice(0, cut) + " ..." : cleaned;
 }
 
+/** 简单清理：去掉 .pdf 后缀、替换下划线/连字符为空格 */
+function quickCleanFilename(raw: string): string {
+  return raw
+    .replace(/^\[\d+\]\s*/, "")
+    .replace(/\.pdf$/i, "")
+    .replace(/[_-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 interface LiteratureChunk {
   content: string;
   index: number;
@@ -51,6 +61,25 @@ export function ReferenceBrowser({
   const [collapsed, setCollapsed] = useState(false);
   const [loadingSource, setLoadingSource] = useState<number | null>(null);
   const [sourceChunks, setSourceChunks] = useState<Record<number, LiteratureChunk[]>>({});
+
+  // 批量格式化引用：文件名 → GB/T 7714
+  const [formattedRefs, setFormattedRefs] = useState<Record<string, string>>({});
+  const formatLoadedRef = useRef<string>("");
+
+  useEffect(() => {
+    if (references.length === 0) return;
+    const key = references.join("|");
+    if (key === formatLoadedRef.current) return;
+    formatLoadedRef.current = key;
+
+    const filenames = references.join(",");
+    fetch(`/api/references?format=true&filenames=${encodeURIComponent(filenames)}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.formatted) setFormattedRefs(data.formatted);
+      })
+      .catch(() => {});
+  }, [references]);
 
   const usedInSection = useMemo(
     () => collectUsedNumbers(activeSectionContent || "", references.length),
@@ -131,7 +160,13 @@ export function ReferenceBrowser({
             const num = idx + 1;
             const isUsedInSection = usedInSection.has(num);
             const isUsedInPaper = usedInPaper.has(num);
-            const label = getRefPreview(ref);
+            const formatted = formattedRefs[ref];
+            const displayRef = formatted
+              ? `[${num}] ${formatted}`
+              : `[${num}] ${quickCleanFilename(ref)}`;
+            const label = formatted
+              ? (formatted.length > 65 ? formatted.slice(0, 65) + " ..." : formatted)
+              : getRefPreview(`[${num}] ${quickCleanFilename(ref)}`);
             const chunks = sourceChunks[num];
 
             return (
@@ -167,7 +202,7 @@ export function ReferenceBrowser({
                         </span>
                       </div>
                       <p className="text-xs leading-relaxed text-foreground bg-muted/20 p-2 rounded-md">
-                        {ref}
+                        {displayRef}
                       </p>
                     </div>
 

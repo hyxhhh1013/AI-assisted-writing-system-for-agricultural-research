@@ -7,7 +7,7 @@ import { randomUUID } from "crypto";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-const CHARTS_DIR = path.join(process.cwd(), "public", "charts");
+const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
 import { PYTHON_CMD } from "@/services/xrd-runner";
 
@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       imageBase64: `data:image/png;base64,${base64}`,
-      imageUrl: `/charts/${outputName}`,
+      imageUrl: `/api/charts/${outputName}`,
       data: pyResult.data,
     });
   } catch (error: unknown) {

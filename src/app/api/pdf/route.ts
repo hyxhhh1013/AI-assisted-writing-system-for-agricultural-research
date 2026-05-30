@@ -1,8 +1,12 @@
+import { logger } from "@/lib/logger";
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 
-const ARTICLES_DIR = path.join(process.cwd(), "热化学小组文章-2024.12.27");
+const ARTICLES_DIR = path.join(
+  /*turbopackIgnore: true*/ process.cwd(),
+  process.env.RAG_ARTICLES_DIR || "papers",
+);
 
 function findFileInDir(dir: string, targetName: string): string | null {
   if (!fs.existsSync(dir)) return null;
@@ -23,7 +27,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const filename = searchParams.get("file");
 
-    console.log("PDF Request for:", filename);
+    logger.info("PDF Request for:", filename);
 
     if (!filename) {
       return NextResponse.json({ error: "File name is required" }, { status: 400 });
@@ -37,10 +41,10 @@ export async function GET(req: NextRequest) {
         filePath = found;
       }
     }
-    console.log("Resolved path:", filePath);
+    logger.info("Resolved path:", filePath);
 
     if (!fs.existsSync(filePath)) {
-      console.error("File not found at:", filePath);
+      logger.error("File not found at:", filePath);
       return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
 
@@ -54,7 +58,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error: any) {
-    console.error("PDF Route Error:", error);
+    logger.error("PDF Route Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

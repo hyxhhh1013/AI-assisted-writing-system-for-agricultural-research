@@ -30,6 +30,13 @@ export const IMRAD_LABELS_EN: Record<SectionKey, string> = {
   conclusion: "Conclusion",
 };
 
+/** discussion 的标签（模板驱动，不在默认 section 列表中） */
+export const DISCUSSION_LABELS = {
+  zh: "讨论 (Discussion)",
+  zhShort: "讨论",
+  en: "Discussion",
+} as const;
+
 /** 章节排序索引 */
 export const IMRAD_ORDER: Record<SectionKey, number> = {
   abstract: 0,

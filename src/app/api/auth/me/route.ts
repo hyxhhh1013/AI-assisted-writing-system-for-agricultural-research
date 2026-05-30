@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { verifyToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
     // 认证临时关闭 — 无有效 token 时返回默认访客用户
     return NextResponse.json(GUEST_USER);
   } catch (error) {
-    console.error("Me error:", error);
+    logger.error("Me error:", error);
     return NextResponse.json(GUEST_USER);
   }
 }

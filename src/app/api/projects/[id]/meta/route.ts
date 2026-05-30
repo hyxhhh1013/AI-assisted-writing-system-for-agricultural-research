@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
@@ -33,7 +34,7 @@ export async function PATCH(
 
     return NextResponse.json({ message: "保存成功" });
   } catch (error) {
-    console.error("Meta PATCH error:", error);
+    logger.error("Meta PATCH error:", error);
     return NextResponse.json({ error: "保存失败" }, { status: 500 });
   }
 }

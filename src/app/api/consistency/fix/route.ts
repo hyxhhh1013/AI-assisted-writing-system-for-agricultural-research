@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { NextRequest } from "next/server";
 import { callAI, getAgentModelConfig, streamAIResponse } from "@/lib/ai";
 
@@ -84,7 +85,7 @@ ${issue.suggestion}
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();
         } catch (error: any) {
-          console.error("Fix error:", error);
+          logger.error("Fix error:", error);
           try { emit({ type: "error", error: error.message }); } catch {}
           try { controller.close(); } catch {}
         }
@@ -99,7 +100,7 @@ ${issue.suggestion}
       },
     });
   } catch (error: any) {
-    console.error("Fix API error:", error);
+    logger.error("Fix API error:", error);
     return new Response(JSON.stringify({ error: error.message || "Internal Server Error" }), { status: 500 });
   }
 }

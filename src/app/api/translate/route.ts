@@ -1,14 +1,15 @@
 import { NextRequest } from "next/server";
 import { callAI, getAgentModelConfig, streamAIResponse } from "@/lib/ai";
 import { TRANSLATE_SYSTEM_PROMPT, buildTranslateUserPrompt } from "@/lib/prompts";
+import { validateBody } from "@/lib/api-validate";
+import { translateSchema } from "@/lib/validations";
 
 export async function POST(req: NextRequest) {
   try {
-    const { text, targetLang = "zh" } = await req.json();
+    const { data, errorResponse: ve } = await validateBody(translateSchema, await req.json());
+    if (ve) return ve;
 
-    if (!text) {
-      return new Response(JSON.stringify({ error: "Text is required" }), { status: 400 });
-    }
+    const { text, targetLang } = data;
 
     const { provider, keyError } = getAgentModelConfig("writer");
     if (keyError) {

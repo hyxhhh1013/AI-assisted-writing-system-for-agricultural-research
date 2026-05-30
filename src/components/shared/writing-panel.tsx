@@ -36,10 +36,8 @@ interface PersistedWritingSession {
   wasGenerating: boolean;
 }
 
-import { buildSectionOptions, IMRAD_SECTION_KEYS, IMRAD_LABELS_ZH, SectionKey } from "@/lib/imrad";
-
-const DEFAULT_SECTIONS = buildSectionOptions();
-const IMRAD_SECTION_IDS = new Set<string>(IMRAD_SECTION_KEYS);
+import { IMRAD_SECTION_KEYS, IMRAD_LABELS_ZH } from "@/lib/imrad";
+import { buildTemplateSectionOptions, getTemplateSections } from "@/lib/template-sections";
 
 interface WritingPanelProps {
   projectId: string;
@@ -162,10 +160,14 @@ export function WritingPanel({
     return buildOutlineTasks(project.outline);
   }, [project.outline]);
 
+  // 模板驱动的 section 选项（替代硬编码 IMRAD）
+  const templateSections = useMemo(() => buildTemplateSectionOptions(project.template || "sci"), [project.template]);
+  const templateSectionIds = useMemo(() => new Set(getTemplateSections(project.template || "sci").map(s => s.key)), [project.template]);
+
   // 仅在未选中大纲任务时，随编辑器当前章节同步「存储至章节」
   // 有选中任务时以任务映射的 IMRaD 章节为准，避免被编辑器默认值覆盖
   useEffect(() => {
-    if (!editorActiveSection || !IMRAD_SECTION_IDS.has(editorActiveSection)) return;
+    if (!editorActiveSection || !templateSectionIds.has(editorActiveSection)) return;
     if (selectedSectionId) return; // 有任务选中时不覆盖
     setTargetSectionKey(editorActiveSection);
   }, [editorActiveSection, selectedSectionId]);
@@ -194,7 +196,7 @@ export function WritingPanel({
       if (typeof s.selectedSectionId === "string") setSelectedSectionId(s.selectedSectionId);
       if (
         typeof s.targetSectionKey === "string" &&
-        IMRAD_SECTION_IDS.has(s.targetSectionKey)
+        templateSectionIds.has(s.targetSectionKey)
       ) {
         setTargetSectionKey(s.targetSectionKey);
       }
@@ -373,6 +375,7 @@ export function WritingPanel({
         subsectionTitle: subTitle,
         figureStart: existingFigures + 1,
         projectMode: project.mode || "review",
+        citationStyle: project.citationStyle || "gbt7714",
         dataClaims,
         globalContext: {
           abstract: project.abstract,
@@ -391,6 +394,21 @@ export function WritingPanel({
       setDataClaimWarnings(streamResult.dataClaimWarnings);
       if (streamResult.references.length > 0 && onUpdateProject) {
         onUpdateProject({ references: streamResult.references });
+      }
+
+      // ReferenceSource 持久化：将 refMapping 写入数据库
+      if (streamResult.refMapping && Object.keys(streamResult.refMapping).length > 0) {
+        const mappings = Object.entries(streamResult.refMapping).map(([sourceName, refIndex]) => ({
+          refIndex,
+          sourceName,
+          category: "",
+          citation: "",
+        }));
+        fetch("/api/references?batch=true", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId, mappings }),
+        }).catch(() => { /* 静默失败，不影响主流程 */ });
       }
 
       // 流结束后：扫描完整结果文本中的 FIGURE 标记和插图占位
@@ -511,7 +529,6 @@ export function WritingPanel({
     setResult(content);
     if (onGenerate && content && targetSectionKey) {
       onGenerate(content, targetSectionKey, subsectionTitle);
-      toast.success(`内容已应用到 ${targetSectionKey} 章节，可点击工具栏"引用重排"整理引用`);
     }
   };
 
@@ -621,7 +638,7 @@ export function WritingPanel({
                     <SelectValue placeholder="目标章节" />
                   </SelectTrigger>
                   <SelectContent>
-                    {DEFAULT_SECTIONS.map((s) => (
+                    {templateSections.map((s) => (
                       <SelectItem key={s.value} value={s.value} className="text-xs">
                         {s.label}
                       </SelectItem>

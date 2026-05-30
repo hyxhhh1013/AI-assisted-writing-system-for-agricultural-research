@@ -18,6 +18,8 @@ export interface ProjectDTO {
   charts?: string;
   expandedOutlineSections?: string[];
   mode?: "review" | "research";
+  /** 引用格式标准：gbt7714 | vancouver | apa7 | ieee */
+  citationStyle?: "gbt7714" | "vancouver" | "apa7" | "ieee";
   /** JSON string: EvidenceClaim[] */
   dataClaims?: string;
   /** JSON string: DataSourceAnalysis[] */
@@ -37,6 +39,7 @@ export interface ProjectMetaPatch {
   researchDirection?: string;
   outline?: string;
   template?: string;
+  citationStyle?: "gbt7714" | "vancouver" | "apa7" | "ieee";
 }
 
 export interface SectionPatch {

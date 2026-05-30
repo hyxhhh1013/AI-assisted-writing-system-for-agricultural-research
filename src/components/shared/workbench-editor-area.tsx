@@ -18,7 +18,7 @@ import { PipelineTimeline } from "@/components/shared/pipeline-timeline";
 import { MarkdownContent } from "@/components/shared/previews/shared";
 import type { PipelineStep } from "@/hooks/use-writing-stream";
 import { ProjectData } from "@/lib/store";
-import { buildWorkbenchSections } from "@/lib/imrad";
+import { getTemplateSections } from "@/lib/template-sections";
 import dynamic from "next/dynamic";
 
 const ParagraphEditor = dynamic(
@@ -33,8 +33,6 @@ const ParagraphEditor = dynamic(
     ),
   }
 );
-
-const SECTIONS = buildWorkbenchSections();
 
 interface WritingPreviewData {
   content: string;
@@ -82,7 +80,11 @@ export function WorkbenchEditorArea({
   onApplyAiOutput, onCancelAiOutput, onCleanReferences, aiPreview,
   projectId,
 }: WorkbenchEditorAreaProps) {
-  const section = SECTIONS.find(s => s.id === activeSection);
+  // 模板驱动的 section 元数据（label + placeholder）
+  const templateDefs = getTemplateSections(project.template || "sci");
+  const sectionMeta = templateDefs.find(s => s.key === activeSection);
+  const sectionLabel = sectionMeta?.label || activeSection;
+  const sectionPlaceholder = sectionMeta ? `${sectionMeta.label}内容…` : "";
 
   // AI 预览模式 — 扩写时中间编辑器显示输出内容
   if (aiPreview) {
@@ -190,7 +192,7 @@ export function WorkbenchEditorArea({
             <div className="bg-primary/10 p-1.5 rounded-md">
               <FileType className="h-4 w-4 text-primary" />
             </div>
-            <span className="font-bold text-sm">{section?.label || activeSection}</span>
+            <span className="font-bold text-sm">{sectionLabel}</span>
           </div>
         </div>
 
@@ -269,7 +271,7 @@ export function WorkbenchEditorArea({
             <>
               <Textarea
                 className="flex-1 border-none focus-visible:ring-0 resize-none p-10 md:p-16 text-lg leading-relaxed font-serif bg-transparent"
-                placeholder={section?.placeholder || ""}
+                placeholder={sectionPlaceholder}
                 value={editingContent}
                 onChange={e => onContentChange(e.target.value)}
               />

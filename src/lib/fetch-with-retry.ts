@@ -60,6 +60,10 @@ export async function fetchWithRetry(
       } else if (attempt === retries) {
         throw error;
       }
+      // 不重试 4xx 客户端错误（模型名错误、参数非法等不会自己恢复）
+      if (error?.status && error.status >= 400 && error.status < 500) {
+        throw error;
+      }
       await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
     }
   }

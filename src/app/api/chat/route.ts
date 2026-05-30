@@ -1,6 +1,9 @@
+import { logger } from "@/lib/logger";
 import { NextRequest } from "next/server";
 import { localRAG } from "@/lib/rag";
 import { callAI, streamAIResponse } from "@/lib/ai";
+import { validateBody } from "@/lib/api-validate";
+import { chatSchema } from "@/lib/validations";
 
 const SYSTEM_BASE = `你是一个专业的农业科研助手，擅长热化学、生物质和碳材料领域。以下是一篇学术文献的完整内容。请基于此文献内容回答用户的问题。
 
@@ -13,14 +16,10 @@ const SYSTEM_BASE = `你是一个专业的农业科研助手，擅长热化学�
 
 export async function POST(req: NextRequest) {
   try {
-    const { filename, messages } = await req.json();
+    const { data, errorResponse: ve } = await validateBody(chatSchema, await req.json());
+    if (ve) return ve;
 
-    if (!filename || !messages || !Array.isArray(messages)) {
-      return new Response(
-        JSON.stringify({ error: "Missing filename or messages" }),
-        { status: 400 },
-      );
-    }
+    const { filename, messages } = data;
 
     // 取文献全文作为上下文
     const fullText = localRAG.getFullText(filename);
@@ -89,7 +88,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error: any) {
-    console.error("Chat API Error:", error);
+    logger.error("Chat API Error:", error);
     return new Response(JSON.stringify({ error: error.message || "Internal Server Error" }), {
       status: 500,
     });

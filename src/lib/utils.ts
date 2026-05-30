@@ -347,6 +347,22 @@ export function cleanMarkdownArtifacts(text: string): string {
   t = t.replace(/[📊📈📉]\s*/g, "");
   // 系统占位符
   t = t.replace(/\[引用\?\]/g, "");
+  // Verifier 审稿备注（以审稿特征词开头的句子）
+  t = t.replace(
+    /(?:需要注意的是，|若需确证|应在后续修改中|需在后续修改中|此处应|建议在后续)\s*[^。；\n]{10,}[。；]/g,
+    ""
+  );
+  // 未渲染的 FIGURE 标记 + 插图占位
+  t = t.replace(/【FIGURE:\{[^】]*\}】/g, "");
+  t = t.replace(/【插[图画]占[位位]：[^】]*】/g, "");
+  t = t.replace(/（待补充数据）/g, "");
+  // 【】占位符清理（请填写、待补充、待确认等）
+  t = t.replace(/【[^】]*(?:请填写|待补充|待确认|待完善|请补充|TODO|TBD)[^】]*】/g, "");
+  // GFM 删除线语法（~~text~~）→ 只保留文字
+  t = t.replace(/~~([^~]+)~~/g, "$1");
+  // em dash 替换为逗号（中文语境用全角逗号）
+  t = t.replace(/—/g, "，");
+  t = t.replace(/–/g, "，");
   return t;
 }
 

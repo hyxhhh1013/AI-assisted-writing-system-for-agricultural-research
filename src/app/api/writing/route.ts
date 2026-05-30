@@ -1,9 +1,11 @@
+import { logger } from "@/lib/logger";
 import { NextRequest } from "next/server";
 import type { WritingSSEEvent } from "@/contracts/sse";
 import type { EvidenceClaim } from "@/contracts/data-source";
 import { localRAG } from "@/lib/rag";
 import { retrieveWritingContext } from "@/services/writing-context";
 import { collectCitationFirstAppearance, collectInvalidCitationNumbers, stripOutOfRangeCitations } from "@/lib/reference-reorder";
+import { normalizeAllCitationFormats } from "@/lib/citation-bounds";
 import { validateCitations, validateDataClaims } from "@/lib/citation-validator";
 import { buildEvidencePack } from "@/services/evidence-pack";
 import { callAI, callAINonStreaming, getAgentModelConfig, streamAIResponse } from "@/lib/ai";
@@ -16,32 +18,47 @@ import {
   buildRefinerSystemPrompt,
   buildRefinerPrompt,
 } from "@/lib/prompts";
-import { IMRAD_SECTION_NUMBER, type SectionKey } from "@/lib/imrad";
+import { validateBody } from "@/lib/api-validate";
+import { writingSchema } from "@/lib/validations";
+import { getTemplateSectionNumber } from "@/lib/template-sections";
 
 export async function POST(req: NextRequest) {
   try {
+    const { data, errorResponse: ve } = await validateBody(writingSchema, await req.json());
+    if (ve) return ve;
+
     const {
       title,
       section,
       context,
-      language = "zh",
-      template = "sci",
+      language,
+      template,
       existingReferences = [],
-      globalContext,
-      mode = "full",
+      globalContext: rawGlobalContext,
+      mode,
       verificationFeedback: manualFeedback,
-      retrievalMode = "balanced",
+      retrievalMode,
       researchDirection,
       subsectionTitle,
       figureStart,
       evidenceSummary: manualEvidenceSummary,
       projectMode,
-      dataClaims = [],
-    } = await req.json();
+      dataClaims: rawDataClaims,
+      citationStyle,
+    } = data;
 
-    if (!title || !section || !context) {
+    const dataClaims = (rawDataClaims ?? []) as EvidenceClaim[];
+    // globalContext 来自前端的项目快照对象，包含 abstract/outline/sectionPreviews/analysisResults
+    const globalContext = rawGlobalContext as {
+      abstract?: string;
+      outline?: string;
+      sectionPreviews?: Record<string, string>;
+      analysisResults?: string[];
+    } | undefined;
+
+    if (!context) {
       return new Response(
-        JSON.stringify({ error: "Missing required fields: title, section, or context" }),
+        JSON.stringify({ error: "Missing required field: context" }),
         { status: 400 },
       );
     }
@@ -135,7 +152,8 @@ export async function POST(req: NextRequest) {
             figureStart: typeof figureStart === "number" ? figureStart : 1,
             evidenceSummary,
             projectMode,
-            sectionNumber: IMRAD_SECTION_NUMBER[section as SectionKey] ?? undefined,
+            sectionNumber: getTemplateSectionNumber(template || "sci", section),
+            citationStyle: typeof citationStyle === "string" ? citationStyle : "gbt7714",
           });
 
           // ====== 阶段 1：模式路由 ======
@@ -311,7 +329,9 @@ export async function POST(req: NextRequest) {
           // ====== 阶段 4：Refiner（根据核查报告修正，修正后的文本再送引用核查） ======
           const maxRefIndex = referencesByIndex.length;
 
-          const correctedDraft = stripOutOfRangeCitations(finalDraft || initialDraft, maxRefIndex);
+          // 先归一化所有非标准引用格式，再清理越界
+          const normalizedDraft = normalizeAllCitationFormats(finalDraft || initialDraft);
+          const correctedDraft = stripOutOfRangeCitations(normalizedDraft, maxRefIndex);
           if (correctedDraft !== (finalDraft || initialDraft)) {
             emit({ type: "corrected_text", text: correctedDraft });
           }
@@ -350,7 +370,7 @@ export async function POST(req: NextRequest) {
               });
 
               if (correctedText && correctedText.trim().length > 10) {
-                refinedDraft = stripOutOfRangeCitations(correctedText.trim(), maxRefIndex);
+                refinedDraft = stripOutOfRangeCitations(normalizeAllCitationFormats(correctedText.trim()), maxRefIndex);
                 // 用 corrected_text 事件一次性替换前端内容
                 emit({ type: "corrected_text", text: refinedDraft });
                 emit({ type: "pipeline_step", step: "refining", status: "done", detail: "已修正" });
@@ -384,7 +404,10 @@ export async function POST(req: NextRequest) {
             .filter((ref): ref is string => Boolean(ref) && newSources.includes(ref));
 
           if (usedNewSources.length > 0) {
-            emit({ type: "references", references: Array.from(new Set(usedNewSources)) });
+            emit({ type: "references", references: Array.from(new Set(usedNewSources)), refMapping });
+          } else if (Object.keys(refMapping).length > 0) {
+            // 无新引用源，单独发送 refMapping（不影响 references 流程）
+            emit({ type: "info", info: "", refMapping });
           }
 
           const citationChecks = validateCitations(checkTarget, contextText);
@@ -413,7 +436,7 @@ export async function POST(req: NextRequest) {
           controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
           controller.close();
         } catch (error: any) {
-          console.error("MAV Pipeline Error:", error);
+          logger.error("MAV Pipeline Error:", error);
           try { emit({ type: "error", error: error.message }); } catch {}
           try { controller.close(); } catch {}
         }
@@ -428,7 +451,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error: any) {
-    console.error("Writing Expansion Error:", error);
+    logger.error("Writing Expansion Error:", error);
     return new Response(JSON.stringify({ error: error.message || "Internal Server Error" }), {
       status: 500,
     });

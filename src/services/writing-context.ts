@@ -2,7 +2,7 @@
 
 import fs from "fs";
 import path from "path";
-import { localRAG, formatRagCitation, cleanSourceName } from "@/lib/rag";
+import { localRAG, formatRagCitation, cleanSourceName, resolveBibEntry } from "@/lib/rag";
 import type { WritingRequest } from "@/contracts/writing";
 
 const METADATA_PATH = path.join(process.cwd(), "data", "metadata.json");
@@ -18,7 +18,9 @@ function matchCategory(direction: string): string | null {
       .map(cat => ({ cat, score: cat.split(/[\s\-_]/).filter(w => kw.includes(w.toLowerCase())).length }))
       .filter(m => m.score > 0)
       .sort((a, b) => b.score - a.score);
-    return matches[0]?.cat || null;
+    // 分类匹配不用于限定检索范围——写作场景下搜全库更可靠
+    // 保留函数供 UI 展示推荐分类用，但不影响检索
+    return null;
   } catch {
     return null;
   }
@@ -84,28 +86,66 @@ export async function retrieveWritingContext(
     referencesByIndex[i] = ref;
   });
 
+  const contextRefIndices: number[] = [];
+
   const contextText = contextChunks.length > 0
     ? contextChunks.map((c) => {
         const rawSource = c.metadata.source;
         if (!rawSource || rawSource === "unknown") return c.content;
-        const source = cleanSourceName(rawSource);
+        // 用原始文件名（含 .pdf）作为 key，确保 resolveBibEntry 能匹配 metadata
+        const sourceKey = rawSource;
+        const sourceDisplay = cleanSourceName(rawSource);
         let globalIndex: number;
-        if (refMapping[source]) {
-          globalIndex = refMapping[source];
+        if (refMapping[sourceKey] != null) {
+          globalIndex = refMapping[sourceKey];
+        } else if (refMapping[sourceDisplay] != null) {
+          // 兼容旧数据：已存的是去除 .pdf 的 cleaned name
+          globalIndex = refMapping[sourceDisplay];
         } else {
           globalIndex = Object.keys(refMapping).length + 1;
-          refMapping[source] = globalIndex;
-          referencesByIndex[globalIndex - 1] = source;
-          newSources.push(source);
+          refMapping[sourceKey] = globalIndex;
+          referencesByIndex[globalIndex - 1] = sourceKey;
+          newSources.push(sourceKey);
         }
+        if (!contextRefIndices.includes(globalIndex)) contextRefIndices.push(globalIndex);
         const cleanedContent = c.content.replace(/\[(\d+[\d,\s\-–—，、]*)\]/g, "[文献$1]");
         return `[参考来源 [${globalIndex}]: ${formatRagCitation(c)}]\n${cleanedContent}`;
       }).join("\n\n")
     : "（未找到直接相关的文献参考，请根据通用学术知识扩写）";
 
   const totalRefs = referencesByIndex.length;
+  const contextRefs = contextRefIndices.sort((a, b) => a - b);
+  const contextRefSet = new Set(contextRefs);
+
+  // 生成完整文献清单：ALL 项目引用（含本次 RAG 新检索的 + 已有文献）
+  // 标注 ★本次新增 帮助 AI 识别哪些是有原文上下文的、哪些仅可引用摘要
+  const allRefListLines: string[] = [];
+  for (let i = 0; i < referencesByIndex.length; i++) {
+    const filename = referencesByIndex[i];
+    if (!filename) continue;
+    const idx = i + 1;
+    const entry = resolveBibEntry(filename);
+    const bib = entry?.bib;
+    const gbTag = entry?.gbTag ? `[${entry.gbTag}]` : "";
+    const isNew = contextRefSet.has(idx);
+    let line: string;
+    if (bib?.firstAuthor || bib?.year || bib?.journal || bib?.doi) {
+      const author = bib.firstAuthor
+        ? `${bib.firstAuthor}${Array.isArray(bib.authors) && bib.authors.length > 1 ? " 等" : ""}`
+        : "";
+      const year = bib.year ? ` (${bib.year})` : "";
+      const title = bib.title ? ` "${bib.title.slice(0, 60)}${bib.title.length > 60 ? "…" : ""}"` : "";
+      const journal = bib.journal ? ` ${bib.journal}` : "";
+      line = `  [${idx}]${gbTag} ${author}${year}${title}${journal}`;
+    } else {
+      line = `  [${idx}] ${cleanSourceName(filename)}`;
+    }
+    if (isNew) line += " ★本次检索";
+    allRefListLines.push(line);
+  }
+
   const refRangeHint = totalRefs > 0
-    ? `\n⚠️ 可用参考文献共 ${totalRefs} 篇，编号 [1] 到 [${totalRefs}]。严禁使用超出此范围的引用编号！`
+    ? `\n⚠️ 项目共有 ${totalRefs} 篇文献。★本次检索 表示有全文RAG上下文可深度引用；未标星的为已在项目中的文献，可引用但仅有标题/作者信息。引用时一律使用 [n] 编号，编号须与下列列表严格对应。\n完整文献列表：\n${allRefListLines.join("\n")}`
     : "";
 
   return { contextText, refMapping, referencesByIndex, newSources, ragLimit, ragMaxPerSource, refRangeHint };

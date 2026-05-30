@@ -23,6 +23,8 @@ export interface WritingRequest {
   evidenceSummary?: string;
   /** 数据证据声明列表（前端传入，服务端构建 EvidencePack） */
   dataClaims?: import("./data-source").EvidenceClaim[];
+  /** 引用格式标准 */
+  citationStyle?: "gbt7714" | "vancouver" | "apa7" | "ieee";
 }
 
 export interface WritingStreamResult {

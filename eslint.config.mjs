@@ -20,6 +20,8 @@ const eslintConfig = defineConfig([
       // Prevent accidental console output in production bundles.
       // Use a dedicated logger (src/lib/logger.ts) instead.
       "no-console": "warn",
+      // Disallow implicit any; use explicit types or unknown instead.
+      "@typescript-eslint/no-explicit-any": "warn",
     },
   },
 ]);

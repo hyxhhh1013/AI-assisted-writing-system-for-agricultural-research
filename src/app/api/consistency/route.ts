@@ -1,18 +1,20 @@
+import { logger } from "@/lib/logger";
 import { NextRequest } from "next/server";
 import { callAI, getAIError } from "@/lib/ai";
 import { buildConsistencyPrompt } from "@/lib/prompts";
 import type { ConsistencyIssue, ConsistencyReport } from "@/types/consistency";
+import { validateBody } from "@/lib/api-validate";
+import { consistencySchema } from "@/lib/validations";
 
 export async function POST(req: NextRequest) {
   try {
-    const { title, sections, outline, dataClaims } = await req.json();
+    const { data, errorResponse: ve } = await validateBody(consistencySchema, await req.json());
+    if (ve) return ve;
 
-    if (!sections || !Array.isArray(sections) || sections.length < 2) {
-      return new Response(
-        JSON.stringify({ error: "需要至少 2 个章节内容才能进行一致性检查" }),
-        { status: 400 },
-      );
-    }
+    const { title, sections, outline } = data;
+    const dataClaims = (data.dataClaims ?? []) as {
+      id: string; text: string; values: Record<string, string | number>;
+    }[];
 
     const keyError = getAIError("deepseek");
     if (keyError) {
@@ -102,7 +104,7 @@ export async function POST(req: NextRequest) {
       headers: { "Content-Type": "application/json" },
     });
   } catch (error: any) {
-    console.error("Consistency Check Error:", error);
+    logger.error("Consistency Check Error:", error);
     return new Response(JSON.stringify({ error: error.message }), { status: 500 });
   }
 }

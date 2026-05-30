@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import fs from "fs";
@@ -77,7 +78,7 @@ export async function POST(req: NextRequest) {
       letters: resultJson.letters,
     });
   } catch (error: any) {
-    console.error("Table API error:", error);
+    logger.error("Table API error:", error);
     return NextResponse.json(
       { error: error.message || "三线表生成失败" },
       { status: 500 }

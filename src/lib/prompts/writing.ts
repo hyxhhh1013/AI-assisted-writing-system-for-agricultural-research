@@ -105,6 +105,68 @@ Keep it selective: if a detail does not affect editorial triage, omit it.`,
 ⚠️ 结论必须基于本文实际数据，不得引入新发现或超出数据范围的推断。`,
 };
 
+/** 各引用格式的参考文献条目示例与规则 */
+function buildCitationStyleBlock(style: string, isChinese: boolean): string {
+  const blocks: Record<string, string> = {
+    gbt7714: isChinese
+      ? `—— 参考文献格式：GB/T 7714-2015（顺序编码制）——
+· 期刊论文示例：
+  [1] 张三, 李四, 王五. 水稻耐盐碱基因调控机制研究[J]. 作物学报, 2023, 49(5): 1234-1245. DOI: 10.3724/SP.J.1006.2023.12345.
+· 书籍示例：
+  [2] 赵六. 农业生物技术导论[M]. 北京: 科学出版社, 2022: 56-78.
+· 学位论文示例：
+  [3] 陈七. 盐碱胁迫下水稻产量形成机制研究[D]. 北京: 中国农业大学, 2021.
+· 格式规则：
+  - 期刊文章用 [J]，书籍用 [M]，学位论文用 [D]，会议论文用 [C]，报告用 [R]
+  - 中文作者：姓名间用逗号分隔，超过 3 人写前 3 人加"等"
+  - 英文作者：SURNAME A B（姓全写，名首字母），超过 3 人加"et al"
+  - 卷号为粗体，格式"卷(期): 页码"，DOI 末尾加点`
+      : `—— Reference Format: GB/T 7714-2015 ——
+· Journal: Author AA, Author BB. Title[J]. Journal Name, Year, Vol(Issue): Pages. DOI: xx.
+· Book: Author AA. Book Title[M]. Publisher, Year: Pages.
+· Rules: Use document-type tags [J][M][D][C][R]; list all authors up to 3 then "et al".`,
+
+    vancouver: isChinese
+      ? `—— 参考文献格式：Vancouver（序号制，适用于医学/SCI 期刊）——
+· 期刊论文示例：
+  [1] Zhang S, Li M, Wang Q, et al. Salt stress mechanisms in rice varieties. Plant Cell Physiol. 2023;64(5):1234-45.
+· 格式规则：
+  - 作者姓 + 名字首字母，超过 6 人写前 6 人后加"et al"
+  - 期刊名缩写（MEDLINE 格式），无需方括号文献类型标记
+  - 格式：作者. 标题. 期刊名缩写. 年;卷(期):页码.`
+      : `—— Reference Format: Vancouver ——
+· Journal: Surname AB, Surname CD, et al. Title. J Abbrev. Year;Vol(Issue):Pages.
+· Rules: Use MEDLINE journal abbreviations; ≤6 authors list all, >6 use "et al".`,
+
+    apa7: isChinese
+      ? `—— 参考文献格式：APA 7th Edition（作者-出版年制）——
+· 期刊论文示例：
+  Zhang, S., Li, M., & Wang, Q. (2023). Salt stress mechanisms in rice. Plant Cell Physiology, 64(5), 1234–1245. https://doi.org/10.1093/pcp/pcad012
+· 格式规则：
+  - 作者：Surname, Initials（逗号分隔，最后一人前加&）
+  - 出版年紧跟作者后用括号括起
+  - 正文引用用 (Zhang et al., 2023) 格式，不用 [n]`
+      : `—— Reference Format: APA 7th Edition ——
+· Journal: Surname, A. B., & Surname, C. D. (Year). Title. Journal, Vol(Issue), Pages. https://doi.org/xx
+· In-text: (Zhang et al., 2023); list up to 20 authors before using ellipsis.`,
+
+    ieee: isChinese
+      ? `—— 参考文献格式：IEEE（适用于工程、电子类期刊）——
+· 期刊论文示例：
+  [1] S. Zhang, M. Li, and Q. Wang, "Salt stress mechanisms in rice varieties," Plant Cell Physiol., vol. 64, no. 5, pp. 1234–1245, May 2023.
+· 格式规则：
+  - 作者名字首字母在前，姓在后，用逗号连接，最后一人前加"and"
+  - 标题用双引号括起
+  - 期刊名斜体缩写，vol./no./pp. 小写
+  - 正文中用右上角角标 [n] 引用`
+      : `—— Reference Format: IEEE ——
+· Journal: A. Surname, B. Surname, and C. Surname, "Title," J. Abbrev., vol. X, no. Y, pp. ZZ–ZZ, Month Year.
+· Rules: Initials-first author names; title in quotes; abbreviated journal in italics.`,
+  };
+
+  return blocks[style] || blocks["gbt7714"];
+}
+
 export function buildWriterSystemPrompt(params: {
   section: string;
   domainExpertise: string;
@@ -117,8 +179,9 @@ export function buildWriterSystemPrompt(params: {
   evidenceSummary?: string;
   projectMode?: "review" | "research";
   sectionNumber?: number;
+  citationStyle?: string;
 }): string {
-  const { section, domainExpertise, globalReferenceInfo, template, language, contextText, sectionInstruction, figureStart = 1, evidenceSummary, projectMode, sectionNumber } = params;
+  const { section, domainExpertise, globalReferenceInfo, template, language, contextText, sectionInstruction, figureStart = 1, evidenceSummary, projectMode, sectionNumber, citationStyle = "gbt7714" } = params;
   const isGBT = template === "gbt7713";
   const isChinese = language !== "en";
   const isAbstract = section === "abstract";
@@ -133,8 +196,8 @@ ${contextText}
 ${evidenceSummary ? `\n—— 实验数据证据（定量结论必须引用编号） ——\n${evidenceSummary}\n` : ""}
 —— 核心写作原则 ——
 原则1·学术质量：使用专业术语，逻辑层层递进。${isGBT ? "遵循 GB/T 7713 学术表达习惯。" : "遵循 SCI 学术论文规范。"}${isAbstract ? "摘要必须是一个紧凑段落，禁止分点。" : ""}
-原则2·深度结合文献：每个主要观点应从文献库中寻找支撑或对比。正文中用 [n] 标注引用，编号须与文献库中 [参考来源 [n]] 严格对应。${projectMode === "research" ? `\n原则2b·数据驱动写作：所有定量结论（数字、趋势、显著性）必须引用实验数据证据编号（如 [D1-C3]）。不得编造、修改证据声明中的数值。数据声明中的 text 字段可以直接改写为学术语言，但数值不可改变。` : ""}
-原则3·结构与配图：使用多级编号子标题组织内容（如 "${major}.1 关键因素的影响"、"${major}.1.1 某一水平下的表现"），子标题独占一行。⚠️ 严禁使用 Markdown 标题语法（###、####、##### 等），直接用纯文本编号。禁止输出一级章节大标题（如 "1. 引言"、"Introduction"）。子标题编号以 ${major} 开头（本节属于第 ${major} 章），第一小节从 ${major}.1 开始计数。
+原则2·深度结合文献：每个主要观点应从文献库中寻找支撑或对比。正文中用 [n] 标注引用（仅数字，如 [1]、[2,3]、[1-3]），编号须与文献库中 [参考来源 [n]] 严格对应。严禁使用 "[参考来源1]" "[文献2]" 等非标准格式——必须是 [n]，只含数字。${projectMode === "research" ? `\n原则2b·数据驱动写作：所有定量结论（数字、趋势、显著性）必须引用实验数据证据编号（如 [D1-C3]）。不得编造、修改证据声明中的数值。数据声明中的 text 字段可以直接改写为学术语言，但数值不可改变。` : ""}
+原则3·结构与配图：使用多级编号子标题组织内容（如 "${major}.1 关键因素的影响"、"${major}.1.1 某一水平下的表现"），子标题独占一行。⚠️ 严禁使用 Markdown 标题语法（###、####、##### 等），直接用纯文本编号。禁止输出一级章节大标题（如 "1. 引言"、"Introduction"）。禁止在章节末尾生成目录结构（列出所有子标题）——读者不需要在正文中看到目录。（如 "1. 引言"、"Introduction"）。子标题编号以 ${major} 开头（本节属于第 ${major} 章），第一小节从 ${major}.1 开始计数。
 
 ${isChinese ? `—— 证据强度分级（选择准确的动词）——
 · 强证据（有显著差异、大样本、可重复）："表明""显示""证实""揭示"
@@ -156,6 +219,20 @@ ${isChinese ? `—— 证据强度分级（选择准确的动词）——
 · ${isAbstract ? "摘要一个段落到底，不分点。" : "段落间用空行分隔，逻辑清晰。"}
 · 结尾不加收尾语。
 
+—— 元文字禁令 ——
+以下内容绝不允许出现在输出中（包括方括号内）：
+· 证据来源标注："[证据来源：...]"、"[需核实...]"、"[XXX，需补充]"
+· 编辑指引："[此处应...]"、"[建议在...]"、含"需核实并添加至文献列表"的引用
+· 自我审查："需要注意的是"开头的段落、"若需确证"、"应在后续修改中"
+· 未完成引用：不得输出半截参考文献条目或带"需补充"标记的引用
+上述任何形式出现在输出中均视为违规。
+
+—— 中文写作质量 ——
+· 空洞措辞禁用：禁止"具有重要的意义""展现出较大的潜力""引起了广泛关注"等虚词填充。用具体事实替代价值判断。
+· 套话禁用：禁止"随着…的发展""在…背景下""众所周知""日益严峻"开头。
+· 句子要求：每句有明确主语（本研究/该处理/温度/生物炭？），不用"被"字句堆砌。超过50字的句子必须拆分。
+· 数据先行：能用数值不用形容词。"显著增加"→"增加了 27.4% (P<0.05)"；"大幅下降"→"从 2.1% 降至 0.4%"。无数据时不编造。
+
 ${section === "introduction" ? "—— Gap 语言规范 ——\n· 精准: \"尚不清楚\"\"在…中研究有限\"\"缺乏…的证据\"\"…的结果不一致\"\n· 禁止: \"从未有人研究过\"\"完全未知\"\n" : ""}${section === "discussion" || section === "conclusion" || section === "abstract" ? "—— Limitation 要求 ——\n· 必须至少有一处明确写出研究局限或结论边界\n" : ""}`
 : `—— Evidence Strength (choose verbs carefully) ——
 · Strong (significant, large sample, reproducible): "demonstrate" "show" "reveal" "establish"
@@ -176,6 +253,13 @@ ${section === "introduction" ? "—— Gap 语言规范 ——\n· 精准: \"尚
 · ${isAbstract ? "Single paragraph, no bullet points." : "Separate paragraphs with blank lines."}
 
 ${section === "introduction" ? "—— Gap Language ——\n· Use: \"remains poorly understood\" \"has not been examined in\" \"few studies have addressed\"\n· Avoid: \"no one has ever studied\" \"completely unknown\"\n" : ""}${section === "discussion" || section === "conclusion" || section === "abstract" ? "—— Limitation Requirement ——\n· Must include at least one substantive limitation or boundary statement\n" : ""}`}
+—— 数学公式规则 ——
+· 所有数学公式必须用 $...$ 完整包裹，包括等号、运算符、数字。
+· 正确示例：$Y_{bio-oil} = \\frac{m_{bio-oil}}{m_{raw}} \\times 100\\%$
+· 错误示例：$\\frac{m_{bio-oil}}{m_{raw}}$ \\times 100\\%（运算符和数字在 $ 外面）
+· 下标用 _{...}，上标用 ^{...}，都在 $ 内部。
+· 独占一行的长公式用 $$...$$。
+
 —— 插图规则 ——
 ⚠️ 本章图表编号从「图${figureStart}」开始，按出现顺序递增（图${figureStart}、图${figureStart + 1}、图${figureStart + 2}…）。严禁从图1重新开始！
 你可以并且应该在正文中插入配图标记。系统会自动根据标记生成图片。
@@ -210,10 +294,10 @@ ${section === "introduction" ? "—— Gap Language ——\n· Use: \"remains po
 · 避免 overclaim 措辞：不得使用"首次""证明""最优""彻底解决""完全阐明"等夸张用语。
 · 若引用前人文献的数据做对比，必须明确标注"据文献[×]报道"，与本文实验数据区分。不得将文献结论当作本文实验结论。
 
-—— 参考文献格式约束 ——
-· 引用参考文献时严禁使用 ".pdf" 后缀（如"Title of paper,.pdf"）。每条文献必须包含：作者. 标题. 期刊, 年份, 卷(期): 页码.
+${buildCitationStyleBlock(citationStyle, isChinese)}
+· 引用参考文献时严禁使用 ".pdf" 后缀（如"Title of paper.pdf"）。
 · 若无法确定某条文献的完整信息，使用标记 [文献×待补充] 而非编造不完整引用。
-· 参考文献列表中的 [n] 编号必须与正文引用一一对应，不得出现正文未引用的文献。`;
+· 参考文献列表中的编号必须与正文引用一一对应，不得出现正文未引用的文献。`;
 }
 
 export function buildVerifierSystemPrompt(role: "audit" | "full"): string {
@@ -276,7 +360,13 @@ export function buildRefinerSystemPrompt(): string {
 
 ⚠️ 引用缺失说明：
 - 如果稿件中某处原文缺少引用编号（即该处应该引用文献但未标注 [n]），
-  请从文献库中找到正确的引用来源，用正确的 [n] 编号在适当位置补充。`;
+  请从文献库中找到正确的引用来源，用正确的 [n] 编号在适当位置补充。
+
+⚠️ 输出铁律 —— 违者视为失败：
+- 严禁在输出中插入任何编辑备注、审稿说明、证据来源标注。
+- 严禁输出 "[证据来源：...]"、"[需核实...]"、"含"需核实并添加至文献列表"的引用。
+- 严禁输出以"需要注意的是""若需确证""应在后续修改中"开头的段落。
+- 修正完成后的稿件必须是纯净的学术正文，不含任何元文字。`;
 }
 
 export function buildRefinerPrompt(params: {

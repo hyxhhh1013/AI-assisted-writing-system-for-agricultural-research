@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 ﻿import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import fs from "fs";
@@ -7,7 +8,7 @@ import { randomUUID } from "crypto";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const CHARTS_DIR = path.join(process.cwd(), "public", "charts");
+const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
 
 // conda pyxplore 环境 Python 路径
@@ -138,11 +139,11 @@ export async function POST(req: NextRequest) {
     // 返回 base64（供面板预览）和 imageUrl（供插入编辑器，短而干净）
     return NextResponse.json({
       imageBase64: `data:image/png;base64,${base64}`,
-      imageUrl: `/charts/${outputName}`,
+      imageUrl: `/api/charts/${outputName}`,
       data: pyResult.data,
     });
   } catch (error: any) {
-    console.error("XRD peakfit API error:", error);
+    logger.error("XRD peakfit API error:", error);
     return NextResponse.json(
       { error: error.message || "分析失败" },
       { status: 500 }

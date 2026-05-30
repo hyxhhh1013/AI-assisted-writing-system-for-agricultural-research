@@ -1,9 +1,12 @@
+import { logger } from "@/lib/logger";
 import { NextRequest } from "next/server";
 import fs from "fs";
 import path from "path";
 import { formatRagCitation, localRAG } from "@/lib/rag";
 import { callAI, getAgentModelConfig, streamAIResponse } from "@/lib/ai";
 import { buildOutlinePrompt } from "@/lib/prompts";
+import { validateBody } from "@/lib/api-validate";
+import { outlineSchema } from "@/lib/validations";
 
 const METADATA_PATH = path.join(process.cwd(), "data/metadata.json");
 
@@ -38,12 +41,14 @@ function matchCategory(direction: string): string | null {
 
 export async function POST(req: NextRequest) {
   try {
-    const { title, researchDirection, language = "zh", category } = await req.json();
+    const { data, errorResponse: ve } = await validateBody(outlineSchema, await req.json());
+    if (ve) return ve;
 
-    if (!title || !researchDirection) {
-      return new Response(JSON.stringify({ error: "Title and Research Direction are required" }), {
-        status: 400,
-      });
+    const { title, researchDirection: rawDir, language, category } = data;
+    const researchDirection = rawDir ?? "";
+
+    if (!researchDirection) {
+      return new Response(JSON.stringify({ error: "研究方向不能为空" }), { status: 400 });
     }
 
     const { provider, keyError } = getAgentModelConfig("writer");
@@ -102,7 +107,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error: any) {
-    console.error("Outline Generation Error:", error);
+    logger.error("Outline Generation Error:", error);
     return new Response(JSON.stringify({ error: error.message || "Internal Server Error" }), {
       status: 500,
     });

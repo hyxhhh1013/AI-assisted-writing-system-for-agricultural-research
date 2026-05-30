@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import fs from "fs";
@@ -7,7 +8,7 @@ import { randomUUID } from "crypto";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const CHARTS_DIR = path.join(process.cwd(), "public", "charts");
+const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
 
 const PYTHON_CMD = process.env.PYTHON_CMD || (process.platform === "win32" ? "python" : "python3");
@@ -133,11 +134,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       imageBase64: `data:${mimeType};base64,${base64}`,
-      imageUrl: `/charts/${outputName}`,
+      imageUrl: `/api/charts/${outputName}`,
       fileName: outputName,
     });
   } catch (error: any) {
-    console.error("Chart API error:", error);
+    logger.error("Chart API error:", error);
     return NextResponse.json(
       { error: error.message || "图表生成失败" },
       { status: 500 }

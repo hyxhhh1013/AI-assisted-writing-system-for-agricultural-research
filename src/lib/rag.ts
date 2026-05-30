@@ -11,12 +11,98 @@ export interface RagChunk {
     source: string;
     category: string;
     id: string;
-    documentType?: string; // "paper" | "patent" | "other"
+    documentType?: string; // "journal" | "patent" | "book" | ...
     /** 索引进度：起始页（1-based），可选 */
     pageStart?: number;
     pageEnd?: number;
     chunkIndex?: number;
   };
+}
+
+/** metadata.json 中每条文献的书目元数据 */
+export interface BibEntry {
+  name: string;
+  path?: string;
+  category: string;
+  chunkCount: number;
+  documentType?: string;
+  gbTag?: string;         // GB/T 7714 类型标识：J / M / P / D / C / S
+  bib?: {
+    title?: string;
+    authors?: string[];
+    firstAuthor?: string;
+    year?: number;
+    journal?: string;
+    volume?: string;
+    issue?: string;
+    pages?: string;
+    doi?: string;
+    // 专利专用
+    patentNumber?: string;
+    inventors?: string[];
+    applicant?: string;
+    publicationDate?: string;
+    // 书籍专用
+    isbn?: string;
+    publisher?: string;
+  } | null;
+}
+
+// ── 书目元数据懒加载 ────────────────────────────────────────────────────────
+
+const DATA_DIR = path.resolve(process.cwd(), "data");
+
+let _bibMap: Map<string, BibEntry> | null = null;
+
+/** 从 source（文件名或相对路径）查找书目条目 */
+export function resolveBibEntry(source: string): BibEntry | undefined {
+  const map = getBibMap();
+  // 1) 精确匹配（含 .pdf）
+  const direct = map.get(source);
+  if (direct) return direct;
+  // 2) 仅匹配 basename
+  const base = path.basename(source.replace(/\\/g, "/"));
+  const byBase = map.get(base);
+  if (byBase) return byBase;
+  // 3) 兼容历史数据：去掉 .pdf 的 cleaned name → 加回 .pdf 重试
+  if (!source.endsWith(".pdf")) {
+    const withPdf = map.get(source + ".pdf");
+    if (withPdf) return withPdf;
+    const baseWithPdf = map.get(base + ".pdf");
+    if (baseWithPdf) return baseWithPdf;
+  }
+  return undefined;
+}
+
+/** 懒加载 metadata.json → filename → BibEntry 字典（生产中只加载一次） */
+export function getBibMap(): Map<string, BibEntry> {
+  if (_bibMap) return _bibMap;
+  const metaPath = path.join(DATA_DIR, "metadata.json");
+  try {
+    if (!fs.existsSync(metaPath)) { _bibMap = new Map(); return _bibMap; }
+    const raw: BibEntry[] = JSON.parse(fs.readFileSync(metaPath, "utf-8"));
+    const map = new Map<string, BibEntry>();
+    for (const entry of raw) {
+      if (!entry?.name) continue;
+      const prev = map.get(entry.name);
+      if (!prev) {
+        map.set(entry.name, entry);
+        continue;
+      }
+      const prevScore = (prev.documentType ? 1 : 0) + (prev.bib ? 2 : 0);
+      const nextScore = (entry.documentType ? 1 : 0) + (entry.bib ? 2 : 0);
+      map.set(entry.name, nextScore >= prevScore ? entry : prev);
+    }
+    _bibMap = map;
+  } catch {
+    _bibMap = new Map();
+  }
+  return _bibMap;
+}
+
+/** 触发下次调用重新加载（reindex 后调用） */
+export function invalidateBibCache(): void {
+  _bibMap = null;
 }
 
 const RRF_K = 60;
@@ -31,16 +117,22 @@ function escapeRegExp(s: string): string {
 function getEmbeddingsUrl(): string {
   const full = process.env.RAG_EMBEDDINGS_URL?.trim();
   if (full) return full;
-  const base = (process.env.RAG_EMBEDDING_API_BASE || "https://api.deepseek.com/v1").replace(/\/$/, "");
-  return `${base}/embeddings`;
+  const base = (process.env.RAG_EMBEDDING_API_BASE || "").trim();
+  if (base) return `${base.replace(/\/$/, "")}/embeddings`;
+  return ""; // 未配置 embedding 服务
 }
 
 function getEmbeddingModel(): string {
-  return process.env.RAG_EMBEDDING_MODEL?.trim() || "deepseek-embed";
+  return process.env.RAG_EMBEDDING_MODEL?.trim() || "";
 }
 
 function getEmbeddingApiKey(): string | undefined {
-  return process.env.RAG_EMBEDDING_API_KEY?.trim() || process.env.DEEPSEEK_API_KEY?.trim();
+  // 只有显式配置了 embedding URL/API_BASE 或专用 key 才启用向量检索
+  // DeepSeek 没有公开的 embedding API，不要用 DEEPSEEK_API_KEY 去撞
+  return process.env.RAG_EMBEDDING_API_KEY?.trim()
+    || (process.env.RAG_EMBEDDINGS_URL?.trim() ? process.env.DEEPSEEK_API_KEY?.trim() : undefined)
+    || (process.env.RAG_EMBEDDING_API_BASE?.trim() ? process.env.DEEPSEEK_API_KEY?.trim() : undefined)
+    || undefined;
 }
 
 function extractQueryTerms(query: string): string[] {
@@ -69,51 +161,59 @@ function extractQueryTerms(query: string): string[] {
   return Array.from(new Set(keywords)).filter((t) => t.length > 0);
 }
 
-function termFrequency(docLower: string, term: string): number {
-  if (!term) return 0;
-  try {
-    const re = new RegExp(escapeRegExp(term.toLowerCase()), "g");
-    return (docLower.match(re) || []).length;
-  } catch {
-    return docLower.includes(term.toLowerCase()) ? 1 : 0;
+// ── 倒排索引：term → Map<chunkIdx, tf> ──
+// 构建在分类加载时，替换 O(N×T) 全扫描
+
+type InvertedIndex = Map<string, Map<number, number>>;
+
+/** 为 chunks 构建倒排索引 */
+function buildInvertedIndex(chunks: RagChunk[]): InvertedIndex {
+  const idx: InvertedIndex = new Map();
+  for (let i = 0; i < chunks.length; i++) {
+    const tokens = chunks[i].content.toLowerCase().split(/[^a-z0-9一-鿿]+/).filter(Boolean);
+    const tfMap = new Map<string, number>();
+    for (const t of tokens) {
+      tfMap.set(t, (tfMap.get(t) || 0) + 1);
+      // 中文单字也索引
+      if (/[一-鿿]/.test(t)) {
+        for (const ch of t) {
+          tfMap.set(ch, (tfMap.get(ch) || 0) + 1);
+        }
+      }
+    }
+    for (const [term, tf] of tfMap) {
+      if (!idx.has(term)) idx.set(term, new Map());
+      idx.get(term)!.set(i, tf);
+    }
   }
+  return idx;
 }
 
-function documentFrequency(chunks: RagChunk[], term: string): number {
-  const tl = term.toLowerCase();
-  let df = 0;
-  for (const c of chunks) {
-    if (c.content.toLowerCase().includes(tl)) df++;
-  }
-  return df;
-}
-
-/** Okapi BM25，按块为「文档」；适合中英混合关键词检索 */
-function bm25Scores(chunks: RagChunk[], terms: string[]): number[] {
+/** BM25 从倒排索引计算，仅遍历命中文档 */
+function bm25FromIndex(
+  idx: InvertedIndex,
+  chunks: RagChunk[],
+  terms: string[],
+): number[] {
   const N = chunks.length;
-  if (N === 0 || terms.length === 0) return chunks.map(() => 0);
+  const scores = new Float32Array(N);
+  if (N === 0 || terms.length === 0) return Array.from(scores);
   const docLens = chunks.map((c) => Math.max(1, c.content.length));
   const avgdl = docLens.reduce((a, b) => a + b, 0) / N;
 
-  const idf = new Map<string, number>();
   for (const t of terms) {
-    const df = documentFrequency(chunks, t);
-    idf.set(t, Math.log((N - df + 0.5) / (df + 0.5) + 1));
-  }
-
-  return chunks.map((chunk, idx) => {
-    const docLower = chunk.content.toLowerCase();
-    const dl = docLens[idx];
-    let s = 0;
-    for (const t of terms) {
-      const tf = termFrequency(docLower, t);
-      if (tf === 0) continue;
-      const idfT = idf.get(t) ?? 0;
+    const posting = idx.get(t);
+    if (!posting || posting.size === 0) continue;
+    const df = posting.size;
+    const idf = Math.log((N - df + 0.5) / (df + 0.5) + 1);
+    if (idf <= 0) continue;
+    for (const [chunkIdx, tf] of posting) {
+      const dl = docLens[chunkIdx];
       const denom = tf + BM25_K1 * (1 - BM25_B + BM25_B * (dl / avgdl));
-      s += idfT * ((tf * (BM25_K1 + 1)) / denom);
+      scores[chunkIdx] += idf * ((tf * (BM25_K1 + 1)) / denom);
     }
-    return s;
-  });
+  }
+  return Array.from(scores);
 }
 
 function argsortDescending(scores: number[]): number[] {
@@ -149,6 +249,23 @@ function rrfFromRanks(rankLists: number[][]): number[] {
   return out;
 }
 
+/** 分类去偏：如果 Top-K 全来自同一分类，从其他分类补入最高分结果 */
+function diversifyByCategory(
+  topChunks: RagChunk[],
+  allChunks: RagChunk[],
+  limit: number,
+): RagChunk[] {
+  if (topChunks.length < 3) return topChunks;
+  const topCats = new Set(topChunks.map(c => c.metadata.category));
+  if (topCats.size >= 2) return topChunks; // 已有 ≥2 个分类
+  // 从其他分类找最高分 chunk，替换最后一条
+  const otherChunks = allChunks.filter(c => !topCats.has(c.metadata.category) && !topChunks.includes(c));
+  if (otherChunks.length === 0) return topChunks;
+  const result = topChunks.slice(0, -1);
+  result.push(otherChunks[0]);
+  return result;
+}
+
 function diversifyBySource(
   order: number[],
   chunks: RagChunk[],
@@ -158,7 +275,8 @@ function diversifyBySource(
   const perSource = new Map<string, number>();
   const out: RagChunk[] = [];
   for (const idx of order) {
-    const src = chunks[idx].metadata.source || "unknown";
+    const raw = chunks[idx].metadata.source || "unknown";
+    const src = path.basename(raw.replace(/\\/g, "/"));
     const c = (perSource.get(src) ?? 0) + 1;
     if (c > maxPerSource) continue;
     perSource.set(src, c);
@@ -171,6 +289,9 @@ function diversifyBySource(
 export class LocalRAG {
   private chunks: RagChunk[] | null = null;
   private categoryChunks = new Map<string, RagChunk[]>();
+  private categoryIndexes = new Map<string, InvertedIndex>(); // 倒排索引缓存
+  private allChunksCache: RagChunk[] | null = null;
+  private allIndexCache: InvertedIndex | null = null; // 全库倒排索引
   private indexPath = path.join(process.cwd(), "data/index.json");
   private metadataPath = path.join(process.cwd(), "data/metadata.json");
 
@@ -198,7 +319,9 @@ export class LocalRAG {
       try {
         const raw = fs.readFileSync(catPath, "utf-8");
         const parsed = JSON.parse(raw) as RagChunk[];
-        this.categoryChunks.set(category, parsed.filter((c) => c?.content && String(c.content).trim().length > 0));
+        const chunks = parsed.filter((c) => c?.content && String(c.content).trim().length > 0);
+        this.categoryChunks.set(category, chunks);
+        this.categoryIndexes.set(category, buildInvertedIndex(chunks));
         return;
       } catch (e) {
         console.error(`Failed to load category index [${category}]:`, e);
@@ -247,7 +370,7 @@ export class LocalRAG {
 
     const url = getEmbeddingsUrl();
     const model = getEmbeddingModel();
-    const input = text.replace(/\n/g, " ").slice(0, 8000);
+    const input = text.replace(/\n/g, " ").slice(0, 512);
 
     try {
       const response = await fetchWithRetry(url, {
@@ -304,24 +427,19 @@ export class LocalRAG {
     if (!q) return [];
 
     let pool: RagChunk[];
+    let idx: InvertedIndex | undefined;
 
-    // 有分类过滤 → 懒加载对应分类索引（大幅提速）
+    // 有分类过滤 → 懒加载对应分类索引
     if (category && category !== "全部") {
       this.ensureCategoryLoaded(category);
       pool = this.categoryChunks.get(category) || [];
+      idx = this.categoryIndexes.get(category);
     } else {
-      // 无分类过滤 → 优先用分类拆分索引的并集，否则回退主索引
-      const cats = this.getCategories();
-      if (cats.length > 0) {
-        // 有分类拆分索引：合并所有分类的 chunk 作为检索池
-        const allChunks: RagChunk[] = [];
-        for (const cat of cats) {
-          this.ensureCategoryLoaded(cat);
-          const c = this.categoryChunks.get(cat);
-          if (c) allChunks.push(...c);
-        }
-        pool = allChunks;
-      } else {
+      // 无分类过滤 → 使用缓存的全库 chunks + 倒排索引
+      const { chunks, index } = this.ensureAllLoaded();
+      pool = chunks;
+      idx = index;
+      if (pool.length === 0) {
         this.ensureLoaded();
         pool = this.chunks || [];
       }
@@ -330,7 +448,9 @@ export class LocalRAG {
     if (pool.length === 0) return [];
 
     const terms = extractQueryTerms(q);
-    const bm25 = bm25Scores(pool, terms);
+    const bm25 = idx
+      ? bm25FromIndex(idx, pool, terms)
+      : new Array(pool.length).fill(0);
 
     const queryVector = await this.getEmbedding(q);
     const hasVec = queryVector.length > 0;
@@ -354,15 +474,22 @@ export class LocalRAG {
     }
 
     const order = argsortDescending(fused);
-    // 过滤掉零分结果（完全不相关的块不应参与去重和返回）
     const nonZero = order.filter((i) => fused[i] > 0);
     if (nonZero.length === 0) return [];
     const diversified = diversifyBySource(nonZero, pool, limit * 2, maxPerSource);
-    return diversified.slice(0, limit);
+    // 分类去偏：确保 Top-K 覆盖 ≥2 个分类
+    const catDiversified = diversifyByCategory(diversified, pool, limit);
+    return catDiversified.slice(0, limit);
   }
 
   /** 按页码 / chunkIndex 拼接，便于全文分析顺序正确 */
   getFullText(fileName: string): string {
+    const baseName = path.basename(fileName.replace(/\\/g, "/"));
+    const matchesSource = (source: string) => {
+      const normalized = path.basename(source.replace(/\\/g, "/"));
+      return normalized === baseName || source === fileName;
+    };
+
     // 优先从分类拆分索引中查找（支持按分类拆分的索引结构）
     const cats = this.getCategories();
     if (cats.length > 0) {
@@ -370,7 +497,7 @@ export class LocalRAG {
         this.ensureCategoryLoaded(cat);
         const catChunks = this.categoryChunks.get(cat);
         if (!catChunks) continue;
-        const match = catChunks.filter((c) => c.metadata.source === fileName);
+        const match = catChunks.filter((c) => matchesSource(c.metadata.source));
         if (match.length > 0) {
           const sorted = match.sort((a, b) => {
             const pa = a.metadata.pageStart ?? 0;
@@ -387,7 +514,7 @@ export class LocalRAG {
     this.ensureLoaded();
     if (!this.chunks) return "";
     const list = this.chunks
-      .filter((c) => c.metadata.source === fileName)
+      .filter((c) => matchesSource(c.metadata.source))
       .sort((a, b) => {
         const pa = a.metadata.pageStart ?? 0;
         const pb = b.metadata.pageStart ?? 0;
@@ -397,9 +524,33 @@ export class LocalRAG {
     return list.map((c) => c.content).join("\n\n");
   }
 
+  /** 预加载+缓存全库 chunks + 倒排索引（无分类过滤搜索的性能关键） */
+  private ensureAllLoaded(): { chunks: RagChunk[]; index: InvertedIndex } {
+    if (this.allChunksCache && this.allIndexCache) {
+      return { chunks: this.allChunksCache, index: this.allIndexCache };
+    }
+    const cats = this.getCategories();
+    if (cats.length > 0) {
+      const all: RagChunk[] = [];
+      for (const cat of cats) {
+        this.ensureCategoryLoaded(cat);
+        const c = this.categoryChunks.get(cat);
+        if (c) all.push(...c);
+      }
+      this.allChunksCache = all;
+      this.allIndexCache = buildInvertedIndex(all);
+      return { chunks: all, index: this.allIndexCache };
+    }
+    this.ensureLoaded();
+    return { chunks: this.chunks || [], index: this.allIndexCache || new Map() };
+  }
+
   reload() {
     this.chunks = null;
     this.categoryChunks.clear();
+    this.categoryIndexes.clear();
+    this.allChunksCache = null;
+    this.allIndexCache = null;
     this.ensureLoaded();
   }
 }
@@ -415,17 +566,95 @@ export function cleanSourceName(raw: string): string {
     .trim();
 }
 
-/** 供 API 拼上下文：按文档类型区分引用格式 */
-export function formatRagCitation(chunk: RagChunk): string {
-  const src = cleanSourceName(chunk.metadata.source);
-  const docType = chunk.metadata.documentType;
-  // 专利用专利号格式，不用页码
-  if (docType === "patent") {
-    return `专利: ${src}`;
+/**
+ * 供 API 拼上下文：优先使用结构化书目元数据，无则退化到文件名+页码。
+ *
+ * 有 bib 时输出格式（便于 AI 生成 GB/T 7714 / Vancouver / APA 条目）：
+ *   [J] Khan MA et al. (2008) 营养浸渍木炭... | p. 3
+ *   [P] 专利: CN102345678A | 申请人: 某公司
+ *   [M] 张三 (2020) 农业生物技术导论 | 出版社: 科学出版社
+ */
+/** 清洗 bib 字段（与 ref-format.ts sanitizeBib 同逻辑，内联避免循环依赖） */
+function sanitizeRagBib(bib: BibEntry["bib"] | undefined | null): BibEntry["bib"] | null {
+  if (!bib) return null;
+  const cleaned = { ...bib };
+  // DOI 清洗：只保留标准 DOI 格式
+  if (cleaned.doi) {
+    const m = cleaned.doi.match(/(10\.\d{4,}\/[^\s一-鿿"<>，。、；]+)/);
+    cleaned.doi = m ? m[1].replace(/[.,;]+$/, "") : cleaned.doi.trim();
   }
+  // Title 清洗：去除 URL/收稿日期/作者简介/摘要
+  if (cleaned.title) {
+    let t = cleaned.title;
+    t = t.replace(/https?:\/\/[^\s]+/g, "");
+    t = t.replace(/收稿日期[：:][^\n。]*/g, "");
+    t = t.replace(/录用日期[：:][^\n。]*/g, "");
+    t = t.replace(/作者简介[：:][^\n。]*/g, "");
+    t = t.replace(/基金项目[：:（(][^\n。]*/g, "");
+    t = t.replace(/随着[^。]{15,}/g, "");
+    t = t.replace(/[\s]+/g, " ").trim();
+    cleaned.title = t.length >= 2 ? t : undefined;
+  }
+  // Authors 清洗：过滤 CNKI
+  if (Array.isArray(cleaned.authors)) {
+    cleaned.authors = cleaned.authors.filter(a => a && a !== "CNKI" && a !== "cnki");
+    if (cleaned.authors.length === 0) cleaned.authors = undefined;
+  }
+  if (cleaned.firstAuthor === "CNKI" || cleaned.firstAuthor === "cnki") {
+    cleaned.firstAuthor = undefined;
+  }
+  return cleaned;
+}
+
+export function formatRagCitation(chunk: RagChunk): string {
+  const bibEntry = resolveBibEntry(chunk.metadata.source);
+  const bib = sanitizeRagBib(bibEntry?.bib);
+  const docType = chunk.metadata.documentType || bibEntry?.documentType;
+  const gbTag = bibEntry?.gbTag;
   const p = chunk.metadata.pageStart;
-  if (p != null && chunk.metadata.pageEnd != null && chunk.metadata.pageEnd !== p) {
-    return `${src} (pp. ${p}-${chunk.metadata.pageEnd})`;
+  const pageEnd = chunk.metadata.pageEnd;
+  const pageStr = p != null
+    ? ` | p. ${p}${pageEnd != null && pageEnd !== p ? `-${pageEnd}` : ""}`
+    : "";
+
+  // ── 专利 ────────────────────────────────────────────────────────────────
+  if (docType === "patent") {
+    if (bib?.patentNumber) {
+      const inventor = bib.inventors?.[0] || bib.applicant || "";
+      return `[P] 专利 ${bib.patentNumber}${inventor ? ` | ${inventor} 等` : ""}${bib.publicationDate ? ` (${bib.publicationDate})` : ""}`;
+    }
+    return `[P] 专利: ${cleanSourceName(chunk.metadata.source)}`;
+  }
+
+  // ── 书籍 ────────────────────────────────────────────────────────────────
+  if (docType === "book") {
+    if (bib?.firstAuthor || bib?.title) {
+      const author = bib.firstAuthor || "佚名";
+      const year = bib.year ? ` (${bib.year})` : "";
+      const title = bib.title ? ` ${bib.title}` : "";
+      const pub = bib.publisher ? ` | ${bib.publisher}` : "";
+      return `[M] ${author}${year}${title}${pub}${pageStr}`;
+    }
+    return `[M] ${cleanSourceName(chunk.metadata.source)}${pageStr}`;
+  }
+
+  // ── 期刊论文（默认）────────────────────────────────────────────────────
+  if (bib?.firstAuthor || bib?.year || bib?.journal || bib?.doi) {
+    const tag = gbTag ? `[${gbTag}] ` : "";
+    const author = bib.firstAuthor
+      ? `${bib.firstAuthor}${bib.authors && bib.authors.length > 1 ? " 等" : ""}`
+      : "";
+    const year = bib.year ? ` (${bib.year})` : "";
+    const journal = bib.journal ? ` | ${bib.journal}` : "";
+    const doi = bib.doi ? ` | DOI: ${bib.doi}` : "";
+    const title = bib.title ? ` ${bib.title}` : "";
+    return `${tag}${author}${year}${title}${journal}${doi}${pageStr}`.trim();
+  }
+
+  // ── 兜底：文件名 + 页码 ────────────────────────────────────────────────
+  const src = cleanSourceName(chunk.metadata.source);
+  if (p != null && pageEnd != null && pageEnd !== p) {
+    return `${src} (pp. ${p}-${pageEnd})`;
   }
   if (p != null) return `${src} (p. ${p})`;
   return src;

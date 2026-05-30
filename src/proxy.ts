@@ -45,8 +45,8 @@ function checkRateLimit(key: string): NextResponse | null {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // TODO: 临时关闭认证 — 所有请求注入默认用户 ID
-  const BYPASS_AUTH = true;
+  // 开发调试：AUTH_BYPASS=true 时跳过 JWT 验证，注入硬编码 userId。生产不要设。
+  const BYPASS_AUTH = process.env.AUTH_BYPASS === "true";
   if (BYPASS_AUTH) {
     const response = NextResponse.next();
     response.headers.set(USER_ID_HEADER, "cmotoc1u50000iey3u6ju4zia");
