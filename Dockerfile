@@ -46,7 +46,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
 RUN groupadd --system --gid 1001 appgroup \
   && useradd --system --uid 1001 --gid appgroup --home-dir /app --shell /usr/sbin/nologin appuser

@@ -1,7 +1,7 @@
 node_modules
 .next
-.env.local
 .env
+.env.*
 *.db
 *.db-journal
 data/
@@ -13,3 +13,9 @@ README.md
 docs/
 __pycache__
 *.pyc
+temp/
+.gstack/
+papers/
+*.log
+.DS_Store
+Thumbs.db

@@ -48,12 +48,17 @@ export async function verifyPassword(
 
 // ---- Cookie helpers ----
 
+function getSecureFlag(): string {
+  // 生产环境使用 Secure 标志（仅 HTTPS）
+  return process.env.NODE_ENV === 'production' ? '; Secure' : '';
+}
+
 export function createTokenCookie(token: string): string {
-  return `${TOKEN_COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${TOKEN_MAX_AGE}`;
+  return `${TOKEN_COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${TOKEN_MAX_AGE}${getSecureFlag()}`;
 }
 
 export function clearTokenCookie(): string {
-  return `${TOKEN_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`;
+  return `${TOKEN_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${getSecureFlag()}`;
 }
 
 // ---- User helpers ----

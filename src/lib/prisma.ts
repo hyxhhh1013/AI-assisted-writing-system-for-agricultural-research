@@ -25,16 +25,7 @@ const prismaClientSingleton = () => {
 
   const client = new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
-    datasources: {
-      db: {
-        url: dbUrl,
-        // PostgreSQL 连接池配置
-        ...(dbUrl.startsWith('postgresql://') && {
-          connection_limit: 20,  // 最大连接数
-          pool_timeout: 30,      // 连接池超时（秒）
-        }),
-      },
-    },
+    datasources: { db: { url: dbUrl } },
   })
 
   // SQLite 专用：启用 WAL 模式（仅当使用 SQLite 时）
