@@ -32,7 +32,7 @@ jobs:
             if [[ -d .git ]]; then
               git fetch origin main
               git checkout main
-              git pull --ff-only origin main
+              git reset --hard origin/main
             fi
             bash scripts/deploy/vps-up.sh
         env:
