@@ -1,0 +1,60 @@
+# 生产环境：拉取 GHCR 预构建镜像，不在服务器上 build。
+# 用法见 docs/DEPLOY_VPS.md
+#
+#   export GRAINSCRIPT_IMAGE=ghcr.io/OWNER/grainscript:latest
+#   docker compose -f docker-compose.prod.yml pull app
+#   docker compose -f docker-compose.prod.yml up -d
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: grainscript-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: grainscript
+      POSTGRES_PASSWORD: grainscript_dev_2024
+      POSTGRES_DB: grainscript
+      TZ: Asia/Shanghai
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grainscript"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    image: ${GRAINSCRIPT_IMAGE:?Set GRAINSCRIPT_IMAGE e.g. ghcr.io/owner/grainscript:latest}
+    container_name: grainscript
+    pull_policy: always
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      PYTHON_CMD: python3
+      DATABASE_URL: postgresql://grainscript:grainscript_dev_2024@db:5432/grainscript
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data
+      - ./prisma:/app/prisma
+      - ./public/charts:/app/public/charts
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+
+volumes:
+  pgdata:
+    driver: local

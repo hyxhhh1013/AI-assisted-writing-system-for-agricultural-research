@@ -1,5 +1,8 @@
 # 部署指南
 
+> **腾讯云 VPS 自动部署**（推荐）：推 `main` 即发布。见 [DEPLOY_VPS.md](./DEPLOY_VPS.md)。  
+> **开发 / 提交规范**：见 [DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md)。
+
 ## 环境要求
 
 - Docker Desktop（Windows/Mac）或 Docker Engine（Linux）

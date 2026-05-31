@@ -158,6 +158,14 @@ npm run index-docs   # 重建文献索引
 - `.env` 不提交 Git，已配置 `.gitignore`
 - 运行时数据 (dev.db、RAG 索引、PDF 文献) 不入 Git
 
+## 文档索引
+
+| 文档 | 内容 |
+|------|------|
+| [DEVELOPMENT_WORKFLOW](docs/DEVELOPMENT_WORKFLOW.md) | 开发、提交、部署总规范 |
+| [DEPLOY_VPS](docs/DEPLOY_VPS.md) | 腾讯云自动部署 |
+| [DEPLOY_SETUP_CHECKLIST](docs/DEPLOY_SETUP_CHECKLIST.md) | 第一次配部署清单 |
+
 ## 许可
 
 实验室内部使用 · v2.2.0 · 2026-05
