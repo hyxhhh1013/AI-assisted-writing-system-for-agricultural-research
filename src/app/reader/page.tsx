@@ -6,14 +6,16 @@ import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import {
   ArrowLeft, Languages, Loader2, Copy, Sparkles,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, BookOpen
 } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { ChatPanel } from "@/components/shared/chat-panel";
+import { KnowledgeAnalyzePanel } from "@/components/shared/knowledge/knowledge-analyze-panel";
 import { AnnotatedText } from "@/components/shared/annotated-text";
 import { loadAnnotations, type Annotation } from "@/lib/annotations-store";
+import { searchKnowledge } from "@/services/knowledge";
 
 // 动态导入 PDFViewer，关闭 SSR 以避免 pdfjs-dist 的 Node.js 依赖问题
 const PDFViewer = dynamic(() => import("@/components/pdf-viewer"), {
@@ -37,6 +39,7 @@ function ReaderContent() {
   const [isTranslating, setIsTranslating] = useState(false);
 
   const [activeTab, setActiveTab] = useState("chat");
+  const [parseWarning, setParseWarning] = useState<"no_text" | "low_text" | null | undefined>(undefined);
   const [currentPage, setCurrentPage] = useState(1);
   // 标注状态
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
@@ -52,6 +55,23 @@ function ReaderContent() {
     if (filename) {
       setPdfUrl(`/api/pdf?file=${encodeURIComponent(filename)}`);
     }
+  }, [filename]);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "analyze" || tab === "translate" || tab === "chat") {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!filename) return;
+    void searchKnowledge({ q: filename, type: "name", pageSize: 30 })
+      .then((data) => {
+        const match = data.files?.find((f) => f.name === filename);
+        setParseWarning(match?.parseWarning ?? null);
+      })
+      .catch(() => setParseWarning(null));
   }, [filename]);
 
   const handleTextSelection = () => {
@@ -150,12 +170,15 @@ function ReaderContent() {
         <aside className="w-[450px] flex flex-col bg-card border-l shrink-0 overflow-hidden">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col min-h-0">
             <div className="px-4 pt-4 shrink-0">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="translate" className="gap-2">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="translate" className="gap-2 text-xs">
                   <Languages className="h-3.5 w-3.5" /> 划词翻译
                 </TabsTrigger>
-                <TabsTrigger value="chat" className="gap-2">
-                  <Sparkles className="h-3.5 w-3.5" /> 文献对话
+                <TabsTrigger value="analyze" className="gap-2 text-xs">
+                  <BookOpen className="h-3.5 w-3.5" /> 分析
+                </TabsTrigger>
+                <TabsTrigger value="chat" className="gap-2 text-xs">
+                  <Sparkles className="h-3.5 w-3.5" /> 对话
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -245,6 +268,16 @@ function ReaderContent() {
               <TabsContent value="chat" className="flex-1 flex flex-col h-full m-0 data-[state=active]:flex overflow-hidden">
                 {filename ? (
                   <ChatPanel filename={filename} />
+                ) : (
+                  <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                    正在加载文献...
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="analyze" className="flex-1 flex flex-col h-full m-0 data-[state=active]:flex overflow-hidden">
+                {filename ? (
+                  <KnowledgeAnalyzePanel filename={filename} parseWarning={parseWarning} />
                 ) : (
                   <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
                     正在加载文献...

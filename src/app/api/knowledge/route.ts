@@ -2,9 +2,67 @@ import { logger } from "@/lib/logger";
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
-import { localRAG } from "@/lib/rag";
+import type { KnowledgeFileRecord } from "@/contracts/knowledge";
+import { localRAG, invalidateBibCache } from "@/lib/rag";
+import { knowledgeMetadataPatchSchema } from "@/lib/validations";
+
 const ARTICLES_DIR = path.join(process.cwd(), process.env.RAG_ARTICLES_DIR || "papers");
 const METADATA_PATH = path.join(process.cwd(), "data/metadata.json");
+
+function loadMetadataRecords(): KnowledgeFileRecord[] {
+  if (!fs.existsSync(METADATA_PATH)) return [];
+  return JSON.parse(fs.readFileSync(METADATA_PATH, "utf-8")) as KnowledgeFileRecord[];
+}
+
+function saveMetadataRecords(records: KnowledgeFileRecord[]): void {
+  fs.writeFileSync(METADATA_PATH, JSON.stringify(records, null, 2), "utf-8");
+  invalidateBibCache();
+}
+
+function metadataByName(records: KnowledgeFileRecord[]): Map<string, KnowledgeFileRecord> {
+  return new Map(records.map((record) => [record.name, record]));
+}
+
+function enrichFromMetadata(
+  partial: KnowledgeFileRecord,
+  metaMap: Map<string, KnowledgeFileRecord>,
+): KnowledgeFileRecord {
+  const stored = metaMap.get(partial.name);
+  if (!stored) return partial;
+  return {
+    ...stored,
+    ...partial,
+    bib: stored.bib ?? partial.bib,
+    gbTag: stored.gbTag ?? partial.gbTag,
+    bibEdited: stored.bibEdited,
+    size: stored.size ?? partial.size,
+    mtime: stored.mtime || partial.mtime,
+  };
+}
+
+function matchesQuery(record: KnowledgeFileRecord, query: string): boolean {
+  const q = query.toLowerCase();
+  if (record.name.toLowerCase().includes(q)) return true;
+  if (record.category.toLowerCase().includes(q)) return true;
+  const bib = record.bib;
+  if (bib?.title?.toLowerCase().includes(q)) return true;
+  if (bib?.firstAuthor?.toLowerCase().includes(q)) return true;
+  if (bib?.journal?.toLowerCase().includes(q)) return true;
+  if (bib?.authors?.some((author) => author.toLowerCase().includes(q))) return true;
+  return false;
+}
+
+function cleanBibPayload(bib: Record<string, unknown>): KnowledgeFileRecord["bib"] {
+  const cleaned = Object.fromEntries(
+    Object.entries(bib).filter(([, value]) => {
+      if (value == null) return false;
+      if (typeof value === "string") return value.trim().length > 0;
+      if (Array.isArray(value)) return value.length > 0;
+      return true;
+    }),
+  );
+  return Object.keys(cleaned).length > 0 ? cleaned as KnowledgeFileRecord["bib"] : null;
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -18,6 +76,7 @@ export async function GET(req: NextRequest) {
     // RAG 语义搜索
     if (searchType === "semantic" && query) {
       const cat = category && category !== "全部" ? category : undefined;
+      const metaMap = metadataByName(loadMetadataRecords());
       // 检索更多 chunk，确保分页后有足够的来源多样性
       const results = await localRAG.search(query, { limit: 50, category: cat });
 
@@ -42,16 +101,15 @@ export async function GET(req: NextRequest) {
       const paged = sources.slice(start, start + pageSize);
 
       return NextResponse.json({
-        files: paged.map(g => ({
+        files: paged.map((g) => enrichFromMetadata({
           name: g.name,
           category: g.category,
           documentType: g.chunks[0]?.metadata?.documentType || "paper",
           chunkCount: g.chunkCount,
           size: 0,
           mtime: "",
-          // 返回完整 chunk 内容（截断到 300 字），方便前端展示相关片段
-          _snippets: g.chunks.map(c => c.content.slice(0, 300)),
-        })),
+          _snippets: g.chunks.map((c) => c.content.slice(0, 300)),
+        }, metaMap)),
         total,
         page,
         pageSize,
@@ -60,23 +118,19 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 原有文件名搜索
-    if (!fs.existsSync(METADATA_PATH)) {
+    const metadata = loadMetadataRecords();
+    if (metadata.length === 0) {
       return NextResponse.json({ files: [], total: 0, categories: ["全部"] });
     }
 
-    const metadata = JSON.parse(fs.readFileSync(METADATA_PATH, "utf-8"));
-    const categories = Array.from(new Set(metadata.map((m: any) => m.category)));
+    const categories = Array.from(new Set(metadata.map((m) => m.category)));
 
     let filtered = metadata;
     if (category && category !== "全部") {
-      filtered = filtered.filter((m: any) => m.category === category);
+      filtered = filtered.filter((m) => m.category === category);
     }
     if (query) {
-      filtered = filtered.filter((m: any) =>
-        m.name.toLowerCase().includes(query) ||
-        m.category.toLowerCase().includes(query)
-      );
+      filtered = filtered.filter((m) => matchesQuery(m, query));
     }
 
     const total = filtered.length;
@@ -92,8 +146,9 @@ export async function GET(req: NextRequest) {
       categories: ["全部", ...categories],
       searchType: "name",
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "请求失败";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -134,9 +189,9 @@ export async function POST(req: NextRequest) {
 
     // 同步更新 metadata.json，使文件立即可见于列表
     if (fs.existsSync(METADATA_PATH)) {
-      const metadata = JSON.parse(fs.readFileSync(METADATA_PATH, "utf-8"));
-      const existingIdx = metadata.findIndex((m: any) => m.name === file.name);
-      const entry = {
+      const metadata = loadMetadataRecords();
+      const existingIdx = metadata.findIndex((m) => m.name === file.name);
+      const entry: KnowledgeFileRecord = {
         name: file.name,
         category,
         documentType,
@@ -145,18 +200,19 @@ export async function POST(req: NextRequest) {
         mtime: new Date().toISOString(),
       };
       if (existingIdx >= 0) {
-        metadata[existingIdx] = entry;
+        metadata[existingIdx] = { ...metadata[existingIdx], ...entry, bib: metadata[existingIdx].bib, bibEdited: metadata[existingIdx].bibEdited };
       } else {
         metadata.push(entry);
       }
-      fs.writeFileSync(METADATA_PATH, JSON.stringify(metadata, null, 2), "utf-8");
+      saveMetadataRecords(metadata);
     }
 
     return NextResponse.json({ message: "文件上传成功", name: file.name });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("Knowledge API error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const message = error instanceof Error ? error.message : "上传失败";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -164,6 +220,27 @@ export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
     const { action, files, newCategory } = body;
+
+    if (action === "update_metadata") {
+      const parsed = knowledgeMetadataPatchSchema.safeParse(body);
+      if (!parsed.success) {
+        return NextResponse.json({ error: parsed.error.issues[0]?.message || "参数无效" }, { status: 400 });
+      }
+
+      const metadata = loadMetadataRecords();
+      const entry = metadata.find((m) => m.name === parsed.data.name);
+      if (!entry) {
+        return NextResponse.json({ error: `文献不存在: ${parsed.data.name}` }, { status: 404 });
+      }
+
+      entry.bib = cleanBibPayload(parsed.data.bib);
+      entry.bibEdited = true;
+      if (parsed.data.documentType) entry.documentType = parsed.data.documentType;
+      if (parsed.data.gbTag) entry.gbTag = parsed.data.gbTag;
+      saveMetadataRecords(metadata);
+
+      return NextResponse.json({ message: "书目信息已保存" });
+    }
 
     if (action === "batch_move") {
       if (!files || !Array.isArray(files) || !newCategory) {
@@ -195,12 +272,12 @@ export async function PATCH(req: NextRequest) {
 
       // 同步更新 metadata.json
       if (fs.existsSync(METADATA_PATH)) {
-        const metadata = JSON.parse(fs.readFileSync(METADATA_PATH, "utf-8"));
+        const metadata = loadMetadataRecords();
         for (const file of files) {
-          const entry = metadata.find((m: any) => m.name === file.name);
+          const entry = metadata.find((m) => m.name === file.name);
           if (entry) entry.category = newCategory;
         }
-        fs.writeFileSync(METADATA_PATH, JSON.stringify(metadata, null, 2), "utf-8");
+        saveMetadataRecords(metadata);
       }
 
       return NextResponse.json({ message: `批量移动完成：成功 ${results.success}，失败 ${results.failed}` });
@@ -243,18 +320,19 @@ export async function PATCH(req: NextRequest) {
 
     // 同步更新 metadata.json
     if (fs.existsSync(METADATA_PATH)) {
-      const metadata = JSON.parse(fs.readFileSync(METADATA_PATH, "utf-8"));
-      const entry = metadata.find((m: any) => m.name === name);
+      const metadata = loadMetadataRecords();
+      const entry = metadata.find((m) => m.name === name);
       if (entry) {
         entry.category = newCategory;
         if (documentType) entry.documentType = documentType;
       }
-      fs.writeFileSync(METADATA_PATH, JSON.stringify(metadata, null, 2), "utf-8");
+      saveMetadataRecords(metadata);
     }
 
     return NextResponse.json({ message: "分类更新成功" });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "更新失败";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -293,7 +371,8 @@ export async function DELETE(req: NextRequest) {
     } else {
       return NextResponse.json({ error: "文件不存在" }, { status: 404 });
     }
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "删除失败";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

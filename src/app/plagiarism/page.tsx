@@ -125,43 +125,43 @@ function Content() {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-10 border-b bg-card/80 backdrop-blur-sm">
-        <div className="container mx-auto px-4 h-12 flex items-center gap-3">
+    <div className="flex h-screen flex-col bg-background overflow-hidden">
+      <header className="shrink-0 z-10 border-b bg-card/80 backdrop-blur-sm">
+        <div className="mx-auto flex h-12 w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.back()}><ArrowLeft className="h-4 w-4" /></Button>
           <span className="text-sm font-semibold flex items-center gap-1.5"><Search className="h-4 w-4 text-primary/60" />论文质量检测</span>
-          {project && <span className="text-xs text-muted-foreground ml-auto truncate">{project.title}</span>}
+          {project && <span className="text-xs text-muted-foreground ml-auto truncate max-w-[40vw]">{project.title}</span>}
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-4 max-w-3xl">
-        {/* Tab */}
-        <div className="flex gap-1 p-1 bg-muted/40 rounded-lg mb-3">
+      <main className="mx-auto flex w-full max-w-6xl flex-1 min-h-0 flex-col px-4 py-4 sm:px-6">
+        <div className="mb-3 flex shrink-0 gap-1 overflow-x-auto rounded-lg bg-muted/40 p-1">
           {tabs.map(t => (
-            <button key={t.k} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all flex-1 justify-center ${tab === t.k ? "bg-background text-foreground shadow-sm" : t.dis ? "text-muted-foreground/40 cursor-not-allowed" : "text-muted-foreground hover:text-foreground"}`} onClick={() => !t.dis && setTab(t.k)} disabled={t.dis}>
-              <t.i className="h-3.5 w-3.5" />{t.l}
+            <button key={t.k} className={`flex min-w-fit items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-all sm:flex-1 ${tab === t.k ? "bg-background text-foreground shadow-sm" : t.dis ? "text-muted-foreground/40 cursor-not-allowed" : "text-muted-foreground hover:text-foreground"}`} onClick={() => !t.dis && setTab(t.k)} disabled={t.dis}>
+              <t.i className="h-3.5 w-3.5 shrink-0" />{t.l}
             </button>
           ))}
         </div>
 
-        {/* 内容 */}
-        <div className="rounded-xl border bg-card p-4">
-          {tab === "check" && <CheckView title={title} setTitle={setTitle} content={content} setContent={setContent} web={web} setWeb={setWeb} checking={checking} onCheck={doCheck} plist={plist} selPid={selPid} loadingP={loadingP} onLoad={loadP} onClear={() => { setContent(""); setResult(null); setSelPid(""); }} />}
-          {tab === "result" && result && <ResultView result={result} onRewrite={() => setTab("rewrite")} onReCheck={() => setTab("check")} />}
-          {tab === "rewrite" && result && <RewriteView checkId={result.checkId} matches={result.matches} onReCheck={c => { setContent(c); setResult(null); setTab("check"); toast.success("已应用改写，点击「查重」验证"); }} />}
-          {tab === "review" && (
-            <ReviewTab
-              title={title || "未命名论文"}
-              sections={[
-                { key: "abstract", title: "摘要", content: content.slice(0, 500) },
-                { key: "introduction", title: "引言", content: content.slice(500, 1500) || "" },
-                { key: "methods", title: "材料与方法", content: content.slice(1500, 3000) || "" },
-                { key: "results", title: "结果与讨论", content: content.slice(3000, 5000) || "" },
-                { key: "conclusion", title: "结论", content: content.slice(5000) || "" },
-              ].filter(s => s.content.trim())}
-            />
-          )}
-          {tab === "history" && <HistoryView projectId={pid} onViewResult={r => { setResult(r); setTab("result"); }} />}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+            {tab === "check" && <CheckView title={title} setTitle={setTitle} content={content} setContent={setContent} web={web} setWeb={setWeb} checking={checking} onCheck={doCheck} plist={plist} selPid={selPid} loadingP={loadingP} onLoad={loadP} onClear={() => { setContent(""); setResult(null); setSelPid(""); }} />}
+            {tab === "result" && result && <ResultView result={result} onRewrite={() => setTab("rewrite")} onReCheck={() => setTab("check")} />}
+            {tab === "rewrite" && result && <RewriteView checkId={result.checkId} matches={result.matches} onReCheck={c => { setContent(c); setResult(null); setTab("check"); toast.success("已应用改写，点击「查重」验证"); }} />}
+            {tab === "review" && (
+              <ReviewTab
+                title={title || "未命名论文"}
+                sections={[
+                  { key: "abstract", title: "摘要", content: content.slice(0, 500) },
+                  { key: "introduction", title: "引言", content: content.slice(500, 1500) || "" },
+                  { key: "methods", title: "材料与方法", content: content.slice(1500, 3000) || "" },
+                  { key: "results", title: "结果与讨论", content: content.slice(3000, 5000) || "" },
+                  { key: "conclusion", title: "结论", content: content.slice(5000) || "" },
+                ].filter(s => s.content.trim())}
+              />
+            )}
+            {tab === "history" && <HistoryView projectId={pid} onViewResult={r => { setResult(r); setTab("result"); }} />}
+          </div>
         </div>
       </main>
     </div>
@@ -176,25 +176,25 @@ function CheckView({ title, setTitle, content, setContent, web, setWeb, checking
   plist: { id: string; title: string }[]; selPid: string; loadingP: boolean; onLoad: (id: string) => void; onClear: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border bg-muted/30">
+    <div className="flex h-full min-h-[420px] flex-col gap-3">
+      <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2.5">
         <FolderOpen className="h-4 w-4 text-muted-foreground shrink-0" />
-        <select className="flex-1 text-sm bg-transparent outline-none" value={selPid} onChange={e => onLoad(e.target.value)} disabled={loadingP}>
+        <select className="flex-1 bg-transparent text-sm outline-none" value={selPid} onChange={e => onLoad(e.target.value)} disabled={loadingP}>
           <option value="">选择已有项目导入内容...</option>
           {plist.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
         </select>
         {loadingP && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
       </div>
 
-      <input type="text" className="w-full text-sm px-3 py-2.5 rounded-lg border bg-background outline-none focus:ring-1 focus:ring-primary/20" placeholder="检测标题（选填）" value={title} onChange={e => setTitle(e.target.value)} />
+      <input type="text" className="w-full rounded-lg border bg-background px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-primary/20" placeholder="检测标题（选填）" value={title} onChange={e => setTitle(e.target.value)} />
 
-      <div className="relative">
-        <Textarea className="w-full h-64 text-sm leading-relaxed resize-none pr-16" placeholder="在此粘贴论文内容，或从上方选择项目导入..." value={content} onChange={e => setContent(e.target.value)} />
-        <span className="absolute bottom-3 right-4 text-[10px] text-muted-foreground tabular-nums">{content.length.toLocaleString()}</span>
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <Textarea className="min-h-[280px] flex-1 resize-none pr-16 text-sm leading-relaxed" placeholder="在此粘贴论文内容，或从上方选择项目导入..." value={content} onChange={e => setContent(e.target.value)} />
+        <span className="absolute bottom-3 right-4 text-[10px] tabular-nums text-muted-foreground">{content.length.toLocaleString()} 字</span>
       </div>
 
-      <div className="flex items-center justify-between">
-        <label className="flex items-center gap-2 text-sm cursor-pointer text-muted-foreground"><input type="checkbox" checked={web} onChange={e => setWeb(e.target.checked)} className="rounded" /><Globe className="h-3.5 w-3.5" />联网搜索</label>
+      <div className="flex shrink-0 items-center justify-between border-t pt-3">
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground"><input type="checkbox" checked={web} onChange={e => setWeb(e.target.checked)} className="rounded" /><Globe className="h-3.5 w-3.5" />联网搜索</label>
         <div className="flex gap-2">
           <Button variant="ghost" size="sm" onClick={onClear}>清空</Button>
           <Button size="sm" onClick={onCheck} disabled={checking || !content.trim()}>{checking ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />检测中...</> : <><Search className="h-4 w-4 mr-1.5" />开始查重</>}</Button>

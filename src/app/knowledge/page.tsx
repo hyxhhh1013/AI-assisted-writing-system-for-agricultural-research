@@ -9,7 +9,7 @@ import {
   CheckCircle2, AlertCircle, ExternalLink, 
   Search, Tag, Calendar, Database, Upload,
   MoreVertical, Edit3, Trash2, CheckSquare, Square,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, BookOpen
 } from "lucide-react";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
@@ -35,22 +35,28 @@ import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 import {
   reindexKnowledgeStream,
+  searchKnowledge,
+  uploadKnowledgeFile,
+  updateFileCategory,
+  batchMoveFiles,
+  deleteKnowledgeFile,
+  batchDeleteKnowledgeFiles,
+  type KnowledgeFile,
+  type ReindexKnowledgeOptions,
 } from "@/services/knowledge";
 import {
   applyReindexEvent,
   INITIAL_REINDEX_PROGRESS,
   type ReindexProgressState,
+  type ReindexRequest,
 } from "@/contracts/reindex";
-
-interface KnowledgeFile {
-  name: string;
-  category: string;
-  documentType?: string;
-  chunkCount: number;
-  size: number;
-  mtime: string;
-  _snippets?: string[];
-}
+import { getDocumentTypeLabel } from "@/contracts/knowledge";
+import { KnowledgeBibSummary } from "@/components/shared/knowledge/knowledge-bib-summary";
+import { KnowledgeIndexBadge } from "@/components/shared/knowledge/knowledge-index-badge";
+import { KnowledgeMetadataDialog } from "@/components/shared/knowledge/knowledge-metadata-dialog";
+import { KnowledgeIndexActions } from "@/components/shared/knowledge/knowledge-index-actions";
+import { KnowledgeParseWarningDialog } from "@/components/shared/knowledge/knowledge-parse-warning-dialog";
+import { DIALOG_FORM, DIALOG_FULL } from "@/components/ui/dialog-sizes";
 
 export default function KnowledgePage() {
   const router = useRouter();
@@ -95,23 +101,29 @@ export default function KnowledgePage() {
   // 片段预览弹窗
   const [snippetFile, setSnippetFile] = useState<KnowledgeFile | null>(null);
 
+  // 书目编辑
+  const [metadataFile, setMetadataFile] = useState<KnowledgeFile | null>(null);
+  const [isMetadataOpen, setIsMetadataOpen] = useState(false);
+
+  // 解析告警说明
+  const [parseWarningFile, setParseWarningFile] = useState<KnowledgeFile | null>(null);
+  const [isParseWarningOpen, setIsParseWarningOpen] = useState(false);
+
   const fetchFiles = async () => {
     setIsLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (selectedCategory !== "全部") params.append("category", selectedCategory);
-      if (searchQuery) params.append("q", searchQuery);
-      if (searchType !== "name") params.append("type", "semantic");
-      params.append("page", currentPage.toString());
-      params.append("pageSize", pageSize.toString());
-
-      const res = await fetch(`/api/knowledge?${params.toString()}`);
-      const data = await res.json();
+      const data = await searchKnowledge({
+        q: searchQuery || undefined,
+        category: selectedCategory !== "全部" ? selectedCategory : undefined,
+        type: searchType,
+        page: currentPage,
+        pageSize,
+      });
       if (data.files) setFiles(data.files);
       if (data.total !== undefined) setTotalFiles(data.total);
       if (data.categories) setCategories(data.categories);
-      setSelectedFiles([]); // 刷新列表后清空选择
-    } catch (error) {
+      setSelectedFiles([]);
+    } catch {
       toast.error("获取文献列表失败");
     } finally {
       setIsLoading(false);
@@ -130,7 +142,7 @@ export default function KnowledgePage() {
     setCurrentPage(1);
   }, [searchQuery, selectedCategory, searchType]);
 
-  const handleReindex = async () => {
+  const runReindex = async (options?: ReindexKnowledgeOptions, startMessage?: string) => {
     if (isIndexing) return;
 
     reindexAbortRef.current?.abort();
@@ -139,12 +151,12 @@ export default function KnowledgePage() {
 
     setIsIndexing(true);
     setIndexProgress(INITIAL_REINDEX_PROGRESS);
-    toast.info("正在重新扫描并索引文献…");
+    toast.info(startMessage || "正在重新扫描并索引文献…");
 
     try {
       await reindexKnowledgeStream((event) => {
         setIndexProgress((prev) => applyReindexEvent(prev, event));
-      }, controller.signal);
+      }, controller.signal, options);
 
       toast.success("本地知识库索引已更新！");
       fetchFiles();
@@ -158,6 +170,19 @@ export default function KnowledgePage() {
       setIsIndexing(false);
       reindexAbortRef.current = null;
     }
+  };
+
+  const handleReindex = () => {
+    void runReindex();
+  };
+
+  const handleSingleReindex = (fileName: string, options: ReindexRequest) => {
+    const label = options.forceStage1
+      ? "强制重解析"
+      : options.forceStage3
+        ? "强制重嵌向量"
+        : "重新索引";
+    void runReindex({ ...options, files: [fileName] }, `正在${label}：${fileName}`);
   };
 
   const handleCancelReindex = () => {
@@ -174,16 +199,15 @@ export default function KnowledgePage() {
   };
 
   const selectAllAcrossPages = async () => {
-    // 获取所有页的文件
     try {
-      const params = new URLSearchParams();
-      if (selectedCategory !== "全部") params.append("category", selectedCategory);
-      if (searchQuery) params.append("q", searchQuery);
-      params.append("pageSize", totalFiles.toString());
-      const res = await fetch(`/api/knowledge?${params}`);
-      const json = await res.json();
-      if (json.files) {
-        setSelectedFiles(json.files);
+      const data = await searchKnowledge({
+        q: searchQuery || undefined,
+        category: selectedCategory !== "全部" ? selectedCategory : undefined,
+        type: searchType,
+        pageSize: totalFiles,
+      });
+      if (data.files) {
+        setSelectedFiles(data.files);
         setSelectAllPages(true);
       }
     } catch {
@@ -205,25 +229,13 @@ export default function KnowledgePage() {
     setIsBatchProcessing(true);
 
     try {
-      const res = await fetch("/api/knowledge", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "batch_move",
-          files: selectedFiles.map(f => ({ name: f.name, category: f.category })),
-          newCategory: catName,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        toast.success(data.message);
-        setIsBatchMoveOpen(false);
-        fetchFiles();
-      } else {
-        const data = await res.json();
-        throw new Error(data.error);
-      }
+      const message = await batchMoveFiles(
+        selectedFiles.map((f) => ({ name: f.name, category: f.category })),
+        catName,
+      );
+      toast.success(message);
+      setIsBatchMoveOpen(false);
+      fetchFiles();
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "操作失败");
     } finally {
@@ -237,22 +249,11 @@ export default function KnowledgePage() {
     
     setIsBatchProcessing(true);
     try {
-      const res = await fetch("/api/knowledge?batch=true", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          files: selectedFiles.map(f => ({ name: f.name, category: f.category }))
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        toast.success(data.message);
-        fetchFiles();
-      } else {
-        const data = await res.json();
-        throw new Error(data.error);
-      }
+      const message = await batchDeleteKnowledgeFiles(
+        selectedFiles.map((f) => ({ name: f.name, category: f.category })),
+      );
+      toast.success(message);
+      fetchFiles();
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "操作失败");
     } finally {
@@ -264,17 +265,9 @@ export default function KnowledgePage() {
     if (!confirm(`确定要删除文件 "${file.name}" 吗？`)) return;
 
     try {
-      const res = await fetch(`/api/knowledge?name=${encodeURIComponent(file.name)}&category=${encodeURIComponent(file.category)}`, {
-        method: "DELETE",
-      });
-
-      if (res.ok) {
-        toast.success("文件已删除");
-        fetchFiles();
-      } else {
-        const data = await res.json();
-        throw new Error(data.error);
-      }
+      await deleteKnowledgeFile(file.name, file.category);
+      toast.success("文件已删除");
+      fetchFiles();
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "操作失败");
     }
@@ -291,17 +284,8 @@ export default function KnowledgePage() {
     let successCount = 0;
     for (const file of uploadFiles) {
       try {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("category", catName);
-        formData.append("documentType", uploadDocumentType);
-
-        const res = await fetch("/api/knowledge", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (res.ok) successCount++;
+        await uploadKnowledgeFile(file, catName, uploadDocumentType);
+        successCount++;
       } catch (e) {
         console.error(`上传失败: ${file.name}`, e);
       }
@@ -320,30 +304,25 @@ export default function KnowledgePage() {
     setIsUpdatingCategory(true);
 
     try {
-      const res = await fetch("/api/knowledge", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: editingFile.name,
-          oldCategory: editingFile.category,
-          newCategory: catName,
-          documentType: editDocumentType,
-        }),
-      });
-
-      if (res.ok) {
-        toast.success("分类更新成功！");
-        setEditingFile(null);
-        fetchFiles();
-      } else {
-        const data = await res.json();
-        throw new Error(data.error);
-      }
+      await updateFileCategory(
+        editingFile.name,
+        editingFile.category,
+        catName,
+        editDocumentType,
+      );
+      toast.success("分类更新成功！");
+      setEditingFile(null);
+      fetchFiles();
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "操作失败");
     } finally {
       setIsUpdatingCategory(false);
     }
+  };
+
+  const openMetadataEditor = (file: KnowledgeFile) => {
+    setMetadataFile(file);
+    setIsMetadataOpen(true);
   };
 
   const formatSize = (bytes: number) => {
@@ -357,12 +336,13 @@ export default function KnowledgePage() {
   const totalPages = Math.ceil(totalFiles / pageSize);
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-5xl">
-      <Button variant="ghost" className="mb-6" onClick={() => router.push("/")}>
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <Button variant="ghost" className="mb-4" onClick={() => router.push("/")}>
         <ArrowLeft className="mr-2 h-4 w-4" /> 返回首页
       </Button>
 
-      <div className="space-y-8">
+      <div className="space-y-6">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">知识库管理</h1>
@@ -395,6 +375,7 @@ export default function KnowledgePage() {
                   {indexProgress.totalFiles > 0 && (
                     <p className="text-xs text-muted-foreground">
                       文献进度 {indexProgress.processedFiles}/{indexProgress.totalFiles}
+                      {indexProgress.unchangedCount > 0 && ` · ${indexProgress.unchangedCount} 个跳过`}
                       {indexProgress.changedCount > 0 && ` · ${indexProgress.changedCount} 个需更新`}
                     </p>
                   )}
@@ -410,7 +391,7 @@ export default function KnowledgePage() {
               </div>
               <Progress value={indexProgress.percent} className="h-2" />
               {indexProgress.logs.length > 0 && (
-                <div className="rounded-md border bg-background/70 p-3 max-h-36 overflow-y-auto">
+                <div className="rounded-md border bg-background/70 p-3 max-h-48 overflow-y-auto">
                   <ul className="space-y-1 text-xs text-muted-foreground font-mono">
                     {indexProgress.logs.map((line, i) => (
                       <li key={`${line}-${i}`}>{line}</li>
@@ -578,26 +559,21 @@ export default function KnowledgePage() {
                             <div className="p-2 rounded bg-primary/10 mr-3 shrink-0">
                               <FileText className="h-5 w-5 text-primary" />
                             </div>
-                            <div className="min-w-0 flex-1">
-                              <h3 className="font-medium truncate group-hover:text-primary transition-colors">
-                                {file.name}
-                              </h3>
-                              <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                                <span className="flex items-center">
-                                  <Tag className="mr-1 h-3 w-3" />
-                                  {file.category}
-                                </span>
-                                {file.documentType === "patent" ? (
-                                  <Badge variant="outline" className="text-xs py-0 px-1.5 border-green-400 text-green-600">专利</Badge>
-                                ) : file.documentType === "other" ? (
-                                  <Badge variant="outline" className="text-xs py-0 px-1.5 border-orange-400 text-orange-600">其他</Badge>
-                                ) : null}
-                                <span className="flex items-center">
-                                  <Database className="mr-1 h-3 w-3" />
-                                  {file.chunkCount} 匹配片段
-                                </span>
-                              </div>
-                            </div>
+                            <KnowledgeBibSummary file={file} />
+                          </div>
+                          <div className="flex items-center gap-2 mt-1.5 pl-10 flex-wrap">
+                            <span className="flex items-center text-xs text-muted-foreground">
+                              <Tag className="mr-1 h-3 w-3" />
+                              {file.category}
+                            </span>
+                            <Badge variant="outline" className="text-xs py-0 px-1.5">
+                              {getDocumentTypeLabel(file.documentType || "paper")}
+                            </Badge>
+                            <KnowledgeIndexBadge file={file} />
+                            <span className="flex items-center text-xs text-muted-foreground">
+                              <Database className="mr-1 h-3 w-3" />
+                              {file.chunkCount} 块
+                            </span>
                           </div>
                           {file._snippets && file._snippets.length > 0 && (
                             <div className="mt-2 space-y-1.5 pl-10">
@@ -622,13 +598,30 @@ export default function KnowledgePage() {
                               </Button>
                             } />
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openMetadataEditor(file)}>
+                                <Edit3 className="mr-2 h-4 w-4" /> 编辑书目信息
+                              </DropdownMenuItem>
+                              <KnowledgeIndexActions
+                                file={file}
+                                disabled={isIndexing}
+                                onReindex={handleSingleReindex}
+                                onShowParseWarning={(target) => {
+                                  setParseWarningFile(target);
+                                  setIsParseWarningOpen(true);
+                                }}
+                              />
                               <DropdownMenuItem onClick={() => {
                                 setEditingFile(file);
                                 setNewCategoryName(file.category);
-                                setEditDocumentType(file.documentType || "paper");
+                                setEditDocumentType(file.documentType === "journal" ? "paper" : (file.documentType || "paper"));
                               }}>
-                                <Edit3 className="mr-2 h-4 w-4" /> 修改分类/类型
+                                <Tag className="mr-2 h-4 w-4" /> 修改分类/类型
                               </DropdownMenuItem>
+                              <DropdownMenuItem render={
+                                <Link href={`/reader?file=${encodeURIComponent(file.name)}&tab=analyze`}>
+                                  <BookOpen className="mr-2 h-4 w-4" /> AI 精读
+                                </Link>
+                              } />
                               <DropdownMenuItem render={
                                 <Link href={`/reader?file=${encodeURIComponent(file.name)}`}>
                                   <ExternalLink className="mr-2 h-4 w-4" /> 阅读文献
@@ -688,7 +681,7 @@ export default function KnowledgePage() {
 
       {/* 批量移动分类对话框 */}
       <Dialog open={isBatchMoveOpen} onOpenChange={setIsBatchMoveOpen}>
-        <DialogContent>
+        <DialogContent className={DIALOG_FORM}>
           <DialogHeader>
             <DialogTitle>批量修改分类</DialogTitle>
             <DialogDescription>
@@ -732,7 +725,7 @@ export default function KnowledgePage() {
 
       {/* 上传文献对话框 */}
       <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
-        <DialogContent>
+        <DialogContent className={DIALOG_FORM}>
           <DialogHeader>
             <DialogTitle>上传文献</DialogTitle>
             <DialogDescription>
@@ -807,7 +800,7 @@ export default function KnowledgePage() {
 
       {/* 修改分类对话框 */}
       <Dialog open={!!editingFile} onOpenChange={(open) => !open && setEditingFile(null)}>
-        <DialogContent>
+        <DialogContent className={DIALOG_FORM}>
           <DialogHeader>
             <DialogTitle>修改文献分类</DialogTitle>
             <DialogDescription>
@@ -871,15 +864,15 @@ export default function KnowledgePage() {
 
       {/* 片段预览弹窗 — 语义搜索点击后展示相关文献片段 */}
       <Dialog open={!!snippetFile} onOpenChange={(open) => { if (!open) setSnippetFile(null); }}>
-        <DialogContent className="w-[calc(100vw-4rem)] max-w-5xl h-[92vh] max-h-[92vh] overflow-hidden flex flex-col">
-          <DialogHeader className="shrink-0 pb-2">
+        <DialogContent className={DIALOG_FULL}>
+          <DialogHeader className="shrink-0 border-b px-6 pt-6 pb-4">
             <DialogTitle className="text-lg truncate pr-8">{snippetFile?.name}</DialogTitle>
             <DialogDescription className="flex items-center gap-3">
               <Badge variant="outline" className="text-xs">{snippetFile?.category}</Badge>
               <span className="text-xs text-muted-foreground">{snippetFile?.chunkCount} 个匹配片段</span>
             </DialogDescription>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto py-2 space-y-4 px-0.5">
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
             {snippetFile?._snippets?.map((snippet, i) => (
               <div key={i} className="p-5 rounded-xl bg-muted/30 border border-border/40 hover:border-primary/20 transition-colors">
                 <div className="flex items-center gap-2 mb-3">
@@ -892,7 +885,7 @@ export default function KnowledgePage() {
               <p className="text-base text-muted-foreground text-center py-16">暂无可预览的片段</p>
             )}
           </div>
-          <DialogFooter className="shrink-0 pt-3 border-t gap-3">
+          <DialogFooter className="shrink-0 border-t px-6 py-4 gap-3">
             <Button variant="outline" onClick={() => setSnippetFile(null)}>关闭</Button>
             <Button
               onClick={() => {
@@ -906,6 +899,27 @@ export default function KnowledgePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <KnowledgeMetadataDialog
+        file={metadataFile}
+        open={isMetadataOpen}
+        onOpenChange={(open) => {
+          setIsMetadataOpen(open);
+          if (!open) setMetadataFile(null);
+        }}
+        onSaved={fetchFiles}
+      />
+
+      <KnowledgeParseWarningDialog
+        file={parseWarningFile}
+        open={isParseWarningOpen}
+        onOpenChange={(open) => {
+          setIsParseWarningOpen(open);
+          if (!open) setParseWarningFile(null);
+        }}
+        onForceReparse={(fileName) => handleSingleReindex(fileName, { files: [fileName], forceStage1: true })}
+      />
+      </div>
     </div>
   );
 }

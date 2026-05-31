@@ -4,8 +4,9 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { BookOpen, FileText, BarChart3, Settings, Layout, Clock, ChevronRight, Search, Play } from "lucide-react";
+import { Clock, ChevronRight } from "lucide-react";
 import { projectStore } from "@/lib/store";
+import { listModules, MODULE_ICON_MAP } from "@/lib/module-registry";
 
 export default function Home() {
   const [recentProjects, setRecentProjects] = useState<{ id: string; title: string; lastUpdated: number }[]>([]);
@@ -18,44 +19,7 @@ export default function Home() {
     fetchRecent();
   }, []);
 
-  const tools = [
-    {
-      title: "全能科研工作台",
-      description: "集成式论文创作环境，支持数据分析、大纲生成、AI 扩写与实时预览",
-      icon: <FileText className="w-6 h-6 text-primary" />,
-      href: "/workbench",
-    },
-    {
-      title: "项目管理中心",
-      description: "管理多篇论文创作进度，支持多项目切换、归档与快速导出",
-      icon: <Layout className="w-6 h-6 text-primary" />,
-      href: "/projects",
-    },
-    {
-      title: "文献库管理",
-      description: "管理实验室私有文献，支持 PDF 查看与 AI 划词翻译",
-      icon: <Settings className="w-6 h-6 text-primary" />,
-      href: "/knowledge",
-    },
-    {
-      title: "论文查重与降重",
-      description: "检测论文重复率，AI 辅助降重改写，支持本地库 + 联网比对",
-      icon: <Search className="w-6 h-6 text-primary" />,
-      href: "/plagiarism",
-    },
-    {
-      title: "项目演示文档",
-      description: "快速了解项目核心功能、技术架构与科学依据的网页版演示稿",
-      icon: <Play className="w-6 h-6 text-primary" />,
-      href: "/presentation",
-    },
-    {
-      title: "使用指南",
-      description: "写给实验室同学的快速上手指南，包含每一步的详细操作说明",
-      icon: <BookOpen className="w-6 h-6 text-primary" />,
-      href: "/guide",
-    },
-  ];
+  const tools = listModules({ placement: "home" });
 
   return (
     <main className="container mx-auto px-4 py-12 max-w-6xl">
@@ -99,11 +63,15 @@ export default function Home() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {tools.map((tool) => (
-          <Link href={tool.href} key={tool.title} className="block">
+        {tools.map((tool) => {
+          const Icon = MODULE_ICON_MAP[tool.iconKey];
+          return (
+          <Link href={tool.href} key={tool.id} className="block">
             <Card className="h-full hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer border-2 hover:border-primary/20 bg-card/50">
               <CardHeader>
-                <div className="mb-4 p-3 bg-primary/5 rounded-xl w-fit">{tool.icon}</div>
+                <div className="mb-4 p-3 bg-primary/5 rounded-xl w-fit">
+                  <Icon className="w-6 h-6 text-primary" />
+                </div>
                 <CardTitle className="text-lg">{tool.title}</CardTitle>
                 <CardDescription>{tool.description}</CardDescription>
               </CardHeader>
@@ -114,7 +82,8 @@ export default function Home() {
               </CardContent>
             </Card>
           </Link>
-        ))}
+          );
+        })}
       </div>
 
       <section className="mt-20 p-10 rounded-3xl bg-primary/5 border border-primary/10 relative overflow-hidden">

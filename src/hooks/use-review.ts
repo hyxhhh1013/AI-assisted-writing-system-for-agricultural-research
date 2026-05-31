@@ -9,6 +9,15 @@ import type {
   FixableReviewIssue,
   IssueStatus,
 } from "@/types/review";
+import { fixIssue as fixIssueService, runReview } from "@/services/review";
+
+export type {
+  FixableReviewIssue,
+  FixableReviewReport,
+  ReviewDimension,
+  ReviewInput,
+  ReviewReport,
+} from "@/types/review";
 
 export interface UseReviewReturn {
   /** 审查报告 */
@@ -89,32 +98,13 @@ export function useReview(): UseReviewReturn {
     try {
       setProgress("正在调用 AI 进行多维度审查，预计需要 30-60 秒...");
 
-      const res = await fetch("/api/review", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...input,
-          dimensions,
-        }),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: "审查失败" }));
-        throw new Error(errorData.error || "审查失败");
-      }
-
-      const data = await res.json();
-
-      if (!data.success) {
-        throw new Error(data.error || "审查失败");
-      }
-
-      const fixable = toFixable(data.report);
+      const data = await runReview(input, dimensions);
+      const fixable = toFixable(data);
       setReport(fixable);
       setProgress("审查完成");
       return fixable;
-    } catch (err: any) {
-      const errorMsg = err.message || "审查失败，请重试";
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : "审查失败，请重试";
       setError(errorMsg);
       setProgress("");
       return null;
@@ -158,9 +148,14 @@ export function useReview(): UseReviewReturn {
     });
 
     try {
-      // 调用修复 API（如果需要）
-      // 目前简单返回建议文本，后续可以接入 AI 修复
-      const fixedContent = issue.suggestion || null;
+      const fixedContent = await fixIssueService({
+        dimension,
+        issueIndex,
+        sectionContents,
+        title,
+        suggestion: issue.suggestion,
+        originalText: issue.originalText,
+      });
 
       // 更新状态
       setReport((prev) => {
@@ -182,7 +177,7 @@ export function useReview(): UseReviewReturn {
       });
 
       return fixedContent;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[use-review] fixIssue error:", err);
       // 恢复状态
       setReport((prev) => {

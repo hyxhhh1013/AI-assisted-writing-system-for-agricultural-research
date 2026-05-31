@@ -1,5 +1,15 @@
 /** 知识库重建索引 SSE 事件 — 前后端共享 */
 
+/** POST /api/knowledge/reindex 请求体 */
+export interface ReindexRequest {
+  /** 仅处理这些 PDF 文件名（basename）；省略则全库 */
+  files?: string[];
+  /** 强制重解析 PDF（Stage 1） */
+  forceStage1?: boolean;
+  /** 强制重算 embedding（Stage 3） */
+  forceStage3?: boolean;
+}
+
 export interface ReindexStartedEvent {
   type: "started";
 }

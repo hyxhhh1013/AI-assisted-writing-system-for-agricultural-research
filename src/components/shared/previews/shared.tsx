@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { ProjectData } from "@/lib/store";
 import { CITATION_GROUP_RE, expandCiteGroup, processCitations, handleCiteClick } from "@/lib/citation";
 import { normalizeAllCitationFormats } from "@/lib/citation-bounds";
+import { formatFilenames } from "@/services/references";
 
 export const CITATION_RE = CITATION_GROUP_RE;
 export { expandCiteGroup };
@@ -183,10 +184,8 @@ export const ReferencesSection = ({ references, isChinese }: { references?: stri
     if (key === formatKeyRef.current) return;
     formatKeyRef.current = key;
 
-    const filenames = references.join(",");
-    fetch(`/api/references?format=true&filenames=${encodeURIComponent(filenames)}`)
-      .then(res => res.json())
-      .then(data => { if (data.formatted) setFormatted(data.formatted); })
+    formatFilenames(references)
+      .then((formatted) => setFormatted(formatted))
       .catch(() => {});
   }, [references]);
 

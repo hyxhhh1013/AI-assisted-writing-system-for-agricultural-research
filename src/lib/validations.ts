@@ -98,6 +98,34 @@ export const knowledgeAnalyzeSchema = z.object({
 });
 export type KnowledgeAnalyzeInput = z.infer<typeof knowledgeAnalyzeSchema>;
 
+// === Knowledge Metadata PATCH ===
+export const knowledgeBibSchema = z.object({
+  title: z.string().optional(),
+  authors: z.array(z.string()).optional(),
+  firstAuthor: z.string().optional(),
+  year: z.coerce.number().int().min(1000).max(9999).optional(),
+  journal: z.string().optional(),
+  volume: z.string().optional(),
+  issue: z.string().optional(),
+  pages: z.string().optional(),
+  doi: z.string().optional(),
+  patentNumber: z.string().optional(),
+  inventors: z.array(z.string()).optional(),
+  applicant: z.string().optional(),
+  publicationDate: z.string().optional(),
+  isbn: z.string().optional(),
+  publisher: z.string().optional(),
+});
+
+export const knowledgeMetadataPatchSchema = z.object({
+  action: z.literal("update_metadata"),
+  name: z.string().min(1, "文献名不能为空"),
+  bib: knowledgeBibSchema,
+  documentType: z.enum(["paper", "journal", "patent", "book", "other"]).optional(),
+  gbTag: z.enum(["J", "M", "P", "D", "C", "S"]).optional(),
+});
+export type KnowledgeMetadataPatchInput = z.infer<typeof knowledgeMetadataPatchSchema>;
+
 // === Review (论文审查) ===
 export const reviewSchema = z.object({
   projectId: z.string().optional(),
@@ -112,3 +140,15 @@ export const reviewSchema = z.object({
   target: z.string().optional(),
 });
 export type ReviewInput = z.infer<typeof reviewSchema>;
+
+// === Project evidence PATCH ===
+export const projectEvidencePatchSchema = z
+  .object({
+    dataClaims: z.string().optional(),
+    dataSources: z.string().optional(),
+  })
+  .refine(
+    (data) => data.dataClaims !== undefined || data.dataSources !== undefined,
+    { message: "至少提供 dataClaims 或 dataSources" },
+  );
+export type ProjectEvidencePatchInput = z.infer<typeof projectEvidencePatchSchema>;

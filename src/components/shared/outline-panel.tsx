@@ -15,7 +15,7 @@ interface OutlinePanelProps {
   projectId: string;
   project: ProjectData;
   onSave?: (updates: Partial<ProjectData>) => void;
-  onTabChange?: (tab: "structure" | "analysis" | "outline" | "writing" | "reader" | "plagiarism" | "xrd") => void;
+  onTabChange?: (tab: "structure" | "data" | "outline" | "writing" | "reader" | "plagiarism" | "xrd") => void;
   expandedSections?: string[];
   onExpandTask?: (taskId: string) => void;
 }

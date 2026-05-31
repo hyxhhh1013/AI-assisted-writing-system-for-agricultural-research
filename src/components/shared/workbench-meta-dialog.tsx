@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DIALOG_FULL } from "@/components/ui/dialog-sizes";
 import { ProjectData } from "@/lib/store";
 
 interface ProjectMetaDraft {
@@ -89,7 +90,7 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[1040px] h-[90vh] max-h-[90vh] overflow-hidden flex flex-col p-0">
+      <DialogContent className={DIALOG_FULL}>
         <DialogHeader className="shrink-0">
           <div className="px-6 pt-6 pb-4 border-b">
             <DialogTitle>项目设置</DialogTitle>

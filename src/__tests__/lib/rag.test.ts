@@ -71,7 +71,7 @@ describe("formatRagCitation", () => {
         pageEnd: 5,
       },
     });
-    expect(citation).toContain("test-paper.pdf");
+    expect(citation).toContain("test paper");
     expect(citation).toContain("pp. 3-5");
   });
 
@@ -84,7 +84,7 @@ describe("formatRagCitation", () => {
         id: "chunk-2",
       },
     });
-    expect(citation).toContain("paper.pdf");
+    expect(citation).toBe("paper");
     expect(citation).not.toContain("pp.");
   });
 });

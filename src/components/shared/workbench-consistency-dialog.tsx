@@ -6,6 +6,7 @@ import {
   Dialog, DialogContent, DialogDescription,
   DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { DIALOG_WORK } from "@/components/ui/dialog-sizes";
 import {
   Loader2, AlertTriangle, CheckCheck, XCircle, RefreshCw,
   Wand2, Check, EyeOff, ArrowRight, ExternalLink,
@@ -132,7 +133,7 @@ export function WorkbenchConsistencyDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[760px] h-[88vh] max-h-[88vh] overflow-hidden flex flex-col p-0">
+      <DialogContent className={DIALOG_WORK}>
         <DialogHeader className="shrink-0">
           <div className="px-6 pt-6 pb-4 border-b">
             <DialogTitle className="flex items-center gap-2">

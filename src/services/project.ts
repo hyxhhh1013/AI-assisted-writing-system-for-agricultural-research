@@ -1,6 +1,11 @@
 /** 项目 API 服务封装 — 类型定义已统一到 src/contracts/project.ts */
 
+import type { DataSourceAnalysis, EvidenceClaim } from "@/contracts/data-source";
 import type { ProjectData } from "@/contracts/project";
+import {
+  serializeDataClaims,
+  serializeDataSources,
+} from "@/contracts/project";
 
 // Re-export so existing importers of services/project don't break
 export type { ProjectData, ProjectDTO } from "@/contracts/project";
@@ -46,4 +51,34 @@ export async function saveProject(data: ProjectData): Promise<string | null> {
 export async function deleteProject(id: string): Promise<boolean> {
   const res = await fetch(`/api/projects?id=${id}`, { method: "DELETE" });
   return res.ok;
+}
+
+export interface ProjectEvidenceFieldsPatch {
+  dataClaims?: EvidenceClaim[];
+  dataSources?: DataSourceAnalysis[];
+}
+
+/** PATCH /api/projects?id= — 仅更新 dataClaims / dataSources */
+export async function patchProjectFields(
+  id: string,
+  fields: ProjectEvidenceFieldsPatch,
+): Promise<void> {
+  const body: Record<string, string> = {};
+  if (fields.dataClaims !== undefined) {
+    body.dataClaims = serializeDataClaims(fields.dataClaims);
+  }
+  if (fields.dataSources !== undefined) {
+    body.dataSources = serializeDataSources(fields.dataSources);
+  }
+
+  const res = await fetch(`/api/projects?id=${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "保存证据数据失败");
+  }
 }

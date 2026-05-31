@@ -7,6 +7,7 @@ import { mergeEditorIntoProject, stripHtmlToPlainForDocx } from "@/lib/export-co
 import { formatKeywords } from "@/lib/paper-metadata";
 import { IMRAD_LABELS_SHORT_ZH, IMRAD_LABELS_EN } from "@/lib/imrad";
 import { parseMarkdownBlocks, MarkdownBlock } from "@/lib/markdown-parser";
+import { formatFilenames } from "@/services/references";
 
 /** 清理文件名用于兜底显示 */
 function cleanRefForDocx(raw: string): string {
@@ -20,12 +21,8 @@ function cleanRefForDocx(raw: string): string {
 
 /** 批量获取 GB/T 7714 格式化引用 */
 async function fetchFormattedRefs(references: string[]): Promise<Record<string, string>> {
-  if (references.length === 0) return {};
   try {
-    const filenames = references.join(",");
-    const res = await fetch(`/api/references?format=true&filenames=${encodeURIComponent(filenames)}`);
-    const data = await res.json();
-    return data.formatted || {};
+    return await formatFilenames(references);
   } catch {
     return {};
   }

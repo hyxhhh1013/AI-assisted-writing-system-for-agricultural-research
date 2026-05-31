@@ -2,6 +2,8 @@ import { logger } from "@/lib/logger";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { unauthorizedResponse, notFoundResponse, errorResponse } from "@/lib/api-response";
+import { validateBody } from "@/lib/api-validate";
+import { projectEvidencePatchSchema } from "@/lib/validations";
 import type { ProjectDTO } from "@/contracts/project";
 
 type SectionRecord = Record<string, string>;
@@ -173,6 +175,50 @@ export async function POST(req: NextRequest) {
   } catch (error: unknown) {
     logger.error("Projects POST error:", error);
     return errorResponse(error instanceof Error ? error.message : "Projects POST failed");
+  }
+}
+
+// 增量 PATCH：仅更新 dataClaims / dataSources
+export async function PATCH(req: NextRequest) {
+  try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return unauthorizedResponse();
+    }
+
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+    if (!id) {
+      return errorResponse("未指定项目ID", 400);
+    }
+
+    const existing = await prisma.project.findFirst({
+      where: { id, userId },
+      select: { id: true },
+    });
+    if (!existing) {
+      return notFoundResponse("项目未找到");
+    }
+
+    const { data, errorResponse: ve } = await validateBody(
+      projectEvidencePatchSchema,
+      await req.json(),
+    );
+    if (ve) return ve;
+
+    await prisma.project.update({
+      where: { id },
+      data: {
+        ...(data.dataClaims !== undefined ? { dataClaims: data.dataClaims } : {}),
+        ...(data.dataSources !== undefined ? { dataSources: data.dataSources } : {}),
+        lastUpdated: new Date(),
+      },
+    });
+
+    return NextResponse.json({ message: "更新成功" });
+  } catch (error: unknown) {
+    logger.error("Projects PATCH error:", error);
+    return errorResponse(error instanceof Error ? error.message : "Projects PATCH failed");
   }
 }
 

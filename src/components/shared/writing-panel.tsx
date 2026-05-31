@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Send, Copy, Eraser, FileText, Database, ScrollText, CheckCircle2, ChevronRight, RefreshCw } from "lucide-react";
+import { Loader2, Send, Copy, Eraser, FileText, Database, ScrollText, CheckCircle2, ChevronRight, ChevronDown, RefreshCw, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { projectStore, ProjectData } from "@/lib/store";
 import { MarkdownContent } from "@/components/shared/previews/shared";
@@ -38,6 +38,7 @@ interface PersistedWritingSession {
 
 import { IMRAD_SECTION_KEYS, IMRAD_LABELS_ZH } from "@/lib/imrad";
 import { buildTemplateSectionOptions, getTemplateSections } from "@/lib/template-sections";
+import { batchUpsertReferences } from "@/services/references";
 
 interface WritingPanelProps {
   projectId: string;
@@ -88,6 +89,8 @@ export function WritingPanel({
   const [result, setResult] = useState("");
   const [verificationFeedback, setVerificationFeedback] = useState("");
   const [detectedRefs, setDetectedRefs] = useState<string[]>([]);
+  const [lastRefMapping, setLastRefMapping] = useState<Record<string, number> | null>(null);
+  const [refMappingExpanded, setRefMappingExpanded] = useState(false);
   const [citationWarnings, setCitationWarnings] = useState<{ num: number; overlap: number; context: string }[]>([]);
   const [dataClaimWarnings, setDataClaimWarnings] = useState<{ claimId: string; claimText: string; found: boolean; citedCorrectly: boolean; issue?: string }[]>([]);
   const [pendingFigures, setPendingFigures] = useState<{ spec: string; tool: string; config: string; caption: string; status: string; imageUrl?: string }[]>([]);
@@ -398,17 +401,16 @@ export function WritingPanel({
 
       // ReferenceSource 持久化：将 refMapping 写入数据库
       if (streamResult.refMapping && Object.keys(streamResult.refMapping).length > 0) {
+        setLastRefMapping(streamResult.refMapping);
         const mappings = Object.entries(streamResult.refMapping).map(([sourceName, refIndex]) => ({
           refIndex,
           sourceName,
           category: "",
           citation: "",
         }));
-        fetch("/api/references?batch=true", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ projectId, mappings }),
-        }).catch(() => { /* 静默失败，不影响主流程 */ });
+        batchUpsertReferences({ projectId, mappings }).catch(() => {
+          /* 静默失败，不影响主流程 */
+        });
       }
 
       // 流结束后：扫描完整结果文本中的 FIGURE 标记和插图占位
@@ -683,19 +685,22 @@ export function WritingPanel({
                   {(() => {
                     const dataClaims = (() => { try { return project.dataClaims ? JSON.parse(project.dataClaims) : []; } catch { return []; } })();
                     const refCount = (project.references || []).length;
-                    if (dataClaims.length === 0 && refCount === 0) return null;
+                    const isResearch = project.mode === "research";
+                    if ((!isResearch || dataClaims.length === 0) && refCount === 0) return null;
                     return (
                       <span className="text-[9px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded flex items-center gap-1">
                         <Database className="h-2.5 w-2.5" />
-                        {dataClaims.length > 0 && <span>{dataClaims.length} 数据证据</span>}
-                        {dataClaims.length > 0 && refCount > 0 && <span>·</span>}
+                        {isResearch && dataClaims.length > 0 && <span>{dataClaims.length} 数据证据</span>}
+                        {isResearch && dataClaims.length > 0 && refCount > 0 && <span>·</span>}
                         {refCount > 0 && <span>{refCount} 文献</span>}
                       </span>
                     );
                   })()}
+                  {project.mode === "research" && (
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={injectAnalysis} title="注入实验数据">
                     <Database className="h-3 w-3" />
                   </Button>
+                  )}
                 </div>
               </div>
               <Textarea
@@ -712,6 +717,8 @@ export function WritingPanel({
               setContext(""); setResult(""); setSelectedSectionId("");
               setVerificationFeedback("");
               setDetectedRefs([]);
+              setLastRefMapping(null);
+              setRefMappingExpanded(false);
               setCitationWarnings([]);
               setDataClaimWarnings([]);
               writingStream.reset();
@@ -794,6 +801,39 @@ export function WritingPanel({
                       </li>
                     ))}
                   </ul>
+                </div>
+              )}
+
+              {lastRefMapping && Object.keys(lastRefMapping).length > 0 && (
+                <div className="bg-background/50 p-2 rounded-md border border-dashed border-blue-300/50">
+                  <button
+                    type="button"
+                    className="w-full text-left text-[10px] font-bold text-blue-700 mb-1 flex items-center gap-1 uppercase"
+                    onClick={() => setRefMappingExpanded((v) => !v)}
+                  >
+                    <Link2 className="h-3 w-3" />
+                    本次新增 {Object.keys(lastRefMapping).length} 条文献映射
+                    {refMappingExpanded ? (
+                      <ChevronDown className="h-3 w-3 ml-auto" />
+                    ) : (
+                      <ChevronRight className="h-3 w-3 ml-auto" />
+                    )}
+                  </button>
+                  {refMappingExpanded && (
+                    <ul className="text-[9px] text-muted-foreground space-y-1 mt-1">
+                      {Object.entries(lastRefMapping)
+                        .sort(([, a], [, b]) => a - b)
+                        .map(([sourceName, refIndex]) => (
+                          <li key={sourceName} className="truncate">
+                            <span className="font-mono text-primary">[{refIndex}]</span>{" "}
+                            {sourceName}
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                  <p className="text-[9px] text-muted-foreground/70 mt-1.5">
+                    可在左侧「参考文献 → 引用溯源」查看并打开 PDF
+                  </p>
                 </div>
               )}
 

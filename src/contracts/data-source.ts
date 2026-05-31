@@ -62,6 +62,22 @@ export interface EvidenceClaim {
   tolerance: number;    // 默认 0.05（5%）
 }
 
+/** Evidence Hub 编辑态：在 EvidenceClaim 基础上允许草稿字段 */
+export interface EvidenceClaimEditor extends EvidenceClaim {
+  isNew?: boolean;
+  isDirty?: boolean;
+}
+
+/** 数据源摘要（Evidence Panel 列表行） */
+export interface DataSourceSummary {
+  sourceId: string;
+  fileName: string;
+  rowCount: number;
+  columnCount: number;
+  claimCount: number;
+  generatedAt: number;
+}
+
 // === 证据包 ===
 
 export interface EvidencePack {

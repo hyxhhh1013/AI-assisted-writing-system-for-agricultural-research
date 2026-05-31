@@ -9,6 +9,8 @@ import {
 } from "@/components/ui/popover";
 import { BookOpen, ChevronDown, ChevronRight, Quote, FileText, Loader2 } from "lucide-react";
 import { CITATION_GROUP_RE, FULLWIDTH_CITATION_RE, expandCitationGroup } from "@/lib/citation";
+import { formatFilenames } from "@/services/references";
+import { ReferenceProvenance } from "@/components/shared/reference-provenance";
 
 function collectUsedNumbers(text: string, refCount: number): Set<number> {
   const set = new Set<number>();
@@ -47,6 +49,7 @@ interface LiteratureChunk {
 
 interface ReferenceBrowserProps {
   references: string[];
+  projectId?: string;
   activeSectionContent?: string;
   allContents?: Record<string, string>;
   className?: string;
@@ -54,6 +57,7 @@ interface ReferenceBrowserProps {
 
 export function ReferenceBrowser({
   references,
+  projectId,
   activeSectionContent,
   allContents,
   className,
@@ -72,12 +76,9 @@ export function ReferenceBrowser({
     if (key === formatLoadedRef.current) return;
     formatLoadedRef.current = key;
 
-    const filenames = references.join(",");
-    fetch(`/api/references?format=true&filenames=${encodeURIComponent(filenames)}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.formatted) setFormattedRefs(data.formatted);
-      })
+    const filenames = references;
+    formatFilenames(filenames)
+      .then((formatted) => setFormattedRefs(formatted))
       .catch(() => {});
   }, [references]);
 
@@ -247,6 +248,10 @@ export function ReferenceBrowser({
         <p className="text-[9px] text-muted-foreground/60 px-1 pt-1">
           当前章节引用 [{Array.from(usedInSection).join(", ")}]
         </p>
+      )}
+
+      {projectId && !collapsed && (
+        <ReferenceProvenance projectId={projectId} />
       )}
     </div>
   );

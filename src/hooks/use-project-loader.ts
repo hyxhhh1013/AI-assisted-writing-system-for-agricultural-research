@@ -3,7 +3,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { projectStore, ProjectData } from "@/lib/store";
 
-type WorkbenchTab = "structure" | "analysis" | "outline" | "writing" | "reader" | "plagiarism" | "xrd";
+type WorkbenchTab = "structure" | "data" | "outline" | "writing" | "reader" | "plagiarism" | "xrd";
 
 interface UseProjectLoaderOptions {
   setProject: (p: ProjectData) => void;
@@ -47,7 +47,9 @@ export function useProjectLoader({
         }
 
         const tab = searchParams.get("tab");
-        if (isWorkbenchTab(tab)) {
+        if (tab === "analysis" || tab === "evidence") {
+          setActiveTab("data");
+        } else if (isWorkbenchTab(tab)) {
           setActiveTab(tab);
         }
       } else {

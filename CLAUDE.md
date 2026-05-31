@@ -57,6 +57,12 @@
 - [x] `src/services/writing.ts` 已删除（死代码）
 - [x] `scripts/misc/` 整理了无关的 gen-*.mjs 脚本
 
+### UI 补全 PR 队列（跨会话接力）
+
+- **任务单**：[`docs/UI_COMPLETION_QUEUE.md`](docs/UI_COMPLETION_QUEUE.md) — 按 `UI-PR-001…` 编号，含 Vibecoding 模板、依赖图、状态表
+- **开干前**：读队列 §0 接力协议 → 找第一个 `todo` 且依赖已 `done` 的 PR
+- **完成后**：更新总表状态 + §4 会话日志
+
 ### 待处理技术债（改进计划）
 
 | 优先级 | 编号 | 说明 |

@@ -76,8 +76,8 @@ const WorkbenchConsistencyDialog = dynamic(
   { ssr: false, loading: () => null }
 );
 
-const LazyAnalysisPanel = dynamic(
-  () => import("@/components/shared/analysis-panel").then(m => m.AnalysisPanel),
+const LazyDataPanel = dynamic(
+  () => import("@/components/shared/data-panel").then(m => m.DataPanel),
   { ssr: false, loading: () => <TabPanelLoading /> }
 );
 
@@ -105,7 +105,6 @@ const LazyXrdPanel = dynamic(
   () => import("@/components/shared/xrd-panel").then(m => m.XrdPanel),
   { ssr: false, loading: () => <TabPanelLoading /> }
 );
-
 const PDFViewer = dynamic(() => import("@/components/pdf-viewer"), {
   ssr: false,
   loading: () => (
@@ -124,11 +123,11 @@ const SECTIONS = IMRAD_SECTION_KEYS.map((key) => {
   };
 });
 
-export type WorkbenchTab = "structure" | "analysis" | "outline" | "writing" | "reader" | "plagiarism" | "xrd";
+export type WorkbenchTab = "structure" | "data" | "outline" | "writing" | "reader" | "plagiarism" | "xrd";
 
 const WORKBENCH_TABS: WorkbenchTab[] = [
   "structure",
-  "analysis",
+  "data",
   "outline",
   "writing",
   "reader",
@@ -191,6 +190,12 @@ function WorkbenchContent() {
   }, [project, activeSection, editingContent]);
 
   useEffect(() => {
+    if (project.mode !== "research" && activeTab === "data") {
+      setActiveTab("structure");
+    }
+  }, [project.mode, activeTab]);
+
+  useEffect(() => {
     const initProject = async () => {
       if (!projectId) {
         const lastId = projectStore.getCurrentId();
@@ -212,7 +217,9 @@ function WorkbenchContent() {
 
         // 根据 URL 参数设置初始 Tab
         const tab = searchParams.get("tab");
-        if (isWorkbenchTab(tab)) {
+        if (tab === "analysis" || tab === "evidence") {
+          setActiveTab("data");
+        } else if (isWorkbenchTab(tab)) {
           setActiveTab(tab);
         }
       } else {
@@ -503,6 +510,7 @@ function WorkbenchContent() {
         activeTab={activeTab} setActiveTab={setActiveTab}
         isWritingGenerating={isWritingGenerating}
         handleSave={handleSave} projectId={projectId}
+        projectMode={project.mode ?? "review"}
         setRightPanelMode={setRightPanelMode}
         setIsPreviewOpen={setIsPreviewOpen}
       />
@@ -518,7 +526,7 @@ function WorkbenchContent() {
             <div className="flex flex-col min-w-0">
               <span className="font-bold text-sm uppercase tracking-wider text-muted-foreground truncate">
                 {activeTab === "structure" && "IMRaD 章节"}
-                {activeTab === "analysis" && "数据分析"}
+                {activeTab === "data" && "实验数据"}
                 {activeTab === "outline" && "论证提纲"}
                 {activeTab === "writing" && "侧栏扩写"}
                 {activeTab === "reader" && "文献库"}
@@ -589,6 +597,7 @@ function WorkbenchContent() {
 
                 <div className="pt-4 mt-4 border-t">
                   <ReferenceBrowser
+                    projectId={projectId ?? undefined}
                     references={project.references || []}
                     activeSectionContent={
                       activeSection === "abstract"
@@ -625,20 +634,16 @@ function WorkbenchContent() {
               </div>
             )}
             {/* 所有面板保持挂载，切换不销毁状态 */}
-            {activeTab === "analysis" && projectId && (
+            {activeTab === "data" && projectId && (
               <div className="h-full min-h-0 flex flex-col overflow-hidden">
                 <ErrorBoundary>
-                  <LazyAnalysisPanel
+                  <LazyDataPanel
                     projectId={projectId}
                     project={project}
                     onSave={(updates) => setProject(prev => ({ ...prev, ...updates }))}
-                    onInsertToPaper={(imageUrl, caption) => {
-                      const mdImage = `\n\n![${caption}](${imageUrl})\n\n`;
-                      handleApplyAiContent(editingContent + mdImage, activeSection);
-                    }}
-                    onInsertClaim={(claimText, claimId) => {
-                      const md = `\n\n${claimText}\n\n`;
-                      handleApplyAiContent(editingContent + md, activeSection);
+                    onOpenProjectSettings={() => setIsMetaDialogOpen(true)}
+                    onInsertClaim={(claimText) => {
+                      handleApplyAiContent(`${editingContent}\n\n${claimText}\n\n`, activeSection);
                     }}
                   />
                 </ErrorBoundary>

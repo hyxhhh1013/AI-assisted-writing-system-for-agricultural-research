@@ -11,6 +11,7 @@
  *   node scripts/index-pdfs.mjs --force-stage3   强制重算所有 embedding
  *   node scripts/index-pdfs.mjs --skip-stage3    跳过 embedding（仅 BM25）
  *   node scripts/index-pdfs.mjs --stage2-only    仅运行过滤+写出（最快，改过滤规则后使用）
+ *   node scripts/index-pdfs.mjs --files=a.pdf,b.pdf  仅处理指定文献（可配合 force-stage1/3）
  */
 
 import fs from "fs";
@@ -29,6 +30,16 @@ dotenv.config({ path: path.join(projectRoot, ".env") });
 dotenv.config({ path: path.join(projectRoot, ".env.local") });
 
 // ─── CLI flags ────────────────────────────────────────────────────────────────
+function parseFileFilter() {
+  const arg = process.argv.find((a) => a.startsWith("--files="));
+  if (!arg) return null;
+  const raw = arg.slice("--files=".length);
+  if (!raw.trim()) return null;
+  return new Set(
+    raw.split(",").map((s) => decodeURIComponent(s.trim())).filter(Boolean),
+  );
+}
+
 const FLAGS = {
   forceStage1: process.argv.includes("--force-stage1"),
   forceStage3: process.argv.includes("--force-stage3"),
@@ -36,9 +47,26 @@ const FLAGS = {
   stage2Only:  process.argv.includes("--stage2-only"),
   progress:    process.argv.includes("--progress"),
   verbose:     process.argv.includes("--verbose"),
+  fileFilter:  parseFileFilter(),
   /** 每个 batch 之间的延迟（毫秒），用于控制 API 调用频率 */
   embedDelay:  parseInt(process.argv.find(a => a.startsWith("--embed-delay="))?.split("=")[1] || "0", 10),
 };
+
+function isPartialReindex() {
+  return FLAGS.fileFilter != null && FLAGS.fileFilter.size > 0;
+}
+
+function shouldForceStage1ForFile(name) {
+  if (!FLAGS.forceStage1) return false;
+  if (!isPartialReindex()) return true;
+  return FLAGS.fileFilter.has(name);
+}
+
+function shouldForceStage3ForFile(name) {
+  if (!FLAGS.forceStage3) return false;
+  if (!isPartialReindex()) return true;
+  return FLAGS.fileFilter.has(name);
+}
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
 const ARTICLES_DIR = path.resolve(projectRoot, process.env.RAG_ARTICLES_DIR || "papers");
@@ -76,6 +104,61 @@ function saveJSON(filePath, data) {
   const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+}
+
+/** 按 y/x 坐标排序后拼接，比简单 join 更保序 */
+function extractPageText(textContent) {
+  const items = (textContent.items || [])
+    .filter((item) => typeof item.str === "string" && item.str.trim())
+    .sort((a, b) => {
+      const ay = a.transform?.[5] ?? 0;
+      const by = b.transform?.[5] ?? 0;
+      if (Math.abs(ay - by) > 2) return by - ay;
+      return (a.transform?.[4] ?? 0) - (b.transform?.[4] ?? 0);
+    });
+  return items.map((item) => item.str).join(" ").replace(/\s+/g, " ").trim();
+}
+
+/** 中文 PDF 首页常较短，单独放宽阈值 */
+function isPageTextUsable(text) {
+  if (!text) return false;
+  if (text.length >= 30) return true;
+  const cjkCount = (text.match(/[\u4e00-\u9fff]/g) || []).length;
+  return cjkCount >= 8;
+}
+
+function countChangedFiles(uniqueFiles, oldState) {
+  let unchanged = 0;
+  let changed = 0;
+  for (const fileInfo of uniqueFiles) {
+    const prev = oldState[fileInfo.name];
+    const cachePath = rawChunkPath(fileInfo.name);
+    const cacheHit =
+      !shouldForceStage1ForFile(fileInfo.name)
+      && prev
+      && prev.mtime === fileInfo.mtime
+      && fs.existsSync(cachePath)
+      && Array.isArray(loadJSON(cachePath)?.chunks)
+      && loadJSON(cachePath).chunks.length > 0;
+    if (cacheHit) unchanged++;
+    else changed++;
+  }
+  return { unchanged, changed };
+}
+
+function loadExistingFilteredBySource() {
+  const bySource = new Map();
+  if (!fs.existsSync(DATA_DIR)) return bySource;
+  for (const catFile of fs.readdirSync(DATA_DIR).filter((f) => f.startsWith("index_") && f.endsWith(".json"))) {
+    const existing = loadJSON(path.join(DATA_DIR, catFile), []);
+    for (const chunk of existing) {
+      const source = chunk.metadata?.source;
+      if (!source) continue;
+      if (!bySource.has(source)) bySource.set(source, []);
+      bySource.get(source).push(chunk);
+    }
+  }
+  return bySource;
 }
 
 // ─── Embedding API ────────────────────────────────────────────────────────────
@@ -137,26 +220,41 @@ async function stage1_parsePDFs(uniqueFiles) {
   const oldState = loadJSON(STAGE1_STATE, {});
 
   let parsed = 0, skipped = 0;
-  const allRawChunks = []; // { filename, chunks }
+  const allRawChunks = [];
+  const total = uniqueFiles.length;
+  let fileIndex = 0;
 
   for (const fileInfo of uniqueFiles) {
+    fileIndex += 1;
     const prev = oldState[fileInfo.name];
     const cachePath = rawChunkPath(fileInfo.name);
 
-    // 增量：mtime 未变 + 缓存存在 → 跳过 PDF 解析
-    if (!FLAGS.forceStage1 && prev && prev.mtime === fileInfo.mtime && fs.existsSync(cachePath)) {
+    if (!shouldForceStage1ForFile(fileInfo.name) && prev && prev.mtime === fileInfo.mtime && fs.existsSync(cachePath)) {
       const cached = loadJSON(cachePath);
       if (cached && Array.isArray(cached.chunks) && cached.chunks.length > 0) {
-        allRawChunks.push({ filename: fileInfo.name, chunks: cached.chunks, docMeta: cached.docMeta, category: fileInfo.category, fromCache: true });
+        allRawChunks.push({
+          filename: fileInfo.name,
+          chunks: cached.chunks,
+          docMeta: cached.docMeta,
+          category: fileInfo.category,
+          fromCache: true,
+        });
         skipped++;
+        emitProgress({
+          type: "file",
+          status: "unchanged",
+          name: fileInfo.name,
+          index: fileIndex,
+          total,
+          chunkCount: cached.chunks.length,
+        });
         if (FLAGS.verbose) console.log(`  [stage1:skip] ${fileInfo.name}`);
         continue;
       }
     }
 
-    // 解析 PDF
+    emitProgress({ type: "file", status: "processing", name: fileInfo.name, index: fileIndex, total });
     if (FLAGS.verbose) console.log(`  [stage1:parse] ${fileInfo.name}`);
-    emitProgress({ type: "stage1", status: "processing", name: fileInfo.name, parsed, total: uniqueFiles.length });
 
     try {
       const dataBuffer = new Uint8Array(fs.readFileSync(fileInfo.path));
@@ -165,14 +263,18 @@ async function stage1_parsePDFs(uniqueFiles) {
       const chunks = [];
       let chunkIdx = 0;
       let firstPageText = "";
+      let skippedPages = 0;
       const relPath = path.relative(articlesResolved, fileInfo.path).split(path.sep).join("/");
 
       for (let pg = 1; pg <= pdfDocument.numPages; pg++) {
         const page = await pdfDocument.getPage(pg);
         const textContent = await page.getTextContent();
-        const pageText = textContent.items.map(item => ("str" in item ? item.str : "")).join(" ").replace(/\s+/g, " ").trim();
+        const pageText = extractPageText(textContent);
         if (pg === 1) firstPageText = pageText.slice(0, 3000);
-        if (pageText.length < 30) continue;
+        if (!isPageTextUsable(pageText)) {
+          skippedPages++;
+          continue;
+        }
 
         const subChunks = await splitter.splitText(pageText);
         for (let i = 0; i < subChunks.length; i++) {
@@ -192,15 +294,29 @@ async function stage1_parsePDFs(uniqueFiles) {
       }
 
       const docMeta = await extractDocMetadata(pdfDocument, fileInfo.name, firstPageText);
+      if (chunks.length === 0) {
+        docMeta.parseWarning = skippedPages >= pdfDocument.numPages ? "no_text" : "low_text";
+      }
 
-      // 写入缓存
       saveJSON(cachePath, { chunks, docMeta, mtime: fileInfo.mtime });
 
       oldState[fileInfo.name] = { mtime: fileInfo.mtime };
       allRawChunks.push({ filename: fileInfo.name, chunks, docMeta, category: fileInfo.category, fromCache: false });
       parsed++;
+      emitProgress({
+        type: "file",
+        status: "done",
+        name: fileInfo.name,
+        index: fileIndex,
+        total,
+        chunkCount: chunks.length,
+        documentType: docMeta?.documentType,
+        message: docMeta.parseWarning === "no_text" ? "未提取到可索引文本（可能为扫描版 PDF）" : undefined,
+      });
     } catch (err) {
-      console.error(`  [stage1:error] ${fileInfo.name}:`, err instanceof Error ? err.message : err);
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`  [stage1:error] ${fileInfo.name}:`, message);
+      emitProgress({ type: "file", status: "error", name: fileInfo.name, index: fileIndex, total, message });
     }
   }
 
@@ -221,8 +337,15 @@ async function stage1_parsePDFs(uniqueFiles) {
 
 // ─── Stage 2: Filter + Write ──────────────────────────────────────────────────
 
+function mergeCategoryChunks(cat, newChunks) {
+  const indexPath = path.join(DATA_DIR, `index_${cat}.json`);
+  if (!isPartialReindex()) return newChunks;
+  const existing = loadJSON(indexPath, []);
+  const kept = existing.filter((c) => !FLAGS.fileFilter.has(c.metadata?.source));
+  return [...kept, ...newChunks];
+}
+
 function stage2_filterAndWrite(allRawChunks) {
-  // 加载现有索引中的 embedding（按 chunk id 索引），避免 Stage 2 覆盖时丢失已有向量
   const existingEmbMap = new Map();
   for (const catFile of fs.readdirSync(DATA_DIR).filter(f => f.startsWith("index_") && f.endsWith(".json"))) {
     const existing = loadJSON(path.join(DATA_DIR, catFile), []);
@@ -234,19 +357,79 @@ function stage2_filterAndWrite(allRawChunks) {
   }
   if (existingEmbMap.size > 0) console.log(`  Preserved ${existingEmbMap.size} existing embeddings`);
 
+  const existingMeta = fs.existsSync(METADATA_PATH) ? loadJSON(METADATA_PATH, []) : [];
+  const existingMetaByName = new Map(existingMeta.map((m) => [m.name, m]));
+  const existingFilteredBySource = loadExistingFilteredBySource();
+
   const allChunks = [];
   const metadata = [];
   const categoryMap = new Map();
 
-  let totalBefore = 0, totalAfter = 0;
+  let totalBefore = 0, totalAfter = 0, reusedFiles = 0;
 
-  for (const { filename, chunks, docMeta, category } of allRawChunks) {
+  for (const { filename, chunks, docMeta, category, fromCache } of allRawChunks) {
+    const prev = existingMetaByName.get(filename);
+    const canReuseFiltered =
+      fromCache
+      && existingFilteredBySource.has(filename)
+      && !shouldForceStage3ForFile(filename)
+      && !shouldForceStage1ForFile(filename);
+
+    if (canReuseFiltered) {
+      const reused = existingFilteredBySource.get(filename).map((chunk) => ({
+        ...chunk,
+        metadata: {
+          ...chunk.metadata,
+          source: filename,
+          category,
+          documentType: (() => {
+            if (prev?.bibEdited && prev?.documentType) return prev.documentType;
+            return docMeta?.documentType || chunk.metadata?.documentType || null;
+          })(),
+        },
+      }));
+
+      totalAfter += reused.length;
+      allChunks.push(...reused);
+
+      const cat = category || "未分类";
+      if (!categoryMap.has(cat)) categoryMap.set(cat, []);
+      categoryMap.get(cat).push(...reused);
+
+      metadata.push({
+        name: filename,
+        category,
+        chunkCount: reused.length,
+        size: prev?.size || 0,
+        mtime: new Date().toISOString(),
+        documentType: (() => {
+          if (prev?.bibEdited && prev?.documentType) return prev.documentType;
+          return docMeta?.documentType || prev?.documentType || null;
+        })(),
+        gbTag: (() => {
+          if (prev?.bibEdited && prev?.gbTag) return prev.gbTag;
+          return docMeta?.gbTag || prev?.gbTag || null;
+        })(),
+        bib: (() => {
+          if (prev?.bibEdited && prev?.bib && Object.keys(prev.bib).length > 0) return prev.bib;
+          const autoBib = (docMeta?.bib && Object.keys(docMeta.bib).length > 0) ? docMeta.bib : null;
+          return autoBib || prev?.bib || null;
+        })(),
+        bibEdited: !!prev?.bibEdited,
+        parseWarning: docMeta?.parseWarning || prev?.parseWarning || null,
+      });
+      reusedFiles++;
+      continue;
+    }
+
     totalBefore += chunks.length;
     const filtered = [];
 
     for (const c of chunks) {
       if (isLikelyGarbled(c.content)) continue;
-      const savedEmb = existingEmbMap.get(c.metadata?.id) || null;
+      const savedEmb = shouldForceStage3ForFile(filename)
+        ? null
+        : (existingEmbMap.get(c.metadata?.id) || null);
       filtered.push({
         content: c.content,
         embedding: savedEmb,
@@ -262,7 +445,6 @@ function stage2_filterAndWrite(allRawChunks) {
 
     allChunks.push(...filtered);
 
-    // category grouping
     const cat = category || "未分类";
     if (!categoryMap.has(cat)) categoryMap.set(cat, []);
     categoryMap.get(cat).push(...filtered);
@@ -271,30 +453,81 @@ function stage2_filterAndWrite(allRawChunks) {
       name: filename,
       category,
       chunkCount: filtered.length,
-      size: 0,
+      size: existingMetaByName.get(filename)?.size || 0,
       mtime: new Date().toISOString(),
-      documentType: docMeta?.documentType || null,
-      gbTag: docMeta?.gbTag || null,
-      bib: (docMeta?.bib && Object.keys(docMeta.bib).length > 0) ? docMeta.bib : null,
+      documentType: (() => {
+        const prevEntry = existingMetaByName.get(filename);
+        if (prevEntry?.bibEdited && prevEntry?.documentType) return prevEntry.documentType;
+        return docMeta?.documentType || prevEntry?.documentType || null;
+      })(),
+      gbTag: (() => {
+        const prevEntry = existingMetaByName.get(filename);
+        if (prevEntry?.bibEdited && prevEntry?.gbTag) return prevEntry.gbTag;
+        return docMeta?.gbTag || prevEntry?.gbTag || null;
+      })(),
+      bib: (() => {
+        const prevEntry = existingMetaByName.get(filename);
+        if (prevEntry?.bibEdited && prevEntry?.bib && Object.keys(prevEntry.bib).length > 0) {
+          return prevEntry.bib;
+        }
+        const autoBib = (docMeta?.bib && Object.keys(docMeta.bib).length > 0) ? docMeta.bib : null;
+        return autoBib || prevEntry?.bib || null;
+      })(),
+      bibEdited: !!existingMetaByName.get(filename)?.bibEdited,
+      parseWarning: filtered.length === 0 ? (docMeta?.parseWarning || "no_text") : null,
     });
   }
 
   const filteredOut = totalBefore - totalAfter;
-  console.log(`Stage 2 done: ${totalBefore} → ${totalAfter} chunks (${filteredOut} garbled filtered, ${categoryMap.size} categories)`);
+  console.log(`Stage 2 done: ${totalBefore} → ${totalAfter} chunks (${filteredOut} garbled filtered, ${reusedFiles} files reused, ${categoryMap.size} categories)`);
 
-  // Write split indexes
+  emitProgress({ type: "phase", phase: "writing", detail: `写入 ${categoryMap.size} 个分类索引` });
+
+  const activeCategories = new Set(categoryMap.keys());
   for (const [cat, chunks] of categoryMap) {
-    saveJSON(path.join(DATA_DIR, `index_${cat}.json`), chunks);
-    const mb = (Buffer.byteLength(JSON.stringify(chunks)) / 1024 / 1024).toFixed(1);
-    console.log(`  index_${cat}.json: ${chunks.length} chunks (${mb} MB)`);
+    const merged = mergeCategoryChunks(cat, chunks);
+    saveJSON(path.join(DATA_DIR, `index_${cat}.json`), merged);
+    emitProgress({ type: "save", phase: "category", category: cat, chunkCount: merged.length });
+    const mb = (Buffer.byteLength(JSON.stringify(merged)) / 1024 / 1024).toFixed(1);
+    console.log(`  index_${cat}.json: ${merged.length} chunks (${mb} MB)`);
   }
 
-  // Write metadata
-  const metadataDeduped = [...new Map(metadata.map(m => [m.name, m])).values()];
+  if (!isPartialReindex()) {
+    for (const catFile of fs.readdirSync(DATA_DIR).filter((f) => f.startsWith("index_") && f.endsWith(".json"))) {
+      const cat = catFile.slice("index_".length, -".json".length);
+      if (!activeCategories.has(cat)) {
+        fs.unlinkSync(path.join(DATA_DIR, catFile));
+        console.log(`  removed orphan index_${cat}.json`);
+      }
+    }
+  }
+
+  let metadataDeduped;
+  if (isPartialReindex()) {
+    const existingMeta = loadJSON(METADATA_PATH, []);
+    const byName = new Map(existingMeta.map((m) => [m.name, m]));
+    for (const m of metadata) byName.set(m.name, m);
+    metadataDeduped = [...byName.values()];
+  } else {
+    metadataDeduped = [...new Map(metadata.map((m) => [m.name, m])).values()];
+  }
   saveJSON(METADATA_PATH, metadataDeduped);
   console.log(`Metadata: ${metadataDeduped.length} files`);
 
-  return { allChunks, metadata };
+  const mergedAllChunks = isPartialReindex()
+    ? rebuildAllChunksFromIndexes(activeCategories)
+    : allChunks;
+
+  return { allChunks: mergedAllChunks, metadata: metadataDeduped, categoryCount: categoryMap.size, reusedFiles };
+}
+
+function rebuildAllChunksFromIndexes(activeCategories) {
+  const chunks = [];
+  for (const cat of activeCategories) {
+    const merged = loadJSON(path.join(DATA_DIR, `index_${cat}.json`), []);
+    chunks.push(...merged);
+  }
+  return chunks;
 }
 
 // ─── Stage 3: Embedding ───────────────────────────────────────────────────────
@@ -316,6 +549,8 @@ async function stage3_embed(allChunks) {
   // Find chunks needing embedding
   const needsEmbed = [];
   for (const c of allChunks) {
+    const source = c.metadata?.source;
+    if (isPartialReindex() && source && !FLAGS.fileFilter.has(source)) continue;
     const hasVec = Array.isArray(c.embedding) && c.embedding.length > 0;
     if (FLAGS.forceStage3 || modelChanged || !hasVec) {
       needsEmbed.push(c);
@@ -324,6 +559,7 @@ async function stage3_embed(allChunks) {
 
   if (needsEmbed.length === 0) {
     console.log("Stage 3: all chunks already have embeddings — nothing to do");
+    emitProgress({ type: "phase", phase: "embed_skip", detail: "全部 chunk 已有向量，跳过向量化" });
     return;
   }
 
@@ -357,6 +593,7 @@ async function stage3_embed(allChunks) {
     for (let j = 0; j < batch.length; j++) {
       if (embeddings[j]) { batch[j].embedding = embeddings[j]; embeddedCount++; }
     }
+    emitProgress({ type: "embed", current: batchNum, total: totalBatches, chunkCount: batch.length });
     process.stdout.write(`done (${embeddedCount} total)\n`);
 
     // 批次间延迟（控制 API 频率）
@@ -414,47 +651,107 @@ async function main() {
   emitProgress({ type: "started" });
   console.log("=== RAG Index Builder (3-stage incremental) ===\n");
 
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(RAW_DIR)) fs.mkdirSync(RAW_DIR, { recursive: true });
+
   const { uniqueFiles, duplicatesSkipped, pathsFound } = scanFiles();
+  let filesToProcess = uniqueFiles;
+
+  if (isPartialReindex()) {
+    const missing = [...FLAGS.fileFilter].filter((name) => !uniqueFiles.some((f) => f.name === name));
+    if (missing.length > 0) {
+      emitProgress({ type: "error", message: `未找到文献：${missing.join("、")}` });
+      process.exit(1);
+    }
+    filesToProcess = uniqueFiles.filter((f) => FLAGS.fileFilter.has(f.name));
+    console.log(`Partial reindex: ${filesToProcess.map((f) => f.name).join(", ")}`);
+  }
+
+  const oldState = loadJSON(STAGE1_STATE, {});
+  const { unchanged, changed } = countChangedFiles(filesToProcess, oldState);
+  emitProgress({
+    type: "scan",
+    total: filesToProcess.length,
+    unchanged,
+    changed,
+    duplicatesSkipped: isPartialReindex() ? 0 : duplicatesSkipped,
+    pathsFound: isPartialReindex() ? filesToProcess.length : pathsFound,
+  });
 
   let allRawChunks;
 
-  if (FLAGS.stage2Only) {
-    // 仅从缓存重建过滤+写出（最快路径）
-    console.log("--stage2-only: loading raw chunks from cache...");
+  const embedOnly = isPartialReindex() && FLAGS.forceStage3 && !FLAGS.forceStage1;
+
+  if (FLAGS.stage2Only || embedOnly) {
+    // 仅从缓存或已有索引重建（用于 forceStage3 单篇重嵌向量）
+    console.log(embedOnly ? "embed-only: loading chunks for target files..." : "--stage2-only: loading raw chunks from cache...");
     allRawChunks = [];
+    const existingFilteredBySource = loadExistingFilteredBySource();
     let missing = 0;
-    for (const f of uniqueFiles) {
+    for (const f of filesToProcess) {
       const cachePath = rawChunkPath(f.name);
       const cached = loadJSON(cachePath);
       if (cached && Array.isArray(cached.chunks)) {
         allRawChunks.push({ filename: f.name, chunks: cached.chunks, docMeta: cached.docMeta, category: f.category, fromCache: true });
+      } else if (existingFilteredBySource.has(f.name)) {
+        const indexed = existingFilteredBySource.get(f.name);
+        allRawChunks.push({
+          filename: f.name,
+          chunks: indexed.map((c) => ({ content: c.content, metadata: { ...c.metadata } })),
+          docMeta: { parseWarning: indexed.length === 0 ? "no_text" : null },
+          category: f.category,
+          fromCache: false,
+        });
       } else {
         missing++;
-        if (FLAGS.verbose) console.log(`  [missing cache] ${f.name}`);
+        if (FLAGS.verbose) console.log(`  [missing cache/index] ${f.name}`);
       }
     }
-    if (missing > 0) console.log(`  ${missing} files without cache — run without --stage2-only to rebuild`);
+    if (missing > 0) {
+      console.log(`  ${missing} files without cache/index — try force-stage1`);
+      if (missing === filesToProcess.length) {
+        emitProgress({ type: "error", message: "目标文献无缓存或索引，请先执行「强制重解析」" });
+        process.exit(1);
+      }
+    }
   } else {
     // Stage 1: PDF → Chunks
     console.log("\n── Stage 1: PDF → Chunks ──");
-    allRawChunks = await stage1_parsePDFs(uniqueFiles);
+    allRawChunks = await stage1_parsePDFs(filesToProcess);
   }
 
-  // Stage 2: Filter + Write
-  console.log("\n── Stage 2: Filter + Write ──");
-  const { allChunks } = stage2_filterAndWrite(allRawChunks);
+  emitProgress({
+    type: "phase",
+    phase: "pdf_done",
+    chunkCount: allRawChunks.reduce((sum, item) => sum + item.chunks.length, 0),
+  });
 
-  // Stage 3: Embedding（--stage2-only 默认跳过）
+  console.log("\n── Stage 2: Filter + Write ──");
+  const { allChunks, categoryCount, reusedFiles } = stage2_filterAndWrite(allRawChunks);
+  if (reusedFiles > 0) {
+    console.log(`  Incremental: reused filtered chunks for ${reusedFiles} unchanged files`);
+  }
+
   const doStage3 = !FLAGS.stage2Only && !FLAGS.skipStage3;
   if (doStage3) {
+    if (!API_KEY) {
+      emitProgress({ type: "phase", phase: "embed_skip", detail: "未配置 Embedding API Key，仅 BM25 检索" });
+    }
     console.log("\n── Stage 3: Embedding ──");
     await stage3_embed(allChunks);
   } else {
     console.log("\n── Stage 3: Skipped ──");
+    emitProgress({ type: "phase", phase: "embed_skip", detail: FLAGS.stage2Only ? "stage2-only 模式跳过向量化" : "已跳过向量化" });
   }
 
   console.log("\n=== Done ===");
-  emitProgress({ type: "complete", totalChunks: allChunks.length, fileCount: uniqueFiles.length, duplicatesSkipped });
+  emitProgress({
+    type: "complete",
+    totalChunks: allChunks.length,
+    fileCount: filesToProcess.length,
+    categoryCount,
+    duplicatesSkipped: isPartialReindex() ? 0 : duplicatesSkipped,
+  });
 }
 
 main().catch(console.error);

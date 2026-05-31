@@ -1,3 +1,5 @@
+import type { DataSourceAnalysis, EvidenceClaim } from "./data-source";
+
 export interface ProjectDTO {
   id: string;
   title: string;
@@ -29,6 +31,64 @@ export interface ProjectDTO {
 /** Alias kept for backward compat — prefer ProjectDTO in new code */
 export type ProjectData = ProjectDTO;
 
+const CLAIM_TYPES = new Set(["mean", "comparison", "trend", "correlation", "model_fit", "ranking"]);
+const SOURCE_TYPES = new Set(["data", "literature"]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isEvidenceClaim(value: unknown): value is EvidenceClaim {
+  if (!isRecord(value)) return false;
+  if (typeof value.id !== "string" || typeof value.sourceId !== "string") return false;
+  if (typeof value.text !== "string" || typeof value.type !== "string") return false;
+  if (!CLAIM_TYPES.has(value.type) || !SOURCE_TYPES.has(value.sourceType as string)) return false;
+  if (!isRecord(value.values) || !Array.isArray(value.variables)) return false;
+  if (typeof value.tolerance !== "number") return false;
+  return value.variables.every((v) => typeof v === "string");
+}
+
+function isDataSourceAnalysis(value: unknown): value is DataSourceAnalysis {
+  if (!isRecord(value)) return false;
+  if (typeof value.fileName !== "string" || typeof value.rowCount !== "number") return false;
+  if (typeof value.generatedAt !== "number" || !Array.isArray(value.columns)) return false;
+  if (!Array.isArray(value.stats)) return false;
+  return true;
+}
+
+/** 安全解析 project.dataClaims JSON → EvidenceClaim[] */
+export function parseDataClaims(project: Pick<ProjectDTO, "dataClaims">): EvidenceClaim[] {
+  if (!project.dataClaims) return [];
+  try {
+    const parsed: unknown = JSON.parse(project.dataClaims);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isEvidenceClaim);
+  } catch {
+    return [];
+  }
+}
+
+/** 安全解析 project.dataSources JSON → DataSourceAnalysis[] */
+export function parseDataSources(project: Pick<ProjectDTO, "dataSources">): DataSourceAnalysis[] {
+  if (!project.dataSources) return [];
+  try {
+    const parsed: unknown = JSON.parse(project.dataSources);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isDataSourceAnalysis);
+  } catch {
+    return [];
+  }
+}
+
+/** 序列化 evidence 字段回 Project JSON 列 */
+export function serializeDataClaims(claims: EvidenceClaim[]): string {
+  return JSON.stringify(claims);
+}
+
+export function serializeDataSources(sources: DataSourceAnalysis[]): string {
+  return JSON.stringify(sources);
+}
+
 export interface ProjectMetaPatch {
   title?: string;
   authors?: string;
@@ -50,4 +110,10 @@ export interface SectionPatch {
 export interface ReferencesPatch {
   references: string[];
   clientUpdatedAt: number;
+}
+
+/** Evidence 字段增量 PATCH（dataClaims / dataSources JSON 字符串） */
+export interface ProjectEvidencePatch {
+  dataClaims?: string;
+  dataSources?: string;
 }
