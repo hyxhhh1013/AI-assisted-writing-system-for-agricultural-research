@@ -26,7 +26,11 @@ if grep -qE '^DATABASE_URL=file:' .env 2>/dev/null; then
 fi
 
 echo "→ 安装依赖"
-npm ci --legacy-peer-deps
+if ! npm ci --legacy-peer-deps; then
+  echo "  npm ci 失败，清理 node_modules 后重试"
+  rm -rf node_modules
+  npm ci --legacy-peer-deps
+fi
 
 echo "→ Prisma"
 npx prisma generate
