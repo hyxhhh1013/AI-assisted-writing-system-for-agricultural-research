@@ -3,7 +3,7 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-RUN apk add --no-cache openssl libc6-compat
+RUN apk add --no-cache openssl openssl1.1-compat libc6-compat
 
 COPY package.json package-lock.json ./
 RUN npm ci --legacy-peer-deps
@@ -24,7 +24,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN apk add --no-cache openssl libc6-compat python3 py3-pip \
+RUN apk add --no-cache openssl openssl1.1-compat libc6-compat python3 py3-pip \
   && pip3 install --break-system-packages matplotlib numpy pandas scipy
 
 RUN addgroup -g 1001 -S appgroup && adduser -S appuser -u 1001 -G appgroup
