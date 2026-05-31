@@ -30,7 +30,17 @@ npm ci --legacy-peer-deps
 
 echo "→ Prisma"
 npx prisma generate
-npx prisma migrate deploy
+if ! npx prisma migrate deploy 2>/tmp/prisma-migrate.err; then
+  if grep -q P3005 /tmp/prisma-migrate.err; then
+    echo "  数据库已有表，baseline 迁移记录"
+    npx prisma migrate resolve --applied 20260503154515_init_db
+    npx prisma migrate resolve --applied 20260530_sqlite_to_postgresql
+    npx prisma migrate deploy
+  else
+    cat /tmp/prisma-migrate.err >&2
+    exit 1
+  fi
+fi
 
 echo "→ 构建 Next.js"
 npm run build
