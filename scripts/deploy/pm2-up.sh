@@ -9,6 +9,8 @@ COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 cd "$DEPLOY_DIR"
 
 echo "→ 停止 Docker 应用容器（若存在）"
+docker stop grainscript 2>/dev/null || true
+docker rm grainscript 2>/dev/null || true
 docker compose -f "$COMPOSE_FILE" stop app 2>/dev/null || true
 docker compose -f "$COMPOSE_FILE" rm -f app 2>/dev/null || true
 
