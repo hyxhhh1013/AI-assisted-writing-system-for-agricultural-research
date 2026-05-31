@@ -42,6 +42,7 @@ services:
       - ./data:/app/data
       - ./prisma:/app/prisma
       - ./public/charts:/app/public/charts
+      - ./scripts:/app/scripts:ro
     restart: unless-stopped
     healthcheck:
       test:
