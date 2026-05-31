@@ -7,7 +7,17 @@ COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 
 cd "$DEPLOY_DIR"
 
-# 若 3000 被旧版 next-server 占用，先释放端口以便 Docker 绑定
+# 停止 PM2 托管的旧版 next-server，避免占用 3000 端口
+if command -v pm2 >/dev/null 2>&1; then
+  if pm2 describe grainscript >/dev/null 2>&1; then
+    echo "→ 停止 PM2 旧进程 grainscript"
+    pm2 stop grainscript >/dev/null 2>&1 || true
+    pm2 delete grainscript >/dev/null 2>&1 || true
+    pm2 save >/dev/null 2>&1 || true
+  fi
+fi
+
+# 若 3000 仍被非 Docker 进程占用，释放端口
 if command -v ss >/dev/null 2>&1 && ss -tlnp 2>/dev/null | grep -q ':3000'; then
   if ! docker ps --format '{{.Ports}}' 2>/dev/null | grep -q '3000'; then
     echo "→ 停止占用 3000 端口的旧进程"
