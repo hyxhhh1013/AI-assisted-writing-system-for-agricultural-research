@@ -17,7 +17,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 | 框架 | Next.js 16 (App Router, Turbopack) |
 | 样式 | Tailwind CSS v4 + Shadcn UI |
 | 编辑器 | TipTap (段落模式) / Textarea (经典模式) |
-| 数据库 | Prisma + SQLite (WAL, `prisma/dev.db`) |
+| 数据库 | Prisma + PostgreSQL (`docker-compose.yml` 提供本地 `db` 服务) |
 | 认证 | JWT (jose + bcryptjs), HTTP-only cookie |
 | AI | DeepSeek API (主), Zhipu GLM-4-plus (审查代理) |
 | RAG | 自研 BM25 + 向量余弦混合检索, RRF 融合 |
@@ -43,7 +43,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - `src/lib/utils.ts` — parseOutline, buildExpansionContext, buildOutlineTasks 等核心工具
 - `src/app/workbench/page.tsx` — 核心工作台（当前 776 行，待继续拆分）
 - `src/components/shared/writing-panel.tsx` — AI 扩写面板（当前 826 行，待拆分）
-- `src/proxy.ts` — Next.js 16 中间件入口（原 middleware.ts，含认证/限流逻辑）
+- `src/proxy.ts` — Next.js 16 Proxy 入口（原 middleware.ts，含认证/限流逻辑）
 
 ### AI 写作管道
 ```
@@ -71,3 +71,4 @@ AI 输出 【FIGURE:{...}】 → findFigureBlocks 解析 → API 调用 → Pyth
 4. **类型严格**：禁止 `any`，所有接口必须有显式类型
 5. **流式优先**：AI 生成接口必须支持 SSE streaming
 6. **大文件不新增代码**：workbench/page.tsx（776行）、writing-panel.tsx（826行）、api/writing/route.ts（436行）待拆分，新逻辑优先放到独立组件/服务
+7. **认证头安全**：Proxy 注入 `x-user-id` 必须用 `NextResponse.next({ request: { headers } })` 传给 Route Handler；不要用 `response.headers.set(...)`，那是发给浏览器的响应头。

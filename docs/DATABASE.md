@@ -1,7 +1,7 @@
 # 数据库文档
 
 > 10 个模型、关系总览、字段说明、索引策略、常见查询。
-> Schema 文件: `prisma/schema.prisma` | 数据库: SQLite + WAL 模式
+> Schema 文件: `prisma/schema.prisma` | 数据库: PostgreSQL
 
 ## 关系总览
 
@@ -42,7 +42,7 @@ KnowledgeFile (1) ──< (N) KnowledgeChunk
 | dataClaims | string? | EvidenceClaim[] JSON |
 | dataSources | string? | DataSourceAnalysis[] JSON |
 
-注意：`charts`/`dataClaims`/`dataSources` 是 JSON 字符串（SQLite 不支持原生 JSON 列），读写时需要 `JSON.parse/stringify`。
+注意：`charts`/`dataClaims`/`dataSources` 目前仍以 JSON 字符串保存，读写时需要 `JSON.parse/stringify`。这是为兼容已有数据结构与前后端契约，不代表数据库仍是 SQLite。
 
 ### Section — 章节
 | 字段 | 类型 | 说明 |
@@ -166,7 +166,7 @@ prisma.knowledgeFile.groupBy({ by: ['category'], _count: true })
 
 ## 迁移注意事项
 
-- 开发环境: `npx prisma db push`（直接同步，不生成迁移文件）
+- 开发环境: `docker compose up -d db` 启动 PostgreSQL 后运行 `npx prisma db push`
 - 生产环境: `npx prisma migrate deploy`（执行已有迁移）
-- dev server 运行时 Prisma 可能因 SQLite 文件锁失败 → 先停服再操作
-- WAL 模式在 `src/lib/prisma.ts` 中启用: `PRAGMA journal_mode=WAL`
+- 修改 schema 后运行 `npx prisma generate`，确保 `@prisma/client` 类型同步
+- `.env.example` 面向本地开发使用 `localhost:5432`；Docker app 容器内使用 `db:5432`

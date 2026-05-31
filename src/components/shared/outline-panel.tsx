@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { TabPanelShell } from "@/components/shared/tab-panel-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -188,6 +187,7 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
             </Button>
           </div>
         )}
-    </TabPanelShell>
+      </div>
+    </div>
   );
 }

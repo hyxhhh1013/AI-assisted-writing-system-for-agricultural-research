@@ -89,9 +89,9 @@ export function WorkbenchEditorArea({
   // AI 预览模式 — 扩写时中间编辑器显示输出内容
   if (aiPreview) {
     return (
-      <div className="flex flex-col h-full bg-background relative">
+      <div className="flex flex-col h-full bg-[#faf9f6] relative">
         {/* 顶部状态栏 */}
-        <header className="h-12 border-b bg-primary/5 flex items-center justify-between px-4 shrink-0">
+        <header className="h-12 border-b border-[#1a5632]/10 bg-[#1a5632]/5 flex items-center justify-between px-4 shrink-0">
           <div className="flex items-center gap-2 text-xs text-primary">
             <Sparkles className={cn("h-3.5 w-3.5", aiPreview.isStreaming && "animate-pulse")} />
             <span className="font-semibold">AI 扩写 — {aiPreview.targetSection}{aiPreview.subsectionTitle ? ` › ${aiPreview.subsectionTitle}` : ""}</span>
@@ -110,7 +110,7 @@ export function WorkbenchEditorArea({
 
         <div className="flex-1 flex overflow-hidden">
           {/* 左侧信息栏 — 管道步骤 + 警告 */}
-          <aside className="w-56 border-r bg-card shrink-0 p-3 flex flex-col min-h-0">
+          <aside className="w-56 border-r border-[#1a5632]/10 bg-white/90 shrink-0 p-3 flex flex-col min-h-0">
             {/* 管道步骤 — 固定顶部 */}
             {aiPreview.pipelineSteps.length > 0 && (
               <div className="shrink-0 mb-3">
@@ -165,7 +165,7 @@ export function WorkbenchEditorArea({
           </aside>
 
           {/* 正文区域 — 主体 */}
-          <main className="flex-1 overflow-auto p-8 md:p-12 bg-muted/5">
+          <main className="flex-1 overflow-auto p-8 md:p-12 bg-[#faf9f6]">
             <div className="max-w-3xl mx-auto min-h-full">
               {aiPreview.content ? (
                 <div className="prose prose-sm max-w-none text-sm leading-relaxed">
@@ -185,8 +185,8 @@ export function WorkbenchEditorArea({
   }
 
   return (
-    <div className="flex flex-col h-full bg-background relative">
-      <header className="h-14 border-b bg-card flex items-center justify-between px-6 shrink-0">
+    <div className="flex flex-col h-full bg-[#faf9f6] relative">
+      <header className="h-14 border-b border-[#1a5632]/10 bg-white/90 flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <div className="bg-primary/10 p-1.5 rounded-md">
@@ -262,10 +262,10 @@ export function WorkbenchEditorArea({
         </div>
       </header>
 
-      <main className="flex-1 overflow-auto p-6 md:p-10 lg:p-16 bg-muted/5">
+      <main className="flex-1 overflow-auto p-6 md:p-10 lg:p-16 bg-[#faf9f6]">
         <div className={cn(
           "max-w-4xl mx-auto min-h-full flex flex-col",
-          editorMode === "classic" ? "bg-card rounded-2xl shadow-xl border overflow-hidden" : ""
+          editorMode === "classic" ? "bg-white rounded-2xl shadow-xl border border-[#1a5632]/10 overflow-hidden" : ""
         )}>
           {editorMode === "classic" ? (
             <>
