@@ -165,7 +165,7 @@ git push origin main
 |--|-----------|------------------------|
 | 文档 | [DEPLOY.md](./DEPLOY.md) | [DEPLOY_VPS.md](./DEPLOY_VPS.md) |
 | 触发 | 手动 `docker compose up -d --build` | `git push origin main` |
-| 构建位置 | 本机 / 服务器本地 build | GitHub Actions 云端 build |
+| 构建位置 | 本机 / 服务器本地 build | **VPS 上** docker build（零镜像仓库费） |
 | 数据库 | SQLite（`.env` 默认） | PostgreSQL（`docker-compose.prod.yml`） |
 | 适用 | 局域网试用、调试 Docker | 公网访问、免手搓 rebuild |
 
@@ -176,22 +176,20 @@ git push origin main
 ```text
 你 push 到 main
     ↓
-GitHub Actions 在云端 docker build
+GitHub Actions SSH 登录 VPS
     ↓
-镜像推到 ghcr.io/hyxhhh1013/grainscript:latest
+git pull + scripts/deploy/vps-up.sh
     ↓
-Actions SSH 登录 VPS，执行 scripts/deploy/vps-up.sh
-    ↓
-VPS 只 docker pull + compose up（不在服务器编译）
+VPS 上 docker compose build + up（不拉镜像仓库，零额外费用）
 ```
 
 相关文件（需在 `main` 上存在才会生效）：
 
 | 文件 | 作用 |
 |------|------|
-| `.github/workflows/deploy.yml` | CI：构建 + SSH 部署 |
-| `docker-compose.prod.yml` | 生产 compose（PostgreSQL + 拉镜像） |
-| `scripts/deploy/vps-up.sh` | VPS 上拉镜像并重启 |
+| `.github/workflows/deploy.yml` | CI：SSH 触发 VPS 部署 |
+| `docker-compose.prod.yml` | 生产 compose（PostgreSQL + 本地 build） |
+| `scripts/deploy/vps-up.sh` | VPS 上 build 并重启 |
 | `scripts/deploy/bootstrap-vps.sh` | VPS 首次初始化 |
 
 > **当前状态**：上述部署文件已在本地写好，但**尚未 merge 到 `main`**。第一次上线前需要先提交并合并。
@@ -206,11 +204,10 @@ VPS 只 docker pull + compose up（不在服务器编译）
 
 | # | 事项 | 怎么做 | 存到哪里 |
 |---|------|--------|----------|
-| 1 | **SSH 私钥** | 腾讯云下载的 `.pem`（与公钥 `skey-qxuyis6t` 配对），或新建 `deploy_key` | GitHub Secret：`DEPLOY_SSH_KEY` |
-| 2 | **GHCR 拉镜像 Token** | GitHub → Settings → Developer settings → Fine-grained PAT，权限 `read:packages` | GitHub Secret：`GHCR_PULL_TOKEN` |
-| 3 | **VPS 上的 `.env`** | SSH 登录服务器，`nano /opt/grainscript/.env` | 仅存在于 VPS，不进 Git |
-| 4 | **`JWT_SECRET`** | 随机字符串（见下方命令） | VPS 的 `.env` |
-| 5 | **`DEEPSEEK_API_KEY`** | DeepSeek 控制台申请 | VPS 的 `.env`（本地 `.env` 也要有） |
+| 1 | **SSH 私钥** | 本机 `cursor.pem` | GitHub Secret：`DEPLOY_SSH_KEY` |
+| 2 | **VPS 上的 `.env`** | SSH 登录服务器，`nano /opt/grainscript/.env` | 仅存在于 VPS，不进 Git |
+| 3 | **`JWT_SECRET`** | 随机字符串（见下方命令） | VPS 的 `.env` |
+| 4 | **`DEEPSEEK_API_KEY`** | DeepSeek 控制台申请 | VPS 的 `.env`（本地 `.env` 也要有） |
 
 生成 `JWT_SECRET`：
 
@@ -221,9 +218,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 写入 GitHub Secret（私钥示例，路径改成你的 `.pem`）：
 
 ```powershell
-gh secret set DEPLOY_SSH_KEY < C:\Users\你的用户名\Downloads\skey-qxuyis6t.pem
-gh secret set GHCR_PULL_TOKEN
-# 粘贴 PAT 后回车
+gh secret set DEPLOY_SSH_KEY < E:\Edownload\cursor.pem
 ```
 
 验证 SSH 私钥能否登录 VPS：
@@ -279,10 +274,10 @@ nano /opt/grainscript/.env
 
 Actions 失败时：
 
-1. 看 Actions 日志是 **build 失败** 还是 **SSH/deploy 失败**  
-2. Build 失败 → 本地 `npm run build` 复现  
-3. SSH 失败 → 检查 Secret、安全组 22、VPS `authorized_keys`  
-4. Pull 401 → 配置 `GHCR_PULL_TOKEN` 或把 GHCR Package 设为 Public  
+1. 看 Actions 日志是 **SSH 失败** 还是 **VPS build 失败 / 超时**
+2. Build 失败 → SSH 进 VPS 手动 `bash scripts/deploy/vps-up.sh` 看完整日志
+3. SSH 失败 → 检查 Secret、安全组 22、VPS `authorized_keys`
+4. OOM / Killed → 给 VPS 加 swap 或升配内存
 
 紧急手动部署（Actions 挂了）见 [DEPLOY_VPS.md](./DEPLOY_VPS.md) 第四节。
 

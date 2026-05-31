@@ -1,19 +1,21 @@
-# 腾讯云 VPS 自动部署（GitHub Actions + 腾讯云 TCR）
+# 腾讯云 VPS 自动部署（GitHub Actions + VPS 本地构建）
 
 > **开发 / 提交 / 部署总规范**：[DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md)  
 > **当前进度清单**（Secrets、还缺什么）：[DEPLOY_SETUP_CHECKLIST.md](./DEPLOY_SETUP_CHECKLIST.md)
 
-推送到 `main` 分支后，GitHub 在云端构建 Docker 镜像并推到 **腾讯云 TCR（个人版）**，VPS 从同城镜像站 **拉镜像 + 重启**，不在服务器上编译。
+推送到 `main` 分支后，GitHub Actions **SSH 登录 VPS**，执行 `git pull` + **本地 Docker build**，**不依赖任何付费镜像仓库**（TCR / GHCR 都不需要）。
 
 ## 架构
 
 ```text
 git push (main)
-  → GitHub Actions: docker build + push ccr.ccs.tencentyun.com/命名空间/grainscript:latest
-  → SSH 到 VPS: docker login TCR + compose pull + up -d
+  → GitHub Actions SSH 到 VPS
+  → git pull + docker compose build + up -d
 ```
 
-日常你只需：`git push`，约 3～8 分钟后线上自动更新（TCR 同城拉取，比 GHCR 快很多）。
+日常你只需：`git push`。首次构建约 **15～30 分钟**（VPS 上编译 Next.js + Playwright），后续有 Docker 层缓存会快很多。
+
+**代价**：部署时占用 VPS CPU/内存；小规格机器可能较慢，但 **零额外费用**。
 
 ---
 
@@ -30,15 +32,19 @@ newgrp docker
 docker compose version
 ```
 
+建议 VPS 至少 **2 核 4GB**；内存不足时 build 可能 OOM，可临时加 swap。
+
 ### 2. 创建部署目录
 
 ```bash
 sudo mkdir -p /opt/grainscript
 sudo chown "$USER:$USER" /opt/grainscript
 cd /opt/grainscript
-git clone https://github.com/hyxhhh1013/AI-assisted-writing-system-for-agricultural-research.git .
+git clone git@github.com:hyxhhh1013/AI-assisted-writing-system-for-agricultural-research.git .
 chmod +x scripts/deploy/vps-up.sh
 ```
+
+（VPS 需已配置 Deploy Key，见 [DEPLOY_SETUP_CHECKLIST.md](./DEPLOY_SETUP_CHECKLIST.md)。）
 
 ### 3. 配置环境变量
 
@@ -55,16 +61,10 @@ nano .env
 
 `docker-compose.prod.yml` 会覆盖 `DATABASE_URL` 为 PostgreSQL，无需在 `.env` 里改 SQLite 路径。
 
-### 4. 首次启动（拉镜像）
-
-在 GitHub 第一次成功构建镜像 **之后**：
+### 4. 首次启动（本地 build）
 
 ```bash
 cd /opt/grainscript
-export TCR_REGISTRY=ccr.ccs.tencentyun.com
-export TCR_USERNAME=你的腾讯云账号ID
-export TCR_PASSWORD=你的TCR固定密码
-export GRAINSCRIPT_IMAGE=ccr.ccs.tencentyun.com/你的命名空间/grainscript:latest
 bash scripts/deploy/vps-up.sh
 ```
 
@@ -74,28 +74,26 @@ bash scripts/deploy/vps-up.sh
 
 ### 5. 给 GitHub Actions 配 SSH 密钥
 
-**在你自己的电脑上**（Windows PowerShell 或 Git Bash）：
+**在你自己的电脑上**（Windows PowerShell）：
 
-```bash
-ssh-keygen -t ed25519 -C "github-actions-deploy" -f deploy_key -N ""
+```powershell
+gh secret set DEPLOY_SSH_KEY < E:\Edownload\cursor.pem
 ```
 
-- 把 `deploy_key.pub` 内容追加到 VPS 的 `~/.ssh/authorized_keys`
-- 把 `deploy_key`（私钥，整文件含 BEGIN/END）存到 GitHub Secret
+- 对应公钥需在 VPS 的 `~/.ssh/authorized_keys`
+- **不要用密码登录写进 GitHub**；只用密钥
 
 测试：
 
-```bash
-ssh -i deploy_key YOUR_USER@你的公网IP
+```powershell
+ssh -i E:\Edownload\cursor.pem ubuntu@你的公网IP
 ```
-
-**不要用密码登录写进 GitHub**；只用密钥。
 
 ---
 
 ## 二、GitHub Secrets 配置
 
-仓库 → **Settings → Secrets and variables → Actions → New repository secret**
+仓库 → **Settings → Secrets and variables → Actions**
 
 | Secret 名称 | 说明 | 示例 |
 |-------------|------|------|
@@ -104,37 +102,16 @@ ssh -i deploy_key YOUR_USER@你的公网IP
 | `DEPLOY_SSH_KEY` | 私钥全文 | `cursor.pem` 文件内容 |
 | `DEPLOY_PATH` | 可选，部署目录 | `/opt/grainscript` |
 | `DEPLOY_PORT` | 可选，SSH 端口 | `22` |
-| `TCR_NAMESPACE` | TCR 命名空间 | `grainscript` |
-| `TCR_USERNAME` | TCR 登录用户名 | 腾讯云 **账号 ID**（12 位数字） |
-| `TCR_PASSWORD` | TCR 登录密码 | 控制台设置的 **固定密码** |
-| `TCR_REGISTRY` | 可选，镜像仓库地址 | 默认 `ccr.ccs.tencentyun.com` |
 
-### 腾讯云 TCR 怎么开通
-
-1. 打开 [容器镜像服务 TCR 控制台](https://console.cloud.tencent.com/tcr) → **个人版**
-2. **命名空间** → 新建（例如 `grainscript`）
-3. **访问凭证** → 设置 **固定密码**（长期有效）
-4. 页面上会显示 **登录用户名**（即腾讯云账号 ID）和 **登录命令**
-
-写入 GitHub Secrets（PowerShell）：
-
-```powershell
-gh secret set TCR_NAMESPACE -b "grainscript"
-gh secret set TCR_USERNAME -b "123456789012"
-gh secret set TCR_PASSWORD -b "你在TCR控制台设置的固定密码"
-# 可选，默认已是个人版地址：
-gh secret set TCR_REGISTRY -b "ccr.ccs.tencentyun.com"
-```
-
-**请勿在聊天里发送 TCR 密码。**
+**不需要** TCR、GHCR、Docker Hub 等任何镜像仓库 Token。
 
 ---
 
 ## 三、日常发布
 
 ```bash
-git add .
-git commit -m "your message"
+git checkout main
+git merge 你的功能分支
 git push origin main
 ```
 
@@ -151,10 +128,6 @@ SSH 登录 VPS：
 ```bash
 cd /opt/grainscript
 git pull --ff-only origin main
-export TCR_REGISTRY=ccr.ccs.tencentyun.com
-export TCR_USERNAME=你的腾讯云账号ID
-export TCR_PASSWORD=你的TCR固定密码
-export GRAINSCRIPT_IMAGE=ccr.ccs.tencentyun.com/你的命名空间/grainscript:latest
 bash scripts/deploy/vps-up.sh
 ```
 
@@ -180,20 +153,20 @@ docker compose -f docker-compose.prod.yml exec db pg_dump -U grainscript grainsc
 
 ## 六、常见问题
 
-**Q: Actions 构建失败，内存不足？**  
-GitHub 免费 runner 一般够用；若失败，重试或检查 Dockerfile 是否被改大。
+**Q: Actions 超时？**  
+首次 build 较慢，workflow 已设 **45 分钟**。若仍超时，在 VPS 上先手动跑一遍 `bash scripts/deploy/vps-up.sh` 完成首次构建。
+
+**Q: VPS build 内存不足（Killed）？**  
+加 swap 或升配；临时：`sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile`
 
 **Q: deploy 步骤 SSH 连不上？**  
 检查安全组是否放行 22、公网 IP 是否正确、`authorized_keys` 是否包含对应公钥。
 
-**Q: pull 镜像 401 Unauthorized？**  
-检查 `TCR_USERNAME`（账号 ID）、`TCR_PASSWORD`（固定密码）是否与 TCR 控制台一致；VPS 上可手动 `docker login ccr.ccs.tencentyun.com` 测试。
+**Q: 3000 端口被旧进程占用？**  
+`vps-up.sh` 会自动尝试释放非 Docker 占用的 3000 端口。
 
-**Q: deploy 超时？**  
-首次拉镜像较大，workflow 已设 30 分钟；若仍超时，在 VPS 上先手动执行 `vps-up.sh` 预拉一次。
-
-**Q: 还想在服务器上 build？**  
-用原来的 `docker-compose.yml` + `docker compose up -d --build`（慢，不推荐）。
+**Q: 还想用云端 build + 拉镜像？**  
+需要镜像仓库（GHCR 免费但国内 pull 慢；TCR 国内快但可能收费）。当前方案刻意 **零仓库费用**。
 
 **Q: 本地实验室 Docker 部署？**  
 仍见 [DEPLOY.md](./DEPLOY.md)（`docker compose up -d --build`）。

@@ -1,8 +1,7 @@
-# 生产环境：拉取腾讯云 TCR 预构建镜像，不在服务器上 build。
+# 生产环境：在 VPS 上本地 build（零镜像仓库费用）。
 # 用法见 docs/DEPLOY_VPS.md
 #
-#   export GRAINSCRIPT_IMAGE=ccr.ccs.tencentyun.com/命名空间/grainscript:latest
-#   docker compose -f docker-compose.prod.yml pull app
+#   docker compose -f docker-compose.prod.yml build app
 #   docker compose -f docker-compose.prod.yml up -d
 
 services:
@@ -26,9 +25,11 @@ services:
       retries: 5
 
   app:
-    image: ${GRAINSCRIPT_IMAGE:?Set GRAINSCRIPT_IMAGE e.g. ccr.ccs.tencentyun.com/namespace/grainscript:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: grainscript:prod
     container_name: grainscript
-    pull_policy: always
     ports:
       - "3000:3000"
     env_file:

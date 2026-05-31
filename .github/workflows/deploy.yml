@@ -12,40 +12,8 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  IMAGE_NAME: grainscript
-  TCR_REGISTRY: ccr.ccs.tencentyun.com
-
 jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Tencent TCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ secrets.TCR_REGISTRY != '' && secrets.TCR_REGISTRY || env.TCR_REGISTRY }}
-          username: ${{ secrets.TCR_USERNAME }}
-          password: ${{ secrets.TCR_PASSWORD }}
-
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ secrets.TCR_REGISTRY != '' && secrets.TCR_REGISTRY || env.TCR_REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/${{ env.IMAGE_NAME }}:latest
-            ${{ secrets.TCR_REGISTRY != '' && secrets.TCR_REGISTRY || env.TCR_REGISTRY }}/${{ secrets.TCR_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
   deploy:
-    needs: build-and-push
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
@@ -56,8 +24,8 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_PORT != '' && secrets.DEPLOY_PORT || 22 }}
-          command_timeout: 30m
-          envs: GRAINSCRIPT_IMAGE,TCR_REGISTRY,TCR_USERNAME,TCR_PASSWORD,DEPLOY_DIR
+          command_timeout: 45m
+          envs: DEPLOY_DIR
           script: |
             set -euo pipefail
             cd "${DEPLOY_DIR:-/opt/grainscript}"
@@ -69,7 +37,3 @@ jobs:
             bash scripts/deploy/vps-up.sh
         env:
           DEPLOY_DIR: ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/opt/grainscript' }}
-          TCR_REGISTRY: ${{ secrets.TCR_REGISTRY != '' && secrets.TCR_REGISTRY || 'ccr.ccs.tencentyun.com' }}
-          TCR_USERNAME: ${{ secrets.TCR_USERNAME }}
-          TCR_PASSWORD: ${{ secrets.TCR_PASSWORD }}
-          GRAINSCRIPT_IMAGE: ${{ secrets.TCR_REGISTRY != '' && secrets.TCR_REGISTRY || 'ccr.ccs.tencentyun.com' }}/${{ secrets.TCR_NAMESPACE }}/${{ env.IMAGE_NAME }}:latest

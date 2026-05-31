@@ -48,7 +48,6 @@ fi
 echo ""
 echo "完成。下一步："
 echo "  1. nano $DEPLOY_DIR/.env"
-echo "  2. 在 GitHub 配置 Secrets: DEPLOY_SSH_KEY, GHCR_PULL_TOKEN"
+echo "  2. 在 GitHub 配置 Secrets: DEPLOY_SSH_KEY（及 DEPLOY_HOST/USER/PATH）"
 echo "  3. push 到 main 触发 Actions，或手动："
-echo "     export GRAINSCRIPT_IMAGE=ghcr.io/hyxhhh1013/grainscript:latest"
 echo "     bash $DEPLOY_DIR/scripts/deploy/vps-up.sh"
