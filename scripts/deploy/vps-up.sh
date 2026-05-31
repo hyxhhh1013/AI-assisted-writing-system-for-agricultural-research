@@ -23,6 +23,7 @@ echo "→ 本地构建 app 镜像（首次约 15～30 分钟，后续有缓存�
 docker compose -f "$COMPOSE_FILE" build app
 
 echo "→ 启动/更新容器"
+docker compose -f "$COMPOSE_FILE" down --remove-orphans 2>/dev/null || true
 docker compose -f "$COMPOSE_FILE" up -d
 
 echo "→ 当前状态"
