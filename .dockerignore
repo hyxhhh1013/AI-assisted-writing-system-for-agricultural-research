@@ -13,4 +13,5 @@ README.md
 docs/
 __pycache__
 *.pyc
-scripts/
+# 部署脚本不进镜像；运行时需要的 scripts 保留
+scripts/deploy/
