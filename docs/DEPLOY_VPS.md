@@ -1,19 +1,19 @@
-# 腾讯云 VPS 自动部署（GitHub Actions + GHCR）
+# 腾讯云 VPS 自动部署（GitHub Actions + 腾讯云 TCR）
 
 > **开发 / 提交 / 部署总规范**：[DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md)  
 > **当前进度清单**（Secrets、还缺什么）：[DEPLOY_SETUP_CHECKLIST.md](./DEPLOY_SETUP_CHECKLIST.md)
 
-推送到 `main` 分支后，GitHub 在云端构建 Docker 镜像并推到 **GHCR**，VPS 只负责 **拉镜像 + 重启**，不在服务器上编译。
+推送到 `main` 分支后，GitHub 在云端构建 Docker 镜像并推到 **腾讯云 TCR（个人版）**，VPS 从同城镜像站 **拉镜像 + 重启**，不在服务器上编译。
 
 ## 架构
 
 ```text
 git push (main)
-  → GitHub Actions: docker build + push ghcr.io/OWNER/grainscript:latest
-  → SSH 到 VPS: docker compose pull + up -d
+  → GitHub Actions: docker build + push ccr.ccs.tencentyun.com/命名空间/grainscript:latest
+  → SSH 到 VPS: docker login TCR + compose pull + up -d
 ```
 
-日常你只需：`git push`，约 5～10 分钟后线上自动更新。
+日常你只需：`git push`，约 3～8 分钟后线上自动更新（TCR 同城拉取，比 GHCR 快很多）。
 
 ---
 
@@ -61,10 +61,11 @@ nano .env
 
 ```bash
 cd /opt/grainscript
-export GRAINSCRIPT_IMAGE=ghcr.io/hyxhhh1013/grainscript:latest
-# 若镜像是私有的，先登录（见下文 GHCR_PULL_TOKEN）
-docker compose -f docker-compose.prod.yml pull app
-docker compose -f docker-compose.prod.yml up -d
+export TCR_REGISTRY=ccr.ccs.tencentyun.com
+export TCR_USERNAME=你的腾讯云账号ID
+export TCR_PASSWORD=你的TCR固定密码
+export GRAINSCRIPT_IMAGE=ccr.ccs.tencentyun.com/你的命名空间/grainscript:latest
+bash scripts/deploy/vps-up.sh
 ```
 
 浏览器访问：`http://你的公网IP:3000`
@@ -100,18 +101,32 @@ ssh -i deploy_key YOUR_USER@你的公网IP
 |-------------|------|------|
 | `DEPLOY_HOST` | VPS 公网 IP | `159.75.106.21` |
 | `DEPLOY_USER` | SSH 用户名 | `ubuntu` |
-| `DEPLOY_SSH_KEY` | 私钥全文 | `deploy_key` 文件内容 |
+| `DEPLOY_SSH_KEY` | 私钥全文 | `cursor.pem` 文件内容 |
 | `DEPLOY_PATH` | 可选，部署目录 | `/opt/grainscript` |
 | `DEPLOY_PORT` | 可选，SSH 端口 | `22` |
-| `GHCR_PULL_TOKEN` | 拉私有镜像用 PAT | 见下一节 |
+| `TCR_NAMESPACE` | TCR 命名空间 | `grainscript` |
+| `TCR_USERNAME` | TCR 登录用户名 | 腾讯云 **账号 ID**（12 位数字） |
+| `TCR_PASSWORD` | TCR 登录密码 | 控制台设置的 **固定密码** |
+| `TCR_REGISTRY` | 可选，镜像仓库地址 | 默认 `ccr.ccs.tencentyun.com` |
 
-### GHCR_PULL_TOKEN 怎么来
+### 腾讯云 TCR 怎么开通
 
-1. GitHub → **Settings → Developer settings → Personal access tokens → Fine-grained tokens**
-2. 权限：`read:packages`，仓库选本仓库（或 All repositories）
-3. 生成后复制 token，存入 `GHCR_PULL_TOKEN`
+1. 打开 [容器镜像服务 TCR 控制台](https://console.cloud.tencent.com/tcr) → **个人版**
+2. **命名空间** → 新建（例如 `grainscript`）
+3. **访问凭证** → 设置 **固定密码**（长期有效）
+4. 页面上会显示 **登录用户名**（即腾讯云账号 ID）和 **登录命令**
 
-**简化做法（推荐新手）**：构建成功后，到 **Packages → grainscript → Package settings → Change visibility → Public**，VPS 拉 `latest` 时可不登录。仍建议保留 PAT 以便以后改回私有。
+写入 GitHub Secrets（PowerShell）：
+
+```powershell
+gh secret set TCR_NAMESPACE -b "grainscript"
+gh secret set TCR_USERNAME -b "123456789012"
+gh secret set TCR_PASSWORD -b "你在TCR控制台设置的固定密码"
+# 可选，默认已是个人版地址：
+gh secret set TCR_REGISTRY -b "ccr.ccs.tencentyun.com"
+```
+
+**请勿在聊天里发送 TCR 密码。**
 
 ---
 
@@ -136,9 +151,10 @@ SSH 登录 VPS：
 ```bash
 cd /opt/grainscript
 git pull --ff-only origin main
-export GRAINSCRIPT_IMAGE=ghcr.io/hyxhhh1013/grainscript:latest
-export GHCR_USER=hyxhhh1013
-export GHCR_TOKEN=你的PAT
+export TCR_REGISTRY=ccr.ccs.tencentyun.com
+export TCR_USERNAME=你的腾讯云账号ID
+export TCR_PASSWORD=你的TCR固定密码
+export GRAINSCRIPT_IMAGE=ccr.ccs.tencentyun.com/你的命名空间/grainscript:latest
 bash scripts/deploy/vps-up.sh
 ```
 
@@ -171,7 +187,10 @@ GitHub 免费 runner 一般够用；若失败，重试或检查 Dockerfile 是�
 检查安全组是否放行 22、公网 IP 是否正确、`authorized_keys` 是否包含对应公钥。
 
 **Q: pull 镜像 401 Unauthorized？**  
-配置 `GHCR_PULL_TOKEN`，或把 GHCR 包改为 Public。
+检查 `TCR_USERNAME`（账号 ID）、`TCR_PASSWORD`（固定密码）是否与 TCR 控制台一致；VPS 上可手动 `docker login ccr.ccs.tencentyun.com` 测试。
+
+**Q: deploy 超时？**  
+首次拉镜像较大，workflow 已设 30 分钟；若仍超时，在 VPS 上先手动执行 `vps-up.sh` 预拉一次。
 
 **Q: 还想在服务器上 build？**  
 用原来的 `docker-compose.yml` + `docker compose up -d --build`（慢，不推荐）。

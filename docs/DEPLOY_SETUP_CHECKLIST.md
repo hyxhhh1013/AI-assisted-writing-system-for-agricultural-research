@@ -9,15 +9,13 @@
 
 ## 阶段 0：代码进 main（否则 Actions 不存在）
 
-部署相关文件目前在本地，**必须先 merge 到 `main`**：
+部署相关文件已在 `main`：
 
-- [ ] `.github/workflows/deploy.yml`
-- [ ] `docker-compose.prod.yml`
-- [ ] `scripts/deploy/bootstrap-vps.sh`
-- [ ] `scripts/deploy/vps-up.sh`
-- [ ] `docs/DEPLOY_VPS.md`、`docs/DEPLOY_SETUP_CHECKLIST.md`、`docs/DEVELOPMENT_WORKFLOW.md`
-
-可对 AI 说：「帮我把部署相关文件单独 commit 并开 PR 合到 main」。
+- [x] `.github/workflows/deploy.yml`（推 TCR）
+- [x] `docker-compose.prod.yml`
+- [x] `scripts/deploy/bootstrap-vps.sh`
+- [x] `scripts/deploy/vps-up.sh`
+- [x] `docs/DEPLOY_VPS.md`、`docs/DEPLOY_SETUP_CHECKLIST.md`、`docs/DEVELOPMENT_WORKFLOW.md`
 
 ---
 
@@ -30,39 +28,33 @@
 | `DEPLOY_HOST` | ✅ 已配置 | `159.75.106.21` |
 | `DEPLOY_USER` | ✅ 已配置 | `ubuntu` |
 | `DEPLOY_PATH` | ✅ 已配置 | `/opt/grainscript` |
-| `DEPLOY_SSH_KEY` | ⬜ **待你配置** | SSH **私钥**全文（见下） |
-| `GHCR_PULL_TOKEN` | ⬜ **待你配置** | PAT，`read:packages`（见下） |
+| `DEPLOY_SSH_KEY` | ✅ 已配置 | `cursor.pem` 私钥 |
+| `TCR_NAMESPACE` | ⬜ **待你配置** | TCR 命名空间，如 `grainscript` |
+| `TCR_USERNAME` | ⬜ **待你配置** | 腾讯云账号 ID（12 位） |
+| `TCR_PASSWORD` | ⬜ **待你配置** | TCR 控制台「固定密码」 |
+| `TCR_REGISTRY` | 可选 | 默认 `ccr.ccs.tencentyun.com` |
 | `DEPLOY_PORT` | 可选 | 默认 22 |
 
-### 1.1 配置 DEPLOY_SSH_KEY
+### 1.1 配置 TCR（替代 GHCR，国内拉取更快）
 
-你曾提供的是**公钥**；Actions 需要配对的**私钥**（`.pem` 文件）。
-
-```powershell
-# 路径改成你本机实际的 .pem
-gh secret set DEPLOY_SSH_KEY < C:\Users\你的用户名\Downloads\skey-qxuyis6t.pem
-```
-
-验证能否登录：
+1. 打开 https://console.cloud.tencent.com/tcr → **个人版**
+2. **命名空间** → 新建（建议名 `grainscript`，与 `TCR_NAMESPACE` 一致）
+3. **访问凭证** → 设置 **固定密码**，记下 **登录用户名**（账号 ID）
+4. 在本机执行（把值换成你的）：
 
 ```powershell
-ssh -i C:\path\to\your-key.pem ubuntu@159.75.106.21
+gh secret set TCR_NAMESPACE -b "grainscript"
+gh secret set TCR_USERNAME -b "你的12位账号ID"
+gh secret set TCR_PASSWORD -b "你在控制台设置的固定密码"
 ```
 
-私钥丢了 → 腾讯云重新绑定密钥，或按 DEPLOY_VPS.md 新建 `deploy_key` 对。
+**请勿在聊天里发送 TCR 密码。**
 
-### 1.2 配置 GHCR_PULL_TOKEN
-
-1. 打开 https://github.com/settings/tokens?type=beta  
-2. Generate token → 权限 **read:packages**  
-3. 执行：
+### 1.2 验证 SSH（已完成）
 
 ```powershell
-gh secret set GHCR_PULL_TOKEN
-# 粘贴 token 回车
+ssh -i E:\Edownload\cursor.pem ubuntu@159.75.106.21
 ```
-
-**简化选项**：首次构建成功后，把 `ghcr.io` 上的 `grainscript` 包设为 **Public**，VPS 可不登录拉镜像（仍建议保留 Token）。
 
 ---
 
@@ -134,7 +126,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ## 阶段 3：触发第一次部署
 
 - [ ] 阶段 0 完成（deploy workflow 在 `main` 上）
-- [ ] 阶段 1 两个 Secret 已填
+- [ ] 阶段 1 三个 TCR Secret 已填（`TCR_NAMESPACE`、`TCR_USERNAME`、`TCR_PASSWORD`）
 - [ ] 阶段 2 VPS 已 clone + `.env` 已编辑
 
 然后：
@@ -156,8 +148,8 @@ git push origin main
 
 | 你需要做的 | AI **不能**代劳的 |
 |------------|-------------------|
-| 本机 `.pem` 私钥 → `gh secret set DEPLOY_SSH_KEY` | 私钥文件内容 |
-| GitHub PAT → `gh secret set GHCR_PULL_TOKEN` | Token 全文 |
+| TCR 控制台开命名空间 + 固定密码 | TCR 密码 |
+| `gh secret set TCR_*` 三个 Secret | 账号 ID、密码 |
 | VPS 上 `nano .env` 填 API Key | `DEEPSEEK_API_KEY` |
 | VPS 上 `nano .env` 填 JWT | `JWT_SECRET` |
 | 腾讯云安全组放行端口 | 控制台操作 |
