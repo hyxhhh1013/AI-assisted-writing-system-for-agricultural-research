@@ -8,7 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Loader2, Send, Copy, Eraser, FileText, Database, ScrollText } from "lucide-react";
+import { Loader2, Send, Copy, Eraser, FileText, Database, ScrollText, PenTool } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
 import { toast } from "sonner";
 import { projectStore, ProjectData } from "@/lib/store";
 import { buildSectionOptions } from "@/lib/imrad";
@@ -137,12 +138,14 @@ function WritingContent() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-5xl">
-      <Button variant="ghost" className="mb-6" onClick={() => router.push("/")}>
-        <ArrowLeft className="mr-2 h-4 w-4" /> 返回首页
-      </Button>
+    <>
+      <PageHeader
+        title="模块化扩写"
+        subtitle="选择章节与上下文，基于本地知识库进行学术化扩写"
+        icon={PenTool}
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
         {/* 输入面板 */}
         <Card className="h-fit">
           <CardHeader>
@@ -271,6 +274,6 @@ function WritingContent() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </>
   );
 }

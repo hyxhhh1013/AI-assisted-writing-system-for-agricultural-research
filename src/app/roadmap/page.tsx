@@ -6,7 +6,6 @@ import {
   ChevronRight, Wheat, Sparkles, ShieldCheck, Zap,
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { AgriBackground } from "@/components/ui/AgriBackground";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -154,32 +153,29 @@ const phase3Weeks = [
 
 export default function RoadmapPage() {
   return (
-    <div className="min-h-screen w-full bg-[#f8fafc] text-slate-900 selection:bg-emerald-100 selection:text-emerald-900">
-      <AgriBackground />
-
-      {/* Hero */}
+    <>
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="pt-20 pb-8 text-center px-6"
+        className="pb-8 pt-2 text-center px-6"
       >
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs font-medium mb-4">
-          <Target className="w-3.5 h-3.5" />
+        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#1a5632]/15 bg-[#1a5632]/8 px-3 py-1 text-xs font-medium text-[#1a5632]">
+          <Target className="h-3.5 w-3.5" />
           项目推进计划
         </div>
-        <h1 className="text-4xl md:text-5xl font-black tracking-tight text-slate-900">
+        <h1 className="text-4xl font-black tracking-tight text-[#122820] md:text-5xl">
           禾书耕文 · 时间推进表
         </h1>
-        <p className="text-slate-500 mt-3 max-w-xl mx-auto text-sm md:text-base">
+        <p className="mx-auto mt-3 max-w-xl text-sm text-[#6b7c72] md:text-base">
           6 个月，三个阶段，从「能写」到「能投」。每个阶段有明确的交付物和验收标准。
         </p>
-        <div className="flex items-center justify-center gap-2 mt-4 text-xs text-slate-400">
-          <Wheat className="w-3.5 h-3.5" />
+        <div className="mt-4 flex items-center justify-center gap-2 text-xs text-[#9aa8a0]">
+          <Wheat className="h-3.5 w-3.5" />
           <span>最后更新：2026-05-27</span>
         </div>
       </motion.div>
 
-      <div className="max-w-4xl mx-auto px-4 pb-24 space-y-12">
+      <div className="mx-auto max-w-4xl space-y-12 px-4 pb-8">
         {/* ── 已完成 ── */}
         <motion.section
           initial="hidden"
@@ -332,6 +328,6 @@ export default function RoadmapPage() {
           </Link>
         </motion.div>
       </div>
-    </div>
+    </>
   );
 }

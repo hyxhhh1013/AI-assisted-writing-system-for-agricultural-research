@@ -145,8 +145,7 @@ export function DataPanel({
   };
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-4 pb-6">
+    <TabPanelShell title="实验数据" icon={Database}>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-bold flex items-center gap-2">
@@ -314,8 +313,7 @@ export function DataPanel({
             </CardFooter>
           </Card>
         )}
-      </div>
-    </div>
+    </TabPanelShell>
   );
 }
 

@@ -125,12 +125,24 @@ function Content() {
   ];
 
   return (
-    <div className="flex h-screen flex-col bg-background overflow-hidden">
-      <header className="shrink-0 z-10 border-b bg-card/80 backdrop-blur-sm">
+    <div className="flex h-screen flex-col overflow-hidden bg-[#faf9f6]">
+      <header className="z-10 shrink-0 border-b border-[#1a5632]/10 bg-white/90 backdrop-blur-sm">
         <div className="mx-auto flex h-12 w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.back()}><ArrowLeft className="h-4 w-4" /></Button>
-          <span className="text-sm font-semibold flex items-center gap-1.5"><Search className="h-4 w-4 text-primary/60" />论文质量检测</span>
-          {project && <span className="text-xs text-muted-foreground ml-auto truncate max-w-[40vw]">{project.title}</span>}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-[#3d4f46] hover:bg-[#1a5632]/8 hover:text-[#1a5632]"
+            onClick={() => router.back()}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <span className="flex items-center gap-1.5 text-sm font-semibold text-[#122820]">
+            <Search className="h-4 w-4 text-[#1a5632]" />
+            论文质量检测
+          </span>
+          {project ? (
+            <span className="ml-auto max-w-[40vw] truncate text-xs text-[#6b7c72]">{project.title}</span>
+          ) : null}
         </div>
       </header>
 

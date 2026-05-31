@@ -8,7 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Loader2, Send, Copy, BookOpen, Save, Languages, Layout } from "lucide-react";
+import { Loader2, Send, Copy, BookOpen, Save, Languages, Layout } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
 import { toast } from "sonner";
 import { projectStore, ProjectData } from "@/lib/store";
 import ReactMarkdown from "react-markdown";
@@ -147,14 +148,12 @@ function OutlineContent() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <Button
-        variant="ghost"
-        className="mb-6"
-        onClick={() => router.push("/")}
-      >
-        <ArrowLeft className="mr-2 h-4 w-4" /> 返回首页
-      </Button>
+    <>
+      <PageHeader
+        title="论文大纲生成"
+        subtitle="输入研究题目与方向，结合实验室知识库生成结构化大纲"
+        icon={BookOpen}
+      />
 
       <div className="grid grid-cols-1 gap-8">
         <Card>
@@ -241,6 +240,6 @@ function OutlineContent() {
           </Card>
         )}
       </div>
-    </div>
+    </>
   );
 }

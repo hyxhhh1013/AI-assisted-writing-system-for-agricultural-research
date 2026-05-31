@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
+import { SiteShell } from "@/components/layout/site-shell";
 import { AuthProvider } from "@/lib/auth-context";
 import "./globals.css";
 
@@ -26,8 +27,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN" className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-      <body className="min-h-screen bg-background font-sans">
-        <AuthProvider>{children}</AuthProvider>
+      <body className="min-h-screen font-sans">
+        <AuthProvider>
+          <SiteShell>{children}</SiteShell>
+        </AuthProvider>
         <Toaster position="top-center" />
       </body>
     </html>

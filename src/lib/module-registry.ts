@@ -1,4 +1,4 @@
-import type { AppModule, ModuleIconKey, ModulePlacement } from "@/contracts/modules";
+import type { AppModule, HomeModuleCategory, ModuleIconKey, ModulePlacement } from "@/contracts/modules";
 import { isModuleEnabled } from "@/lib/feature-flags";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -21,6 +21,7 @@ export const APP_MODULES: AppModule[] = [
     href: "/workbench",
     flag: "WRITING",
     placement: ["home"],
+    homeCategory: "core",
     iconKey: "file-text",
     order: 10,
   },
@@ -31,6 +32,7 @@ export const APP_MODULES: AppModule[] = [
     href: "/projects",
     flag: "WRITING",
     placement: ["home"],
+    homeCategory: "core",
     iconKey: "layout",
     order: 20,
   },
@@ -41,6 +43,7 @@ export const APP_MODULES: AppModule[] = [
     href: "/knowledge",
     flag: "KNOWLEDGE",
     placement: ["home"],
+    homeCategory: "tools",
     iconKey: "database",
     order: 30,
   },
@@ -51,6 +54,7 @@ export const APP_MODULES: AppModule[] = [
     href: "/plagiarism",
     flag: "PLAGIARISM",
     placement: ["home"],
+    homeCategory: "tools",
     iconKey: "search",
     order: 40,
   },
@@ -62,6 +66,7 @@ export const APP_MODULES: AppModule[] = [
     requiresProjectId: true,
     flag: "CHART",
     placement: ["home", "workbench-sidebar"],
+    homeCategory: "tools",
     iconKey: "bar-chart",
     order: 50,
   },
@@ -72,6 +77,7 @@ export const APP_MODULES: AppModule[] = [
     href: "/xrd-lab",
     flag: "XRD",
     placement: ["home"],
+    homeCategory: "tools",
     iconKey: "radar",
     order: 55,
   },
@@ -82,6 +88,7 @@ export const APP_MODULES: AppModule[] = [
     href: "/presentation",
     flag: null,
     placement: ["home"],
+    homeCategory: "help",
     iconKey: "play",
     order: 60,
   },
@@ -92,6 +99,7 @@ export const APP_MODULES: AppModule[] = [
     href: "/guide",
     flag: null,
     placement: ["home"],
+    homeCategory: "help",
     iconKey: "book-open",
     order: 70,
   },
@@ -118,6 +126,29 @@ export function listModules(options?: {
   }
   return modules.sort((a, b) => a.order - b.order);
 }
+
+const HOME_CATEGORY_ORDER: HomeModuleCategory[] = ["core", "tools", "help"];
+
+export function groupHomeModules(): Record<HomeModuleCategory, AppModule[]> {
+  const grouped: Record<HomeModuleCategory, AppModule[]> = {
+    core: [],
+    tools: [],
+    help: [],
+  };
+  for (const module of listModules({ placement: "home" })) {
+    const category = module.homeCategory ?? "tools";
+    grouped[category].push(module);
+  }
+  return grouped;
+}
+
+export const HOME_SECTION_LABELS: Record<HomeModuleCategory, string> = {
+  core: "写作核心",
+  tools: "数据与质量",
+  help: "帮助与说明",
+};
+
+export { HOME_CATEGORY_ORDER };
 
 export function getModuleHref(module: AppModule, projectId?: string | null): string {
   if (module.requiresProjectId && projectId) {

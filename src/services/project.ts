@@ -14,6 +14,12 @@ export interface ProjectListItem {
   id: string;
   title: string;
   lastUpdated: number;
+  /** 写作进度 0-100（基于核心章节完成度） */
+  progress: number;
+  /** 总章节数 */
+  sectionCount: number;
+  /** 已填写章节数 */
+  filledCount: number;
 }
 
 export interface SectionRecord {

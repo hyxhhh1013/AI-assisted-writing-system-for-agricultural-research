@@ -505,7 +505,7 @@ function WorkbenchContent() {
 
   return (
     <ErrorBoundary>
-    <div className="flex h-screen bg-background overflow-hidden relative">
+    <div className="flex h-screen overflow-hidden relative bg-[#faf9f6]">
       <WorkbenchTabSwitcher
         activeTab={activeTab} setActiveTab={setActiveTab}
         isWritingGenerating={isWritingGenerating}

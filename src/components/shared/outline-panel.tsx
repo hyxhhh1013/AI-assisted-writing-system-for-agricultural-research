@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { TabPanelShell } from "@/components/shared/tab-panel-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -130,11 +131,10 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
             生成
           </Button>
         </div>
-      </div>
-      </div>
-
+        </>
+      }
+    >
       {/* 大纲任务列表 — 点击即可跳转到扩写 */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
         {!result && !isGenerating && (
           <div className="text-center py-16 text-muted-foreground">
             <FileText className="h-10 w-10 mx-auto mb-3 opacity-20" />
@@ -188,7 +188,6 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
             </Button>
           </div>
         )}
-      </div>
-    </div>
+    </TabPanelShell>
   );
 }

@@ -1,131 +1,39 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Clock, ChevronRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import { HomeHero } from "@/components/home/home-hero";
+import { HomeModuleSections } from "@/components/home/home-module-sections";
+import { HomeTopBar } from "@/components/home/home-top-bar";
+import { LabBackground } from "@/components/layout/lab-background";
+import { SiteFooter } from "@/components/layout/site-footer";
 import { projectStore } from "@/lib/store";
-import { listModules, MODULE_ICON_MAP } from "@/lib/module-registry";
+import { siteShellClass } from "@/lib/site-theme";
+import type { ProjectListItem } from "@/services/project";
 
 export default function Home() {
-  const [recentProjects, setRecentProjects] = useState<{ id: string; title: string; lastUpdated: number }[]>([]);
+  const [projects, setProjects] = useState<ProjectListItem[]>([]);
 
   useEffect(() => {
-    const fetchRecent = async () => {
-      const list = await projectStore.list();
-      setRecentProjects(list.slice(0, 3));
-    };
-    fetchRecent();
+    void projectStore.list().then(setProjects);
   }, []);
 
-  const tools = listModules({ placement: "home" });
+  const recentProject = projects[0] ?? null;
 
   return (
-    <main className="container mx-auto px-4 py-12 max-w-6xl">
+    <div className={siteShellClass}>
+      <LabBackground />
 
-      <header className="mb-16 text-center">
-        <h1 className="text-4xl font-extrabold tracking-tight lg:text-6xl mb-6 text-slate-900">
-          禾书耕文 | GrainScript
-        </h1>
-        <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-          让 AI 懂农业，让科研更高效。基于实验室私有知识库的垂直领域写作助手。
-        </p>
-      </header>
+      <HomeTopBar />
 
-      {recentProjects.length > 0 && (
-        <section className="mb-12">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold flex items-center gap-2">
-              <Clock className="h-5 w-5 text-primary" /> 最近编辑的论文
-            </h2>
-            <Link href="/projects" className="text-sm text-primary hover:underline flex items-center">
-              查看全部项目 <ChevronRight className="h-4 w-4" />
-            </Link>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {recentProjects.map((project) => (
-              <Link key={project.id} href={`/workbench?id=${project.id}`}>
-                <Card className="hover:border-primary/50 transition-colors group">
-                  <CardHeader className="p-4">
-                    <CardTitle className="text-sm line-clamp-1 group-hover:text-primary transition-colors">
-                      {project.title || "未命名论文"}
-                    </CardTitle>
-                    <CardDescription className="text-xs">
-                      上次编辑: {new Date(project.lastUpdated).toLocaleDateString()}
-                    </CardDescription>
-                  </CardHeader>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
+      <main className="relative mx-auto max-w-6xl px-4 pb-14 pt-8 sm:px-6 sm:pt-10">
+        <HomeHero projects={projects} />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {tools.map((tool) => {
-          const Icon = MODULE_ICON_MAP[tool.iconKey];
-          return (
-          <Link href={tool.href} key={tool.id} className="block">
-            <Card className="h-full hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer border-2 hover:border-primary/20 bg-card/50">
-              <CardHeader>
-                <div className="mb-4 p-3 bg-primary/5 rounded-xl w-fit">
-                  <Icon className="w-6 h-6 text-primary" />
-                </div>
-                <CardTitle className="text-lg">{tool.title}</CardTitle>
-                <CardDescription>{tool.description}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center font-semibold text-primary text-sm">
-                  进入模块 <span className="ml-2">→</span>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-          );
-        })}
-      </div>
+        <div className="my-12 h-px bg-gradient-to-r from-transparent via-[#1a5632]/15 to-transparent" />
 
-      <section className="mt-20 p-10 rounded-3xl bg-primary/5 border border-primary/10 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
-        <div className="max-w-3xl relative z-10">
-          <h2 className="text-2xl font-bold mb-6">专业化与可定制性</h2>
-          <div className="grid md:grid-cols-2 gap-8">
-            <div className="space-y-4">
-              <div className="flex items-start">
-                <div className="mr-3 mt-1 bg-primary text-white rounded-full p-1 text-[10px]">✓</div>
-                <div>
-                  <h3 className="font-bold text-sm">多项目并行</h3>
-                  <p className="text-xs text-muted-foreground">支持同时开展多篇论文撰写，互不干扰。</p>
-                </div>
-              </div>
-              <div className="flex items-start">
-                <div className="mr-3 mt-1 bg-primary text-white rounded-full p-1 text-[10px]">✓</div>
-                <div>
-                  <h3 className="font-bold text-sm">多格式预览</h3>
-                  <p className="text-xs text-muted-foreground">内置 SCI、IEEE、GB/T 7713 等国内外主流期刊排版模板。</p>
-                </div>
-              </div>
-            </div>
-            <div className="space-y-4">
-              <div className="flex items-start">
-                <div className="mr-3 mt-1 bg-primary text-white rounded-full p-1 text-[10px]">✓</div>
-                <div>
-                  <h3 className="font-bold text-sm">RAG 知识增强</h3>
-                  <p className="text-xs text-muted-foreground">深度绑定实验室私有文献，确保生成的表达学术严谨。</p>
-                </div>
-              </div>
-              <div className="flex items-start">
-                <div className="mr-3 mt-1 bg-primary text-white rounded-full p-1 text-[10px]">✓</div>
-                <div>
-                  <h3 className="font-bold text-sm">数据驱动分析</h3>
-                  <p className="text-xs text-muted-foreground">自动解析实验数据，生成符合论文规范的数据描述。</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-    </main>
+        <HomeModuleSections recentProjectId={recentProject?.id ?? null} />
+
+        <SiteFooter className="mt-16 border-t pt-8" />
+      </main>
+    </div>
   );
 }

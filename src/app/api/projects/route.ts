@@ -61,13 +61,30 @@ export async function GET(req: NextRequest) {
     const projects = await prisma.project.findMany({
       where: { userId },
       orderBy: { lastUpdated: 'desc' },
-      select: { id: true, title: true, lastUpdated: true }
+      select: {
+        id: true,
+        title: true,
+        lastUpdated: true,
+        sections: { select: { key: true, content: true } },
+      }
     });
 
-    return NextResponse.json(projects.map(p => ({
-      ...p,
-      lastUpdated: p.lastUpdated.getTime()
-    })));
+    // 核心章节（计入进度）
+    const CORE_KEYS = ["abstract", "introduction", "methods", "results", "conclusion"];
+
+    return NextResponse.json(projects.map(p => {
+      const filledCount = p.sections.filter(s => s.content && s.content.trim().length > 10).length;
+      const coreFilled = p.sections.filter(s => CORE_KEYS.includes(s.key) && s.content && s.content.trim().length > 10).length;
+      const progress = Math.round((coreFilled / CORE_KEYS.length) * 100);
+      return {
+        id: p.id,
+        title: p.title,
+        lastUpdated: p.lastUpdated.getTime(),
+        progress,
+        sectionCount: p.sections.length,
+        filledCount,
+      };
+    }));
   } catch (error: unknown) {
     logger.error("Projects GET error:", error);
     return errorResponse(error instanceof Error ? error.message : "Projects GET failed");

@@ -144,13 +144,18 @@ function ReaderContent() {
   if (!filename) return <div>未找到文件</div>;
 
   return (
-    <div className="flex flex-col h-screen bg-background">
-      <header className="flex items-center justify-between px-6 py-3 border-b bg-card">
+    <div className="flex h-screen flex-col overflow-hidden bg-[#faf9f6]">
+      <header className="flex shrink-0 items-center justify-between border-b border-[#1a5632]/10 bg-white/90 px-6 py-3 backdrop-blur-sm">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => router.push("/knowledge")}>
-            <ArrowLeft className="h-4 w-4 mr-2" /> 返回
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-[#3d4f46] hover:bg-[#1a5632]/8 hover:text-[#1a5632]"
+            onClick={() => router.push("/knowledge")}
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" /> 返回
           </Button>
-          <h1 className="font-semibold text-sm truncate max-w-[400px]">{filename}</h1>
+          <h1 className="max-w-[400px] truncate text-sm font-semibold text-[#122820]">{filename}</h1>
         </div>
       </header>
 

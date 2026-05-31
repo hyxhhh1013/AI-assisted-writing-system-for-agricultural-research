@@ -16,7 +16,7 @@ const protectedApis = [
   "/api/projects", "/api/writing", "/api/analysis", "/api/outline", "/api/export",
   "/api/plagiarism", "/api/knowledge", "/api/chat", "/api/translate",
   "/api/consistency", "/api/chart", "/api/flow-diagram", "/api/mol-diagram",
-  "/api/save-chart", "/api/references", "/api/xrd", "/api/pdf",
+  "/api/save-chart", "/api/references", "/api/xrd", "/api/pdf", "/api/admin",
 ];
 
 // AI 端点限流
@@ -119,5 +119,6 @@ export const config = {
     "/api/references/:path*",
     "/api/xrd/:path*",
     "/api/pdf/:path*",
+    "/api/admin/:path*",
   ],
 };

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { 
-  ArrowLeft, Loader2, RefreshCw, FileText, 
+  Loader2, RefreshCw, FileText,
   CheckCircle2, AlertCircle, ExternalLink, 
   Search, Tag, Calendar, Database, Upload,
   MoreVertical, Edit3, Trash2, CheckSquare, Square,
@@ -33,6 +33,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
+import { PageHeader } from "@/components/layout/page-header";
+import { siteTheme } from "@/lib/site-theme";
 import {
   reindexKnowledgeStream,
   searchKnowledge,
@@ -336,31 +338,25 @@ export default function KnowledgePage() {
   const totalPages = Math.ceil(totalFiles / pageSize);
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      <Button variant="ghost" className="mb-4" onClick={() => router.push("/")}>
-        <ArrowLeft className="mr-2 h-4 w-4" /> 返回首页
-      </Button>
-
-      <div className="space-y-6">
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">知识库管理</h1>
-            <p className="text-muted-foreground mt-1">
-              集成检索与分类功能，支持高效管理海量实验室私有文献。
-            </p>
-          </div>
+    <>
+      <PageHeader
+        title="知识库管理"
+        subtitle="集成检索与分类功能，支持高效管理海量实验室私有文献"
+        icon={Database}
+        actions={
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setIsUploadOpen(true)}>
+            <Button variant="outline" className="border-[#1a5632]/20" onClick={() => setIsUploadOpen(true)}>
               <Upload className="mr-2 h-4 w-4" /> 上传文献
             </Button>
-            <Button onClick={handleReindex} disabled={isIndexing} className="shrink-0">
+            <Button onClick={handleReindex} disabled={isIndexing} className={`shrink-0 ${siteTheme.btnPrimary}`}>
               {isIndexing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
               重新构建索引
             </Button>
           </div>
-        </header>
+        }
+      />
 
+      <div className="space-y-6">
         {isIndexing && (
           <Card className="border-primary/50 bg-primary/5">
             <CardContent className="pt-6 space-y-4">
@@ -919,7 +915,6 @@ export default function KnowledgePage() {
         }}
         onForceReparse={(fileName) => handleSingleReindex(fileName, { files: [fileName], forceStage1: true })}
       />
-      </div>
-    </div>
+    </>
   );
 }

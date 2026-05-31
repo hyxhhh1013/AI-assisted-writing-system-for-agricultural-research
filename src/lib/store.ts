@@ -1,7 +1,7 @@
 "use client";
 
 import { listProjects, getProject, saveProject, deleteProject } from "@/services/project";
-import type { ProjectData, SectionRecord } from "@/services/project";
+import type { ProjectData, ProjectListItem, SectionRecord } from "@/services/project";
 
 export type { ProjectData } from "@/services/project";
 
@@ -15,7 +15,7 @@ const DEFAULT_SECTIONS = {
 } satisfies SectionRecord;
 
 export const projectStore = {
-  async list(): Promise<{ id: string; title: string; lastUpdated: number }[]> {
+  async list(): Promise<ProjectListItem[]> {
     return listProjects();
   },
 

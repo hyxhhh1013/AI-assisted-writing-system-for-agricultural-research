@@ -30,6 +30,8 @@ export type ModuleIconKey =
   | "play"
   | "flask";
 
+export type HomeModuleCategory = "core" | "tools" | "help";
+
 export interface AppModule {
   id: string;
   title: string;
@@ -39,6 +41,8 @@ export interface AppModule {
   requiresProjectId?: boolean;
   flag: ModuleFlagKey | null;
   placement: ModulePlacement[];
+  /** 首页分组：写作核心 / 工具 / 帮助 */
+  homeCategory?: HomeModuleCategory;
   iconKey: ModuleIconKey;
   order: number;
 }

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Loader2, RefreshCw, FileText, CheckCircle2, ExternalLink, Search } from "lucide-react";
 import { toast } from "sonner";
+import { TabPanelShell } from "@/components/shared/tab-panel-shell";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { reindexKnowledgeStream } from "@/services/knowledge";
@@ -65,26 +66,26 @@ export function ReaderPanel({ onOpenFile }: ReaderPanelProps) {
   );
 
   return (
-    <div className="flex flex-col h-full gap-4">
-      <div className="flex items-center justify-between px-1">
-        <h3 className="text-sm font-bold flex items-center gap-2">
-          <FileText className="h-4 w-4 text-primary" /> 文献库
-        </h3>
+    <TabPanelShell
+      title="文献库"
+      icon={FileText}
+      actions={
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleReindex} disabled={isIndexing}>
           <RefreshCw className={`h-3.5 w-3.5 ${isIndexing ? "animate-spin" : ""}`} />
         </Button>
-      </div>
-
-      <div className="relative">
-        <Search className="absolute left-2 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-        <Input
-          placeholder="搜索文献或分类..."
-          className="pl-8 h-8 text-xs"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-      </div>
-
+      }
+      tools={
+        <div className="relative w-full">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="搜索文献或分类..."
+            className="pl-8 h-7 text-xs"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+      }
+    >
       <ScrollArea className="flex-1 -mx-1 px-1">
         {isLoading ? (
           <div className="flex justify-center py-8">
@@ -113,6 +114,6 @@ export function ReaderPanel({ onOpenFile }: ReaderPanelProps) {
           </div>
         )}
       </ScrollArea>
-    </div>
+    </TabPanelShell>
   );
 }

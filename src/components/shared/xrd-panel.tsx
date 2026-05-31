@@ -19,6 +19,8 @@ type XrdTool = "peakfit" | "background" | "unitcell" | "amorphous" | "bragg" | "
 interface XrdPanelProps {
   projectId: string;
   activeSection?: string;
+  /** 默认激活的子工具（不传则默认 peakfit） */
+  defaultTool?: XrdTool;
   onInsertToPaper: (imageUrl: string, caption: string) => void;
 }
 
@@ -33,9 +35,9 @@ const TOOLS: { id: XrdTool; label: string; icon: React.ElementType }[] = [
   { id: "mechanism", label: "机理图", icon: PictureInPicture },
 ];
 
-export function XrdPanel({ projectId, onInsertToPaper }: XrdPanelProps) {
+export function XrdPanel({ projectId, defaultTool, onInsertToPaper }: XrdPanelProps) {
   const router = useRouter();
-  const [activeTool, setActiveTool] = useState<XrdTool>("peakfit");
+  const [activeTool, setActiveTool] = useState<XrdTool>(defaultTool ?? "peakfit");
   const [previewImg, setPreviewImg] = useState<PreviewImage | null>(null);
 
   const cardProps = { onInsertToPaper, onPreview: setPreviewImg };

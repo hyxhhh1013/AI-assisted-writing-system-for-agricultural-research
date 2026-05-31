@@ -7,7 +7,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Loader2, Upload, FileSpreadsheet, Send, Copy, Table as TableIcon, BarChart3, Save } from "lucide-react";
+import { Loader2, Upload, FileSpreadsheet, Send, Copy, Table as TableIcon, BarChart3, Save } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
 import { toast } from "sonner";
 import { projectStore, ProjectData } from "@/lib/store";
 
@@ -149,12 +150,14 @@ function AnalysisContent() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-5xl">
-      <Button variant="ghost" className="mb-6" onClick={() => router.push("/")}>
-        <ArrowLeft className="mr-2 h-4 w-4" /> 返回首页
-      </Button>
+    <>
+      <PageHeader
+        title="实验数据分析"
+        subtitle="上传 CSV/Excel 实验数据，AI 生成学术描述并保存到项目"
+        icon={BarChart3}
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -238,6 +241,6 @@ function AnalysisContent() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </>
   );
 }

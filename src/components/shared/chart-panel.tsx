@@ -25,6 +25,8 @@ interface ChartPanelProps {
   projectId: string;
   onInsertToPaper: (imageUrl: string, caption: string) => void;
   registryEntry?: RegistryEntry;
+  /** 页面级布局：vertical=上下堆叠（默认），horizontal=左右并排 */
+  layout?: "vertical" | "horizontal";
 }
 
 // 注册表 ID → 旧 chart_type 映射
@@ -79,7 +81,7 @@ function parseTabularData(text: string): {
   return { labels, datasets, columns: headers };
 }
 
-export function ChartPanel({ projectId, onInsertToPaper, registryEntry }: ChartPanelProps) {
+export function ChartPanel({ projectId, onInsertToPaper, registryEntry, layout = "vertical" }: ChartPanelProps) {
   const resolvedType = registryEntry ? (ID_TO_TYPE[registryEntry.id] || "bar") : "bar";
   const [inputMode, setInputMode] = useState<"file" | "paste">("paste");
   const [file, setFile] = useState<File | null>(null);
@@ -160,7 +162,7 @@ export function ChartPanel({ projectId, onInsertToPaper, registryEntry }: ChartP
   };
 
   return (
-    <div className="space-y-4">
+    <div className={layout === "horizontal" ? "grid grid-cols-1 lg:grid-cols-2 gap-4" : "space-y-4"}>
       <Card>
         <CardHeader className="p-4 pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
@@ -291,7 +293,7 @@ export function ChartPanel({ projectId, onInsertToPaper, registryEntry }: ChartP
       </Card>
 
       {result && (
-        <Card>
+        <Card className={layout === "horizontal" ? "sticky top-4" : ""}>
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <ImageIcon className="h-4 w-4" /> 图表预览
@@ -300,7 +302,7 @@ export function ChartPanel({ projectId, onInsertToPaper, registryEntry }: ChartP
           <CardContent className="p-4 space-y-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={result.imageBase64} alt={result.caption} className="w-full rounded-lg border bg-white"
-              style={{ maxHeight: 400, objectFit: "contain" }} />
+              style={{ maxHeight: 500, objectFit: "contain" }} />
             <div className="flex gap-2">
               <Button variant="outline" size="sm" className="text-xs gap-1 flex-1"
                 onClick={() => { const a = document.createElement("a"); a.download = `${title || "chart"}.png`; a.href = result.imageBase64; a.click(); }}>
