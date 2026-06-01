@@ -2,7 +2,7 @@
  * RAG 索引构建 — 三阶段增量架构
  *
  *   阶段 1: PDF → Chunks  →  缓存到 data/chunks_raw/<hash>.json
- *   阶段 2: Chunk 过滤    →  写 data/index_*.json + data/metadata.json
+ *   阶段 2: Chunk 过滤    →  写 data/index_*.json（无 embedding）+ index_*.emb + metadata.json
  *   阶段 3: Embedding     →  仅对新/无向量的 chunk 调 API
  *
  * 使用：
@@ -104,6 +104,94 @@ function saveJSON(filePath, data) {
   const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+}
+
+// ─── 分离格式：轻量 JSON + float32 .emb（与 convert-index-to-binary.mjs 一致）──
+
+const EMB_HEADER_SIZE = 8;
+
+function writeFloat32LE(arr) {
+  const buf = Buffer.allocUnsafe(arr.length * 4);
+  for (let i = 0; i < arr.length; i++) buf.writeFloatLE(arr[i], i * 4);
+  return buf;
+}
+
+function readFloat32LE(buf, offset, count) {
+  const out = new Array(count);
+  for (let i = 0; i < count; i++) out[i] = buf.readFloatLE(offset + i * 4);
+  return out;
+}
+
+function writeEmbeddingFile(filePath, embeddings, dim) {
+  const header = Buffer.alloc(EMB_HEADER_SIZE);
+  header.writeUInt32LE(1, 0);
+  header.writeUInt32LE(dim, 4);
+  const parts = [header];
+  for (const emb of embeddings) {
+    if (!emb || emb.length !== dim) {
+      parts.push(writeFloat32LE(new Array(dim).fill(0)));
+    } else {
+      parts.push(writeFloat32LE(emb));
+    }
+  }
+  fs.writeFileSync(filePath, Buffer.concat(parts));
+}
+
+function stripEmbeddingsFromChunks(chunks) {
+  const embeddings = [];
+  let dim = 0;
+  const stripped = chunks.map((c) => {
+    const emb = Array.isArray(c.embedding) && c.embedding.length > 0 ? c.embedding : null;
+    embeddings.push(emb);
+    if (emb && dim === 0) dim = emb.length;
+    const { embedding: _e, ...rest } = c;
+    return rest;
+  });
+  return { stripped, embeddings, dim };
+}
+
+function writeCategoryIndex(cat, chunks) {
+  const indexPath = path.join(DATA_DIR, `index_${cat}.json`);
+  const embPath = path.join(DATA_DIR, `index_${cat}.emb`);
+  const { stripped, embeddings, dim } = stripEmbeddingsFromChunks(chunks);
+  saveJSON(indexPath, stripped);
+  const hasEmb = dim > 0 && embeddings.some((e) => e && e.length === dim);
+  if (hasEmb) {
+    writeEmbeddingFile(embPath, embeddings, dim);
+  } else if (fs.existsSync(embPath)) {
+    fs.unlinkSync(embPath);
+  }
+  return { jsonPath: indexPath, embPath, chunkCount: stripped.length, hasEmb };
+}
+
+function loadExistingEmbMap() {
+  const map = new Map();
+  if (!fs.existsSync(DATA_DIR)) return map;
+  for (const catFile of fs.readdirSync(DATA_DIR).filter((f) => f.startsWith("index_") && f.endsWith(".json"))) {
+    const cat = catFile.slice("index_".length, -".json".length);
+    const chunks = loadJSON(path.join(DATA_DIR, catFile), []);
+    const embPath = path.join(DATA_DIR, `index_${cat}.emb`);
+    let buf = null;
+    let dim = 0;
+    let embCount = 0;
+    if (fs.existsSync(embPath)) {
+      buf = fs.readFileSync(embPath);
+      if (buf.length >= EMB_HEADER_SIZE) {
+        dim = buf.readUInt32LE(4);
+        embCount = Math.floor((buf.length - EMB_HEADER_SIZE) / (dim * 4));
+      }
+    }
+    for (let i = 0; i < chunks.length; i++) {
+      const id = chunks[i].metadata?.id;
+      if (!id) continue;
+      if (Array.isArray(chunks[i].embedding) && chunks[i].embedding.length > 0) {
+        map.set(id, chunks[i].embedding);
+      } else if (buf && dim > 0 && i < embCount) {
+        map.set(id, readFloat32LE(buf, EMB_HEADER_SIZE + i * dim * 4, dim));
+      }
+    }
+  }
+  return map;
 }
 
 /** 按 y/x 坐标排序后拼接，比简单 join 更保序 */
@@ -346,15 +434,7 @@ function mergeCategoryChunks(cat, newChunks) {
 }
 
 function stage2_filterAndWrite(allRawChunks) {
-  const existingEmbMap = new Map();
-  for (const catFile of fs.readdirSync(DATA_DIR).filter(f => f.startsWith("index_") && f.endsWith(".json"))) {
-    const existing = loadJSON(path.join(DATA_DIR, catFile), []);
-    for (const c of existing) {
-      if (Array.isArray(c.embedding) && c.embedding.length > 0 && c.metadata?.id) {
-        existingEmbMap.set(c.metadata.id, c.embedding);
-      }
-    }
-  }
+  const existingEmbMap = loadExistingEmbMap();
   if (existingEmbMap.size > 0) console.log(`  Preserved ${existingEmbMap.size} existing embeddings`);
 
   const existingMeta = fs.existsSync(METADATA_PATH) ? loadJSON(METADATA_PATH, []) : [];
@@ -376,18 +456,23 @@ function stage2_filterAndWrite(allRawChunks) {
       && !shouldForceStage1ForFile(filename);
 
     if (canReuseFiltered) {
-      const reused = existingFilteredBySource.get(filename).map((chunk) => ({
-        ...chunk,
-        metadata: {
-          ...chunk.metadata,
-          source: filename,
-          category,
-          documentType: (() => {
-            if (prev?.bibEdited && prev?.documentType) return prev.documentType;
-            return docMeta?.documentType || chunk.metadata?.documentType || null;
-          })(),
-        },
-      }));
+      const reused = existingFilteredBySource.get(filename).map((chunk) => {
+        const id = chunk.metadata?.id;
+        const preservedEmb = id ? existingEmbMap.get(id) : null;
+        return {
+          ...chunk,
+          embedding: preservedEmb || chunk.embedding || undefined,
+          metadata: {
+            ...chunk.metadata,
+            source: filename,
+            category,
+            documentType: (() => {
+              if (prev?.bibEdited && prev?.documentType) return prev.documentType;
+              return docMeta?.documentType || chunk.metadata?.documentType || null;
+            })(),
+          },
+        };
+      });
 
       totalAfter += reused.length;
       allChunks.push(...reused);
@@ -486,10 +571,11 @@ function stage2_filterAndWrite(allRawChunks) {
   const activeCategories = new Set(categoryMap.keys());
   for (const [cat, chunks] of categoryMap) {
     const merged = mergeCategoryChunks(cat, chunks);
-    saveJSON(path.join(DATA_DIR, `index_${cat}.json`), merged);
-    emitProgress({ type: "save", phase: "category", category: cat, chunkCount: merged.length });
-    const mb = (Buffer.byteLength(JSON.stringify(merged)) / 1024 / 1024).toFixed(1);
-    console.log(`  index_${cat}.json: ${merged.length} chunks (${mb} MB)`);
+    const { stripped, hasEmb } = writeCategoryIndex(cat, merged);
+    emitProgress({ type: "save", phase: "category", category: cat, chunkCount: stripped.length });
+    const mb = (Buffer.byteLength(JSON.stringify(stripped)) / 1024 / 1024).toFixed(1);
+    const embNote = hasEmb ? " + .emb" : "";
+    console.log(`  index_${cat}.json: ${stripped.length} chunks (${mb} MB)${embNote}`);
   }
 
   if (!isPartialReindex()) {
@@ -497,6 +583,8 @@ function stage2_filterAndWrite(allRawChunks) {
       const cat = catFile.slice("index_".length, -".json".length);
       if (!activeCategories.has(cat)) {
         fs.unlinkSync(path.join(DATA_DIR, catFile));
+        const embPath = path.join(DATA_DIR, `index_${cat}.emb`);
+        if (fs.existsSync(embPath)) fs.unlinkSync(embPath);
         console.log(`  removed orphan index_${cat}.json`);
       }
     }
@@ -614,9 +702,9 @@ async function stage3_embed(allChunks) {
     categoryMap.get(cat).push(c);
   }
   for (const [cat, chunks] of categoryMap) {
-    saveJSON(path.join(DATA_DIR, `index_${cat}.json`), chunks);
+    writeCategoryIndex(cat, chunks);
   }
-  console.log("Indexes re-written with embeddings");
+  console.log("Indexes re-written (JSON + .emb split format)");
 }
 
 // ─── File Scanning ────────────────────────────────────────────────────────────

@@ -59,7 +59,7 @@
 | RAG-PR-001 | 转换脚本：JSON → content.json + embedding.bin | — | 1h | done |
 | RAG-PR-002 | rag.ts 异步加载 + 二进制嵌入读取 | RAG-PR-001 | 3h | done |
 | RAG-PR-003 | 所有 API 调用方 await 化 | RAG-PR-002 | 2h | done |
-| RAG-PR-004 | index-pdfs.mjs 直接输出分离格式 | RAG-PR-001 | 2h | todo |
+| RAG-PR-004 | index-pdfs.mjs 直接输出分离格式 | RAG-PR-001 | 2h | done |
 | RAG-PR-005 | 部署 + 端到端验证 | RAG-PR-003 | 1h | todo |
 
 ---

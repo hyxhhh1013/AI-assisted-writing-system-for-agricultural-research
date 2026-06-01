@@ -59,7 +59,7 @@
 | RAG-PR-001 | 转换脚本：JSON → content.json + `.emb` | — | 2h | done | 2026-06-01 |
 | RAG-PR-002 | `rag.ts` 异步加载 + 二进制嵌入 | RAG-PR-001 | 4h | done | 2026-06-01 |
 | RAG-PR-003 | 所有 RAG 调用方 `await` 化 | RAG-PR-002 | 3h | done | 2026-06-01 |
-| RAG-PR-004 | `index-pdfs.mjs` 直接输出分离格式 | RAG-PR-001 | 3h | todo | |
+| RAG-PR-004 | `index-pdfs.mjs` 直接输出分离格式 | RAG-PR-001 | 3h | done | 2026-06-01 |
 | RAG-PR-005 | RAG 部署验证 + 文档更新 | RAG-PR-003, RAG-PR-004 | 2h | todo | |
 | **Phase 2 — API 契约与数据一致性** |
 | ENG-PR-020 | `services/consistency.ts` + hook 去 fetch | ENG-PR-002 | 2h | todo | |
@@ -821,6 +821,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-06-01 | ENG-PR-002 | AI | ESLint 0 error（Compiler hooks off + 机械修复）；`npm run check` + build 绿；PROJECT_HEALTH 同步 |
 | 2026-06-01 | RAG-PR-001 | AI | `convert-index-to-binary.mjs` + npm scripts + .emb 单测 |
 | 2026-06-01 | RAG-PR-002, 003 | AI | EmbeddingStore + async load；chat/source/writing/analyze/reindex await |
+| 2026-06-01 | RAG-PR-004 | AI | index-pdfs stage2/3 写 index_*.json + .emb 分离格式 |
 
 ---
 
