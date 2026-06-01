@@ -102,7 +102,11 @@ model KnowledgeFile {
   category     String   @default("未分类")
   documentType String   @default("paper") // "paper" | "patent" | "other"
   size         Int
-  mtime        DateTime
+  mtime        DateTime?
+  bib          String?  // JSON string of KnowledgeBib
+  gbTag        String?
+  parseWarning String?  // "no_text" | "low_text" | null
+  bibEdited    Boolean  @default(false)
   chunks       KnowledgeChunk[]
 }
 
@@ -241,4 +245,11 @@ model ReferenceSource {
 
   @@index([projectId])
   @@unique([projectId, refIndex])
+}
+
+// 系统设置（加密 key-value 存储）
+model SystemSetting {
+  key       String   @id
+  value     String   // AES-256-GCM 加密
+  updatedAt DateTime @updatedAt
 }

@@ -1,130 +1,129 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, Shield, ShieldOff } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Loader2, Shield, ShieldOff, Search, Trash2, User, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
+import Link from "next/link";
+import { exportUsersCSV } from "@/lib/admin-export";
 
 interface User {
-  id: string;
-  email: string;
-  name: string;
-  role: string;
-  projectCount: number;
-  createdAt: string;
+  id: string; email: string; name: string; role: string; projectCount: number; createdAt: string;
 }
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  const load = () => {
-    fetch("/api/admin/users")
-      .then((r) => r.json())
-      .then((d) => { setUsers(d); setLoading(false); })
+  const load = useCallback(() => {
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    fetch(`/api/admin/users?${params}`)
+      .then(r => r.json())
+      .then(d => { setUsers(d.data || []); setLoading(false); })
       .catch(() => setLoading(false));
-  };
+  }, [q]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   const toggleRole = async (userId: string, currentRole: string) => {
     const newRole = currentRole === "admin" ? "user" : "admin";
-    const res = await fetch("/api/admin/users", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, role: newRole }),
-    });
-    if (res.ok) {
-      toast.success(`已${newRole === "admin" ? "设为管理员" : "取消管理员"}`);
-      load();
-    } else {
-      toast.error("操作失败");
-    }
+    await fetch("/api/admin/users", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId, role: newRole }) });
+    load();
+    toast.success(`角色已切换为 ${newRole}`);
   };
 
-  if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-[#6b7c72]" />
-      </div>
-    );
-  }
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/admin/users", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: deleteTarget.id }) });
+      const d = await res.json();
+      if (res.ok) { toast.success(d.message || "已删除"); load(); }
+      else toast.error(d.error || "删除失败");
+    } catch { toast.error("删除失败"); }
+    finally { setDeleting(false); setDeleteTarget(null); }
+  };
 
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-semibold text-[#122820]">用户管理</h1>
-
-      <div className="rounded-xl border border-[#1a5632]/10 bg-white overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[#1a5632]/10 bg-[#f8f7f4]">
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-[#6b7c72]">
-                姓名
-              </th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-[#6b7c72]">
-                邮箱
-              </th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-[#6b7c72]">
-                角色
-              </th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-[#6b7c72]">
-                项目数
-              </th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-[#6b7c72]">
-                注册时间
-              </th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-[#6b7c72]">
-                操作
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id} className="border-b border-[#1a5632]/5 last:border-0">
-                <td className="px-4 py-2.5 font-medium text-[#122820]">
-                  {u.name || "—"}
-                </td>
-                <td className="px-4 py-2.5 text-[#3d4f46]">{u.email}</td>
-                <td className="px-4 py-2.5">
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                      u.role === "admin"
-                        ? "bg-[#1a5632]/10 text-[#1a5632]"
-                        : "bg-gray-100 text-gray-600"
-                    }`}
-                  >
-                    {u.role === "admin" ? "管理员" : "普通用户"}
-                  </span>
-                </td>
-                <td className="px-4 py-2.5 text-[#3d4f46]">{u.projectCount}</td>
-                <td className="px-4 py-2.5 text-xs text-[#9aa8a0]">
-                  {new Date(u.createdAt).toLocaleDateString("zh-CN")}
-                </td>
-                <td className="px-4 py-2.5">
-                  <button
-                    onClick={() => void toggleRole(u.id, u.role)}
-                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[#6b7c72] hover:bg-[#1a5632]/8 hover:text-[#1a5632]"
-                  >
-                    {u.role === "admin" ? (
-                      <>
-                        <ShieldOff className="h-3 w-3" />
-                        取消管理员
-                      </>
-                    ) : (
-                      <>
-                        <Shield className="h-3 w-3" />
-                        设为管理员
-                      </>
-                    )}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {users.length === 0 && (
-          <p className="py-8 text-center text-xs text-[#9aa8a0]">暂无用户</p>
-        )}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold text-[#122820]">用户管理</h2>
+        <Button variant="outline" size="sm" onClick={() => exportUsersCSV(users)} className="text-xs">导出 CSV</Button>
       </div>
+
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9aa8a0]" />
+        <Input className="pl-9 h-9 text-sm" placeholder="搜索姓名或邮箱..." value={q} onChange={e => setQ(e.target.value)} />
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-[#6b7c72]" /></div>
+      ) : (
+        <div className="border border-[#1a5632]/10 rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[#1a5632]/10 bg-[#faf9f6] text-left text-[#6b7c72]">
+                <th className="py-2.5 px-4 font-medium">用户</th>
+                <th className="py-2.5 px-4 font-medium">角色</th>
+                <th className="py-2.5 px-4 font-medium hidden sm:table-cell">项目数</th>
+                <th className="py-2.5 px-4 font-medium hidden sm:table-cell">注册时间</th>
+                <th className="py-2.5 px-4 font-medium">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map(u => (
+                <tr key={u.id} className="border-b border-[#1a5632]/5 hover:bg-[#1a5632]/[0.02]">
+                  <td className="py-2.5 px-4">
+                    <Link href={`/admin/users/${u.id}`} className="hover:underline">
+                      <p className="font-medium text-[#122820]">{u.name}</p>
+                      <p className="text-xs text-[#9aa8a0]">{u.email}</p>
+                    </Link>
+                  </td>
+                  <td className="py-2.5 px-4">
+                    <Badge variant={u.role === "admin" ? "default" : "secondary"} className="text-[10px]">{u.role}</Badge>
+                  </td>
+                  <td className="py-2.5 px-4 hidden sm:table-cell text-[#6b7c72]">{u.projectCount}</td>
+                  <td className="py-2.5 px-4 hidden sm:table-cell text-[#9aa8a0] text-xs">{new Date(u.createdAt).toLocaleDateString("zh-CN")}</td>
+                  <td className="py-2.5 px-4">
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toggleRole(u.id, u.role)} title={u.role === "admin" ? "降级" : "升级"}>
+                        {u.role === "admin" ? <ShieldOff className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700" onClick={() => setDeleteTarget(u)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                      <Link href={`/admin/users/${u.id}`}><Button variant="ghost" size="icon" className="h-7 w-7"><ChevronRight className="h-3.5 w-3.5" /></Button></Link>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {users.length === 0 && <tr><td colSpan={5} className="py-12 text-center text-[#9aa8a0] text-sm">暂无用户</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader><DialogTitle>确认删除用户</DialogTitle></DialogHeader>
+          <div className="text-sm text-[#6b7c72] space-y-2">
+            <p>即将删除 <strong className="text-[#122820]">{deleteTarget?.name}</strong>（{deleteTarget?.email}）</p>
+            <p className="text-red-600 text-xs">此操作将删除该用户的所有项目、审查记录、查重记录，不可恢复。</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)}>取消</Button>
+            <Button variant="destructive" size="sm" onClick={handleDelete} disabled={deleting}>{deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "确认删除"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

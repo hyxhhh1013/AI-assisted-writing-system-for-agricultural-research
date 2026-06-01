@@ -124,6 +124,23 @@ export async function fixIssue(request: ReviewFixIssueRequest): Promise<string |
   return request.suggestion || request.originalText || null;
 }
 
+/** PATCH /api/projects/[id]/sections/[key] — 增量写入单个章节 */
+export async function patchSection(
+  projectId: string,
+  sectionKey: string,
+  content: string,
+): Promise<void> {
+  const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/sections/${encodeURIComponent(sectionKey)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(data.error || "保存章节失败");
+  }
+}
+
 /** 将 RunReviewRequest 转为 ReviewInput（供 hook 使用） */
 export function toReviewInput(request: RunReviewRequest): ReviewInput {
   return {

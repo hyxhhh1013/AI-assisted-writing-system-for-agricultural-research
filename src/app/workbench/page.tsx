@@ -546,7 +546,7 @@ function WorkbenchContent() {
           
           <div className="flex-1 overflow-hidden p-4">
             {activeTab === "plagiarism" && (
-              <div className="h-full min-h-0 flex flex-col overflow-y-auto px-2 py-2">
+              <div className="h-full min-h-0 flex flex-col overflow-hidden">
                 <ErrorBoundary>
                   <LazyPlagiarismPanel
                     projectId={projectId ?? undefined}
@@ -574,7 +574,7 @@ function WorkbenchContent() {
               </div>
             )}
             {activeTab === "structure" && (
-              <div className="h-full overflow-y-auto pr-2 custom-scrollbar space-y-1">
+              <div className="h-full min-h-0 flex flex-col overflow-hidden">
                 <p className="text-[10px] text-muted-foreground px-1 pb-2 border-b mb-2 leading-relaxed">
                   点选章节后，中间编辑器与预览对应该段；引用重排会扫描<strong>含当前编辑区</strong>的全文。
                 </p>

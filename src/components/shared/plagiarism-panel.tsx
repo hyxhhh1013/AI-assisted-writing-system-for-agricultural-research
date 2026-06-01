@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { checkPlagiarismStream } from "@/services/plagiarism";
 import { toast } from "sonner";
 import {
   Search, Shuffle, Loader2, CheckCircle2,
@@ -120,15 +121,15 @@ export function PlagiarismPanel({
     if (checkContent.length > 100000) { toast.error("内容超过 10 万字上限"); return; }
     setIsChecking(true);
     setResult(null);
-    setCheckStatus("正在分析...");
     try {
-      const res = await fetch("/api/plagiarism/check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: selectedProjectId || projectId, title: checkTitle || "未命名", content: checkContent, webSearch }),
-      });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || "查重失败"); }
-      const data: CheckResult = await res.json();
+      const data = await checkPlagiarismStream(
+        { projectId: selectedProjectId || projectId, title: checkTitle || "未命名", content: checkContent, webSearch },
+        (event) => {
+          if (event.type === "progress") {
+            setCheckStatus(event.message);
+          }
+        },
+      );
       setResult(data);
       setView("result");
       toast.success(`检测完成，${data.totalMatches} 处匹配`);

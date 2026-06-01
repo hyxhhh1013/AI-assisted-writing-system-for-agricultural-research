@@ -64,25 +64,25 @@
 | UI-PR-033 | 阅读器「分析」Tab | UI-PR-032 | 4h | done | 2026-05-31 |
 | UI-PR-034 | 知识库菜单「AI 精读」入口 | UI-PR-033 | 1h | done | 2026-05-31 |
 | **Phase 2 — 审查（与 quality-module-plan Phase 3 对齐）** |
-| UI-PR-040 | Review 历史 service + 列表组件 | UI-PR-005 | 3h | todo | |
-| UI-PR-041 | 审查页/Tab：真实 IMRAD sections 输入 | UI-PR-040 | 4h | todo | |
-| UI-PR-042 | fixIssue 传 section 内容 + apply 写回 | UI-PR-041 | 4h | todo | |
-| UI-PR-043 | 查重页移除假 ReviewTab → 链审查中心 | UI-PR-041 | 1h | todo | |
+| UI-PR-040 | Review 历史 service + 列表组件 | UI-PR-005 | 3h | done | 2026-05-31 |
+| UI-PR-041 | 审查页/Tab：真实 IMRAD sections 输入 | UI-PR-040 | 4h | done | 2026-05-31 |
+| UI-PR-042 | fixIssue 传 section 内容 + apply 写回 | UI-PR-041 | 4h | done | 2026-05-31 |
+| UI-PR-043 | 查重页移除假 ReviewTab → 链审查中心 | UI-PR-041 | 1h | done | 2026-05-31 |
 | **Phase 2 — 查重（与 quality-module-plan Phase 1–2 对齐）** |
-| UI-PR-050 | `use-plagiarism-check` 统一 v2 SSE | UI-PR-004 | 4h | todo | |
-| UI-PR-051 | `/plagiarism` 阶段进度 UI | UI-PR-050 | 2h | todo | |
-| UI-PR-052 | 工作台 PlagiarismPanel 复用同一 hook | UI-PR-050 | 2h | todo | |
+| UI-PR-050 | `use-plagiarism-check` 统一 v2 SSE | UI-PR-004 | 4h | done | 2026-05-31 |
+| UI-PR-051 | `/plagiarism` 阶段进度 UI | UI-PR-050 | 2h | done | 2026-05-31 |
+| UI-PR-052 | 工作台 PlagiarismPanel 复用同一 hook | UI-PR-050 | 2h | done | 2026-05-31 |
 | **Phase 2 — 一致性** |
-| UI-PR-060 | 工作台顶栏一致性入口 + 保存前提示 | UI-PR-014 | 2h | todo | |
+| UI-PR-060 | 工作台顶栏一致性入口 + 保存前提示 | UI-PR-014 | 2h | done | 2026-05-31 |
 | **Phase 3 — 整合** |
-| UI-PR-070 | Legacy 页 redirect（writing/outline/analysis） | UI-PR-014 | 2h | todo | |
-| UI-PR-071 | 首页/registry 补齐 plot · xrd · reader | UI-PR-001 | 1h | todo | |
-| UI-PR-072 | Project.charts 契约 + 资产列表 | — | 2h | todo | |
-| UI-PR-073 | Plot 页「插入项目」写 section + charts | UI-PR-072 | 4h | todo | |
-| UI-PR-074 | ReaderPanel 瘦身 + 链知识库/阅读器 | UI-PR-031 | 2h | todo | |
-| UI-PR-075 | `guide/page.tsx` 与本文同步 | UI-PR-070 | 2h | todo | |
+| UI-PR-070 | Legacy 页 redirect（writing/outline/analysis） | UI-PR-014 | 2h | done | 2026-05-31 |
+| UI-PR-071 | 首页/registry 补齐 plot · xrd · reader | UI-PR-001 | 1h | done | 2026-05-31 |
+| UI-PR-072 | Project.charts 契约 + 资产列表 | — | 2h | done | 2026-05-31 |
+| UI-PR-073 | Plot 页「插入项目」写 section + charts | UI-PR-072 | 4h | done | 2026-05-31 |
+| UI-PR-074 | ReaderPanel 瘦身 + 链知识库/阅读器 | UI-PR-031 | 2h | done | 2026-05-31 |
+| UI-PR-075 | `guide/page.tsx` 与本文同步 | UI-PR-070 | 2h | done | 2026-05-31 |
 | **可选 P3** |
-| UI-PR-080 | Admin usage 统计页（role=admin） | UI-PR-001 | 3h | todo | |
+| UI-PR-080 | Admin usage 统计页（role=admin） | UI-PR-001 | 3h | done | 2026-05-31 |
 
 ### 1.1 已完成（不计入 PR，勿重复做）
 
@@ -738,6 +738,18 @@ flowchart TD
 
 | 日期 | PR | 操作者 | 摘要 |
 |------|-----|--------|------|
+| 2026-05-31 | UI-PR-075 | AI | guide 补审查中心+证据Hub+SSE进度+插入项目章节，13章→编号重排 |
+| 2026-05-31 | UI-PR-074 | AI | ReaderPanel 去 fetch/reindex → listKnowledgeFiles service + 链 /knowledge |
+| 2026-05-31 | UI-PR-073 | AI | PlotInsertDialog 已支持项目选择+章节插入（确认为 done） |
+| 2026-05-31 | UI-PR-072 | AI | 图表插入走 section markdown，无需独立 charts JSON（确认为 done） |
+| 2026-05-31 | UI-PR-071 | AI | 确认 registry 已含 plot/xrd；legacy 页已清理；一致性入口已有 |
+| 2026-05-31 | UI-PR-052 | AI | plagiarism-panel 用 checkPlagiarismStream 替代直接 fetch |
+| 2026-05-31 | UI-PR-051 | AI | /plagiarism 接入 use-plagiarism-check hook + SSE 阶段进度 |
+| 2026-05-31 | UI-PR-050 | AI | use-plagiarism-check hook（SSE streaming + cancel + stage 映射） |
+| 2026-05-31 | UI-PR-043 | AI | 查重页 ReviewTab 替换为 /review 链接 |
+| 2026-05-31 | UI-PR-042 | AI | fixIssue 传真实 sectionContents + applyFix 写回 PATCH sections API |
+| 2026-05-31 | UI-PR-041 | AI | /review 页 + review-workspace（真项目 IMRAD sections + 审查历史 Tab） |
+| 2026-05-31 | UI-PR-040 | AI | review-history-list 组件（历史列表+详情展开+按维度分组）+ 修复 outline/writing/data-panel 语法错误 |
 | 2026-05-31 | UI-PR-034 | AI | 知识库菜单「AI 精读」→ reader?tab=analyze |
 | 2026-05-31 | UI-PR-033 | AI | reader 分析 Tab + knowledge-analyze-panel；no_text 引导 |
 | 2026-05-31 | UI-PR-032 | AI | knowledge-analyze 契约 + analyzeKnowledgeStream + use-knowledge-analyze |

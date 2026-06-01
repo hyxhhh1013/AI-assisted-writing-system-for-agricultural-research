@@ -24,6 +24,7 @@ import { getTemplateSectionNumber } from "@/lib/template-sections";
 
 export async function POST(req: NextRequest) {
   try {
+    const userId = req.headers.get("x-user-id") || undefined;
     const { data, errorResponse: ve } = await validateBody(writingSchema, await req.json());
     if (ve) return ve;
 
@@ -164,7 +165,7 @@ export async function POST(req: NextRequest) {
             const prompt = buildVerifierPrompt({ contextText, content: context });
 
             const response = await callAI({
-              provider: getAgentModelConfig("verifier").provider,
+              userId, provider: getAgentModelConfig("verifier").provider,
               messages: [
                 { role: "system", content: buildVerifierSystemPrompt("audit") },
                 { role: "user", content: prompt },
@@ -192,7 +193,7 @@ export async function POST(req: NextRequest) {
             });
 
             const response = await callAI({
-              provider: getAgentModelConfig("refiner").provider,
+              userId, provider: getAgentModelConfig("refiner").provider,
               messages: [
                 { role: "system", content: buildRefinerSystemPrompt() },
                 { role: "user", content: prompt },
@@ -298,7 +299,7 @@ export async function POST(req: NextRequest) {
 
           try {
             const verifierResponse = await callAI({
-              provider: actualVerifierProvider,
+              userId, provider: actualVerifierProvider,
               messages: [
                 { role: "system", content: buildVerifierSystemPrompt("full") },
                 { role: "user", content: verifierPrompt },
@@ -359,7 +360,7 @@ export async function POST(req: NextRequest) {
               });
 
               // 非流式调用：等待完整修正文本，一次返回，彻底避免流挂起
-              const correctedText = await callAINonStreaming({
+              const correctedText = await callAINonStreaming({ userId,
                 provider: getAgentModelConfig("refiner").provider,
                 messages: [
                   { role: "system", content: buildRefinerSystemPrompt() },

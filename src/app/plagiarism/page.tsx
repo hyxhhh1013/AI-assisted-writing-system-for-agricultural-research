@@ -13,7 +13,9 @@ import {
 } from "lucide-react";
 import { projectStore } from "@/lib/store";
 import type { ProjectData } from "@/lib/store";
-import { ReviewTab } from "@/components/shared/review-tab";
+import { usePlagiarismCheck } from "@/hooks/use-plagiarism-check";
+import type { PlagiarismStage } from "@/hooks/use-plagiarism-check";
+import Link from "next/link";
 
 // ==================== 类型 ====================
 
@@ -62,8 +64,10 @@ function Content() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [web, setWeb] = useState(false);
-  const [checking, setChecking] = useState(false);
-  const [result, setResult] = useState<CheckResult | null>(null);
+  const { result: checkResult, checking, stage, check: doPlagiarismCheck, reset: resetPlagiarism } = usePlagiarismCheck();
+  // 展示用的 result：active check 的结果 或 历史查看的结果
+  const [historyResult, setHistoryResult] = useState<CheckResult | null>(null);
+  const result = checkResult ?? historyResult;
   const [tab, setTab] = useState<"check" | "result" | "rewrite" | "review" | "history">("check");
 
   const [plist, setPlist] = useState<{ id: string; title: string }[]>([]);
@@ -97,7 +101,7 @@ function Content() {
       const p: string[] = [];
       if (d.abstract) p.push(`摘要：${d.abstract}`);
       for (const [k, c] of Object.entries(d.sections || {})) if (c && typeof c === "string" && c.trim()) p.push(`${l[k] || k}：${c}`);
-      setContent(p.join("\n\n")); setResult(null); setTab("check");
+      setContent(p.join("\n\n")); resetPlagiarism(); setTab("check");
       toast.success(`已导入「${d.title}」`);
     } catch { toast.error("加载失败"); }
     finally { setLoadingP(false); }
@@ -105,16 +109,17 @@ function Content() {
 
   const doCheck = async () => {
     if (!content.trim()) { toast.error("请输入内容"); return; }
-    setChecking(true); setResult(null);
-    try {
-      const r = await fetch("/api/plagiarism/check", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId: selPid || pid || undefined, title: title || "未命名", content, webSearch: web }) });
-      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || "查重失败"); }
-      const d: CheckResult = await r.json();
-      setResult(d); setTab("result");
-      toast.success(`检测完成，${d.totalMatches} 处匹配`);
-    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "查重失败"); }
-    finally { setChecking(false); }
+    await doPlagiarismCheck({ projectId: selPid || pid || undefined, title: title || "未命名", content, webSearch: web });
   };
+
+  // 查重完成时自动跳转到结果页
+  useEffect(() => {
+    if (checkResult && !checking) {
+      setTab("result");
+      setHistoryResult(null);
+      toast.success(`检测完成，${checkResult.totalMatches} 处匹配`);
+    }
+  }, [checkResult, checking]);
 
   const tabs = [
     { k: "check" as const, l: "查重检测", i: Search },
@@ -157,22 +162,26 @@ function Content() {
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card">
           <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
-            {tab === "check" && <CheckView title={title} setTitle={setTitle} content={content} setContent={setContent} web={web} setWeb={setWeb} checking={checking} onCheck={doCheck} plist={plist} selPid={selPid} loadingP={loadingP} onLoad={loadP} onClear={() => { setContent(""); setResult(null); setSelPid(""); }} />}
+            {tab === "check" && <CheckView title={title} setTitle={setTitle} content={content} setContent={setContent} web={web} setWeb={setWeb} checking={checking} stage={stage} onCheck={doCheck} plist={plist} selPid={selPid} loadingP={loadingP} onLoad={loadP} onClear={() => { setContent(""); resetPlagiarism(); setSelPid(""); }} />}
             {tab === "result" && result && <ResultView result={result} onRewrite={() => setTab("rewrite")} onReCheck={() => setTab("check")} />}
-            {tab === "rewrite" && result && <RewriteView checkId={result.checkId} matches={result.matches} onReCheck={c => { setContent(c); setResult(null); setTab("check"); toast.success("已应用改写，点击「查重」验证"); }} />}
+            {tab === "rewrite" && result && <RewriteView checkId={result.checkId} matches={result.matches} onReCheck={c => { setContent(c); resetPlagiarism(); setHistoryResult(null); setTab("check"); toast.success("已应用改写，点击「查重」验证"); }} />}
             {tab === "review" && (
-              <ReviewTab
-                title={title || "未命名论文"}
-                sections={[
-                  { key: "abstract", title: "摘要", content: content.slice(0, 500) },
-                  { key: "introduction", title: "引言", content: content.slice(500, 1500) || "" },
-                  { key: "methods", title: "材料与方法", content: content.slice(1500, 3000) || "" },
-                  { key: "results", title: "结果与讨论", content: content.slice(3000, 5000) || "" },
-                  { key: "conclusion", title: "结论", content: content.slice(5000) || "" },
-                ].filter(s => s.content.trim())}
-              />
+              <div className="flex flex-col items-center justify-center h-full text-center space-y-4 py-16">
+                <FileText className="h-12 w-12 text-[#1a5632]/20" />
+                <div>
+                  <p className="text-sm font-medium text-[#122820]">论文审查已独立为专用页面</p>
+                  <p className="text-xs text-[#6b7c72] mt-1">基于真实的 IMRAD 章节内容进行多维度审查</p>
+                </div>
+                <Link
+                  href={pid ? `/review?id=${pid}` : "/review"}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-[#1a5632] px-5 py-2 text-sm font-medium text-white shadow-sm shadow-[#1a5632]/25 hover:bg-[#144a2a] transition-colors"
+                >
+                  <FileText className="h-4 w-4" />
+                  打开论文审查
+                </Link>
+              </div>
             )}
-            {tab === "history" && <HistoryView projectId={pid} onViewResult={r => { setResult(r); setTab("result"); }} />}
+            {tab === "history" && <HistoryView projectId={pid} onViewResult={r => { setHistoryResult(r); setTab("result"); }} />}
           </div>
         </div>
       </main>
@@ -182,9 +191,9 @@ function Content() {
 
 // ==================== 输入 ====================
 
-function CheckView({ title, setTitle, content, setContent, web, setWeb, checking, onCheck, plist, selPid, loadingP, onLoad, onClear }: {
+function CheckView({ title, setTitle, content, setContent, web, setWeb, checking, stage, onCheck, plist, selPid, loadingP, onLoad, onClear }: {
   title: string; setTitle: (v: string) => void; content: string; setContent: (v: string) => void;
-  web: boolean; setWeb: (v: boolean) => void; checking: boolean; onCheck: () => void;
+  web: boolean; setWeb: (v: boolean) => void; checking: boolean; stage: PlagiarismStage | null; onCheck: () => void;
   plist: { id: string; title: string }[]; selPid: string; loadingP: boolean; onLoad: (id: string) => void; onClear: () => void;
 }) {
   return (
@@ -212,6 +221,14 @@ function CheckView({ title, setTitle, content, setContent, web, setWeb, checking
           <Button size="sm" onClick={onCheck} disabled={checking || !content.trim()}>{checking ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />检测中...</> : <><Search className="h-4 w-4 mr-1.5" />开始查重</>}</Button>
         </div>
       </div>
+      {checking && stage && (
+        <div className="px-1 pb-1">
+          <div className="flex items-center gap-2 text-[11px] text-[#1a5632]">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <span>{stage.label}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

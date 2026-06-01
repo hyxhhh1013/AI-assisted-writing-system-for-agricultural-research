@@ -1,5 +1,6 @@
 import { fetchWithRetry } from "./fetch-with-retry";
 import { getModelConfig, ModelProviderKey, validateProviderKey } from "./models";
+import { usageLog } from "./usage-log";
 export { getAgentModelConfig } from "./models";
 
 export interface AICallOptions {
@@ -8,6 +9,8 @@ export interface AICallOptions {
   stream?: boolean;
   timeoutMs?: number;
   signal?: AbortSignal;
+  /** 可选：调用者 userId，用于用量统计 */
+  userId?: string;
 }
 
 export class AIError extends Error {
@@ -24,9 +27,39 @@ export function getAIError(provider: ModelProviderKey): string | null {
   return validateProviderKey(provider);
 }
 
+// ==================== API Key 热加载 ====================
+
+let _keyCache: Record<string, string> | null = null;
+let _keyCacheTime = 0;
+const KEY_CACHE_TTL = 30_000; // 30 秒
+
+/** 从 DB settings 读取 API Key（TTL 缓存，避免每次调用都查 DB） */
+async function getApiKeyFromSettings(provider: ModelProviderKey): Promise<string | undefined> {
+  const config = getModelConfig(provider);
+  const cacheKey = config.apiKeyEnvVar;
+
+  try {
+    // 刷新缓存
+    if (!_keyCache || Date.now() - _keyCacheTime > KEY_CACHE_TTL) {
+      const { getSetting } = await import("./settings");
+      _keyCache = {};
+      for (const k of ["DEEPSEEK_API_KEY", "ZHIPU_API_KEY"]) {
+        const v = await getSetting(k);
+        if (v) _keyCache[k] = v;
+      }
+      _keyCacheTime = Date.now();
+    }
+    return _keyCache[cacheKey];
+  } catch {
+    return undefined;
+  }
+}
+
 export async function callAI(options: AICallOptions): Promise<Response> {
   const config = getModelConfig(options.provider);
-  const apiKey = config.getApiKey();
+  // 优先读 DB settings，fallback 到环境变量
+  const dbKey = await getApiKeyFromSettings(options.provider);
+  const apiKey = dbKey || config.getApiKey();
 
   const keyError = validateProviderKey(options.provider);
   if (keyError) {
@@ -69,6 +102,13 @@ export async function callAI(options: AICallOptions): Promise<Response> {
     } catch {}
     throw new AIError(errorMsg, response.status);
   }
+
+  // 记录用量（仅成功调用）
+  usageLog.record(`ai:${options.provider}`, {
+    model: config.model,
+    messageCount: options.messages.length,
+    stream: options.stream ?? true,
+  }, options.userId);
 
   return response;
 }

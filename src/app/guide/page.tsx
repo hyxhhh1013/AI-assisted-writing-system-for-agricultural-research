@@ -71,14 +71,15 @@ const sections = [
   },
   {
     icon: BarChart3,
-    title: "6. 实验数据分析",
+    title: "6. 实验数据与证据",
     badge: null,
     steps: [
-      "左侧切换到「数据分析」标签",
+      "左侧切换到「数据」标签（研究论文模式）",
       "上传 CSV 或 Excel 实验数据文件",
       "填写研究方向后点击「开始数据分析」",
-      "点击「提取数据证据」→ 系统自动统计计算，生成带编号的 EvidenceClaim",
-      "在写作时，AI 会引用数据编号，Verifier 自动校验数值一致性",
+      "切换到「证据 Hub」→ 系统自动提取数据声明（EvidenceClaim）",
+      "在写作时，AI 引用数据编号，Verifier 校验数值一致性",
+      "证据可手动编辑、添加、删除，自动保存到项目",
     ],
   },
   {
@@ -88,7 +89,8 @@ const sections = [
     steps: [
       "知识库页面点击文献 → 进入 PDF 阅读器",
       "划词选中英文段落 → 自动翻译（农业术语优化）",
-      "支持全文检索、AI 对话问答、段落标注",
+      "支持全文检索、AI 对话问答、AI 精读分析",
+      "单篇文献可强制重解析或重嵌向量（右键菜单）",
     ],
   },
   {
@@ -98,12 +100,25 @@ const sections = [
     steps: [
       "工作台左侧「查重」标签，或独立打开查重页面",
       "导入项目内容或粘贴文本 → 检测自重复 / 跨项目 / 本地库 / 网络",
+      "SSE 实时推送进度：预处理 → 自检 → 跨项目 → 知识库 → 联网搜索",
       "查看匹配详情 → 使用 AI 降重（4 种策略）",
     ],
   },
   {
+    icon: FileText,
+    title: "9. 论文审查",
+    badge: null,
+    steps: [
+      "查重页 → 「论文审查」→ 打开审查中心（/review）",
+      "加载项目真实的 IMRAD 章节进行多维度审查",
+      "四个维度：学术规范 / 论证质量 / 结构规范 / 学术诚信",
+      "查看历史审查记录，展开详情按维度分组查看问题",
+      "发现问题可点击「修复」→ AI 生成建议 →「接受修复」写回章节",
+    ],
+  },
+  {
     icon: Radar,
-    title: "9. 一致性检查",
+    title: "10. 一致性检查",
     badge: null,
     steps: [
       "工作台工具栏 → 「一致性检查」",
@@ -113,17 +128,19 @@ const sections = [
   },
   {
     icon: Wrench,
-    title: "10. 科学绘图",
+    title: "11. 科学绘图",
     badge: null,
     steps: [
       "工作台或主页进入「科学绘图」",
       "选择图表类型（柱状/折线/XRD/流程图等）",
-      "填写数据 → 生成 PNG → 复制 Markdown 插入论文",
+      "填写数据 → 生成 PNG",
+      "用「插入到论文」对话框选择项目和章节直接写入",
+      "也可复制 Markdown 手动粘贴到编辑器",
     ],
   },
   {
     icon: Construction,
-    title: "11. XRD / XPS 实验室",
+    title: "12. XRD / XPS 实验室",
     badge: { text: "进阶", color: "bg-amber-50 text-amber-700 border-amber-200" },
     steps: [
       "模拟 XRD 谱图、分析 XPS 数据、绘制分子结构",
@@ -132,7 +149,7 @@ const sections = [
   },
   {
     icon: Download,
-    title: "12. 导出与投稿",
+    title: "13. 导出与投稿",
     badge: null,
     steps: [
       "写完论文后点击工具栏「导出 Word」",

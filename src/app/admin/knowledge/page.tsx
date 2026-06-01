@@ -1,150 +1,105 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, Database } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Loader2, Search, Trash2, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 
-interface KnowledgeFile {
-  id: string;
-  name: string;
-  category: string;
-  documentType: string;
-  size: number;
-  chunkCount: number;
-  mtime: string | null;
-}
-
-interface CategoryStat {
-  category: string;
-  count: number;
-}
-
-function formatSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+interface File {
+  id: string; name: string; category: string; documentType: string; size: number; chunkCount: number; mtime: string | null;
 }
 
 export default function AdminKnowledgePage() {
-  const [files, setFiles] = useState<KnowledgeFile[]>([]);
-  const [categoryStats, setCategoryStats] = useState<CategoryStat[]>([]);
-  const [total, setTotal] = useState(0);
+  const [files, setFiles] = useState<File[]>([]);
+  const [cats, setCats] = useState<{ category: string; count: number }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<string>("");
+  const [q, setQ] = useState("");
+  const [cat, setCat] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleteTarget, setDeleteTarget] = useState<File | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [reindexing, setReindexing] = useState<string | null>(null);
 
-  useEffect(() => {
-    const url = filter
-      ? `/api/admin/knowledge?category=${encodeURIComponent(filter)}`
-      : "/api/admin/knowledge";
-    fetch(url)
-      .then((r) => r.json())
-      .then((d) => {
-        setFiles(d.files);
-        setCategoryStats(d.categoryStats);
-        setTotal(d.total);
-        setLoading(false);
-      })
+  const load = useCallback(() => {
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (cat) params.set("category", cat);
+    fetch(`/api/admin/knowledge?${params}`)
+      .then(r => r.json())
+      .then(d => { setFiles(d.files || []); setCats(d.categoryStats || []); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [filter]);
+  }, [q, cat]);
+  useEffect(() => { load(); }, [load]);
 
-  if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-[#6b7c72]" />
-      </div>
-    );
-  }
+  const handleReindex = async (f: File) => {
+    setReindexing(f.name);
+    try {
+      const res = await fetch("/api/admin/knowledge", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: f.name, category: f.category }) });
+      if (res.ok) toast.success(`已触发重索引：${f.name}`);
+      else toast.error("重索引失败");
+    } catch { toast.error("重索引失败"); }
+    setReindexing(null);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    const res = await fetch("/api/admin/knowledge", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: deleteTarget.name, category: deleteTarget.category }) });
+    if (res.ok) { toast.success("已删除"); load(); }
+    else toast.error("删除失败");
+    setDeleteTarget(null);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selected.size === 0) return;
+    setBulkDeleting(true);
+    const toDelete = files.filter(f => selected.has(f.id)).map(f => ({ name: f.name, category: f.category }));
+    const res = await fetch("/api/admin/knowledge", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ files: toDelete }) });
+    if (res.ok) { toast.success(`已删除 ${toDelete.length} 篇`); setSelected(new Set()); load(); }
+    else toast.error("批量删除失败");
+    setBulkDeleting(false);
+  };
+
+  const toggleSelect = (id: string) => setSelected(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  const toggleAll = () => { if (selected.size === files.length) setSelected(new Set()); else setSelected(new Set(files.map(f => f.id))); };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-[#122820]">
-          文献库管理
-          <span className="ml-2 text-sm font-normal text-[#9aa8a0]">
-            {total} 篇
-          </span>
-        </h1>
+        <h2 className="text-lg font-bold text-[#122820]">文献管理</h2>
+        {selected.size > 0 && <Button variant="destructive" size="sm" onClick={handleBulkDelete} disabled={bulkDeleting}>删除选中 ({selected.size})</Button>}
       </div>
-
-      {/* 分类筛选 */}
-      <div className="flex flex-wrap gap-1.5">
-        <button
-          onClick={() => setFilter("")}
-          className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
-            filter === ""
-              ? "bg-[#1a5632] text-white"
-              : "text-[#6b7c72] hover:bg-[#1a5632]/8"
-          }`}
-        >
-          全部 ({total})
-        </button>
-        {categoryStats.map((c) => (
-          <button
-            key={c.category}
-            onClick={() => setFilter(c.category)}
-            className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
-              filter === c.category
-                ? "bg-[#1a5632] text-white"
-                : "text-[#6b7c72] hover:bg-[#1a5632]/8"
-            }`}
-          >
-            {c.category || "未分类"} ({c.count})
-          </button>
-        ))}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9aa8a0]" /><Input className="pl-9 h-9 text-sm" placeholder="搜索文件名..." value={q} onChange={e => setQ(e.target.value)} /></div>
+        <div className="flex gap-1">{["", ...cats.slice(0, 6).map(c => c.category)].map(c => <Button key={c} variant={cat === c ? "default" : "ghost"} size="sm" className="h-8 text-[10px]" onClick={() => setCat(c)}>{c || "全部"}</Button>)}</div>
       </div>
-
-      {/* 文件列表 */}
-      <div className="rounded-xl border border-[#1a5632]/10 bg-white overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[#1a5632]/10 bg-[#f8f7f4]">
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-[#6b7c72]">
-                文件名
-              </th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-[#6b7c72]">
-                分类
-              </th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-[#6b7c72]">
-                类型
-              </th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-[#6b7c72]">
-                文本块
-              </th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-[#6b7c72]">
-                大小
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {files.map((f) => (
-              <tr key={f.id} className="border-b border-[#1a5632]/5 last:border-0">
-                <td className="px-4 py-2.5 font-medium text-[#122820] truncate max-w-[300px]">
-                  <div className="flex items-center gap-2">
-                    <Database className="h-3.5 w-3.5 shrink-0 text-[#1a5632]/40" />
-                    {f.name.replace(/\.pdf$/i, "")}
-                  </div>
-                </td>
-                <td className="px-4 py-2.5">
-                  <span className="rounded bg-[#1a5632]/8 px-1.5 py-0.5 text-[10px] text-[#1a5632]">
-                    {f.category || "未分类"}
-                  </span>
-                </td>
-                <td className="px-4 py-2.5 text-xs text-[#3d4f46]">
-                  {f.documentType === "paper" ? "论文" : f.documentType}
-                </td>
-                <td className="px-4 py-2.5 text-xs text-[#3d4f46]">
-                  {f.chunkCount}
-                </td>
-                <td className="px-4 py-2.5 text-xs text-[#9aa8a0]">
-                  {formatSize(f.size)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {files.length === 0 && (
-          <p className="py-8 text-center text-xs text-[#9aa8a0]">暂无文献</p>
-        )}
-      </div>
+      {loading ? <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-[#6b7c72]" /></div> : (
+        <div className="border border-[#1a5632]/10 rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b border-[#1a5632]/10 bg-[#faf9f6] text-left text-[#6b7c72]"><th className="py-2.5 px-4 font-medium w-8"><Checkbox checked={selected.size === files.length && files.length > 0} onCheckedChange={toggleAll} /></th><th className="py-2.5 px-4 font-medium">文件名</th><th className="py-2.5 px-4 font-medium hidden sm:table-cell">分类</th><th className="py-2.5 px-4 font-medium hidden sm:table-cell">分块</th><th className="py-2.5 px-4 font-medium">操作</th></tr></thead>
+            <tbody>
+              {files.map(f => (
+                <tr key={f.id} className="border-b border-[#1a5632]/5 hover:bg-[#1a5632]/[0.02]">
+                  <td className="py-2.5 px-4"><Checkbox checked={selected.has(f.id)} onCheckedChange={() => toggleSelect(f.id)} /></td>
+                  <td className="py-2.5 px-4 max-w-[250px]"><p className="truncate font-medium text-[#122820]">{f.name}</p><p className="text-[10px] text-[#9aa8a0]">{(f.size / 1024).toFixed(0)} KB</p></td>
+                  <td className="py-2.5 px-4 hidden sm:table-cell"><Badge variant="outline" className="text-[10px]">{f.category}</Badge></td>
+                  <td className="py-2.5 px-4 hidden sm:table-cell text-[#6b7c72]">{f.chunkCount}</td>
+                  <td className="py-2.5 px-4"><div className="flex items-center gap-1">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleReindex(f)} disabled={reindexing === f.name}><RefreshCw className={`h-3.5 w-3.5 ${reindexing === f.name ? "animate-spin" : ""}`} /></Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => setDeleteTarget(f)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                  </div></td>
+                </tr>
+              ))}
+              {files.length === 0 && <tr><td colSpan={5} className="py-12 text-center text-[#9aa8a0] text-sm">暂无文献</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}><DialogContent className="sm:max-w-sm"><DialogHeader><DialogTitle>确认删除</DialogTitle></DialogHeader><p className="text-sm text-[#6b7c72]">删除「{deleteTarget?.name}」及其所有文本块。</p><DialogFooter><Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)}>取消</Button><Button variant="destructive" size="sm" onClick={handleDelete}>确认删除</Button></DialogFooter></DialogContent></Dialog>
     </div>
   );
 }

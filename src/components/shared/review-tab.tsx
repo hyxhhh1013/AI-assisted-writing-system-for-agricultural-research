@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -23,6 +23,7 @@ import {
   FileText,
 } from "lucide-react";
 import { useReview } from "@/hooks/use-review";
+import { patchSection } from "@/services/review";
 import type {
   ReviewReport,
   ReviewDimension,
@@ -60,6 +61,7 @@ interface ReviewTabProps {
   sections: Array<{ key: string; title: string; content: string }>;
   outline?: string;
   references?: string[];
+  projectId?: string;
   onJumpToSection?: (sectionKey: string) => void;
 }
 
@@ -70,6 +72,7 @@ export function ReviewTab({
   sections,
   outline,
   references,
+  projectId,
   onJumpToSection,
 }: ReviewTabProps) {
   const {
@@ -90,6 +93,15 @@ export function ReviewTab({
   const [expandedDimensions, setExpandedDimensions] = useState<Set<ReviewDimension>>(
     new Set()
   );
+
+  // 构建真实的 sectionContents 映射（修复之前传 {} 的 bug）
+  const sectionContents = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const s of sections) {
+      map[s.key] = s.content;
+    }
+    return map;
+  }, [sections]);
 
   // 执行审查
   const handleReview = async () => {
@@ -243,7 +255,7 @@ export function ReviewTab({
             <Button
               size="sm"
               variant="outline"
-              onClick={() => fixIssue(dimension, index, {}, title)}
+              onClick={() => fixIssue(dimension, index, sectionContents, title)}
             >
               修复
             </Button>
@@ -261,7 +273,23 @@ export function ReviewTab({
             <Button
               size="sm"
               variant="default"
-              onClick={() => applyFix(dimension, index)}
+              onClick={() => {
+                applyFix(dimension, index);
+                // 写回：尝试匹配 issue.location 到 section key
+                if (projectId) {
+                  const locSection = sections.find(s =>
+                    issue.location?.includes(s.key) || issue.location?.includes(s.title)
+                  );
+                  const targetKey = locSection?.key || sections[0]?.key;
+                  if (targetKey) {
+                    patchSection(projectId, targetKey, fixedContent).then(() => {
+                      toast.success(`已写入 ${targetKey} 章节`);
+                    }).catch((e: unknown) => {
+                      toast.error(e instanceof Error ? e.message : "保存失败");
+                    });
+                  }
+                }
+              }}
             >
               接受修复
             </Button>

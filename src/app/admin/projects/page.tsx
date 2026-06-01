@@ -1,140 +1,78 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Loader2, Search, Trash2, ExternalLink } from "lucide-react";
+import { toast } from "sonner";
+import Link from "next/link";
+import { exportProjectsCSV } from "@/lib/admin-export";
 
 interface Project {
-  id: string;
-  title: string;
-  template: string;
-  mode: string;
-  userName: string;
-  userEmail: string;
-  progress: number;
-  referenceCount: number;
-  createdAt: string;
-  lastUpdated: string;
+  id: string; title: string; template: string; mode: string; userName: string; progress: number; referenceCount: number; createdAt: string; lastUpdated: string;
 }
 
-const TEMPLATE_LABELS: Record<string, string> = {
-  sci: "SCI",
-  ieee: "IEEE",
-  gbt7713: "GB/T 7713",
-  nature: "Nature",
-};
-
-function getProgressColor(p: number) {
-  if (p === 0) return "bg-gray-200";
-  if (p < 50) return "bg-blue-400";
-  if (p < 90) return "bg-amber-400";
-  return "bg-[#1a5632]";
-}
+const TPLS = ["", "sci", "ieee", "gbt7713", "nature"];
+const TPL_LABEL: Record<string, string> = { sci: "SCI", ieee: "IEEE", gbt7713: "GB/T 7713", nature: "Nature" };
 
 export default function AdminProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<string>("");
+  const [q, setQ] = useState("");
+  const [tpl, setTpl] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
 
-  useEffect(() => {
-    const url = filter ? `/api/admin/projects?template=${filter}` : "/api/admin/projects";
-    fetch(url)
-      .then((r) => r.json())
-      .then((d) => { setProjects(d); setLoading(false); })
+  const load = useCallback(() => {
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (tpl) params.set("template", tpl);
+    fetch(`/api/admin/projects?${params}`)
+      .then(r => r.json())
+      .then(d => { setProjects(d.data || []); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [filter]);
+  }, [q, tpl]);
+  useEffect(() => { load(); }, [load]);
 
-  if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-[#6b7c72]" />
-      </div>
-    );
-  }
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    const res = await fetch("/api/admin/projects", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId: deleteTarget.id }) });
+    if (res.ok) { toast.success("已删除"); load(); setDeleteTarget(null); }
+    else { const d = await res.json(); toast.error(d.error || "删除失败"); }
+  };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-[#122820]">项目管理</h1>
-        <div className="flex gap-1">
-          {["", "sci", "ieee", "gbt7713", "nature"].map((t) => (
-            <button
-              key={t}
-              onClick={() => setFilter(t)}
-              className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
-                filter === t
-                  ? "bg-[#1a5632] text-white"
-                  : "text-[#6b7c72] hover:bg-[#1a5632]/8"
-              }`}
-            >
-              {t ? TEMPLATE_LABELS[t] ?? t : "全部"}
-            </button>
-          ))}
+        <h2 className="text-lg font-bold text-[#122820]">项目管理</h2>
+        <Button variant="outline" size="sm" onClick={() => exportProjectsCSV(projects)} className="text-xs">导出 CSV</Button>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9aa8a0]" /><Input className="pl-9 h-9 text-sm" placeholder="搜索标题..." value={q} onChange={e => setQ(e.target.value)} /></div>
+        <div className="flex gap-1">{TPLS.map(t => <Button key={t} variant={tpl === t ? "default" : "ghost"} size="sm" className="h-8 text-[10px]" onClick={() => setTpl(t)}>{t ? TPL_LABEL[t] || t : "全部"}</Button>)}</div>
+      </div>
+      {loading ? <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-[#6b7c72]" /></div> : (
+        <div className="border border-[#1a5632]/10 rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b border-[#1a5632]/10 bg-[#faf9f6] text-left text-[#6b7c72]"><th className="py-2.5 px-4 font-medium">标题</th><th className="py-2.5 px-4 font-medium hidden sm:table-cell">作者</th><th className="py-2.5 px-4 font-medium hidden sm:table-cell">模板</th><th className="py-2.5 px-4 font-medium">进度</th><th className="py-2.5 px-4 font-medium">操作</th></tr></thead>
+            <tbody>
+              {projects.map(p => (
+                <tr key={p.id} className="border-b border-[#1a5632]/5 hover:bg-[#1a5632]/[0.02]">
+                  <td className="py-2.5 px-4 max-w-[200px]"><p className="truncate font-medium text-[#122820]">{p.title || "未命名"}</p><p className="text-[10px] text-[#9aa8a0]">{new Date(p.lastUpdated).toLocaleDateString("zh-CN")}</p></td>
+                  <td className="py-2.5 px-4 hidden sm:table-cell text-[#6b7c72]">{p.userName}</td>
+                  <td className="py-2.5 px-4 hidden sm:table-cell"><Badge variant="outline" className="text-[10px]">{TPL_LABEL[p.template] || p.template}</Badge></td>
+                  <td className="py-2.5 px-4"><div className="flex items-center gap-2"><div className="h-1.5 w-16 rounded-full bg-[#1a5632]/10 overflow-hidden"><div className="h-full rounded-full bg-[#1a5632]" style={{ width: `${p.progress}%` }} /></div><span className="text-xs text-[#9aa8a0]">{p.progress}%</span></div></td>
+                  <td className="py-2.5 px-4"><div className="flex items-center gap-1"><Link href={`/workbench?id=${p.id}`} target="_blank"><Button variant="ghost" size="icon" className="h-7 w-7"><ExternalLink className="h-3.5 w-3.5" /></Button></Link><Button variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => setDeleteTarget(p)}><Trash2 className="h-3.5 w-3.5" /></Button></div></td>
+                </tr>
+              ))}
+              {projects.length === 0 && <tr><td colSpan={5} className="py-12 text-center text-[#9aa8a0] text-sm">暂无项目</td></tr>}
+            </tbody>
+          </table>
         </div>
-      </div>
-
-      <div className="rounded-xl border border-[#1a5632]/10 bg-white overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-[#1a5632]/10 bg-[#f8f7f4]">
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-[#6b7c72]">
-                标题
-              </th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-[#6b7c72]">
-                作者
-              </th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-[#6b7c72]">
-                模板
-              </th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-[#6b7c72]">
-                进度
-              </th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-[#6b7c72]">
-                引用
-              </th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-[#6b7c72]">
-                更新时间
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {projects.map((p) => (
-              <tr key={p.id} className="border-b border-[#1a5632]/5 last:border-0">
-                <td className="px-4 py-2.5 font-medium text-[#122820] truncate max-w-[200px]">
-                  {p.title || "未命名"}
-                </td>
-                <td className="px-4 py-2.5 text-xs text-[#3d4f46]">
-                  {p.userName}
-                </td>
-                <td className="px-4 py-2.5">
-                  <span className="rounded bg-[#1a5632]/8 px-1.5 py-0.5 text-[10px] text-[#1a5632]">
-                    {TEMPLATE_LABELS[p.template] ?? p.template}
-                  </span>
-                </td>
-                <td className="px-4 py-2.5">
-                  <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-16 rounded-full bg-[#1a5632]/8 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${getProgressColor(p.progress)}`}
-                        style={{ width: `${p.progress}%` }}
-                      />
-                    </div>
-                    <span className="text-[10px] text-[#9aa8a0]">{p.progress}%</span>
-                  </div>
-                </td>
-                <td className="px-4 py-2.5 text-xs text-[#3d4f46]">
-                  {p.referenceCount}
-                </td>
-                <td className="px-4 py-2.5 text-xs text-[#9aa8a0]">
-                  {new Date(p.lastUpdated).toLocaleDateString("zh-CN")}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {projects.length === 0 && (
-          <p className="py-8 text-center text-xs text-[#9aa8a0]">暂无项目</p>
-        )}
-      </div>
+      )}
+      <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}><DialogContent className="sm:max-w-sm"><DialogHeader><DialogTitle>确认删除</DialogTitle></DialogHeader><p className="text-sm text-[#6b7c72]">删除「{deleteTarget?.title}」及所有关联数据，不可恢复。</p><DialogFooter><Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)}>取消</Button><Button variant="destructive" size="sm" onClick={handleDelete}>确认删除</Button></DialogFooter></DialogContent></Dialog>
     </div>
   );
 }

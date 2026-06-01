@@ -1,40 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
+import fs from "fs";
+import path from "path";
 import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
+import { success, badRequest } from "@/lib/admin-response";
+
+const ARTICLES_DIR = path.join(process.cwd(), process.env.RAG_ARTICLES_DIR || "papers");
 
 export async function GET(req: NextRequest) {
   const { error } = await requireAdmin(req);
   if (error) return error;
 
   const { searchParams } = new URL(req.url);
-  const category = searchParams.get("category");
+  const q = searchParams.get("q") || "";
+  const category = searchParams.get("category") || "";
 
   const where: any = {};
+  if (q) where.name = { contains: q };
   if (category) where.category = category;
 
-  const files = await prisma.knowledgeFile.findMany({
-    where,
-    orderBy: { name: "asc" },
-    select: {
-      id: true,
-      name: true,
-      category: true,
-      documentType: true,
-      size: true,
-      mtime: true,
-      _count: { select: { chunks: true } },
-    },
-  });
-
-  // 分类统计
-  const categoryStats = await prisma.knowledgeFile.groupBy({
-    by: ["category"],
-    _count: { id: true },
-    orderBy: { _count: { id: "desc" } },
-  });
+  const [files, allForCats] = await Promise.all([
+    prisma.knowledgeFile.findMany({
+      where,
+      orderBy: { name: "asc" },
+      include: { _count: { select: { chunks: true } } },
+    }),
+    prisma.knowledgeFile.groupBy({ by: ["category"], _count: true, orderBy: { _count: { category: "desc" } } }),
+  ]);
 
   return NextResponse.json({
-    files: files.map((f) => ({
+    files: files.map(f => ({
       id: f.id,
       name: f.name,
       category: f.category,
@@ -43,10 +38,42 @@ export async function GET(req: NextRequest) {
       chunkCount: f._count.chunks,
       mtime: f.mtime?.toISOString() ?? null,
     })),
-    categoryStats: categoryStats.map((c) => ({
-      category: c.category,
-      count: c._count.id,
-    })),
+    categoryStats: allForCats.map(c => ({ category: c.category, count: c._count })),
     total: files.length,
   });
+}
+
+export async function DELETE(req: NextRequest) {
+  const { error } = await requireAdmin(req);
+  if (error) return error;
+
+  const body = await req.json();
+  const { name, category, files: bulkFiles } = body;
+  const toDelete: { name: string; category: string }[] = bulkFiles || [{ name, category }].filter((f: any) => f.name);
+  if (!toDelete.length) return badRequest("缺少文件信息");
+
+  let deletedDisk = 0;
+  for (const f of toDelete) {
+    try {
+      const fp = path.join(ARTICLES_DIR, f.category === "未分类" ? "" : f.category, f.name);
+      if (fs.existsSync(fp)) { fs.unlinkSync(fp); deletedDisk++; }
+    } catch {}
+    await prisma.knowledgeFile.deleteMany({ where: { name: f.name } });
+  }
+
+  return success(undefined, `已删除 ${toDelete.length} 篇（磁盘 ${deletedDisk} 个文件），索引需重建`);
+}
+
+export async function POST(req: NextRequest) {
+  const { error } = await requireAdmin(req);
+  if (error) return error;
+
+  const body = await req.json();
+  const { name, forceStage1, forceStage3 } = body;
+  if (!name) return badRequest("缺少文件名");
+
+  const { reindexKnowledge } = await import("@/services/knowledge");
+  reindexKnowledge({ files: [name], forceStage1, forceStage3 }).catch(() => {});
+
+  return success(undefined, `已触发「${name}」重索引`);
 }

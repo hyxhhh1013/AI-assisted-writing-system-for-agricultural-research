@@ -1,11 +1,10 @@
-/** PM2 生产进程配置 — VPS 上 next start */
+/** PM2 生产进程配置 — VPS 上 standalone 模式用 node server.js */
 module.exports = {
   apps: [
     {
       name: "grainscript",
       cwd: __dirname,
-      script: "node_modules/next/dist/bin/next",
-      args: "start",
+      script: "server.js",
       instances: 1,
       autorestart: true,
       max_memory_restart: "1500M",

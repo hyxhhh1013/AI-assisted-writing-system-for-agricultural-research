@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Loader2, RefreshCw, FileText, CheckCircle2, ExternalLink, Search } from "lucide-react";
+import { Loader2, FileText, CheckCircle2, ExternalLink, Search, Library } from "lucide-react";
 import { toast } from "sonner";
 import { TabPanelShell } from "@/components/shared/tab-panel-shell";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { reindexKnowledgeStream } from "@/services/knowledge";
+import { listKnowledgeFiles } from "@/services/knowledge";
+import Link from "next/link";
 
 interface ReaderPanelProps {
   onOpenFile: (fileName: string) => void;
@@ -23,44 +23,16 @@ interface KnowledgeFile {
 export function ReaderPanel({ onOpenFile }: ReaderPanelProps) {
   const [files, setFiles] = useState<KnowledgeFile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isIndexing, setIsIndexing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const fetchFiles = async () => {
-    try {
-      const res = await fetch("/api/knowledge");
-      const data = await res.json();
-      if (data.files) setFiles(data.files);
-    } catch (error) {
-      toast.error("获取文献列表失败");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchFiles();
+    listKnowledgeFiles()
+      .then((data) => { if (data.files) setFiles(data.files); })
+      .catch(() => toast.error("获取文献列表失败"))
+      .finally(() => setIsLoading(false));
   }, []);
 
-  const handleReindex = async () => {
-    setIsIndexing(true);
-    toast.info("正在重新扫描并索引文献…");
-    try {
-      await reindexKnowledgeStream((event) => {
-        if (event.type === "file" && event.status === "processing") {
-          toast.info(`正在处理: ${event.name}`, { id: "reindex-progress" });
-        }
-      });
-      toast.success("知识库已更新");
-      fetchFiles();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "更新失败");
-    } finally {
-      setIsIndexing(false);
-    }
-  };
-
-  const filteredFiles = files.filter(f => 
+  const filteredFiles = files.filter(f =>
     f.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     f.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -70,19 +42,26 @@ export function ReaderPanel({ onOpenFile }: ReaderPanelProps) {
       title="文献库"
       icon={FileText}
       actions={
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleReindex} disabled={isIndexing}>
-          <RefreshCw className={`h-3.5 w-3.5 ${isIndexing ? "animate-spin" : ""}`} />
-        </Button>
+        <Link href="/knowledge">
+          <Button variant="ghost" size="icon" className="h-7 w-7" title="打开知识库管理">
+            <Library className="h-3.5 w-3.5" />
+          </Button>
+        </Link>
       }
       tools={
-        <div className="relative w-full">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            placeholder="搜索文献或分类..."
-            className="pl-8 h-7 text-xs"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+        <div className="flex items-center gap-2 w-full">
+          <div className="relative flex-1">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              placeholder="搜索文献或分类..."
+              className="pl-8 h-7 text-xs"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <Link href="/knowledge" className="text-[10px] text-[#1a5632] hover:underline whitespace-nowrap shrink-0">
+            管理
+          </Link>
         </div>
       }
     >
@@ -109,8 +88,11 @@ export function ReaderPanel({ onOpenFile }: ReaderPanelProps) {
             ))}
           </div>
         ) : (
-          <div className="text-center py-8 text-muted-foreground text-xs italic">
-            未发现匹配文献
+          <div className="text-center py-8 text-muted-foreground text-xs space-y-2">
+            <p className="italic">未发现匹配文献</p>
+            <Link href="/knowledge" className="text-[#1a5632] hover:underline text-[10px]">
+              前往知识库上传文献
+            </Link>
           </div>
         )}
       </ScrollArea>

@@ -871,6 +871,7 @@ export function WritingPanel({
             </CardContent>
           </Card>
         )}
-    </TabPanelShell>
+      </div>
+    </div>
   );
 }

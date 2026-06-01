@@ -130,9 +130,8 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
             生成
           </Button>
         </div>
-        </>
-      }
-    >
+      </div>
+    </div>
       {/* 大纲任务列表 — 点击即可跳转到扩写 */}
         {!result && !isGenerating && (
           <div className="text-center py-16 text-muted-foreground">
@@ -187,7 +186,6 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
             </Button>
           </div>
         )}
-      </div>
     </div>
   );
 }

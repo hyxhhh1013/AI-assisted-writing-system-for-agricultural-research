@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Radar, ImageIcon, Box, Layers, Ruler, ExternalLink, Atom, GitBranch, PictureInPicture } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { TabPanelShell } from "@/components/shared/tab-panel-shell";
 import { PeakFitCard } from "@/components/shared/xrd/peakfit-card";
 import { BackgroundCard } from "@/components/shared/xrd/background-card";
 import { UnitCellCard } from "@/components/shared/xrd/unitcell-card";
@@ -43,27 +44,26 @@ export function XrdPanel({ projectId, defaultTool, onInsertToPaper }: XrdPanelPr
   const cardProps = { onInsertToPaper, onPreview: setPreviewImg };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      {/* Tool Selector */}
-      <div className="flex gap-1 p-2 border-b bg-muted/30 shrink-0 overflow-x-auto">
-        {TOOLS.map(tool => (
-          <Button key={tool.id} variant={activeTool === tool.id ? "default" : "ghost"}
-            size="sm" className="shrink-0 text-xs h-8 px-2.5" onClick={() => setActiveTool(tool.id)}>
-            <tool.icon className="h-3.5 w-3.5 mr-1" />{tool.label}
-          </Button>
-        ))}
-      </div>
-
-      {/* Link to XRD Lab */}
-      <div className="shrink-0 px-2 pt-1">
+    <TabPanelShell
+      title="材料分析"
+      icon={Radar}
+      tools={
+        <div className="flex gap-1 w-full">
+          {TOOLS.map(tool => (
+            <Button key={tool.id} variant={activeTool === tool.id ? "default" : "ghost"}
+              size="sm" className="shrink-0 text-xs h-7 px-2" onClick={() => setActiveTool(tool.id)}>
+              <tool.icon className="h-3 w-3 mr-1" />{tool.label}
+            </Button>
+          ))}
+        </div>
+      }
+    >
+      <div className="shrink-0">
         <Button variant="ghost" size="sm" className="w-full h-6 text-[10px] text-muted-foreground"
           onClick={() => router.push(`/xrd-lab${projectId ? `?projectId=${projectId}` : ""}`)}>
           <ExternalLink className="h-3 w-3 mr-1" /> 打开 XRD 实验室（模拟 / XPS）
         </Button>
       </div>
-
-      {/* Tool Content */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-4 custom-scrollbar">
         {activeTool === "peakfit" && <PeakFitCard {...cardProps} />}
         {activeTool === "background" && <BackgroundCard {...cardProps} />}
         {activeTool === "unitcell" && <UnitCellCard {...cardProps} />}
@@ -72,10 +72,8 @@ export function XrdPanel({ projectId, defaultTool, onInsertToPaper }: XrdPanelPr
         {activeTool === "mol" && <MolCard {...cardProps} />}
         {activeTool === "flow" && <FlowCard {...cardProps} />}
         {activeTool === "mechanism" && <MechanismCard {...cardProps} />}
-      </div>
-
-      <ImagePreviewDialog preview={previewImg} onClose={() => setPreviewImg(null)} onInsertToPaper={onInsertToPaper} />
-    </div>
+        <ImagePreviewDialog preview={previewImg} onClose={() => setPreviewImg(null)} onInsertToPaper={onInsertToPaper} />
+    </TabPanelShell>
   );
 }
 

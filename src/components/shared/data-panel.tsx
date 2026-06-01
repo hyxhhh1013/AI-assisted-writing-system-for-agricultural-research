@@ -14,6 +14,7 @@ import { parseDataFileToSummary } from "@/lib/parse-data-file";
 import { streamDataAnalysis } from "@/services/analysis";
 import { projectStore } from "@/lib/store";
 import { EvidenceHubSections } from "@/components/shared/evidence-hub-sections";
+import { TabPanelShell } from "@/components/shared/tab-panel-shell";
 import {
   BarChart3,
   Copy,

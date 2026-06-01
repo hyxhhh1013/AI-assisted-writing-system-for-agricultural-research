@@ -23,6 +23,13 @@ export type {
 };
 export type { KnowledgeFileRecord as KnowledgeFile, KnowledgeSearchParams, KnowledgeSearchResult };
 
+/** GET /api/knowledge — 获取知识库文件列表 */
+export async function listKnowledgeFiles(): Promise<{ files: KnowledgeFileRecord[]; categories: string[] }> {
+  const res = await fetch("/api/knowledge");
+  if (!res.ok) throw new Error("获取文献列表失败");
+  return res.json();
+}
+
 export async function searchKnowledge(params: KnowledgeSearchParams): Promise<KnowledgeSearchResult> {
   const url = new URLSearchParams();
   if (params.q) url.append("q", params.q);
