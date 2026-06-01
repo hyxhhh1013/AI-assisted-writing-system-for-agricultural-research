@@ -96,6 +96,11 @@ docker compose down
 
 备份只需要 copy 这三个目录。不要只备份 `dev.db` 单文件，因为 SQLite 可能同时使用 `dev.db-wal` 和 `dev.db-shm`。
 
+## 部署安全检查
+
+- 生产环境 **不要** 设置 `AUTH_BYPASS=true`（`src/proxy.ts` 会在 `NODE_ENV=production` 时忽略该变量）
+- `JWT_SECRET` 必须使用随机长字符串，勿用模板默认值
+
 ## 功能验证清单
 
 部署后建议按顺序验证：

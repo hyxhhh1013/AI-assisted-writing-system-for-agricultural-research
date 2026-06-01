@@ -9,7 +9,7 @@ const USER_ID_HEADER = "x-user-id";
  * 返回 { error: NextResponse, user: null } 表示拒绝。
  */
 export async function requireAdmin(req?: { headers: { get: (key: string) => string | null } }) {
-  // 从 headers 读取 userId（由 proxy middleware 注入）
+  // 从 request headers 读取 userId（由 src/proxy.ts 注入）
   const userId = req?.headers.get(USER_ID_HEADER) ?? null;
   if (!userId) {
     return { error: NextResponse.json({ error: "未登录" }, { status: 401 }), user: null };
