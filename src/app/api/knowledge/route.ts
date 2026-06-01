@@ -1,4 +1,9 @@
 import { logger } from "@/lib/logger";
+import {
+  SafePathError,
+  resolveKnowledgeCategoryDir,
+  resolveKnowledgeFilePath,
+} from "@/lib/safe-path";
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
@@ -96,8 +101,21 @@ export async function GET(req: NextRequest) {
 
     const allCategories = await prisma.knowledgeFile.groupBy({ by: ["category"], _count: true, orderBy: { _count: { category: "desc" } } });
 
+    // 从 metadata.json 补充 chunkCount（Prisma KnowledgeChunk 表可能为空）
+    const metaMap = new Map<string, number>();
+    if (fs.existsSync(METADATA_PATH)) {
+      const metaRecords: KnowledgeFileRecord[] = JSON.parse(fs.readFileSync(METADATA_PATH, "utf-8"));
+      for (const m of metaRecords) metaMap.set(m.name, m.chunkCount ?? 0);
+    }
+    const filesWithChunks = files.map(f => {
+      const rec = prismaToRecord(f);
+      const metaCount = metaMap.get(rec.name);
+      if (metaCount !== undefined && metaCount > 0) rec.chunkCount = metaCount;
+      return rec;
+    });
+
     return NextResponse.json({
-      files: files.map(prismaToRecord),
+      files: filesWithChunks,
       total, page, pageSize,
       categories: ["全部", ...allCategories.map(c => c.category)],
       searchType: "name",
@@ -125,9 +143,10 @@ export async function POST(req: NextRequest) {
     if (!file) return NextResponse.json({ error: "未发现上传文件" }, { status: 400 });
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const targetDir = category === "未分类" ? ARTICLES_DIR : path.join(ARTICLES_DIR, category);
+    const targetPath = resolveKnowledgeFilePath(ARTICLES_DIR, category, file.name);
+    const targetDir = path.dirname(targetPath);
     if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
-    fs.writeFileSync(path.join(targetDir, file.name), buffer);
+    fs.writeFileSync(targetPath, buffer);
 
     // 双写：Prisma + metadata.json
     try {
@@ -149,6 +168,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ message: "文件上传成功", name: file.name });
   } catch (error: unknown) {
+    if (error instanceof SafePathError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     logger.error("Knowledge API error:", error);
     return NextResponse.json({ error: (error as Error).message || "上传失败" }, { status: 500 });
   }
@@ -194,14 +216,17 @@ export async function PATCH(req: NextRequest) {
 
     if (action === "batch_move") {
       if (!files?.length || !newCategory) return NextResponse.json({ error: "参数不完整" }, { status: 400 });
-      const newDir = path.join(ARTICLES_DIR, newCategory === "未分类" ? "" : newCategory);
+      const newDir = resolveKnowledgeCategoryDir(ARTICLES_DIR, newCategory);
       if (!fs.existsSync(newDir)) fs.mkdirSync(newDir, { recursive: true });
       let ok = 0, fail = 0;
       for (const f of files) {
         try {
-          const oldPath = path.join(ARTICLES_DIR, f.category === "未分类" ? "" : f.category, f.name);
-          if (fs.existsSync(oldPath)) { fs.renameSync(oldPath, path.join(newDir, f.name)); ok++; }
-          else fail++;
+          const oldPath = resolveKnowledgeFilePath(ARTICLES_DIR, f.category, f.name);
+          const destPath = resolveKnowledgeFilePath(ARTICLES_DIR, newCategory, f.name);
+          if (fs.existsSync(oldPath)) {
+            fs.renameSync(oldPath, destPath);
+            ok++;
+          } else fail++;
         } catch { fail++; }
       }
       // 更新 Prisma
@@ -221,19 +246,26 @@ export async function PATCH(req: NextRequest) {
     const { name, oldCategory, documentType } = body;
     if (!name || !oldCategory || !newCategory) return NextResponse.json({ error: "参数不完整" }, { status: 400 });
 
-    let oldPath = path.join(ARTICLES_DIR, oldCategory === "未分类" ? "" : oldCategory, name);
+    let oldPath = resolveKnowledgeFilePath(ARTICLES_DIR, oldCategory, name);
     if (!fs.existsSync(oldPath)) {
       for (const entry of fs.readdirSync(ARTICLES_DIR, { withFileTypes: true })) {
         if (!entry.isDirectory()) continue;
-        const c = path.join(ARTICLES_DIR, entry.name, name);
-        if (fs.existsSync(c)) { oldPath = c; break; }
+        try {
+          const c = resolveKnowledgeFilePath(ARTICLES_DIR, entry.name, name);
+          if (fs.existsSync(c)) {
+            oldPath = c;
+            break;
+          }
+        } catch {
+          continue;
+        }
       }
     }
     if (!fs.existsSync(oldPath)) return NextResponse.json({ error: `文件不存在: ${name}` }, { status: 404 });
 
-    const newDir = path.join(ARTICLES_DIR, newCategory === "未分类" ? "" : newCategory);
+    const newDir = resolveKnowledgeCategoryDir(ARTICLES_DIR, newCategory);
     if (!fs.existsSync(newDir)) fs.mkdirSync(newDir, { recursive: true });
-    fs.renameSync(oldPath, path.join(newDir, name));
+    fs.renameSync(oldPath, resolveKnowledgeFilePath(ARTICLES_DIR, newCategory, name));
 
     // 更新 Prisma
     await prisma.knowledgeFile.updateMany({ where: { name }, data: { category: newCategory, ...(documentType ? { documentType } : {}) } });
@@ -247,6 +279,9 @@ export async function PATCH(req: NextRequest) {
     }
     return NextResponse.json({ message: "分类更新成功" });
   } catch (error: unknown) {
+    if (error instanceof SafePathError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     return NextResponse.json({ error: (error as Error).message || "更新失败" }, { status: 500 });
   }
 }
@@ -265,19 +300,32 @@ export async function DELETE(req: NextRequest) {
       if (!files?.length) return NextResponse.json({ error: "未提供文件列表" }, { status: 400 });
       let deleted = 0;
       for (const f of files) {
-        const fp = path.join(ARTICLES_DIR, f.category === "未分类" ? "" : f.category, f.name);
-        if (fs.existsSync(fp)) { fs.unlinkSync(fp); deleted++; }
-        await prisma.knowledgeFile.deleteMany({ where: { name: f.name } });
+        try {
+          const fp = resolveKnowledgeFilePath(ARTICLES_DIR, f.category, f.name);
+          if (fs.existsSync(fp)) {
+            fs.unlinkSync(fp);
+            deleted++;
+          }
+          await prisma.knowledgeFile.deleteMany({ where: { name: f.name } });
+        } catch (e) {
+          if (e instanceof SafePathError) {
+            return NextResponse.json({ error: e.message }, { status: 400 });
+          }
+          throw e;
+        }
       }
       return NextResponse.json({ message: `删除 ${deleted} 个文件` });
     }
 
     if (!name || !category) return NextResponse.json({ error: "参数不完整" }, { status: 400 });
-    const fp = path.join(ARTICLES_DIR, category === "未分类" ? "" : category, name);
+    const fp = resolveKnowledgeFilePath(ARTICLES_DIR, category, name);
     if (fs.existsSync(fp)) fs.unlinkSync(fp);
     await prisma.knowledgeFile.deleteMany({ where: { name } });
     return NextResponse.json({ message: "文件已删除" });
   } catch (error: unknown) {
+    if (error instanceof SafePathError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     return NextResponse.json({ error: (error as Error).message || "删除失败" }, { status: 500 });
   }
 }
