@@ -102,12 +102,14 @@ export async function POST(req: NextRequest) {
         if (stdoutBuffer.trim()) handleLine(stdoutBuffer);
 
         if (code === 0) {
-          try {
-            localRAG.reload();
-            invalidateBibCache();
-          } catch (err) {
-            logger.error("RAG reload after reindex failed:", err);
-          }
+          (async () => {
+            try {
+              await localRAG.reload();
+              invalidateBibCache();
+            } catch (err) {
+              logger.error("RAG reload after reindex failed:", err);
+            }
+          })();
           finish();
           return;
         }

@@ -265,7 +265,7 @@ export async function POST(req: NextRequest) {
           for (const idx of citedIndices) {
             const sourceName = referencesByIndex[idx - 1];
             if (!sourceName) continue;
-            const fullText = localRAG.getFullText(sourceName);
+            const fullText = await localRAG.getFullText(sourceName);
             if (!fullText) continue;
             sourceIdx++;
             if (sourceIdx <= MAX_FULL_SOURCES) {

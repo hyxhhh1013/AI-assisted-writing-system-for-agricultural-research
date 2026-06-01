@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     const { filename, messages } = data;
 
     // 取文献全文作为上下文
-    const fullText = localRAG.getFullText(filename);
+    const fullText = await localRAG.getFullText(filename);
     if (!fullText) {
       return new Response(
         JSON.stringify({ error: "文献内容未找到，请先构建索引" }),

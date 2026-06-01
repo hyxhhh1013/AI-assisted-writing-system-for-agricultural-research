@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "未指定文件名" }, { status: 400 });
     }
 
-    const fullText = localRAG.getFullText(filename);
+    const fullText = await localRAG.getFullText(filename);
     if (!fullText) {
       return NextResponse.json({ error: "未找到该文献的索引内容，请先重建索引" }, { status: 404 });
     }

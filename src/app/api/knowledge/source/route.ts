@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 从 RAG 索引获取该文献的所有 chunk（按页码排序）
-    const fullText = localRAG.getFullText(name);
+    const fullText = await localRAG.getFullText(name);
 
     if (!fullText) {
       return NextResponse.json(
