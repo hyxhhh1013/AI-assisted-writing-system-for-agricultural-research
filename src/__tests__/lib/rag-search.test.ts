@@ -8,14 +8,14 @@ describe("RAG search integration", () => {
   }, 15000);
 
   it("searches within a specific category", async () => {
-    const cats = localRAG.getCategories();
+    const cats = await localRAG.getCategories();
     if (cats.length === 0) return;
     const results = await localRAG.search("热解", { limit: 3, category: cats[0] });
     expect(results.length).toBeGreaterThan(0);
   }, 15000);
 
   it("BM25 fallback works when embedding unavailable", async () => {
-    const cats = localRAG.getCategories();
+    const cats = await localRAG.getCategories();
     if (cats.length === 0) return;
     const results = await localRAG.search("pyrolysis catalyst temperature", { limit: 3 });
     expect(results.length).toBeGreaterThan(0);

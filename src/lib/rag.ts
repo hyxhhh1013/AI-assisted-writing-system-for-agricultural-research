@@ -1,4 +1,5 @@
 import fs from "fs";
+import fsp from "fs/promises";
 import path from "path";
 import { fetchWithRetry } from "@/lib/fetch-with-retry";
 import { cosineSimilarity } from "./similarity";
@@ -11,22 +12,20 @@ export interface RagChunk {
     source: string;
     category: string;
     id: string;
-    documentType?: string; // "journal" | "patent" | "book" | ...
-    /** 索引进度：起始页（1-based），可选 */
+    documentType?: string;
     pageStart?: number;
     pageEnd?: number;
     chunkIndex?: number;
   };
 }
 
-/** metadata.json 中每条文献的书目元数据 */
 export interface BibEntry {
   name: string;
   path?: string;
   category: string;
   chunkCount: number;
   documentType?: string;
-  gbTag?: string;         // GB/T 7714 类型标识：J / M / P / D / C / S
+  gbTag?: string;
   bib?: {
     title?: string;
     authors?: string[];
@@ -37,15 +36,109 @@ export interface BibEntry {
     issue?: string;
     pages?: string;
     doi?: string;
-    // 专利专用
     patentNumber?: string;
     inventors?: string[];
     applicant?: string;
     publicationDate?: string;
-    // 书籍专用
     isbn?: string;
     publisher?: string;
   } | null;
+}
+
+// ── 二进制 Embedding 存储 ─────────────────────────────────────────────────
+
+const EMB_HEADER_SIZE = 8; // version: uint32 + dim: uint32
+
+/**
+ * 从 .emb 二进制文件按需读取 embedding。
+ * 文件格式（小端序）：
+ *   [0..3]   version: uint32 = 1
+ *   [4..7]   dim: uint32
+ *   [8..]    float32[] — 按 chunk 索引顺序平铺
+ */
+class EmbeddingStore {
+  private loaded = new Map<string, { buffer: Buffer; dim: number; count: number }>();
+
+  /** 检查指定分类是否有 .emb 文件 */
+  has(category: string): boolean {
+    const p = this.embPath(category);
+    return fs.existsSync(p);
+  }
+
+  /** 异步加载 .emb 文件 */
+  async load(category: string): Promise<{ dim: number; count: number }> {
+    if (this.loaded.has(category)) {
+      const c = this.loaded.get(category)!;
+      return { dim: c.dim, count: c.count };
+    }
+    const p = this.embPath(category);
+    if (!fs.existsSync(p)) return { dim: 0, count: 0 };
+
+    const buf = await fsp.readFile(p);
+    if (buf.length < EMB_HEADER_SIZE) {
+      console.error(`EmbeddingStore: ${p} too small (${buf.length} bytes)`);
+      return { dim: 0, count: 0 };
+    }
+
+    const version = buf.readUInt32LE(0);
+    const dim = buf.readUInt32LE(4);
+    if (version !== 1) {
+      console.error(`EmbeddingStore: unknown version ${version} in ${p}`);
+      return { dim: 0, count: 0 };
+    }
+
+    const dataLen = buf.length - EMB_HEADER_SIZE;
+    const count = Math.floor(dataLen / (dim * 4));
+
+    this.loaded.set(category, { buffer: buf, dim, count });
+    return { dim, count };
+  }
+
+  /** 获取指定索引的 embedding（返回 number[]，按需从 buffer 切片） */
+  get(category: string, index: number): number[] | null {
+    const entry = this.loaded.get(category);
+    if (!entry || index < 0 || index >= entry.count) return null;
+
+    const offset = EMB_HEADER_SIZE + index * entry.dim * 4;
+    const arr = new Array<number>(entry.dim);
+    for (let i = 0; i < entry.dim; i++) {
+      arr[i] = entry.buffer.readFloatLE(offset + i * 4);
+    }
+    return arr;
+  }
+
+  /** 批量获取 embedding（比逐个调 get 更高效） */
+  getBatch(category: string, indices: number[]): (number[] | null)[] {
+    const entry = this.loaded.get(category);
+    if (!entry) return indices.map(() => null);
+
+    return indices.map((index) => {
+      if (index < 0 || index >= entry.count) return null;
+      const offset = EMB_HEADER_SIZE + index * entry.dim * 4;
+      const arr = new Array<number>(entry.dim);
+      for (let i = 0; i < entry.dim; i++) {
+        arr[i] = entry.buffer.readFloatLE(offset + i * 4);
+      }
+      return arr;
+    });
+  }
+
+  /** 卸载指定分类以释放内存 */
+  unload(category: string): void {
+    this.loaded.delete(category);
+  }
+
+  clear(): void {
+    this.loaded.clear();
+  }
+
+  get size(): number {
+    return this.loaded.size;
+  }
+
+  private embPath(category: string): string {
+    return path.join(process.cwd(), `data/index_${category}.emb`);
+  }
 }
 
 // ── 书目元数据懒加载 ────────────────────────────────────────────────────────
@@ -54,17 +147,13 @@ const DATA_DIR = path.resolve(process.cwd(), "data");
 
 let _bibMap: Map<string, BibEntry> | null = null;
 
-/** 从 source（文件名或相对路径）查找书目条目 */
 export function resolveBibEntry(source: string): BibEntry | undefined {
   const map = getBibMap();
-  // 1) 精确匹配（含 .pdf）
   const direct = map.get(source);
   if (direct) return direct;
-  // 2) 仅匹配 basename
   const base = path.basename(source.replace(/\\/g, "/"));
   const byBase = map.get(base);
   if (byBase) return byBase;
-  // 3) 兼容历史数据：去掉 .pdf 的 cleaned name → 加回 .pdf 重试
   if (!source.endsWith(".pdf")) {
     const withPdf = map.get(source + ".pdf");
     if (withPdf) return withPdf;
@@ -74,7 +163,6 @@ export function resolveBibEntry(source: string): BibEntry | undefined {
   return undefined;
 }
 
-/** 懒加载 metadata.json → filename → BibEntry 字典（生产中只加载一次） */
 export function getBibMap(): Map<string, BibEntry> {
   if (_bibMap) return _bibMap;
   const metaPath = path.join(DATA_DIR, "metadata.json");
@@ -85,25 +173,21 @@ export function getBibMap(): Map<string, BibEntry> {
     for (const entry of raw) {
       if (!entry?.name) continue;
       const prev = map.get(entry.name);
-      if (!prev) {
-        map.set(entry.name, entry);
-        continue;
-      }
+      if (!prev) { map.set(entry.name, entry); continue; }
       const prevScore = (prev.documentType ? 1 : 0) + (prev.bib ? 2 : 0);
       const nextScore = (entry.documentType ? 1 : 0) + (entry.bib ? 2 : 0);
       map.set(entry.name, nextScore >= prevScore ? entry : prev);
     }
     _bibMap = map;
-  } catch {
-    _bibMap = new Map();
-  }
+  } catch { _bibMap = new Map(); }
   return _bibMap;
 }
 
-/** 触发下次调用重新加载（reindex 后调用） */
 export function invalidateBibCache(): void {
   _bibMap = null;
 }
+
+// ── 检索算法常量 ───────────────────────────────────────────────────────────
 
 const RRF_K = 60;
 const BM25_K1 = 1.2;
@@ -119,7 +203,7 @@ function getEmbeddingsUrl(): string {
   if (full) return full;
   const base = (process.env.RAG_EMBEDDING_API_BASE || "").trim();
   if (base) return `${base.replace(/\/$/, "")}/embeddings`;
-  return ""; // 未配置 embedding 服务
+  return "";
 }
 
 function getEmbeddingModel(): string {
@@ -127,25 +211,22 @@ function getEmbeddingModel(): string {
 }
 
 function getEmbeddingApiKey(): string | undefined {
-  // 只有显式配置了 embedding URL/API_BASE 或专用 key 才启用向量检索
-  // DeepSeek 没有公开的 embedding API，不要用 DEEPSEEK_API_KEY 去撞
   return process.env.RAG_EMBEDDING_API_KEY?.trim()
     || (process.env.RAG_EMBEDDINGS_URL?.trim() ? process.env.DEEPSEEK_API_KEY?.trim() : undefined)
     || (process.env.RAG_EMBEDDING_API_BASE?.trim() ? process.env.DEEPSEEK_API_KEY?.trim() : undefined)
     || undefined;
 }
 
+// ── 分词 ──────────────────────────────────────────────────────────────────
+
 function extractQueryTerms(query: string): string[] {
   const q = query.trim();
   if (!q) return [];
   const keywords: string[] = [];
-  if (/[\u4e00-\u9fa5]/.test(q)) {
-    const segments = q
-      .toLowerCase()
-      .split(/[^\u4e00-\u9fa5a-z0-9]+/i)
-      .filter((s) => s.length >= 1);
+  if (/[一-龥]/.test(q)) {
+    const segments = q.toLowerCase().split(/[^一-龥a-z0-9]+/i).filter((s) => s.length >= 1);
     for (const seg of segments) {
-      if (/[\u4e00-\u9fa5]/.test(seg)) {
+      if (/[一-龥]/.test(seg)) {
         for (let i = 0; i < seg.length; i++) keywords.push(seg[i]);
         if (seg.length >= 2) {
           for (let i = 0; i < seg.length - 1; i++) keywords.push(seg.substring(i, i + 2));
@@ -161,12 +242,10 @@ function extractQueryTerms(query: string): string[] {
   return Array.from(new Set(keywords)).filter((t) => t.length > 0);
 }
 
-// ── 倒排索引：term → Map<chunkIdx, tf> ──
-// 构建在分类加载时，替换 O(N×T) 全扫描
+// ── 倒排索引 ──────────────────────────────────────────────────────────────
 
 type InvertedIndex = Map<string, Map<number, number>>;
 
-/** 为 chunks 构建倒排索引 */
 function buildInvertedIndex(chunks: RagChunk[]): InvertedIndex {
   const idx: InvertedIndex = new Map();
   for (let i = 0; i < chunks.length; i++) {
@@ -174,11 +253,8 @@ function buildInvertedIndex(chunks: RagChunk[]): InvertedIndex {
     const tfMap = new Map<string, number>();
     for (const t of tokens) {
       tfMap.set(t, (tfMap.get(t) || 0) + 1);
-      // 中文单字也索引
       if (/[一-鿿]/.test(t)) {
-        for (const ch of t) {
-          tfMap.set(ch, (tfMap.get(ch) || 0) + 1);
-        }
+        for (const ch of t) tfMap.set(ch, (tfMap.get(ch) || 0) + 1);
       }
     }
     for (const [term, tf] of tfMap) {
@@ -189,18 +265,12 @@ function buildInvertedIndex(chunks: RagChunk[]): InvertedIndex {
   return idx;
 }
 
-/** BM25 从倒排索引计算，仅遍历命中文档 */
-function bm25FromIndex(
-  idx: InvertedIndex,
-  chunks: RagChunk[],
-  terms: string[],
-): number[] {
+function bm25FromIndex(idx: InvertedIndex, chunks: RagChunk[], terms: string[]): number[] {
   const N = chunks.length;
   const scores = new Float32Array(N);
   if (N === 0 || terms.length === 0) return Array.from(scores);
   const docLens = chunks.map((c) => Math.max(1, c.content.length));
   const avgdl = docLens.reduce((a, b) => a + b, 0) / N;
-
   for (const t of terms) {
     const posting = idx.get(t);
     if (!posting || posting.size === 0) continue;
@@ -209,21 +279,18 @@ function bm25FromIndex(
     if (idf <= 0) continue;
     for (const [chunkIdx, tf] of posting) {
       const dl = docLens[chunkIdx];
-      const denom = tf + BM25_K1 * (1 - BM25_B + BM25_B * (dl / avgdl));
-      scores[chunkIdx] += idf * ((tf * (BM25_K1 + 1)) / denom);
+      scores[chunkIdx] += idf * ((tf * (BM25_K1 + 1)) / (tf + BM25_K1 * (1 - BM25_B + BM25_B * (dl / avgdl))));
     }
   }
   return Array.from(scores);
 }
 
+// ── RRF / 去重 ────────────────────────────────────────────────────────────
+
 function argsortDescending(scores: number[]): number[] {
-  return scores
-    .map((s, i) => ({ s, i }))
-    .sort((a, b) => b.s - a.s || a.i - b.i)
-    .map((x) => x.i);
+  return scores.map((s, i) => ({ s, i })).sort((a, b) => b.s - a.s || a.i - b.i).map((x) => x.i);
 }
 
-/** 将得分转为名次（1 = 最高）；得分为 0 的并列给较大名次，降低 RRF 权重 */
 function ranksFromScores(scores: number[], zeroAsMissing: boolean): number[] {
   const n = scores.length;
   const order = argsortDescending(scores);
@@ -249,29 +316,18 @@ function rrfFromRanks(rankLists: number[][]): number[] {
   return out;
 }
 
-/** 分类去偏：如果 Top-K 全来自同一分类，从其他分类补入最高分结果 */
-function diversifyByCategory(
-  topChunks: RagChunk[],
-  allChunks: RagChunk[],
-  limit: number,
-): RagChunk[] {
+function diversifyByCategory(topChunks: RagChunk[], allChunks: RagChunk[], limit: number): RagChunk[] {
   if (topChunks.length < 3) return topChunks;
-  const topCats = new Set(topChunks.map(c => c.metadata.category));
-  if (topCats.size >= 2) return topChunks; // 已有 ≥2 个分类
-  // 从其他分类找最高分 chunk，替换最后一条
-  const otherChunks = allChunks.filter(c => !topCats.has(c.metadata.category) && !topChunks.includes(c));
+  const topCats = new Set(topChunks.map((c) => c.metadata.category));
+  if (topCats.size >= 2) return topChunks;
+  const otherChunks = allChunks.filter((c) => !topCats.has(c.metadata.category) && !topChunks.includes(c));
   if (otherChunks.length === 0) return topChunks;
   const result = topChunks.slice(0, -1);
   result.push(otherChunks[0]);
   return result;
 }
 
-function diversifyBySource(
-  order: number[],
-  chunks: RagChunk[],
-  limit: number,
-  maxPerSource: number,
-): RagChunk[] {
+function diversifyBySource(order: number[], chunks: RagChunk[], limit: number, maxPerSource: number): RagChunk[] {
   const perSource = new Map<string, number>();
   const out: RagChunk[] = [];
   for (const idx of order) {
@@ -286,68 +342,76 @@ function diversifyBySource(
   return out;
 }
 
+// ── LocalRAG 主类 ────────────────────────────────────────────────────────
+
 export class LocalRAG {
   private chunks: RagChunk[] | null = null;
   private categoryChunks = new Map<string, RagChunk[]>();
-  private categoryIndexes = new Map<string, InvertedIndex>(); // 倒排索引缓存
+  private categoryIndexes = new Map<string, InvertedIndex>();
+  private embCategoryMap = new Map<string, string>(); // chunk category → emb category
   private allChunksCache: RagChunk[] | null = null;
-  private allIndexCache: InvertedIndex | null = null; // 全库倒排索引
+  private allIndexCache: InvertedIndex | null = null;
   private indexPath = path.join(process.cwd(), "data/index.json");
   private metadataPath = path.join(process.cwd(), "data/metadata.json");
+  private embStore = new EmbeddingStore();
 
   private getCategoryIndexPath(category: string): string {
     return path.join(process.cwd(), `data/index_${category}.json`);
   }
 
-  /** 列出所有可用的分类（从 metadata.json 读取，不加载大索引） */
-  getCategories(): string[] {
-    if (!fs.existsSync(this.metadataPath)) return [];
+  /** 列出所有可用的分类 */
+  async getCategories(): Promise<string[]> {
     try {
-      const meta = JSON.parse(fs.readFileSync(this.metadataPath, "utf-8")) as { category: string }[];
+      if (!fs.existsSync(this.metadataPath)) return [];
+      const raw = await fsp.readFile(this.metadataPath, "utf-8");
+      const meta = JSON.parse(raw) as { category: string }[];
       return Array.from(new Set(meta.map((m) => m.category))).filter(Boolean);
     } catch {
       return [];
     }
   }
 
-  /** 按需加载单个分类的索引（懒加载，不重复解析） */
-  private ensureCategoryLoaded(category: string) {
+  /** 异步加载单个分类的索引（含 .emb 二进制嵌入） */
+  private async ensureCategoryLoaded(category: string): Promise<void> {
     if (this.categoryChunks.has(category)) return;
     const catPath = this.getCategoryIndexPath(category);
-    // 尝试分类拆分索引，不存在则回退到主索引中过滤
+
     if (fs.existsSync(catPath)) {
       try {
-        const raw = fs.readFileSync(catPath, "utf-8");
+        const raw = await fsp.readFile(catPath, "utf-8");
         const parsed = JSON.parse(raw) as RagChunk[];
         const chunks = parsed.filter((c) => c?.content && String(c.content).trim().length > 0);
         this.categoryChunks.set(category, chunks);
         this.categoryIndexes.set(category, buildInvertedIndex(chunks));
+
+        // 预加载 .emb 文件（如果存在）
+        if (this.embStore.has(category)) {
+          await this.embStore.load(category);
+          this.embCategoryMap.set(category, category);
+        }
         return;
       } catch (e) {
         console.error(`Failed to load category index [${category}]:`, e);
       }
     }
-    // 回退：从主索引中过滤出对应分类
-    this.ensureLoaded();
+    // 回退：从主索引中过滤
+    await this.ensureLoaded();
     if (this.chunks) {
       const filtered = this.chunks.filter((c) => c.metadata.category === category);
       this.categoryChunks.set(category, filtered);
     }
   }
 
-  private ensureLoaded() {
+  private async ensureLoaded(): Promise<void> {
     if (this.chunks) return;
-    // 优先尝试加载分类拆分索引的元数据
-    const cats = this.getCategories();
+    const cats = await this.getCategories();
     if (cats.length > 0) {
-      // 有分类拆分索引时，不加载主索引，按需加载各分类
-      this.chunks = []; // 标记已初始化，走懒加载路径
+      this.chunks = [];
       return;
     }
-    // 回退：加载单体 index.json
     if (fs.existsSync(this.indexPath)) {
       try {
-        const raw = fs.readFileSync(this.indexPath, "utf-8");
+        const raw = await fsp.readFile(this.indexPath, "utf-8");
         const parsed = JSON.parse(raw) as RagChunk[];
         this.chunks = Array.isArray(parsed)
           ? parsed.filter((c) => c?.content && String(c.content).trim().length > 0)
@@ -361,33 +425,57 @@ export class LocalRAG {
     }
   }
 
-  /**
-   * 查询向量：无 Key 或失败时返回空数组，检索自动退化为 BM25。
-   */
+  /** 预加载+缓存全库 chunks + 倒排索引 */
+  private async ensureAllLoaded(): Promise<{ chunks: RagChunk[]; index: InvertedIndex }> {
+    if (this.allChunksCache && this.allIndexCache) {
+      return { chunks: this.allChunksCache, index: this.allIndexCache };
+    }
+    const cats = await this.getCategories();
+    if (cats.length > 0) {
+      const all: RagChunk[] = [];
+      for (const cat of cats) {
+        await this.ensureCategoryLoaded(cat);
+        const c = this.categoryChunks.get(cat);
+        if (c) {
+          this.fillEmbeddings(c, cat);
+          all.push(...c);
+        }
+      }
+      this.allChunksCache = all;
+      this.allIndexCache = buildInvertedIndex(all);
+      return { chunks: all, index: this.allIndexCache };
+    }
+    await this.ensureLoaded();
+    return { chunks: this.chunks || [], index: this.allIndexCache || new Map() };
+  }
+
+  /** 从 EmbeddingStore 为 chunk 填充 embedding 字段 */
+  private fillEmbeddings(chunks: RagChunk[], category: string): void {
+    if (!this.embStore.has(category)) return;
+    for (let i = 0; i < chunks.length; i++) {
+      if (chunks[i].embedding) continue;
+      const emb = this.embStore.get(category, i);
+      if (emb) chunks[i].embedding = emb;
+    }
+  }
+
   async getEmbedding(text: string): Promise<number[]> {
     const apiKey = getEmbeddingApiKey();
     if (!apiKey) return [];
-
     const url = getEmbeddingsUrl();
     const model = getEmbeddingModel();
     const input = text.replace(/\n/g, " ").slice(0, 512);
-
     try {
       const response = await fetchWithRetry(url, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({ model, input }),
       });
-
       if (!response.ok) {
         const err = await response.text();
         console.warn("Embedding API failed, lexical-only RAG:", err.slice(0, 200));
         return [];
       }
-
       const result = (await response.json()) as { data?: { embedding?: number[] }[] };
       const emb = result.data?.[0]?.embedding;
       return Array.isArray(emb) ? emb : [];
@@ -397,19 +485,11 @@ export class LocalRAG {
     }
   }
 
-  /**
-   * 混合检索：BM25 +（可选）向量 RRF 融合，并按文献名做上限去重，避免 TopK 被单篇占满。
-   */
   async search(
     query: string,
     options:
       | number
-      | {
-          limit?: number;
-          category?: string;
-          /** 同一 source 最多入选条数，默认 4 */
-          maxPerSource?: number;
-        } = {},
+      | { limit?: number; category?: string; maxPerSource?: number } = {},
   ): Promise<RagChunk[]> {
     let limit = 8;
     let category: string | undefined;
@@ -429,18 +509,18 @@ export class LocalRAG {
     let pool: RagChunk[];
     let idx: InvertedIndex | undefined;
 
-    // 有分类过滤 → 懒加载对应分类索引
     if (category && category !== "全部") {
-      this.ensureCategoryLoaded(category);
+      await this.ensureCategoryLoaded(category);
       pool = this.categoryChunks.get(category) || [];
       idx = this.categoryIndexes.get(category);
+      // 填充 embedding 以备向量检索
+      this.fillEmbeddings(pool, category);
     } else {
-      // 无分类过滤 → 使用缓存的全库 chunks + 倒排索引
-      const { chunks, index } = this.ensureAllLoaded();
+      const { chunks, index } = await this.ensureAllLoaded();
       pool = chunks;
       idx = index;
       if (pool.length === 0) {
-        this.ensureLoaded();
+        await this.ensureLoaded();
         pool = this.chunks || [];
       }
     }
@@ -448,9 +528,7 @@ export class LocalRAG {
     if (pool.length === 0) return [];
 
     const terms = extractQueryTerms(q);
-    const bm25 = idx
-      ? bm25FromIndex(idx, pool, terms)
-      : new Array(pool.length).fill(0);
+    const bm25 = idx ? bm25FromIndex(idx, pool, terms) : new Array(pool.length).fill(0);
 
     const queryVector = await this.getEmbedding(q);
     const hasVec = queryVector.length > 0;
@@ -477,24 +555,22 @@ export class LocalRAG {
     const nonZero = order.filter((i) => fused[i] > 0);
     if (nonZero.length === 0) return [];
     const diversified = diversifyBySource(nonZero, pool, limit * 2, maxPerSource);
-    // 分类去偏：确保 Top-K 覆盖 ≥2 个分类
     const catDiversified = diversifyByCategory(diversified, pool, limit);
     return catDiversified.slice(0, limit);
   }
 
-  /** 按页码 / chunkIndex 拼接，便于全文分析顺序正确 */
-  getFullText(fileName: string): string {
+  /** 按页码/chunkIndex 拼接全文（异步） */
+  async getFullText(fileName: string): Promise<string> {
     const baseName = path.basename(fileName.replace(/\\/g, "/"));
     const matchesSource = (source: string) => {
       const normalized = path.basename(source.replace(/\\/g, "/"));
       return normalized === baseName || source === fileName;
     };
 
-    // 优先从分类拆分索引中查找（支持按分类拆分的索引结构）
-    const cats = this.getCategories();
+    const cats = await this.getCategories();
     if (cats.length > 0) {
       for (const cat of cats) {
-        this.ensureCategoryLoaded(cat);
+        await this.ensureCategoryLoaded(cat);
         const catChunks = this.categoryChunks.get(cat);
         if (!catChunks) continue;
         const match = catChunks.filter((c) => matchesSource(c.metadata.source));
@@ -510,8 +586,7 @@ export class LocalRAG {
       }
       return "";
     }
-    // 回退：主索引
-    this.ensureLoaded();
+    await this.ensureLoaded();
     if (!this.chunks) return "";
     const list = this.chunks
       .filter((c) => matchesSource(c.metadata.source))
@@ -524,66 +599,34 @@ export class LocalRAG {
     return list.map((c) => c.content).join("\n\n");
   }
 
-  /** 预加载+缓存全库 chunks + 倒排索引（无分类过滤搜索的性能关键） */
-  private ensureAllLoaded(): { chunks: RagChunk[]; index: InvertedIndex } {
-    if (this.allChunksCache && this.allIndexCache) {
-      return { chunks: this.allChunksCache, index: this.allIndexCache };
-    }
-    const cats = this.getCategories();
-    if (cats.length > 0) {
-      const all: RagChunk[] = [];
-      for (const cat of cats) {
-        this.ensureCategoryLoaded(cat);
-        const c = this.categoryChunks.get(cat);
-        if (c) all.push(...c);
-      }
-      this.allChunksCache = all;
-      this.allIndexCache = buildInvertedIndex(all);
-      return { chunks: all, index: this.allIndexCache };
-    }
-    this.ensureLoaded();
-    return { chunks: this.chunks || [], index: this.allIndexCache || new Map() };
-  }
-
-  reload() {
+  /** 异步重载 */
+  async reload(): Promise<void> {
     this.chunks = null;
     this.categoryChunks.clear();
     this.categoryIndexes.clear();
     this.allChunksCache = null;
     this.allIndexCache = null;
-    this.ensureLoaded();
+    this.embCategoryMap.clear();
+    this.embStore.clear();
+    await this.ensureLoaded();
   }
 }
 
 export const localRAG = new LocalRAG();
 
-/** 清理 RAG 来源文件名，去除 .pdf 等后缀，生成可读的引用标识 */
+// ── 引用格式化 ────────────────────────────────────────────────────────────
+
 export function cleanSourceName(raw: string): string {
-  return raw
-    .replace(/\.pdf$/i, "")
-    .replace(/[_-]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return raw.replace(/\.pdf$/i, "").replace(/[_-]/g, " ").replace(/\s+/g, " ").trim();
 }
 
-/**
- * 供 API 拼上下文：优先使用结构化书目元数据，无则退化到文件名+页码。
- *
- * 有 bib 时输出格式（便于 AI 生成 GB/T 7714 / Vancouver / APA 条目）：
- *   [J] Khan MA et al. (2008) 营养浸渍木炭... | p. 3
- *   [P] 专利: CN102345678A | 申请人: 某公司
- *   [M] 张三 (2020) 农业生物技术导论 | 出版社: 科学出版社
- */
-/** 清洗 bib 字段（与 ref-format.ts sanitizeBib 同逻辑，内联避免循环依赖） */
 function sanitizeRagBib(bib: BibEntry["bib"] | undefined | null): BibEntry["bib"] | null {
   if (!bib) return null;
   const cleaned = { ...bib };
-  // DOI 清洗：只保留标准 DOI 格式
   if (cleaned.doi) {
     const m = cleaned.doi.match(/(10\.\d{4,}\/[^\s一-鿿"<>，。、；]+)/);
     cleaned.doi = m ? m[1].replace(/[.,;]+$/, "") : cleaned.doi.trim();
   }
-  // Title 清洗：去除 URL/收稿日期/作者简介/摘要
   if (cleaned.title) {
     let t = cleaned.title;
     t = t.replace(/https?:\/\/[^\s]+/g, "");
@@ -595,9 +638,8 @@ function sanitizeRagBib(bib: BibEntry["bib"] | undefined | null): BibEntry["bib"
     t = t.replace(/[\s]+/g, " ").trim();
     cleaned.title = t.length >= 2 ? t : undefined;
   }
-  // Authors 清洗：过滤 CNKI
   if (Array.isArray(cleaned.authors)) {
-    cleaned.authors = cleaned.authors.filter(a => a && a !== "CNKI" && a !== "cnki");
+    cleaned.authors = cleaned.authors.filter((a) => a && a !== "CNKI" && a !== "cnki");
     if (cleaned.authors.length === 0) cleaned.authors = undefined;
   }
   if (cleaned.firstAuthor === "CNKI" || cleaned.firstAuthor === "cnki") {
@@ -617,7 +659,6 @@ export function formatRagCitation(chunk: RagChunk): string {
     ? ` | p. ${p}${pageEnd != null && pageEnd !== p ? `-${pageEnd}` : ""}`
     : "";
 
-  // ── 专利 ────────────────────────────────────────────────────────────────
   if (docType === "patent") {
     if (bib?.patentNumber) {
       const inventor = bib.inventors?.[0] || bib.applicant || "";
@@ -626,7 +667,6 @@ export function formatRagCitation(chunk: RagChunk): string {
     return `[P] 专利: ${cleanSourceName(chunk.metadata.source)}`;
   }
 
-  // ── 书籍 ────────────────────────────────────────────────────────────────
   if (docType === "book") {
     if (bib?.firstAuthor || bib?.title) {
       const author = bib.firstAuthor || "佚名";
@@ -638,7 +678,6 @@ export function formatRagCitation(chunk: RagChunk): string {
     return `[M] ${cleanSourceName(chunk.metadata.source)}${pageStr}`;
   }
 
-  // ── 期刊论文（默认）────────────────────────────────────────────────────
   if (bib?.firstAuthor || bib?.year || bib?.journal || bib?.doi) {
     const tag = gbTag ? `[${gbTag}] ` : "";
     const author = bib.firstAuthor
@@ -651,11 +690,8 @@ export function formatRagCitation(chunk: RagChunk): string {
     return `${tag}${author}${year}${title}${journal}${doi}${pageStr}`.trim();
   }
 
-  // ── 兜底：文件名 + 页码 ────────────────────────────────────────────────
   const src = cleanSourceName(chunk.metadata.source);
-  if (p != null && pageEnd != null && pageEnd !== p) {
-    return `${src} (pp. ${p}-${pageEnd})`;
-  }
+  if (p != null && pageEnd != null && pageEnd !== p) return `${src} (pp. ${p}-${pageEnd})`;
   if (p != null) return `${src} (p. ${p})`;
   return src;
 }
