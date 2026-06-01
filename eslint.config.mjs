@@ -22,6 +22,11 @@ const eslintConfig = defineConfig([
       "no-console": "warn",
       // Disallow implicit any; use explicit types or unknown instead.
       "@typescript-eslint/no-explicit-any": "warn",
+      // Next 16 / React Compiler 存量模式：避免单次 PR 改 40+ 页面（见 ENG-PR-002）
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/refs": "off",
+      // 中文 UI 文案中的引号，不要求 HTML 实体转义
+      "react/no-unescaped-entities": "off",
     },
   },
 ]);

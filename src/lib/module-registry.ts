@@ -135,9 +135,9 @@ export function groupHomeModules(): Record<HomeModuleCategory, AppModule[]> {
     tools: [],
     help: [],
   };
-  for (const module of listModules({ placement: "home" })) {
-    const category = module.homeCategory ?? "tools";
-    grouped[category].push(module);
+  for (const appModule of listModules({ placement: "home" })) {
+    const category = appModule.homeCategory ?? "tools";
+    grouped[category].push(appModule);
   }
   return grouped;
 }

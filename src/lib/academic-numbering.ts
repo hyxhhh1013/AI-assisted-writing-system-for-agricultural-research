@@ -101,7 +101,8 @@ export function buildNumberedParagraphBlocks(
     return rawParts.map((p) => `<p>${escapeHtmlText(p)}</p>`).join("");
   }
 
-  let { sub, ter } = maxThirdLevelInText(textBeforeInsert, major);
+  const { sub, ter: startTer } = maxThirdLevelInText(textBeforeInsert, major);
+  let ter = startTer;
 
   return rawParts
     .map((p) => {

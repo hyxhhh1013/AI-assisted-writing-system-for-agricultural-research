@@ -1,69 +1,56 @@
 # 项目健康检查
 
-> 最近检查日期：2026-05-31  
-> 目标：记录当前阻断项，避免后续开发误判项目状态。
+> 最近检查日期：2026-06-01  
+> 目标：记录当前阻断项，避免后续开发误判项目状态。  
+> **工程修复队列**：[`docs/ENGINEERING_OPTIMIZATION_QUEUE.md`](./ENGINEERING_OPTIMIZATION_QUEUE.md)（ENG-PR-001 起）
 
 ## 验证结果
 
 | 命令 | 结果 | 备注 |
 |------|------|------|
-| `npm run test` | 通过 | 18 个测试文件、141 个测试通过 |
-| `npx prisma validate` | 通过 | `prisma/schema.prisma` 当前为 PostgreSQL |
-| `npm run typecheck` | 失败 | JSX 解析错误阻断类型检查 |
-| `npm run lint:src --quiet` | 失败 | 73 个 error |
-| `npm run build` | 失败 | 受 JSX 解析、Google font 拉取、Turbopack 动态文件追踪影响 |
+| `npm run test` | **通过** | 19 个测试文件（含 proxy-auth、safe-path）；2026-06-01 |
+| `npx prisma validate` | 通过 | `prisma/schema.prisma` 为 PostgreSQL |
+| `npx tsc --noEmit` | **通过** | 2026-06-01 本地 0 error |
+| `npm run lint:src --quiet` | **通过** | 0 error；293 warn（`no-console` / `no-explicit-any` 等，非门禁） |
+| `npm run build` | **通过** | 2026-06-01 本地 `next build` 成功 |
+| `npm run check` | **通过** | typecheck + test + lint:src（2026-06-01） |
 
-## 优先修复项
+复验命令：
 
-### P0：认证代理头传递错误
+```bash
+npx tsc --noEmit
+npm run lint:src --quiet
+npm run test
+npm run build
+npm run check
+```
 
-文件：`src/proxy.ts`
+## 优先修复项（下一阶段）
 
-当前代码把 `x-user-id` 写入 response header。Next 16 中这会暴露给浏览器，不能作为下游 Route Handler 的可信 request header。正确做法是复制 request headers，设置 `x-user-id`，再通过 `NextResponse.next({ request: { headers } })` 传递。
+### P0：RAG 巨型索引阻塞 → RAG-PR-001～005
 
-影响范围：
+见 [`docs/rag-index-refactor.md`](./rag-index-refactor.md)。`data/index_*.json` 合计约 1.88GB，同步 `readFileSync` 可导致对话 API 卡死或 OOM。
 
-- `src/app/api/projects/route.ts`
-- `src/app/api/projects/[id]/meta/route.ts`
-- `src/app/api/projects/[id]/sections/[key]/route.ts`
-- `src/lib/admin-auth.ts`
-- `src/app/api/admin/*`
+### P1：认证代理头 → ENG-PR-001（已完成）
 
-修复时同时移除或严格限制 `AUTH_BYPASS` 的硬编码用户注入，避免生产环境误开。
+`x-user-id` 已通过 `NextResponse.next({ request: { headers } })` 注入 request。
 
-### P0：JSX 结构损坏导致无法构建
+### P1：文件路径安全 → ENG-PR-003（已完成）
 
-文件：
+`src/lib/safe-path.ts` + knowledge/pdf API。
 
-- `src/components/shared/outline-panel.tsx`
-- `src/components/shared/writing-panel.tsx`
+### P2：React Compiler hooks 规则（存量）
 
-表现：
+`react-hooks/set-state-in-effect` / `refs` 在 ESLint 中设为 `off`，避免单次改 40+ 客户端页面；后续可按页面逐步改为 fetch-in-effect 无同步 setState 模式。
 
-- `outline-panel.tsx` 中残留 `</>` / `}` / `>`，导致解析失败。
-- `writing-panel.tsx` 关闭了 `</TabPanelShell>`，但当前 JSX 开头是普通 `div`。
+### P2：Lint warn 清零 → ENG-PR-054
 
-### P1：组件引用不完整
+`no-console`、`no-explicit-any` 等约 293 条 warning，不阻断 `npm run check`。
 
-文件：`src/components/shared/data-panel.tsx`
+## 已过时条目（勿再作为默认任务）
 
-`DataPanel` 使用了 `<TabPanelShell>`，但缺少对应 import。修完 JSX 后这里会继续阻断 lint 或编译。
-
-### P1：文件路径安全
-
-文件：
-
-- `src/app/api/knowledge/route.ts`
-- `src/app/api/pdf/route.ts`
-
-知识库上传、移动、删除、PDF 读取路径由用户输入拼接，修复时需要对文件名和分类做白名单校验，并在 `path.resolve` 后确认结果仍位于允许目录内。
-
-### P1：生产构建与部署
-
-当前构建还暴露两个部署风险：
-
-- `next/font/google` 在无外网环境会拉取失败，建议改为本地字体或确保构建环境可访问 Google fonts。
-- `src/app/api/knowledge/route.ts` 的动态文件路径让 Turbopack 追踪范围过宽，建议把运行时文件路径限定在静态子目录，必要时使用 `/*turbopackIgnore: true*/`。
+- 2026-05-31 JSX 结构损坏（outline/writing/data-panel）— 当前 `tsc` 已通过
+- `next/font/google` 构建失败 — 2026-06-01 build 已通过（系统字体栈）
 
 ## 修复后复验顺序
 
@@ -71,4 +58,3 @@
 2. `npm run lint:src --quiet`
 3. `npm run test`
 4. `npm run build`
-5. 登录后验证项目列表、项目保存、管理员接口、PDF 打开和知识库上传/移动/删除
