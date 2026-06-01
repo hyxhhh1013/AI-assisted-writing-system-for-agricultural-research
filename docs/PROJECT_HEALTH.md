@@ -27,9 +27,10 @@ npm run check
 
 ## 优先修复项（下一阶段）
 
-### P0：RAG 巨型索引阻塞 → RAG-PR-001～005
+### P0：RAG 巨型索引 → 代码已合入，服务器需跑转换
 
-见 [`docs/rag-index-refactor.md`](./rag-index-refactor.md)。`data/index_*.json` 合计约 1.88GB，同步 `readFileSync` 可导致对话 API 卡死或 OOM。
+见 [`docs/rag-index-refactor.md`](./rag-index-refactor.md) 与 [`docs/DEPLOY.md`](./DEPLOY.md)「RAG 索引迁移」。  
+应用侧已异步加载 + `.emb`；若磁盘上仍是旧版巨型 JSON，需执行 `npm run rag:convert-index`。
 
 ### P1：认证代理头 → ENG-PR-001（已完成）
 

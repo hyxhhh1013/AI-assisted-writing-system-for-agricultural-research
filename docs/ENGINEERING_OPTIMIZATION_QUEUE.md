@@ -60,7 +60,7 @@
 | RAG-PR-002 | `rag.ts` 异步加载 + 二进制嵌入 | RAG-PR-001 | 4h | done | 2026-06-01 |
 | RAG-PR-003 | 所有 RAG 调用方 `await` 化 | RAG-PR-002 | 3h | done | 2026-06-01 |
 | RAG-PR-004 | `index-pdfs.mjs` 直接输出分离格式 | RAG-PR-001 | 3h | done | 2026-06-01 |
-| RAG-PR-005 | RAG 部署验证 + 文档更新 | RAG-PR-003, RAG-PR-004 | 2h | todo | |
+| RAG-PR-005 | RAG 部署验证 + 文档更新 | RAG-PR-003, RAG-PR-004 | 2h | done | 2026-06-01 |
 | **Phase 2 — API 契约与数据一致性** |
 | ENG-PR-020 | `services/consistency.ts` + hook 去 fetch | ENG-PR-002 | 2h | todo | |
 | ENG-PR-021 | Admin 页面 fetch 迁入 services | ENG-PR-002 | 4h | todo | |
@@ -822,6 +822,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-06-01 | RAG-PR-001 | AI | `convert-index-to-binary.mjs` + npm scripts + .emb 单测 |
 | 2026-06-01 | RAG-PR-002, 003 | AI | EmbeddingStore + async load；chat/source/writing/analyze/reindex await |
 | 2026-06-01 | RAG-PR-004 | AI | index-pdfs stage2/3 写 index_*.json + .emb 分离格式 |
+| 2026-06-01 | RAG-PR-005 | AI | DEPLOY.md RAG 迁移步骤 + 验证清单；本地 check/build 通过 |
 
 ---
 

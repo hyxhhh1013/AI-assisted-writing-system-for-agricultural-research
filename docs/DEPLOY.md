@@ -101,17 +101,35 @@ docker compose down
 - 生产环境 **不要** 设置 `AUTH_BYPASS=true`（`src/proxy.ts` 会在 `NODE_ENV=production` 时忽略该变量）
 - `JWT_SECRET` 必须使用随机长字符串，勿用模板默认值
 
+## RAG 索引迁移（约 1.88GB 旧格式）
+
+若 `data/index_*.json` 仍含内嵌 `embedding` 数组（单文件数百 MB），部署新代码前在宿主机执行一次：
+
+```bash
+# 预览
+npm run rag:convert-index:dry
+
+# 转换（原文件备份到 data/.backup/）
+npm run rag:convert-index
+```
+
+转换后每个分类应有 `data/index_<分类>.json`（仅 content + metadata）与 `data/index_<分类>.emb`（float32 向量）。新索引请直接用 `npm run index-docs`（已输出分离格式）。
+
+部署后重启应用（`docker compose up -d --build` 或 PM2 restart），再验证文献对话与语义检索。
+
 ## 功能验证清单
 
 部署后建议按顺序验证：
 
 1. 打开 `http://localhost:3000`
-2. 创建或打开项目
-3. 运行一次 AI 写作
-4. 生成一个普通数据图表
-5. 生成一个三线表
-6. 导出 PDF
-7. 如需使用 XRD/XPS/分子图，再分别验证对应页面
+2. 文献库列表可加载
+3. 语义搜索返回结果
+4. 「基于文献对话」可流式回复（非 HTTP 000）
+5. 创建或打开项目，运行一次 AI 写作
+6. 生成一个普通数据图表
+7. 生成一个三线表
+8. 导出 PDF
+9. 如需使用 XRD/XPS/分子图，再分别验证对应页面
 
 ## 常见问题
 
