@@ -15,7 +15,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "index-docs": "node scripts/index-pdfs.mjs",
-    "create-admin": "node scripts/create-admin.mjs"
+    "create-admin": "node scripts/create-admin.mjs",
+    "rag:convert-index": "node scripts/convert-index-to-binary.mjs",
+    "rag:convert-index:dry": "node scripts/convert-index-to-binary.mjs --dry-run"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

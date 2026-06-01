@@ -56,7 +56,7 @@
 | ENG-PR-003 | 知识库/PDF 路径穿越防护 | — | 3h | done | 2026-06-01 |
 | ENG-PR-004 | `AUTH_BYPASS` 生产防护 + 文档 | ENG-PR-001 | 1h | done | 2026-06-01 |
 | **Phase 1 — RAG 性能（≈1.88GB 索引）** |
-| RAG-PR-001 | 转换脚本：JSON → content.json + `.emb` | — | 2h | todo | |
+| RAG-PR-001 | 转换脚本：JSON → content.json + `.emb` | — | 2h | done | 2026-06-01 |
 | RAG-PR-002 | `rag.ts` 异步加载 + 二进制嵌入 | RAG-PR-001 | 4h | todo | |
 | RAG-PR-003 | 所有 RAG 调用方 `await` 化 | RAG-PR-002 | 3h | todo | |
 | RAG-PR-004 | `index-pdfs.mjs` 直接输出分离格式 | RAG-PR-001 | 3h | todo | |
@@ -819,6 +819,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-06-01 | ENG-PR-001, 004 | AI | proxy request header 注入 + 生产忽略 AUTH_BYPASS；auth 单测 3 条 |
 | 2026-06-01 | ENG-PR-003 | AI | `safe-path.ts` + knowledge/pdf 路由接入；单测 4 条 |
 | 2026-06-01 | ENG-PR-002 | AI | ESLint 0 error（Compiler hooks off + 机械修复）；`npm run check` + build 绿；PROJECT_HEALTH 同步 |
+| 2026-06-01 | RAG-PR-001 | AI | `convert-index-to-binary.mjs` + npm scripts + .emb 单测 |
 
 ---
 
