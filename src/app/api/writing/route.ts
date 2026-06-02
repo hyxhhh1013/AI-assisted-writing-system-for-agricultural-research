@@ -37,12 +37,24 @@ export async function POST(req: NextRequest) {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
+        let streamClosed = false;
         const emit = (event: WritingSSEEvent) => {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+          if (streamClosed) return;
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+          } catch {
+            streamClosed = true;
+          }
         };
         const finishStream = () => {
-          controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
-          controller.close();
+          if (streamClosed) return;
+          try {
+            controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+            controller.close();
+            streamClosed = true;
+          } catch {
+            streamClosed = true;
+          }
         };
         try {
           await runWritingPipeline({
