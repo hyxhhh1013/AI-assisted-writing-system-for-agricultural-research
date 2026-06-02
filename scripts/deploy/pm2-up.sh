@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# VPS：git 拉代码 → build → PM2 重启（不用 Docker 跑应用）
+# GrainScript VPS 部署（git-pull 模式，用于 GitHub Actions / SSH 手动触发）
+# 如需本地 build + 上传模式，用 package.ps1 + apply.sh
 set -euo pipefail
 
-DEPLOY_DIR="${DEPLOY_DIR:-/opt/grainscript}"
+DEPLOY_DIR="${DEPLOY_DIR:-/home/ubuntu/grainscript}"
 DEPLOY_BRANCH="${DEPLOY_BRANCH:-cursor/code-quality-cleanup}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 
@@ -19,10 +20,13 @@ git fetch origin "$DEPLOY_BRANCH"
 git checkout "$DEPLOY_BRANCH"
 git reset --hard "origin/${DEPLOY_BRANCH}"
 
-echo "→ 检查 DATABASE_URL（新代码需要 PostgreSQL）"
+echo "→ 检查 DATABASE_URL（确保指向 PostgreSQL 5432）"
 if grep -qE '^DATABASE_URL=file:' .env 2>/dev/null; then
   echo "  将 .env 中 SQLite 改为 PostgreSQL（127.0.0.1:5432）"
   sed -i 's|^DATABASE_URL=.*|DATABASE_URL=postgresql://grainscript:grainscript_dev_2024@127.0.0.1:5432/grainscript|' .env
+elif grep -q 'localhost:5433' .env 2>/dev/null; then
+  echo "  修正端口 5433 → 5432"
+  sed -i 's|localhost:5433|localhost:5432|g' .env
 fi
 
 echo "→ 安装依赖"

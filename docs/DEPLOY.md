@@ -1,12 +1,78 @@
 # 部署指南
 
-## 环境要求
+## 部署方式总览
 
-- Docker Desktop（Windows/Mac）或 Docker Engine（Linux）
-- 至少 6 GB 空闲内存给 Docker
-- 不需要在宿主机安装 Node.js、Python、Playwright 或图表依赖；这些依赖都会打进镜像
+| 方式 | 适用场景 | 文档 |
+|------|---------|------|
+| **PM2 + SCP 上传** | VPS 生产环境（aifascience.site） | 见下方 § PM2 部署 |
+| **Docker Compose** | 实验室电脑本地运行 | 见下方 § Docker 部署 |
+| **GitHub Actions** | CI 自动部署（git push 触发） | 见 `.github/workflows/deploy.yml` |
 
-## 实验室电脑部署步骤
+配置清单见 [DEPLOY_SETUP_CHECKLIST.md](./DEPLOY_SETUP_CHECKLIST.md)。
+
+---
+
+## PM2 部署（VPS 生产环境）
+
+### 部署包结构
+
+Next.js standalone 模式：本地 `npm run build` → `.next/standalone/` 包含运行时所需文件。打包脚本 (`scripts/deploy/package.ps1`) 自动：
+1. 取出 standalone 输出
+2. 排除服务器已有的目录（`papers/`, `node_modules/`, `data/`）
+3. 补上 `.next/static/`（不在 standalone 内，需单独复制）
+4. 压缩为 `deploy.tar.gz`
+5. SCP 上传 + SSH 远程部署
+
+### 日常部署
+
+```powershell
+# 一键完成：build → 打包 → 上传 → 服务器重启
+powershell -File scripts/deploy/package.ps1
+```
+
+### 手动分步
+
+```powershell
+# 1. 构建
+npm run build
+
+# 2. 打包
+# （参考 package.ps1 中的步骤，或直接跑脚本跳过上传）
+
+# 3. 上传
+scp deploy.tar.gz ubuntu@159.75.106.21:/home/ubuntu/
+
+# 4. 服务器部署
+ssh ubuntu@159.75.106.21 "cd /home/ubuntu/grainscript && bash scripts/deploy/apply.sh"
+```
+
+### 服务器脚本
+
+| 脚本 | 用途 |
+|------|------|
+| `scripts/deploy/apply.sh` | 解压 + npm install + prisma + pm2 reload |
+| `scripts/deploy/pm2-up.sh` | git pull + build（CI 用） |
+| `ecosystem.config.cjs` | PM2 配置（2 实例 cluster, port 3000） |
+
+### 常用排查
+
+```bash
+# 查看日志
+ssh ubuntu@159.75.106.21 "pm2 logs grainscript --lines 30"
+
+# 查看状态
+ssh ubuntu@159.75.106.21 "pm2 status"
+
+# 手动重启
+ssh ubuntu@159.75.106.21 "pm2 reload ecosystem.config.cjs --update-env"
+
+# 检查 DB
+ssh ubuntu@159.75.106.21 "docker ps --filter name=grainscript-db"
+```
+
+---
+
+## Docker 部署（实验室电脑）
 
 ### 1. 安装 Docker Desktop
 
