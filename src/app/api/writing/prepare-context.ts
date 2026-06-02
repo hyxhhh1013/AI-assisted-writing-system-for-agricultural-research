@@ -38,26 +38,45 @@ export async function prepareWritingContext(
   emit({ type: "status", status: "retrieving" });
   emit({ type: "pipeline_step", step: "retrieving", status: "running", detail: "正在检索相关文献..." });
 
-  const {
-    contextText,
-    refMapping,
-    referencesByIndex,
-    newSources,
-    refRangeHint,
-  } = await retrieveWritingContext(
-    {
-      title,
-      section,
-      context,
-      language,
-      template: template || "sci",
-      existingReferences,
-      researchDirection,
-      retrievalMode,
-      projectMode,
-    },
-    existingReferences,
-  );
+  // 检索超时保护：最多 25 秒，超时用降级结果
+  let contextText = "";
+  let refMapping: Record<string, number> = {};
+  let referencesByIndex: string[] = [];
+  let newSources: string[] = [];
+  let refRangeHint = "";
+
+  try {
+    const result = await Promise.race([
+      retrieveWritingContext(
+        {
+          title,
+          section,
+          context,
+          language,
+          template: template || "sci",
+          existingReferences,
+          researchDirection,
+          retrievalMode,
+          projectMode,
+        },
+        existingReferences,
+      ),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new DOMException("检索超时", "TimeoutError")), 25_000)
+      ),
+    ]);
+    contextText = result.contextText;
+    refMapping = result.refMapping;
+    referencesByIndex = result.referencesByIndex;
+    newSources = result.newSources;
+    refRangeHint = result.refRangeHint;
+  } catch (e: unknown) {
+    const isTimeout = e instanceof DOMException && e.name === "TimeoutError";
+    emit({ type: "info", info: isTimeout
+      ? "文献检索超时，使用基础上下文继续写作"
+      : `文献检索失败，使用基础上下文继续写作` });
+    contextText = `${title}\n${context || ""}`;
+  }
 
   const refCount = referencesByIndex.length;
   const dataClaimCount = dataClaims.length;
