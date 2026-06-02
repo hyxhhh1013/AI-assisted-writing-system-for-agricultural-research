@@ -25,8 +25,8 @@ foreach ($d in $skipDirs) {
     Remove-Item -Recurse -Force "deploy-pkg\$d" -ErrorAction SilentlyContinue
 }
 
-# 移除不需要的大文件
-$skipFiles = @("deploy.tar.gz", "package-lock.json", "tsconfig.tsbuildinfo")
+# 移除不需要的大文件 + 服务器敏感文件（防止覆盖服务器 .env）
+$skipFiles = @("deploy.tar.gz", "package-lock.json", "tsconfig.tsbuildinfo", ".env")
 foreach ($f in $skipFiles) {
     Remove-Item "deploy-pkg\$f" -ErrorAction SilentlyContinue
 }

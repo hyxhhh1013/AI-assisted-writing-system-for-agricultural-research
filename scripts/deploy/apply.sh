@@ -7,18 +7,27 @@ set -euo pipefail
 APP_DIR="${APP_DIR:-/home/ubuntu/grainscript}"
 TAR_FILE="${TAR_FILE:-/home/ubuntu/deploy.tar.gz}"
 
-echo "→ 解压到 ${APP_DIR}"
+echo "→ 解压到 ${APP_DIR}（保留服务器 .env）"
 cd "$APP_DIR"
+# 备份服务器 .env，解压后恢复（防止本地 .env 覆盖服务器配置）
+cp .env .env.server-backup 2>/dev/null || true
 tar -xzf "$TAR_FILE"
+if [ -f .env.server-backup ]; then
+  cp .env.server-backup .env
+  rm .env.server-backup
+fi
 
 echo "→ 安装依赖"
 npm install --production --legacy-peer-deps --ignore-scripts
 
+echo "→ 安装 Prisma CLI（devDependency，production install 会跳过）"
+npm install prisma@^5.22.0 --legacy-peer-deps --ignore-scripts
+
 echo "→ Prisma Generate（生成 Debian 引擎）"
-npx prisma generate
+./node_modules/.bin/prisma generate
 
 echo "→ Prisma DB Push"
-npx prisma db push --skip-generate
+./node_modules/.bin/prisma db push --skip-generate
 
 echo "→ PM2 零停机重启"
 pm2 reload ecosystem.config.cjs --update-env
