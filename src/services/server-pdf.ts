@@ -417,7 +417,7 @@ const baseCss = (template: string) => `
 `;
 
 const standardSciHtml = (project: ProjectData): string => {
-  const templateDefs = getTemplateSections("sci");
+  const templateDefs = getTemplateSections("sci", project.mode);
   const bodyHtml = templateDefs.map(def =>
     sciSection(def.sectionNumber, def.label, sectionWithMerge(project, def))
   ).join("\n");
@@ -453,7 +453,7 @@ const sciSection = (number: number, title: string, content: string): string => `
 const ROMAN = ["I", "II", "III", "IV", "V", "VI"] as const;
 
 const ieeeHtml = (project: ProjectData): string => {
-  const templateDefs = getTemplateSections("ieee");
+  const templateDefs = getTemplateSections("ieee", project.mode);
   const bodyHtml = templateDefs.map(def =>
     ieeeSection(`${ROMAN[def.sectionNumber - 1] || def.sectionNumber}.`, def.label, sectionWithMerge(project, def), def.sectionNumber)
   ).join("\n");
@@ -487,7 +487,7 @@ const ieeeSection = (number: string, title: string, content: string, secNum: num
 
 const gbtHtml = (project: ProjectData): string => {
   const classification = formatClassification(project);
-  const sections = getTemplateSections("gbt7713");
+  const sections = getTemplateSections("gbt7713", project.mode);
 
   const bodyHtml = sections.map(def =>
     gbtSection(def.sectionNumber, def.label, sectionWithMerge(project, def))
@@ -521,7 +521,7 @@ const gbtSection = (number: number, title: string, content: string): string => `
 `;
 
 const natureHtml = (project: ProjectData): string => {
-  const templateDefs = getTemplateSections("nature");
+  const templateDefs = getTemplateSections("nature", project.mode);
   const introDef = templateDefs.find(d => d.key === "introduction");
   const resultsDef = templateDefs.find(d => d.key === "results");
   const methodsDef = templateDefs.find(d => d.key === "methods");
@@ -554,7 +554,7 @@ const natureHtml = (project: ProjectData): string => {
 };
 
 const casHtml = (project: ProjectData): string => {
-  const templateDefs = getTemplateSections("cas");
+  const templateDefs = getTemplateSections("cas", project.mode);
   const bodyHtml = templateDefs.map(def =>
     casSection(def.sectionNumber, def.label, sectionWithMerge(project, def))
   ).join("\n");

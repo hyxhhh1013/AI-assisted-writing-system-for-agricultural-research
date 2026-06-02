@@ -17,7 +17,7 @@ function getSectionContent(project: ProjectData, def: TemplateSectionDef): strin
 }
 
 export function NaturePreview({ project, onCiteClick }: TemplateProps) {
-  const templateSections = getTemplateSections("nature");
+  const templateSections = getTemplateSections("nature", project.mode);
   const introDef = templateSections.find(d => d.key === "introduction");
   const resultsDef = templateSections.find(d => d.key === "results");
   const methodsDef = templateSections.find(d => d.key === "methods");

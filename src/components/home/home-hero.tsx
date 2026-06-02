@@ -18,6 +18,9 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { projectStore } from "@/lib/store";
 import { searchKnowledge } from "@/services/knowledge";
 import type { ProjectListItem } from "@/services/project";
+import type { ProjectWritingMode } from "@/contracts/writing-mode";
+import { CreateProjectDialog } from "@/components/shared/create-project-dialog";
+import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
 import { cn } from "@/lib/utils";
 
 function formatRelativeTime(timestamp: number): string {
@@ -57,6 +60,8 @@ const QUICK_LINKS = [
 export function HomeHero({ projects }: HomeHeroProps) {
   const router = useRouter();
   const [stats, setStats] = useState<KnowledgeStats | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
 
   const recentProject = projects[0] ?? null;
   const otherProjects = projects.slice(1, 5);
@@ -79,10 +84,16 @@ export function HomeHero({ projects }: HomeHeroProps) {
     };
   }, []);
 
-  const handleCreate = async () => {
-    const created = await projectStore.create();
-    if (created) {
-      router.push(`/workbench?id=${created.id}`);
+  const handleCreate = async (mode: ProjectWritingMode, title: string) => {
+    setIsCreating(true);
+    try {
+      const created = await projectStore.create(mode, title);
+      if (created) {
+        setCreateOpen(false);
+        router.push(`/workbench?id=${created.id}`);
+      }
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -116,6 +127,7 @@ export function HomeHero({ projects }: HomeHeroProps) {
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex items-center gap-2">
                     <p className="text-xs font-medium text-[#1a5632]">最近编辑</p>
+                    <ProjectModeBadge mode={recentProject.mode} />
                     {(() => {
                       const status = getProjectStatus(recentProject.progress);
                       return (
@@ -162,7 +174,7 @@ export function HomeHero({ projects }: HomeHeroProps) {
                   variant="outline"
                   size="lg"
                   className="h-10 rounded-full border-[#1a5632]/20 bg-transparent text-[#1a5632] hover:bg-[#1a5632]/5"
-                  onClick={() => void handleCreate()}
+                  onClick={() => setCreateOpen(true)}
                 >
                   <FolderPlus className="mr-1.5 h-4 w-4" />
                   新建
@@ -199,6 +211,7 @@ export function HomeHero({ projects }: HomeHeroProps) {
                             <span className="min-w-0 flex-1 truncate text-sm text-[#3d4f46] group-hover:text-[#122820]">
                               {project.title || "未命名论文"}
                             </span>
+                            <ProjectModeBadge mode={project.mode} />
                             {/* 进度条 */}
                             <div className="flex items-center gap-2 shrink-0">
                               <div className="flex items-center gap-1.5">
@@ -230,7 +243,7 @@ export function HomeHero({ projects }: HomeHeroProps) {
             <div className="relative space-y-6">
               <div className="grid gap-3 sm:grid-cols-3">
                 {[
-                  { step: "01", title: "新建项目", sub: "确定论文主题与结构" },
+                  { step: "01", title: "选择类型", sub: "综述或创新型研究论文" },
                   { step: "02", title: "整理文献", sub: "上传 PDF 建立索引" },
                   { step: "03", title: "AI 扩写", sub: "大纲生成与章节写作" },
                 ].map((item) => (
@@ -251,7 +264,7 @@ export function HomeHero({ projects }: HomeHeroProps) {
                 <Button
                   size="lg"
                   className="h-10 rounded-full bg-[#1a5632] px-5 shadow-sm shadow-[#1a5632]/25 hover:bg-[#144a2a]"
-                  onClick={() => void handleCreate()}
+                  onClick={() => setCreateOpen(true)}
                 >
                   <FolderPlus className="mr-1.5 h-4 w-4" />
                   新建第一篇论文
@@ -321,6 +334,13 @@ export function HomeHero({ projects }: HomeHeroProps) {
           </div>
         </aside>
       </div>
+
+      <CreateProjectDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreate={handleCreate}
+        isCreating={isCreating}
+      />
     </section>
   );
 }

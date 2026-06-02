@@ -1,8 +1,11 @@
+import type { ProjectWritingMode } from "@/contracts/writing-mode";
 import { buildDomainExpertise } from "./domain";
+import { REVIEW_SECTION_PROMPTS } from "./review-writing";
+import type { SectionPrompt, SectionPromptParams } from "./writing-types";
 
 export { buildDomainExpertise };
 
-type SectionPrompt = string | ((params: { isGBT: boolean; isChinese: boolean }) => string);
+export type { SectionPrompt, SectionPromptParams };
 
 export const WRITING_SECTION_PROMPTS: Record<string, SectionPrompt> = {
   abstract: ({ isChinese }: { isGBT: boolean; isChinese: boolean }) =>
@@ -104,6 +107,22 @@ Keep it selective: if a detail does not affect editorial triage, omit it.`,
 
 ⚠️ 结论必须基于本文实际数据，不得引入新发现或超出数据范围的推断。`,
 };
+
+/** 按项目写作模式解析章节 Prompt */
+export function resolveSectionPrompt(
+  section: string,
+  mode: ProjectWritingMode | undefined,
+  opts: SectionPromptParams,
+): string {
+  const effectiveMode = mode === "research" ? "research" : "review";
+  if (effectiveMode === "review" && section in REVIEW_SECTION_PROMPTS) {
+    const reviewPrompt = REVIEW_SECTION_PROMPTS[section];
+    return typeof reviewPrompt === "function" ? reviewPrompt(opts) : reviewPrompt;
+  }
+  const researchPrompt = WRITING_SECTION_PROMPTS[section];
+  if (!researchPrompt) return "请根据以上信息进行专业扩写。";
+  return typeof researchPrompt === "function" ? researchPrompt(opts) : researchPrompt;
+}
 
 /** 各引用格式的参考文献条目示例与规则 */
 function buildCitationStyleBlock(style: string, isChinese: boolean): string {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense, useRef, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { IMRAD_SECTION_KEYS, IMRAD_ORDER, IMRAD_LABELS_EN } from "@/lib/imrad";
+import { buildWorkbenchSectionsForMode } from "@/lib/section-registry";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -115,15 +115,6 @@ const PDFViewer = dynamic(() => import("@/components/pdf-viewer"), {
   ),
 });
 
-const SECTIONS = IMRAD_SECTION_KEYS.map((key) => {
-  const num = IMRAD_ORDER[key];
-  return {
-    id: key,
-    label: num > 0 ? `${num}. ${IMRAD_LABELS_EN[key]}` : IMRAD_LABELS_EN[key],
-    placeholder: "",
-  };
-});
-
 export type WorkbenchTab = "structure" | "data" | "outline" | "writing" | "reader" | "plagiarism" | "xrd";
 
 const WORKBENCH_TABS: WorkbenchTab[] = [
@@ -185,6 +176,19 @@ function WorkbenchContent() {
   editingContentRef.current = editingContent;
   const activeSectionRef = useRef(activeSection);
   activeSectionRef.current = activeSection;
+
+  const structureSections = useMemo(
+    () => buildWorkbenchSectionsForMode(project.mode ?? "review", "zh"),
+    [project.mode],
+  );
+
+  const sectionContentsForRefs = useMemo(() => {
+    const base: Record<string, string> = { abstract: project.abstract || "" };
+    for (const [key, content] of Object.entries(project.sections || {})) {
+      base[key] = content || "";
+    }
+    return base;
+  }, [project.abstract, project.sections]);
 
   const previewProject = useMemo<ProjectData>(() => {
     return mergeEditorIntoProject(project, activeSection, editingContent);
@@ -399,7 +403,7 @@ function WorkbenchContent() {
     setIsPreviewOpen(true);
   };
 
-  const handleSaveMeta = async (draft: { title: string; authors: string; affiliations: string; abstract: string; keywords: string; classification: string; researchDirection: string; outline: string; template: string; referencesText: string; mode?: "review" | "research"; citationStyle?: "gbt7714" | "vancouver" | "apa7" | "ieee" }) => {
+  const handleSaveMeta = async (draft: { title: string; authors: string; affiliations: string; abstract: string; keywords: string; classification: string; researchDirection: string; outline: string; template: string; referencesText: string; citationStyle?: "gbt7714" | "vancouver" | "apa7" | "ieee" }) => {
     const updated: ProjectData = {
       ...project,
       title: draft.title,
@@ -411,7 +415,6 @@ function WorkbenchContent() {
       researchDirection: draft.researchDirection,
       outline: draft.outline,
       template: draft.template,
-      mode: draft.mode || "review",
       citationStyle: draft.citationStyle || "gbt7714",
       references: draft.referencesText.split(/\n+/).map((ref) => ref.trim()).filter(Boolean),
     };
@@ -588,7 +591,7 @@ function WorkbenchContent() {
                   点选章节后，中间编辑器与预览对应该段；引用重排会扫描<strong>含当前编辑区</strong>的全文。
                 </p>
                 <div className="shrink-0 space-y-0">
-                  {SECTIONS.map((s) => (
+                  {structureSections.map((s) => (
                     <button
                       key={s.id}
                       onClick={() => setActiveSection(s.id)}
@@ -616,13 +619,7 @@ function WorkbenchContent() {
                           ? project.abstract
                           : project.sections[activeSection]
                       }
-                      allContents={{
-                        abstract: project.abstract || "",
-                        introduction: project.sections.introduction || "",
-                        methods: project.sections.methods || "",
-                        results: project.sections.results || "",
-                        conclusion: project.sections.conclusion || "",
-                      }}
+                      allContents={sectionContentsForRefs}
                     />
                   </div>
 

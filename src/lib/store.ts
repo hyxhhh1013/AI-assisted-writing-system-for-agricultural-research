@@ -9,16 +9,23 @@ import {
   replaceReferences as replaceReferencesApi,
 } from "@/services/project";
 import type { ProjectData } from "@/contracts/project";
-import type { ProjectListItem, SectionRecord } from "@/services/project";
+import type { ProjectWritingMode } from "@/contracts/writing-mode";
+import { getDefaultProjectTitle } from "@/contracts/writing-mode";
+import type { ProjectListItem } from "@/services/project";
 
-import { IMRAD_BODY_KEYS } from "@/lib/imrad";
-
-const DEFAULT_SECTIONS = {
+const RESEARCH_DEFAULT_SECTIONS: Record<string, string> = {
   introduction: "",
   methods: "",
   results: "",
   conclusion: "",
-} satisfies SectionRecord;
+};
+
+const REVIEW_DEFAULT_SECTIONS: Record<string, string> = {
+  introduction: "",
+  background: "",
+  literature_body: "",
+  conclusion: "",
+};
 
 export const projectStore = {
   async list(): Promise<ProjectListItem[]> {
@@ -37,15 +44,18 @@ export const projectStore = {
     return deleteProject(id);
   },
 
-  async create(title: string = "新论文项目"): Promise<ProjectData | null> {
-    const newProject = this.getDefault("");
-    newProject.title = title;
+  async create(
+    mode: ProjectWritingMode = "review",
+    title?: string,
+  ): Promise<ProjectData | null> {
+    const newProject = this.getDefault("", mode);
+    newProject.title = title?.trim() || getDefaultProjectTitle(mode);
     const id = await saveProject(newProject);
     if (!id) return null;
     return getProject(id);
   },
 
-  getDefault(id: string = ""): ProjectData {
+  getDefault(id: string = "", mode: ProjectWritingMode = "review"): ProjectData {
     return {
       id,
       title: "",
@@ -56,9 +66,12 @@ export const projectStore = {
       classification: "",
       researchDirection: "",
       outline: "",
-      template: "sci",
-      mode: "review",
-      sections: { ...DEFAULT_SECTIONS },
+      template: mode === "research" ? "sci" : "gbt7713",
+      mode,
+      sections:
+        mode === "research"
+          ? { ...RESEARCH_DEFAULT_SECTIONS }
+          : { ...REVIEW_DEFAULT_SECTIONS },
       analysisResults: [],
       references: [],
       lastUpdated: Date.now(),

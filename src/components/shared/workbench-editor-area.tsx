@@ -81,7 +81,7 @@ export function WorkbenchEditorArea({
   projectId,
 }: WorkbenchEditorAreaProps) {
   // 模板驱动的 section 元数据（label + placeholder）
-  const templateDefs = getTemplateSections(project.template || "sci");
+  const templateDefs = getTemplateSections(project.template || "sci", project.mode);
   const sectionMeta = templateDefs.find(s => s.key === activeSection);
   const sectionLabel = sectionMeta?.label || activeSection;
   const sectionPlaceholder = sectionMeta ? `${sectionMeta.label}内容…` : "";

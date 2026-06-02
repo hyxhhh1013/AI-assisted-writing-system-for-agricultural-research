@@ -19,7 +19,7 @@ function getSectionContent(project: ProjectData, def: TemplateSectionDef): strin
 
 export function CASPreview({ project, onCiteClick }: TemplateProps) {
   const keywords = formatKeywords(project, "zh");
-  const templateSections = getTemplateSections("cas");
+  const templateSections = getTemplateSections("cas", project.mode);
   return (
     <div className="p-12 text-[10.5pt] text-black max-w-[210mm] mx-auto bg-white" style={{ fontFamily: '"SimSun", "Microsoft YaHei", "Noto Sans CJK SC", serif', lineHeight: '1.78' }}>
       <header className="text-center mb-12">

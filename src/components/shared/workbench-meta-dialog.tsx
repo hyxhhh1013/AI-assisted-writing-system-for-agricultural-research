@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/dialog";
 import { DIALOG_FULL } from "@/components/ui/dialog-sizes";
 import type { ProjectData } from "@/contracts/project";
+import { getWritingModeMeta } from "@/contracts/writing-mode";
+import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
 
 interface ProjectMetaDraft {
   title: string;
@@ -28,7 +30,6 @@ interface ProjectMetaDraft {
   outline: string;
   template: string;
   referencesText: string;
-  mode?: "review" | "research";
   citationStyle?: "gbt7714" | "vancouver" | "apa7" | "ieee";
 }
 
@@ -60,7 +61,6 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
     outline: project.outline || "",
     template: project.template || "sci",
     referencesText: (project.references || []).join("\n"),
-    mode: project.mode || "review",
     citationStyle: project.citationStyle || "gbt7714",
   });
 
@@ -77,7 +77,6 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
         outline: project.outline || "",
         template: project.template || "sci",
         referencesText: (project.references || []).join("\n"),
-        mode: project.mode || "review",
         citationStyle: project.citationStyle || "gbt7714",
       });
     }
@@ -132,17 +131,12 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
                 </div>
               </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="meta-mode">写作模式</Label>
-                <Select value={tempMeta.mode || "review"} onValueChange={(val) => setTempMeta({ ...tempMeta, mode: val as "review" | "research" })}>
-                  <SelectTrigger id="meta-mode">
-                    <SelectValue placeholder="选择写作模式" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="review">综述模式 — 文献驱动，适合撰写文献综述</SelectItem>
-                    <SelectItem value="research">研究论文 — 数据驱动，定量结论需引用实验数据</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-[#1a5632]/15 bg-[#f6f5f1]/60 px-3 py-2">
+                <span className="text-xs text-[#6b7c72]">项目类型</span>
+                <ProjectModeBadge mode={project.mode} size="md" />
+                <span className="text-[11px] text-[#9aa8a0]">
+                  {getWritingModeMeta(project.mode).description} · 创建后不可更改
+                </span>
               </div>
 
               <div className="grid gap-2">

@@ -21,6 +21,7 @@ import {
 } from "@/lib/utils";
 import type { OutlineTask } from "@/lib/utils";
 import { buildTemplateSectionOptions, getTemplateSections } from "@/lib/template-sections";
+import { buildSectionOptionsForMode } from "@/lib/section-registry";
 import { WritingOutlineTaskList } from "@/components/shared/writing/writing-outline-task-list";
 import { WritingExpandResult } from "@/components/shared/writing/writing-expand-result";
 import type { WritingPreviewPayload, GenerationStatus, CitationWarning, DataClaimWarning } from "@/components/shared/writing/writing-types";
@@ -76,6 +77,7 @@ export function WritingPanel({
   >([]);
 
   const writingStream = useWritingStream();
+  const projectMode = project.mode ?? "review";
 
   useEffect(() => {
     onGeneratingChange?.(isGenerating);
@@ -91,13 +93,22 @@ export function WritingPanel({
 
   const outlineTasks: OutlineTask[] = useMemo(() => {
     if (!project.outline) return [];
-    return buildOutlineTasks(project.outline);
-  }, [project.outline]);
+    return buildOutlineTasks(project.outline, projectMode);
+  }, [project.outline, projectMode]);
 
-  const templateSections = useMemo(() => buildTemplateSectionOptions(project.template || "sci"), [project.template]);
+  const templateSections = useMemo(
+    () =>
+      projectMode === "review"
+        ? buildSectionOptionsForMode(projectMode, language === "en" ? "en" : "zh")
+        : buildTemplateSectionOptions(project.template || "sci", projectMode),
+    [project.template, projectMode, language],
+  );
   const templateSectionIds = useMemo(
-    () => new Set(getTemplateSections(project.template || "sci").map((s) => s.key)),
-    [project.template],
+    () =>
+      new Set(
+        getTemplateSections(project.template || "sci", projectMode).map((s) => s.key),
+      ),
+    [project.template, projectMode],
   );
 
   const { clearSession } = useWritingPanelSession({
@@ -142,7 +153,7 @@ export function WritingPanel({
       const allSections = parseOutline(project.outline || "");
       const currentSection = allSections.find((s) => s.id === task.id);
       if (currentSection) {
-        setContext(buildExpansionContext(currentSection, allSections, project.outline || ""));
+        setContext(buildExpansionContext(currentSection, allSections, project.outline || "", projectMode));
       } else {
         setContext(
           `【扩写目标子节】：${task.fullPath}\n【写作要求】：请针对此主题展开学术论述。\n\n【论文大纲参考】：\n${(project.outline || "").slice(0, 400)}`,

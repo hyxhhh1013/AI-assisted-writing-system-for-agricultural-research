@@ -21,7 +21,7 @@ function getSectionContent(project: ProjectData, def: TemplateSectionDef): strin
 
 export function IEEEPreview({ project, onCiteClick }: TemplateProps) {
   const keywords = formatKeywords(project, "en");
-  const templateSections = getTemplateSections("ieee");
+  const templateSections = getTemplateSections("ieee", project.mode);
   return (
     <div className="p-8 text-[9pt] leading-[1.1] text-black max-w-[210mm] mx-auto bg-white" style={{ fontFamily: '"Times New Roman", Georgia, serif' }}>
       <div className="text-center mb-8">

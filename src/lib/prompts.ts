@@ -2,6 +2,7 @@
 export {
   buildDomainExpertise,
   WRITING_SECTION_PROMPTS,
+  resolveSectionPrompt,
   buildWriterSystemPrompt,
   buildVerifierSystemPrompt,
   buildVerifierPrompt,

@@ -62,7 +62,13 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
     setResult("");
     try {
       const full = await streamOutline(
-        { title, researchDirection, language: language as "zh" | "en", category },
+        {
+          title,
+          researchDirection,
+          language: language as "zh" | "en",
+          category,
+          projectMode: project.mode ?? "review",
+        },
         setResult,
       );
       handleSave(full);

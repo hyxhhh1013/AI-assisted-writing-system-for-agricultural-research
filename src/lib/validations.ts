@@ -1,28 +1,51 @@
 import { z } from "zod";
 import { IMRAD_SECTION_KEYS } from "@/lib/imrad";
+import { REVIEW_SECTION_KEYS } from "@/lib/review-structure";
+import { isSectionValidForMode } from "@/lib/section-registry";
+
+const WRITING_SECTION_ENUM = [
+  ...new Set([...IMRAD_SECTION_KEYS, ...REVIEW_SECTION_KEYS, "discussion"]),
+] as [
+  "abstract",
+  "introduction",
+  "background",
+  "literature_body",
+  "methods",
+  "results",
+  "discussion",
+  "conclusion",
+];
 
 // === Writing ===
-export const writingSchema = z.object({
-  title: z.string().min(1, "标题不能为空"),
-  section: z.enum(IMRAD_SECTION_KEYS),
-  context: z.string().optional(),
-  language: z.enum(["zh", "en"]).optional().default("zh"),
-  template: z.enum(["sci", "ieee", "gbt7713", "nature"]).optional().default("sci"),
-  existingReferences: z.array(z.string()).optional(),
-  // globalContext 是前端传来的包含 abstract/outline/sectionPreviews 的复杂对象
-  globalContext: z.unknown().optional(),
-  mode: z.enum(["full", "fast", "audit_only", "fix_only"]).optional().default("full"),
-  verificationFeedback: z.string().optional(),
-  retrievalMode: z.enum(["balanced", "precise", "extensive"]).optional().default("balanced"),
-  researchDirection: z.string().optional(),
-  // 扩展字段（子章节 / 图表 / 数据核查）
-  subsectionTitle: z.string().optional(),
-  figureStart: z.number().int().optional(),
-  evidenceSummary: z.string().optional(),
-  projectMode: z.enum(["review", "research"]).optional(),
-  dataClaims: z.array(z.unknown()).optional().default([]),
-  citationStyle: z.enum(["gbt7714", "vancouver", "apa7", "ieee"]).optional().default("gbt7714"),
-});
+export const writingSchema = z
+  .object({
+    title: z.string().min(1, "标题不能为空"),
+    section: z.enum(WRITING_SECTION_ENUM),
+    context: z.string().optional(),
+    language: z.enum(["zh", "en"]).optional().default("zh"),
+    template: z.enum(["sci", "ieee", "gbt7713", "nature"]).optional().default("sci"),
+    existingReferences: z.array(z.string()).optional(),
+    globalContext: z.unknown().optional(),
+    mode: z.enum(["full", "fast", "audit_only", "fix_only"]).optional().default("full"),
+    verificationFeedback: z.string().optional(),
+    retrievalMode: z.enum(["balanced", "precise", "extensive"]).optional().default("balanced"),
+    researchDirection: z.string().optional(),
+    subsectionTitle: z.string().optional(),
+    figureStart: z.number().int().optional(),
+    evidenceSummary: z.string().optional(),
+    projectMode: z.enum(["review", "research"]).optional(),
+    dataClaims: z.array(z.unknown()).optional().default([]),
+    citationStyle: z.enum(["gbt7714", "vancouver", "apa7", "ieee"]).optional().default("gbt7714"),
+  })
+  .superRefine((data, ctx) => {
+    if (!isSectionValidForMode(data.section, data.projectMode)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `章节 "${data.section}" 与项目类型 ${data.projectMode ?? "review"} 不匹配`,
+        path: ["section"],
+      });
+    }
+  });
 export type WritingInput = z.infer<typeof writingSchema>;
 
 // === Outline ===
@@ -31,6 +54,7 @@ export const outlineSchema = z.object({
   researchDirection: z.string().optional(),
   language: z.enum(["zh", "en"]).optional().default("zh"),
   category: z.string().optional(),
+  projectMode: z.enum(["review", "research"]).optional(),
 });
 export type OutlineInput = z.infer<typeof outlineSchema>;
 

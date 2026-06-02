@@ -7,6 +7,8 @@ import { projectEvidencePatchSchema } from "@/lib/validations";
 import type { ProjectDTO } from "@/contracts/project";
 import { getErrorMessage } from "@/lib/error-utils";
 
+import { getCoreSectionKeysForMode } from "@/lib/section-registry";
+
 type SectionRecord = Record<string, string>;
 
 // 获取当前用户的 userId（由 middleware.ts 设置 header）
@@ -65,21 +67,24 @@ export async function GET(req: NextRequest) {
       select: {
         id: true,
         title: true,
+        mode: true,
         lastUpdated: true,
         sections: { select: { key: true, content: true } },
       }
     });
 
-    // 核心章节（计入进度）
-    const CORE_KEYS = ["abstract", "introduction", "methods", "results", "conclusion"];
-
     return NextResponse.json(projects.map(p => {
       const filledCount = p.sections.filter(s => s.content && s.content.trim().length > 10).length;
-      const coreFilled = p.sections.filter(s => CORE_KEYS.includes(s.key) && s.content && s.content.trim().length > 10).length;
-      const progress = Math.round((coreFilled / CORE_KEYS.length) * 100);
+      const mode = p.mode === "research" ? "research" : "review";
+      const coreKeys = getCoreSectionKeysForMode(mode);
+      const coreFilled = p.sections.filter(
+        s => coreKeys.includes(s.key) && s.content && s.content.trim().length > 10,
+      ).length;
+      const progress = Math.round((coreFilled / coreKeys.length) * 100);
       return {
         id: p.id,
         title: p.title,
+        mode,
         lastUpdated: p.lastUpdated.getTime(),
         progress,
         sectionCount: p.sections.length,
@@ -137,13 +142,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 创建或更新主记录
+    // 创建或更新主记录（mode 仅在新建时写入，更新时不允许切换类型）
     const project = projectId
       ? await prisma.project.update({
           where: { id: projectId },
           data: {
             title, authors, affiliations, abstract, keywords,
-            classification, researchDirection, outline, template, mode, citationStyle,
+            classification, researchDirection, outline, template, citationStyle,
             dataClaims, dataSources,
             lastUpdated: new Date(),
           },
@@ -151,7 +156,9 @@ export async function POST(req: NextRequest) {
       : await prisma.project.create({
           data: {
             userId, title, authors, affiliations, abstract, keywords,
-            classification, researchDirection, outline, template, mode, citationStyle,
+            classification, researchDirection, outline, template,
+            mode: mode === "research" ? "research" : "review",
+            citationStyle,
             dataClaims, dataSources,
           },
         });

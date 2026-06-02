@@ -1,6 +1,7 @@
 export { buildDomainExpertise } from "./domain";
 export {
   WRITING_SECTION_PROMPTS,
+  resolveSectionPrompt,
   buildWriterSystemPrompt,
   buildVerifierSystemPrompt,
   buildVerifierPrompt,

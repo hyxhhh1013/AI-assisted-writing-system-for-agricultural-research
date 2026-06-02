@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     const { data, errorResponse: ve } = await validateBody(outlineSchema, await req.json());
     if (ve) return ve;
 
-    const { title, researchDirection: rawDir, language, category } = data;
+    const { title, researchDirection: rawDir, language, category, projectMode } = data;
     const researchDirection = rawDir ?? "";
 
     if (!researchDirection) {
@@ -41,7 +41,13 @@ export async function POST(req: NextRequest) {
       })
       .join("\n\n");
 
-    const systemPrompt = buildOutlinePrompt({ title, researchDirection, language, contextText });
+    const systemPrompt = buildOutlinePrompt({
+      title,
+      researchDirection,
+      language,
+      contextText,
+      projectMode: projectMode ?? "review",
+    });
 
     const response = await callAI({
       provider,

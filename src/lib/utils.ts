@@ -1,6 +1,8 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { IMRAD_LABELS_ZH, IMRAD_ORDER } from "@/lib/imrad"
+import { REVIEW_ORDER } from "@/lib/review-structure"
+import type { ProjectWritingMode } from "@/contracts/writing-mode"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -19,7 +21,7 @@ export interface OutlineSection {
 export interface OutlineTask {
   id: string;
   title: string;
-  sectionKey: string;  // IMRaD key: abstract | introduction | methods | results | conclusion
+  sectionKey: string;
   level: number;
   fullPath: string;
   content: string;
@@ -50,7 +52,24 @@ const IMRAD_KEYWORDS: { key: string; patterns: RegExp[] }[] = [
   },
 ];
 
-/** 将大纲标题映射到 IMRaD 节 key */
+const REVIEW_KEYWORDS: { key: string; patterns: RegExp[] }[] = [
+  { key: "abstract", patterns: [/摘要/i, /abstract/i] },
+  { key: "introduction", patterns: [/引言/i, /introduction/i, /前言/i] },
+  {
+    key: "background",
+    patterns: [/研究现状/i, /现状与问题/i, /概念/i, /问题框架/i, /background/i, /领域背景/i],
+  },
+  {
+    key: "literature_body",
+    patterns: [/进展综述/i, /研究进展/i, /文献综述/i, /literature review/i, /主题/i, /争议/i, /综合/i],
+  },
+  {
+    key: "conclusion",
+    patterns: [/结论/i, /展望/i, /conclusion/i, /未来方向/i, /研究空白/i],
+  },
+];
+
+/** 将大纲标题映射到 IMRaD 节 key（研究论文） */
 export function mapToIMRADSection(titleOrPath: string): string {
   const lower = titleOrPath.toLowerCase();
   for (const group of IMRAD_KEYWORDS) {
@@ -58,7 +77,22 @@ export function mapToIMRADSection(titleOrPath: string): string {
       if (pat.test(lower)) return group.key;
     }
   }
-  return "introduction"; // fallback
+  return "introduction";
+}
+
+/** 按项目写作模式映射大纲标题到 section key */
+export function mapToSectionForMode(
+  titleOrPath: string,
+  mode?: ProjectWritingMode,
+): string {
+  if (mode === "research") return mapToIMRADSection(titleOrPath);
+  const lower = titleOrPath.toLowerCase();
+  for (const group of REVIEW_KEYWORDS) {
+    for (const pat of group.patterns) {
+      if (pat.test(lower)) return group.key;
+    }
+  }
+  return mapToIMRADSection(titleOrPath);
 }
 
 // ==================== Expansion Context Builder ====================
@@ -70,9 +104,10 @@ export function buildExpansionContext(
   section: OutlineSection,
   allSections: OutlineSection[],
   outlineText?: string,
+  mode?: ProjectWritingMode,
 ): string {
-  const parentKey = mapToIMRADSection(section.fullPath);
-  const parentLabel = IMRAD_LABELS[parentKey] || parentKey;
+  const parentKey = mapToSectionForMode(section.fullPath, mode);
+  const parentLabel = IMRAD_LABELS[parentKey] || REVIEW_LABELS[parentKey] || parentKey;
 
   // 找到同级兄弟子节（同父路径下 level 相同的章节）
   const parentPath = section.fullPath.split(" > ").slice(0, -1).join(" > ");
@@ -104,6 +139,11 @@ export function buildExpansionContext(
 }
 
 const IMRAD_LABELS: Record<string, string> = IMRAD_LABELS_ZH;
+
+const REVIEW_LABELS: Record<string, string> = {
+  background: "研究现状与问题",
+  literature_body: "研究进展综述",
+};
 
 // ==================== Outline Parser ====================
 
@@ -251,12 +291,15 @@ export function parseOutline(markdown: string): OutlineSection[] {
 }
 
 /** 从解析后的大纲生成 OutlineTask 列表（供 WritingPanel 使用） */
-export function buildOutlineTasks(outlineText: string): OutlineTask[] {
+export function buildOutlineTasks(
+  outlineText: string,
+  mode?: ProjectWritingMode,
+): OutlineTask[] {
   const sections = parseOutline(outlineText);
   return sections.map((s) => ({
     id: s.id,
     title: s.fullPath,
-    sectionKey: mapToIMRADSection(s.fullPath),
+    sectionKey: mapToSectionForMode(s.fullPath, mode),
     level: s.level,
     fullPath: s.fullPath,
     content: s.content,
@@ -264,7 +307,10 @@ export function buildOutlineTasks(outlineText: string): OutlineTask[] {
 }
 
 /** 论文章节的标准顺序（用于跨章节图表全局编号） */
-export const SECTION_ORDER: Record<string, number> = IMRAD_ORDER;
+export const SECTION_ORDER: Record<string, number> = {
+  ...IMRAD_ORDER,
+  ...REVIEW_ORDER,
+};
 
 function countFiguresInText(text: string): number {
   const imgMatches = text.match(/!\[[^\]]*\]\([^)]+\)/g);

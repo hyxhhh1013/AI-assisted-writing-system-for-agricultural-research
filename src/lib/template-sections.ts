@@ -1,9 +1,10 @@
 /**
  * 模板 section 声明 — 全项目单一数据源
  *
- * 每个模板定义自己需要哪些 section、如何渲染、哪些 section 合并 Discussion 内容。
- * 替代预览/导出中的硬编码 section 列表。
+ * research 模式按期刊模板；review 模式使用固定五章结构（见 REVIEW_TEMPLATE_SECTIONS）。
  */
+
+import type { ProjectWritingMode } from "@/contracts/writing-mode";
 
 export interface TemplateSectionDef {
   /** section key（对应 project.sections[key]） */
@@ -62,11 +63,23 @@ export const TEMPLATE_SECTIONS: Record<TemplateId, TemplateSectionDef[]> = {
   ],
 };
 
+/** 综述模式固定章节（与 template 无关） */
+export const REVIEW_TEMPLATE_SECTIONS: TemplateSectionDef[] = [
+  { key: "introduction", label: "引言", sectionNumber: 1 },
+  { key: "background", label: "研究现状与问题", sectionNumber: 2 },
+  { key: "literature_body", label: "研究进展综述", sectionNumber: 3 },
+  { key: "conclusion", label: "结论与展望", sectionNumber: 4 },
+];
+
 /**
- * 获取指定模板的 section 列表。
- * 未知模板回退到 sci。
+ * 获取指定模板 + 写作模式的 section 列表。
+ * review 模式忽略 template，使用 REVIEW_TEMPLATE_SECTIONS。
  */
-export function getTemplateSections(template: string): TemplateSectionDef[] {
+export function getTemplateSections(
+  template: string,
+  mode?: ProjectWritingMode,
+): TemplateSectionDef[] {
+  if (mode === "review") return REVIEW_TEMPLATE_SECTIONS;
   return TEMPLATE_SECTIONS[template as TemplateId] || TEMPLATE_SECTIONS.sci;
 }
 
@@ -74,8 +87,8 @@ export function getTemplateSections(template: string): TemplateSectionDef[] {
  * 获取模板中所有需要的 section key（含 mergeKeys）。
  * 用于判断哪些 section 需要生成内容。
  */
-export function getAllSectionKeys(template: string): string[] {
-  const sections = getTemplateSections(template);
+export function getAllSectionKeys(template: string, mode?: ProjectWritingMode): string[] {
+  const sections = getTemplateSections(template, mode);
   const keys: string[] = [];
   for (const s of sections) {
     if (!keys.includes(s.key)) keys.push(s.key);
@@ -93,16 +106,17 @@ export function getAllSectionKeys(template: string): string[] {
  * 仅返回主 key（不含 mergeKeys），因为 mergeKeys 的内容在主 key 中合并渲染。
  * 但如果模板独立使用某个 key（如 Nature 的 discussion），则单独列出。
  */
-export function buildTemplateSectionOptions(template: string): { value: string; label: string }[] {
-  const sections = getTemplateSections(template);
-  return sections.map(s => ({ value: s.key, label: s.label }));
+export function buildTemplateSectionOptions(
+  template: string,
+  mode?: ProjectWritingMode,
+): { value: string; label: string }[] {
+  const sections = getTemplateSections(template, mode);
+  return sections.map((s) => ({ value: s.key, label: s.label }));
 }
 
-/**
- * 判断指定模板是否独立使用 discussion section（不合并到 results 中）。
- */
-export function hasSeparateDiscussion(template: string): boolean {
-  const sections = getTemplateSections(template);
+export function hasSeparateDiscussion(template: string, mode?: ProjectWritingMode): boolean {
+  if (mode === "review") return false;
+  const sections = getTemplateSections(template, mode);
   return sections.some(s => s.key === "discussion");
 }
 
@@ -111,8 +125,12 @@ export function hasSeparateDiscussion(template: string): boolean {
  * 如 Nature 模板中 discussion 的 sectionNumber = 4。
  * 未找到时返回 undefined。
  */
-export function getTemplateSectionNumber(template: string, sectionKey: string): number | undefined {
-  const sections = getTemplateSections(template);
+export function getTemplateSectionNumber(
+  template: string,
+  sectionKey: string,
+  mode?: ProjectWritingMode,
+): number | undefined {
+  const sections = getTemplateSections(template, mode);
   const def = sections.find(s => s.key === sectionKey);
   return def?.sectionNumber;
 }

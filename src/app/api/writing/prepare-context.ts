@@ -2,10 +2,11 @@ import type { EvidenceClaim } from "@/contracts/data-source";
 import type { WritingInput } from "@/lib/validations";
 import {
   buildDomainExpertise,
-  WRITING_SECTION_PROMPTS,
+  resolveSectionPrompt,
   buildWriterSystemPrompt,
 } from "@/lib/prompts";
 import { getTemplateSectionNumber } from "@/lib/template-sections";
+import { getSectionNumberForMode } from "@/lib/section-registry";
 import { retrieveWritingContext } from "@/services/writing-context";
 import { buildEvidencePack } from "@/services/evidence-pack";
 import type { WritingPipelineEmit, PreparedWritingContext, WritingGlobalContext } from "./types";
@@ -53,6 +54,7 @@ export async function prepareWritingContext(
       existingReferences,
       researchDirection,
       retrievalMode,
+      projectMode,
     },
     existingReferences,
   );
@@ -86,14 +88,7 @@ export async function prepareWritingContext(
 
   const isGBT = template === "gbt7713";
   const isChinese = language !== "en";
-  const sectionInstruction = WRITING_SECTION_PROMPTS[section];
-  const basePrompt =
-    typeof sectionInstruction === "function"
-      ? (sectionInstruction as (params: { isGBT: boolean; isChinese: boolean }) => string)({
-          isGBT,
-          isChinese,
-        })
-      : sectionInstruction || "请根据以上信息进行专业扩写。";
+  const basePrompt = resolveSectionPrompt(section, projectMode, { isGBT, isChinese });
 
   const resolvedSectionPrompt = subsectionTitle
     ? `请针对「${subsectionTitle}」这一子节进行扩写。只写这一小节的内容，不要扩写到该章节的其他子节。` +
@@ -127,7 +122,9 @@ export async function prepareWritingContext(
     figureStart: typeof figureStart === "number" ? figureStart : 1,
     evidenceSummary,
     projectMode,
-    sectionNumber: getTemplateSectionNumber(template || "sci", section),
+    sectionNumber:
+      getSectionNumberForMode(section, projectMode) ??
+      getTemplateSectionNumber(template || "sci", section, projectMode),
     citationStyle: typeof citationStyle === "string" ? citationStyle : "gbt7714",
   });
 

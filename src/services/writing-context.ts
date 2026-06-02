@@ -13,13 +13,26 @@ export interface WritingContext {
   refRangeHint: string;
 }
 
-const sectionKeywords: Record<string, string> = {
+const RESEARCH_SECTION_KEYWORDS: Record<string, string> = {
   abstract: "综述 研究背景 研究目的 主要结果 结论",
   introduction: "研究背景 综述 研究现状 存在问题 研究进展",
   methods: "实验方法 制备 表征 测试 合成 优化",
   results: "实验数据 结果分析 性能对比 机理 影响因素",
   conclusion: "结论 展望 应用前景 创新点 贡献",
 };
+
+const REVIEW_SECTION_KEYWORDS: Record<string, string> = {
+  abstract: "综述 研究进展 主要结论 展望 文献综合",
+  introduction: "研究背景 综述必要性 研究脉络 文献不足 结构安排",
+  background: "研究现状 概念框架 分类 主要问题 研究分布",
+  literature_body: "研究进展 文献综合 对比 争议 主题综述 机制",
+  conclusion: "综合结论 研究空白 未来方向 展望 启示",
+};
+
+function sectionKeywordsForMode(section: string, mode?: "review" | "research"): string {
+  const map = mode === "research" ? RESEARCH_SECTION_KEYWORDS : REVIEW_SECTION_KEYWORDS;
+  return map[section] || REVIEW_SECTION_KEYWORDS.introduction;
+}
 
 const retrievalConfigs: Record<string, { limit: number; maxPerSource: number }> = {
   precise: { limit: 10, maxPerSource: 2 },
@@ -31,13 +44,12 @@ export async function retrieveWritingContext(
   params: WritingRequest,
   existingReferences: string[],
 ): Promise<WritingContext> {
-  const { title, section, context, researchDirection, retrievalMode = "balanced" } = params;
+  const { title, section, context, researchDirection, retrievalMode = "balanced", projectMode } = params;
   const { limit: ragLimit, maxPerSource: ragMaxPerSource } = retrievalConfigs[retrievalMode] || retrievalConfigs.balanced;
 
   await ensureBibMapLoaded();
 
-  // RAG 检索
-  const sectionBoost = sectionKeywords[section] || "";
+  const sectionBoost = sectionKeywordsForMode(section, projectMode);
   const directionBoost = researchDirection || "";
   const enhancedQuery = [sectionBoost, directionBoost, title, context].filter(Boolean).join(" ");
   const matchedCategory = null;

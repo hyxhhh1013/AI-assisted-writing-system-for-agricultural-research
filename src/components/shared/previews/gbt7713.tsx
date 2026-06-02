@@ -25,7 +25,7 @@ function getSectionContent(project: ProjectData, def: TemplateSectionDef): strin
 export function GBT7713Preview({ project, onCiteClick }: TemplateProps) {
   const keywords = formatKeywords(project, "zh");
   const classification = formatClassification(project);
-  const templateSections = getTemplateSections("gbt7713");
+  const templateSections = getTemplateSections("gbt7713", project.mode);
   return (
     <div className="p-[20mm] text-[10.5pt] leading-[1.6] text-black max-w-[210mm] mx-auto bg-white" style={{ fontFamily: '"SimSun", "Noto Serif CJK SC", "Source Han Serif SC", serif', lineHeight: '1.7' }}>
       <header className="text-center mb-10">
