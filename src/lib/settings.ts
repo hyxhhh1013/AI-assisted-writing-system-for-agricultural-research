@@ -43,14 +43,20 @@ function decrypt(encoded: string): string {
 
 // ==================== CRUD ====================
 
-/** 获取单个设置（解密后明文） */
+/** 检查 key 是否存在（不解密） */
+export async function hasSetting(key: string): Promise<boolean> {
+  const count = await prisma.systemSetting.count({ where: { key } });
+  return count > 0;
+}
+
+/** 获取单个设置（解密后明文）。解密失败时返回 null 并打印 warning */
 export async function getSetting(key: string): Promise<string | null> {
   const record = await prisma.systemSetting.findUnique({ where: { key } });
   if (!record) return null;
   try {
     return decrypt(record.value);
   } catch {
-    // 解密失败（可能是旧数据或密钥变更），返回密文不予展示
+    console.warn(`[settings] 解密 ${key} 失败（加密密钥可能已变更），请在 Admin 页面重新设置`);
     return null;
   }
 }
@@ -87,7 +93,7 @@ export async function getAllSettings(): Promise<Array<{ key: string; maskedValue
   });
 }
 
-/** 初始化默认设置（如果不存在），从环境变量迁移 */
+/** 初始化默认设置（仅当 DB 中不存在该 key 时，才从环境变量迁移） */
 export async function initDefaultSettings(): Promise<void> {
   const defaults: [string, string | undefined][] = [
     ["DEEPSEEK_API_KEY", process.env.DEEPSEEK_API_KEY],
@@ -96,10 +102,9 @@ export async function initDefaultSettings(): Promise<void> {
 
   for (const [key, envValue] of defaults) {
     if (!envValue) continue;
-    const existing = await getSetting(key);
-    if (!existing) {
-      await setSetting(key, envValue);
-      console.log(`[settings] 已从环境变量迁移: ${key}`);
-    }
+    const exists = await hasSetting(key);
+    if (exists) continue; // 已存在则不覆盖（即使无法解密也保留，等用户手动修改）
+    await setSetting(key, envValue);
+    console.log(`[settings] 已从环境变量迁移: ${key}`);
   }
 }
