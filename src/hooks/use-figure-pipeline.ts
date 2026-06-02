@@ -44,9 +44,9 @@ export function findFigureBlocks(text: string): { json: Record<string, unknown>;
       if (jsonEnd <= jsonStart) continue;
     }
     const raw = text.slice(match.index, jsonEnd + 2);
-    let jsonStr = text.slice(jsonStart, jsonEnd + 1);
+    const jsonStr = text.slice(jsonStart, jsonEnd + 1);
     try {
-      let json = JSON.parse(jsonStr) as Record<string, unknown>;
+      const json = JSON.parse(jsonStr) as Record<string, unknown>;
       // AI 有时把 caption 写在 config 内部（因为漏了 config 的 }）
       if (!json.caption && json.config && typeof json.config === "object") {
         const cfg = json.config as Record<string, unknown>;

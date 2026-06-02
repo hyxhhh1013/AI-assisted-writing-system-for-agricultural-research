@@ -36,7 +36,7 @@ import matplotlib.patches as mpatches
 from matplotlib.patches import FancyBboxPatch
 
 # 中文字体
-plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "DejaVu Sans"]
+plt.rcParams["font.sans-serif"] = ["Noto Sans CJK JP", "Noto Serif CJK JP", "SimHei", "Microsoft YaHei", "PingFang SC", "Heiti SC", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
 # Unicode 上下标 → ASCII（SimHei 字体的 Unicode 上标覆盖不全）

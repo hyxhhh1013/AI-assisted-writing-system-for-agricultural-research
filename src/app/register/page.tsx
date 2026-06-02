@@ -8,14 +8,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth-context";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { refresh, user } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+
+  if (user) {
+    router.replace("/");
+    return null;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,8 +37,10 @@ export default function RegisterPage() {
         const data = await res.json();
         throw new Error(data.error || "注册失败");
       }
-      toast.success("注册成功，请登录");
-      router.push("/login");
+      // 注册 API 已设置 cookie，刷新 auth 状态后跳转首页
+      await refresh();
+      toast.success("注册成功");
+      router.push("/");
     } catch (err: any) {
       toast.error(err.message);
     } finally {

@@ -135,7 +135,7 @@ export function parseOutline(markdown: string): OutlineSection[] {
     if (!trimmed) return;
 
     // 1. 预处理
-    let cleanLine = trimmed
+    const cleanLine = trimmed
       .replace(/^[\*\-\+]\s+/, "")
       .replace(/\*\*/g, "")
       .trim();

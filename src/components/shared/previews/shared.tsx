@@ -95,7 +95,7 @@ function processCitationsWithBounds(text: string, refCount?: number): string {
   if (!refCount || refCount <= 0) return processCitations(text);
   const normalized = normalizeAllCitationFormats(text);
   // 先处理越界引用为红色标记
-  let result = normalized.replace(
+  const result = normalized.replace(
     CITATION_GROUP_RE,
     (match, raw: string) => {
       const nums = expandCiteGroup(raw);

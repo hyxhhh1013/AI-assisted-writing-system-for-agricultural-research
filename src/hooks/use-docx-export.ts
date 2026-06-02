@@ -101,7 +101,7 @@ export function useDocxExport({ project, activeSection, editingContent, saveProj
     /** 将标题 MarkdownBlock 转为 docx heading Paragraph */
     const renderHeadingBlock = (block: MarkdownBlock): Paragraph => {
       const level = block.level ?? 2;
-      let titleText = (block.title || "").replace(/^([\d.]+|[一二三四五六七八九十]+[、.\s])\s*/, "");
+      const titleText = (block.title || "").replace(/^([\d.]+|[一二三四五六七八九十]+[、.\s])\s*/, "");
       return new Paragraph({
         children: [new TextRun({ text: titleText, bold: true, size: config.heading1Size - 4, font: config.fontHeading })],
         heading: level <= 3 ? HeadingLevel.HEADING_2 : HeadingLevel.HEADING_3,

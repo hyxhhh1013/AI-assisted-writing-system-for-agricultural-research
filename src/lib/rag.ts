@@ -371,7 +371,7 @@ export class LocalRAG {
     }
   }
 
-  /** 异步加载单个分类的索引（含 .emb 二进制嵌入） */
+  /** 异步加载单个分类的索引（仅文本 + 倒排索引，不含 embedding） */
   private async ensureCategoryLoaded(category: string): Promise<void> {
     if (this.categoryChunks.has(category)) return;
     const catPath = this.getCategoryIndexPath(category);
@@ -383,12 +383,6 @@ export class LocalRAG {
         const chunks = parsed.filter((c) => c?.content && String(c.content).trim().length > 0);
         this.categoryChunks.set(category, chunks);
         this.categoryIndexes.set(category, buildInvertedIndex(chunks));
-
-        // 预加载 .emb 文件（如果存在）
-        if (this.embStore.has(category)) {
-          await this.embStore.load(category);
-          this.embCategoryMap.set(category, category);
-        }
         return;
       } catch (e) {
         console.error(`Failed to load category index [${category}]:`, e);
@@ -437,6 +431,7 @@ export class LocalRAG {
         await this.ensureCategoryLoaded(cat);
         const c = this.categoryChunks.get(cat);
         if (c) {
+          await this.ensureEmbeddingsLoaded(cat);
           this.fillEmbeddings(c, cat);
           all.push(...c);
         }
@@ -449,7 +444,15 @@ export class LocalRAG {
     return { chunks: this.chunks || [], index: this.allIndexCache || new Map() };
   }
 
-  /** 从 EmbeddingStore 为 chunk 填充 embedding 字段 */
+  /** 确保 .emb 已加载（延迟到语义搜索时才加载，getFullText 不触发） */
+  private async ensureEmbeddingsLoaded(category: string): Promise<void> {
+    if (!this.embStore.has(category)) return;
+    if (this.embCategoryMap.has(category)) return; // 已加载
+    await this.embStore.load(category);
+    this.embCategoryMap.set(category, category);
+  }
+
+  /** 从 EmbeddingStore 为 chunk 填充 embedding 字段（仅语义搜索时调用） */
   private fillEmbeddings(chunks: RagChunk[], category: string): void {
     if (!this.embStore.has(category)) return;
     for (let i = 0; i < chunks.length; i++) {
@@ -513,7 +516,8 @@ export class LocalRAG {
       await this.ensureCategoryLoaded(category);
       pool = this.categoryChunks.get(category) || [];
       idx = this.categoryIndexes.get(category);
-      // 填充 embedding 以备向量检索
+      // 延迟加载 embedding 以备向量检索（仅首次触发 I/O）
+      await this.ensureEmbeddingsLoaded(category);
       this.fillEmbeddings(pool, category);
     } else {
       const { chunks, index } = await this.ensureAllLoaded();

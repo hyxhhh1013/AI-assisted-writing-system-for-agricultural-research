@@ -113,7 +113,7 @@ export function ChartPanel({ projectId, onInsertToPaper, registryEntry, layout =
     try {
       let body: FormData | null = null;
       let jsonBody: any = null;
-      let endpoint = "/api/chart";
+      const endpoint = "/api/chart";
       let reqInit: RequestInit;
 
       if (inputMode === "file" && file) {
