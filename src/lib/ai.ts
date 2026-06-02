@@ -27,39 +27,79 @@ export function getAIError(provider: ModelProviderKey): string | null {
   return validateProviderKey(provider);
 }
 
-// ==================== API Key 热加载 ====================
+// ==================== API Key 热加载 + 多 Key 轮转 ====================
 
-let _keyCache: Record<string, string> | null = null;
+let _keyCache: Record<string, string[]> | null = null;
 let _keyCacheTime = 0;
+let _keyRoundRobin = 0; // 轮转计数器
 const KEY_CACHE_TTL = 30_000; // 30 秒
 
-/** 从 DB settings 读取 API Key（TTL 缓存，避免每次调用都查 DB） */
-async function getApiKeyFromSettings(provider: ModelProviderKey): Promise<string | undefined> {
+/** 收集所有可用的 API Key（DB + env），支持 DEEPSEEK_API_KEY, DEEPSEEK_API_KEY_2, ... */
+async function getAllKeys(provider: ModelProviderKey): Promise<string[]> {
   const config = getModelConfig(provider);
-  const cacheKey = config.apiKeyEnvVar;
+  const baseKey = config.apiKeyEnvVar; // e.g. "DEEPSEEK_API_KEY"
+  const keys: string[] = [];
 
   try {
     // 刷新缓存
     if (!_keyCache || Date.now() - _keyCacheTime > KEY_CACHE_TTL) {
-      const { getSetting } = await import("./settings");
+      const { getAllSettings } = await import("./settings");
+      const all = await getAllSettings(); // 读所有 DB 设置
       _keyCache = {};
-      for (const k of ["DEEPSEEK_API_KEY", "ZHIPU_API_KEY"]) {
-        const v = await getSetting(k);
-        if (v) _keyCache[k] = v;
+      for (const { key, maskedValue: _masked } of all) {
+        // maskedValue 是脱敏的，需要用 getSetting 读明文
+      }
+      // getAllSettings 返回脱敏值，改用逐个读取
+      const { getSetting } = await import("./settings");
+      const prefixes = ["DEEPSEEK_API_KEY", "ZHIPU_API_KEY"];
+      _keyCache = {};
+      for (const prefix of prefixes) {
+        // 读 DEEPSEEK_API_KEY, DEEPSEEK_API_KEY_2, ...
+        const collected: string[] = [];
+        // 先读不带后缀的
+        const v0 = await getSetting(prefix);
+        if (v0) collected.push(v0);
+        // 再读带后缀的
+        for (let i = 2; i <= 10; i++) {
+          const v = await getSetting(`${prefix}_${i}`);
+          if (v) collected.push(v);
+        }
+        if (collected.length > 0) _keyCache[prefix] = collected;
       }
       _keyCacheTime = Date.now();
     }
-    return _keyCache[cacheKey];
-  } catch {
-    return undefined;
+
+    const cached = _keyCache[baseKey];
+    if (cached && cached.length > 0) keys.push(...cached);
+  } catch { /* DB 读取失败，回退到 env */ }
+
+  // 从环境变量补充
+  const envKey = config.getApiKey();
+  if (envKey && !keys.includes(envKey)) {
+    keys.unshift(envKey); // env key 优先
   }
+  // 读取带后缀的环境变量
+  for (let i = 2; i <= 10; i++) {
+    const envKeyN = process.env[`${baseKey}_${i}`];
+    if (envKeyN && !keys.includes(envKeyN)) keys.push(envKeyN);
+  }
+
+  return keys;
+}
+
+/** 轮转获取一个 API Key */
+async function pickApiKey(provider: ModelProviderKey): Promise<string | undefined> {
+  const keys = await getAllKeys(provider);
+  if (keys.length === 0) return undefined;
+  if (keys.length === 1) return keys[0];
+  // 轮转：每次调用取下一个 key
+  _keyRoundRobin++;
+  return keys[_keyRoundRobin % keys.length];
 }
 
 export async function callAI(options: AICallOptions): Promise<Response> {
   const config = getModelConfig(options.provider);
-  // 优先读 DB settings，fallback 到环境变量
-  const dbKey = await getApiKeyFromSettings(options.provider);
-  const apiKey = dbKey || config.getApiKey();
+  const apiKey = await pickApiKey(options.provider);
 
   const keyError = validateProviderKey(options.provider);
   if (keyError) {
@@ -121,10 +161,11 @@ export async function callAI(options: AICallOptions): Promise<Response> {
   return response;
 }
 
+/** 流式读取上游 AI 响应；idleTimeoutMs 为相邻 chunk 最大间隔（非总时长） */
 export async function* streamAIResponse(
   response: Response,
   signal?: AbortSignal,
-  idleTimeoutMs = 120_000,
+  idleTimeoutMs = 300_000,
 ): AsyncGenerator<{ content?: string }> {
   if (!response.body) return;
 
@@ -132,23 +173,24 @@ export async function* streamAIResponse(
   const decoder = new TextDecoder();
   let buffer = "";
 
-  // 静默超时：如果 N 毫秒内没收到新 chunk，主动 abort
+  // 静默超时：如果 N 毫秒内没收到新 chunk，主动 cancel
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
   const clearIdle = () => { if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; } };
+  const cancelReader = (reason: string) => {
+    reader.cancel(reason)?.catch(() => {}); // 吞掉 rejection，防止 unhandledRejection
+  };
   const resetIdle = () => {
     clearIdle();
-    idleTimer = setTimeout(() => {
-      reader.cancel("Stream idle timeout");
-    }, idleTimeoutMs);
+    idleTimer = setTimeout(() => cancelReader("Stream idle timeout"), idleTimeoutMs);
   };
 
   // 如果外部信号触发，取消 reader
   const onExternalAbort = () => {
     clearIdle();
-    reader.cancel("Aborted");
+    cancelReader("Aborted");
   };
   if (signal) {
-    if (signal.aborted) { reader.cancel("Aborted"); return; }
+    if (signal.aborted) { cancelReader("Aborted"); return; }
     signal.addEventListener("abort", onExternalAbort, { once: true });
   }
 
