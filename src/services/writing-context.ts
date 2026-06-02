@@ -1,30 +1,7 @@
 /** 写作上下文构建 — 从 writing/route.ts 提取的 RAG + prompt 逻辑 */
 
-import fs from "fs";
-import path from "path";
-import { localRAG, formatRagCitation, cleanSourceName, resolveBibEntry } from "@/lib/rag";
+import { ensureBibMapLoaded, localRAG, formatRagCitation, cleanSourceName, resolveBibEntry } from "@/lib/rag";
 import type { WritingRequest } from "@/contracts/writing";
-
-const METADATA_PATH = path.join(process.cwd(), "data", "metadata.json");
-
-function matchCategory(direction: string): string | null {
-  if (!direction || !fs.existsSync(METADATA_PATH)) return null;
-  try {
-    const metadata = JSON.parse(fs.readFileSync(METADATA_PATH, "utf-8")) as { category: string }[];
-    const categories = Array.from(new Set(metadata.map((m) => m.category))).filter(c => c && c !== "未分类");
-    if (categories.length === 0) return null;
-    const kw = direction.toLowerCase();
-    const matches = categories
-      .map(cat => ({ cat, score: cat.split(/[\s\-_]/).filter(w => kw.includes(w.toLowerCase())).length }))
-      .filter(m => m.score > 0)
-      .sort((a, b) => b.score - a.score);
-    // 分类匹配不用于限定检索范围——写作场景下搜全库更可靠
-    // 保留函数供 UI 展示推荐分类用，但不影响检索
-    return null;
-  } catch {
-    return null;
-  }
-}
 
 export interface WritingContext {
   contextText: string;
@@ -57,11 +34,13 @@ export async function retrieveWritingContext(
   const { title, section, context, researchDirection, retrievalMode = "balanced" } = params;
   const { limit: ragLimit, maxPerSource: ragMaxPerSource } = retrievalConfigs[retrievalMode] || retrievalConfigs.balanced;
 
+  await ensureBibMapLoaded();
+
   // RAG 检索
   const sectionBoost = sectionKeywords[section] || "";
   const directionBoost = researchDirection || "";
   const enhancedQuery = [sectionBoost, directionBoost, title, context].filter(Boolean).join(" ");
-  const matchedCategory = matchCategory(researchDirection || "");
+  const matchedCategory = null;
 
   let contextChunks = await localRAG.search(enhancedQuery, {
     limit: ragLimit,

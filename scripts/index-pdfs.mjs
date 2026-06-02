@@ -2,7 +2,7 @@
  * RAG 索引构建 — 三阶段增量架构
  *
  *   阶段 1: PDF → Chunks  →  缓存到 data/chunks_raw/<hash>.json
- *   阶段 2: Chunk 过滤    →  写 data/index_*.json（无 embedding）+ index_*.emb + metadata.json
+ *   阶段 2: Chunk 过滤    →  写 data/index_*.json（无 embedding）+ index_*.emb + Prisma KnowledgeFile
  *   阶段 3: Embedding     →  仅对新/无向量的 chunk 调 API
  *
  * 使用：
@@ -17,6 +17,7 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import { execSync } from "child_process";
 import { fileURLToPath } from "url";
 import pdfjs from "pdfjs-dist/legacy/build/pdf.js";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
@@ -433,12 +434,65 @@ function mergeCategoryChunks(cat, newChunks) {
   return [...kept, ...newChunks];
 }
 
-function stage2_filterAndWrite(allRawChunks) {
+async function loadExistingMetaByNameFromPrisma() {
+  const map = new Map();
+  try {
+    const { PrismaClient } = await import("@prisma/client");
+    const prisma = new PrismaClient();
+    try {
+      const files = await prisma.knowledgeFile.findMany();
+      for (const f of files) {
+        let bib = null;
+        if (f.bib) {
+          try {
+            bib = JSON.parse(f.bib);
+          } catch {
+            bib = null;
+          }
+        }
+        map.set(f.name, {
+          name: f.name,
+          category: f.category,
+          documentType: f.documentType,
+          chunkCount: f.chunkCount ?? 0,
+          size: f.size,
+          mtime: f.mtime ? new Date(f.mtime).toISOString() : "",
+          bib,
+          gbTag: f.gbTag,
+          parseWarning: f.parseWarning,
+          bibEdited: !!f.bibEdited,
+        });
+      }
+    } finally {
+      await prisma.$disconnect();
+    }
+  } catch (err) {
+    console.warn("  Prisma 元数据加载失败，回退 metadata.json:", err.message);
+  }
+  if (map.size === 0 && fs.existsSync(METADATA_PATH)) {
+    for (const m of loadJSON(METADATA_PATH, [])) {
+      if (m?.name) map.set(m.name, m);
+    }
+  }
+  return map;
+}
+
+function syncMetadataToPrisma(metadataRecords) {
+  const tmpMeta = path.join(DATA_DIR, ".metadata-prisma-sync.json");
+  saveJSON(tmpMeta, metadataRecords);
+  try {
+    execSync(
+      `node "${path.join(__dirname, "sync-knowledge-metadata-to-prisma.mjs")}" "${tmpMeta}"`,
+      { cwd: projectRoot, stdio: "inherit" },
+    );
+  } finally {
+    if (fs.existsSync(tmpMeta)) fs.unlinkSync(tmpMeta);
+  }
+}
+
+function stage2_filterAndWrite(allRawChunks, existingMetaByName) {
   const existingEmbMap = loadExistingEmbMap();
   if (existingEmbMap.size > 0) console.log(`  Preserved ${existingEmbMap.size} existing embeddings`);
-
-  const existingMeta = fs.existsSync(METADATA_PATH) ? loadJSON(METADATA_PATH, []) : [];
-  const existingMetaByName = new Map(existingMeta.map((m) => [m.name, m]));
   const existingFilteredBySource = loadExistingFilteredBySource();
 
   const allChunks = [];
@@ -592,15 +646,14 @@ function stage2_filterAndWrite(allRawChunks) {
 
   let metadataDeduped;
   if (isPartialReindex()) {
-    const existingMeta = loadJSON(METADATA_PATH, []);
-    const byName = new Map(existingMeta.map((m) => [m.name, m]));
+    const byName = new Map(existingMetaByName);
     for (const m of metadata) byName.set(m.name, m);
     metadataDeduped = [...byName.values()];
   } else {
     metadataDeduped = [...new Map(metadata.map((m) => [m.name, m])).values()];
   }
-  saveJSON(METADATA_PATH, metadataDeduped);
-  console.log(`Metadata: ${metadataDeduped.length} files`);
+  syncMetadataToPrisma(metadataDeduped);
+  console.log(`Metadata → Prisma: ${metadataDeduped.length} files`);
 
   const mergedAllChunks = isPartialReindex()
     ? rebuildAllChunksFromIndexes(activeCategories)
@@ -815,7 +868,8 @@ async function main() {
   });
 
   console.log("\n── Stage 2: Filter + Write ──");
-  const { allChunks, categoryCount, reusedFiles } = stage2_filterAndWrite(allRawChunks);
+  const existingMetaByName = await loadExistingMetaByNameFromPrisma();
+  const { allChunks, categoryCount, reusedFiles } = stage2_filterAndWrite(allRawChunks, existingMetaByName);
   if (reusedFiles > 0) {
     console.log(`  Incremental: reused filtered chunks for ${reusedFiles} unchanged files`);
   }

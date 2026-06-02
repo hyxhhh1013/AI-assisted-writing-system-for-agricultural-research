@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { ensureBibMapLoaded } from "@/lib/rag";
 import { formatReference } from "@/lib/ref-format";
 
 /**
@@ -32,6 +33,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: "缺少 filenames" }, { status: 400 });
       }
       const filenames = filenamesParam.split(",").map(f => f.trim()).filter(Boolean);
+      await ensureBibMapLoaded();
       const formatted: Record<string, string> = {};
       for (const filename of filenames) {
         formatted[filename] = formatFilenameToCitation(filename);

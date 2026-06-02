@@ -1,43 +1,11 @@
 import { logger } from "@/lib/logger";
 import { NextRequest } from "next/server";
-import fs from "fs";
-import path from "path";
+import { matchCategoryFromDirection } from "@/lib/knowledge-metadata";
 import { formatRagCitation, localRAG } from "@/lib/rag";
 import { callAI, getAgentModelConfig, streamAIResponse } from "@/lib/ai";
 import { buildOutlinePrompt } from "@/lib/prompts";
 import { validateBody } from "@/lib/api-validate";
 import { outlineSchema } from "@/lib/validations";
-
-const METADATA_PATH = path.join(process.cwd(), "data/metadata.json");
-
-/** 从 researchDirection 中匹配最相关的知识库分类 */
-function matchCategory(direction: string): string | null {
-  if (!fs.existsSync(METADATA_PATH)) return null;
-  try {
-    const metadata = JSON.parse(fs.readFileSync(METADATA_PATH, "utf-8")) as {
-      category: string;
-    }[];
-    const categories = Array.from(new Set(metadata.map((m) => m.category))).filter(
-      (c) => c && c !== "未分类",
-    );
-
-    if (categories.length === 0) return null;
-
-    const kw = direction.toLowerCase();
-    // 按匹配长度排序，取最长的匹配（"热化学" 比 "热" 更准确）
-    const matches = categories
-      .map((cat) => ({
-        cat,
-        score: cat.split(/[\s\-_]/).filter((w) => kw.includes(w.toLowerCase())).length,
-      }))
-      .filter((m) => m.score > 0)
-      .sort((a, b) => b.score - a.score);
-
-    return matches[0]?.cat || null;
-  } catch {
-    return null;
-  }
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -57,7 +25,10 @@ export async function POST(req: NextRequest) {
     }
 
     // 手动指定分类优先，否则自动匹配研究方向到知识库分类
-    const targetCategory = category && category !== "全部" ? category : matchCategory(researchDirection);
+    const targetCategory =
+      category && category !== "全部"
+        ? category
+        : await matchCategoryFromDirection(researchDirection);
     const contextChunks = await localRAG.search(`${title} ${researchDirection}`, {
       limit: 10,
       category: targetCategory || undefined,

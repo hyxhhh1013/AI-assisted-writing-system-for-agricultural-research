@@ -1,4 +1,4 @@
-/** 知识库文献元数据契约（前后端 + metadata.json 共享） */
+/** 知识库文献元数据契约（前后端 + Prisma KnowledgeFile 共享） */
 
 export type KnowledgeDocumentType =
   | "paper"
@@ -9,7 +9,7 @@ export type KnowledgeDocumentType =
 
 export type KnowledgeGbTag = "J" | "M" | "P" | "D" | "C" | "S";
 
-/** metadata.json 中的结构化书目字段 */
+/** 结构化书目字段（存于 KnowledgeFile.bib JSON） */
 export interface KnowledgeBib {
   title?: string;
   authors?: string[];
@@ -28,7 +28,7 @@ export interface KnowledgeBib {
   publisher?: string;
 }
 
-/** metadata.json 单条文献记录 */
+/** 单条知识库文献记录（API 列表项） */
 export interface KnowledgeFileRecord {
   name: string;
   path?: string;

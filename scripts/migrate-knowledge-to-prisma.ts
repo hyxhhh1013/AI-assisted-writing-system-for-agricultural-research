@@ -40,6 +40,7 @@ async function main() {
         gbTag: r.gbTag || null,
         parseWarning: r.parseWarning || null,
         bibEdited: r.bibEdited ?? false,
+        chunkCount: typeof r.chunkCount === "number" ? r.chunkCount : 0,
       };
 
       const existing = await prisma.knowledgeFile.findUnique({ where: { name: r.name } });

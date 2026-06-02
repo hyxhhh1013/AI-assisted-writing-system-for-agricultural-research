@@ -76,6 +76,15 @@ KnowledgeFile (1) ──< (N) KnowledgeChunk
 | documentType | "paper"\|"patent"\|"other" | 文档类型 |
 | size | int | 文件大小 (bytes) |
 | mtime | datetime | 文件修改时间 |
+| chunkCount | int | RAG 索引块数量（与 `data/index_*.json` 同步） |
+| bib | string? | 书目 JSON |
+| gbTag | string? | GB/T 文献类型标识 |
+| parseWarning | string? | PDF 解析警告 |
+| bibEdited | bool | 用户是否手动校正书目 |
+
+**主数据源**：Prisma `KnowledgeFile`（API 读写、RAG 书目缓存均走 DB）。
+
+`data/metadata.json` 已 **deprecated**（仅迁移脚本或 `USE_METADATA_JSON_FALLBACK=true` 时只读回退）。索引构建由 `scripts/index-pdfs.mjs` 在 Stage 2 结束后调用 `scripts/sync-knowledge-metadata-to-prisma.mjs` 写入 Prisma。
 
 与文件系统同步，删除文件时需同步删除数据库记录。
 

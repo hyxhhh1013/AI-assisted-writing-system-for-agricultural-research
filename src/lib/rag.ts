@@ -2,6 +2,12 @@ import fs from "fs";
 import fsp from "fs/promises";
 import path from "path";
 import { fetchWithRetry } from "@/lib/fetch-with-retry";
+import {
+  ensureBibMapLoaded,
+  getCachedBibMap,
+  invalidateKnowledgeBibCache,
+  listKnowledgeCategories,
+} from "@/lib/knowledge-metadata";
 import { cosineSimilarity } from "./similarity";
 
 /** 单条索引块（与 data/index.json 一致，metadata 可扩展） */
@@ -141,14 +147,10 @@ class EmbeddingStore {
   }
 }
 
-// ── 书目元数据懒加载 ────────────────────────────────────────────────────────
-
-const DATA_DIR = path.resolve(process.cwd(), "data");
-
-let _bibMap: Map<string, BibEntry> | null = null;
+// ── 书目元数据（Prisma KnowledgeFile，见 knowledge-metadata.ts）────────────
 
 export function resolveBibEntry(source: string): BibEntry | undefined {
-  const map = getBibMap();
+  const map = getCachedBibMap();
   const direct = map.get(source);
   if (direct) return direct;
   const base = path.basename(source.replace(/\\/g, "/"));
@@ -163,29 +165,16 @@ export function resolveBibEntry(source: string): BibEntry | undefined {
   return undefined;
 }
 
+/** @deprecated 优先使用 ensureBibMapLoaded；同步读缓存，未加载时为空 Map */
 export function getBibMap(): Map<string, BibEntry> {
-  if (_bibMap) return _bibMap;
-  const metaPath = path.join(DATA_DIR, "metadata.json");
-  try {
-    if (!fs.existsSync(metaPath)) { _bibMap = new Map(); return _bibMap; }
-    const raw: BibEntry[] = JSON.parse(fs.readFileSync(metaPath, "utf-8"));
-    const map = new Map<string, BibEntry>();
-    for (const entry of raw) {
-      if (!entry?.name) continue;
-      const prev = map.get(entry.name);
-      if (!prev) { map.set(entry.name, entry); continue; }
-      const prevScore = (prev.documentType ? 1 : 0) + (prev.bib ? 2 : 0);
-      const nextScore = (entry.documentType ? 1 : 0) + (entry.bib ? 2 : 0);
-      map.set(entry.name, nextScore >= prevScore ? entry : prev);
-    }
-    _bibMap = map;
-  } catch { _bibMap = new Map(); }
-  return _bibMap;
+  return getCachedBibMap();
 }
 
 export function invalidateBibCache(): void {
-  _bibMap = null;
+  invalidateKnowledgeBibCache();
 }
+
+export { ensureBibMapLoaded };
 
 // ── 检索算法常量 ───────────────────────────────────────────────────────────
 
@@ -352,7 +341,6 @@ export class LocalRAG {
   private allChunksCache: RagChunk[] | null = null;
   private allIndexCache: InvertedIndex | null = null;
   private indexPath = path.join(process.cwd(), "data/index.json");
-  private metadataPath = path.join(process.cwd(), "data/metadata.json");
   private embStore = new EmbeddingStore();
 
   private getCategoryIndexPath(category: string): string {
@@ -361,14 +349,7 @@ export class LocalRAG {
 
   /** 列出所有可用的分类 */
   async getCategories(): Promise<string[]> {
-    try {
-      if (!fs.existsSync(this.metadataPath)) return [];
-      const raw = await fsp.readFile(this.metadataPath, "utf-8");
-      const meta = JSON.parse(raw) as { category: string }[];
-      return Array.from(new Set(meta.map((m) => m.category))).filter(Boolean);
-    } catch {
-      return [];
-    }
+    return listKnowledgeCategories();
   }
 
   /** 异步加载单个分类的索引（仅文本 + 倒排索引，不含 embedding） */
@@ -508,6 +489,8 @@ export class LocalRAG {
 
     const q = query.trim();
     if (!q) return [];
+
+    await ensureBibMapLoaded();
 
     let pool: RagChunk[];
     let idx: InvertedIndex | undefined;
