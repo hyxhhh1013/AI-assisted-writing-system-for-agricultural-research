@@ -8,9 +8,8 @@ import {
   patchAnalysisResults,
   replaceReferences as replaceReferencesApi,
 } from "@/services/project";
-import type { ProjectData, ProjectListItem, SectionRecord } from "@/services/project";
-
-export type { ProjectData } from "@/services/project";
+import type { ProjectData } from "@/contracts/project";
+import type { ProjectListItem, SectionRecord } from "@/services/project";
 
 import { IMRAD_BODY_KEYS } from "@/lib/imrad";
 

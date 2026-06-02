@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getHistory, getDetail } from "@/services/review";
 import type { ReviewHistoryItem, ReviewDetailResponse } from "@/contracts/review";
+import { getErrorMessage } from "@/lib/error-utils";
 import {
   Clock,
   ChevronDown,
@@ -157,7 +158,7 @@ export function ReviewHistoryList({ projectId, onSelect, className }: ReviewHist
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "加载失败");
+          setError(err instanceof Error ? getErrorMessage(err) : "加载失败");
           toast.error("加载审查历史失败");
         }
       })

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
-import { usageLog } from "@/lib/usage-log";
+import { getAiUsageDashboard } from "@/services/admin-usage";
 
 export async function GET(req: NextRequest) {
   const { error } = await requireAdmin(req);
@@ -50,23 +50,7 @@ export async function GET(req: NextRequest) {
     select: { title: true, lastUpdated: true, owner: { select: { name: true } } },
   });
 
-  // AI 用量统计
-  const aiStats = usageLog.stats();
-  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-  const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - 7);
-  const todayCount = usageLog.recent(500).filter(e => e.timestamp >= todayStart.getTime()).length;
-  const weekCount = usageLog.recent(500).filter(e => e.timestamp >= weekStart.getTime()).length;
-  const totalAiCalls = Object.values(aiStats).reduce((s, c) => s + c, 0);
-
-  // 按用户 AI 用量
-  const recentAll = usageLog.recent(2000);
-  const byUser: Record<string, { userId: string; count: number }> = {};
-  for (const e of recentAll) {
-    const uid = e.userId || "anonymous";
-    if (!byUser[uid]) byUser[uid] = { userId: uid, count: 0 };
-    byUser[uid].count++;
-  }
-  const topUsers = Object.values(byUser).sort((a, b) => b.count - a.count).slice(0, 10);
+  const aiUsage = await getAiUsageDashboard();
 
   return NextResponse.json({
     userCount, projectCount, knowledgeFileCount, knowledgeChunkCount, plagiarismCount, reviewCount,
@@ -76,6 +60,6 @@ export async function GET(req: NextRequest) {
     recentActivity: recentActivity.map(a => ({
       title: a.title, user: a.owner?.name ?? "未知", time: a.lastUpdated.toISOString(),
     })),
-    aiUsage: { totalCalls: totalAiCalls, todayCount, weekCount, byFeature: aiStats, topUsers },
+    aiUsage,
   });
 }

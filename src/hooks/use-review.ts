@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { getErrorMessage } from "@/lib/error-utils";
 import type {
   ReviewReport,
   ReviewDimension,
@@ -104,7 +105,7 @@ export function useReview(): UseReviewReturn {
       setProgress("审查完成");
       return fixable;
     } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : "审查失败，请重试";
+      const errorMsg = err instanceof Error ? getErrorMessage(err) : "审查失败，请重试";
       setError(errorMsg);
       setProgress("");
       return null;

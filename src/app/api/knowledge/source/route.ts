@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { localRAG } from "@/lib/rag";
+import { getErrorMessage } from "@/lib/error-utils";
 
 /**
  * 按文献源文件名获取知识库 content chunks
@@ -43,7 +44,8 @@ export async function GET(req: NextRequest) {
       chunks,
       totalChunks: paragraphs.length,
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? getErrorMessage(error) : "请求失败";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

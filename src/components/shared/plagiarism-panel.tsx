@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { checkPlagiarismStream, rewriteMatch, updateRewriteSuggestion } from "@/services/plagiarism";
 import { getProject, listProjects } from "@/services/project";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/error-utils";
 import {
   Search, Shuffle, Loader2, CheckCircle2,
   Globe, Sparkles, ChevronDown, ChevronUp, RefreshCw,
@@ -134,7 +135,7 @@ export function PlagiarismPanel({
       setView("result");
       toast.success(`检测完成，${data.totalMatches} 处匹配`);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "查重失败");
+      toast.error(err instanceof Error ? getErrorMessage(err) : "查重失败");
     } finally { setIsChecking(false); setCheckStatus(""); }
   }, [checkContent, checkTitle, projectId, selectedProjectId, webSearch]);
 
@@ -299,7 +300,7 @@ function RewriteView({ checkId, matches, onBack, onReCheck }: {
       const suggestions = await rewriteMatch({ checkId, matchId: m.id, originalText: m.sourceText });
       setSuggestions(p => ({ ...p, [m.id]: suggestions }));
       toast.success("改写建议已生成");
-    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "改写失败"); }
+    } catch (err: unknown) { toast.error(err instanceof Error ? getErrorMessage(err) : "改写失败"); }
     finally { setRewriting(null); }
   };
 

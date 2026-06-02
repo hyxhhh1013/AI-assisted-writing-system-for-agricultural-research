@@ -6,6 +6,7 @@ import { callAI, getAgentModelConfig, streamAIResponse } from "@/lib/ai";
 import { buildOutlinePrompt } from "@/lib/prompts";
 import { validateBody } from "@/lib/api-validate";
 import { outlineSchema } from "@/lib/validations";
+import { getErrorMessage } from "@/lib/error-utils";
 
 export async function POST(req: NextRequest) {
   try {
@@ -63,8 +64,8 @@ export async function POST(req: NextRequest) {
           }
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();
-        } catch (error: any) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: error.message })}\n\n`));
+        } catch (error: unknown) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: getErrorMessage(error) })}\n\n`));
           controller.close();
         }
       }
@@ -77,9 +78,9 @@ export async function POST(req: NextRequest) {
         Connection: "keep-alive",
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("Outline Generation Error:", error);
-    return new Response(JSON.stringify({ error: error.message || "Internal Server Error" }), {
+    return new Response(JSON.stringify({ error: getErrorMessage(error) || "Internal Server Error" }), {
       status: 500,
     });
   }

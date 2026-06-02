@@ -156,6 +156,7 @@ Admin Key：`PUT /api/admin/settings` → DB → `callAI()` 读缓存。
 - [ ] 项目保存走增量 PATCH（若 touched）
 - [ ] `npx tsc --noEmit` 通过
 - [ ] 相关 vitest 通过（`npx vitest run`）
+- [ ] 本地提交前：`git commit` 会跑 `tsc` + 暂存文件的 `eslint`（husky；全量 `npm run check` 仍建议在合并前手动跑）
 - [ ] 命中 S0 更新表时，已改对应 `docs/`
 - [ ] 接力 PR 完成时，已更新队列 §1 + §4
 
@@ -166,10 +167,13 @@ Admin Key：`PUT /api/admin/settings` → DB → `callAI()` 读缓存。
 | 项 | 状态 |
 |----|------|
 | `/api/writing` | 已拆 `pipeline/*`，route ~90 行（ENG-PR-030 done） |
-| `writing-panel.tsx` | 仍偏大 → ENG-PR-031 todo |
+| `writing-panel.tsx` | 已拆 hooks + `writing/*` 子组件（ENG-PR-031 done，~423 行） |
 | references / analysis PATCH | done（025/026/025b） |
 | 知识库元数据 | Prisma 主源（027/028 done） |
 | RAG 二进制索引 | RAG-PR-001～005 done |
 | 组件 fetch → services | ENG-PR-020～022 done |
+| `ProjectData` 类型 | 以 `@/contracts/project` 为准（062 done） |
+| 重路由 lazy | `/plot`、`/reader`、`/admin` 首屏 dynamic（060 done） |
+| pre-commit | husky：`typecheck` + `lint-staged`（061 done） |
 
-技术债与 PR 编号：[`docs/ENGINEERING_OPTIMIZATION_QUEUE.md`](./docs/ENGINEERING_OPTIMIZATION_QUEUE.md) §1、§8。
+技术债与 PR 编号：[`docs/ENGINEERING_OPTIMIZATION_QUEUE.md`](./docs/ENGINEERING_OPTIMIZATION_QUEUE.md) §1、§8。Bundle 分析：`npm run analyze`（`ANALYZE=true next build`）。

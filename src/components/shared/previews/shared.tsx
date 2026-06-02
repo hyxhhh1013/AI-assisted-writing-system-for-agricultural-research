@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, useRef, type ComponentPropsWithoutRef, type ElementType } from "react";
 import { Quote, BookOpen } from "lucide-react";
@@ -9,7 +9,7 @@ import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
 import "katex/dist/katex.min.css";
 import { cn } from "@/lib/utils";
-import { ProjectData } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
 import { CITATION_GROUP_RE, expandCiteGroup, processCitations, handleCiteClick } from "@/lib/citation";
 import { normalizeAllCitationFormats } from "@/lib/citation-bounds";
 import { formatFilenames } from "@/services/references";

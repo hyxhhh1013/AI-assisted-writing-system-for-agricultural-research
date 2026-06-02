@@ -4,6 +4,7 @@ import { success, badRequest } from "@/lib/admin-response";
 import { getAllSettings, getSetting, setSetting, deleteSetting, initDefaultSettings } from "@/lib/settings";
 import { validateBody } from "@/lib/api-validate";
 import { adminSettingDeleteSchema, adminSettingPutSchema } from "@/lib/validations";
+import { getErrorMessage } from "@/lib/error-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,7 @@ export async function PUT(req: NextRequest) {
     await setSetting(key, value);
     return success(undefined, `已保存 ${key}`);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = err instanceof Error ? getErrorMessage(err) : String(err);
     console.error("[admin/settings] PUT error:", message);
     return NextResponse.json({ success: false, error: `保存失败: ${message}` }, { status: 500 });
   }

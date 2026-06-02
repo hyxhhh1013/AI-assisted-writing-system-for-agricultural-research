@@ -1,4 +1,7 @@
-import { logger } from "@/lib/logger";
+import { createLogger } from "@/lib/logger";
+import { getErrorMessage } from "@/lib/error-utils";
+
+const log = createLogger("api/plagiarism/rewrite");
 import { NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 import { generateRewriteSuggestions } from "@/services/rewrite-service";
@@ -32,8 +35,8 @@ export async function POST(req: NextRequest) {
 
     return Response.json({ suggestions });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "生成改写建议失败";
-    logger.error("[Rewrite]", error);
+    const message = error instanceof Error ? getErrorMessage(error) : "生成改写建议失败";
+    log.fail("rewrite suggestions failed", error);
     return Response.json({ error: message }, { status: 500 });
   }
 }
@@ -53,7 +56,8 @@ export async function PATCH(req: NextRequest) {
 
     return Response.json({ ok: true });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "操作失败";
+    log.fail("rewrite suggestion patch failed", error);
+    const message = error instanceof Error ? getErrorMessage(error) : "操作失败";
     return Response.json({ error: message }, { status: 500 });
   }
 }

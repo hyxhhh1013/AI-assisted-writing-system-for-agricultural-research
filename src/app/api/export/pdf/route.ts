@@ -1,7 +1,8 @@
-import { logger } from "@/lib/logger";
+﻿import { logger } from "@/lib/logger";
 import { NextRequest } from "next/server";
 import { renderProjectPdf } from "@/services/server-pdf";
-import type { ProjectData } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
+import { getErrorMessage } from "@/lib/error-utils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: unknown) {
     logger.error("Server PDF Export Error:", error);
-    const message = error instanceof Error ? error.message : "未知错误";
+    const message = error instanceof Error ? getErrorMessage(error) : "未知错误";
     return new Response(`PDF 服务端导出失败: ${message}`, { status: 500 });
   }
 }

@@ -1,8 +1,8 @@
-import { useCallback } from "react";
+﻿import { useCallback } from "react";
 import { toast } from "sonner";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType, BorderStyle } from "docx";
 import { saveAs } from "file-saver";
-import { ProjectData } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
 import { mergeEditorIntoProject, stripHtmlToPlainForDocx } from "@/lib/export-content";
 import { formatKeywords } from "@/lib/paper-metadata";
 import { IMRAD_LABELS_SHORT_ZH, IMRAD_LABELS_EN } from "@/lib/imrad";

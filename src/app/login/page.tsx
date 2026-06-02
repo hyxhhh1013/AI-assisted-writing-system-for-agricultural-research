@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
+import { getErrorMessage } from "@/lib/error-utils";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -30,8 +31,9 @@ export default function LoginPage() {
       await login(email, password);
       toast.success("登录成功");
       router.push("/");
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? getErrorMessage(err) : "登录失败";
+      toast.error(message);
     } finally {
       setLoading(false);
     }

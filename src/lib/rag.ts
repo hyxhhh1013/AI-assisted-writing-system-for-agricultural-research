@@ -9,6 +9,9 @@ import {
   listKnowledgeCategories,
 } from "@/lib/knowledge-metadata";
 import { cosineSimilarity } from "./similarity";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("rag");
 
 /** 单条索引块（与 data/index.json 一致，metadata 可扩展） */
 export interface RagChunk {
@@ -82,14 +85,14 @@ class EmbeddingStore {
 
     const buf = await fsp.readFile(p);
     if (buf.length < EMB_HEADER_SIZE) {
-      console.error(`EmbeddingStore: ${p} too small (${buf.length} bytes)`);
+      log.error("embedding file too small", { path: p, bytes: buf.length });
       return { dim: 0, count: 0 };
     }
 
     const version = buf.readUInt32LE(0);
     const dim = buf.readUInt32LE(4);
     if (version !== 1) {
-      console.error(`EmbeddingStore: unknown version ${version} in ${p}`);
+      log.error("embedding file unknown version", { path: p, version });
       return { dim: 0, count: 0 };
     }
 
@@ -366,7 +369,7 @@ export class LocalRAG {
         this.categoryIndexes.set(category, buildInvertedIndex(chunks));
         return;
       } catch (e) {
-        console.error(`Failed to load category index [${category}]:`, e);
+        log.fail(`failed to load category index [${category}]`, e);
       }
     }
     // 回退：从主索引中过滤
@@ -392,7 +395,7 @@ export class LocalRAG {
           ? parsed.filter((c) => c?.content && String(c.content).trim().length > 0)
           : [];
       } catch (e) {
-        console.error("Failed to load RAG index:", e);
+        log.fail("failed to load RAG index", e);
         this.chunks = [];
       }
     } else {
@@ -457,14 +460,14 @@ export class LocalRAG {
       });
       if (!response.ok) {
         const err = await response.text();
-        console.warn("Embedding API failed, lexical-only RAG:", err.slice(0, 200));
+        log.warn("embedding API failed, lexical-only RAG", { detail: err.slice(0, 200) });
         return [];
       }
       const result = (await response.json()) as { data?: { embedding?: number[] }[] };
       const emb = result.data?.[0]?.embedding;
       return Array.isArray(emb) ? emb : [];
     } catch (e) {
-      console.error("Embedding generation error:", e);
+      log.fail("embedding generation error", e);
       return [];
     }
   }

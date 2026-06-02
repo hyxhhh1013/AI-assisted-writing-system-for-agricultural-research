@@ -1,6 +1,7 @@
 import { logger } from "@/lib/logger";
 import { NextRequest } from "next/server";
 import { callAI, getAgentModelConfig, streamAIResponse } from "@/lib/ai";
+import { getErrorMessage } from "@/lib/error-utils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -84,9 +85,9 @@ ${issue.suggestion}
           emit({ type: "done", sectionKey: targetSection, content });
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();
-        } catch (error: any) {
+        } catch (error: unknown) {
           logger.error("Fix error:", error);
-          try { emit({ type: "error", error: error.message }); } catch {}
+          try { emit({ type: "error", error: getErrorMessage(error) }); } catch {}
           try { controller.close(); } catch {}
         }
       },
@@ -99,8 +100,8 @@ ${issue.suggestion}
         Connection: "keep-alive",
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("Fix API error:", error);
-    return new Response(JSON.stringify({ error: error.message || "Internal Server Error" }), { status: 500 });
+    return new Response(JSON.stringify({ error: getErrorMessage(error) || "Internal Server Error" }), { status: 500 });
   }
 }

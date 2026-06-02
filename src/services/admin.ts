@@ -7,6 +7,7 @@ import type {
   AdminKnowledgeFile,
   AdminKnowledgeListResponse,
   AdminListParams,
+  AdminPlagiarismDetail,
   AdminPlagiarismRecord,
   AdminProjectRecord,
   AdminReviewDetail,
@@ -23,6 +24,7 @@ export type {
   AdminHealthData,
   AdminKnowledgeFile,
   AdminKnowledgeListResponse,
+  AdminPlagiarismDetail,
   AdminPlagiarismRecord,
   AdminProjectRecord,
   AdminReviewDetail,
@@ -219,9 +221,9 @@ export async function listAdminPlagiarism(risk?: string): Promise<AdminPlagiaris
 }
 
 /** GET /api/admin/plagiarism/[id] */
-export async function getAdminPlagiarismDetail(id: string): Promise<Record<string, unknown> | null> {
+export async function getAdminPlagiarismDetail(id: string): Promise<AdminPlagiarismDetail | null> {
   const res = await fetch(`/api/admin/plagiarism/${id}`);
-  const data = await parseJson<AdminSuccessResponse<Record<string, unknown>>>(res);
+  const data = await parseJson<AdminSuccessResponse<AdminPlagiarismDetail>>(res);
   return data.success ? (data.data ?? null) : null;
 }
 

@@ -1,17 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2, User, Mail, Calendar, BarChart3 } from "lucide-react";
 import Link from "next/link";
 import { getAdminUser, type AdminUserDetail } from "@/services/admin";
+import { useGoBack } from "@/contexts/navigation-history";
 
 export default function UserDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
+  const goBack = useGoBack();
   const [data, setData] = useState<AdminUserDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -26,7 +27,7 @@ export default function UserDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" size="sm" onClick={() => router.push("/admin/users")} className="gap-1">
+      <Button variant="ghost" size="sm" onClick={() => goBack("/admin/users")} className="gap-1">
         <ArrowLeft className="h-4 w-4" />返回用户列表
       </Button>
 

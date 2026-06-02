@@ -5,6 +5,7 @@ import { buildAnalysisPrompt } from "@/lib/prompts";
 import { analysisSchema } from "@/lib/validations";
 import { validateBody } from "@/lib/api-validate";
 import { errorResponse } from "@/lib/api-response";
+import { getErrorMessage } from "@/lib/error-utils";
 
 export async function POST(req: NextRequest) {
   try {
@@ -47,8 +48,8 @@ export async function POST(req: NextRequest) {
           }
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();
-        } catch (error: any) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: error.message })}\n\n`));
+        } catch (error: unknown) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: getErrorMessage(error) })}\n\n`));
           controller.close();
         }
       },
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
         Connection: "keep-alive",
       },
     });
-  } catch (error: any) {
-    return errorResponse(error.message);
+  } catch (error: unknown) {
+    return errorResponse(getErrorMessage(error));
   }
 }

@@ -3,6 +3,7 @@ import { callAI, getAgentModelConfig, streamAIResponse } from "@/lib/ai";
 import { TRANSLATE_SYSTEM_PROMPT, buildTranslateUserPrompt } from "@/lib/prompts";
 import { validateBody } from "@/lib/api-validate";
 import { translateSchema } from "@/lib/validations";
+import { getErrorMessage } from "@/lib/error-utils";
 
 export async function POST(req: NextRequest) {
   try {
@@ -39,8 +40,8 @@ export async function POST(req: NextRequest) {
           }
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();
-        } catch (error: any) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: error.message })}\n\n`));
+        } catch (error: unknown) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: getErrorMessage(error) })}\n\n`));
           controller.close();
         }
       }
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
         Connection: "keep-alive",
       },
     });
-  } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+  } catch (error: unknown) {
+    return new Response(JSON.stringify({ error: getErrorMessage(error) }), { status: 500 });
   }
 }

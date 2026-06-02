@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -11,10 +11,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Send, Copy, BookOpen, Save, Languages, Layout } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { toast } from "sonner";
-import { projectStore, ProjectData } from "@/lib/store";
+import { projectStore } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
 import { streamOutline } from "@/services/outline";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { getErrorMessage } from "@/lib/error-utils";
+import { workbenchFallback } from "@/lib/navigation";
 
 export default function OutlinePage() {
   return (
@@ -94,7 +97,7 @@ function OutlineContent() {
     try {
       await streamOutline({ title, researchDirection, language }, setResult);
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "生成失败");
+      toast.error(error instanceof Error ? getErrorMessage(error) : "生成失败");
     } finally {
       setIsGenerating(false);
     }
@@ -111,6 +114,7 @@ function OutlineContent() {
         title="论文大纲生成"
         subtitle="输入研究题目与方向，结合实验室知识库生成结构化大纲"
         icon={BookOpen}
+        backHref={workbenchFallback(projectId)}
       />
 
       <div className="grid grid-cols-1 gap-8">

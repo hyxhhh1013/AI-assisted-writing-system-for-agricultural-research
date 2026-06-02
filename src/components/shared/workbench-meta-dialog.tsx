@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { DIALOG_FULL } from "@/components/ui/dialog-sizes";
-import { ProjectData } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
 
 interface ProjectMetaDraft {
   title: string;

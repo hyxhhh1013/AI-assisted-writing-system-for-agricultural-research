@@ -104,11 +104,16 @@ export async function callAI(options: AICallOptions): Promise<Response> {
   }
 
   // 记录用量（仅成功调用）
-  usageLog.record(`ai:${options.provider}`, {
-    model: config.model,
-    messageCount: options.messages.length,
-    stream: options.stream ?? true,
-  }, options.userId);
+  usageLog.record(
+    `ai:${options.provider}`,
+    {
+      provider: options.provider,
+      model: config.model,
+      messageCount: options.messages.length,
+      stream: options.stream ?? true,
+    },
+    options.userId,
+  );
 
   return response;
 }

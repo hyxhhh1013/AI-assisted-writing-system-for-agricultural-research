@@ -5,6 +5,7 @@ import { unauthorizedResponse, notFoundResponse, errorResponse } from "@/lib/api
 import { validateBody } from "@/lib/api-validate";
 import { projectEvidencePatchSchema } from "@/lib/validations";
 import type { ProjectDTO } from "@/contracts/project";
+import { getErrorMessage } from "@/lib/error-utils";
 
 type SectionRecord = Record<string, string>;
 
@@ -87,7 +88,7 @@ export async function GET(req: NextRequest) {
     }));
   } catch (error: unknown) {
     logger.error("Projects GET error:", error);
-    return errorResponse(error instanceof Error ? error.message : "Projects GET failed");
+    return errorResponse(error instanceof Error ? getErrorMessage(error) : "Projects GET failed");
   }
 }
 
@@ -191,7 +192,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ id: project.id, message: "保存成功" });
   } catch (error: unknown) {
     logger.error("Projects POST error:", error);
-    return errorResponse(error instanceof Error ? error.message : "Projects POST failed");
+    return errorResponse(error instanceof Error ? getErrorMessage(error) : "Projects POST failed");
   }
 }
 
@@ -235,7 +236,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ message: "更新成功" });
   } catch (error: unknown) {
     logger.error("Projects PATCH error:", error);
-    return errorResponse(error instanceof Error ? error.message : "Projects PATCH failed");
+    return errorResponse(error instanceof Error ? getErrorMessage(error) : "Projects PATCH failed");
   }
 }
 
@@ -266,6 +267,6 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ message: "删除成功" });
   } catch (error: unknown) {
     logger.error("Projects DELETE error:", error);
-    return errorResponse(error instanceof Error ? error.message : "Projects DELETE failed");
+    return errorResponse(error instanceof Error ? getErrorMessage(error) : "Projects DELETE failed");
   }
 }

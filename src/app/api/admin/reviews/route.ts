@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { paginated } from "@/lib/admin-response";
@@ -11,7 +12,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const params = parseListParams(searchParams);
 
-  const where: any = {};
+  const where: Prisma.ReviewCheckWhereInput = {};
   if (params.projectId) where.projectId = params.projectId;
   if (params.grade) where.overallGrade = params.grade;
   if (params.q) where.title = { contains: params.q };

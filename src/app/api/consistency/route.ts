@@ -5,6 +5,7 @@ import { buildConsistencyPrompt } from "@/lib/prompts";
 import type { ConsistencyIssue, ConsistencyReport } from "@/types/consistency";
 import { validateBody } from "@/lib/api-validate";
 import { consistencySchema } from "@/lib/validations";
+import { getErrorMessage } from "@/lib/error-utils";
 
 export async function POST(req: NextRequest) {
   try {
@@ -103,8 +104,8 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify(report), {
       headers: { "Content-Type": "application/json" },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("Consistency Check Error:", error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: getErrorMessage(error) }), { status: 500 });
   }
 }

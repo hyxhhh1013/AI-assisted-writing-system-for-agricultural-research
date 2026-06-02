@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
+import { getErrorMessage } from "@/lib/error-utils";
 
 export async function GET(req: NextRequest) {
   try {
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest) {
     });
 
     return Response.json({ checks });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return Response.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }

@@ -2,12 +2,15 @@
  * Admin CSV 导出工具
  */
 
-function toCSV(rows: Record<string, unknown>[], cols: string[], headers: string[]): string {
+import type { AdminProjectRecord, AdminUserRecord } from "@/contracts/admin";
+
+function toCSV<T extends object>(rows: T[], cols: string[], headers: string[]): string {
   const BOM = "﻿";
   const lines = [headers.join(",")];
   for (const row of rows) {
+    const record = row as Record<string, unknown>;
     lines.push(cols.map(c => {
-      const v = String(row[c] ?? "");
+      const v = String(record[c] ?? "");
       return v.includes(",") || v.includes('"') || v.includes("\n")
         ? `"${v.replace(/"/g, '""')}"`
         : v;
@@ -24,24 +27,27 @@ function downloadCSV(csv: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function exportUsersCSV(users: any[]) {
+export function exportUsersCSV(users: AdminUserRecord[]) {
   downloadCSV(
     toCSV(users, ["name", "email", "role", "projectCount", "createdAt"], ["姓名", "邮箱", "角色", "项目数", "注册时间"]),
     `users-${new Date().toISOString().slice(0, 10)}.csv`,
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function exportProjectsCSV(projects: any[]) {
+export function exportProjectsCSV(projects: AdminProjectRecord[]) {
   downloadCSV(
     toCSV(projects, ["title", "userName", "template", "mode", "progress", "referenceCount", "lastUpdated"], ["标题", "作者", "模板", "模式", "进度%", "文献数", "最后更新"]),
     `projects-${new Date().toISOString().slice(0, 10)}.csv`,
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function exportUsageCSV(entries: any[]) {
+export interface AdminUsageCsvRow {
+  feature: string;
+  userId: string;
+  timestamp: string;
+}
+
+export function exportUsageCSV(entries: AdminUsageCsvRow[]) {
   downloadCSV(
     toCSV(entries, ["feature", "userId", "timestamp"], ["功能", "用户", "时间"]),
     `usage-${new Date().toISOString().slice(0, 10)}.csv`,

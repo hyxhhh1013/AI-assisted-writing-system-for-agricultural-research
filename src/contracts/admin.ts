@@ -1,16 +1,15 @@
-/**
- * Admin API 统一契约 — 分页/搜索/响应格式
+﻿/**
+ * Admin API 缁熶竴濂戠害 鈥?鍒嗛〉/鎼滅储/鍝嶅簲鏍煎紡
  */
 
-// ==================== 请求参数 ====================
+// ==================== 璇锋眰鍙傛暟 ====================
 
 export interface AdminListParams {
-  q?: string; // 搜索关键词
-  page?: number; // 页码，默认 1
-  pageSize?: number; // 每页条数，默认 20
-  sortBy?: string; // 排序字段
+  q?: string;
+  page?: number;
+  pageSize?: number;
+  sortBy?: string;
   sortOrder?: "asc" | "desc";
-  // 扩展筛选
   template?: string;
   mode?: string;
   category?: string;
@@ -22,7 +21,7 @@ export interface AdminListParams {
   dateTo?: string;
 }
 
-// ==================== 分页响应 ====================
+// ==================== 鍒嗛〉鍝嶅簲 ====================
 
 export interface AdminPaginatedResponse<T> {
   success: true;
@@ -33,7 +32,7 @@ export interface AdminPaginatedResponse<T> {
   totalPages: number;
 }
 
-// ==================== 简单响应 ====================
+// ==================== 绠€鍗曞搷搴?====================
 
 export interface AdminSuccessResponse<T = undefined> {
   success: true;
@@ -48,7 +47,7 @@ export interface AdminErrorResponse {
 
 export type AdminApiResponse<T = undefined> = AdminSuccessResponse<T> | AdminErrorResponse;
 
-// ==================== 删除请求体 ====================
+// ==================== 鍒犻櫎璇锋眰浣?====================
 
 export interface AdminDeleteRequest {
   id?: string;
@@ -56,7 +55,7 @@ export interface AdminDeleteRequest {
   [key: string]: unknown;
 }
 
-// ==================== 仪表盘 / 健康 / 用量 ====================
+// ==================== 浠〃鐩?/ 鍋ュ悍 / 鐢ㄩ噺 ====================
 
 export interface AdminStats {
   userCount: number;
@@ -96,7 +95,7 @@ export interface AdminUsageStats {
   totalEntries: number;
 }
 
-// ==================== 用户 / 项目 / 文献 ====================
+// ==================== 鐢ㄦ埛 / 椤圭洰 / 鏂囩尞 ====================
 
 export interface AdminUserRecord {
   id: string;
@@ -159,7 +158,7 @@ export interface AdminSettingRecord {
   updatedAt: string;
 }
 
-// ==================== 审查 / 查重 ====================
+// ==================== 瀹℃煡 / 鏌ラ噸 ====================
 
 export interface AdminPlagiarismRecord {
   id: string;
@@ -170,6 +169,21 @@ export interface AdminPlagiarismRecord {
   overallRisk: string;
   matchCount: number;
   createdAt: string;
+}
+
+export interface AdminPlagiarismMatchRow {
+  riskLevel: string;
+  matchType: string;
+  similarity: number;
+  matchedText: string;
+  matchedFrom: string;
+  matchedUrl?: string | null;
+}
+
+export interface AdminPlagiarismDetail {
+  id?: string;
+  title?: string;
+  matches?: AdminPlagiarismMatchRow[];
 }
 
 export interface AdminReviewRecord {

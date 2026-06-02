@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { ensureBibMapLoaded } from "@/lib/rag";
 import { formatReference } from "@/lib/ref-format";
+import { getErrorMessage } from "@/lib/error-utils";
 
 /**
  * 引用-文献映射管理
@@ -45,7 +47,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "缺少 projectId" }, { status: 400 });
     }
 
-    const where: any = { projectId };
+    const where: Prisma.ReferenceSourceWhereInput = { projectId };
     if (refIndex) {
       where.refIndex = parseInt(refIndex, 10);
     }
@@ -56,8 +58,8 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json(sources);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }
 
@@ -116,7 +118,7 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ message: "保存成功" });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }

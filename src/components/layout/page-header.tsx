@@ -1,15 +1,18 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { ArrowLeft, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useGoBack } from "@/contexts/navigation-history";
 
 interface PageHeaderProps {
   title: string;
   subtitle?: string;
   icon?: LucideIcon;
+  /** 无浏览历史时的兜底路由 */
   backHref?: string;
+  /** 为 true 时忽略历史栈，始终跳转 backHref */
+  backForceFallback?: boolean;
   actions?: React.ReactNode;
   className?: string;
 }
@@ -19,10 +22,11 @@ export function PageHeader({
   subtitle,
   icon: Icon,
   backHref = "/",
+  backForceFallback = false,
   actions,
   className,
 }: PageHeaderProps) {
-  const router = useRouter();
+  const goBack = useGoBack();
 
   return (
     <header
@@ -36,7 +40,7 @@ export function PageHeader({
           variant="ghost"
           size="icon"
           className="mt-0.5 shrink-0 text-[#3d4f46] hover:bg-[#1a5632]/8 hover:text-[#1a5632]"
-          onClick={() => router.push(backHref)}
+          onClick={() => goBack(backHref, { forceFallback: backForceFallback })}
           title="返回"
         >
           <ArrowLeft className="h-5 w-5" />

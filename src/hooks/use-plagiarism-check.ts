@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { checkPlagiarismStream } from "@/services/plagiarism";
+import { getErrorMessage } from "@/lib/error-utils";
 import type {
   PlagiarismCheckRequest,
   PlagiarismCheckResult,
@@ -86,7 +87,7 @@ export function usePlagiarismCheck(): UsePlagiarismCheckReturn {
         setStage({ stage: "error", label: "已取消" });
         return;
       }
-      const message = err instanceof Error ? err.message : "查重失败";
+      const message = err instanceof Error ? getErrorMessage(err) : "查重失败";
       setError(message);
       setStage({ stage: "error", label: message });
     } finally {

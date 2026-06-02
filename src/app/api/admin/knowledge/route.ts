@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { success, badRequest } from "@/lib/admin-response";
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest) {
   const q = searchParams.get("q") || "";
   const category = searchParams.get("category") || "";
 
-  const where: any = {};
+  const where: Prisma.KnowledgeFileWhereInput = {};
   if (q) where.name = { contains: q };
   if (category) where.category = category;
 

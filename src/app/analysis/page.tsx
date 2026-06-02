@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -10,8 +10,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Upload, FileSpreadsheet, Send, Copy, Table as TableIcon, BarChart3, Save } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { toast } from "sonner";
-import { projectStore, ProjectData } from "@/lib/store";
+import { projectStore } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
 import { streamDataAnalysis } from "@/services/analysis";
+import { getErrorMessage } from "@/lib/error-utils";
+import { workbenchFallback } from "@/lib/navigation";
 
 export default function AnalysisPage() {
   return (
@@ -107,7 +110,7 @@ function AnalysisContent() {
     try {
       await streamDataAnalysis(dataSummary, researchDirection, setResult);
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "分析失败");
+      toast.error(error instanceof Error ? getErrorMessage(error) : "分析失败");
     } finally {
       setIsGenerating(false);
     }
@@ -128,6 +131,7 @@ function AnalysisContent() {
         title="实验数据分析"
         subtitle="上传 CSV/Excel 实验数据，AI 生成学术描述并保存到项目"
         icon={BarChart3}
+        backHref={workbenchFallback(projectId)}
       />
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">

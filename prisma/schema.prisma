@@ -93,6 +93,8 @@ model AnalysisResult {
   content   String
   projectId String
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
 }
 
 // 知识库文献模型 (用于同步文件系统和数据库)
@@ -109,6 +111,8 @@ model KnowledgeFile {
   bibEdited    Boolean  @default(false)
   chunkCount   Int      @default(0) // RAG index_*.json 块数，非 KnowledgeChunk 行数
   chunks       KnowledgeChunk[]
+
+  @@index([category])
 }
 
 // 知识库分块模型 (存储向量 RAG 信息)
@@ -253,4 +257,18 @@ model SystemSetting {
   key       String   @id
   value     String   // AES-256-GCM 加密
   updatedAt DateTime @updatedAt
+}
+
+// AI / 功能调用用量（Admin 仪表盘持久化）
+model AiUsageLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  feature   String
+  tokens    Int?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([feature])
+  @@index([userId])
+  @@index([createdAt])
 }

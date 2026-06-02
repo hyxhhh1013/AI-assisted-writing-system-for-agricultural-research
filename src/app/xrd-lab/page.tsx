@@ -1,10 +1,11 @@
 "use client";
 
 import { Suspense, useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getErrorMessage } from "@/lib/error-utils";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -15,11 +16,14 @@ import {
   Loader2, Box, Ruler, Layers, FileText, Download, Expand, X, ArrowLeft, Table2, Atom,
 } from "lucide-react";
 import { toast } from "sonner";
+import type { ProjectData } from "@/contracts/project";
 import { projectStore } from "@/lib/store";
 import { runSimulation } from "@/services/xrd";
 import type { SimulateData } from "@/services/xrd";
 import { XpsCard } from "@/components/shared/xrd/xps-card";
 import { MolDiagramPanel } from "@/components/shared/mol-diagram-panel";
+import { useGoBack } from "@/contexts/navigation-history";
+import { workbenchFallback } from "@/lib/navigation";
 
 export default function XrdLabPage() {
   return (
@@ -30,7 +34,7 @@ export default function XrdLabPage() {
 }
 
 function XrdLabContent() {
-  const router = useRouter();
+  const goBack = useGoBack();
   const searchParams = useSearchParams();
   const [activeTool, setActiveTool] = useState<"simulation" | "xps" | "mol">("simulation");
   const [projectId, setProjectId] = useState(searchParams.get("projectId") || "");
@@ -49,12 +53,15 @@ function XrdLabContent() {
       const mdImage = `\n\n![${caption}](${imageUrl})\n\n`;
       const section = activeSection === "abstract" ? "abstract" : (project.sections[activeSection] ? activeSection : "results");
       const current = section === "abstract" ? (project.abstract || "") : (project.sections[section] || "");
-      const updated = { ...project } as Record<string, unknown>;
-      if (section === "abstract") { updated.abstract = current + mdImage; }
-      else { updated.sections = { ...project.sections, [section]: current + mdImage }; }
-      await projectStore.save(updated as any);
+      const updated: ProjectData = { ...project };
+      if (section === "abstract") {
+        updated.abstract = current + mdImage;
+      } else {
+        updated.sections = { ...project.sections, [section]: current + mdImage };
+      }
+      await projectStore.save(updated);
       toast.success(`已插入到 ${section} 章节`);
-    } catch (err: any) { toast.error(err.message || "插入失败"); }
+    } catch (err: unknown) { toast.error(getErrorMessage(err) || "插入失败"); }
   };
 
   return (
@@ -65,7 +72,7 @@ function XrdLabContent() {
           variant="ghost"
           size="icon"
           className="text-[#3d4f46] hover:bg-[#1a5632]/8 hover:text-[#1a5632]"
-          onClick={() => router.push(projectId ? `/workbench?id=${projectId}` : "/projects")}
+          onClick={() => goBack(workbenchFallback(projectId || searchParams.get("projectId")))}
         >
           <ArrowLeft className="h-5 w-5" />
         </Button>
@@ -152,7 +159,7 @@ function SimulationCard({ onInsertToPaper }: { onInsertToPaper: (url: string, ca
       });
       setResult({ imageBase64: json.imageBase64, imageUrl: json.imageUrl, data: json.data });
       toast.success(`模拟完成，${json.data.n_peaks} 个衍射峰`);
-    } catch (err: any) { toast.error(err.message); }
+    } catch (err: unknown) { toast.error(getErrorMessage(err)); }
     finally { setLoading(false); }
   };
 

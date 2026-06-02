@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { getErrorMessage } from "@/lib/error-utils";
 import {
   Dialog,
   DialogContent,
@@ -111,7 +112,7 @@ export function KnowledgeMetadataDialog({
       onOpenChange(false);
       onSaved?.();
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "保存失败");
+      toast.error(error instanceof Error ? getErrorMessage(error) : "保存失败");
     } finally {
       setIsSaving(false);
     }

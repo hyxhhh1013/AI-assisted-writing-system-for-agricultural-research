@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
+import { getErrorMessage } from "@/lib/error-utils";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
       imageUrl: `/api/charts/${outputName}`,
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "未知错误";
+    const message = error instanceof Error ? getErrorMessage(error) : "未知错误";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

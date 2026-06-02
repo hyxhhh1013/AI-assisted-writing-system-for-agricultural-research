@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
 import { MarkdownContent, CompactMarkdown, ReferencesSection } from "./shared";
 import { formatKeywords } from "@/lib/paper-metadata";
 import { formatClassification } from "@/lib/paper-metadata";
-import { ProjectData } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
 import { getTemplateSections, type TemplateSectionDef } from "@/lib/template-sections";
 
 interface TemplateProps {

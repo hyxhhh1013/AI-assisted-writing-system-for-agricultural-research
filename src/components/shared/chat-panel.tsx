@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { getErrorMessage } from "@/lib/error-utils";
 import {
   Send, Loader2, Sparkles, MessageSquare, Trash2,
 } from "lucide-react";
@@ -75,7 +76,7 @@ export function ChatPanel({ filename }: ChatPanelProps) {
         },
       );
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "请求失败");
+      toast.error(error instanceof Error ? getErrorMessage(error) : "请求失败");
       // 移除占位消息
       setMessages(prev => prev.filter(m => m.content !== ""));
     } finally {

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -7,12 +7,16 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ReviewTab } from "@/components/shared/review-tab";
 import { ReviewHistoryList } from "@/components/shared/review/review-history-list";
-import { projectStore, ProjectData } from "@/lib/store";
+import { projectStore } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
 import { ArrowLeft, Loader2, History, Play } from "lucide-react";
 import { toast } from "sonner";
+import { useGoBack } from "@/contexts/navigation-history";
+import { workbenchFallback } from "@/lib/navigation";
 
 export function ReviewWorkspace() {
   const router = useRouter();
+  const goBack = useGoBack();
   const searchParams = useSearchParams();
   const projectId = searchParams.get("id");
 
@@ -85,7 +89,7 @@ export function ReviewWorkspace() {
               variant="ghost"
               size="icon"
               className="h-8 w-8 text-[#3d4f46] hover:text-[#1a5632]"
-              onClick={() => router.push(`/workbench?id=${projectId}`)}
+              onClick={() => goBack(workbenchFallback(projectId))}
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>

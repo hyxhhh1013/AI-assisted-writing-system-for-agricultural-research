@@ -1,4 +1,4 @@
-import type { ProjectData } from "@/lib/store";
+﻿import type { ProjectData } from "@/contracts/project";
 
 type KeywordLanguage = "zh" | "en";
 

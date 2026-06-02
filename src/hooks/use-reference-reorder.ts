@@ -1,6 +1,7 @@
-import { useCallback } from "react";
+﻿import { useCallback } from "react";
 import { toast } from "sonner";
-import { ProjectData, projectStore } from "@/lib/store";
+import { projectStore } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
 import { mergeEditorIntoProject } from "@/lib/export-content";
 import {
   buildReorderedReferences,

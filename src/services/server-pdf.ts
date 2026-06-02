@@ -1,5 +1,5 @@
-import { chromium } from "playwright";
-import type { ProjectData } from "@/lib/store";
+﻿import { chromium } from "playwright";
+import type { ProjectData } from "@/contracts/project";
 import { formatClassification, formatKeywords } from "@/lib/paper-metadata";
 import { parseMarkdownBlocks, MarkdownBlock } from "@/lib/markdown-parser";
 import { normalizeMathDelimiters } from "@/lib/math-delimiter";

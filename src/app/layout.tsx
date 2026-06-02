@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Toaster } from "@/components/ui/sonner";
 import { SiteShell } from "@/components/layout/site-shell";
 import { AuthProvider } from "@/lib/auth-context";
+import { NavigationHistoryProvider } from "@/contexts/navigation-history";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -18,7 +19,9 @@ export default function RootLayout({
     <html lang="zh-CN" className="antialiased">
       <body className="min-h-screen font-sans">
         <AuthProvider>
-          <SiteShell>{children}</SiteShell>
+          <NavigationHistoryProvider>
+            <SiteShell>{children}</SiteShell>
+          </NavigationHistoryProvider>
         </AuthProvider>
         <Toaster position="top-center" />
       </body>

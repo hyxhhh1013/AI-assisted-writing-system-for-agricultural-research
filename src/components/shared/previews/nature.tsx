@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import { MarkdownContent, ReferencesSection } from "./shared";
-import { ProjectData } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
 import { getTemplateSections, type TemplateSectionDef } from "@/lib/template-sections";
 
 interface TemplateProps {

@@ -12,13 +12,14 @@ export async function GET(
 
   const { id } = await params;
   const detail = await getReviewDetail(id);
-  if (!detail) return notFound("审查记录不存在");
+  if (!detail?.check) return notFound("审查记录不存在");
 
+  const { check, issues } = detail;
   return success({
     check: {
-      ...detail.check,
-      createdAt: detail.check.createdAt instanceof Date ? detail.check.createdAt.toISOString() : detail.check.createdAt,
+      ...check,
+      createdAt: check.createdAt instanceof Date ? check.createdAt.toISOString() : check.createdAt,
     },
-    issues: detail.issues,
+    issues,
   });
 }

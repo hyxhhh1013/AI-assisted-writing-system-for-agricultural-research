@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import type { AdminPlagiarismDetail, AdminPlagiarismMatchRow } from "@/contracts/admin";
 import {
   getAdminPlagiarismDetail,
   listAdminPlagiarism,
@@ -17,7 +18,7 @@ export default function AdminPlagiarismPage() {
   const [checks, setChecks] = useState<AdminPlagiarismRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
+  const [detail, setDetail] = useState<AdminPlagiarismDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [riskFilter, setRiskFilter] = useState("");
 
@@ -38,7 +39,7 @@ export default function AdminPlagiarismPage() {
 
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-[#6b7c72]" /></div>;
 
-  const matches = (detail as any)?.matches || [];
+  const matches: AdminPlagiarismMatchRow[] = detail?.matches ?? [];
 
   return (
     <div className="space-y-4">
@@ -68,7 +69,7 @@ export default function AdminPlagiarismPage() {
                   {detailLoading ? <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin" /></div> : detail ? (
                     <div className="space-y-2">
                       {matches.length === 0 ? <p className="text-sm text-[#9aa8a0] py-4 text-center">未发现匹配</p> :
-                        matches.map((m: any, i: number) => (
+                        matches.map((m, i) => (
                           <div key={i} className="rounded border border-[#1a5632]/10 bg-white px-3 py-2 text-xs">
                             <div className="flex items-center gap-2 mb-1">
                               <Badge variant="outline" className={`text-[10px] ${RISK_BADGE[m.riskLevel] || ""}`}>{RISK_LABEL[m.riskLevel] || m.riskLevel}</Badge>

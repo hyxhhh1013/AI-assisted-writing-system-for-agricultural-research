@@ -1,4 +1,4 @@
-import type { ProjectData } from "@/lib/store";
+﻿import type { ProjectData } from "@/contracts/project";
 
 /** 将中间编辑器未保存的正文合并进 project，供预览 / 导出 */
 export function mergeEditorIntoProject(

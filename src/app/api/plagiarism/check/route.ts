@@ -1,9 +1,13 @@
 import { NextRequest } from "next/server";
+import { createLogger } from "@/lib/logger";
 import { validateBody } from "@/lib/api-validate";
 import { plagiarismCheckSchema } from "@/lib/validations";
 import { runPlagiarismCheck } from "@/services/plagiarism-service";
+import { getErrorMessage } from "@/lib/error-utils";
 
 export const maxDuration = 180;
+
+const log = createLogger("api/plagiarism/check");
 
 export async function POST(req: NextRequest) {
   try {
@@ -34,7 +38,8 @@ export async function POST(req: NextRequest) {
             );
             send({ type: "done", data: result });
           } catch (err) {
-            send({ type: "error", message: err instanceof Error ? err.message : "查重检测失败" });
+            log.fail("SSE plagiarism check failed", err, { projectId });
+            send({ type: "error", message: err instanceof Error ? getErrorMessage(err) : "查重检测失败" });
           } finally {
             controller.close();
           }
@@ -54,7 +59,8 @@ export async function POST(req: NextRequest) {
     const result = await runPlagiarismCheck({ projectId, title, content, webSearch: false });
     return Response.json(result);
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "查重检测失败";
+    log.fail("plagiarism check failed", error);
+    const message = error instanceof Error ? getErrorMessage(error) : "查重检测失败";
     return Response.json({ error: message }, { status: 500 });
   }
 }

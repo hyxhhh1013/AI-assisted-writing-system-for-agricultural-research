@@ -1,7 +1,7 @@
-import { useCallback } from "react";
+﻿import { useCallback } from "react";
 import { toast } from "sonner";
 import { mergeEditorIntoProject } from "@/lib/export-content";
-import { ProjectData } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
 
 /** Markdown 导出：合并编辑器当前内容后生成 .md 文件 */
 export function useMarkdownExport(

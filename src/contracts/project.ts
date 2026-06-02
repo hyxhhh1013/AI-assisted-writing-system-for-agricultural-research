@@ -1,3 +1,4 @@
+/** 项目领域类型唯一出口：UI/hooks/API 请 `import type { ProjectData } from "@/contracts/project"` */
 import type { DataSourceAnalysis, EvidenceClaim } from "./data-source";
 
 export interface ProjectDTO {

@@ -74,24 +74,24 @@
 | ENG-PR-028 | 移除 `metadata.json` 双写（写路径） | ENG-PR-027 | 4h | done | 2026-06-02 |
 | **Phase 3 — 大文件拆分** |
 | ENG-PR-030 | `/api/writing` 按阶段拆 handler | ENG-PR-002 | 6h | done | 2026-06-02 |
-| ENG-PR-031 | `writing-panel` 拆 SSE 条 + 扩写区 | ENG-PR-030 | 6h | todo | |
-| ENG-PR-032 | `knowledge/page` 拆 hooks + 子组件 | ENG-PR-021 | 6h | todo | |
-| ENG-PR-033 | `use-figure-pipeline` 图表 API 进 service | ENG-PR-022 | 3h | todo | |
+| ENG-PR-031 | `writing-panel` 拆 SSE 条 + 扩写区 | ENG-PR-030 | 6h | done | 423 行 + hooks/子组件 |
+| ENG-PR-032 | `knowledge/page` 拆 hooks + 子组件 | ENG-PR-021 | 6h | done | page 58 行 + hook/5 组件 |
+| ENG-PR-033 | `use-figure-pipeline` 图表 API 进 service | ENG-PR-022 | 3h | done | generateFigure → services/figures |
 | **Phase 4 — 观测与运维** |
-| ENG-PR-040 | Prisma `AiUsageLog` + 写入 | ENG-PR-024 | 3h | todo | |
-| ENG-PR-041 | Admin 用量读 DB（替代内存环） | ENG-PR-040 | 2h | todo | |
-| ENG-PR-042 | 统一 `logger` 封装 | ENG-PR-041 | 2h | todo | |
-| ENG-PR-043 | AI/脚本路由接入 logger | ENG-PR-042 | 3h | todo | |
+| ENG-PR-040 | Prisma `AiUsageLog` + 写入 | ENG-PR-024 | 3h | done | 双写内存+DB |
+| ENG-PR-041 | Admin 用量读 DB（替代内存环） | ENG-PR-040 | 2h | done | admin-usage service |
+| ENG-PR-042 | 统一 `logger` 封装 | ENG-PR-041 | 2h | done | createLogger + fail + 生产 JSON |
+| ENG-PR-043 | AI/脚本路由接入 logger | ENG-PR-042 | 3h | done | writing/chat/reindex/plagiarism + rag/hooks |
 | **Phase 5 — 质量闭环与测试** |
-| ENG-PR-050 | quality-module Phase 4 收尾 + 死代码清理 | ENG-PR-020 | 4h | todo | |
-| ENG-PR-051 | API 集成测试：writing + plagiarism v2 | ENG-PR-030 | 4h | todo | |
-| ENG-PR-052 | Playwright 冒烟：登录→工作台→保存 | ENG-PR-002 | 4h | todo | |
-| ENG-PR-053 | Prisma 补索引（P3-1） | ENG-PR-040 | 2h | todo | |
-| ENG-PR-054 | `no-explicit-any` warn + 热点清零 | ENG-PR-023 | 6h | todo | |
+| ENG-PR-050 | quality-module Phase 4 收尾 + 死代码清理 | ENG-PR-020 | 4h | done | 删 plagiarism-check.ts；quality-module-plan 状态表 |
+| ENG-PR-051 | API 集成测试：writing + plagiarism v2 | ENG-PR-030 | 4h | done | route integration + mock pipeline/service |
+| ENG-PR-052 | Playwright 冒烟：登录→工作台→保存 | ENG-PR-002 | 4h | done | playwright.config + e2e/smoke-workbench |
+| ENG-PR-053 | Prisma 补索引（P3-1） | ENG-PR-040 | 2h | done | AnalysisResult/KnowledgeFile @@index + migration |
+| ENG-PR-054 | `no-explicit-any` warn + 热点清零 | ENG-PR-023 | 6h | done | admin-export/knowledge/login 热点 |
 | **可选 P3** |
-| ENG-PR-060 | Bundle analyze + 重路由 lazy | ENG-PR-031 | 3h | todo | |
-| ENG-PR-061 | pre-commit：`check` + lint-staged | ENG-PR-002 | 2h | todo | |
-| ENG-PR-062 | `ProjectData` 类型统一（contracts 为准） | ENG-PR-025b | 4h | todo | |
+| ENG-PR-060 | Bundle analyze + 重路由 lazy | ENG-PR-031 | 3h | done | plot/reader/admin dynamic client；`npm run analyze` |
+| ENG-PR-061 | pre-commit：`check` + lint-staged | ENG-PR-002 | 2h | done | husky: typecheck + lint-staged(src) |
+| ENG-PR-062 | `ProjectData` 类型统一（contracts 为准） | ENG-PR-025b | 4h | done | store 停 re-export；全库改 contracts |
 
 ### 1.1 与既有队列的关系
 
@@ -834,6 +834,16 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-06-02 | ENG-PR-027 | AI | knowledge-metadata.ts + rag 书目 Prisma；USE_METADATA_JSON_FALLBACK |
 | 2026-06-02 | ENG-PR-028 | AI | knowledge API 停 metadata 双写；index-pdfs → sync-knowledge-metadata-to-prisma |
 | 2026-06-02 | ENG-PR-030 | AI | writing route ~90 行；prepare-context + pipeline/{writer,verifier,refiner,finalize,modes} + run-pipeline；tsc + writing.test 绿 |
+| 2026-06-02 | ENG-PR-031 | AI | writing-panel 878→423 行；writing/{sse-status,expand-result,outline-task-list,types} + use-writing-panel-{session,preview-sync,generate} |
+| 2026-06-02 | ENG-PR-033 | AI | generateFigure 迁入 services/figures；hook 仅保留解析 + processFigures |
+| 2026-06-02 | ENG-PR-032 | AI | knowledge/page 849→58 行；use-knowledge-list + 5 子组件 |
+| 2026-06-02 | ENG-PR-040, 041 | AI | AiUsageLog 表 + usageLog 双写；Admin stats/usage/users 读 DB（无表时回退内存） |
+| 2026-06-02 | ENG-PR-042, 043 | AI | `createLogger(scope)` + `fail()`；api/writing|chat|reindex|plagiarism* + rag + figure/writing/knowledge hooks；logger 单测 2 条 |
+| 2026-06-02 | ENG-PR-050, 051 | AI | 删死代码 `plagiarism-check.ts`；quality-module-plan 对照表；writing/v2 路由 SSE 集成测 |
+| 2026-06-02 | ENG-PR-052, 053, 054 | AI | e2e 冒烟 + P3 索引迁移；any 热点（admin-export/knowledge/login）；DATABASE.md/README |
+| 2026-06-02 | ENG-PR-061 | AI | husky pre-commit：typecheck + lint-staged；`isMetadataJsonFallbackEnabled` 修 lint error |
+| 2026-06-02 | ENG-PR-060, 062 | AI | plot/reader/admin dynamic import；ProjectData 统一 `@/contracts/project` |
+| 2026-06-01 | 技术债清扫 | AI | src 内 `: any`/`as any` 清零；chart-panel→`postChartForm`；Prisma WhereInput；workbench 拆 `workbench-page-client`；`.github/workflows/ci.yml`；`npm run check` 绿（167 warn） |
 
 ---
 

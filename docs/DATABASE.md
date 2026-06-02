@@ -146,7 +146,7 @@ KnowledgeFile (1) ──< (N) KnowledgeChunk
 | PlagiarismMatch | checkId | 查检测所有匹配 |
 | ReferenceSource | projectId + [projectId, refIndex] (unique) | 查项目引用映射 |
 
-**待补**（来自技术债 P3-1）：AnalysisResult、RewriteSuggestion、KnowledgeFile.category 的高频查询路径。当前数据量小，暂不影响性能。
+**已补**（ENG-PR-053）：`AnalysisResult(projectId)`、`KnowledgeFile(category)`；`RewriteSuggestion(checkId)` 此前已有。
 
 ## 常见查询
 

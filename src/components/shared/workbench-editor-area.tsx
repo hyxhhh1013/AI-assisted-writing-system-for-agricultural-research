@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,7 +17,7 @@ import { EditorImageGallery } from "@/components/shared/editor-image-gallery";
 import { PipelineTimeline } from "@/components/shared/pipeline-timeline";
 import { MarkdownContent } from "@/components/shared/previews/shared";
 import type { PipelineStep } from "@/hooks/use-writing-stream";
-import { ProjectData } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
 import { getTemplateSections } from "@/lib/template-sections";
 import dynamic from "next/dynamic";
 

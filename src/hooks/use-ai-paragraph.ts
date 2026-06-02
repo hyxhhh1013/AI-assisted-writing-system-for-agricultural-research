@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useCallback } from "react";
-import type { ProjectData } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
 import type { WritingRequest } from "@/contracts/writing";
 import { postWritingStream } from "@/services/writing";
 

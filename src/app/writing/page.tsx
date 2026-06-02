@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -11,9 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Send, Copy, Eraser, FileText, Database, ScrollText, PenTool } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { toast } from "sonner";
-import { projectStore, ProjectData } from "@/lib/store";
+import { projectStore } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
 import { buildSectionOptions } from "@/lib/imrad";
 import { postWritingStream } from "@/services/writing";
+import { getErrorMessage } from "@/lib/error-utils";
+import { workbenchFallback } from "@/lib/navigation";
 
 const SECTIONS = buildSectionOptions();
 
@@ -125,8 +128,8 @@ function WritingContent() {
           }
         }
       }
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error));
     } finally {
       setIsGenerating(false);
     }
@@ -143,6 +146,7 @@ function WritingContent() {
         title="模块化扩写"
         subtitle="选择章节与上下文，基于本地知识库进行学术化扩写"
         icon={PenTool}
+        backHref={workbenchFallback(projectId)}
       />
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">

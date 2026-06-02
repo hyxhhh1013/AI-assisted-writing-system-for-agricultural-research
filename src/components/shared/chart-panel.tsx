@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { getErrorMessage } from "@/lib/error-utils";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -13,6 +14,11 @@ import {
 } from "@/components/ui/card";
 import { Loader2, BarChart3, ImageIcon, FileText, Table2, ClipboardPaste, Upload } from "lucide-react";
 import { toast } from "sonner";
+import {
+  postChartForm,
+  type ChartGenericFileConfig,
+  type ChartPasteInlineConfig,
+} from "@/services/charts";
 
 interface RegistryEntry {
   id: string;
@@ -111,25 +117,21 @@ export function ChartPanel({ projectId, onInsertToPaper, registryEntry, layout =
   const handleGenerate = async () => {
     setLoading(true);
     try {
-      let body: FormData | null = null;
-      let jsonBody: any = null;
-      const endpoint = "/api/chart";
-      let reqInit: RequestInit;
+      let body: FormData;
 
       if (inputMode === "file" && file) {
-        body = new FormData();
-        body.append("dataFile", file);
-        body.append("mode", "generic");
-        body.append("config", JSON.stringify({
+        const config: ChartGenericFileConfig = {
           title: title || "图表",
           chart_type: chartType,
           x_label: xLabel,
           y_label: yLabel,
-        }));
-        reqInit = { method: "POST", body };
+        };
+        body = new FormData();
+        body.append("dataFile", file);
+        body.append("mode", "generic");
+        body.append("config", JSON.stringify(config));
       } else if (inputMode === "paste" && parsedData) {
-        // 内联数据模式：直接用 Chart.js 风格 JSON
-        jsonBody = {
+        const inlineConfig: ChartPasteInlineConfig = {
           data: {
             labels: parsedData.labels,
             datasets: parsedData.datasets,
@@ -141,23 +143,23 @@ export function ChartPanel({ projectId, onInsertToPaper, registryEntry, layout =
         };
         body = new FormData();
         body.append("mode", "generic");
-        body.append("config", JSON.stringify(jsonBody));
-        // 传一个 dummy file 满足 API 要求（dataFile 字段必须存在）
+        body.append("config", JSON.stringify(inlineConfig));
         body.append("dataFile", new Blob([pasteText], { type: "text/csv" }), "data.csv");
-        reqInit = { method: "POST", body };
       } else {
         toast.error("请上传文件或粘贴数据");
         setLoading(false);
         return;
       }
 
-      const res = await fetch(endpoint, reqInit);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "生成失败");
-      setResult({ imageBase64: data.imageBase64, imageUrl: data.imageUrl, caption: title || "图表" });
+      const data = await postChartForm(body);
+      setResult({
+        imageBase64: data.imageBase64 ?? "",
+        imageUrl: data.imageUrl ?? "",
+        caption: title || "图表",
+      });
       toast.success("图表生成成功");
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err));
     } finally { setLoading(false); }
   };
 

@@ -1,5 +1,9 @@
 /** 统一错误处理工具 */
 
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("error-utils");
+
 export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
@@ -7,7 +11,5 @@ export function getErrorMessage(error: unknown): string {
 }
 
 export function logError(context: string, error: unknown): void {
-  if (process.env.NODE_ENV === "development") {
-    console.error(`[${context}]`, error);
-  }
+  log.fail(context, error);
 }

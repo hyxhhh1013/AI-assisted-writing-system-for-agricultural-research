@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import {
   Wand2, Check, EyeOff, ArrowRight, ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
-import { ProjectData } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
 import { mergeEditorIntoProject } from "@/lib/export-content";
 import { useConsistency } from "@/hooks/use-consistency";
 import type { FixableIssue } from "@/contracts/consistency";

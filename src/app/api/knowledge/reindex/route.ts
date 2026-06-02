@@ -1,4 +1,6 @@
-import { logger } from "@/lib/logger";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("api/knowledge/reindex");
 import { NextRequest } from "next/server";
 import { spawn } from "child_process";
 import path from "path";
@@ -72,7 +74,7 @@ export async function POST(req: NextRequest) {
           const payload = JSON.parse(trimmed.slice(PROGRESS_PREFIX.length)) as ReindexProgressEvent;
           emit(payload);
         } catch (err) {
-          logger.warn("Failed to parse index progress line:", err);
+          log.warn("failed to parse index progress line", err);
         }
       };
 
@@ -84,11 +86,11 @@ export async function POST(req: NextRequest) {
       });
 
       child.stderr.on("data", (chunk: Buffer) => {
-        logger.warn("index-pdfs stderr:", chunk.toString());
+        log.warn("index-pdfs stderr", { stderr: chunk.toString().slice(0, 500) });
       });
 
       child.on("error", (err) => {
-        logger.error("index-pdfs spawn error:", err);
+        log.fail("index-pdfs spawn error", err);
         finish(err.message || "无法启动索引进程");
       });
 
@@ -101,7 +103,7 @@ export async function POST(req: NextRequest) {
               await localRAG.reload();
               invalidateBibCache();
             } catch (err) {
-              logger.error("RAG reload after reindex failed:", err);
+              log.fail("RAG reload after reindex failed", err);
             }
           })();
           finish();

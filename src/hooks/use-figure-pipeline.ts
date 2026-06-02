@@ -1,6 +1,12 @@
 "use client";
 
 import { useRef, useCallback, useState } from "react";
+import { generateFigure } from "@/services/figures";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("figure-pipeline");
+
+export { generateFigure, generateFigure as generateSingleFigure } from "@/services/figures";
 
 interface PendingFigure {
   spec: string;
@@ -58,7 +64,7 @@ export function findFigureBlocks(text: string): { json: Record<string, unknown>;
       if (json.tool && json.config && json.caption) {
         results.push({ json, raw });
       } else {
-        console.warn("[Figure] FIGURE block missing tool/config/caption:", jsonStr.slice(0, 100));
+        log.warn("FIGURE block missing tool/config/caption", { preview: jsonStr.slice(0, 100) });
       }
     } catch {
       // 尝试修复 AI 常见 JSON 错误
@@ -142,25 +148,15 @@ export function findFigureBlocks(text: string): { json: Record<string, unknown>;
           }
         }
         if (json.tool && json.config && json.caption) {
-          console.warn("[Figure] Auto-fixed malformed JSON in FIGURE marker");
+          log.warn("auto-fixed malformed JSON in FIGURE marker");
           results.push({ json, raw });
           continue;
         }
       } catch { /* still broken */ }
-      console.warn("[Figure] JSON parse failed:", jsonStr.slice(0, 120));
+      log.warn("FIGURE JSON parse failed", { preview: jsonStr.slice(0, 120) });
     }
   }
   return results;
-}
-
-export async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 12000): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 /** 处理文本中的插图占位符 */
@@ -172,78 +168,6 @@ export function replacePlaceholders(text: string): { processedText: string; coun
     return `\n\n> 📊 **${caption.trim()}**（待补充数据）\n\n`;
   });
   return { processedText, count };
-}
-
-/**
- * 为单个 FIGURE 调用对应的生成 API，返回 { url, error? }。
- */
-export async function generateSingleFigure(
-  tool: string,
-  config: Record<string, unknown>,
-  caption: string,
-  signal?: AbortSignal,
-): Promise<{ url: string; error?: string }> {
-  if (signal?.aborted) return { url: "", error: "已取消" };
-
-  if (tool === "chart") {
-    const fd = new FormData();
-    if (config.data && typeof config.data === "object") {
-      const data = config.data as { labels?: string[]; datasets?: Array<{ label?: string; data: number[] }> };
-      if (data.labels && data.datasets) {
-        let csv = "X," + data.labels.join(",") + "\n";
-        for (const ds of data.datasets) {
-          csv += (ds.label || "data") + "," + ds.data.join(",") + "\n";
-        }
-        fd.append("dataFile", new Blob([csv], { type: "text/csv" }), "data.csv");
-      }
-    } else if (config.data_file) {
-      const resp = await fetchWithTimeout(config.data_file as string, { signal });
-      const blob = await resp.blob();
-      fd.append("dataFile", blob, "data.csv");
-    }
-    if (fd.has("dataFile")) {
-      fd.append("config", JSON.stringify({ title: caption, chart_type: config.chart_type || config.type || "bar", data: config.data }));
-      const r = await fetchWithTimeout("/api/chart", { method: "POST", body: fd, signal });
-      const j = await r.json();
-      if (j.error) return { url: "", error: j.error as string };
-      return { url: (j.imageUrl as string) || "" };
-    }
-    return { url: "", error: "chart: 无有效数据" };
-  }
-
-  if (tool === "xrd_peakfit" && config.data_file) {
-    const fd = new FormData();
-    const resp = await fetchWithTimeout(config.data_file as string, { signal });
-    const blob = await resp.blob();
-    fd.append("dataFile", blob, "data.csv");
-    fd.append("config", JSON.stringify({ title: caption, bg_params: {}, peak_params: { max_peaks: 15 } }));
-    const r = await fetchWithTimeout("/api/xrd/peakfit", { method: "POST", body: fd, signal });
-    const j = await r.json();
-    if (j.error) return { url: "", error: j.error as string };
-    return { url: (j.imageUrl as string) || "" };
-  }
-
-  if (tool === "flow") {
-    const r = await fetchWithTimeout("/api/flow-diagram", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...config, renderer: "graphviz" }), signal });
-    const j = await r.json();
-    if (j.error) return { url: "", error: j.error as string };
-    return { url: (j.imageUrl as string) || "" };
-  }
-
-  if (tool === "mechanism") {
-    const mechanismCfg = {
-      title: (config.title || config.description || "反应机理") as string,
-      direction: "vertical",
-      nodes: [{ id: "1", label: ((config.description as string)?.slice(0, 20) || "机理过程") }, { id: "2", label: "产物" }],
-      edges: [{ from: "1", to: "2" }],
-    };
-    const r = await fetchWithTimeout("/api/flow-diagram", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...mechanismCfg, renderer: "graphviz" }), signal });
-    const j = await r.json();
-    if (j.error) return { url: "", error: j.error as string };
-    return { url: (j.imageUrl as string) || "" };
-  }
-
-  return { url: "", error: `未知图表工具: ${tool}` };
 }
 
 // === React Hook ===
@@ -286,7 +210,7 @@ export function useFigurePipeline(): UseFigurePipelineReturn {
       processedText = processedText.replace(block.raw, `\n\n*[正在生成 ${caption}...]*\n\n`);
 
       try {
-        const result = await generateSingleFigure(tool, config, caption, figureAbort.signal);
+        const result = await generateFigure(tool, config, caption, figureAbort.signal);
         if (result.url) {
           fig.status = "done";
           fig.imageUrl = result.url;

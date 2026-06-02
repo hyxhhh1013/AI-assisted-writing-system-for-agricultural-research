@@ -4,6 +4,7 @@
 
 import { NextRequest } from "next/server";
 import { getReviewHistory } from "@/services/review-service";
+import { getErrorMessage } from "@/lib/error-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -18,10 +19,10 @@ export async function GET(request: NextRequest) {
       success: true,
       history,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[review/history] GET error:", error);
     return Response.json(
-      { success: false, error: error.message || "获取历史记录失败" },
+      { success: false, error: getErrorMessage(error) || "获取历史记录失败" },
       { status: 500 }
     );
   }

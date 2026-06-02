@@ -8,7 +8,7 @@ const METADATA_PATH = path.join(process.cwd(), "data/metadata.json");
 const DATA_DIR = path.join(process.cwd(), "data");
 
 /** 仅迁移/应急：只读 data/metadata.json，默认关闭 */
-export function useMetadataJsonFallback(): boolean {
+export function isMetadataJsonFallbackEnabled(): boolean {
   return process.env.USE_METADATA_JSON_FALLBACK === "true";
 }
 
@@ -68,7 +68,7 @@ export async function getKnowledgeFileByName(name: string): Promise<KnowledgeFil
   });
   if (row) return prismaRowToKnowledgeRecord(row);
 
-  if (useMetadataJsonFallback()) {
+  if (isMetadataJsonFallbackEnabled()) {
     return loadMetadataJsonFallback().find((m) => m.name === name) ?? null;
   }
   return null;
@@ -84,7 +84,7 @@ export async function listKnowledgeCategories(): Promise<string[]> {
     .map((r) => r.category)
     .filter((c) => c && c !== "未分类");
 
-  if (!useMetadataJsonFallback()) {
+  if (!isMetadataJsonFallbackEnabled()) {
     return Array.from(new Set(fromDb));
   }
 
@@ -148,7 +148,7 @@ export async function buildBibMap(): Promise<Map<string, BibEntry>> {
     mergeBibEntry(map, prismaRowToKnowledgeRecord(f));
   }
 
-  if (useMetadataJsonFallback()) {
+  if (isMetadataJsonFallbackEnabled()) {
     for (const m of loadMetadataJsonFallback()) {
       mergeBibEntry(map, m);
     }

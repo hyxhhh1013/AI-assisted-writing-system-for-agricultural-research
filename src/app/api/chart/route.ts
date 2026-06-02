@@ -6,6 +6,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { parseOptionalJsonConfig } from "@/lib/api-validate";
 import { chartModeSchema } from "@/lib/validations";
+import { getErrorMessage } from "@/lib/error-utils";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
         });
 
         proc.on("error", (err) => {
-          resolve({ success: false, error: err.message });
+          resolve({ success: false, error: getErrorMessage(err) });
         });
       }
     );
@@ -140,10 +141,10 @@ export async function POST(req: NextRequest) {
       imageUrl: `/api/charts/${outputName}`,
       fileName: outputName,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("Chart API error:", error);
     return NextResponse.json(
-      { error: error.message || "图表生成失败" },
+      { error: getErrorMessage(error) || "图表生成失败" },
       { status: 500 }
     );
   }

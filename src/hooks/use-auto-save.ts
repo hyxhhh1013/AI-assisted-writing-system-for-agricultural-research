@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
-import { ProjectData, projectStore } from "@/lib/store";
+﻿import { useEffect, useRef } from "react";
+import { projectStore } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
 
 /** 每 10 秒检测变更并自动保存（仅在内容实际变化时保存） */
 export function useAutoSave(project: ProjectData, projectId: string | null | undefined) {

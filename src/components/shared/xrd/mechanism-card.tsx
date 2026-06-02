@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { getErrorMessage } from "@/lib/error-utils";
 import {
   Card, CardContent, CardHeader, CardTitle, CardDescription,
 } from "@/components/ui/card";
@@ -47,7 +48,7 @@ export function MechanismCard({ onInsertToPaper, onPreview }: MechanismCardProps
           previewSvgRef.current.innerHTML = svg;
         }
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "渲染错误");
+        setError(err instanceof Error ? getErrorMessage(err) : "渲染错误");
       }
     };
     const timer = setTimeout(renderMermaid, 300);
@@ -92,7 +93,7 @@ export function MechanismCard({ onInsertToPaper, onPreview }: MechanismCardProps
       setResult({ imageBase64: json.imageBase64, imageUrl: json.imageUrl });
       toast.success("机理图生成成功");
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "生成失败");
+      toast.error(err instanceof Error ? getErrorMessage(err) : "生成失败");
     } finally { setLoading(false); }
   };
 

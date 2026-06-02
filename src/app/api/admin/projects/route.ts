@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { paginated, success, badRequest } from "@/lib/admin-response";
@@ -15,7 +16,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const params = parseListParams(searchParams);
 
-  const where: any = {};
+  const where: Prisma.ProjectWhereInput = {};
   if (params.userId) where.userId = params.userId;
   if (params.template) where.template = params.template;
   if (params.mode) where.mode = params.mode;

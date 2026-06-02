@@ -1,4 +1,6 @@
 import { logger } from "@/lib/logger";
+import type { XrdPythonJsonResult } from "@/contracts/xrd-python";
+import { getErrorMessage } from "@/lib/error-utils";
 ﻿import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import fs from "fs";
@@ -78,7 +80,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let pyResult: any = {};
+    let pyResult: XrdPythonJsonResult = {};
     try {
       // 从 stdout 提取最后一段完整 JSON（容忍前缀调试输出）
       const lines = stdout.trim().split("\n");
@@ -109,8 +111,8 @@ export async function POST(req: NextRequest) {
       imageUrl: `/api/charts/${outputName}`,
       data: pyResult.data,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("XPS API error:", error);
-    return NextResponse.json({ error: error.message || "分析失败" }, { status: 500 });
+    return NextResponse.json({ error: getErrorMessage(error) || "分析失败" }, { status: 500 });
   }
 }

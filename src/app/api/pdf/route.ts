@@ -1,4 +1,5 @@
 import { logger } from "@/lib/logger";
+import { getErrorMessage } from "@/lib/error-utils";
 import {
   SafePathError,
   assertResolvedInsideBase,
@@ -70,10 +71,10 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: unknown) {
     if (error instanceof SafePathError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
     }
     logger.error("PDF Route Error:", error);
-    const message = error instanceof Error ? error.message : "请求失败";
+    const message = error instanceof Error ? getErrorMessage(error) : "请求失败";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

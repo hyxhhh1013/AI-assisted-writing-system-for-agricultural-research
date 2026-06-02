@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getErrorMessage } from "@/lib/error-utils";
 import {
   Card, CardContent, CardHeader, CardTitle, CardDescription,
 } from "@/components/ui/card";
@@ -45,7 +46,7 @@ export function MolCard({ onInsertToPaper, onPreview }: MolCardProps) {
         setResult({ imageBase64: json.imageBase64, imageUrl: json.imageUrl, data: json.data });
       }
       toast.success("结构图生成成功");
-    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "渲染失败"); }
+    } catch (err: unknown) { toast.error(err instanceof Error ? getErrorMessage(err) : "渲染失败"); }
     finally { setLoading(false); }
   };
 

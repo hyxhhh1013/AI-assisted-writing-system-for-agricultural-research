@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useGoBack } from "@/contexts/navigation-history";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -36,13 +37,14 @@ export function WorkbenchTabSwitcher({
   handleSave, projectId, projectMode,
   setRightPanelMode, setIsPreviewOpen,
 }: WorkbenchTabSwitcherProps) {
+  const goBack = useGoBack();
   const router = useRouter();
   const sidebarModules = listModules({ placement: "workbench-sidebar" });
   const visibleTabs = TABS.filter((tab) => !tab.researchOnly || projectMode === "research");
 
   return (
     <div className="w-14 border-r bg-card flex flex-col items-center py-4 gap-4 shrink-0">
-      <Button variant="ghost" size="icon" onClick={() => router.push("/projects")} title="返回项目列表">
+      <Button variant="ghost" size="icon" onClick={() => goBack("/projects")} title="返回上一页">
         <ArrowLeft className="h-5 w-5" />
       </Button>
       <div className="flex-1 flex flex-col gap-2">

@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useState, useCallback, useEffect } from "react";
 import { Quote, BookOpen } from "lucide-react";
-import { ProjectData } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
 import { cn } from "@/lib/utils";
 import { findCiteContextsInProject, expandCiteGroup } from "@/components/shared/previews/shared";
 import { StandardSCIPreview } from "@/components/shared/previews/sci-standard";

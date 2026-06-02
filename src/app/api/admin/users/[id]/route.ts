@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { success, notFound } from "@/lib/admin-response";
-import { usageLog } from "@/lib/usage-log";
+import { getUserAiUsage } from "@/services/admin-usage";
 
 export async function GET(
   _req: NextRequest,
@@ -28,13 +28,7 @@ export async function GET(
     orderBy: { lastUpdated: "desc" },
   });
 
-  // 该用户的 AI 用量
-  const allStats = usageLog.stats();
-  const userRecent = usageLog.recent(500).filter(e => e.userId === id);
-  const userFeatureCounts: Record<string, number> = {};
-  for (const e of userRecent) {
-    userFeatureCounts[e.feature] = (userFeatureCounts[e.feature] || 0) + 1;
-  }
+  const { aiUsage, totalAiCalls } = await getUserAiUsage(id);
 
   return success({
     ...user,
@@ -46,7 +40,7 @@ export async function GET(
       sectionCount: p._count.sections,
       referenceCount: p._count.references,
     })),
-    aiUsage: userFeatureCounts,
-    totalAiCalls: userRecent.length,
+    aiUsage,
+    totalAiCalls,
   });
 }

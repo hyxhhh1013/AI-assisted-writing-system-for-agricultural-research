@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Upload, FileSpreadsheet, Send, Copy, Table as TableIcon, BarChart3, Save, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
-import { projectStore, ProjectData } from "@/lib/store";
+import { projectStore } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
 import { streamDataAnalysis } from "@/services/analysis";
+import { getErrorMessage } from "@/lib/error-utils";
 
 interface AnalysisPanelProps {
   projectId: string;
@@ -122,7 +124,7 @@ export function AnalysisPanel({ projectId, project, onSave, onInsertToPaper, onI
       handleSaveToProject(fullResult);
       toast.success("分析完成并已自动保存");
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "分析失败");
+      toast.error(error instanceof Error ? getErrorMessage(error) : "分析失败");
     } finally {
       setIsGenerating(false);
     }

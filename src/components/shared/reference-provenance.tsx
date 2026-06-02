@@ -93,7 +93,7 @@ export function ReferenceProvenance({ projectId, className }: ReferenceProvenanc
           )}
 
           {!loading && records.length > 0 && (
-            <div className="overflow-x-auto">
+            <div className="max-h-[min(220px,35vh)] min-h-0 overflow-y-auto overflow-x-auto pr-1 custom-scrollbar">
               <table className="w-full text-[10px]">
                 <thead>
                   <tr className="text-muted-foreground border-b">

@@ -6,6 +6,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { validateBody } from "@/lib/api-validate";
 import { tableGenerateSchema } from "@/lib/validations";
+import { getErrorMessage } from "@/lib/error-utils";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -74,10 +75,10 @@ export async function POST(req: NextRequest) {
       statsText: resultJson.stats_text,
       letters: resultJson.letters,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("Table API error:", error);
     return NextResponse.json(
-      { error: error.message || "三线表生成失败" },
+      { error: getErrorMessage(error) || "三线表生成失败" },
       { status: 500 }
     );
   }

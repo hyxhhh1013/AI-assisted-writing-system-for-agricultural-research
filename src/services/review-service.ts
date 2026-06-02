@@ -353,8 +353,8 @@ export async function getReviewHistory(
 export async function getReviewDetail(
   checkId: string
 ): Promise<{
-  check: any;
-  issues: any[];
+  check: NonNullable<Awaited<ReturnType<typeof prisma.reviewCheck.findUnique>>>;
+  issues: Awaited<ReturnType<typeof prisma.reviewIssue.findMany>>;
 } | null> {
   const check = await prisma.reviewCheck.findUnique({
     where: { id: checkId },

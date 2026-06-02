@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import type { WritingRequest } from "@/contracts/writing";
 import { postWritingStream } from "@/services/writing";
+import { getErrorMessage } from "@/lib/error-utils";
 import {
   isDeltaEvent, isStatusEvent, isPipelineStepEvent, isVerificationEvent,
   isReferencesEvent, isCitationWarningsEvent, isDataClaimWarningsEvent,
@@ -201,7 +202,7 @@ export function useWritingStream(): UseWritingStreamReturn {
       if (error instanceof DOMException && error.name === "AbortError") {
         // user cancelled
       } else {
-        const raw = error instanceof Error ? error.message : "写作生成失败";
+        const raw = error instanceof Error ? getErrorMessage(error) : "写作生成失败";
         // 超长消息（如 HTML 504 页面）截断并显示友好提示
         const msg = raw.length > 80 ? "AI 服务暂时不可用，请稍后重试" : raw;
         toast.error(msg);

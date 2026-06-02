@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import type { ProjectData } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
 
 export type PdfExportResponse = {
   filename: string;

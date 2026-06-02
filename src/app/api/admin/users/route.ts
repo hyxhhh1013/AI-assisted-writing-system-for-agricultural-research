@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { paginated, success, badRequest } from "@/lib/admin-response";
@@ -13,7 +14,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const params = parseListParams(searchParams);
 
-  const where: Record<string, unknown> = {};
+  const where: Prisma.UserWhereInput = {};
   if (params.q) {
     where.OR = [
       { name: { contains: params.q } },
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
 
   const [users, total] = await Promise.all([
     prisma.user.findMany({
-      where: where as any,
+      where,
       select: {
         id: true, email: true, name: true, role: true, createdAt: true,
         _count: { select: { projects: true } },
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
       skip: ((params.page ?? 1) - 1) * (params.pageSize ?? 20),
       take: params.pageSize ?? 20,
     }),
-    prisma.user.count({ where: where as any }),
+    prisma.user.count({ where }),
   ]);
 
   return paginated(

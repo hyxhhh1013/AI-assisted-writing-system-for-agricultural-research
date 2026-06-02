@@ -1,4 +1,6 @@
 import { logger } from "@/lib/logger";
+import type { Prisma } from "@prisma/client";
+import { getErrorMessage } from "@/lib/error-utils";
 import {
   SafePathError,
   resolveKnowledgeCategoryDir,
@@ -65,7 +67,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 主路径：从 Prisma 读
-    const where: any = {};
+    const where: Prisma.KnowledgeFileWhereInput = {};
     if (category && category !== "全部") where.category = category;
     if (query) where.OR = [{ name: { contains: query } }, { category: { contains: query } }];
 
@@ -89,7 +91,7 @@ export async function GET(req: NextRequest) {
       searchType: "name",
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "请求失败";
+    const message = error instanceof Error ? getErrorMessage(error) : "请求失败";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -149,7 +151,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: "文件上传成功", name: file.name });
   } catch (error: unknown) {
     if (error instanceof SafePathError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
     }
     logger.error("Knowledge API error:", error);
     return NextResponse.json({ error: (error as Error).message || "上传失败" }, { status: 500 });
@@ -243,7 +245,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ message: "分类更新成功" });
   } catch (error: unknown) {
     if (error instanceof SafePathError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
     }
     return NextResponse.json({ error: (error as Error).message || "更新失败" }, { status: 500 });
   }
@@ -297,7 +299,7 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ message: "文件已删除" });
   } catch (error: unknown) {
     if (error instanceof SafePathError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
     }
     return NextResponse.json({ error: (error as Error).message || "删除失败" }, { status: 500 });
   }

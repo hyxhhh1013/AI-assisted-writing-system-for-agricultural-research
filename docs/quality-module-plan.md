@@ -1,11 +1,29 @@
 # 论文质量模块完整开发计划
 
-> 更新时间：2026-05-29
-> 状态：Phase 1 开发中
+> 更新时间：2026-06-02
+> 状态：Phase 1～3 已在 main 落地；Phase 4 文档收尾见 ENG-PR-050
+
+## 实现状态对照（2026-06-02）
+
+| 计划项 | 状态 | 实际路径 / 说明 |
+|--------|------|-----------------|
+| 统一查重 service | **已实现** | `src/services/plagiarism-service.ts`；`api/plagiarism/v2`、`check` 为薄路由 |
+| 降重 service | **已实现** | `src/services/rewrite-service.ts` + `api/plagiarism/rewrite` |
+| 审查四维度 | **已实现** | `src/services/review-service.ts`、`/review` 页面、`api/review/*` |
+| 查重 SSE 进度 | **已实现** | v2/check 路由 `Accept: text/event-stream` |
+| 旧 `plagiarism-check.ts` | **已删除** | 无引用；勿恢复 |
+| `similarity.ts` 算法 | **保留** | `extractNGrams` / `jaccard` / `cosine` 被 service 与 RAG 使用 |
+| 统一 `/quality` 单页三 Tab | **跳过** | 保留 `/plagiarism` + `/review` + 工作台 panel |
+| `reviewIntegrity` 独立 flag | **跳过** | 仅 `NEXT_PUBLIC_ENABLE_REVIEW` 总开关 |
+| Phase 4.5 清 any | **另 PR** | ENG-PR-054 |
+
+**手动验收**（发布前）：查重 → 降重建议 → 审查 → 单项 fix 各走通一条。
 
 ---
 
 ## 一、现状诊断
+
+> 以下 §1.1～1.3 为 2026-05-29 诊断快照；多项已在后续 PR 中修复，以「实现状态对照」为准。
 
 ### 1.1 查重系统问题
 

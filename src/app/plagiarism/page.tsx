@@ -1,23 +1,26 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/error-utils";
 import {
   Search, Shuffle, Loader2, CheckCircle2,
   Globe, ArrowLeft, Sparkles, ChevronDown, ChevronUp, RefreshCw,
   FileText, FolderOpen, Clock, Check, X,
 } from "lucide-react";
 import { projectStore } from "@/lib/store";
-import type { ProjectData } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
 import { usePlagiarismCheck } from "@/hooks/use-plagiarism-check";
 import type { PlagiarismStage } from "@/hooks/use-plagiarism-check";
 import Link from "next/link";
 import { getProject, listProjects } from "@/services/project";
 import { getCheckDetail, listHistory, rewriteMatch, toCheckResult, updateRewriteSuggestion } from "@/services/plagiarism";
+import { useGoBack } from "@/contexts/navigation-history";
+import { workbenchFallback } from "@/lib/navigation";
 
 // ==================== 类型 ====================
 
@@ -58,9 +61,9 @@ export default function PlagiarismPage() {
 }
 
 function Content() {
-  const router = useRouter();
   const sp = useSearchParams();
   const pid = sp.get("id");
+  const goBack = useGoBack();
 
   const [project, setProject] = useState<ProjectData | null>(null);
   const [title, setTitle] = useState("");
@@ -138,7 +141,7 @@ function Content() {
             variant="ghost"
             size="icon"
             className="h-8 w-8 text-[#3d4f46] hover:bg-[#1a5632]/8 hover:text-[#1a5632]"
-            onClick={() => router.back()}
+            onClick={() => goBack(workbenchFallback(pid))}
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
@@ -310,7 +313,7 @@ function RewriteView({ checkId, matches, onReCheck }: { checkId: string; matches
       const suggestions = await rewriteMatch({ checkId, matchId: m.id, originalText: m.sourceText });
       setSuggestions(p => ({ ...p, [m.id]: suggestions }));
       toast.success("改写建议已生成");
-    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "改写失败"); }
+    } catch (err: unknown) { toast.error(err instanceof Error ? getErrorMessage(err) : "改写失败"); }
     finally { setRewriting(null); }
   };
 

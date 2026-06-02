@@ -1,4 +1,7 @@
-import { logger } from "@/lib/logger";
+import { createLogger } from "@/lib/logger";
+import { getErrorMessage } from "@/lib/error-utils";
+
+const log = createLogger("api/writing");
 import { NextRequest } from "next/server";
 import type { WritingSSEEvent } from "@/contracts/sse";
 import type { EvidenceClaim } from "@/contracts/data-source";
@@ -53,8 +56,8 @@ export async function POST(req: NextRequest) {
             finishStream,
           });
         } catch (error: unknown) {
-          const message = error instanceof Error ? error.message : "Internal Server Error";
-          logger.error("MAV Pipeline Error:", error);
+          const message = error instanceof Error ? getErrorMessage(error) : "Internal Server Error";
+          log.fail("pipeline error", error);
           try {
             emit({ type: "error", error: message });
           } catch {
@@ -77,8 +80,8 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Internal Server Error";
-    logger.error("Writing Expansion Error:", error);
+    const message = error instanceof Error ? getErrorMessage(error) : "Internal Server Error";
+    log.fail("request failed", error);
     return new Response(JSON.stringify({ error: message }), { status: 500 });
   }
 }

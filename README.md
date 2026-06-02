@@ -151,10 +151,21 @@ data/                     # RAG 索引（不入 Git 大文件时需按 DEPLOY �
 ```bash
 npm run dev              # 开发服务
 npm run build            # 生产构建
+npm run analyze          # Bundle 报告（ANALYZE=true，需先 build）
 npm run check            # typecheck + test + lint
+npm run test:e2e         # Playwright 冒烟（需 DB + create-admin，见下）
 npm run index-docs       # 重建文献索引
 npm run docs:api-index   # 刷新 docs/API_INDEX.md 路由表
 ```
+
+### E2E 冒烟前置
+
+`npm run test:e2e` 会拉起 `npm run dev`（非 CI 时可复用已有 dev server）。需：
+
+1. `docker compose up -d db`，`.env` 配置 `DATABASE_URL`
+2. `npx prisma migrate deploy`（或 `db push`）+ `npm run create-admin`
+3. 可选 `E2E_EMAIL` / `E2E_PASSWORD`（默认 `admin@lab.local` / `admin123456`）
+4. 首次运行：`npx playwright install chromium`
 
 ## 开发注意事项
 

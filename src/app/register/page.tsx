@@ -10,6 +10,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { register as authRegister } from "@/services/auth";
+import { getErrorMessage } from "@/lib/error-utils";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -33,8 +34,8 @@ export default function RegisterPage() {
       await refresh();
       toast.success("注册成功");
       router.push("/");
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err));
     } finally {
       setLoading(false);
     }

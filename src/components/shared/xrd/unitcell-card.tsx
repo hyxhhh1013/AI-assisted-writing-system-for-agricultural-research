@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getErrorMessage } from "@/lib/error-utils";
 import {
   Card, CardContent, CardHeader, CardTitle, CardDescription,
 } from "@/components/ui/card";
@@ -31,7 +32,7 @@ export function UnitCellCard({ onInsertToPaper, onPreview }: UnitCellCardProps) 
       const json = await runUnitCell(cifFile, { title: title || "Unit Cell" });
       setResult({ imageBase64: json.imageBase64, imageUrl: json.imageUrl, data: json.data });
       toast.success("晶胞可视化完成");
-    } catch (err: any) { toast.error(err.message); }
+    } catch (err: unknown) { toast.error(getErrorMessage(err)); }
     finally { setLoading(false); }
   };
 

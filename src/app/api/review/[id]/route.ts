@@ -4,6 +4,7 @@
 
 import { NextRequest } from "next/server";
 import { getReviewDetail } from "@/services/review-service";
+import { getErrorMessage } from "@/lib/error-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -26,10 +27,10 @@ export async function GET(
       success: true,
       ...detail,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[review/[id]] GET error:", error);
     return Response.json(
-      { success: false, error: error.message || "获取审查详情失败" },
+      { success: false, error: getErrorMessage(error) || "获取审查详情失败" },
       { status: 500 }
     );
   }

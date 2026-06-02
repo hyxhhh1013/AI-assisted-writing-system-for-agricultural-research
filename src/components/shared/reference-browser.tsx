@@ -156,7 +156,7 @@ export function ReferenceBrowser({
       </button>
 
       {!collapsed && (
-        <div className="space-y-0.5 max-h-[280px] overflow-y-auto pr-1 custom-scrollbar">
+        <div className="space-y-0.5">
           {references.map((ref, idx) => {
             const num = idx + 1;
             const isUsedInSection = usedInSection.has(num);
