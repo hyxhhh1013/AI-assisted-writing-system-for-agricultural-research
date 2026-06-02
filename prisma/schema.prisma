@@ -2,7 +2,8 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -61,6 +62,8 @@ model Project {
   citationStyle     String?   @default("gbt7714")
   // 数据源分析结果（JSON 数组 DataSourceAnalysis[]）
   dataSources       String?
+  // 大纲扩写已完成任务 id 列表（JSON string[]，stableHash(fullPath)）
+  expandedOutlineSections String?
 
   @@index([userId])
 }

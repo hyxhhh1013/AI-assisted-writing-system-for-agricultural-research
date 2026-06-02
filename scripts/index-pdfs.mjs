@@ -23,6 +23,7 @@ import pdfjs from "pdfjs-dist/legacy/build/pdf.js";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import dotenv from "dotenv";
 import { extractDocMetadata } from "./doc-type-registry.mjs";
+import { groupTextContentLines } from "./extractors/header-lines.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..");
@@ -351,15 +352,20 @@ async function stage1_parsePDFs(uniqueFiles) {
 
       const chunks = [];
       let chunkIdx = 0;
-      let firstPageText = "";
+      let headerText = "";
+      let headerLines = [];
       let skippedPages = 0;
       const relPath = path.relative(articlesResolved, fileInfo.path).split(path.sep).join("/");
+      const headerPageLimit = Math.min(3, pdfDocument.numPages);
 
       for (let pg = 1; pg <= pdfDocument.numPages; pg++) {
         const page = await pdfDocument.getPage(pg);
         const textContent = await page.getTextContent();
         const pageText = extractPageText(textContent);
-        if (pg === 1) firstPageText = pageText.slice(0, 3000);
+        if (pg <= headerPageLimit) {
+          headerText += (headerText ? "\n" : "") + pageText;
+          headerLines.push(...groupTextContentLines(textContent));
+        }
         if (!isPageTextUsable(pageText)) {
           skippedPages++;
           continue;
@@ -382,7 +388,9 @@ async function stage1_parsePDFs(uniqueFiles) {
         }
       }
 
-      const docMeta = await extractDocMetadata(pdfDocument, fileInfo.name, firstPageText);
+      const docMeta = await extractDocMetadata(pdfDocument, fileInfo.name, headerText.slice(0, 10000), {
+        headerLines: headerLines.slice(0, 120),
+      });
       if (chunks.length === 0) {
         docMeta.parseWarning = skippedPages >= pdfDocument.numPages ? "no_text" : "low_text";
       }
@@ -625,11 +633,11 @@ function stage2_filterAndWrite(allRawChunks, existingMetaByName) {
   const activeCategories = new Set(categoryMap.keys());
   for (const [cat, chunks] of categoryMap) {
     const merged = mergeCategoryChunks(cat, chunks);
-    const { stripped, hasEmb } = writeCategoryIndex(cat, merged);
-    emitProgress({ type: "save", phase: "category", category: cat, chunkCount: stripped.length });
-    const mb = (Buffer.byteLength(JSON.stringify(stripped)) / 1024 / 1024).toFixed(1);
+    const { chunkCount, hasEmb, jsonPath } = writeCategoryIndex(cat, merged);
+    emitProgress({ type: "save", phase: "category", category: cat, chunkCount });
+    const mb = (fs.statSync(jsonPath).size / 1024 / 1024).toFixed(1);
     const embNote = hasEmb ? " + .emb" : "";
-    console.log(`  index_${cat}.json: ${stripped.length} chunks (${mb} MB)${embNote}`);
+    console.log(`  index_${cat}.json: ${chunkCount} chunks (${mb} MB)${embNote}`);
   }
 
   if (!isPartialReindex()) {
@@ -896,4 +904,11 @@ async function main() {
   });
 }
 
-main().catch(console.error);
+main().catch((err) => {
+  console.error(err);
+  emitProgress({
+    type: "error",
+    message: err instanceof Error ? err.message : String(err),
+  });
+  process.exit(1);
+});

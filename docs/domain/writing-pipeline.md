@@ -43,6 +43,9 @@ route.ts               SSE 外壳
 ## 业务不变量（热规则摘要）
 
 - 引用编号必须在 RAG 返回的 `[1]…[N]` 范围内；越界会被 strip + 警告。
+- **正文引用格式**：仅半角方括号 `[1]`、`[2,3]`、`[1-3]`。禁止 `【16】`、`［16］`、`[文献16]` 等变体（Prompt 与后处理均约束）。
+- **引用归一化**：`src/lib/citation-bounds.ts` 的 `normalizeAllCitationFormats`（含角括号 `【n】` → `[n]`）在 Refiner、预览、应用到章节时执行；测试见 `src/__tests__/lib/citation-bounds.test.ts`。
+- 综述模式章节 Prompt：`src/lib/prompts/review-writing.ts`；综述引用规则：`review-synthesis-rules.ts`。
 - Verifier 检查 overclaim、Results/Discussion 混淆，不只查引用真假。
 - Prompt 已注入 nature-polishing 原则（见 `prompts.ts` 注释）。
 - 农业场景：GB/T 7713 与 SCI 双轨、`domain.ts` 术语适配。

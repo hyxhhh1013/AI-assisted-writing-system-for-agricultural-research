@@ -55,6 +55,7 @@ export async function runWritingPipeline(params: {
     emit,
     userId,
     signal,
+    data.projectMode,
   );
   await tick(40);
 
@@ -67,6 +68,7 @@ export async function runWritingPipeline(params: {
     emit,
     userId,
     signal,
+    data.projectMode,
   );
 
   await runFinalizePhase(refinedDraft, correctedDraft, prepared, dataClaims, emit);

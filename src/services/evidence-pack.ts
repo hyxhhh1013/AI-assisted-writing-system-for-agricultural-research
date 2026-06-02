@@ -73,6 +73,9 @@ export function buildEvidencePack(options: BuildEvidencePackOptions): EvidencePa
       summary += `\n` + litClaims.slice(0, 10).map(c => `  ${c.text}`).join("\n");
       if (litClaims.length > 10) summary += `\n  ...（还有 ${litClaims.length - 10} 条）`;
     }
+    summary += `\n\n写作规则（综述）：`;
+    summary += `\n· 仅作事实依据，须转述改写，禁止连续照搬原文 ≥15 字`;
+    summary += `\n· 他人数据/结论必须 [n] 标注，不得写成「本研究」结果`;
   } else {
     summary = `【文献证据】${litClaims.length} 条 | 【数据证据】${numClaims.length} 条\n`;
     summary += `\n—— 数据证据（定量结论必须引用编号）——`;

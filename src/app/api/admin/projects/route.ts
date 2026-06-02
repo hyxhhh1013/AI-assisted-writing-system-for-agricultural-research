@@ -7,7 +7,9 @@ import { parseListParams } from "@/lib/admin-response";
 import { validateBody } from "@/lib/api-validate";
 import { adminProjectDeleteSchema } from "@/lib/validations";
 
-const CORE_KEYS = ["abstract", "introduction", "methods", "results", "conclusion"];
+import { getCoreSectionKeysForMode, getProjectWritingMode } from "@/lib/section-registry";
+import { buildOutlineTasks } from "@/lib/utils";
+import { parseExpandedOutlineSections } from "@/contracts/project";
 
 export async function GET(req: NextRequest) {
   const { error } = await requireAdmin(req);
@@ -29,7 +31,9 @@ export async function GET(req: NextRequest) {
       skip: ((params.page ?? 1) - 1) * (params.pageSize ?? 20),
       take: params.pageSize ?? 20,
       select: {
-        id: true, title: true, template: true, mode: true, createdAt: true, lastUpdated: true,
+        id: true, title: true, template: true, mode: true, outline: true,
+        expandedOutlineSections: true,
+        createdAt: true, lastUpdated: true,
         owner: { select: { name: true, email: true } },
         sections: { select: { key: true, content: true } },
         _count: { select: { references: true } },
@@ -40,13 +44,23 @@ export async function GET(req: NextRequest) {
 
   return paginated(
     projects.map((p) => {
-      const filledCount = p.sections.filter(s => s.content && s.content.trim().length > 10).length;
-      const coreFilled = p.sections.filter(s => CORE_KEYS.includes(s.key) && s.content && s.content.trim().length > 10).length;
-      const progress = Math.round((coreFilled / CORE_KEYS.length) * 100);
+      const mode = getProjectWritingMode(p.mode as "review" | "research" | undefined);
+      const coreKeys = getCoreSectionKeysForMode(mode);
+      const coreFilled = p.sections.filter(
+        (s) => coreKeys.includes(s.key) && s.content && s.content.trim().length > 10,
+      ).length;
+      const progress = Math.round((coreFilled / coreKeys.length) * 100);
+      const outlineTasks = p.outline ? buildOutlineTasks(p.outline, mode) : [];
+      const expandedIds = parseExpandedOutlineSections(p.expandedOutlineSections);
+      const outlineTasksTotal = outlineTasks.length;
+      const outlineTasksDone = outlineTasks.filter((t) => expandedIds.includes(t.id)).length;
+      const outlineProgress =
+        outlineTasksTotal > 0 ? Math.round((outlineTasksDone / outlineTasksTotal) * 100) : 0;
       return {
         id: p.id, title: p.title, template: p.template, mode: p.mode,
         userName: p.owner?.name ?? "未知", userEmail: p.owner?.email ?? "",
-        progress, referenceCount: p._count.references,
+        progress, outlineProgress, outlineTasksDone, outlineTasksTotal,
+        referenceCount: p._count.references,
         createdAt: p.createdAt.toISOString(), lastUpdated: p.lastUpdated.toISOString(),
       };
     }),

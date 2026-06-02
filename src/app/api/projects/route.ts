@@ -5,6 +5,10 @@ import { unauthorizedResponse, notFoundResponse, errorResponse } from "@/lib/api
 import { validateBody } from "@/lib/api-validate";
 import { projectEvidencePatchSchema } from "@/lib/validations";
 import type { ProjectDTO } from "@/contracts/project";
+import {
+  parseExpandedOutlineSections,
+  serializeExpandedOutlineSections,
+} from "@/contracts/project";
 import { getErrorMessage } from "@/lib/error-utils";
 
 import { getCoreSectionKeysForMode } from "@/lib/section-registry";
@@ -56,6 +60,7 @@ export async function GET(req: NextRequest) {
         citationStyle: (project.citationStyle as ProjectDTO["citationStyle"]) || "gbt7714",
         dataClaims: project.dataClaims || undefined,
         dataSources: project.dataSources || undefined,
+        expandedOutlineSections: parseExpandedOutlineSections(project.expandedOutlineSections),
       };
 
       return NextResponse.json(formattedProject);
@@ -124,6 +129,7 @@ export async function POST(req: NextRequest) {
       analysisResults,
       dataClaims,
       dataSources,
+      expandedOutlineSections,
     } = data;
 
     if (!title) {
@@ -150,6 +156,13 @@ export async function POST(req: NextRequest) {
             title, authors, affiliations, abstract, keywords,
             classification, researchDirection, outline, template, citationStyle,
             dataClaims, dataSources,
+            ...(expandedOutlineSections !== undefined
+              ? {
+                  expandedOutlineSections: serializeExpandedOutlineSections(
+                    Array.isArray(expandedOutlineSections) ? expandedOutlineSections : [],
+                  ),
+                }
+              : {}),
             lastUpdated: new Date(),
           },
         })
@@ -160,6 +173,9 @@ export async function POST(req: NextRequest) {
             mode: mode === "research" ? "research" : "review",
             citationStyle,
             dataClaims, dataSources,
+            expandedOutlineSections: serializeExpandedOutlineSections(
+              Array.isArray(expandedOutlineSections) ? expandedOutlineSections : [],
+            ),
           },
         });
 

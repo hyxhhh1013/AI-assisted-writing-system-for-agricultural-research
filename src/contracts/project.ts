@@ -90,6 +90,22 @@ export function serializeDataSources(sources: DataSourceAnalysis[]): string {
   return JSON.stringify(sources);
 }
 
+/** 解析 DB 中的 expandedOutlineSections JSON → 大纲任务 id 列表 */
+export function parseExpandedOutlineSections(raw: string | null | undefined): string[] {
+  if (!raw?.trim()) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((id): id is string => typeof id === "string" && id.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+export function serializeExpandedOutlineSections(ids: string[]): string {
+  return JSON.stringify(ids);
+}
+
 export interface ProjectMetaPatch {
   title?: string;
   authors?: string;
@@ -101,6 +117,7 @@ export interface ProjectMetaPatch {
   outline?: string;
   template?: string;
   citationStyle?: "gbt7714" | "vancouver" | "apa7" | "ieee";
+  expandedOutlineSections?: string[];
 }
 
 export interface SectionPatch {

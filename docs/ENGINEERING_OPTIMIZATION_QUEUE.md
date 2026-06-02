@@ -842,6 +842,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-06-02 | ENG-PR-050, 051 | AI | 删死代码 `plagiarism-check.ts`；quality-module-plan 对照表；writing/v2 路由 SSE 集成测 |
 | 2026-06-02 | ENG-PR-052, 053, 054 | AI | e2e 冒烟 + P3 索引迁移；any 热点（admin-export/knowledge/login）；DATABASE.md/README |
 | 2026-06-02 | ENG-PR-061 | AI | husky pre-commit：typecheck + lint-staged；`isMetadataJsonFallbackEnabled` 修 lint error |
+| 2026-06-02 | 维护 | AI | index-pdfs Stage2 `writeCategoryIndex` 解构修复（索引流意外结束）；书目 Crossref/header-lines 增强；引用 `【n】`→`[n]` 归一化；domain/API/DATABASE 文档同步 |
 | 2026-06-02 | ENG-PR-060, 062 | AI | plot/reader/admin dynamic import；ProjectData 统一 `@/contracts/project` |
 | 2026-06-01 | 技术债清扫 | AI | src 内 `: any`/`as any` 清零；chart-panel→`postChartForm`；Prisma WhereInput；workbench 拆 `workbench-page-client`；`.github/workflows/ci.yml`；`npm run check` 绿（167 warn） |
 

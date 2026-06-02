@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,12 +13,10 @@ import { PageHeader } from "@/components/layout/page-header";
 import { toast } from "sonner";
 import { projectStore } from "@/lib/store";
 import type { ProjectData } from "@/contracts/project";
-import { buildSectionOptions } from "@/lib/imrad";
+import { buildSectionOptionsForMode, getProjectWritingMode } from "@/lib/section-registry";
 import { postWritingStream } from "@/services/writing";
 import { getErrorMessage } from "@/lib/error-utils";
 import { workbenchFallback } from "@/lib/navigation";
-
-const SECTIONS = buildSectionOptions();
 
 export default function WritingPage() {
   return (
@@ -41,6 +39,12 @@ function WritingContent() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState("");
 
+  const projectMode = getProjectWritingMode(project?.mode);
+  const sectionOptions = useMemo(
+    () => buildSectionOptionsForMode(projectMode),
+    [projectMode],
+  );
+
   // 加载项目数据
   useEffect(() => {
     const init = async () => {
@@ -58,10 +62,15 @@ function WritingContent() {
       if (data) {
         setProject(data);
         if (data.title) setTitle(data.title);
+        const mode = getProjectWritingMode(data.mode);
+        const options = buildSectionOptionsForMode(mode);
+        const defaultSection =
+          options.find((o) => o.value === "introduction")?.value ?? options[0]?.value ?? "";
+        setSection(defaultSection);
       }
     };
     init();
-  }, [projectId]);
+  }, [projectId, router]);
 
   const injectOutline = () => {
     if (project?.outline) {
@@ -92,12 +101,13 @@ function WritingContent() {
     try {
       const response = await postWritingStream({
         title,
-        section: section as "abstract" | "introduction" | "methods" | "results" | "conclusion",
+        section,
         context,
         language: language as "zh" | "en",
         template: project?.template || "sci",
         existingReferences: project?.references || [],
         researchDirection: project?.researchDirection,
+        projectMode,
       });
 
       const reader = response.body?.getReader();
@@ -176,7 +186,7 @@ function WritingContent() {
                   <SelectValue placeholder="选择要扩写的章节" />
                 </SelectTrigger>
                 <SelectContent>
-                  {SECTIONS.map((s) => (
+                  {sectionOptions.map((s) => (
                     <SelectItem key={s.value} value={s.value}>
                       {s.label}
                     </SelectItem>

@@ -12,6 +12,7 @@ export interface ConsistencyCheckInput {
     text: string;
     values: Record<string, number | string>;
   }[];
+  projectMode?: "review" | "research";
 }
 
 /** 问题状态：open → fixing → fixed / dismissed */
@@ -36,4 +37,5 @@ export interface FixIssueRequest {
   sectionContents: Record<string, string>;
   outline?: string;
   title: string;
+  projectMode?: "review" | "research";
 }

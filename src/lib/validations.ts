@@ -75,10 +75,10 @@ export type AnalysisInput = z.infer<typeof analysisSchema>;
 // === Consistency Check ===
 export const consistencySchema = z.object({
   title: z.string().min(1, "标题不能为空"),
-  // sections 是 { key: string; content: string }[] 对象数组
   sections: z.array(z.object({ key: z.string(), content: z.string() })).min(1, "至少需要一个章节"),
   outline: z.string().optional().default(""),
   dataClaims: z.array(z.unknown()).optional(),
+  projectMode: z.enum(["review", "research"]).optional(),
 });
 export type ConsistencyInput = z.infer<typeof consistencySchema>;
 
@@ -216,6 +216,7 @@ export const reviewSchema = z.object({
     .array(z.enum(["academic", "argument", "structure", "integrity"]))
     .optional(),
   target: z.string().optional(),
+  projectMode: z.enum(["review", "research"]).optional(),
 });
 export type ReviewInput = z.infer<typeof reviewSchema>;
 

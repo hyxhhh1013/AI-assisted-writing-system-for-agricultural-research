@@ -8,6 +8,7 @@ import {
   buildOutlineTasks,
   countProjectFigures,
   cleanMarkdownArtifacts,
+  getOutlineTaskIdsForSectionCompletion,
 } from "@/lib/utils";
 
 // ==================== parseOutline ====================
@@ -143,6 +144,35 @@ describe("buildExpansionContext", () => {
     const ctx = buildExpansionContext(section, [], "# 大纲\n内容概要");
     expect(ctx).toContain("论文大纲概览");
   });
+
+  it("outline excerpt follows selected chapter, not always document start", () => {
+    const outline = [
+      "## 摘要",
+      "摘要正文很长，不应出现在引言任务的概览主体里。",
+      "",
+      "## 引言",
+      "",
+      "### 领域背景",
+      "引言专属要点A。",
+      "",
+      "## 研究现状与问题",
+      "",
+      "### 研究脉络",
+      "现状专属要点B。",
+    ].join("\n");
+
+    const sections = parseOutline(outline);
+    const introTask = sections.find((s) => s.title === "领域背景")!;
+    const bgTask = sections.find((s) => s.title === "研究脉络")!;
+
+    const introCtx = buildExpansionContext(introTask, sections, outline, "review");
+    const bgCtx = buildExpansionContext(bgTask, sections, outline, "review");
+
+    expect(introCtx).toContain("引言专属要点A");
+    expect(introCtx).not.toContain("现状专属要点B");
+    expect(bgCtx).toContain("现状专属要点B");
+    expect(bgCtx).not.toContain("引言专属要点A");
+  });
 });
 
 // ==================== buildOutlineTasks ====================
@@ -153,6 +183,20 @@ describe("buildOutlineTasks", () => {
     expect(tasks).toHaveLength(2);
     expect(tasks[0].sectionKey).toBeDefined();
     expect(tasks[0].fullPath).toBeDefined();
+  });
+});
+
+describe("getOutlineTaskIdsForSectionCompletion", () => {
+  it("marks all outline tasks under the same sectionKey", () => {
+    const tasks = buildOutlineTasks(
+      ["## 引言", "背景要点", "### 研究意义", "意义要点", "## 研究现状", "现状要点"].join("\n"),
+      "review",
+    );
+    const introIds = getOutlineTaskIdsForSectionCompletion(tasks, "introduction");
+    expect(introIds.length).toBeGreaterThanOrEqual(2);
+    expect(introIds).toContain(tasks.find((t) => t.fullPath.includes("研究意义"))!.id);
+    const statusIds = getOutlineTaskIdsForSectionCompletion(tasks, "background");
+    expect(statusIds).toHaveLength(1);
   });
 });
 

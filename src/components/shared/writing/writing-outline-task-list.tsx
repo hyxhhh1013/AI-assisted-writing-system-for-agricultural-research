@@ -6,12 +6,14 @@ import { Label } from "@/components/ui/label";
 import { CheckCircle2, ChevronRight, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { OutlineTask } from "@/lib/utils";
-import { IMRAD_SECTION_KEYS, IMRAD_LABELS_ZH } from "@/lib/imrad";
+import { getSectionKeysForMode, getSectionLabelForMode } from "@/lib/section-registry";
+import type { ProjectWritingMode } from "@/contracts/writing-mode";
 
 interface WritingOutlineTaskListProps {
   outlineTasks: OutlineTask[];
   selectedSectionId: string;
   expandedSections?: string[];
+  projectMode?: ProjectWritingMode;
   onSelectTask: (task: OutlineTask) => void;
   onRefreshOutline: () => void;
 }
@@ -20,11 +22,11 @@ export function WritingOutlineTaskList({
   outlineTasks,
   selectedSectionId,
   expandedSections,
+  projectMode = "review",
   onSelectTask,
   onRefreshOutline,
 }: WritingOutlineTaskListProps) {
-  const IMRAD_ORDER = IMRAD_SECTION_KEYS as readonly string[];
-  const IMRAD_LABELS: Record<string, string> = IMRAD_LABELS_ZH;
+  const sectionOrder = getSectionKeysForMode(projectMode);
 
   let listBody: ReactNode;
   if (outlineTasks.length > 0) {
@@ -36,7 +38,7 @@ export function WritingOutlineTaskList({
     }
 
     const rows: ReactNode[] = [];
-    for (const key of IMRAD_ORDER) {
+    for (const key of sectionOrder) {
       const tasks = grouped.get(key);
       if (!tasks || tasks.length === 0) continue;
       rows.push(
@@ -44,7 +46,7 @@ export function WritingOutlineTaskList({
           key={`hdr-${key}`}
           className="px-2 py-1 text-[10px] font-bold text-muted-foreground bg-muted/40 uppercase tracking-wider border-b"
         >
-          {IMRAD_LABELS[key] || key}
+          {getSectionLabelForMode(key, projectMode) || key}
         </div>,
       );
       for (const task of tasks) {

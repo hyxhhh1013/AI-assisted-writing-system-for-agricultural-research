@@ -45,7 +45,8 @@ Do NOT preview detailed themes or describe original experiments.`,
 2. 该领域研究的整体分布（地域、材料、方法路线等，基于文献综合）
 3. 当前公认的主要问题、瓶颈或应用约束
 4. 不同研究路线或观点的分野（为后文主题综述铺垫）
-写作要求：以文献综合为主，对比不同来源观点；可适度使用「研究表明」「多数研究认为」；禁止写成单次试验的流程描述。`
+写作要求：以文献综合为主，对比不同来源观点；可适度使用「研究表明」「多数研究认为」；禁止写成单次试验的流程描述。
+引用格式：正文仅使用半角方括号 [1]、[2,3]、[1-3] 标注文献，严禁【16】、［16］等变体。`
       : `Write the Background section establishing concepts and problems:
 1. Key concepts, taxonomy, or scope definitions
 2. Overall distribution of research (themes, regions, approaches) from literature
@@ -59,7 +60,7 @@ Synthesize literature; do NOT describe a single original experiment.`,
 1. 按**主题/机制/应用维度**组织子节（如 3.1、3.2、3.3），子节标题应体现分类逻辑
 2. 每个子节内：概述该主题研究脉络 → 综合多项研究结论 → 对比异同 → 指出局限或争议
 3. 优先使用综合叙述（「多项研究表明…」「然而，…结果存在差异」），避免逐篇流水账
-4. 可建议在段落中标注需对比的关键维度（处理、指标、条件），但不要虚构具体试验数据
+4. 引用他人数据时必须转述 + [n]：禁止连续照搬原文 ≥15 字；数值可保留但须标注来源
 5. 适当引用 [n] 支撑每个主要判断
 严禁：
 · 「本试验」「本研究采用」「试验设计」「随机区组」等原创实验语体
@@ -69,7 +70,8 @@ Synthesize literature; do NOT describe a single original experiment.`,
 1. Organize by themes/mechanisms/applications (numbered subsections)
 2. Per theme: trace research → synthesize findings → compare studies → note limits/disputes
 3. Prefer synthetic prose over paper-by-paper lists
-4. Support major claims with [n] citations
+4. Paraphrase borrowed data with [n]; no ≥10-word verbatim copying
+5. Support major claims with [n] citations
 Do NOT use original-experiment language (we conducted, our trial, materials and methods).`,
 
   conclusion: ({ isChinese }: PromptParams) =>

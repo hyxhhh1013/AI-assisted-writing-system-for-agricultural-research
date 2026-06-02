@@ -92,10 +92,83 @@ export function mapToSectionForMode(
       if (pat.test(lower)) return group.key;
     }
   }
-  return mapToIMRADSection(titleOrPath);
+  // 综述无 methods/results；仅用引言/结论的 IMRaD 弱匹配，避免落到无效章节
+  for (const key of ["introduction", "conclusion"] as const) {
+    const group = IMRAD_KEYWORDS.find((g) => g.key === key);
+    if (!group) continue;
+    for (const pat of group.patterns) {
+      if (pat.test(lower)) return group.key;
+    }
+  }
+  return "introduction";
 }
 
 // ==================== Expansion Context Builder ====================
+
+/** 按章节扩写完成后，应标记为已完成的大纲任务 id（含同级子节） */
+export function getOutlineTaskIdsForSectionCompletion(
+  outlineTasks: OutlineTask[],
+  targetSectionKey: string,
+  selectedSectionId?: string,
+): string[] {
+  const ids = outlineTasks.filter((t) => t.sectionKey === targetSectionKey).map((t) => t.id);
+  if (ids.length > 0) return ids;
+  return selectedSectionId ? [selectedSectionId] : [];
+}
+
+const OUTLINE_EXCERPT_MAX = 1000;
+
+/** 提取与当前任务所属一级章节相关的完整大纲片段（非全文前 N 字） */
+export function buildOutlineExcerptForSection(
+  section: OutlineSection,
+  allSections: OutlineSection[],
+): string {
+  if (allSections.length === 0) return "";
+
+  const formatBlock = (s: OutlineSection): string => {
+    const heading = `${"#".repeat(Math.min(Math.max(s.level, 1), 6))} ${s.title}`;
+    const body = s.content.trim();
+    return body ? `${heading}\n${body}` : heading;
+  };
+
+  // 子节任务：只展示同父路径下的兄弟子节要点，避免整章 dump
+  if (section.level > 1) {
+    const parentPath = section.fullPath.split(" > ").slice(0, -1).join(" > ");
+    const chapterRoot = section.fullPath.split(" > ")[0];
+    const peerSections = allSections.filter((s) => {
+      const sParent = s.fullPath.split(" > ").slice(0, -1).join(" > ");
+      return sParent === parentPath;
+    });
+    let body = peerSections.map(formatBlock).join("\n\n");
+    body = `【「${chapterRoot}」相关子节】\n${body}`;
+    if (body.length > OUTLINE_EXCERPT_MAX) {
+      return `${body.slice(0, OUTLINE_EXCERPT_MAX)}\n…（已截断）`;
+    }
+    return body;
+  }
+
+  const chapterRoot = section.fullPath.split(" > ")[0];
+  const inChapter = allSections.filter(
+    (s) => s.fullPath === chapterRoot || s.fullPath.startsWith(`${chapterRoot} > `),
+  );
+
+  let body = inChapter.map(formatBlock).join("\n\n");
+
+  const peerTitles = allSections
+    .filter((s) => s.level === 1 && s.fullPath !== chapterRoot)
+    .map((s) => s.title);
+
+  if (peerTitles.length > 0) {
+    body =
+      `【其他章节目录】${peerTitles.join("、")}\n\n` +
+      `【「${chapterRoot}」章节大纲（含子节要点）】\n${body}`;
+  }
+
+  if (body.length > OUTLINE_EXCERPT_MAX) {
+    return `${body.slice(0, OUTLINE_EXCERPT_MAX)}\n…（本章节大纲较长，已截断尾部）`;
+  }
+  return body;
+}
 
 /**
  * 为目标子节构建精准的扩写上下文，彻底替代"把整个大纲 dump 进去"的做法
@@ -120,18 +193,22 @@ export function buildExpansionContext(
 【所属章节】：${parentLabel}
 `;
 
-  if (section.content) {
-    ctx += `【子节要点】：${section.content}\n`;
+  if (section.content.trim()) {
+    ctx += `【子节要点】：${section.content.trim()}\n`;
   }
 
   if (siblings.length > 0) {
     ctx += `【同级子节（保持逻辑衔接）】：${siblings.map((s) => s.title).join("、")}\n`;
   }
 
-  // 附上精简的大纲结构概览（最多 300 字），帮助 AI 理解整体位置
-  if (outlineText && outlineText.trim()) {
-    const compact = outlineText.replace(/\n{3,}/g, "\n\n").slice(0, 400);
-    ctx += `\n【论文大纲概览】：\n${compact}\n`;
+  if (outlineText?.trim()) {
+    const excerpt =
+      allSections.length > 0
+        ? buildOutlineExcerptForSection(section, allSections)
+        : outlineText.replace(/\n{3,}/g, "\n\n").slice(0, 800);
+    if (excerpt.trim()) {
+      ctx += `\n【论文大纲概览】：\n${excerpt}\n`;
+    }
   }
 
   ctx += `\n【写作要求】：请针对「${section.title}」这一具体主题展开专业、深入的学术论述。结合文献库中的相关研究，遵循学术论文写作规范。`;

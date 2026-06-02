@@ -20,6 +20,7 @@ import Link from "next/link";
 import { getProject, listProjects } from "@/services/project";
 import { getCheckDetail, listHistory, rewriteMatch, toCheckResult, updateRewriteSuggestion } from "@/services/plagiarism";
 import { useGoBack } from "@/contexts/navigation-history";
+import { buildPlagiarismContentFromProject } from "@/lib/export-content";
 import { workbenchFallback } from "@/lib/navigation";
 
 // ==================== 类型 ====================
@@ -86,11 +87,7 @@ function Content() {
     projectStore.get(pid).then(d => {
       if (!d) return;
       setProject(d); setTitle(d.title || ""); setSelPid(pid);
-      const l: Record<string, string> = { introduction: "引言", methods: "材料与方法", results: "结果与讨论", conclusion: "结论" };
-      const p: string[] = [];
-      if (d.abstract) p.push(`摘要：${d.abstract}`);
-      for (const [k, c] of Object.entries(d.sections || {})) if (c && typeof c === "string" && c.trim()) p.push(`${l[k] || k}：${c}`);
-      setContent(p.join("\n\n"));
+      setContent(buildPlagiarismContentFromProject(d));
     }).catch(() => {});
   }, [pid]);
 
@@ -101,11 +98,7 @@ function Content() {
       const d = await getProject(id);
       if (!d) throw new Error("加载失败");
       setSelPid(id); setProject(d); setTitle(d.title || "");
-      const l: Record<string, string> = { introduction: "引言", methods: "材料与方法", results: "结果与讨论", conclusion: "结论" };
-      const p: string[] = [];
-      if (d.abstract) p.push(`摘要：${d.abstract}`);
-      for (const [k, c] of Object.entries(d.sections || {})) if (c && typeof c === "string" && c.trim()) p.push(`${l[k] || k}：${c}`);
-      setContent(p.join("\n\n")); resetPlagiarism(); setTab("check");
+      setContent(buildPlagiarismContentFromProject(d)); resetPlagiarism(); setTab("check");
       toast.success(`已导入「${d.title}」`);
     } catch { toast.error("加载失败"); }
     finally { setLoadingP(false); }

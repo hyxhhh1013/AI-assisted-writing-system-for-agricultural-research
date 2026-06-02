@@ -197,9 +197,20 @@
 
 ## 人工备注（不随脚本覆盖）
 
+### Admin 项目列表
+
+- `GET /api/admin/projects`：query 支持 `q`、`template`、`mode`（`review` \| `research`）；进度 `progress` 按 `getCoreSectionKeysForMode` 计算；`outlineProgress` / `outlineTasksDone` / `outlineTasksTotal` 来自 `expandedOutlineSections` + 大纲解析。
+- `GET /api/admin/stats`：响应含 `projectsByMode`（综述/研究项目数）。
+
 ### 写作 SSE 事件类型
 
 见 [`domain/writing-pipeline.md`](./domain/writing-pipeline.md) 与 `src/contracts/sse.ts`。
+
+### 知识库重建索引 SSE
+
+- `POST /api/knowledge/reindex`：spawn `node scripts/index-pdfs.mjs --progress`；请求体见 `reindexRequestSchema`（`files?`, `forceStage1?`, `forceStage3?`）。
+- 事件类型见 `src/contracts/reindex.ts`；必须以 `complete` 结束，否则客户端报「索引流意外结束」。
+- 详情与排障：[`domain/rag-and-knowledge.md`](./domain/rag-and-knowledge.md)。
 
 ### 查重 v2 SSE
 

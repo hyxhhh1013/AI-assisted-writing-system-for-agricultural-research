@@ -14,10 +14,10 @@ export async function POST(req: NextRequest) {
     if (ve) return ve;
 
     const { title, researchDirection: rawDir, language, category, projectMode } = data;
-    const researchDirection = rawDir ?? "";
+    const researchDirection = (rawDir?.trim() || title.trim());
 
     if (!researchDirection) {
-      return new Response(JSON.stringify({ error: "研究方向不能为空" }), { status: 400 });
+      return new Response(JSON.stringify({ error: "请填写论文题目或研究方向" }), { status: 400 });
     }
 
     const { provider, keyError } = getAgentModelConfig("writer");

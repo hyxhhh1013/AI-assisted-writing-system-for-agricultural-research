@@ -41,7 +41,11 @@ export type IntegrityIssueType =
   | "data_inconsistency" // 数据不一致
   | "stats_misuse"      // 统计方法滥用
   | "reproducibility"   // 可复现性问题
-  | "suspicious_result"; // 结果可疑
+  | "suspicious_result" // 结果可疑
+  | "verbatim_copy"     // 综述：疑似照搬
+  | "data_misattribution" // 综述：数据归属错误
+  | "uncited_data"      // 综述：未标注来源的数据
+  | "synthesis_gap";    // 综述：缺乏综合
 
 export type ReviewIssueType =
   | AcademicIssueType
@@ -105,6 +109,8 @@ export interface ReviewConfig {
   target?: string;
   /** 是否包含学术诚信检测，默认 true */
   includeIntegrity?: boolean;
+  /** 写作模式：review=文献综述 research=创新型论文 */
+  projectMode?: "review" | "research";
 }
 
 // ==================== 审查输入 ====================
@@ -113,13 +119,15 @@ export interface ReviewInput {
   projectId?: string;
   title: string;
   sections: Array<{
-    key: string;       // 章节标识：abstract / introduction / methods / results / discussion / conclusion
+    key: string;       // abstract / introduction / background / literature_body / methods / results / conclusion …
     title: string;     // 章节标题
     content: string;   // 章节内容
   }>;
   outline?: string;    // 论文大纲（可选，用于结构检查）
   references?: string[]; // 参考文献列表（可选，用于引用验证）
   config?: ReviewConfig;
+  /** 写作模式（也可放在 config.projectMode） */
+  projectMode?: "review" | "research";
 }
 
 // ==================== 修复状态 ====================

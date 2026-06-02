@@ -8,6 +8,7 @@ import { checkPlagiarismStream, rewriteMatch, updateRewriteSuggestion } from "@/
 import { getProject, listProjects } from "@/services/project";
 import { toast } from "sonner";
 import { getErrorMessage } from "@/lib/error-utils";
+import { buildPlagiarismContentFromProject } from "@/lib/export-content";
 import {
   Search, Shuffle, Loader2, CheckCircle2,
   Globe, Sparkles, ChevronDown, ChevronUp, RefreshCw,
@@ -103,13 +104,7 @@ export function PlagiarismPanel({
       if (!p) throw new Error("加载失败");
       setSelectedProjectId(pid);
       setCheckTitle(p.title || "");
-      const labels: Record<string, string> = { introduction: "引言", methods: "材料与方法", results: "结果与讨论", conclusion: "结论" };
-      const parts: string[] = [];
-      if (p.abstract) parts.push(`摘要：${p.abstract}`);
-      for (const [k, c] of Object.entries(p.sections || {})) {
-        if (c && typeof c === "string" && c.trim()) parts.push(`${labels[k] || k}：${c}`);
-      }
-      setCheckContent(parts.join("\n\n"));
+      setCheckContent(buildPlagiarismContentFromProject(p));
       setResult(null);
       setView("check");
       toast.success(`已导入「${p.title}」`);

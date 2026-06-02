@@ -24,6 +24,7 @@ import {
 } from "./extractors/patent.mjs";
 
 import { extractISBN, extractPublisherInfo } from "./extractors/book.mjs";
+import { enrichBibFromCrossref } from "./extractors/crossref.mjs";
 
 // ────────────────────────────────────────────────────────────────────────────
 // 类型注册表
@@ -84,11 +85,16 @@ export const REGISTRY = [
     detect() {
       return true; // 兜底：匹配所有其他类型
     },
-    async extract(pdfDocument, filename, firstPageText) {
-      const fromInfo = await extractFromPdfInfo(pdfDocument);
+    async extract(pdfDocument, filename, firstPageText, options = {}) {
+      const fromPage = extractFromFirstPage(firstPageText || "", options);
       const fromName = extractFromFilename(filename);
-      const fromPage = extractFromFirstPage(firstPageText || "");
-      return mergeBibEntries(fromInfo, fromPage, fromName);
+      const fromInfo = await extractFromPdfInfo(pdfDocument);
+      // 首页 > 文件名 > PDF Info（Info 常不准）
+      let bib = mergeBibEntries(fromPage, fromName, fromInfo);
+      if (process.env.DISABLE_CROSSREF_ENRICH !== "1" && bib.doi) {
+        bib = await enrichBibFromCrossref(bib);
+      }
+      return bib;
     },
   },
 ];
@@ -112,13 +118,14 @@ export function detectDocType(filename, firstPageText) {
 
 /**
  * 提取文献结构化元数据（包含类型检测）
+ * @param {object} [options] - { headerLines?: string[] }
  * @returns {{ documentType, gbTag, bib }}
  */
-export async function extractDocMetadata(pdfDocument, filename, firstPageText) {
+export async function extractDocMetadata(pdfDocument, filename, firstPageText, options = {}) {
   const docType = detectDocType(filename, firstPageText);
   let bib = {};
   try {
-    bib = await docType.extract(pdfDocument, filename, firstPageText);
+    bib = await docType.extract(pdfDocument, filename, firstPageText, options);
   } catch (err) {
     // 提取失败不影响索引，graceful degrade
     console.warn(`  [meta] extraction failed for ${filename}:`, err.message);

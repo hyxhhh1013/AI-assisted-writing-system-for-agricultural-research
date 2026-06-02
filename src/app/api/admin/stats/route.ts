@@ -27,6 +27,11 @@ export async function GET(req: NextRequest) {
     by: ["template"], _count: { id: true },
   });
 
+  // 写作模式分布（review / research）
+  const projectsByMode = await prisma.project.groupBy({
+    by: ["mode"], _count: { id: true },
+  });
+
   // 最近 7 天新建项目数
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -56,6 +61,10 @@ export async function GET(req: NextRequest) {
     userCount, projectCount, knowledgeFileCount, knowledgeChunkCount, plagiarismCount, reviewCount,
     filesByCategory: filesByCategory.map(f => ({ category: f.category, count: f._count.id })),
     projectsByTemplate: projectsByTemplate.map(p => ({ template: p.template, count: p._count.id })),
+    projectsByMode: projectsByMode.map(p => ({
+      mode: p.mode === "research" ? "research" : "review",
+      count: p._count.id,
+    })),
     projectTrend,
     recentActivity: recentActivity.map(a => ({
       title: a.title, user: a.owner?.name ?? "未知", time: a.lastUpdated.toISOString(),

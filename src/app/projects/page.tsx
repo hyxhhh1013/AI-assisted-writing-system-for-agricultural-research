@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import type { ProjectWritingMode } from "@/contracts/writing-mode";
 import type { ProjectListItem } from "@/services/project";
 import { cn } from "@/lib/utils";
+import { getModeAccent } from "@/lib/mode-theme";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -165,6 +166,7 @@ export default function ProjectsPage() {
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filteredProjects.map((project) => {
             const isResearch = project.mode === "research";
+            const accent = getModeAccent(project.mode);
             const Icon = isResearch ? FlaskConical : BookOpen;
             return (
               <Card
@@ -173,9 +175,7 @@ export default function ProjectsPage() {
                   "group cursor-pointer border-l-4",
                   siteTheme.card,
                   siteTheme.cardHover,
-                  isResearch
-                    ? "border-l-[#1a5632] hover:border-[#1a5632]/25"
-                    : "border-l-[#2563eb] hover:border-[#2563eb]/25",
+                  accent.borderLeft,
                 )}
                 onClick={() => handleOpen(project.id)}
               >
@@ -184,12 +184,11 @@ export default function ProjectsPage() {
                     <div
                       className={cn(
                         "flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
-                        isResearch
-                          ? "bg-[#1a5632]/10 group-hover:bg-[#1a5632]/15"
-                          : "bg-[#2563eb]/10 group-hover:bg-[#2563eb]/15",
+                        accent.iconBg,
+                        "group-hover:opacity-90",
                       )}
                     >
-                      <Icon className={cn("h-5 w-5", isResearch ? "text-[#1a5632]" : "text-[#2563eb]")} />
+                      <Icon className={cn("h-5 w-5", accent.iconText)} />
                     </div>
                     <div className="flex items-center gap-1">
                       <ProjectModeBadge mode={project.mode} />
@@ -225,10 +224,7 @@ export default function ProjectsPage() {
                   <div className="flex items-center gap-2">
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-black/5">
                       <div
-                        className={cn(
-                          "h-full rounded-full transition-all",
-                          isResearch ? "bg-[#1a5632]" : "bg-[#2563eb]",
-                        )}
+                        className={cn("h-full rounded-full transition-all", accent.progress)}
                         style={{ width: `${project.progress}%` }}
                       />
                     </div>

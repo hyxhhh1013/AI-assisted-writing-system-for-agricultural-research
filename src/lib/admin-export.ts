@@ -36,7 +36,11 @@ export function exportUsersCSV(users: AdminUserRecord[]) {
 
 export function exportProjectsCSV(projects: AdminProjectRecord[]) {
   downloadCSV(
-    toCSV(projects, ["title", "userName", "template", "mode", "progress", "referenceCount", "lastUpdated"], ["标题", "作者", "模板", "模式", "进度%", "文献数", "最后更新"]),
+    toCSV(
+      projects,
+      ["title", "userName", "template", "mode", "progress", "outlineProgress", "outlineTasksDone", "outlineTasksTotal", "referenceCount", "lastUpdated"],
+      ["标题", "作者", "模板", "模式", "章节进度%", "大纲进度%", "大纲已完成", "大纲任务数", "文献数", "最后更新"],
+    ),
     `projects-${new Date().toISOString().slice(0, 10)}.csv`,
   );
 }

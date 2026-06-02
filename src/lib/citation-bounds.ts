@@ -5,7 +5,11 @@
  * 被 preview（shared.tsx）、export（server-pdf.ts）、writing（route.ts）三方复用。
  */
 
-import { CITATION_GROUP_RE, FULLWIDTH_CITATION_RE, expandCitationGroup } from "@/lib/citation";
+import {
+  CITATION_GROUP_RE,
+  expandCitationGroup,
+  normalizeCitationBrackets,
+} from "@/lib/citation";
 
 // ── 归一化 ──────────────────────────────────────────────────────────────────
 
@@ -15,10 +19,7 @@ import { CITATION_GROUP_RE, FULLWIDTH_CITATION_RE, expandCitationGroup } from "@
  */
 export function normalizeAllCitationFormats(text: string): string {
   if (!text) return text;
-  let t = text;
-
-  // 全角方括号 → 半角
-  t = t.replace(/［([0-9,\s\-–—，、]+)］/g, (_m, inner) => `[${inner}]`);
+  let t = normalizeCitationBrackets(text);
 
   // [参考来源23] / [参考来源 [23]] → [23]
   t = t.replace(/\[参考来源\s*(?:\[)?(\d+)(?:\])?\]/g, "[$1]");

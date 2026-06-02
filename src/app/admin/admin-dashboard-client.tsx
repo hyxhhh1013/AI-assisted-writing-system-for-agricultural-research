@@ -12,6 +12,7 @@ function formatTime(iso: string) {
 }
 
 const TPL_LABEL: Record<string, string> = { sci: "SCI", ieee: "IEEE", gbt7713: "GB/T 7713", nature: "Nature" };
+const MODE_LABEL: Record<string, string> = { review: "综述", research: "研究" };
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -129,6 +130,25 @@ export default function AdminDashboard() {
               const max = Math.max(...stats.projectsByTemplate.map(x => x.count), 1);
               return <div key={t.template} className="flex items-center gap-2"><span className="w-20 text-xs text-[#3d4f46]">{TPL_LABEL[t.template] ?? t.template}</span><div className="flex-1 h-4 rounded bg-[#1a5632]/8 overflow-hidden"><div className="h-full rounded bg-blue-400/60" style={{ width: `${(t.count / max) * 100}%` }} /></div><span className="text-[10px] text-[#9aa8a0] w-8 text-right">{t.count}</span></div>;
             })}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-[#1a5632]/10 bg-white p-4">
+          <h2 className="mb-3 text-xs font-medium text-[#6b7c72]">写作模式分布</h2>
+          <div className="space-y-2">
+            {(stats.projectsByMode ?? []).map(m => {
+              const max = Math.max(...(stats.projectsByMode ?? []).map(x => x.count), 1);
+              return (
+                <div key={m.mode} className="flex items-center gap-2">
+                  <span className="w-20 text-xs text-[#3d4f46]">{MODE_LABEL[m.mode] ?? m.mode}</span>
+                  <div className="flex-1 h-4 rounded bg-[#1a5632]/8 overflow-hidden">
+                    <div className="h-full rounded bg-emerald-500/60" style={{ width: `${(m.count / max) * 100}%` }} />
+                  </div>
+                  <span className="text-[10px] text-[#9aa8a0] w-8 text-right">{m.count}</span>
+                </div>
+              );
+            })}
+            {(stats.projectsByMode ?? []).length === 0 && <p className="text-xs text-[#9aa8a0]">暂无数据</p>}
           </div>
         </div>
 

@@ -29,6 +29,8 @@
 |------|------|-----|----------|
 | 文献浏览/搜索 | `src/app/knowledge/page.tsx` | `GET /api/knowledge` | `lib/knowledge-metadata.ts` |
 | 重建索引 | 知识库页 | `POST /api/knowledge/reindex` | `scripts/index-pdfs.mjs` |
+| 书目自动解析 | （索引 Stage 1） | — | `scripts/doc-type-registry.mjs`, `scripts/extractors/*` |
+| 引用括号归一化 | 扩写/预览/应用章节 | — | `src/lib/citation-bounds.ts`, `src/lib/citation.ts` |
 | 文献对话 | — | `POST /api/chat` SSE | `lib/rag.ts` |
 | 写作检索上下文 | — | （writing 内） | `services/writing-context.ts` |
 
@@ -77,6 +79,7 @@
 | 域 | 文件 |
 |----|------|
 | 写作/扩写 | `src/lib/prompts/writing.ts` |
+| 综述章节 | `src/lib/prompts/review-writing.ts` |
 | 大纲 | `src/lib/prompts/outline.ts` |
 | 数据分析 | `src/lib/prompts/analysis.ts` |
 | 一致性 | `src/lib/prompts/consistency.ts` |

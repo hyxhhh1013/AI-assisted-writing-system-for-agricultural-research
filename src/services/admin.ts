@@ -113,7 +113,7 @@ export async function deleteAdminUser(userId: string): Promise<{ ok: boolean; me
 
 /** GET /api/admin/projects */
 export async function listAdminProjects(
-  params?: Pick<AdminListParams, "q" | "template">,
+  params?: Pick<AdminListParams, "q" | "template" | "mode">,
 ): Promise<AdminProjectRecord[]> {
   const res = await fetch(`/api/admin/projects${buildQuery(params)}`);
   const data = await parseJson<{ data?: AdminProjectRecord[] }>(res);

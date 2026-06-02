@@ -17,12 +17,14 @@ export interface UseConsistencyReturn {
     sections: Record<string, string>,
     outline?: string,
     dataClaims?: { id: string; text: string; values: Record<string, number | string> }[],
+    projectMode?: "review" | "research",
   ) => Promise<FixableReport>;
   fixIssue: (
     index: number,
     sectionContents: Record<string, string>,
     title: string,
     outline?: string,
+    projectMode?: "review" | "research",
   ) => Promise<string | null>;
   applyFix: (index: number) => void;
   dismissIssue: (index: number) => void;
@@ -44,6 +46,7 @@ export function useConsistency(): UseConsistencyReturn {
       sections: Record<string, string>,
       outline?: string,
       dataClaims?: { id: string; text: string; values: Record<string, number | string> }[],
+      projectMode?: "review" | "research",
     ) => {
       setIsChecking(true);
       setReport(null);
@@ -53,6 +56,7 @@ export function useConsistency(): UseConsistencyReturn {
           sections: Object.entries(sections).map(([key, content]) => ({ key, content })),
           outline,
           dataClaims,
+          projectMode,
         });
         const fixable = toFixableReport(data);
         setReport(fixable);
@@ -78,6 +82,7 @@ export function useConsistency(): UseConsistencyReturn {
       sectionContents: Record<string, string>,
       title: string,
       outline?: string,
+      projectMode?: "review" | "research",
     ): Promise<string | null> => {
       if (!report || index < 0 || index >= report.issues.length) return null;
 
@@ -100,6 +105,7 @@ export function useConsistency(): UseConsistencyReturn {
           sectionContents,
           outline,
           title,
+          projectMode,
         });
 
         setReport((prev) =>

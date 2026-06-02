@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     const { data, errorResponse: ve } = await validateBody(consistencySchema, await req.json());
     if (ve) return ve;
 
-    const { title, sections, outline } = data;
+    const { title, sections, outline, projectMode } = data;
     const dataClaims = (data.dataClaims ?? []) as {
       id: string; text: string; values: Record<string, string | number>;
     }[];
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: keyError }), { status: 500 });
     }
 
-    const prompt = buildConsistencyPrompt({ title, sections, outline, dataClaims });
+    const prompt = buildConsistencyPrompt({ title, sections, outline, dataClaims, projectMode });
 
     const response = await callAI({
       provider: "deepseek",

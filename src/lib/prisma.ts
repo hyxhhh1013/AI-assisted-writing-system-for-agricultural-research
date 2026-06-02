@@ -41,8 +41,21 @@ declare global {
   var prisma: undefined | ReturnType<typeof prismaClientSingleton>
 }
 
-const prisma = globalThis.prisma ?? prismaClientSingleton()
+function getPrismaClient() {
+  // schema 变更后若仍缓存旧 Client（缺 aiUsageLog 等 delegate），在 dev 下自动重建
+  if (
+    process.env.NODE_ENV !== "production" &&
+    globalThis.prisma &&
+    typeof (globalThis.prisma as { aiUsageLog?: unknown }).aiUsageLog === "undefined"
+  ) {
+    globalThis.prisma = undefined;
+  }
+
+  const client = globalThis.prisma ?? prismaClientSingleton();
+  if (process.env.NODE_ENV !== "production") globalThis.prisma = client;
+  return client;
+}
+
+const prisma = getPrismaClient()
 
 export default prisma
-
-if (process.env.NODE_ENV !== 'production') globalThis.prisma = prisma

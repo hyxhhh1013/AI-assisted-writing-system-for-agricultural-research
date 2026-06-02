@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -13,7 +13,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { toast } from "sonner";
 import { projectStore } from "@/lib/store";
 import type { ProjectData } from "@/contracts/project";
-import { streamOutline } from "@/services/outline";
+import { resolveOutlineResearchDirection, streamOutline } from "@/services/outline";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { getErrorMessage } from "@/lib/error-utils";
@@ -34,6 +34,7 @@ function OutlineContent() {
 
   const [title, setTitle] = useState("");
   const [researchDirection, setResearchDirection] = useState("");
+  const [projectMode, setProjectMode] = useState<ProjectData["mode"]>("review");
   const [language, setLanguage] = useState<"zh" | "en">("zh");
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState("");
@@ -56,6 +57,7 @@ function OutlineContent() {
         if (data.title) setTitle(data.title);
         if (data.researchDirection) setResearchDirection(data.researchDirection);
         if (data.outline) setResult(data.outline);
+        setProjectMode(data.mode ?? "review");
       }
     };
     init();
@@ -86,8 +88,10 @@ function OutlineContent() {
   };
 
   const handleGenerate = async () => {
-    if (!title || !researchDirection) {
-      toast.error("请填写完整信息");
+    const effectiveTitle = title.trim();
+    const effectiveDirection = resolveOutlineResearchDirection(title, researchDirection);
+    if (!effectiveTitle) {
+      toast.error("请填写论文题目");
       return;
     }
 
@@ -95,7 +99,15 @@ function OutlineContent() {
     setResult("");
 
     try {
-      await streamOutline({ title, researchDirection, language }, setResult);
+      await streamOutline(
+        {
+          title: effectiveTitle,
+          researchDirection: effectiveDirection,
+          language,
+          projectMode: projectMode ?? "review",
+        },
+        setResult,
+      );
     } catch (error: unknown) {
       toast.error(error instanceof Error ? getErrorMessage(error) : "生成失败");
     } finally {

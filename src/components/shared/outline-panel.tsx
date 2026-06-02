@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -8,10 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Send, FileText, ChevronRight, PenTool, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
-import { projectStore } from "@/lib/store";
 import type { ProjectData } from "@/contracts/project";
 import { listKnowledgeFiles } from "@/services/knowledge";
-import { streamOutline } from "@/services/outline";
+import { resolveOutlineResearchDirection, streamOutline } from "@/services/outline";
 import { parseOutline, OutlineSection } from "@/lib/utils";
 
 interface OutlinePanelProps {
@@ -24,6 +23,7 @@ interface OutlinePanelProps {
 }
 
 export function OutlinePanel({ projectId, project, onSave, onTabChange, expandedSections, onExpandTask }: OutlinePanelProps) {
+  const isReview = (project.mode ?? "review") === "review";
   const [title, setTitle] = useState(project.title || "");
   const [researchDirection, setResearchDirection] = useState(project.researchDirection || "");
   const [language, setLanguage] = useState("zh");
@@ -36,7 +36,7 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
     setTitle(project.title || "");
     setResearchDirection(project.researchDirection || "");
     setResult(project.outline || "");
-  }, [project.id, project.title, project.researchDirection]);
+  }, [project.id, project.title, project.researchDirection, project.outline]);
 
   useEffect(() => {
     listKnowledgeFiles()
@@ -48,23 +48,39 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
       .catch(() => {});
   }, []);
 
-  // 解析大纲为结构化任务列表
   const outlineTasks = useMemo(() => parseOutline(result), [result]);
 
   const handleSave = (customOutline?: string) => {
     if (!projectId) return;
-    if (onSave) onSave({ title, researchDirection, outline: customOutline ?? result });
+    const effectiveDirection = resolveOutlineResearchDirection(title, researchDirection);
+    if (onSave) {
+      onSave({
+        title,
+        researchDirection: effectiveDirection,
+        outline: customOutline ?? result,
+      });
+    }
   };
 
   const handleGenerate = async () => {
-    if (!title || !researchDirection) { toast.error("请填写论文题目和研究方向"); return; }
+    const effectiveTitle = title.trim();
+    const effectiveDirection = resolveOutlineResearchDirection(title, researchDirection);
+    if (!effectiveTitle) {
+      toast.error("请填写论文题目");
+      return;
+    }
+    if (!effectiveDirection) {
+      toast.error(isReview ? "请填写综述主题或关键词" : "请填写研究方向");
+      return;
+    }
+
     setIsGenerating(true);
     setResult("");
     try {
       const full = await streamOutline(
         {
-          title,
-          researchDirection,
+          title: effectiveTitle,
+          researchDirection: effectiveDirection,
           language: language as "zh" | "en",
           category,
           projectMode: project.mode ?? "review",
@@ -75,10 +91,11 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
       toast.success("大纲生成完毕，点击章节可跳转到扩写");
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "生成失败");
-    } finally { setIsGenerating(false); }
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
-  // 点击大纲章节 → 通过回调通知父组件跳转到扩写面板
   const handleExpandTask = (task: OutlineSection) => {
     onExpandTask?.(task.id);
     onTabChange?.("writing");
@@ -86,18 +103,30 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* 表单区 */}
       <div className="shrink-0 p-3 border-b bg-card space-y-2">
         <div>
           <Label className="text-[10px] text-muted-foreground">论文题目</Label>
-          <Input className="text-xs h-8 mt-0.5" value={title}
-            onChange={e => setTitle(e.target.value)} placeholder="碳基肥对盐碱地水稻产量的影响" />
+          <Input
+            className="text-xs h-8 mt-0.5"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            placeholder={isReview ? "如：生物炭改良盐碱地研究进展" : "碳基肥对盐碱地水稻产量的影响"}
+          />
         </div>
         <div>
-          <Label className="text-[10px] text-muted-foreground">关键词 / 研究方向</Label>
-          <Textarea className="text-xs h-12 min-h-[2rem] mt-0.5" value={researchDirection}
+          <Label className="text-[10px] text-muted-foreground">
+            {isReview ? "综述主题 / 关键词" : "关键词 / 研究方向"}
+          </Label>
+          <Textarea
+            className="text-xs h-12 min-h-[2rem] mt-0.5"
+            value={researchDirection}
             onChange={e => setResearchDirection(e.target.value)}
-            placeholder="研究方向、实验对象、核心指标，越详细大纲越精准" />
+            placeholder={
+              isReview
+                ? "综述范围、主题维度、争议点；留空时将使用论文题目检索文献"
+                : "研究方向、实验对象、核心指标，越详细大纲越精准"
+            }
+          />
         </div>
         <div className="flex justify-between items-center gap-1">
           <Select value={category} onValueChange={v => v && setCategory(v)}>
@@ -115,17 +144,18 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
               </SelectContent>
             </Select>
             <Button size="sm" className="h-7 text-xs" disabled={isGenerating} onClick={handleGenerate}>
-            {isGenerating ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Send className="h-3 w-3 mr-1" />}
-            生成
-          </Button>
+              {isGenerating ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Send className="h-3 w-3 mr-1" />}
+              生成
+            </Button>
+          </div>
         </div>
       </div>
-    </div>
-      {/* 大纲任务列表 — 点击即可跳转到扩写 */}
+
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {!result && !isGenerating && (
           <div className="text-center py-16 text-muted-foreground">
             <FileText className="h-10 w-10 mx-auto mb-3 opacity-20" />
-            <p className="text-sm">填写论文信息后生成大纲</p>
+            <p className="text-sm">{isReview ? "填写综述题目后生成主题式大纲" : "填写论文信息后生成大纲"}</p>
             <p className="text-[10px] mt-1">生成后可点击章节直接跳转到扩写面板</p>
           </div>
         )}
@@ -133,7 +163,7 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
         {isGenerating && (
           <div className="text-center py-16 text-muted-foreground">
             <Loader2 className="h-8 w-8 mx-auto mb-3 animate-spin" />
-            <p className="text-sm">正在生成大纲...</p>
+            <p className="text-sm">正在生成{isReview ? "综述" : ""}大纲...</p>
           </div>
         )}
 
@@ -159,22 +189,29 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
             ))}
           </div>
         )}
+      </div>
 
-        {/* 原始大纲编辑区 */}
-        {result && (
-          <div className="p-2 border-t space-y-1.5 shrink-0">
-            <Label className="text-[10px] text-muted-foreground uppercase">编辑大纲文本</Label>
-            <Textarea
-              className="text-xs min-h-[80px] max-h-40 font-mono bg-muted/20"
-              value={result}
-              onChange={e => setResult(e.target.value)}
-            />
-            <Button size="sm" variant="outline" className="h-6 text-[10px] w-full"
-              onClick={() => { handleSave(); toast.success("大纲已保存"); }}>
-              保存修改
-            </Button>
-          </div>
-        )}
+      {result && (
+        <div className="p-2 border-t space-y-1.5 shrink-0">
+          <Label className="text-[10px] text-muted-foreground uppercase">编辑大纲文本</Label>
+          <Textarea
+            className="text-xs min-h-[80px] max-h-40 font-mono bg-muted/20"
+            value={result}
+            onChange={e => setResult(e.target.value)}
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 text-[10px] w-full"
+            onClick={() => {
+              handleSave();
+              toast.success("大纲已保存");
+            }}
+          >
+            保存修改
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

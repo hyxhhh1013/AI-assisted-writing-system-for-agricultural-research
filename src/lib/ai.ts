@@ -103,17 +103,20 @@ export async function callAI(options: AICallOptions): Promise<Response> {
     throw new AIError(errorMsg, response.status);
   }
 
-  // 记录用量（仅成功调用）
-  usageLog.record(
-    `ai:${options.provider}`,
-    {
-      provider: options.provider,
-      model: config.model,
-      messageCount: options.messages.length,
-      stream: options.stream ?? true,
-    },
-    options.userId,
-  );
+  try {
+    usageLog.record(
+      `ai:${options.provider}`,
+      {
+        provider: options.provider,
+        model: config.model,
+        messageCount: options.messages.length,
+        stream: options.stream ?? true,
+      },
+      options.userId,
+    );
+  } catch {
+    /* 用量统计失败不影响 AI 响应 */
+  }
 
   return response;
 }

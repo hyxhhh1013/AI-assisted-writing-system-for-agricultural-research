@@ -76,6 +76,7 @@ export interface RunReviewRequest {
   references?: string[];
   dimensions?: import("@/types/review").ReviewDimension[];
   target?: string;
+  projectMode?: "review" | "research";
 }
 
 export interface ReviewFixIssueRequest {

@@ -24,12 +24,14 @@ KnowledgeFile 1──* KnowledgeChunk
 | `charts` | JSON 字符串，图表元数据 |
 | `dataClaims` | JSON `EvidenceClaim[]` |
 | `dataSources` | JSON `DataSourceAnalysis[]` |
+| `expandedOutlineSections` | JSON `string[]`，大纲扩写已完成任务 id（`stableHash(fullPath)`）；整章扩写时同 `sectionKey` 下子节一并标记 |
 
 **保存策略（当前）**
 
 - `Section`：按 key **增量 PATCH** `/api/projects/[id]/sections/[key]`
 - `Reference`：**增量 PATCH** `/api/projects/[id]/references`（含 `replace`）
 - `AnalysisResult`：**增量 PATCH** `/api/projects/[id]/analysis-results`
+- `expandedOutlineSections`：随项目 **POST** `/api/projects` 写入（JSON 列）；自动保存/手动保存均走此路径
 - 禁止前端 `saveProject` 全量覆盖 refs/analysis（已迁移，见 ENG-PR-025b）
 
 ## 知识库（KnowledgeFile）

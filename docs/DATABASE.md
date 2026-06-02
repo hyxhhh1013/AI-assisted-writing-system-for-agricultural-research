@@ -86,6 +86,8 @@ KnowledgeFile (1) ──< (N) KnowledgeChunk
 
 `data/metadata.json` 已 **deprecated**（仅迁移脚本或 `USE_METADATA_JSON_FALLBACK=true` 时只读回退）。索引构建由 `scripts/index-pdfs.mjs` 在 Stage 2 结束后调用 `scripts/sync-knowledge-metadata-to-prisma.mjs` 写入 Prisma。
 
+若 UI 显示「未索引 / 0 块」，多为索引任务未跑完或未 emit `complete`；全量重建索引成功后 `chunkCount` 会与 `data/index_*.json` 对齐。详见 [`domain/rag-and-knowledge.md`](./domain/rag-and-knowledge.md) 故障排查。
+
 与文件系统同步，删除文件时需同步删除数据库记录。
 
 ### KnowledgeChunk — 知识库分块

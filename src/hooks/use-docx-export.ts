@@ -3,9 +3,9 @@ import { toast } from "sonner";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType, BorderStyle } from "docx";
 import { saveAs } from "file-saver";
 import type { ProjectData } from "@/contracts/project";
-import { mergeEditorIntoProject, stripHtmlToPlainForDocx } from "@/lib/export-content";
+import { mergeEditorIntoProject, stripHtmlToPlainForDocx, getTemplateSectionContent } from "@/lib/export-content";
 import { formatKeywords } from "@/lib/paper-metadata";
-import { IMRAD_LABELS_SHORT_ZH, IMRAD_LABELS_EN } from "@/lib/imrad";
+import { getTemplateSections } from "@/lib/template-sections";
 import { parseMarkdownBlocks, MarkdownBlock } from "@/lib/markdown-parser";
 import { formatFilenames } from "@/services/references";
 
@@ -292,16 +292,18 @@ export function useDocxExport({ project, activeSection, editingContent, saveProj
               indent: isChinese ? { firstLine: config.indent } : undefined,
             }),
             // Sections
-            ...(Object.entries(isChinese ? IMRAD_LABELS_SHORT_ZH : IMRAD_LABELS_EN) as [string, string][])
-              .filter(([key]) => key !== "abstract")
-              .flatMap(([key, label], index) => {
-              const raw = p.sections[key] || "";
+            ...getTemplateSections(template, p.mode)
+              .flatMap((def, index) => {
+              const raw = getTemplateSectionContent(p.sections, def);
               const content = stripHtmlToPlainForDocx(raw);
               if (!content) return [];
 
-              const sectionNumber = index + 1;
-              const romanNumerals = ["I", "II", "III", "IV"];
-              const fullLabel = isIEEE ? `${romanNumerals[index]}. ${label.toUpperCase()}` : `${sectionNumber} ${label}`;
+              const sectionNumber = def.sectionNumber;
+              const romanNumerals = ["I", "II", "III", "IV", "V", "VI"];
+              const label = def.label;
+              const fullLabel = isIEEE
+                ? `${romanNumerals[index] ?? String(index + 1)}. ${label.toUpperCase()}`
+                : `${sectionNumber} ${label}`;
               const elements: (Paragraph | Table)[] = [];
 
               elements.push(new Paragraph({

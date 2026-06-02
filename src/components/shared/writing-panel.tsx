@@ -39,7 +39,7 @@ interface WritingPanelProps {
   onPreviewUpdate?: (data: WritingPreviewPayload) => void;
   preselectedTaskId?: string | null;
   expandedSections?: string[];
-  onTaskExpanded?: (taskId: string) => void;
+  onTaskExpanded?: (taskIds: string | string[]) => void;
   onClearPreselected?: () => void;
 }
 
@@ -160,7 +160,7 @@ export function WritingPanel({
         );
       }
     },
-    [project.outline],
+    [project.outline, projectMode],
   );
 
   useEffect(() => {
@@ -305,6 +305,7 @@ export function WritingPanel({
               outlineTasks={outlineTasks}
               selectedSectionId={selectedSectionId}
               expandedSections={expandedSections}
+              projectMode={projectMode}
               onSelectTask={handleSelectTask}
               onRefreshOutline={async () => {
                 const latest = await projectStore.get(projectId);
@@ -419,7 +420,7 @@ export function WritingPanel({
               <Textarea
                 id="context"
                 placeholder="选择左侧大纲任务后，这里会自动填入写作要求..."
-                className="text-xs min-h-[100px] bg-muted/5"
+                className="text-xs min-h-[88px] max-h-[160px] overflow-y-auto resize-none bg-muted/5"
                 value={context}
                 onChange={(e) => setContext(e.target.value)}
               />

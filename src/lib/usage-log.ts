@@ -28,32 +28,43 @@ function extractTokens(metadata?: Record<string, unknown>): number | undefined {
 }
 
 function persistToDatabase(entry: UsageLogEntry) {
-  const userId = entry.userId && entry.userId !== "anonymous" ? entry.userId : null;
-  void prisma.aiUsageLog
-    .create({
-      data: {
-        userId,
-        feature: entry.feature,
-        tokens: extractTokens(entry.metadata),
-        metadata: entry.metadata as Prisma.InputJsonValue | undefined,
-      },
-    })
-    .catch(() => {
-      /* 持久化失败不阻塞 AI 主路径 */
-    });
+  try {
+    const delegate = prisma.aiUsageLog;
+    if (!delegate?.create) return;
+
+    const userId = entry.userId && entry.userId !== "anonymous" ? entry.userId : null;
+    void delegate
+      .create({
+        data: {
+          userId,
+          feature: entry.feature,
+          tokens: extractTokens(entry.metadata),
+          metadata: entry.metadata as Prisma.InputJsonValue | undefined,
+        },
+      })
+      .catch(() => {
+        /* 持久化失败不阻塞 AI 主路径 */
+      });
+  } catch {
+    /* 旧版 Prisma 单例或表未迁移时跳过 */
+  }
 }
 
 export const usageLog = {
   record(feature: string, metadata?: Record<string, unknown>, userId?: string) {
-    const entry: UsageLogEntry = {
-      feature,
-      userId: userId ?? "anonymous",
-      timestamp: Date.now(),
-      metadata,
-    };
-    logs.push(entry);
-    prune();
-    persistToDatabase(entry);
+    try {
+      const entry: UsageLogEntry = {
+        feature,
+        userId: userId ?? "anonymous",
+        timestamp: Date.now(),
+        metadata,
+      };
+      logs.push(entry);
+      prune();
+      persistToDatabase(entry);
+    } catch {
+      /* 内存/DB 任一环节失败均不向外抛 */
+    }
   },
 
   countSince(feature: string, minutes: number): number {

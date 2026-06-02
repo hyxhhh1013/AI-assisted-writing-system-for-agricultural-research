@@ -8,11 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cleanDraftArtifacts, deduplicateParagraphs, cleanMarkdownArtifacts } from "@/lib/utils";
-import { mergeEditorIntoProject } from "@/lib/export-content";
+import { mergeEditorIntoProject, buildPlagiarismContentFromProject } from "@/lib/export-content";
 import { ensureSubsectionNumbering, majorNumberFromSectionId, maxSecondLevelInText } from "@/lib/academic-numbering";
 import { useDocxExport } from "@/hooks/use-docx-export";
 import { useReferenceReorder } from "@/hooks/use-reference-reorder";
 import { pruneUncitedReferences, collectAllCitedIndices, stripOutOfRangeCitations, remapPrunedCitations } from "@/lib/reference-reorder";
+import { normalizeAllCitationFormats } from "@/lib/citation-bounds";
 import { useEditorSync } from "@/hooks/use-editor-sync";
 import { useAutoSave } from "@/hooks/use-auto-save";
 import { useMarkdownExport } from "@/hooks/use-markdown-export";
@@ -39,6 +40,11 @@ import { ReferenceBrowser } from "@/components/shared/reference-browser";
 import { WorkbenchTabSwitcher } from "@/components/shared/workbench-tab-switcher";
 import { useAiParagraph } from "@/hooks/use-ai-paragraph";
 import { WorkbenchEditorArea } from "@/components/shared/workbench-editor-area";
+import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
+import { getModeAccent, getStructurePanelTitle, getStructurePanelHint } from "@/lib/mode-theme";
+import { siteTheme } from "@/lib/site-theme";
+import { cn } from "@/lib/utils";
+import { getProjectWritingMode } from "@/lib/section-registry";
 
 // === Lazy-loaded panels: 首屏不加载，仅在对应 tab 激活时按需加载 ===
 
@@ -181,6 +187,9 @@ function WorkbenchContent() {
     () => buildWorkbenchSectionsForMode(project.mode ?? "review", "zh"),
     [project.mode],
   );
+
+  const writingMode = getProjectWritingMode(project.mode);
+  const modeAccent = useMemo(() => getModeAccent(writingMode), [writingMode]);
 
   const sectionContentsForRefs = useMemo(() => {
     const base: Record<string, string> = { abstract: project.abstract || "" };
@@ -363,11 +372,8 @@ function WorkbenchContent() {
       processedContent = ensureSubsectionNumbering(processedContent, sectionId, existingBeforeMerge);
     }
 
-    // 归一化非标准引用格式：[参考来源N] / [文献N] → [N]
-    processedContent = processedContent
-      .replace(/\[参考来源\s*\[?(\d+)\]?\s*\]/g, "[$1]")
-      .replace(/\[文献\s*(\d+)\]/g, "[$1]")
-      .replace(/\[[Rr]ef\s*(\d+)\]/g, "[$1]");
+    // 归一化非标准引用格式：[参考来源N] / [文献N] / 【16】→ [N]
+    processedContent = normalizeAllCitationFormats(processedContent);
     // 清理草稿痕迹 + 去重 + 越界引用剥离后再写入
     const refCount = currentProject.references?.length || 0;
     processedContent = stripOutOfRangeCitations(processedContent, refCount);
@@ -435,19 +441,22 @@ function WorkbenchContent() {
   // 清理未被正文引用的参考文献
   const handleCleanReferences = useCallback(() => {
     const p = projectRef.current;
+    const currentEditingContent = editingContentRef.current;
+    const currentActiveSection = activeSectionRef.current;
     if (!p || !p.references || p.references.length === 0) {
       toast.info("暂无参考文献可清理");
       return;
     }
-    const { references: cleaned, removed, indexMap } = pruneUncitedReferences(p);
+    const merged = mergeEditorIntoProject(p, currentActiveSection, currentEditingContent);
+    const { references: cleaned, removed, indexMap } = pruneUncitedReferences(merged);
     if (removed === 0) {
       toast.info("所有参考文献均在正文中被引用，无需清理");
       return;
     }
     // 重映射所有章节正文中的引用编号
-    const remappedAbstract = remapPrunedCitations(p.abstract || "", indexMap);
+    const remappedAbstract = remapPrunedCitations(merged.abstract || "", indexMap);
     const remappedSections: Record<string, string> = {};
-    for (const [key, content] of Object.entries(p.sections)) {
+    for (const [key, content] of Object.entries(merged.sections)) {
       remappedSections[key] = remapPrunedCitations(content || "", indexMap);
     }
     const updated = {
@@ -457,13 +466,18 @@ function WorkbenchContent() {
       references: cleaned,
     };
     setProject(updated);
+    setEditingContent(
+      currentActiveSection === "abstract"
+        ? remappedAbstract
+        : remappedSections[currentActiveSection] ?? currentEditingContent,
+    );
     if (p.id) {
       void projectStore.replaceReferences(p.id, cleaned).then(() =>
         projectStore.save(updated),
       );
     }
     toast.success(`已移除 ${removed} 条未引用文献，剩余 ${cleaned.length} 条（正文引用号已同步更新）`);
-  }, [projectRef, setProject]);
+  }, [projectRef, editingContentRef, activeSectionRef, setProject, setEditingContent]);
 
   const aiParagraph = useAiParagraph({ project, activeSection, setProject });
   const handleExpandParagraph = (content: string) => aiParagraph.run("expand", content);
@@ -507,17 +521,19 @@ function WorkbenchContent() {
       return next;
     });
   }, []);
-  const handleTaskExpanded = useCallback((taskId: string) => {
-    setExpandedOutlineSections(prev => {
-      if (prev.includes(taskId)) return prev;
-      return [...prev, taskId];
+  const handleTaskExpanded = useCallback((taskIds: string | string[]) => {
+    const ids = Array.isArray(taskIds) ? taskIds : [taskIds];
+    setExpandedOutlineSections((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.add(id);
+      return [...next];
     });
   }, []);
   const handleClearPreselected = useCallback(() => setPendingExpandTask(null), []);
 
   return (
     <ErrorBoundary>
-    <div className="flex h-screen overflow-hidden relative bg-[#faf9f6]">
+    <div className={cn("flex h-screen overflow-hidden relative", siteTheme.bgSoft)}>
       <WorkbenchTabSwitcher
         activeTab={activeTab} setActiveTab={setActiveTab}
         isWritingGenerating={isWritingGenerating}
@@ -529,25 +545,30 @@ function WorkbenchContent() {
 
       {/* Second Left: Dynamic Panel */}
       <div 
-        className={`bg-card border-r flex flex-col transition-all duration-300 ease-in-out overflow-hidden ${
-          isSidebarOpen ? "w-80" : "w-0"
-        }`}
+        className={cn(
+          "border-r flex flex-col transition-all duration-300 ease-in-out overflow-hidden bg-white/90",
+          modeAccent.borderTint,
+          isSidebarOpen ? "w-80" : "w-0",
+        )}
       >
         <div className="flex flex-col h-full w-80">
-          <header className="h-14 border-b flex items-center justify-between px-4 shrink-0">
-            <div className="flex flex-col min-w-0">
-              <span className="font-bold text-sm uppercase tracking-wider text-muted-foreground truncate">
-                {activeTab === "structure" && "IMRaD 章节"}
-                {activeTab === "data" && "实验数据"}
-                {activeTab === "outline" && "论证提纲"}
-                {activeTab === "writing" && "侧栏扩写"}
-                {activeTab === "reader" && "文献库"}
-                {activeTab === "plagiarism" && "论文质量检测"}
-                {activeTab === "xrd" && "XRD 分析"}
-              </span>
+          <header className={cn("h-14 border-b flex items-center justify-between px-4 shrink-0", modeAccent.headerTint, modeAccent.borderTint)}>
+            <div className="flex flex-col min-w-0 gap-0.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-semibold text-sm text-[#122820] truncate">
+                  {activeTab === "structure" && getStructurePanelTitle(writingMode)}
+                  {activeTab === "data" && "实验数据"}
+                  {activeTab === "outline" && "论证提纲"}
+                  {activeTab === "writing" && "侧栏扩写"}
+                  {activeTab === "reader" && "文献库"}
+                  {activeTab === "plagiarism" && "论文质量检测"}
+                  {activeTab === "xrd" && "XRD 分析"}
+                </span>
+                <ProjectModeBadge mode={writingMode} />
+              </div>
               {activeTab === "structure" && (
-                <span className="text-[10px] text-muted-foreground font-normal normal-case leading-tight mt-0.5 line-clamp-2">
-                  与「论证提纲」并列：此处管五段正文；Outline 页管 AI 目录树。
+                <span className="text-[10px] text-[#6b7c72] font-normal leading-tight line-clamp-2">
+                  {getStructurePanelHint(writingMode)}
                 </span>
               )}
             </div>
@@ -563,47 +584,38 @@ function WorkbenchContent() {
                   <LazyPlagiarismPanel
                     projectId={projectId ?? undefined}
                     projectTitle={project.title}
-                    initialContent={
-                      [
-                        project.abstract ? `摘要：${project.abstract}` : "",
-                        ...Object.entries(project.sections || {})
-                          .filter(([, content]) => content?.trim())
-                          .map(([key, content]) => {
-                            const labels: Record<string, string> = {
-                              introduction: "引言",
-                              methods: "材料与方法",
-                              results: "结果与讨论",
-                              conclusion: "结论",
-                            };
-                            return `${labels[key] || key}：${content}`;
-                          }),
-                      ]
-                        .filter(Boolean)
-                        .join("\n\n")
-                    }
+                    initialContent={buildPlagiarismContentFromProject(
+                      mergeEditorIntoProject(project, activeSection, editingContent),
+                    )}
                   />
                 </ErrorBoundary>
               </div>
             )}
             {activeTab === "structure" && (
               <div className="h-full min-h-0 flex flex-col overflow-hidden">
-                <p className="shrink-0 text-[10px] text-muted-foreground px-1 pb-2 border-b mb-2 leading-relaxed">
+                <p className="shrink-0 text-[10px] text-[#6b7c72] px-1 pb-2 border-b mb-2 leading-relaxed">
                   点选章节后，中间编辑器与预览对应该段；引用重排会扫描<strong>含当前编辑区</strong>的全文。
                 </p>
-                <div className="shrink-0 space-y-0">
+                <div className="shrink-0 space-y-0.5">
                   {structureSections.map((s) => (
                     <button
                       key={s.id}
                       onClick={() => setActiveSection(s.id)}
-                      className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all flex items-center justify-between group ${
-                        activeSection === s.id 
-                          ? "bg-primary text-primary-foreground shadow-md" 
-                          : "hover:bg-muted"
-                      }`}
+                      className={cn(
+                        "w-full text-left px-3 py-2.5 rounded-xl text-sm transition-all flex items-center justify-between group",
+                        activeSection === s.id
+                          ? modeAccent.sectionActive
+                          : "text-[#3d4f46] hover:bg-black/[0.03]",
+                      )}
                     >
                       <span className="truncate font-medium">{s.label}</span>
                       {project.sections[s.id] && (
-                        <CheckCircle2 className={`h-3.5 w-3.5 ml-2 ${activeSection === s.id ? "text-primary-foreground" : "text-green-500"}`} />
+                        <CheckCircle2
+                          className={cn(
+                            "h-3.5 w-3.5 ml-2 shrink-0",
+                            activeSection === s.id ? "text-white/90" : modeAccent.iconText,
+                          )}
+                        />
                       )}
                     </button>
                   ))}
@@ -779,13 +791,19 @@ function WorkbenchContent() {
           <>
             <ResizableHandle withHandle />
             <ResizablePanel defaultSize={40} minSize={20}>
-              <div className="bg-card flex flex-col h-full overflow-hidden border-l">
-                <header className="h-14 border-b bg-card flex items-center px-6 shrink-0 justify-between">
-                  <span className="font-bold text-sm flex items-center gap-2">
+              <div className="bg-white/90 flex flex-col h-full overflow-hidden border-l">
+                <header className={cn("h-14 border-b flex items-center px-6 shrink-0 justify-between", modeAccent.headerTint, modeAccent.borderTint)}>
+                  <span className="font-semibold text-sm flex items-center gap-2 min-w-0 text-[#122820]">
                     {rightPanelMode === "preview" ? (
-                      <><Eye className="h-4 w-4 text-primary shrink-0" /><span className="truncate max-w-[200px]">{project.title || "未命名论文"}</span></>
+                      <>
+                        <Eye className={cn("h-4 w-4 shrink-0", modeAccent.iconText)} />
+                        <span className="truncate max-w-[180px]">{project.title || "未命名论文"}</span>
+                        <ProjectModeBadge mode={writingMode} />
+                      </>
                     ) : (
-                      <><FileSearch className="h-4 w-4 text-primary" /> 文献详情</>
+                      <>
+                        <FileSearch className={cn("h-4 w-4", modeAccent.iconText)} /> 文献详情
+                      </>
                     )}
                   </span>
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsPreviewOpen(false)}>

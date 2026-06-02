@@ -32,14 +32,27 @@ import type {
   IssueStatus,
 } from "@/types/review";
 
+import type { ProjectWritingMode } from "@/contracts/writing-mode";
+
 // ==================== 常量 ====================
 
-const DIMENSIONS: Array<{ id: ReviewDimension; name: string; icon: string; description: string }> = [
+const RESEARCH_DIMENSIONS: Array<{ id: ReviewDimension; name: string; icon: string; description: string }> = [
   { id: "academic", name: "学术规范", icon: "📝", description: "口语化、术语一致性、句式规范" },
   { id: "argument", name: "论证质量", icon: "💡", description: "论点论据、推理链、因果关系" },
   { id: "structure", name: "结构规范", icon: "🏗️", description: "章节完整性、图表引用、摘要" },
-  { id: "integrity", name: "学术诚信", icon: "🔒", description: "引用真实性、数据一致性、统计" },
+  { id: "integrity", name: "学术诚信", icon: "🔒", description: "引用真实性、数据一致性、统计方法" },
 ];
+
+const REVIEW_DIMENSIONS: Array<{ id: ReviewDimension; name: string; icon: string; description: string }> = [
+  { id: "academic", name: "学术规范", icon: "📝", description: "口语化、术语一致性、综述体例" },
+  { id: "argument", name: "论证质量", icon: "💡", description: "综合对比、批判性、数据归因" },
+  { id: "structure", name: "结构规范", icon: "🏗️", description: "综述章节完整性、摘要与展望" },
+  { id: "integrity", name: "学术诚信", icon: "🔒", description: "照搬原文、数据归属、未标注来源" },
+];
+
+function getDimensionsForMode(mode?: ProjectWritingMode) {
+  return mode === "research" ? RESEARCH_DIMENSIONS : REVIEW_DIMENSIONS;
+}
 
 const SEVERITY_CONFIG = {
   high: { color: "bg-red-100 text-red-800", icon: XCircle, label: "高" },
@@ -62,6 +75,7 @@ interface ReviewTabProps {
   outline?: string;
   references?: string[];
   projectId?: string;
+  projectMode?: ProjectWritingMode;
   onJumpToSection?: (sectionKey: string) => void;
 }
 
@@ -73,8 +87,11 @@ export function ReviewTab({
   outline,
   references,
   projectId,
+  projectMode,
   onJumpToSection,
 }: ReviewTabProps) {
+  const dimensions = useMemo(() => getDimensionsForMode(projectMode), [projectMode]);
+
   const {
     report,
     isReviewing,
@@ -88,7 +105,7 @@ export function ReviewTab({
   } = useReview();
 
   const [selectedDimensions, setSelectedDimensions] = useState<ReviewDimension[]>(
-    DIMENSIONS.map((d) => d.id)
+    () => dimensions.map((d) => d.id),
   );
   const [expandedDimensions, setExpandedDimensions] = useState<Set<ReviewDimension>>(
     new Set()
@@ -116,8 +133,10 @@ export function ReviewTab({
         sections,
         outline,
         references,
+        projectMode,
+        config: { projectMode },
       },
-      selectedDimensions
+      selectedDimensions,
     );
 
     if (result) {
@@ -306,7 +325,9 @@ export function ReviewTab({
         <CardHeader>
           <CardTitle>📋 论文审查</CardTitle>
           <CardDescription>
-            对论文进行学术规范、论证质量、结构规范、学术诚信四个维度的全面审查
+            {projectMode === "research"
+              ? "对原创研究论文进行学术规范、论证质量、结构规范、学术诚信四个维度的全面审查"
+              : "对文献综述进行引用规范、转述质量、综合论证与学术诚信审查（侧重照搬与数据归属）"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -314,7 +335,7 @@ export function ReviewTab({
           <div className="mb-4">
             <label className="text-sm font-medium mb-2 block">选择审查维度</label>
             <div className="flex flex-wrap gap-3">
-              {DIMENSIONS.map((dim) => (
+              {dimensions.map((dim) => (
                 <label
                   key={dim.id}
                   className="flex items-center gap-2 cursor-pointer"
@@ -411,7 +432,7 @@ export function ReviewTab({
           </Card>
 
           {/* 各维度详情 */}
-          {DIMENSIONS.filter((d) => selectedDimensions.includes(d.id)).map((dim) => {
+          {dimensions.filter((d) => selectedDimensions.includes(d.id)).map((dim) => {
             const result = report.dimensions[dim.id];
             const isExpanded = expandedDimensions.has(dim.id);
 

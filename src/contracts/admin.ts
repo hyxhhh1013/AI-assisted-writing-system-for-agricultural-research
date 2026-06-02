@@ -66,6 +66,7 @@ export interface AdminStats {
   reviewCount: number;
   filesByCategory: { category: string; count: number }[];
   projectsByTemplate: { template: string; count: number }[];
+  projectsByMode: { mode: "review" | "research"; count: number }[];
   projectTrend: { date: string; count: number }[];
   recentActivity: { title: string; user: string; time: string }[];
   aiUsage?: {
@@ -131,7 +132,13 @@ export interface AdminProjectRecord {
   template: string;
   mode: string;
   userName: string;
+  userEmail?: string;
+  /** 核心章节完成度 0-100（随 mode 使用不同章节键） */
   progress: number;
+  /** 大纲任务完成度 0-100 */
+  outlineProgress: number;
+  outlineTasksDone: number;
+  outlineTasksTotal: number;
   referenceCount: number;
   createdAt: string;
   lastUpdated: string;

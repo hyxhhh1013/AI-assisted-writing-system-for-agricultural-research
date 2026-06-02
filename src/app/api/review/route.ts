@@ -27,9 +27,11 @@ export async function POST(request: NextRequest) {
         content: s.content,
       })),
       outline: body.outline,
+      projectMode: body.projectMode,
       config: {
         dimensions: body.dimensions,
         target: body.target,
+        projectMode: body.projectMode,
       },
     });
 

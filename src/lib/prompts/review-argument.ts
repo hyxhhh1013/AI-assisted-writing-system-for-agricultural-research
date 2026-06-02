@@ -5,22 +5,33 @@
  */
 
 import { buildDomainExpertise } from "./domain";
+import type { ProjectWritingMode } from "@/contracts/writing-mode";
 
-/**
- * 构建论证质量审查 prompt
- */
 export function buildArgumentReviewPrompt(
   content: string,
-  target?: string
+  target?: string,
+  projectMode?: ProjectWritingMode,
 ): { system: string; user: string } {
   const domainExpertise = buildDomainExpertise();
   const targetClause = target
     ? `\n\n目标投稿：${target}。请根据该期刊/会议的论证要求进行审查。`
     : "";
+  const reviewClause =
+    projectMode !== "research"
+      ? `
+
+## 文献综述额外审查（高优先级）
+
+7. **verbatim_risk（照搬风险）**：是否存在大段与文献原文高度相似的表述
+8. **data_attribution（数据归因）**：他人数据是否被写成「本研究」结果
+9. **synthesis（综合质量）**：是否仅罗列文献、缺乏对比与综合
+
+问题 type 可使用：evidence|logic|causality|overclaim|counter|criticism|synthesis|data_attribution|verbatim_risk`
+      : "";
 
   const system = `${domainExpertise}
 
-你是一位严谨的学术论证质量审查专家。你的任务是审查农业科研论文的论证质量。
+你是一位严谨的学术论证质量审查专家。你的任务是审查${projectMode !== "research" ? "文献综述" : "农业科研论文"}的论证质量。
 
 ## 审查维度
 
@@ -55,6 +66,7 @@ export function buildArgumentReviewPrompt(
    - 是否仅罗列文献而无评价
    - 是否指出了前人研究的不足
    - 是否明确了本研究的创新点
+${reviewClause}
 
 ## 输出格式
 

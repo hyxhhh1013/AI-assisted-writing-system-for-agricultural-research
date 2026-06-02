@@ -12,17 +12,18 @@ export async function runAuditOnlyMode(
   params: WritingPipelineRunParams,
   prepared: PreparedWritingContext,
 ): Promise<void> {
-  const { context, userId, emit, finishStream } = params;
+  const { context, userId, emit, finishStream, data } = params;
   const { contextText } = prepared;
+  const projectMode = data.projectMode;
 
   emit({ type: "status", status: "verifying" });
-  const prompt = buildVerifierPrompt({ contextText, content: context });
+  const prompt = buildVerifierPrompt({ contextText, content: context, projectMode });
 
   const response = await callAI({
     userId,
     provider: getAgentModelConfig("verifier").provider,
     messages: [
-      { role: "system", content: buildVerifierSystemPrompt("audit") },
+      { role: "system", content: buildVerifierSystemPrompt("audit", projectMode) },
       { role: "user", content: prompt },
     ],
   });
@@ -56,7 +57,7 @@ export async function runFixOnlyMode(
     userId,
     provider: getAgentModelConfig("refiner").provider,
     messages: [
-      { role: "system", content: buildRefinerSystemPrompt() },
+      { role: "system", content: buildRefinerSystemPrompt(data.projectMode) },
       { role: "user", content: prompt },
     ],
   });

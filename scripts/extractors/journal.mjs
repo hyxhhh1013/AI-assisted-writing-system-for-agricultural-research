@@ -294,22 +294,120 @@ export function extractFromFilename(filename) {
     if (zhTitle) result.titleHint = zhTitle.slice(0, 200);
   }
 
+  // ── 策略 5：纯中文文件名（无作者/年份）整段作标题 ──
+  if (!result.titleHint && !result.firstAuthor) {
+    const zhParts = segments.filter((s) => /[一-鿿]/.test(s) && !/^(19|20)\d{2}$/.test(s));
+    if (zhParts.length > 0) {
+      const joined = zhParts.join("").replace(/^(19|20)\d{2}/, "");
+      if (joined.length >= 6) result.titleHint = joined.slice(0, 200);
+    }
+  }
+
   return result;
+}
+
+/**
+ * 从 pdfjs 还原的首页行文本提取英文题录（Elsevier/Springer/Wiley 等）
+ */
+export function extractEnglishFromHeaderLines(lines) {
+  if (!Array.isArray(lines) || lines.length === 0) return {};
+  const result = {};
+
+  const absIdx = lines.findIndex((l) => /^\s*abstract\s*$/i.test(l.trim()));
+  const headerLines = (absIdx > 0 ? lines.slice(0, absIdx) : lines.slice(0, 30))
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const skipLine = (l) =>
+    /^(journal|article|research|review|communication|letter|paper|open access|creative commons)/i.test(l)
+    || /^(vol\.|volume|issue|issn|doi:|https?:\/\/|www\.|©|copyright|elsevier|springer|wiley|nature|taylor)/i.test(l)
+    || /^\d{4}\s*$/.test(l)
+    || l.length < 4;
+
+  let startIdx = 0;
+  for (let i = 0; i < headerLines.length; i++) {
+    if (!skipLine(headerLines[i])) {
+      startIdx = i;
+      break;
+    }
+  }
+
+  const titleParts = [];
+  for (let i = startIdx; i < headerLines.length; i++) {
+    const l = headerLines[i];
+    if (/^abstract$/i.test(l)) break;
+    if (/@|university|institute|college|department|laboratory|corresponding author|author affiliations/i.test(l)) break;
+    if (/^[A-Z][a-zA-Z\-']+(?:,\s*[A-Z]\.?)(?:\s*,\s*[A-Z][a-zA-Z\-']+(?:,\s*[A-Z]\.?)?)*$/.test(l)) break;
+    if (/\bet al\.?\b/i.test(l) && l.length < 120) break;
+    if (l.length >= 8 && !skipLine(l)) titleParts.push(l);
+    if (titleParts.join(" ").length > 280) break;
+  }
+
+  if (titleParts.length > 0) {
+    const title = titleParts.join(" ").replace(/\s+/g, " ").trim();
+    if (title.length >= 15) result.title = title.slice(0, 300);
+  }
+
+  for (const l of headerLines) {
+    if (/@|university|abstract|affiliation/i.test(l)) continue;
+    const etAl = l.match(/^([A-Z][a-zA-Z\-']+(?:\s+[A-Z]\.?)?(?:\s+[A-Z][a-zA-Z\-']+)*)\s+et\s+al\.?/i);
+    if (etAl) {
+      result.firstAuthor = etAl[1].split(/\s+/)[0];
+      result.authors = [result.firstAuthor];
+      break;
+    }
+    const commaAuthors = l.match(/^([A-Z][a-zA-Z\-']+(?:,\s*[A-Z]\.?)+(?:\s*,\s*[A-Z][a-zA-Z\-']+(?:,\s*[A-Z]\.?)?){0,8})$/);
+    if (commaAuthors) {
+      result.authors = parseAuthorLine(commaAuthors[1]);
+      if (result.authors.length > 0) result.firstAuthor = result.authors[0].split(/[,\s]/)[0];
+      break;
+    }
+  }
+
+  for (const l of headerLines) {
+    const journalMatch = l.match(/^([A-Z][A-Za-z &\-:()]{4,80})$/);
+    if (journalMatch && /journal|science|letters|materials|energy|chemistry|biology|research/i.test(l)) {
+      result.journal = journalMatch[1].trim();
+      break;
+    }
+  }
+
+  return result;
+}
+
+function parseAuthorLine(line) {
+  return line
+    .split(/\s*,\s*/)
+    .map((a) => a.trim())
+    .filter((a) => a.length >= 2 && /[a-zA-Z]/.test(a))
+    .slice(0, 10);
 }
 
 /** 从 PDF 首页文字提取结构化信息（增强 CNKI 论文支持）
  *  pdfjs 对中文 PDF 会把字拆成单字加空格，所以需要先去空格再匹配中文
+ *  @param {string} firstPageText
+ *  @param {{ headerLines?: string[] }} [options]
  */
-export function extractFromFirstPage(firstPageText) {
+export function extractFromFirstPage(firstPageText, options = {}) {
   if (!firstPageText || firstPageText.length < 20) return {};
-  const rawText = firstPageText.slice(0, 8000);
+  const rawText = firstPageText.slice(0, 10000);
+  const { headerLines = [] } = options;
   // 去除 pdfjs 插入的单字空格（用于中文匹配）
   const compact = rawText.replace(/\s+/g, "");
   const result = {};
 
   // DOI（原始文本匹配，DOI 不会被 pdfjs 拆空格）
-  const doiMatch = rawText.match(/\b(10\.\d{4,}\/[^\s,;）\]>]+)/i);
-  if (doiMatch) result.doi = doiMatch[1].replace(/[.,;)]+$/, "");
+  const doiPatterns = [
+    /doi[：:\s]*(?:https?:\/\/(?:dx\.)?doi\.org\/)?(10\.\d{4,}\/[^\s,;）\]>]+)/i,
+    /\b(10\.\d{4,}\/[^\s,;）\]>]+)/i,
+  ];
+  for (const re of doiPatterns) {
+    const m = rawText.match(re);
+    if (m) {
+      result.doi = m[1].replace(/[.,;)>\]}]+$/g, "");
+      break;
+    }
+  }
 
   // 年份
   const yearMatch = compact.match(/(20\d{2}|19[89]\d)/);
@@ -359,6 +457,14 @@ export function extractFromFirstPage(firstPageText) {
   if (!result.title && titleTagMatch) {
     const t = titleTagMatch[1].trim();
     if (t.length >= 10) result.title = t.slice(0, 200);
+  }
+  // 网络首发 / 优先发表：题目常在摘要前大段中文
+  if (!result.title) {
+    const onlineMatch = compact.match(/(?:网络首发|优先发表|在线发表)(.{0,20})?([\u4e00-\u9fff，、：:（）()\-—\d\s]{12,200}?)(?:摘要|Abstract|关键词|Key words)/);
+    if (onlineMatch?.[2]) {
+      const t = onlineMatch[2].replace(/^[\s\d.,;:，、]+/, "").trim();
+      if (t.length >= 10) result.title = t.slice(0, 200);
+    }
   }
 
   // fallback: 从作者簇提取 authors（如果上面的 pattern 没抓到）
@@ -448,7 +554,8 @@ export function extractFromFirstPage(firstPageText) {
     if (enPageMatch) result.pages = `${enPageMatch[1]}-${enPageMatch[2]}`;
   }
 
-  return result;
+  const fromLines = extractEnglishFromHeaderLines(headerLines);
+  return mergeBibEntries(result, fromLines);
 }
 
 /** 合并三层结果，高置信度优先；智能修复 firstAuthor→title 误判 */
@@ -527,6 +634,19 @@ export function mergeBibEntries(...sources) {
     merged.title = merged.titleHint;
   }
   delete merged.titleHint;
+
+  // PDF Info 标题常为文件名或短垃圾串，丢弃以便首页/Crossref 覆盖
+  if (merged.title && typeof merged.title === "string") {
+    const t = merged.title.trim();
+    const isChinese = /[一-鿿]/.test(t);
+    if (!isChinese && t.length < 20) {
+      const words = t.split(/\s+/).filter(Boolean);
+      const stopCount = words.filter((w) => ENGLISH_STOP_WORDS.has(w.toLowerCase())).length;
+      if (words.length >= 2 && stopCount / words.length >= 0.45) {
+        merged.title = undefined;
+      }
+    }
+  }
 
   return merged;
 }

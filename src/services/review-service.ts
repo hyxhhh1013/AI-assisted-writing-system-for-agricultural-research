@@ -29,6 +29,7 @@ const DEFAULT_CONFIG: Required<ReviewConfig> = {
   dimensions: ["academic", "argument", "structure", "integrity"],
   target: "",
   includeIntegrity: true,
+  projectMode: "review",
 };
 
 // ==================== JSON 解析（三层容错）====================
@@ -82,7 +83,8 @@ async function reviewDimension(
   content: string,
   fullContent: string,
   references?: string[],
-  target?: string
+  target?: string,
+  projectMode?: "review" | "research",
 ): Promise<ReviewIssue[]> {
   let prompt: { system: string; user: string };
 
@@ -91,13 +93,13 @@ async function reviewDimension(
       prompt = buildAcademicReviewPrompt(content, target);
       break;
     case "argument":
-      prompt = buildArgumentReviewPrompt(content, target);
+      prompt = buildArgumentReviewPrompt(content, target, projectMode);
       break;
     case "structure":
       prompt = buildStructureReviewPrompt(content, undefined, target);
       break;
     case "integrity":
-      prompt = buildIntegrityReviewPrompt(content, references, target);
+      prompt = buildIntegrityReviewPrompt(content, references, target, projectMode);
       break;
     default:
       throw new Error(`未知维度: ${dimension}`);
@@ -142,7 +144,9 @@ export async function runReview(
   input: ReviewInput,
   config?: ReviewConfig
 ): Promise<ReviewReport> {
-  const mergedConfig = { ...DEFAULT_CONFIG, ...config };
+  const mergedConfig = { ...DEFAULT_CONFIG, ...config, ...input.config };
+  const projectMode =
+    input.projectMode ?? mergedConfig.projectMode ?? "review";
 
   // 拼接全文内容（用于内容审查）
   const fullContent = input.sections
@@ -163,7 +167,8 @@ export async function runReview(
       content,
       fullContent,
       input.references,
-      mergedConfig.target
+      mergedConfig.target,
+      projectMode,
     );
     return { dimension: dim, issues };
   });

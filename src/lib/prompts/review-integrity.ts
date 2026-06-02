@@ -5,6 +5,8 @@
  */
 
 import { buildDomainExpertise } from "./domain";
+import { buildLiteratureReviewIntegrityPrompt } from "./review-literature-integrity";
+import type { ProjectWritingMode } from "@/contracts/writing-mode";
 
 /**
  * 构建学术诚信审查 prompt
@@ -12,8 +14,12 @@ import { buildDomainExpertise } from "./domain";
 export function buildIntegrityReviewPrompt(
   content: string,
   references?: string[],
-  target?: string
+  target?: string,
+  projectMode?: ProjectWritingMode,
 ): { system: string; user: string } {
+  if (projectMode !== "research") {
+    return buildLiteratureReviewIntegrityPrompt(content, references, target);
+  }
   const domainExpertise = buildDomainExpertise();
   const referencesClause = references
     ? `\n\n参考文献列表：\n${references.map((ref, i) => `[${i + 1}] ${ref}`).join("\n")}`

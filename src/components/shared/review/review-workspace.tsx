@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -9,6 +9,11 @@ import { ReviewTab } from "@/components/shared/review-tab";
 import { ReviewHistoryList } from "@/components/shared/review/review-history-list";
 import { projectStore } from "@/lib/store";
 import type { ProjectData } from "@/contracts/project";
+import {
+  getProjectWritingMode,
+  getSectionKeysForMode,
+  getSectionLabelForMode,
+} from "@/lib/section-registry";
 import { ArrowLeft, Loader2, History, Play } from "lucide-react";
 import { toast } from "sonner";
 import { useGoBack } from "@/contexts/navigation-history";
@@ -44,24 +49,28 @@ export function ReviewWorkspace() {
     });
   }, [projectId, router]);
 
-  // 从 project 构建真实的 IMRAD sections
+  // 按写作模式构建章节列表（综述 vs IMRaD）
   const sections = useMemo(() => {
     if (!project) return [];
+    const mode = getProjectWritingMode(project.mode);
     const list: Array<{ key: string; title: string; content: string }> = [];
 
     if (project.abstract?.trim()) {
-      list.push({ key: "abstract", title: "摘要", content: project.abstract });
+      list.push({
+        key: "abstract",
+        title: getSectionLabelForMode("abstract", mode),
+        content: project.abstract,
+      });
     }
-    const labels: Record<string, string> = {
-      introduction: "引言",
-      methods: "材料与方法",
-      results: "结果与讨论",
-      conclusion: "结论",
-    };
-    for (const [key, title] of Object.entries(labels)) {
+    for (const key of getSectionKeysForMode(mode)) {
+      if (key === "abstract") continue;
       const content = project.sections?.[key];
       if (content?.trim()) {
-        list.push({ key, title, content });
+        list.push({
+          key,
+          title: getSectionLabelForMode(key, mode),
+          content,
+        });
       }
     }
 
@@ -129,6 +138,7 @@ export function ReviewWorkspace() {
                 outline={project.outline}
                 references={project.references || []}
                 projectId={projectId ?? undefined}
+                projectMode={getProjectWritingMode(project.mode)}
               />
             ) : (
               <div className="rounded-2xl border border-[#1a5632]/10 bg-white overflow-hidden">

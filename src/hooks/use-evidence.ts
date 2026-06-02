@@ -188,7 +188,7 @@ export function useEvidence({
     if (claims.length === 0) return "暂无数据证据，扩写时将不注入定量结论。";
     return buildEvidencePack({
       dataClaims: claims,
-      mode: project.mode ?? "research",
+      mode: project.mode ?? "review",
     }).summary;
   }, [claims, project.mode]);
 

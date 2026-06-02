@@ -4,7 +4,7 @@ import { useRef, useCallback, type Dispatch, type SetStateAction } from "react";
 import { toast } from "sonner";
 import type { ProjectData } from "@/contracts/project";
 import type { OutlineTask } from "@/lib/utils";
-import { countProjectFigures } from "@/lib/utils";
+import { countProjectFigures, getOutlineTaskIdsForSectionCompletion } from "@/lib/utils";
 import { findFigureBlocks, replacePlaceholders } from "@/hooks/use-figure-pipeline";
 import { generateFigure } from "@/services/figures";
 import type { UseWritingStreamReturn } from "@/hooks/use-writing-stream";
@@ -30,7 +30,7 @@ interface UseWritingPanelGenerateParams {
   writingStream: UseWritingStreamReturn;
   onUpdateProject?: (updates: Partial<ProjectData>) => void;
   onPreviewUpdate?: (data: WritingPreviewPayload) => void;
-  onTaskExpanded?: (taskId: string) => void;
+  onTaskExpanded?: (taskIds: string | string[]) => void;
   setIsGenerating: (v: boolean) => void;
   setGenerationStatus: (v: GenerationStatus) => void;
   setResult: (v: string) => void;
@@ -114,6 +114,7 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
 
       const selectedTask = outlineTasks.find((t) => t.id === selectedSectionId);
       const subTitle = selectedTask && selectedTask.level > 1 ? selectedTask.title : undefined;
+      const isChapterScope = !selectedTask || selectedTask.level <= 1;
       setSubsectionTitle(subTitle);
 
       const existingFigures = countProjectFigures(project, targetSectionKey);
@@ -266,8 +267,13 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
       } else {
         setGenerationStatus("completed");
       }
-      if (selectedSectionId && onTaskExpanded) {
-        onTaskExpanded(selectedSectionId);
+      const completedIds = isChapterScope
+        ? getOutlineTaskIdsForSectionCompletion(outlineTasks, targetSectionKey, selectedSectionId)
+        : selectedSectionId
+          ? [selectedSectionId]
+          : [];
+      if (completedIds.length > 0 && onTaskExpanded) {
+        onTaskExpanded(completedIds);
       }
     } catch (error: unknown) {
       if (!(error instanceof DOMException && error.name === "AbortError")) {

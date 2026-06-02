@@ -23,6 +23,7 @@ export async function runRefinerPhase(
   emit: WritingPipelineEmit,
   userId: string | undefined,
   signal: AbortSignal,
+  projectMode?: "review" | "research",
 ): Promise<RefinerPhaseResult> {
   const { contextText, referencesByIndex } = prepared;
   const maxRefIndex = referencesByIndex.length;
@@ -64,7 +65,7 @@ export async function runRefinerPhase(
         userId,
         provider: getAgentModelConfig("refiner").provider,
         messages: [
-          { role: "system", content: buildRefinerSystemPrompt() },
+          { role: "system", content: buildRefinerSystemPrompt(projectMode) },
           { role: "user", content: refinerPrompt },
         ],
         signal,

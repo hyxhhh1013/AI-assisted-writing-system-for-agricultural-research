@@ -15,6 +15,7 @@ export async function runVerifierPhase(
   emit: WritingPipelineEmit,
   userId: string | undefined,
   signal: AbortSignal,
+  projectMode?: "review" | "research",
 ): Promise<VerifierPhaseResult> {
   const { contextText, globalReferenceInfo, referencesByIndex } = prepared;
 
@@ -46,6 +47,7 @@ export async function runVerifierPhase(
     content: initialDraft,
     globalReferenceInfo,
     fullSourceTexts: fullSourceChunks.length > 0 ? fullSourceChunks.join("\n\n") : undefined,
+    projectMode,
   });
 
   let verificationReport = "";
@@ -71,7 +73,7 @@ export async function runVerifierPhase(
       userId,
       provider: actualVerifierProvider,
       messages: [
-        { role: "system", content: buildVerifierSystemPrompt("full") },
+        { role: "system", content: buildVerifierSystemPrompt("full", projectMode) },
         { role: "user", content: verifierPrompt },
       ],
       signal,

@@ -1,6 +1,11 @@
 import type { ProjectWritingMode } from "@/contracts/writing-mode";
 import { buildDomainExpertise } from "./domain";
 import { REVIEW_SECTION_PROMPTS } from "./review-writing";
+import {
+  buildReviewSynthesisWriterBlock,
+  buildReviewVerifierChecklist,
+  buildResearchVerifierChecklist,
+} from "./review-synthesis-rules";
 import type { SectionPrompt, SectionPromptParams } from "./writing-types";
 
 export { buildDomainExpertise };
@@ -206,8 +211,21 @@ export function buildWriterSystemPrompt(params: {
   const isAbstract = section === "abstract";
   const major = sectionNumber ?? 2; // 默认值 2 兼容旧调用
 
+  const isReview = projectMode !== "research";
+  const reviewSynthesisBlock = isReview ? buildReviewSynthesisWriterBlock(isChinese) : "";
+  const rigorBlock = isReview
+    ? `—— 综述严谨性约束 ——
+· 所有 borrowed 数据/结论须转述并标注 [n]，禁止照搬原文长句。
+· 不得将他人试验结果表述为「本研究/本试验」的发现。
+· 综合对比不同文献时注意条件差异，避免无出处的「普遍结论」。
+· 避免 overclaim：首次、证明、最优、填补空白。`
+    : `—— 科学严谨性约束 ——
+· 结论只能基于当前实验的实际数据点做推断。禁止在未测试的取值区间声称"最优""最佳"等结论（例如实验只设置了 3 个梯度，就只能在 3 个实测点之间比较，不得推断未测区间的表现）。若需讨论趋势，使用"本实验条件下呈上升/下降趋势""推测在…范围内可能…"等审慎表达，并明确区分"实测结果"与"推测"。
+· 避免 overclaim 措辞：不得使用"首次""证明""最优""彻底解决""完全阐明"等夸张用语。
+· 若引用前人文献的数据做对比，必须明确标注"据文献[×]报道"，与本文实验数据区分。不得将文献结论当作本文实验结论。`;
+
   return `${domainExpertise}
-你的任务是协助撰写论文【${section}】章节。模板：${isGBT ? "GB/T 7713 国标" : "SCI 国际期刊"}。输出语言：${isChinese ? "中文" : "英文"}。
+你的任务是协助撰写论文「${section}」章节。模板：${isGBT ? "GB/T 7713 国标" : "SCI 国际期刊"}。输出语言：${isChinese ? "中文" : "英文"}。
 ${globalReferenceInfo}
 
 —— 可供引用的文献库 ——
@@ -215,7 +233,7 @@ ${contextText}
 ${evidenceSummary ? `\n—— 实验数据证据（定量结论必须引用编号） ——\n${evidenceSummary}\n` : ""}
 —— 核心写作原则 ——
 原则1·学术质量：使用专业术语，逻辑层层递进。${isGBT ? "遵循 GB/T 7713 学术表达习惯。" : "遵循 SCI 学术论文规范。"}${isAbstract ? "摘要必须是一个紧凑段落，禁止分点。" : ""}
-原则2·深度结合文献：每个主要观点应从文献库中寻找支撑或对比。正文中用 [n] 标注引用（仅数字，如 [1]、[2,3]、[1-3]），编号须与文献库中 [参考来源 [n]] 严格对应。严禁使用 "[参考来源1]" "[文献2]" 等非标准格式——必须是 [n]，只含数字。${projectMode === "research" ? `\n原则2b·数据驱动写作：所有定量结论（数字、趋势、显著性）必须引用实验数据证据编号（如 [D1-C3]）。不得编造、修改证据声明中的数值。数据声明中的 text 字段可以直接改写为学术语言，但数值不可改变。` : ""}
+原则2·深度结合文献：每个主要观点应从文献库中寻找支撑或对比。正文中用半角方括号 [n] 标注引用（仅数字，如 [1]、[2,3]、[1-3]），编号须与文献库中 [参考来源 [n]] 严格对应。严禁使用 "[参考来源1]" "[文献2]" 等非标准格式；严禁用中文角括号【16】、全角方括号［16］标注引用——只能是 [16]、[16, 21] 这种半角方括号。${projectMode === "research" ? `\n原则2b·数据驱动写作：所有定量结论（数字、趋势、显著性）必须引用实验数据证据编号（如 [D1-C3]）。不得编造、修改证据声明中的数值。数据声明中的 text 字段可以直接改写为学术语言，但数值不可改变。` : ""}${reviewSynthesisBlock}
 原则3·结构与配图：使用多级编号子标题组织内容（如 "${major}.1 关键因素的影响"、"${major}.1.1 某一水平下的表现"），子标题独占一行。⚠️ 严禁使用 Markdown 标题语法（###、####、##### 等），直接用纯文本编号。禁止输出一级章节大标题（如 "1. 引言"、"Introduction"）。禁止在章节末尾生成目录结构（列出所有子标题）——读者不需要在正文中看到目录。（如 "1. 引言"、"Introduction"）。子标题编号以 ${major} 开头（本节属于第 ${major} 章），第一小节从 ${major}.1 开始计数。
 
 ${isChinese ? `—— 证据强度分级（选择准确的动词）——
@@ -234,6 +252,7 @@ ${isChinese ? `—— 证据强度分级（选择准确的动词）——
 —— 引文铁律 ——
 · 严禁虚构引用！文献库中找不到依据的观点，直接陈述即可。
 · 文献库中的 [n] 编号必须与引用处严格一致。
+· 引用格式唯一合法形态：半角方括号 + 数字，如 [3]、[2,5]、[1-3]。禁止【3】、［3］、(3) 等变体。
 · 禁止输出解释、道歉、前言后记等"元文字"。只输出正文。
 · ${isAbstract ? "摘要一个段落到底，不分点。" : "段落间用空行分隔，逻辑清晰。"}
 · 结尾不加收尾语。
@@ -308,10 +327,7 @@ ${section === "introduction" ? "—— Gap Language ——\n· Use: \"remains po
 · 术语须与论文大纲及摘要保持一致。
 · 若摘要或已写章节提到具体数据，扩写内容须与之匹配，不得矛盾。
 
-—— 科学严谨性约束 ——
-· 结论只能基于当前实验的实际数据点做推断。禁止在未测试的取值区间声称"最优""最佳"等结论（例如实验只设置了 3 个梯度，就只能在 3 个实测点之间比较，不得推断未测区间的表现）。若需讨论趋势，使用"本实验条件下呈上升/下降趋势""推测在…范围内可能…"等审慎表达，并明确区分"实测结果"与"推测"。
-· 避免 overclaim 措辞：不得使用"首次""证明""最优""彻底解决""完全阐明"等夸张用语。
-· 若引用前人文献的数据做对比，必须明确标注"据文献[×]报道"，与本文实验数据区分。不得将文献结论当作本文实验结论。
+${rigorBlock}
 
 ${buildCitationStyleBlock(citationStyle, isChinese)}
 · 引用参考文献时严禁使用 ".pdf" 后缀（如"Title of paper.pdf"）。
@@ -319,7 +335,25 @@ ${buildCitationStyleBlock(citationStyle, isChinese)}
 · 参考文献列表中的编号必须与正文引用一一对应，不得出现正文未引用的文献。`;
 }
 
-export function buildVerifierSystemPrompt(role: "audit" | "full"): string {
+export function buildVerifierSystemPrompt(
+  role: "audit" | "full",
+  projectMode?: ProjectWritingMode,
+): string {
+  if (projectMode !== "research") {
+    return role === "audit"
+      ? `你是文献综述学术诚信审计员。职责：
+1. 核实 [n] 引用是否有原文依据、归属是否正确
+2. 检测连续照搬原文（≥15 汉字）——要求转述改写
+3. 检测他人数据是否被写成「本研究」结果
+4. 检测无 [n] 的具体数值、overclaim、试验报告体例
+必须具体到每个引用编号和每处措辞。`
+      : `你是文献综述审计员。职责：
+1. 逐条核实 [n] 是否有原文依据
+2. 标记疑似照搬、数据归属错误、未标注来源的数据
+3. 检查是否符合综述体例（非 IMRaD 试验报告）
+4. 检查 overclaim 并建议替换
+必须指出哪个编号、什么问题、如何改写。`;
+  }
   return role === "audit"
     ? `你是农业学术论文审计员。职责：
 1. 逐条核实每个 [n] 引用是否在文献原文中有确切依据
@@ -338,13 +372,19 @@ export function buildVerifierPrompt(params: {
   content: string;
   globalReferenceInfo?: string;
   fullSourceTexts?: string;
+  projectMode?: ProjectWritingMode;
 }): string {
-  const { contextText, content, globalReferenceInfo, fullSourceTexts } = params;
+  const { contextText, content, globalReferenceInfo, fullSourceTexts, projectMode } = params;
   const globalBg = globalReferenceInfo ? `\n\n【论文全局背景】：\n${globalReferenceInfo}` : "";
   const fullSourceSection = fullSourceTexts
-    ? `\n\n【被引用文献完整原文（用于事实对照）】：\n${fullSourceTexts}`
+    ? `\n\n【被引用文献完整原文（用于事实对照与照搬检测）】：\n${fullSourceTexts}`
     : "";
-  return `你是严谨的农业学术评审员。逐条核实段落中每个 [n] 引用。
+  const checklist =
+    projectMode === "research"
+      ? buildResearchVerifierChecklist()
+      : buildReviewVerifierChecklist();
+
+  return `你是严谨的农业学术评审员。${projectMode === "research" ? "逐条核实段落中每个 [n] 引用。" : "审查文献综述的引用规范、转述质量与数据归属。"}
 
 【RAG 检索摘要（供参考）】：
 ${contextText}${globalBg}${fullSourceSection}
@@ -352,26 +392,17 @@ ${contextText}${globalBg}${fullSourceSection}
 【待审计段落】：
 ${content}
 
-【审计清单 — 逐条执行】：
-一、引用核实（每个 [n]）：
-1. 定位：在文献原文中找到 [n] 号文献
-2. 比对：段落中引用 [n] 的结论/数据/观点，原文中是否有明确对应的语句
-3. 判定：完全匹配 → 通过；核心观点不对应 → 标记「归属错误」；原文找不到该信息 → 标记「疑似虚构」
-
-二、Overclaim 检查：
-扫描段落中是否出现：首次、证明、最优、最好、前所未有、填补空白
-如有 → 标记并建议替换
-
-三、句式检查：
-- 如果这是 Results 段落，检查是否混入了 Discussion 句式（"可能反映""或许由于""提示"）
-- 如果混入 → 标记"Results 中混入 Discussion 句式"
-
-【输出格式】：
-- 全部通过 → 输出"PASS：逐条核实通过，所有引用均有原文依据，无 overclaim，句式合规"${params.globalReferenceInfo ? "\n- 最后可附一个整体微调建议。" : ""}
-- 有问题 → 逐条列出：编号、错误类型、引用句原文、实际内容、修正建议`;
+${checklist}${globalReferenceInfo && projectMode === "research" ? "\n- 最后可附一个整体微调建议。" : ""}`;
 }
 
-export function buildRefinerSystemPrompt(): string {
+export function buildRefinerSystemPrompt(projectMode?: ProjectWritingMode): string {
+  const reviewNote =
+    projectMode !== "research"
+      ? `\n⚠️ 综述修正要点：
+- 照搬原文 → 改写转述，保留 [n] 与数值
+- 他人数据写成「本研究」→ 改为「据文献[n]报道」
+- 流水账罗列 → 改为综合对比叙述\n`
+      : "";
   return `你是农业学术主编，根据审稿人的逐条意见精准修正稿件。
 
 严禁为了'通过审查'而直接删除引用——必须对照原文修正。
@@ -385,7 +416,7 @@ export function buildRefinerSystemPrompt(): string {
 - 严禁在输出中插入任何编辑备注、审稿说明、证据来源标注。
 - 严禁输出 "[证据来源：...]"、"[需核实...]"、"含"需核实并添加至文献列表"的引用。
 - 严禁输出以"需要注意的是""若需确证""应在后续修改中"开头的段落。
-- 修正完成后的稿件必须是纯净的学术正文，不含任何元文字。`;
+- 修正完成后的稿件必须是纯净的学术正文，不含任何元文字。${reviewNote}`;
 }
 
 export function buildRefinerPrompt(params: {
