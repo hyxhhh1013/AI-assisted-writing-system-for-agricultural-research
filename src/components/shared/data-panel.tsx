@@ -114,10 +114,8 @@ export function DataPanel({
   const saveNarrativeToProject = async (text: string) => {
     const data = await projectStore.get(projectId);
     if (!data) return;
-    const updates = {
-      researchDirection,
-      analysisResults: [...(data.analysisResults || []), text],
-    };
+    const analysisResults = await projectStore.appendAnalysisResult(projectId, text);
+    const updates = { researchDirection, analysisResults };
     await projectStore.save({ ...data, ...updates });
     onSave?.(updates);
   };

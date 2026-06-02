@@ -68,8 +68,8 @@
 | ENG-PR-023 | Zod `validateBody` 波次 A（admin + 图表） | ENG-PR-002 | 3h | done | 2026-06-02 |
 | ENG-PR-024 | Zod `validateBody` 波次 B（knowledge 写 + projects） | ENG-PR-023 | 3h | done | 2026-06-02 |
 | ENG-PR-025 | References 增量 PATCH API | ENG-PR-024 | 4h | done | 2026-06-02 |
-| ENG-PR-026 | AnalysisResults 增量 PATCH API | ENG-PR-025 | 3h | todo | |
-| ENG-PR-025b | 增量 PATCH 前端接线（store / autosave / 面板） | ENG-PR-025, ENG-PR-026 | 4h | todo | |
+| ENG-PR-026 | AnalysisResults 增量 PATCH API | ENG-PR-025 | 3h | done | 2026-06-02 |
+| ENG-PR-025b | 增量 PATCH 前端接线（store / autosave / 面板） | ENG-PR-025, ENG-PR-026 | 4h | done | 2026-06-02 |
 | ENG-PR-027 | `metadata.json` 只读 Prisma（停双写-读） | RAG-PR-005 | 4h | todo | |
 | ENG-PR-028 | 移除 `metadata.json` 双写（写路径） | ENG-PR-027 | 4h | todo | |
 | **Phase 3 — 大文件拆分** |
@@ -829,6 +829,8 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-06-02 | ENG-PR-023 | AI | admin 写接口 + table/chart/xrd validateBody；validations 单测补 4 组 |
 | 2026-06-02 | ENG-PR-024 | AI | knowledge/projects/plagiarism/reindex validateBody；162 测试绿；CONVENTIONS 补 API 校验约定 |
 | 2026-06-02 | ENG-PR-025 | AI | PATCH /api/projects/[id]/references + patchReferences service + 单测 |
+| 2026-06-02 | ENG-PR-026 | AI | PATCH /api/projects/[id]/analysis-results + patchAnalysisResults + 单测 |
+| 2026-06-02 | ENG-PR-025b | AI | references replace op；saveProject 剥离 refs/analysis；面板/重排/元数据走 PATCH |
 
 ---
 

@@ -18,6 +18,7 @@ import {
   projectMetaPatchSchema,
   projectSectionPatchSchema,
   projectReferencesPatchSchema,
+  projectAnalysisResultsPatchSchema,
   plagiarismRewritePatchSchema,
   reindexRequestSchema,
 } from "@/lib/validations";
@@ -164,12 +165,32 @@ describe("projectReferencesPatchSchema", () => {
     expect(projectReferencesPatchSchema.safeParse({ ops: [] }).success).toBe(false);
   });
 
-  it("accepts create/update/delete ops", () => {
+  it("accepts create/update/delete/replace ops", () => {
     const result = projectReferencesPatchSchema.safeParse({
       ops: [
         { op: "create", content: "Author (2024). Title." },
         { op: "update", id: "ref-1", content: "Updated." },
         { op: "delete", id: "ref-2" },
+        { op: "replace", items: ["A", "B"] },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("projectAnalysisResultsPatchSchema", () => {
+  it("rejects empty ops", () => {
+    expect(projectAnalysisResultsPatchSchema.safeParse({ ops: [] }).success).toBe(
+      false,
+    );
+  });
+
+  it("accepts create/update/delete ops", () => {
+    const result = projectAnalysisResultsPatchSchema.safeParse({
+      ops: [
+        { op: "create", content: "ANOVA p<0.05" },
+        { op: "update", id: "ar-1", content: "Updated." },
+        { op: "delete", id: "ar-2" },
       ],
     });
     expect(result.success).toBe(true);

@@ -5,6 +5,8 @@ import type {
   ProjectData,
   ReferencePatchOp,
   ProjectReferenceRecord,
+  AnalysisResultPatchOp,
+  ProjectAnalysisRecord,
 } from "@/contracts/project";
 import {
   serializeDataClaims,
@@ -48,10 +50,11 @@ export async function getProject(id: string): Promise<ProjectData | null> {
 }
 
 export async function saveProject(data: ProjectData): Promise<string | null> {
+  const { references: _refs, analysisResults: _analysis, ...payload } = data;
   const res = await fetch("/api/projects", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) return null;
   const result = await res.json();
@@ -109,4 +112,42 @@ export async function patchReferences(
   }
   const data = (await res.json()) as { references: ProjectReferenceRecord[] };
   return data.references;
+}
+
+/** PATCH /api/projects/:id/analysis-results — 分析结果增量 create/update/delete */
+export async function patchAnalysisResults(
+  projectId: string,
+  ops: AnalysisResultPatchOp[],
+): Promise<ProjectAnalysisRecord[]> {
+  const res = await fetch(
+    `/api/projects/${encodeURIComponent(projectId)}/analysis-results`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ops }),
+    },
+  );
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "保存分析结果失败");
+  }
+  const data = (await res.json()) as { analysisResults: ProjectAnalysisRecord[] };
+  return data.analysisResults;
+}
+
+/** 整表替换参考文献（重排/清理） */
+export async function replaceReferences(
+  projectId: string,
+  items: string[],
+): Promise<ProjectReferenceRecord[]> {
+  return patchReferences(projectId, [{ op: "replace", items }]);
+}
+
+/** 追加一条分析结果并返回全部 content 列表 */
+export async function appendAnalysisResult(
+  projectId: string,
+  content: string,
+): Promise<string[]> {
+  const rows = await patchAnalysisResults(projectId, [{ op: "create", content }]);
+  return rows.map((r) => r.content);
 }

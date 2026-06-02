@@ -246,12 +246,39 @@ const referencePatchOpSchema = z.discriminatedUnion("op", [
     op: z.literal("delete"),
     id: z.string().min(1, "缺少 id"),
   }),
+  z.object({
+    op: z.literal("replace"),
+    items: z.array(z.string()),
+  }),
 ]);
 
 export const projectReferencesPatchSchema = z.object({
   ops: z.array(referencePatchOpSchema).min(1).max(500),
 });
 export type ProjectReferencesPatchInput = z.infer<typeof projectReferencesPatchSchema>;
+
+const analysisResultPatchOpSchema = z.discriminatedUnion("op", [
+  z.object({
+    op: z.literal("create"),
+    content: z.string().min(1, "content 不能为空"),
+  }),
+  z.object({
+    op: z.literal("update"),
+    id: z.string().min(1, "缺少 id"),
+    content: z.string().min(1, "content 不能为空"),
+  }),
+  z.object({
+    op: z.literal("delete"),
+    id: z.string().min(1, "缺少 id"),
+  }),
+]);
+
+export const projectAnalysisResultsPatchSchema = z.object({
+  ops: z.array(analysisResultPatchOpSchema).min(1).max(500),
+});
+export type ProjectAnalysisResultsPatchInput = z.infer<
+  typeof projectAnalysisResultsPatchSchema
+>;
 
 // === Admin ===
 export const adminUserRolePatchSchema = z.object({

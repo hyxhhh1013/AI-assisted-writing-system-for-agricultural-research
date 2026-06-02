@@ -94,11 +94,8 @@ export function AnalysisPanel({ projectId, project, onSave, onInsertToPaper, onI
     const data = await projectStore.get(projectId);
     if (!data) return;
     
-    const updates = {
-      researchDirection,
-      analysisResults: [...(data.analysisResults || []), finalResult]
-    };
-    
+    const analysisResults = await projectStore.appendAnalysisResult(projectId, finalResult);
+    const updates = { researchDirection, analysisResults };
     const updatedProject = { ...data, ...updates };
     await projectStore.save(updatedProject);
     if (onSave) onSave(updates);

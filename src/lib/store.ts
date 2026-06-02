@@ -1,6 +1,13 @@
 "use client";
 
-import { listProjects, getProject, saveProject, deleteProject } from "@/services/project";
+import {
+  listProjects,
+  getProject,
+  saveProject,
+  deleteProject,
+  patchAnalysisResults,
+  replaceReferences as replaceReferencesApi,
+} from "@/services/project";
 import type { ProjectData, ProjectListItem, SectionRecord } from "@/services/project";
 
 export type { ProjectData } from "@/services/project";
@@ -72,5 +79,15 @@ export const projectStore = {
     const savedId = await saveProject(merged);
     if (!savedId) return null;
     return getProject(savedId);
+  },
+
+  async appendAnalysisResult(projectId: string, content: string): Promise<string[]> {
+    const rows = await patchAnalysisResults(projectId, [{ op: "create", content }]);
+    return rows.map((r) => r.content);
+  },
+
+  async replaceReferences(projectId: string, items: string[]): Promise<string[]> {
+    const rows = await replaceReferencesApi(projectId, items);
+    return rows.map((r) => r.content);
   },
 };

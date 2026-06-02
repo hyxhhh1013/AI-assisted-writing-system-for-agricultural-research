@@ -73,6 +73,7 @@ export function useReferenceReorder({
         ? nextAbstract
         : updatedSections[currentActiveSection as keyof typeof updatedSections] || ""
     );
+    await projectStore.replaceReferences(currentProject.id, newRefs);
     await projectStore.save(updatedProject);
     toast.success(`已按正文引用顺序重排 ${newRefs.length} 条参考文献`);
   }, [projectRef, editingContentRef, activeSectionRef, setProject, setEditingContent]);

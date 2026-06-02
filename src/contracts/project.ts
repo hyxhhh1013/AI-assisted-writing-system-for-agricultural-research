@@ -122,6 +122,17 @@ export interface ProjectReferenceRecord {
 export type ReferencePatchOp =
   | { op: "create"; content: string; index?: number }
   | { op: "update"; id: string; content: string }
+  | { op: "delete"; id: string }
+  | { op: "replace"; items: string[] };
+
+export interface ProjectAnalysisRecord {
+  id: string;
+  content: string;
+}
+
+export type AnalysisResultPatchOp =
+  | { op: "create"; content: string }
+  | { op: "update"; id: string; content: string }
   | { op: "delete"; id: string };
 
 export interface ReferencesPatchRequest {
@@ -130,6 +141,14 @@ export interface ReferencesPatchRequest {
 
 export interface ReferencesPatchResponse {
   references: ProjectReferenceRecord[];
+}
+
+export interface AnalysisResultsPatchRequest {
+  ops: AnalysisResultPatchOp[];
+}
+
+export interface AnalysisResultsPatchResponse {
+  analysisResults: ProjectAnalysisRecord[];
 }
 
 /** Evidence 字段增量 PATCH（dataClaims / dataSources JSON 字符串） */

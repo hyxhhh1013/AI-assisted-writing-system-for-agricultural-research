@@ -48,6 +48,16 @@ export async function applyReferencePatchOps(
         where: { projectId, order: { gt: ref.order } },
         data: { order: { decrement: 1 } },
       });
+      continue;
+    }
+
+    if (op.op === "replace") {
+      await tx.reference.deleteMany({ where: { projectId } });
+      for (let i = 0; i < op.items.length; i++) {
+        await tx.reference.create({
+          data: { projectId, content: op.items[i], order: i },
+        });
+      }
     }
   }
 }

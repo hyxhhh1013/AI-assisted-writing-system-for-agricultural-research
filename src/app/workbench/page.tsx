@@ -414,7 +414,11 @@ function WorkbenchContent() {
       citationStyle: draft.citationStyle || "gbt7714",
       references: draft.referencesText.split(/\n+/).map((ref) => ref.trim()).filter(Boolean),
     };
+    const refLines = draft.referencesText.split(/\n+/).map((ref) => ref.trim()).filter(Boolean);
     setProject(updated);
+    if (project.id) {
+      await projectStore.replaceReferences(project.id, refLines);
+    }
     await projectStore.save(updated);
     setIsMetaDialogOpen(false);
     toast.success("项目信息已更新");
@@ -449,7 +453,11 @@ function WorkbenchContent() {
       references: cleaned,
     };
     setProject(updated);
-    projectStore.save(updated);
+    if (p.id) {
+      void projectStore.replaceReferences(p.id, cleaned).then(() =>
+        projectStore.save(updated),
+      );
+    }
     toast.success(`已移除 ${removed} 条未引用文献，剩余 ${cleaned.length} 条（正文引用号已同步更新）`);
   }, [projectRef, setProject]);
 

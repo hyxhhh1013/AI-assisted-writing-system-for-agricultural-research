@@ -117,8 +117,8 @@ function AnalysisContent() {
     if (!result || !projectId) return;
     const data = await projectStore.get(projectId);
     if (!data) return;
-    const updatedResults = [...(data.analysisResults || []), result];
-    await projectStore.save({ ...data, analysisResults: updatedResults });
+    const analysisResults = await projectStore.appendAnalysisResult(projectId, result);
+    setProject({ ...data, analysisResults });
     toast.success("分析结果已保存到项目，可在工作台直接调用");
   };
 
