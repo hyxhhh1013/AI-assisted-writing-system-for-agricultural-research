@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { searchKnowledge } from "@/services/knowledge";
 
 interface SCIPreviewProps {
   project: ProjectData;
@@ -50,10 +51,9 @@ export default function SCIPreview({ project }: SCIPreviewProps) {
         if (!ref) continue;
         try {
           const query = ref.slice(0, 100);
-          const res = await fetch(`/api/knowledge?q=${encodeURIComponent(query)}&type=semantic&pageSize=5`);
-          const json = await res.json();
+          const json = await searchKnowledge({ q: query, type: "semantic", pageSize: 5 });
           if (json?.files) {
-            results[n] = json.files.flatMap((f: any) =>
+            results[n] = json.files.flatMap((f) =>
               (f._snippets || []).map((s: string) => ({ content: s, source: f.name }))
             );
           }

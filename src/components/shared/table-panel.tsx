@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Loader2, Table2, FileText, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
+import { generateTable } from "@/services/table";
 
 interface GroupInput {
   label: string;
@@ -89,17 +90,11 @@ export function TablePanel() {
           p: parseFloat(ph.p),
         }));
       }
-      const res = await fetch("/api/table", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "生成失败");
+      const data = await generateTable(body);
       setResult(data);
       toast.success("三线表生成成功");
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "生成失败");
     } finally { setLoading(false); }
   };
 

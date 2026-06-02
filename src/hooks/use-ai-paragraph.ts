@@ -2,6 +2,8 @@
 
 import { useCallback } from "react";
 import type { ProjectData } from "@/lib/store";
+import type { WritingRequest } from "@/contracts/writing";
+import { postWritingStream } from "@/services/writing";
 
 type AiMode = "expand" | "audit" | "fix";
 
@@ -23,7 +25,7 @@ export function useAiParagraph({ project, activeSection, setProject }: UseAiPara
   ): Promise<string> => {
     if (!project || !activeSection) return "";
 
-    const body: Record<string, unknown> = {
+    const body: WritingRequest = {
       title: project.title,
       section: activeSection,
       context: paragraphContent,
@@ -39,13 +41,7 @@ export function useAiParagraph({ project, activeSection, setProject }: UseAiPara
       body.verificationFeedback = feedback;
     }
 
-    const response = await fetch("/api/writing", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) throw new Error(`${mode} 失败`);
+    const response = await postWritingStream(body);
 
     const reader = response.body?.getReader();
     const decoder = new TextDecoder();

@@ -8,39 +8,42 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Search, Trash2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-
-interface File {
-  id: string; name: string; category: string; documentType: string; size: number; chunkCount: number; mtime: string | null;
-}
+import {
+  bulkDeleteAdminKnowledge,
+  deleteAdminKnowledge,
+  listAdminKnowledge,
+  reindexAdminKnowledge,
+  type AdminKnowledgeFile,
+} from "@/services/admin";
 
 export default function AdminKnowledgePage() {
-  const [files, setFiles] = useState<File[]>([]);
+  const [files, setFiles] = useState<AdminKnowledgeFile[]>([]);
   const [cats, setCats] = useState<{ category: string; count: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [deleteTarget, setDeleteTarget] = useState<File | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminKnowledgeFile | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [reindexing, setReindexing] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (cat) params.set("category", cat);
-    fetch(`/api/admin/knowledge?${params}`)
-      .then(r => r.json())
-      .then(d => { setFiles(d.files || []); setCats(d.categoryStats || []); setLoading(false); })
-      .catch(() => setLoading(false));
+    listAdminKnowledge({ q: q || undefined, category: cat || undefined })
+      .then(({ files: f, categoryStats }) => {
+        setFiles(f);
+        setCats(categoryStats);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [q, cat]);
   useEffect(() => { load(); }, [load]);
 
-  const handleReindex = async (f: File) => {
+  const handleReindex = async (f: AdminKnowledgeFile) => {
     setReindexing(f.name);
     try {
-      const res = await fetch("/api/admin/knowledge", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: f.name, category: f.category }) });
-      if (res.ok) toast.success(`已触发重索引：${f.name}`);
+      const ok = await reindexAdminKnowledge(f.name, f.category);
+      if (ok) toast.success(`已触发重索引：${f.name}`);
       else toast.error("重索引失败");
     } catch { toast.error("重索引失败"); }
     setReindexing(null);
@@ -48,8 +51,8 @@ export default function AdminKnowledgePage() {
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    const res = await fetch("/api/admin/knowledge", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: deleteTarget.name, category: deleteTarget.category }) });
-    if (res.ok) { toast.success("已删除"); load(); }
+    const ok = await deleteAdminKnowledge(deleteTarget.name, deleteTarget.category);
+    if (ok) { toast.success("已删除"); load(); }
     else toast.error("删除失败");
     setDeleteTarget(null);
   };
@@ -58,8 +61,8 @@ export default function AdminKnowledgePage() {
     if (selected.size === 0) return;
     setBulkDeleting(true);
     const toDelete = files.filter(f => selected.has(f.id)).map(f => ({ name: f.name, category: f.category }));
-    const res = await fetch("/api/admin/knowledge", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ files: toDelete }) });
-    if (res.ok) { toast.success(`已删除 ${toDelete.length} 篇`); setSelected(new Set()); load(); }
+    const ok = await bulkDeleteAdminKnowledge(toDelete);
+    if (ok) { toast.success(`已删除 ${toDelete.length} 篇`); setSelected(new Set()); load(); }
     else toast.error("批量删除失败");
     setBulkDeleting(false);
   };

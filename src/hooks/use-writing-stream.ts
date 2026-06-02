@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import type { WritingRequest } from "@/contracts/writing";
+import { postWritingStream } from "@/services/writing";
 import {
   isDeltaEvent, isStatusEvent, isPipelineStepEvent, isVerificationEvent,
   isReferencesEvent, isCitationWarningsEvent, isDataClaimWarningsEvent,
@@ -113,14 +114,7 @@ export function useWritingStream(): UseWritingStreamReturn {
     setPipelineSteps(defaultSteps);
 
     try {
-      const response = await fetch("/api/writing", {
-        method: "POST",
-        signal: abortController.signal,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(request),
-      });
-
-      if (!response.ok) throw new Error("写作请求失败");
+      const response = await postWritingStream(request, abortController.signal);
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error("No response body");

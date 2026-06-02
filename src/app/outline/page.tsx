@@ -12,6 +12,7 @@ import { Loader2, Send, Copy, BookOpen, Save, Languages, Layout } from "lucide-r
 import { PageHeader } from "@/components/layout/page-header";
 import { toast } from "sonner";
 import { projectStore, ProjectData } from "@/lib/store";
+import { streamOutline } from "@/services/outline";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -30,7 +31,7 @@ function OutlineContent() {
 
   const [title, setTitle] = useState("");
   const [researchDirection, setResearchDirection] = useState("");
-  const [language, setLanguage] = useState("zh");
+  const [language, setLanguage] = useState<"zh" | "en">("zh");
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState("");
 
@@ -91,52 +92,9 @@ function OutlineContent() {
     setResult("");
 
     try {
-      const response = await fetch("/api/outline", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ title, researchDirection, language }),
-      });
-
-      if (!response.ok) {
-        throw new Error("生成失败，请检查配置或重试");
-      }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          
-          // 最后一行可能不完整，保留到下一次处理
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            const trimmedLine = line.trim();
-            if (!trimmedLine || trimmedLine === "data: [DONE]") continue;
-            
-            if (trimmedLine.startsWith("data:")) {
-              try {
-                const jsonStr = trimmedLine.slice(5).trim();
-                const data = JSON.parse(jsonStr);
-                const content = data.choices[0]?.delta?.content || "";
-                setResult((prev) => prev + content);
-              } catch (e) {
-                console.error("Error parsing streaming chunk:", e, "Line:", trimmedLine);
-              }
-            }
-          }
-        }
-      }
-    } catch (error: any) {
-      toast.error(error.message);
+      await streamOutline({ title, researchDirection, language }, setResult);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "生成失败");
     } finally {
       setIsGenerating(false);
     }

@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
+import { register as authRegister } from "@/services/auth";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -28,16 +29,7 @@ export default function RegisterPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, name, password, confirmPassword }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "注册失败");
-      }
-      // 注册 API 已设置 cookie，刷新 auth 状态后跳转首页
+      await authRegister({ email, name, password, confirmPassword });
       await refresh();
       toast.success("注册成功");
       router.push("/");

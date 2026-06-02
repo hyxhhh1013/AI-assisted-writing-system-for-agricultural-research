@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Send, FileText, ChevronRight, PenTool, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { projectStore, ProjectData } from "@/lib/store";
+import { listKnowledgeFiles } from "@/services/knowledge";
+import { streamOutline } from "@/services/outline";
 import { parseOutline, OutlineSection } from "@/lib/utils";
 
 interface OutlinePanelProps {
@@ -36,9 +38,12 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
   }, [project.id, project.title, project.researchDirection]);
 
   useEffect(() => {
-    fetch("/api/knowledge")
-      .then(r => r.json())
-      .then(d => { if (d.categories) setCategories(["全部", ...d.categories.filter((c: string) => c !== "全部")]); })
+    listKnowledgeFiles()
+      .then(d => {
+        if (d.categories) {
+          setCategories(["全部", ...d.categories.filter(c => c !== "全部")]);
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -55,38 +60,15 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
     setIsGenerating(true);
     setResult("");
     try {
-      const res = await fetch("/api/outline", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, researchDirection, language, category }),
-      });
-      if (!res.ok) throw new Error("生成失败");
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      let buf = "", full = "";
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const lines = buf.split("\n");
-          buf = lines.pop() || "";
-          for (const line of lines) {
-            const t = line.trim();
-            if (!t || t === "data: [DONE]") continue;
-            if (t.startsWith("data:")) {
-              try {
-                const d = JSON.parse(t.slice(5).trim());
-                full += d.choices?.[0]?.delta?.content || "";
-                setResult(full);
-              } catch {}
-            }
-          }
-        }
-      }
+      const full = await streamOutline(
+        { title, researchDirection, language: language as "zh" | "en", category },
+        setResult,
+      );
       handleSave(full);
       toast.success("大纲生成完毕，点击章节可跳转到扩写");
-    } catch (e: any) { toast.error(e.message); }
-    finally { setIsGenerating(false); }
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "生成失败");
+    } finally { setIsGenerating(false); }
   };
 
   // 点击大纲章节 → 通过回调通知父组件跳转到扩写面板

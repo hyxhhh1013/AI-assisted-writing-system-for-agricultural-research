@@ -9,38 +9,32 @@ import { Loader2, Search, Trash2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 import { exportProjectsCSV } from "@/lib/admin-export";
-
-interface Project {
-  id: string; title: string; template: string; mode: string; userName: string; progress: number; referenceCount: number; createdAt: string; lastUpdated: string;
-}
+import { deleteAdminProject, listAdminProjects, type AdminProjectRecord } from "@/services/admin";
 
 const TPLS = ["", "sci", "ieee", "gbt7713", "nature"];
 const TPL_LABEL: Record<string, string> = { sci: "SCI", ieee: "IEEE", gbt7713: "GB/T 7713", nature: "Nature" };
 
 export default function AdminProjectsPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<AdminProjectRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [tpl, setTpl] = useState("");
-  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminProjectRecord | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (tpl) params.set("template", tpl);
-    fetch(`/api/admin/projects?${params}`)
-      .then(r => r.json())
-      .then(d => { setProjects(d.data || []); setLoading(false); })
-      .catch(() => setLoading(false));
+    listAdminProjects({ q: q || undefined, template: tpl || undefined })
+      .then(setProjects)
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [q, tpl]);
   useEffect(() => { load(); }, [load]);
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    const res = await fetch("/api/admin/projects", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId: deleteTarget.id }) });
-    if (res.ok) { toast.success("已删除"); load(); setDeleteTarget(null); }
-    else { const d = await res.json(); toast.error(d.error || "删除失败"); }
+    const d = await deleteAdminProject(deleteTarget.id);
+    if (d.ok) { toast.success("已删除"); load(); setDeleteTarget(null); }
+    else toast.error(d.error || "删除失败");
   };
 
   return (

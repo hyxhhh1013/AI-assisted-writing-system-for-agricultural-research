@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { getFigureRegistry } from "@/services/figures";
 import { Button } from "@/components/ui/button";
 import {
   ArrowLeft,
@@ -92,8 +93,7 @@ function PlotContent() {
   }>({ open: false, imageUrl: "", caption: "" });
 
   useEffect(() => {
-    fetch("/api/figures/registry")
-      .then((r) => r.json())
+    getFigureRegistry()
       .then((data) => {
         setRegistry(data);
         setLoading(false);

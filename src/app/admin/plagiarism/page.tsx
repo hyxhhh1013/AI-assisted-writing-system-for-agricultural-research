@@ -4,16 +4,17 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
-
-interface Check {
-  id: string; projectId: string; title: string; status: string; maxSimilarity: number; overallRisk: string; matchCount: number; createdAt: string;
-}
+import {
+  getAdminPlagiarismDetail,
+  listAdminPlagiarism,
+  type AdminPlagiarismRecord,
+} from "@/services/admin";
 
 const RISK_BADGE: Record<string, string> = { high: "bg-red-50 text-red-700", medium: "bg-amber-50 text-amber-700", low: "bg-green-50 text-green-700" };
 const RISK_LABEL: Record<string, string> = { high: "高风险", medium: "中风险", low: "低风险" };
 
 export default function AdminPlagiarismPage() {
-  const [checks, setChecks] = useState<Check[]>([]);
+  const [checks, setChecks] = useState<AdminPlagiarismRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
@@ -21,18 +22,18 @@ export default function AdminPlagiarismPage() {
   const [riskFilter, setRiskFilter] = useState("");
 
   useEffect(() => {
-    fetch(`/api/admin/plagiarism${riskFilter ? `?risk=${riskFilter}` : ""}`)
-      .then(r => r.json()).then(d => { setChecks(d.data || []); setLoading(false); }).catch(() => setLoading(false));
+    listAdminPlagiarism(riskFilter || undefined)
+      .then(setChecks)
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [riskFilter]);
 
   const toggle = async (id: string) => {
     if (expanded === id) { setExpanded(null); setDetail(null); return; }
     setExpanded(id); setDetail(null); setDetailLoading(true);
     try {
-      const r = await fetch(`/api/admin/plagiarism/${id}`);
-      const d = await r.json();
-      if (d.success) setDetail(d.data);
-    } catch { } finally { setDetailLoading(false); }
+      setDetail(await getAdminPlagiarismDetail(id));
+    } catch { /* ignore */ } finally { setDetailLoading(false); }
   };
 
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-[#6b7c72]" /></div>;

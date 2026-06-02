@@ -4,31 +4,21 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, BarChart3, Clock, Activity } from "lucide-react";
-
-interface UsageStats {
-  stats: Array<{ feature: string; count: number }>;
-  recent: Array<{ feature: string; userId?: string; timestamp: number; metadata?: Record<string, unknown> }>;
-  totalEntries: number;
-}
+import { getAdminUsage, type AdminUsageStats } from "@/services/admin";
 
 function formatTime(ts: number) {
   return new Date(ts).toLocaleString("zh-CN");
 }
 
 export default function AdminUsagePage() {
-  const [data, setData] = useState<UsageStats | null>(null);
+  const [data, setData] = useState<AdminUsageStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/admin/usage")
-      .then((res) => {
-        if (res.status === 403) throw new Error("无管理员权限");
-        if (!res.ok) throw new Error("加载失败");
-        return res.json();
-      })
-      .then((d) => setData(d))
-      .catch((e) => setError(e.message))
+    getAdminUsage()
+      .then(setData)
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : "加载失败"))
       .finally(() => setLoading(false));
   }, []);
 

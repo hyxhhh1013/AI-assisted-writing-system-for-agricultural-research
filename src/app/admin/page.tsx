@@ -2,16 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Users, FileText, Database, Search, Clock, Loader2, Sparkles, TrendingUp } from "lucide-react";
-
-interface Stats {
-  userCount: number; projectCount: number; knowledgeFileCount: number; knowledgeChunkCount: number;
-  plagiarismCount: number; reviewCount: number;
-  filesByCategory: { category: string; count: number }[];
-  projectsByTemplate: { template: string; count: number }[];
-  projectTrend: { date: string; count: number }[];
-  recentActivity: { title: string; user: string; time: string }[];
-  aiUsage?: { totalCalls: number; todayCount: number; weekCount: number; byFeature: Record<string, number>; topUsers: { userId: string; count: number }[] };
-}
+import { getAdminStats, type AdminStats } from "@/services/admin";
 
 function formatTime(iso: string) {
   const d = new Date(iso); const now = Date.now(); const diff = now - d.getTime();
@@ -23,12 +14,13 @@ function formatTime(iso: string) {
 const TPL_LABEL: Record<string, string> = { sci: "SCI", ieee: "IEEE", gbt7713: "GB/T 7713", nature: "Nature" };
 
 export default function AdminDashboard() {
-  const [stats, setStats] = useState<Stats | null>(null);
+  const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/admin/stats").then(r => { if (!r.ok) throw new Error("unauthorized"); return r.json(); })
-      .then(d => { setStats(d); setLoading(false); }).catch(() => setLoading(false));
+    getAdminStats()
+      .then(d => { setStats(d); setLoading(false); })
+      .catch(() => setLoading(false));
   }, []);
 
   if (loading) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-[#6b7c72]" /></div>;

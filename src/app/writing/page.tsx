@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { toast } from "sonner";
 import { projectStore, ProjectData } from "@/lib/store";
 import { buildSectionOptions } from "@/lib/imrad";
+import { postWritingStream } from "@/services/writing";
 
 const SECTIONS = buildSectionOptions();
 
@@ -86,16 +87,15 @@ function WritingContent() {
     setResult("");
 
     try {
-      const response = await fetch("/api/writing", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, section, context, language }),
+      const response = await postWritingStream({
+        title,
+        section: section as "abstract" | "introduction" | "methods" | "results" | "conclusion",
+        context,
+        language: language as "zh" | "en",
+        template: project?.template || "sci",
+        existingReferences: project?.references || [],
+        researchDirection: project?.researchDirection,
       });
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || "生成失败");
-      }
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();

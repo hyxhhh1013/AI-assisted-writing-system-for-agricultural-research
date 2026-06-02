@@ -4,36 +4,37 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
-
-interface Review {
-  id: string; projectId: string; title: string; status: string; overallScore: number; overallGrade: string; synopsis: string; issueCount: number; createdAt: string;
-}
-interface Detail { check: Record<string, unknown>; issues: Array<{ dimension: string; severity: string; type: string; description: string; suggestion: string; location: string }>; }
+import {
+  getAdminReviewDetail,
+  listAdminReviews,
+  type AdminReviewDetail,
+  type AdminReviewRecord,
+} from "@/services/admin";
 
 const GRADE_COLOR: Record<string, string> = { A: "bg-green-50 text-green-700", B: "bg-blue-50 text-blue-700", C: "bg-amber-50 text-amber-700", D: "bg-red-50 text-red-700" };
 const DIM_LABEL: Record<string, string> = { academic: "学术规范", argument: "论证质量", structure: "结构规范", integrity: "学术诚信" };
 
 export default function AdminReviewsPage() {
-  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviews, setReviews] = useState<AdminReviewRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [detail, setDetail] = useState<Detail | null>(null);
+  const [detail, setDetail] = useState<AdminReviewDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [gradeFilter, setGradeFilter] = useState("");
 
   useEffect(() => {
-    fetch(`/api/admin/reviews${gradeFilter ? `?grade=${gradeFilter}` : ""}`)
-      .then(r => r.json()).then(d => { setReviews(d.data || []); setLoading(false); }).catch(() => setLoading(false));
+    listAdminReviews(gradeFilter || undefined)
+      .then(setReviews)
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [gradeFilter]);
 
   const toggle = async (id: string) => {
     if (expanded === id) { setExpanded(null); setDetail(null); return; }
     setExpanded(id); setDetail(null); setDetailLoading(true);
     try {
-      const r = await fetch(`/api/admin/reviews/${id}`);
-      const d = await r.json();
-      if (d.success) setDetail(d.data);
-    } catch { } finally { setDetailLoading(false); }
+      setDetail(await getAdminReviewDetail(id));
+    } catch { /* ignore */ } finally { setDetailLoading(false); }
   };
 
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-[#6b7c72]" /></div>;

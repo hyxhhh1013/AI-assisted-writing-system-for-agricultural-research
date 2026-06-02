@@ -9,6 +9,7 @@ import {
   ChevronLeft, ChevronRight, BookOpen
 } from "lucide-react";
 import { toast } from "sonner";
+import { streamTranslate } from "@/services/translate";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { ChatPanel } from "@/components/shared/chat-panel";
@@ -94,46 +95,12 @@ function ReaderContent() {
     setTranslation("");
 
     try {
-      const response = await fetch("/api/translate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: selectedText, targetLang: "zh" }),
-      });
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      if (reader) {
-        let fullTranslation = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            const trimmedLine = line.trim();
-            if (!trimmedLine || trimmedLine === "data: [DONE]") continue;
-            
-            if (trimmedLine.startsWith("data:")) {
-              try {
-                const data = JSON.parse(trimmedLine.slice(5).trim());
-                const content = data.choices[0]?.delta?.content || "";
-                fullTranslation += content;
-                setTranslation(fullTranslation);
-              } catch (e) {
-                console.error("Error parsing translation chunk:", e);
-              }
-            }
-          }
-        }
-        // 添加到历史记录
-        setTranslationHistory(prev => [fullTranslation, ...prev.slice(0, 9)]);
-        setCurrentTranslationIndex(0);
-      }
+      const fullTranslation = await streamTranslate(
+        { text: selectedText, targetLang: "zh" },
+        (chunk) => setTranslation(chunk),
+      );
+      setTranslationHistory(prev => [fullTranslation, ...prev.slice(0, 9)]);
+      setCurrentTranslationIndex(0);
     } catch (error) {
       toast.error("翻译失败");
     } finally {

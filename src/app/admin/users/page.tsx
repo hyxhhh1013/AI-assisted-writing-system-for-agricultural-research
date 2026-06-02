@@ -9,33 +9,33 @@ import { Loader2, Shield, ShieldOff, Search, Trash2, User, ChevronRight } from "
 import { toast } from "sonner";
 import Link from "next/link";
 import { exportUsersCSV } from "@/lib/admin-export";
-
-interface User {
-  id: string; email: string; name: string; role: string; projectCount: number; createdAt: string;
-}
+import {
+  deleteAdminUser,
+  listAdminUsers,
+  updateAdminUserRole,
+  type AdminUserRecord,
+} from "@/services/admin";
 
 export default function AdminUsersPage() {
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<AdminUserRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
-  const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminUserRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    fetch(`/api/admin/users?${params}`)
-      .then(r => r.json())
-      .then(d => { setUsers(d.data || []); setLoading(false); })
-      .catch(() => setLoading(false));
+    listAdminUsers(q ? { q } : undefined)
+      .then(setUsers)
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [q]);
 
   useEffect(() => { load(); }, [load]);
 
   const toggleRole = async (userId: string, currentRole: string) => {
     const newRole = currentRole === "admin" ? "user" : "admin";
-    await fetch("/api/admin/users", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId, role: newRole }) });
+    await updateAdminUserRole(userId, newRole);
     load();
     toast.success(`角色已切换为 ${newRole}`);
   };
@@ -44,9 +44,8 @@ export default function AdminUsersPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const res = await fetch("/api/admin/users", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: deleteTarget.id }) });
-      const d = await res.json();
-      if (res.ok) { toast.success(d.message || "已删除"); load(); }
+      const d = await deleteAdminUser(deleteTarget.id);
+      if (d.ok) { toast.success(d.message || "已删除"); load(); }
       else toast.error(d.error || "删除失败");
     } catch { toast.error("删除失败"); }
     finally { setDeleting(false); setDeleteTarget(null); }

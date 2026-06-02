@@ -7,25 +7,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2, User, Mail, Calendar, BarChart3 } from "lucide-react";
 import Link from "next/link";
-
-interface UserDetail {
-  id: string; email: string; name: string; role: string; createdAt: string;
-  projects: Array<{ id: string; title: string; template: string; mode: string; lastUpdated: string; sectionCount: number; referenceCount: number }>;
-  aiUsage: Record<string, number>;
-  totalAiCalls: number;
-}
+import { getAdminUser, type AdminUserDetail } from "@/services/admin";
 
 export default function UserDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [data, setData] = useState<UserDetail | null>(null);
+  const [data, setData] = useState<AdminUserDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/admin/users/${id}`)
-      .then(r => r.json())
-      .then(d => { if (d.success) setData(d.data); })
-      .finally(() => setLoading(false));
+    getAdminUser(id).then(setData).finally(() => setLoading(false));
   }, [id]);
 
   if (loading) return <div className="flex items-center gap-2 text-sm text-[#6b7c72]"><Loader2 className="h-4 w-4 animate-spin" />加载中...</div>;

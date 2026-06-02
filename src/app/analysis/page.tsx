@@ -11,6 +11,7 @@ import { Loader2, Upload, FileSpreadsheet, Send, Copy, Table as TableIcon, BarCh
 import { PageHeader } from "@/components/layout/page-header";
 import { toast } from "sonner";
 import { projectStore, ProjectData } from "@/lib/store";
+import { streamDataAnalysis } from "@/services/analysis";
 
 export default function AnalysisPage() {
   return (
@@ -104,37 +105,9 @@ function AnalysisContent() {
     setResult("");
 
     try {
-      const response = await fetch("/api/analysis", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dataSummary, researchDirection }),
-      });
-
-      if (!response.ok) throw new Error("分析失败");
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-          for (const line of lines) {
-            if (line.trim().startsWith("data:")) {
-              try {
-                const data = JSON.parse(line.trim().slice(5).trim());
-                setResult((prev) => prev + (data.choices[0]?.delta?.content || ""));
-              } catch (e) {}
-            }
-          }
-        }
-      }
-    } catch (error: any) {
-      toast.error(error.message);
+      await streamDataAnalysis(dataSummary, researchDirection, setResult);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "分析失败");
     } finally {
       setIsGenerating(false);
     }

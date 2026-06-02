@@ -16,6 +16,8 @@ import type { ProjectData } from "@/lib/store";
 import { usePlagiarismCheck } from "@/hooks/use-plagiarism-check";
 import type { PlagiarismStage } from "@/hooks/use-plagiarism-check";
 import Link from "next/link";
+import { getProject, listProjects } from "@/services/project";
+import { getCheckDetail, listHistory, rewriteMatch, toCheckResult, updateRewriteSuggestion } from "@/services/plagiarism";
 
 // ==================== 类型 ====================
 
@@ -74,7 +76,7 @@ function Content() {
   const [selPid, setSelPid] = useState(pid || "");
   const [loadingP, setLoadingP] = useState(false);
 
-  useEffect(() => { fetch("/api/projects").then(r => r.json()).then(d => { if (Array.isArray(d)) setPlist(d); }).catch(() => {}); }, []);
+  useEffect(() => { listProjects().then(d => { if (Array.isArray(d)) setPlist(d); }).catch(() => {}); }, []);
 
   useEffect(() => {
     if (!pid) return;
@@ -93,9 +95,8 @@ function Content() {
     if (!id) return;
     setLoadingP(true);
     try {
-      const r = await fetch(`/api/projects?id=${id}`);
-      if (!r.ok) throw new Error("加载失败");
-      const d = await r.json();
+      const d = await getProject(id);
+      if (!d) throw new Error("加载失败");
       setSelPid(id); setProject(d); setTitle(d.title || "");
       const l: Record<string, string> = { introduction: "引言", methods: "材料与方法", results: "结果与讨论", conclusion: "结论" };
       const p: string[] = [];
@@ -306,24 +307,22 @@ function RewriteView({ checkId, matches, onReCheck }: { checkId: string; matches
   const doRewrite = async (m: MatchResult) => {
     setRewriting(m.id);
     try {
-      const r = await fetch("/api/plagiarism/rewrite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ checkId, matchId: m.id, originalText: m.sourceText }) });
-      if (!r.ok) throw new Error("改写失败");
-      const d = await r.json();
-      setSuggestions(p => ({ ...p, [m.id]: d.suggestions }));
+      const suggestions = await rewriteMatch({ checkId, matchId: m.id, originalText: m.sourceText });
+      setSuggestions(p => ({ ...p, [m.id]: suggestions }));
       toast.success("改写建议已生成");
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "改写失败"); }
     finally { setRewriting(null); }
   };
 
   const accept = (mid: string, s: RewriteSuggestion) => {
-    if (s.id) fetch("/api/plagiarism/rewrite", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ suggestionId: s.id, status: "accepted" }) }).catch(() => {});
+    if (s.id) updateRewriteSuggestion({ suggestionId: s.id, status: "accepted" }).catch(() => {});
     navigator.clipboard.writeText(s.suggestedText).then(() => { setCopiedId(`${mid}-${s.strategy}`); setTimeout(() => setCopiedId(null), 1500); }).catch(() => {});
     setAccepted(p => ({ ...p, [`${mid}-${s.strategy}`]: true }));
     toast.success("已采纳并复制");
   };
 
   const reject = (mid: string, s: RewriteSuggestion) => {
-    if (s.id) fetch("/api/plagiarism/rewrite", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ suggestionId: s.id, status: "rejected" }) }).catch(() => {});
+    if (s.id) updateRewriteSuggestion({ suggestionId: s.id, status: "rejected" }).catch(() => {});
     setAccepted(p => ({ ...p, [`${mid}-${s.strategy}`]: false }));
   };
 
@@ -385,15 +384,16 @@ function HistoryView({ projectId, onViewResult }: { projectId?: string | null; o
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const p = new URLSearchParams(); if (projectId) p.append("projectId", projectId);
-    fetch(`/api/plagiarism/history?${p}`).then(r => r.json()).then(d => setChecks(d.checks || [])).catch(() => setChecks([])).finally(() => setLoading(false));
+    listHistory({ projectId: projectId || undefined })
+      .then(checks => setChecks(checks as HC[]))
+      .catch(() => setChecks([]))
+      .finally(() => setLoading(false));
   }, [projectId]);
 
   const load = async (id: string) => {
     try {
-      const r = await fetch(`/api/plagiarism/history?checkId=${id}`);
-      const d = await r.json();
-      if (d.check) onViewResult({ checkId: d.check.id, totalMatches: d.check._count?.matches || 0, maxSimilarity: d.check.maxSimilarity || 0, overallRisk: (d.check.overallRisk || "low") as "high" | "medium" | "low", matches: d.check.matches?.map((m: Record<string, unknown>) => ({ id: m.id, sourceText: m.sourceText, sourceOffset: m.sourceOffset, matchType: m.matchType, matchedText: m.matchedText, matchedFrom: m.matchedFrom, matchedUrl: m.matchedUrl, similarity: m.similarity, riskLevel: m.riskLevel })) || [] });
+      const detail = await getCheckDetail(id);
+      onViewResult(toCheckResult(detail));
     } catch { toast.error("加载详情失败"); }
   };
 

@@ -8,10 +8,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Loader2, Plus, Trash2, Eye, EyeOff, Key, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
-
-interface Setting {
-  key: string; maskedValue: string; updatedAt: string;
-}
+import {
+  checkAdminSettingKey,
+  deleteAdminSetting,
+  listAdminSettings,
+  saveAdminSetting,
+  type AdminSettingRecord,
+} from "@/services/admin";
 
 const PRESET_KEYS = [
   { key: "DEEPSEEK_API_KEY", label: "DeepSeek API Key", hint: "用于 AI 写作、大纲、翻译等" },
@@ -19,7 +22,7 @@ const PRESET_KEYS = [
 ];
 
 export default function AdminSettingsPage() {
-  const [settings, setSettings] = useState<Setting[]>([]);
+  const [settings, setSettings] = useState<AdminSettingRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [editKey, setEditKey] = useState("");
@@ -32,9 +35,8 @@ export default function AdminSettingsPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    fetch("/api/admin/settings")
-      .then(r => r.json())
-      .then(d => { if (d.success) setSettings(d.data); })
+    listAdminSettings()
+      .then(setSettings)
       .catch(() => toast.error("加载失败"))
       .finally(() => setLoading(false));
   }, []);
@@ -46,11 +48,8 @@ export default function AdminSettingsPage() {
       setVisibleKeys(prev => { const n = new Set(prev); n.delete(key); return n; });
       return;
     }
-    // 查询完整值
-    const r = await fetch(`/api/admin/settings?key=${encodeURIComponent(key)}`);
-    const d = await r.json();
-    if (d.success && d.data?.exists) {
-      // 需要通过 getSetting 获取解密值
+    const exists = await checkAdminSettingKey(key);
+    if (exists) {
       setVisibleKeys(prev => new Set(prev).add(key));
     }
   };
@@ -60,24 +59,17 @@ export default function AdminSettingsPage() {
     if (!editValue.trim()) { toast.error("Value 不能为空"); return; }
     setSaving(true);
     try {
-      const res = await fetch("/api/admin/settings", {
-        method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: editKey.trim(), value: editValue.trim() }),
-      });
-      const d = await res.json().catch(() => ({ error: `${res.status} ${res.statusText}` }));
-      if (res.ok && d.success) { toast.success(d.message || "已保存"); load(); setShowAdd(false); }
-      else toast.error(d.error || d.message || "保存失败");
+      const d = await saveAdminSetting(editKey.trim(), editValue.trim());
+      if (d.ok) { toast.success(d.message || "已保存"); load(); setShowAdd(false); }
+      else toast.error(d.error || "保存失败");
     } catch (e: unknown) { toast.error(e instanceof Error ? e.message : "网络错误"); }
     finally { setSaving(false); }
   };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    const res = await fetch("/api/admin/settings", {
-      method: "DELETE", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: deleteTarget }),
-    });
-    if (res.ok) { toast.success("已删除"); load(); }
+    const ok = await deleteAdminSetting(deleteTarget);
+    if (ok) { toast.success("已删除"); load(); }
     else toast.error("删除失败");
     setDeleteTarget(null);
   };

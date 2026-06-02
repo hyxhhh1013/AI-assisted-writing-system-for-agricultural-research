@@ -3,20 +3,14 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, CheckCircle2, XCircle, Database, FileText, HardDrive, Server } from "lucide-react";
-
-interface Health {
-  db: { connected: boolean; provider: string; sizeBytes: number };
-  knowledge: { fileCount: number; chunkCount: number; uncategorizedCount: number };
-  index: { indexFiles: string[]; totalSizeBytes: number };
-  server: { uptime: number; nodeVersion: string; platform: string; memoryMB: number };
-}
+import { getAdminHealth, type AdminHealthData } from "@/services/admin";
 
 export default function AdminHealthPage() {
-  const [data, setData] = useState<Health | null>(null);
+  const [data, setData] = useState<AdminHealthData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/admin/health").then(r => r.json()).then(d => { if (d.success) setData(d.data); }).finally(() => setLoading(false));
+    getAdminHealth().then(setData).finally(() => setLoading(false));
   }, []);
 
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-[#6b7c72]" /></div>;

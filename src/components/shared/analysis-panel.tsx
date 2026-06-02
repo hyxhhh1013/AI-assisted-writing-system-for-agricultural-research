@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Upload, FileSpreadsheet, Send, Copy, Table as TableIcon, BarChart3, Save, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { projectStore, ProjectData } from "@/lib/store";
+import { streamDataAnalysis } from "@/services/analysis";
 
 interface AnalysisPanelProps {
   projectId: string;
@@ -114,44 +115,17 @@ export function AnalysisPanel({ projectId, project, onSave, onInsertToPaper, onI
     setResult("");
 
     try {
-      const response = await fetch("/api/analysis", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dataSummary, researchDirection }),
-      });
-
-      if (!response.ok) throw new Error("分析失败");
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let fullResult = "";
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-          for (const line of lines) {
-            if (line.trim().startsWith("data:")) {
-              try {
-                const data = JSON.parse(line.trim().slice(5).trim());
-                const content = data.choices?.[0]?.delta?.content || "";
-                fullResult += content;
-                setResult(fullResult);
-              } catch (e) {}
-            }
-          }
-        }
-      }
+      const fullResult = await streamDataAnalysis(
+        dataSummary,
+        researchDirection,
+        (chunk) => setResult((prev) => prev + chunk),
+      );
       
       // 生成完成后自动保存到项目
       handleSaveToProject(fullResult);
       toast.success("分析完成并已自动保存");
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "分析失败");
     } finally {
       setIsGenerating(false);
     }

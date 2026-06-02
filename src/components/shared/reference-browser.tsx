@@ -10,6 +10,7 @@ import {
 import { BookOpen, ChevronDown, ChevronRight, Quote, FileText, Loader2 } from "lucide-react";
 import { CITATION_GROUP_RE, FULLWIDTH_CITATION_RE, expandCitationGroup } from "@/lib/citation";
 import { formatFilenames } from "@/services/references";
+import { searchKnowledge } from "@/services/knowledge";
 import { ReferenceProvenance } from "@/components/shared/reference-provenance";
 
 function collectUsedNumbers(text: string, refCount: number): Set<number> {
@@ -112,9 +113,8 @@ export function ReferenceBrowser({
         return;
       }
 
-      const res = await fetch(`/api/knowledge?q=${encodeURIComponent(keywords)}&type=semantic&pageSize=5`);
-      const data = await res.json();
-      const chunks: LiteratureChunk[] = (data.files || []).flatMap((f: any) =>
+      const data = await searchKnowledge({ q: keywords, type: "semantic", pageSize: 5 });
+      const chunks: LiteratureChunk[] = (data.files || []).flatMap((f) =>
         (f._snippets || []).map((s: string, i: number) => ({
           content: s,
           index: i + 1,

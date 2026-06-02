@@ -4,7 +4,8 @@ import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { checkPlagiarismStream } from "@/services/plagiarism";
+import { checkPlagiarismStream, rewriteMatch, updateRewriteSuggestion } from "@/services/plagiarism";
+import { getProject, listProjects } from "@/services/project";
 import { toast } from "sonner";
 import {
   Search, Shuffle, Loader2, CheckCircle2,
@@ -86,7 +87,7 @@ export function PlagiarismPanel({
 
   useEffect(() => {
     if (showProjectSelector) {
-      fetch("/api/projects").then(r => r.json()).then(d => { if (Array.isArray(d)) setProjects(d); }).catch(() => {});
+      listProjects().then(d => { if (Array.isArray(d)) setProjects(d); }).catch(() => {});
     }
   }, [showProjectSelector]);
 
@@ -97,9 +98,8 @@ export function PlagiarismPanel({
     if (!pid) return;
     setLoadingProject(true);
     try {
-      const res = await fetch(`/api/projects?id=${pid}`);
-      if (!res.ok) throw new Error("加载失败");
-      const p = await res.json();
+      const p = await getProject(pid);
+      if (!p) throw new Error("加载失败");
       setSelectedProjectId(pid);
       setCheckTitle(p.title || "");
       const labels: Record<string, string> = { introduction: "引言", methods: "材料与方法", results: "结果与讨论", conclusion: "结论" };
@@ -296,24 +296,22 @@ function RewriteView({ checkId, matches, onBack, onReCheck }: {
   const doRewrite = async (m: MatchResult) => {
     setRewriting(m.id);
     try {
-      const res = await fetch("/api/plagiarism/rewrite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ checkId, matchId: m.id, originalText: m.sourceText }) });
-      if (!res.ok) throw new Error("改写失败");
-      const data = await res.json();
-      setSuggestions(p => ({ ...p, [m.id]: data.suggestions }));
+      const suggestions = await rewriteMatch({ checkId, matchId: m.id, originalText: m.sourceText });
+      setSuggestions(p => ({ ...p, [m.id]: suggestions }));
       toast.success("改写建议已生成");
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "改写失败"); }
     finally { setRewriting(null); }
   };
 
   const accept = async (mid: string, s: RewriteSuggestion) => {
-    if (s.id) fetch("/api/plagiarism/rewrite", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ suggestionId: s.id, status: "accepted" }) }).catch(() => {});
+    if (s.id) updateRewriteSuggestion({ suggestionId: s.id, status: "accepted" }).catch(() => {});
     navigator.clipboard.writeText(s.suggestedText).then(() => { setCopiedId(`${mid}-${s.strategy}`); setTimeout(() => setCopiedId(null), 1500); }).catch(() => {});
     setAccepted(p => ({ ...p, [`${mid}-${s.strategy}`]: true }));
     toast.success("已采纳并复制");
   };
 
   const reject = (mid: string, s: RewriteSuggestion) => {
-    if (s.id) fetch("/api/plagiarism/rewrite", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ suggestionId: s.id, status: "rejected" }) }).catch(() => {});
+    if (s.id) updateRewriteSuggestion({ suggestionId: s.id, status: "rejected" }).catch(() => {});
     setAccepted(p => ({ ...p, [`${mid}-${s.strategy}`]: false }));
   };
 
