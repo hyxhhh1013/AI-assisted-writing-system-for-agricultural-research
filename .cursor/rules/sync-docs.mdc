@@ -1,0 +1,32 @@
+---
+description: 改 API/数据/Prompt 后同步更新 docs 索引（GrainScript 知识分层）
+globs:
+  - "src/app/api/**/*.ts"
+  - "prisma/schema.prisma"
+  - "src/lib/prompts/**/*.ts"
+  - "src/lib/prompts.ts"
+  - "src/contracts/sse.ts"
+  - "scripts/charts/registry.json"
+  - "src/services/review-service.ts"
+  - "src/services/plagiarism-service.ts"
+  - "AGENTS.md"
+---
+
+# 同步项目文档
+
+完成代码改动后，对照 @AGENTS.md **S0 更新规则**，更新确实受影响的文档（只改必要章节）：
+
+| 改动 | 更新 |
+|------|------|
+| 新/改 Route Handler | `docs/API_INDEX.md` |
+| 新页面或模块入口 | `docs/DOMAIN_INDEX.md` |
+| schema 表/字段 | `docs/DATA_MODEL.md` |
+| `/api/writing` 或 SSE 类型 | `docs/domain/writing-pipeline.md`、`src/contracts/sse.ts` |
+| RAG / knowledge API | `docs/domain/rag-and-knowledge.md` |
+| 图表 registry / Python 图 | `docs/domain/figures-and-python.md` |
+| 审查 / 查重 service 或 API | `docs/domain/review-plagiarism.md` |
+| 任意 API 路由增删改 | 运行 `npm run docs:api-index`（更新 `docs/API_INDEX.md` 自动段） |
+| Prisma schema 变更 | `docs/DATA_MODEL.md` + `npx prisma db push` |
+| 工程 PR 完成 | `docs/ENGINEERING_OPTIMIZATION_QUEUE.md` §1 + §4 |
+
+不要把长表、历史复盘写回 `AGENTS.md`。不确定是否更新时，问用户。

@@ -1,0 +1,34 @@
+---
+description: 禾书耕文 Vibecoding 铁律 — 实现功能时始终遵守
+alwaysApply: true
+---
+
+# GrainScript Vibecoding
+
+完整模板与队列：@docs/VIBECODING.md、@AGENTS.md S0～S5。
+
+## 禁止
+
+- 组件内直接 `fetch('/api/...')` → 用 `src/services/`
+- 全量保存 Project 的 references / analysisResults
+- `any` 类型
+- 修改 `backup_*` 目录
+- 在 `workbench/page.tsx` 堆业务逻辑（仅接 hook）
+- 硬编码 Python 路径（用 `PYTHON_CMD`）
+
+## 实现顺序
+
+`contracts` → `services` → `hooks` → `components` → `app/api`
+
+## 验证
+
+改后运行 `npm run check`，或至少 `npx tsc --noEmit` + 相关 `vitest`。
+
+## 文档
+
+- 改 `src/app/api/**/route.ts` 后执行 `npm run docs:api-index`
+- 改 `prisma/schema.prisma` 后更新 `docs/DATA_MODEL.md` 并 `npx prisma generate`
+
+## 大文件
+
+`writing-panel.tsx` 新逻辑进子组件/hooks；`api/writing/route.ts` 只编排，逻辑进 `pipeline/`。
