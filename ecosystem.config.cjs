@@ -5,7 +5,8 @@ module.exports = {
       name: "grainscript",
       cwd: __dirname,
       script: "server.js",
-      instances: 2,
+      instances: 1,
+      exec_mode: "fork",
       autorestart: true,
       max_memory_restart: "1500M",
       env: {
