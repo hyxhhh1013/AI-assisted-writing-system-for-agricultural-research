@@ -73,7 +73,7 @@
 | ENG-PR-027 | `metadata.json` 只读 Prisma（停双写-读） | RAG-PR-005 | 4h | done | 2026-06-02 |
 | ENG-PR-028 | 移除 `metadata.json` 双写（写路径） | ENG-PR-027 | 4h | done | 2026-06-02 |
 | **Phase 3 — 大文件拆分** |
-| ENG-PR-030 | `/api/writing` 按阶段拆 handler | ENG-PR-002 | 6h | todo | |
+| ENG-PR-030 | `/api/writing` 按阶段拆 handler | ENG-PR-002 | 6h | done | 2026-06-02 |
 | ENG-PR-031 | `writing-panel` 拆 SSE 条 + 扩写区 | ENG-PR-030 | 6h | todo | |
 | ENG-PR-032 | `knowledge/page` 拆 hooks + 子组件 | ENG-PR-021 | 6h | todo | |
 | ENG-PR-033 | `use-figure-pipeline` 图表 API 进 service | ENG-PR-022 | 3h | todo | |
@@ -833,6 +833,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-06-02 | ENG-PR-025b | AI | references replace op；saveProject 剥离 refs/analysis；面板/重排/元数据走 PATCH |
 | 2026-06-02 | ENG-PR-027 | AI | knowledge-metadata.ts + rag 书目 Prisma；USE_METADATA_JSON_FALLBACK |
 | 2026-06-02 | ENG-PR-028 | AI | knowledge API 停 metadata 双写；index-pdfs → sync-knowledge-metadata-to-prisma |
+| 2026-06-02 | ENG-PR-030 | AI | writing route ~90 行；prepare-context + pipeline/{writer,verifier,refiner,finalize,modes} + run-pipeline；tsc + writing.test 绿 |
 
 ---
 

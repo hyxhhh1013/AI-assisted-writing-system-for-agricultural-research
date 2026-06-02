@@ -62,21 +62,33 @@
 - **任务单**：[`docs/UI_COMPLETION_QUEUE.md`](docs/UI_COMPLETION_QUEUE.md) — 按 `UI-PR-001…` 编号，含 Vibecoding 模板、依赖图、状态表
 - **开干前**：读队列 §0 接力协议 → 找第一个 `todo` 且依赖已 `done` 的 PR
 - **完成后**：更新总表状态 + §4 会话日志
+- **状态**：UI-PR-001～080 已全部 `done`（2026-05-31）
+
+### 工程优化 PR 队列（跨会话接力）
+
+- **任务单**：[`docs/ENGINEERING_OPTIMIZATION_QUEUE.md`](docs/ENGINEERING_OPTIMIZATION_QUEUE.md) — `ENG-PR-001…` + `RAG-PR-001…`（RAG 细节见 [`docs/rag-index-refactor.md`](docs/rag-index-refactor.md)）
+- **开干前**：Phase 0 优先（proxy / check / build）→ 再 RAG 性能 → 架构债
+- **完成后**：更新 §1 总表 + §4 会话日志；RAG 子项同步 `rag-index-refactor.md` §1
 
 ### 待处理技术债（改进计划）
 
-| 优先级 | 编号 | 说明 |
-|--------|------|------|
-| P1 | p1-1 | `@typescript-eslint/no-explicit-any: warn` + 修 shared.tsx 13 个 any |
-| P1 | p1-2 | 8 个 zod schema 接入对应 API 路由 validateBody |
-| P1 | p1-3 | 组件层直接 fetch() 迁移到 services/（9 处） |
-| P2 | p2-1 | references/analysisResults 改增量 PATCH |
-| P2 | p2-3 | 统一 ProjectData 类型（以 contracts/project.ts 为准） |
-| P3 | p3-1 | Prisma 补 3 条 @@index |
-| P3 | p3-2 | lib/utils.ts 8 个核心函数补单测 |
-| P3 | p3-3 | 拆 writing-panel.tsx + api/writing/route.ts |
-| P3 | p3-4 | 统一 logger 封装 |
-| P3 | p3-5 | 补 .env.example + pre-commit hook |
+> 执行拆解见 [`docs/ENGINEERING_OPTIMIZATION_QUEUE.md`](docs/ENGINEERING_OPTIMIZATION_QUEUE.md) §8 映射表。
+
+| 优先级 | 编号 | 说明 | 队列 PR |
+|--------|------|------|---------|
+| P0 | — | proxy `x-user-id` 传 request header | ENG-PR-001 |
+| P0 | — | RAG ~1.88GB 同步 JSON 阻塞 | RAG-PR-001～005 |
+| P1 | p1-1 | `@typescript-eslint/no-explicit-any: warn` + 热点 any | ENG-PR-054 |
+| P1 | p1-2 | zod schema 接入 API validateBody | ENG-PR-023、024 |
+| P1 | p1-3 | 组件层 fetch 迁移 services | ENG-PR-020～022、033 |
+| P2 | p2-1 | references/analysisResults 增量 PATCH | ENG-PR-025、026、025b |
+| P2 | p2-3 | 统一 ProjectData（contracts 为准） | ENG-PR-062 |
+| P3 | p3-1 | Prisma 补 @@index | ENG-PR-053 |
+| P3 | p3-2 | lib/utils 等单测（含 API 集成） | ENG-PR-051 |
+| P3 | p3-3 | 拆 writing-panel + api/writing | ENG-PR-030、031 |
+| P3 | p3-4 | 统一 logger | ENG-PR-042、043 |
+| P3 | p3-5 | .env 说明 + pre-commit | ENG-PR-004、061 |
+| P3 | — | AiUsageLog 持久化（ADMIN-013 文档债） | ENG-PR-040、041 |
 
 ### Prompt 系统
 - 所有 AI prompt 已注入 nature-polishing 学术写作原则（Section move order、Evidence strength 分级、Results/Discussion 分离、Overclaim 防护、Limitation 要求）

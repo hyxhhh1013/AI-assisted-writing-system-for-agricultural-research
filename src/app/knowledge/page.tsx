@@ -458,30 +458,7 @@ export default function KnowledgePage() {
           </div>
         </div>
 
-        {/* 索引状态提示 */}
-        <Card className="bg-muted/30 border-dashed">
-          <CardContent className="py-3 px-4">
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-4">
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <Database className="h-3.5 w-3.5" />
-                  共 <strong>{totalFiles}</strong> 篇文献
-                </span>
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <FileText className="h-3.5 w-3.5" />
-                  <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={handleReindex} disabled={isIndexing}>
-                    {isIndexing ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> 索引中...</> : "重建索引"}
-                  </Button>
-                </span>
-              </div>
-              <Badge variant="outline" className="text-xs">
-                {searchType === "semantic" ? "语义搜索" : "文件名搜索"}
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="w-full mt-4">
+        <div className="w-full">
           <div className="flex items-center justify-between mb-4 overflow-x-auto gap-4">
             <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="bg-muted/50 rounded-lg p-1">
               <TabsList className="bg-transparent">
