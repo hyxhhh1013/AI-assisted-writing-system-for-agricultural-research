@@ -231,6 +231,28 @@ export const projectSectionPatchSchema = z.object({
 });
 export type ProjectSectionPatchInput = z.infer<typeof projectSectionPatchSchema>;
 
+const referencePatchOpSchema = z.discriminatedUnion("op", [
+  z.object({
+    op: z.literal("create"),
+    content: z.string().min(1, "content 不能为空"),
+    index: z.number().int().min(0).optional(),
+  }),
+  z.object({
+    op: z.literal("update"),
+    id: z.string().min(1, "缺少 id"),
+    content: z.string().min(1, "content 不能为空"),
+  }),
+  z.object({
+    op: z.literal("delete"),
+    id: z.string().min(1, "缺少 id"),
+  }),
+]);
+
+export const projectReferencesPatchSchema = z.object({
+  ops: z.array(referencePatchOpSchema).min(1).max(500),
+});
+export type ProjectReferencesPatchInput = z.infer<typeof projectReferencesPatchSchema>;
+
 // === Admin ===
 export const adminUserRolePatchSchema = z.object({
   userId: z.string().min(1, "缺少 userId"),

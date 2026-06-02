@@ -17,6 +17,7 @@ import {
   knowledgeBatchMoveSchema,
   projectMetaPatchSchema,
   projectSectionPatchSchema,
+  projectReferencesPatchSchema,
   plagiarismRewritePatchSchema,
   reindexRequestSchema,
 } from "@/lib/validations";
@@ -155,5 +156,22 @@ describe("plagiarismRewritePatchSchema", () => {
 describe("reindexRequestSchema", () => {
   it("accepts empty body defaults", () => {
     expect(reindexRequestSchema.safeParse({}).success).toBe(true);
+  });
+});
+
+describe("projectReferencesPatchSchema", () => {
+  it("rejects empty ops", () => {
+    expect(projectReferencesPatchSchema.safeParse({ ops: [] }).success).toBe(false);
+  });
+
+  it("accepts create/update/delete ops", () => {
+    const result = projectReferencesPatchSchema.safeParse({
+      ops: [
+        { op: "create", content: "Author (2024). Title." },
+        { op: "update", id: "ref-1", content: "Updated." },
+        { op: "delete", id: "ref-2" },
+      ],
+    });
+    expect(result.success).toBe(true);
   });
 });

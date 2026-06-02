@@ -1,7 +1,11 @@
 /** 项目 API 服务封装 — 类型定义已统一到 src/contracts/project.ts */
 
 import type { DataSourceAnalysis, EvidenceClaim } from "@/contracts/data-source";
-import type { ProjectData } from "@/contracts/project";
+import type {
+  ProjectData,
+  ReferencePatchOp,
+  ProjectReferenceRecord,
+} from "@/contracts/project";
 import {
   serializeDataClaims,
   serializeDataSources,
@@ -87,4 +91,22 @@ export async function patchProjectFields(
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error || "保存证据数据失败");
   }
+}
+
+/** PATCH /api/projects/:id/references — 参考文献增量 upsert/delete */
+export async function patchReferences(
+  projectId: string,
+  ops: ReferencePatchOp[],
+): Promise<ProjectReferenceRecord[]> {
+  const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/references`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ops }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "保存参考文献失败");
+  }
+  const data = (await res.json()) as { references: ProjectReferenceRecord[] };
+  return data.references;
 }

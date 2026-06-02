@@ -112,6 +112,26 @@ export interface ReferencesPatch {
   clientUpdatedAt: number;
 }
 
+/** 数据库参考文献行（增量 PATCH 响应） */
+export interface ProjectReferenceRecord {
+  id: string;
+  content: string;
+  order: number;
+}
+
+export type ReferencePatchOp =
+  | { op: "create"; content: string; index?: number }
+  | { op: "update"; id: string; content: string }
+  | { op: "delete"; id: string };
+
+export interface ReferencesPatchRequest {
+  ops: ReferencePatchOp[];
+}
+
+export interface ReferencesPatchResponse {
+  references: ProjectReferenceRecord[];
+}
+
 /** Evidence 字段增量 PATCH（dataClaims / dataSources JSON 字符串） */
 export interface ProjectEvidencePatch {
   dataClaims?: string;
