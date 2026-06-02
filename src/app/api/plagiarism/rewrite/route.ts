@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 import { generateRewriteSuggestions } from "@/services/rewrite-service";
 import { validateBody } from "@/lib/api-validate";
-import { plagiarismRewriteSchema } from "@/lib/validations";
+import { plagiarismRewriteSchema, plagiarismRewritePatchSchema } from "@/lib/validations";
 
 export async function POST(req: NextRequest) {
   try {
@@ -41,15 +41,10 @@ export async function POST(req: NextRequest) {
 /** 接受/拒绝改写建议 */
 export async function PATCH(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { suggestionId, status } = body;
+    const { data, errorResponse: ve } = await validateBody(plagiarismRewritePatchSchema, await req.json());
+    if (ve) return ve;
 
-    if (!suggestionId || !["accepted", "rejected"].includes(status)) {
-      return Response.json(
-        { error: "suggestionId and status(accepted|rejected) required" },
-        { status: 400 }
-      );
-    }
+    const { suggestionId, status } = data;
 
     await prisma.rewriteSuggestion.update({
       where: { id: suggestionId },

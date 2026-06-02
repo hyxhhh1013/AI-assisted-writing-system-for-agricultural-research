@@ -4,6 +4,8 @@ import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
+import { parseOptionalJsonConfig } from "@/lib/api-validate";
+import { chartModeSchema } from "@/lib/validations";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -30,20 +32,21 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const dataFile = formData.get("dataFile") as File | null;
     const configStr = formData.get("config") as string | null;
-    const mode = (formData.get("mode") as string) || "generic";
+    const modeRaw = formData.get("mode");
+    const modeResult = chartModeSchema.safeParse(
+      typeof modeRaw === "string" && modeRaw ? modeRaw : "generic",
+    );
+    if (!modeResult.success) {
+      return NextResponse.json({ error: "图表模式无效" }, { status: 400 });
+    }
+    const mode = modeResult.data;
 
     if (!dataFile) {
       return NextResponse.json({ error: "请上传数据文件" }, { status: 400 });
     }
 
-    let config: Record<string, any> = {};
-    if (configStr) {
-      try {
-        config = JSON.parse(configStr);
-      } catch {
-        return NextResponse.json({ error: "图表配置格式错误" }, { status: 400 });
-      }
-    }
+    const { data: config, errorResponse: configError } = parseOptionalJsonConfig(configStr);
+    if (configError) return configError;
 
     // 保存上传的数据文件到临时目录
     const tmpDir = path.join(process.cwd(), ".tmp", randomUUID());

@@ -11,6 +11,7 @@ export const maxDuration = 60;
 const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
 import { PYTHON_CMD } from "@/services/xrd-runner";
+import { parseOptionalJsonConfig } from "@/lib/api-validate";
 
 if (!fs.existsSync(CHARTS_DIR)) {
   fs.mkdirSync(CHARTS_DIR, { recursive: true });
@@ -44,8 +45,13 @@ export async function POST(req: NextRequest) {
       args.push("--cif", cifPath);
 
       if (configStr) {
+        const { data: config, errorResponse: configError } = parseOptionalJsonConfig(configStr);
+        if (configError) {
+          fs.rmSync(tmpDir, { recursive: true, force: true });
+          return configError;
+        }
         const configPath = path.join(tmpDir, "config.json");
-        fs.writeFileSync(configPath, configStr, "utf-8");
+        fs.writeFileSync(configPath, JSON.stringify(config), "utf-8");
         args.push("--config", configPath);
       }
     } else {

@@ -17,3 +17,4 @@
 ## 4. 自动化与质量
 *   **Pre-commit Hooks**：提交代码前强制进行 ESLint 和 Prettier 校验。
 *   **部署自动化**：通过简单的 Shell 脚本实现一键 Pull 代码并重启 Docker 容器。
+*   **API 入参校验**：Route Handler 写操作统一走 `@/lib/api-validate` 的 `validateBody` + `@/lib/validations` 中的 Zod schema；FormData JSON 字段用 `parseOptionalJsonConfig`。

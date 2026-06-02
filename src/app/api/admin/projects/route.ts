@@ -3,6 +3,8 @@ import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { paginated, success, badRequest } from "@/lib/admin-response";
 import { parseListParams } from "@/lib/admin-response";
+import { validateBody } from "@/lib/api-validate";
+import { adminProjectDeleteSchema } from "@/lib/validations";
 
 const CORE_KEYS = ["abstract", "introduction", "methods", "results", "conclusion"];
 
@@ -56,9 +58,10 @@ export async function DELETE(req: NextRequest) {
   const { error } = await requireAdmin(req);
   if (error) return error;
 
-  const body = await req.json();
-  const { projectId } = body;
-  if (!projectId) return badRequest("缺少 projectId");
+  const body = await req.json().catch(() => null);
+  const { data, errorResponse: ve } = await validateBody(adminProjectDeleteSchema, body);
+  if (ve) return ve;
+  const { projectId } = data;
 
   await prisma.$transaction([
     prisma.reviewIssue.deleteMany({ where: { check: { projectId } } }),

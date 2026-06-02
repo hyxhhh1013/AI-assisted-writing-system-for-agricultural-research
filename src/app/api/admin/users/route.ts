@@ -3,6 +3,8 @@ import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { paginated, success, badRequest } from "@/lib/admin-response";
 import { parseListParams } from "@/lib/admin-response";
+import { validateBody } from "@/lib/api-validate";
+import { adminUserDeleteSchema, adminUserRolePatchSchema } from "@/lib/validations";
 
 export async function GET(req: NextRequest) {
   const { error } = await requireAdmin(req);
@@ -48,11 +50,10 @@ export async function PATCH(req: NextRequest) {
   const { error } = await requireAdmin(req);
   if (error) return error;
 
-  const body = await req.json();
-  const { userId, role } = body;
-  if (!userId || !["user", "admin"].includes(role)) {
-    return badRequest("参数无效");
-  }
+  const body = await req.json().catch(() => null);
+  const { data, errorResponse: ve } = await validateBody(adminUserRolePatchSchema, body);
+  if (ve) return ve;
+  const { userId, role } = data;
   await prisma.user.update({ where: { id: userId }, data: { role } });
   return success(undefined, "角色已更新");
 }
@@ -61,9 +62,10 @@ export async function DELETE(req: NextRequest) {
   const { error: authError, user: adminUser } = await requireAdmin(req);
   if (authError) return authError;
 
-  const body = await req.json();
-  const { userId } = body;
-  if (!userId) return badRequest("缺少 userId");
+  const body = await req.json().catch(() => null);
+  const { data, errorResponse: ve } = await validateBody(adminUserDeleteSchema, body);
+  if (ve) return ve;
+  const { userId } = data;
   if (userId === adminUser?.id) return badRequest("不能删除自己");
 
   // 级联删除关联数据

@@ -6,21 +6,18 @@
  */
 
 import { NextRequest } from "next/server";
-import { runPlagiarismCheck, DEFAULT_CONFIG } from "@/services/plagiarism-service";
+import { runPlagiarismCheck } from "@/services/plagiarism-service";
+import { validateBody } from "@/lib/api-validate";
+import { plagiarismV2Schema } from "@/lib/validations";
 
 export const maxDuration = 180;
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { projectId, title, content, webSearch } = body;
+    const { data, errorResponse: ve } = await validateBody(plagiarismV2Schema, await req.json());
+    if (ve) return ve;
 
-    if (!title || !content) {
-      return Response.json({ error: "参数不完整" }, { status: 400 });
-    }
-    if (content.length < 50) {
-      return Response.json({ error: "内容太短" }, { status: 400 });
-    }
+    const { projectId, title, content, webSearch } = data;
 
     // 检查是否需要 SSE 进度推送
     const accept = req.headers.get("accept") || "";
@@ -40,7 +37,7 @@ export async function POST(req: NextRequest) {
                 projectId,
                 title,
                 content,
-                webSearch: webSearch === true,
+                webSearch,
               },
               (event) => {
                 send({ type: "progress", stage: event.stage, message: event.message });
@@ -69,7 +66,7 @@ export async function POST(req: NextRequest) {
       projectId,
       title,
       content,
-      webSearch: webSearch === true,
+      webSearch,
     });
     return Response.json(result);
   } catch (error: unknown) {

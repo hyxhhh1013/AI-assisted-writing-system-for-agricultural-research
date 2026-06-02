@@ -11,6 +11,7 @@ export const maxDuration = 120;
 const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
 import { PYTHON_CMD } from "@/services/xrd-runner";
+import { parseOptionalJsonConfig } from "@/lib/api-validate";
 
 if (!fs.existsSync(CHARTS_DIR)) {
   fs.mkdirSync(CHARTS_DIR, { recursive: true });
@@ -31,14 +32,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "请上传 XRD 数据文件" }, { status: 400 });
     }
 
-    let config: Record<string, any> = {};
-    if (configStr) {
-      try {
-        config = JSON.parse(configStr);
-      } catch {
-        return NextResponse.json({ error: "配置格式错误" }, { status: 400 });
-      }
-    }
+    const { data: config, errorResponse: configError } = parseOptionalJsonConfig(configStr);
+    if (configError) return configError;
 
     const tmpDir = path.join(process.cwd(), ".tmp", randomUUID());
     fs.mkdirSync(tmpDir, { recursive: true });

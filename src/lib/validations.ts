@@ -90,6 +90,16 @@ export const plagiarismRewriteSchema = z.object({
 });
 export type PlagiarismRewriteInput = z.infer<typeof plagiarismRewriteSchema>;
 
+/** v2 查重与 plagiarismCheckSchema 同构 */
+export const plagiarismV2Schema = plagiarismCheckSchema;
+export type PlagiarismV2Input = PlagiarismCheckInput;
+
+export const plagiarismRewritePatchSchema = z.object({
+  suggestionId: z.string().min(1, "suggestionId 不能为空"),
+  status: z.enum(["accepted", "rejected"]),
+});
+export type PlagiarismRewritePatchInput = z.infer<typeof plagiarismRewritePatchSchema>;
+
 // === Knowledge Analyze ===
 export const knowledgeAnalyzeSchema = z.object({
   filename: z.string().min(1, "文献名不能为空"),
@@ -126,6 +136,50 @@ export const knowledgeMetadataPatchSchema = z.object({
 });
 export type KnowledgeMetadataPatchInput = z.infer<typeof knowledgeMetadataPatchSchema>;
 
+export const knowledgeFileRefSchema = z.object({
+  name: z.string().min(1),
+  category: z.string().min(1),
+});
+
+export const knowledgeUploadFieldsSchema = z.object({
+  category: z.string().optional().default("未分类"),
+  documentType: z.enum(["paper", "journal", "patent", "book", "other"]).optional().default("paper"),
+});
+export type KnowledgeUploadFieldsInput = z.infer<typeof knowledgeUploadFieldsSchema>;
+
+export const knowledgeBatchMoveSchema = z.object({
+  action: z.literal("batch_move"),
+  files: z.array(knowledgeFileRefSchema).min(1, "文件列表不能为空"),
+  newCategory: z.string().min(1, "目标分类不能为空"),
+});
+export type KnowledgeBatchMoveInput = z.infer<typeof knowledgeBatchMoveSchema>;
+
+export const knowledgeCategoryPatchSchema = z.object({
+  name: z.string().min(1, "文献名不能为空"),
+  oldCategory: z.string().min(1, "原分类不能为空"),
+  newCategory: z.string().min(1, "新分类不能为空"),
+  documentType: z.enum(["paper", "journal", "patent", "book", "other"]).optional(),
+});
+export type KnowledgeCategoryPatchInput = z.infer<typeof knowledgeCategoryPatchSchema>;
+
+export const knowledgeDeleteBatchSchema = z.object({
+  files: z.array(knowledgeFileRefSchema).min(1, "文件列表不能为空"),
+});
+export type KnowledgeDeleteBatchInput = z.infer<typeof knowledgeDeleteBatchSchema>;
+
+export const knowledgeDeleteQuerySchema = z.object({
+  name: z.string().min(1, "缺少 name"),
+  category: z.string().min(1, "缺少 category"),
+});
+export type KnowledgeDeleteQueryInput = z.infer<typeof knowledgeDeleteQuerySchema>;
+
+export const reindexRequestSchema = z.object({
+  files: z.array(z.string().min(1)).optional(),
+  forceStage1: z.boolean().optional(),
+  forceStage3: z.boolean().optional(),
+});
+export type ReindexRequestInput = z.infer<typeof reindexRequestSchema>;
+
 // === Review (论文审查) ===
 export const reviewSchema = z.object({
   projectId: z.string().optional(),
@@ -152,3 +206,138 @@ export const projectEvidencePatchSchema = z
     { message: "至少提供 dataClaims 或 dataSources" },
   );
 export type ProjectEvidencePatchInput = z.infer<typeof projectEvidencePatchSchema>;
+
+export const projectMetaPatchSchema = z
+  .object({
+    title: z.string().optional(),
+    authors: z.string().optional(),
+    affiliations: z.string().optional(),
+    abstract: z.string().optional(),
+    keywords: z.string().optional(),
+    classification: z.string().optional(),
+    researchDirection: z.string().optional(),
+    outline: z.string().optional(),
+    template: z.string().optional(),
+    mode: z.string().optional(),
+  })
+  .refine(
+    (data) => Object.values(data).some((v) => v !== undefined),
+    { message: "无可更新的字段" },
+  );
+export type ProjectMetaPatchInput = z.infer<typeof projectMetaPatchSchema>;
+
+export const projectSectionPatchSchema = z.object({
+  content: z.string(),
+});
+export type ProjectSectionPatchInput = z.infer<typeof projectSectionPatchSchema>;
+
+// === Admin ===
+export const adminUserRolePatchSchema = z.object({
+  userId: z.string().min(1, "缺少 userId"),
+  role: z.enum(["user", "admin"]),
+});
+export type AdminUserRolePatchInput = z.infer<typeof adminUserRolePatchSchema>;
+
+export const adminUserDeleteSchema = z.object({
+  userId: z.string().min(1, "缺少 userId"),
+});
+export type AdminUserDeleteInput = z.infer<typeof adminUserDeleteSchema>;
+
+export const adminProjectDeleteSchema = z.object({
+  projectId: z.string().min(1, "缺少 projectId"),
+});
+export type AdminProjectDeleteInput = z.infer<typeof adminProjectDeleteSchema>;
+
+export const adminKnowledgeFileRefSchema = z.object({
+  name: z.string().min(1),
+  category: z.string().optional(),
+});
+
+export const adminKnowledgeDeleteSchema = z
+  .object({
+    name: z.string().optional(),
+    category: z.string().optional(),
+    files: z.array(adminKnowledgeFileRefSchema).optional(),
+  })
+  .refine((data) => (data.files && data.files.length > 0) || !!data.name, {
+    message: "缺少文件信息",
+  });
+export type AdminKnowledgeDeleteInput = z.infer<typeof adminKnowledgeDeleteSchema>;
+
+export const adminKnowledgeReindexSchema = z.object({
+  name: z.string().min(1, "缺少文件名"),
+  forceStage1: z.boolean().optional(),
+  forceStage3: z.boolean().optional(),
+});
+export type AdminKnowledgeReindexInput = z.infer<typeof adminKnowledgeReindexSchema>;
+
+export const adminSettingPutSchema = z.object({
+  key: z.string().min(1, "缺少 key"),
+  value: z.string(),
+});
+export type AdminSettingPutInput = z.infer<typeof adminSettingPutSchema>;
+
+export const adminSettingDeleteSchema = z.object({
+  key: z.string().min(1, "缺少 key"),
+});
+export type AdminSettingDeleteInput = z.infer<typeof adminSettingDeleteSchema>;
+
+// === Chart / Table / XRD ===
+export const chartModeSchema = z.enum(["generic", "crd"]).default("generic");
+
+export const jsonObjectSchema = z.record(z.string(), z.unknown());
+
+export const tableGroupSchema = z.object({
+  label: z.string().min(1),
+  n: z.number(),
+  mean: z.number(),
+  sd: z.number(),
+});
+
+export const tableGenerateSchema = z.object({
+  title: z.string().min(1, "表标题不能为空"),
+  columnHeader: z.string().optional(),
+  groups: z.array(tableGroupSchema).min(2, "请提供至少 2 个处理组数据"),
+  anova: z
+    .object({
+      F: z.number(),
+      df1: z.number(),
+      df2: z.number(),
+      p: z.number(),
+    })
+    .optional(),
+  posthoc: z
+    .array(
+      z.object({
+        pair: z.tuple([z.string(), z.string()]),
+        p: z.number(),
+      }),
+    )
+    .optional(),
+  alpha: z.number().optional(),
+  note: z.string().optional(),
+});
+export type TableGenerateInput = z.infer<typeof tableGenerateSchema>;
+
+const braggHklSchema = z.tuple([z.number(), z.number(), z.number()]);
+
+export const xrdBraggSchema = z.object({
+  crystal_system: z.union([z.string(), z.number()]),
+  lattice_init: z.tuple([
+    z.number(),
+    z.number(),
+    z.number(),
+    z.number(),
+    z.number(),
+    z.number(),
+  ]),
+  hkl: z.array(braggHklSchema).min(1),
+  exp_angles: z.array(z.number()).min(1),
+  wavelength: z.number().optional(),
+  title: z.string().optional(),
+  subset_number: z.number().optional(),
+  low_bound: z.number().optional(),
+  up_bound: z.number().optional(),
+  tao: z.number().optional(),
+});
+export type XrdBraggInput = z.infer<typeof xrdBraggSchema>;

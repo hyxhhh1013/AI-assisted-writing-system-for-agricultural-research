@@ -1,6 +1,18 @@
 import type { ConsistencyIssue, ConsistencyReport } from "@/types/consistency";
 
-export type { ConsistencyReport };
+export type { ConsistencyIssue, ConsistencyReport };
+
+/** POST /api/consistency 请求体 */
+export interface ConsistencyCheckInput {
+  title: string;
+  sections: { key: string; content: string }[];
+  outline?: string;
+  dataClaims?: {
+    id: string;
+    text: string;
+    values: Record<string, number | string>;
+  }[];
+}
 
 /** 问题状态：open → fixing → fixed / dismissed */
 export type IssueStatus = "open" | "fixing" | "fixed" | "dismissed";

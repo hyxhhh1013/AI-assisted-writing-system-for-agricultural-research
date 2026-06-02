@@ -3,11 +3,13 @@ import { NextRequest } from "next/server";
 import { spawn } from "child_process";
 import path from "path";
 import { localRAG, invalidateBibCache } from "@/lib/rag";
-import type { ReindexProgressEvent, ReindexRequest } from "@/contracts/reindex";
+import type { ReindexProgressEvent } from "@/contracts/reindex";
+import { validateBody } from "@/lib/api-validate";
+import { reindexRequestSchema, type ReindexRequestInput } from "@/lib/validations";
 
 const PROGRESS_PREFIX = "__INDEX_PROGRESS__";
 
-function buildScriptArgs(options: ReindexRequest): string[] {
+function buildScriptArgs(options: ReindexRequestInput): string[] {
   const args = ["--progress"];
   if (options.forceStage1) args.push("--force-stage1");
   if (options.forceStage3) args.push("--force-stage3");
@@ -17,25 +19,17 @@ function buildScriptArgs(options: ReindexRequest): string[] {
   return args;
 }
 
-function parseReindexBody(body: unknown): ReindexRequest {
-  if (body == null || typeof body !== "object") return {};
-  const record = body as Record<string, unknown>;
-  const files = Array.isArray(record.files)
-    ? record.files.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-    : undefined;
-  return {
-    files: files && files.length > 0 ? files : undefined,
-    forceStage1: record.forceStage1 === true,
-    forceStage3: record.forceStage3 === true,
-  };
-}
-
 export async function POST(req: NextRequest) {
-  let options: ReindexRequest = {};
+  let options: ReindexRequestInput = {};
   try {
     const text = await req.text();
     if (text.trim()) {
-      options = parseReindexBody(JSON.parse(text) as unknown);
+      const { data, errorResponse: ve } = await validateBody(
+        reindexRequestSchema,
+        JSON.parse(text) as unknown,
+      );
+      if (ve) return ve;
+      options = data;
     }
   } catch {
     return Response.json({ error: "无效的 reindex 请求体" }, { status: 400 });

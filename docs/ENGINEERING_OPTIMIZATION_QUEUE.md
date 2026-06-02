@@ -62,11 +62,11 @@
 | RAG-PR-004 | `index-pdfs.mjs` 直接输出分离格式 | RAG-PR-001 | 3h | done | 2026-06-01 |
 | RAG-PR-005 | RAG 部署验证 + 文档更新 | RAG-PR-003, RAG-PR-004 | 2h | done | 2026-06-01 |
 | **Phase 2 — API 契约与数据一致性** |
-| ENG-PR-020 | `services/consistency.ts` + hook 去 fetch | ENG-PR-002 | 2h | todo | |
-| ENG-PR-021 | Admin 页面 fetch 迁入 services | ENG-PR-002 | 4h | todo | |
-| ENG-PR-022 | Legacy/独立页 fetch 迁入 services | ENG-PR-020 | 4h | todo | |
-| ENG-PR-023 | Zod `validateBody` 波次 A（admin + 图表） | ENG-PR-002 | 3h | todo | |
-| ENG-PR-024 | Zod `validateBody` 波次 B（knowledge 写 + projects） | ENG-PR-023 | 3h | todo | |
+| ENG-PR-020 | `services/consistency.ts` + hook 去 fetch | ENG-PR-002 | 2h | done | 2026-06-02 |
+| ENG-PR-021 | Admin 页面 fetch 迁入 services | ENG-PR-002 | 4h | done | 2026-06-02 |
+| ENG-PR-022 | Legacy/独立页 fetch 迁入 services | ENG-PR-020 | 4h | done | 2026-06-02 |
+| ENG-PR-023 | Zod `validateBody` 波次 A（admin + 图表） | ENG-PR-002 | 3h | done | 2026-06-02 |
+| ENG-PR-024 | Zod `validateBody` 波次 B（knowledge 写 + projects） | ENG-PR-023 | 3h | done | 2026-06-02 |
 | ENG-PR-025 | References 增量 PATCH API | ENG-PR-024 | 4h | todo | |
 | ENG-PR-026 | AnalysisResults 增量 PATCH API | ENG-PR-025 | 3h | todo | |
 | ENG-PR-025b | 增量 PATCH 前端接线（store / autosave / 面板） | ENG-PR-025, ENG-PR-026 | 4h | todo | |
@@ -823,6 +823,11 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-06-01 | RAG-PR-002, 003 | AI | EmbeddingStore + async load；chat/source/writing/analyze/reindex await |
 | 2026-06-01 | RAG-PR-004 | AI | index-pdfs stage2/3 写 index_*.json + .emb 分离格式 |
 | 2026-06-01 | RAG-PR-005 | AI | DEPLOY.md RAG 迁移步骤 + 验证清单；本地 check/build 通过 |
+| 2026-06-02 | ENG-PR-020 | AI | consistency service + hook 去 fetch；单测 3 条（队列补记） |
+| 2026-06-02 | ENG-PR-021 | AI | `services/admin.ts` + 10 个 admin 页面 fetch 清零；contracts/admin 扩展 DTO |
+| 2026-06-02 | ENG-PR-022 | AI | auth/outline/writing/translate 等 9 个 service；panel+独立页+hooks fetch 清零；152 测试绿 |
+| 2026-06-02 | ENG-PR-023 | AI | admin 写接口 + table/chart/xrd validateBody；validations 单测补 4 组 |
+| 2026-06-02 | ENG-PR-024 | AI | knowledge/projects/plagiarism/reindex validateBody；162 测试绿；CONVENTIONS 补 API 校验约定 |
 
 ---
 

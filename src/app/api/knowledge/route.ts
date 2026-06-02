@@ -10,7 +10,15 @@ import path from "path";
 import prisma from "@/lib/prisma";
 import type { KnowledgeFileRecord } from "@/contracts/knowledge";
 import { localRAG, invalidateBibCache } from "@/lib/rag";
-import { knowledgeMetadataPatchSchema } from "@/lib/validations";
+import { validateBody } from "@/lib/api-validate";
+import {
+  knowledgeBatchMoveSchema,
+  knowledgeCategoryPatchSchema,
+  knowledgeDeleteBatchSchema,
+  knowledgeDeleteQuerySchema,
+  knowledgeMetadataPatchSchema,
+  knowledgeUploadFieldsSchema,
+} from "@/lib/validations";
 
 const ARTICLES_DIR = path.join(process.cwd(), process.env.RAG_ARTICLES_DIR || "papers");
 const METADATA_PATH = path.join(process.cwd(), "data/metadata.json");
@@ -137,10 +145,22 @@ export async function POST(req: NextRequest) {
     }
 
     const formData = await req.formData();
-    const file = formData.get("file") as File;
-    const category = formData.get("category") as string || "未分类";
-    const documentType = formData.get("documentType") as string || "paper";
-    if (!file) return NextResponse.json({ error: "未发现上传文件" }, { status: 400 });
+    const file = formData.get("file");
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: "未发现上传文件" }, { status: 400 });
+    }
+
+    const categoryRaw = formData.get("category");
+    const documentTypeRaw = formData.get("documentType");
+    const { data: uploadFields, errorResponse: fieldError } = await validateBody(
+      knowledgeUploadFieldsSchema,
+      {
+        category: typeof categoryRaw === "string" ? categoryRaw : undefined,
+        documentType: typeof documentTypeRaw === "string" ? documentTypeRaw : undefined,
+      },
+    );
+    if (fieldError) return fieldError;
+    const { category, documentType } = uploadFields;
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const targetPath = resolveKnowledgeFilePath(ARTICLES_DIR, category, file.name);
@@ -181,19 +201,19 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
-    const { action, files, newCategory } = body;
+    const { action } = body;
 
     if (action === "update_metadata") {
-      const parsed = knowledgeMetadataPatchSchema.safeParse(body);
-      if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || "参数无效" }, { status: 400 });
+      const { data: parsed, errorResponse: ve } = await validateBody(knowledgeMetadataPatchSchema, body);
+      if (ve) return ve;
 
       // 更新 Prisma
       await prisma.knowledgeFile.updateMany({
-        where: { name: parsed.data.name },
+        where: { name: parsed.name },
         data: {
-          documentType: parsed.data.documentType || undefined,
-          gbTag: parsed.data.gbTag || undefined,
-          bib: parsed.data.bib ? JSON.stringify(parsed.data.bib) : undefined,
+          documentType: parsed.documentType || undefined,
+          gbTag: parsed.gbTag || undefined,
+          bib: parsed.bib ? JSON.stringify(parsed.bib) : undefined,
           bibEdited: true,
         },
       });
@@ -201,12 +221,12 @@ export async function PATCH(req: NextRequest) {
       // 同步 metadata.json
       if (fs.existsSync(METADATA_PATH)) {
         const metadata = loadMetadataJSON();
-        const entry = metadata.find(m => m.name === parsed.data.name);
+        const entry = metadata.find(m => m.name === parsed.name);
         if (entry) {
-          entry.bib = parsed.data.bib as any;
+          entry.bib = parsed.bib as KnowledgeFileRecord["bib"];
           entry.bibEdited = true;
-          if (parsed.data.documentType) entry.documentType = parsed.data.documentType;
-          if (parsed.data.gbTag) entry.gbTag = parsed.data.gbTag;
+          if (parsed.documentType) entry.documentType = parsed.documentType;
+          if (parsed.gbTag) entry.gbTag = parsed.gbTag;
           saveMetadataJSON(metadata);
         }
       }
@@ -215,7 +235,9 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (action === "batch_move") {
-      if (!files?.length || !newCategory) return NextResponse.json({ error: "参数不完整" }, { status: 400 });
+      const { data: moveData, errorResponse: ve } = await validateBody(knowledgeBatchMoveSchema, body);
+      if (ve) return ve;
+      const { files, newCategory } = moveData;
       const newDir = resolveKnowledgeCategoryDir(ARTICLES_DIR, newCategory);
       if (!fs.existsSync(newDir)) fs.mkdirSync(newDir, { recursive: true });
       let ok = 0, fail = 0;
@@ -243,8 +265,12 @@ export async function PATCH(req: NextRequest) {
     }
 
     // 单文件分类修改
-    const { name, oldCategory, documentType } = body;
-    if (!name || !oldCategory || !newCategory) return NextResponse.json({ error: "参数不完整" }, { status: 400 });
+    const { data: categoryData, errorResponse: categoryError } = await validateBody(
+      knowledgeCategoryPatchSchema,
+      body,
+    );
+    if (categoryError) return categoryError;
+    const { name, oldCategory, newCategory, documentType } = categoryData;
 
     let oldPath = resolveKnowledgeFilePath(ARTICLES_DIR, oldCategory, name);
     if (!fs.existsSync(oldPath)) {
@@ -296,8 +322,12 @@ export async function DELETE(req: NextRequest) {
     const isBatch = searchParams.get("batch") === "true";
 
     if (isBatch) {
-      const { files } = await req.json();
-      if (!files?.length) return NextResponse.json({ error: "未提供文件列表" }, { status: 400 });
+      const { data: batchData, errorResponse: ve } = await validateBody(
+        knowledgeDeleteBatchSchema,
+        await req.json(),
+      );
+      if (ve) return ve;
+      const { files } = batchData;
       let deleted = 0;
       for (const f of files) {
         try {
@@ -317,10 +347,14 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ message: `删除 ${deleted} 个文件` });
     }
 
-    if (!name || !category) return NextResponse.json({ error: "参数不完整" }, { status: 400 });
-    const fp = resolveKnowledgeFilePath(ARTICLES_DIR, category, name);
+    const { data: deleteQuery, errorResponse: queryError } = await validateBody(
+      knowledgeDeleteQuerySchema,
+      { name, category },
+    );
+    if (queryError) return queryError;
+    const fp = resolveKnowledgeFilePath(ARTICLES_DIR, deleteQuery.category, deleteQuery.name);
     if (fs.existsSync(fp)) fs.unlinkSync(fp);
-    await prisma.knowledgeFile.deleteMany({ where: { name } });
+    await prisma.knowledgeFile.deleteMany({ where: { name: deleteQuery.name } });
     return NextResponse.json({ message: "文件已删除" });
   } catch (error: unknown) {
     if (error instanceof SafePathError) {

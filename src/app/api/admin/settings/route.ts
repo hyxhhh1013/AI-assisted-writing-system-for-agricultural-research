@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { success, badRequest } from "@/lib/admin-response";
 import { getAllSettings, getSetting, setSetting, deleteSetting, initDefaultSettings } from "@/lib/settings";
+import { validateBody } from "@/lib/api-validate";
+import { adminSettingDeleteSchema, adminSettingPutSchema } from "@/lib/validations";
 
 export const dynamic = "force-dynamic";
 
@@ -34,9 +36,10 @@ export async function PUT(req: NextRequest) {
     const { error } = await requireAdmin(req);
     if (error) return error;
 
-    const body = await req.json();
-    const { key, value } = body;
-    if (!key || value === undefined) return badRequest("缺少 key 或 value");
+    const body = await req.json().catch(() => null);
+    const { data, errorResponse: ve } = await validateBody(adminSettingPutSchema, body);
+    if (ve) return ve;
+    const { key, value } = data;
 
     await setSetting(key, value);
     return success(undefined, `已保存 ${key}`);
@@ -51,9 +54,10 @@ export async function DELETE(req: NextRequest) {
   const { error } = await requireAdmin(req);
   if (error) return error;
 
-  const body = await req.json();
-  const { key } = body;
-  if (!key) return badRequest("缺少 key");
+  const body = await req.json().catch(() => null);
+  const { data, errorResponse: ve } = await validateBody(adminSettingDeleteSchema, body);
+  if (ve) return ve;
+  const { key } = data;
 
   await deleteSetting(key);
   return success(undefined, `已删除 ${key}`);

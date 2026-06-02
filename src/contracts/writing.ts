@@ -7,7 +7,7 @@ export interface WritingRequest {
   existingReferences: string[];  // 修复：实际是数组，不是 string
   researchDirection?: string;
   retrievalMode?: "precise" | "balanced" | "extensive";
-  mode?: "fast" | "full";
+  mode?: "fast" | "full" | "audit_only" | "fix_only";
   subsectionTitle?: string;
   figureStart?: number;
   globalContext?: {

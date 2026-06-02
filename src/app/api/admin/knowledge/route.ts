@@ -4,6 +4,11 @@ import path from "path";
 import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { success, badRequest } from "@/lib/admin-response";
+import { validateBody } from "@/lib/api-validate";
+import {
+  adminKnowledgeDeleteSchema,
+  adminKnowledgeReindexSchema,
+} from "@/lib/validations";
 
 const ARTICLES_DIR = path.join(process.cwd(), process.env.RAG_ARTICLES_DIR || "papers");
 
@@ -47,10 +52,13 @@ export async function DELETE(req: NextRequest) {
   const { error } = await requireAdmin(req);
   if (error) return error;
 
-  const body = await req.json();
-  const { name, category, files: bulkFiles } = body;
-  const toDelete: { name: string; category: string }[] = bulkFiles || [{ name, category }].filter((f: any) => f.name);
-  if (!toDelete.length) return badRequest("缺少文件信息");
+  const body = await req.json().catch(() => null);
+  const { data, errorResponse: ve } = await validateBody(adminKnowledgeDeleteSchema, body);
+  if (ve) return ve;
+  const { name, category, files: bulkFiles } = data;
+  const toDelete: { name: string; category: string }[] =
+    bulkFiles?.map((f) => ({ name: f.name, category: f.category || "未分类" }))
+    ?? [{ name: name!, category: category || "未分类" }];
 
   let deletedDisk = 0;
   for (const f of toDelete) {
@@ -68,9 +76,10 @@ export async function POST(req: NextRequest) {
   const { error } = await requireAdmin(req);
   if (error) return error;
 
-  const body = await req.json();
-  const { name, forceStage1, forceStage3 } = body;
-  if (!name) return badRequest("缺少文件名");
+  const body = await req.json().catch(() => null);
+  const { data, errorResponse: ve } = await validateBody(adminKnowledgeReindexSchema, body);
+  if (ve) return ve;
+  const { name, forceStage1, forceStage3 } = data;
 
   const { reindexKnowledge } = await import("@/services/knowledge");
   reindexKnowledge({ files: [name], forceStage1, forceStage3 }).catch(() => {});
