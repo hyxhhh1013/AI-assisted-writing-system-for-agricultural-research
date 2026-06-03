@@ -1,8 +1,8 @@
 name: Deploy to VPS (PM2)
 
+# 日常部署请用 scripts/deploy/package.ps1 + apply.sh（standalone 上传）。
+# 本 workflow 仅手动触发，避免 push 时在错误目录跑旧 Docker 脚本或误覆盖线上。
 on:
-  push:
-    branches: [cursor/code-quality-cleanup, main]
   workflow_dispatch:
 
 concurrency:
@@ -27,9 +27,9 @@ jobs:
           envs: DEPLOY_DIR,DEPLOY_BRANCH
           script: |
             set -euo pipefail
-            cd "${DEPLOY_DIR:-/opt/grainscript}"
-            export DEPLOY_BRANCH="${DEPLOY_BRANCH:-cursor/code-quality-cleanup}"
+            cd "${DEPLOY_DIR:-/home/ubuntu/grainscript}"
+            export DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
             bash scripts/deploy/pm2-up.sh
         env:
-          DEPLOY_DIR: ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/opt/grainscript' }}
+          DEPLOY_DIR: ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/home/ubuntu/grainscript' }}
           DEPLOY_BRANCH: ${{ github.ref_name }}

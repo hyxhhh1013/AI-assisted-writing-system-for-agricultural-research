@@ -1,7 +1,14 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it, expect } from "vitest";
 import { localRAG } from "@/lib/rag";
 
-describe("RAG search integration", () => {
+/** CI / 无 data 索引时跳过（本地有 data/index.json 或 RUN_RAG_INTEGRATION=1 才跑） */
+const hasRagIndex =
+  process.env.RUN_RAG_INTEGRATION === "1" ||
+  existsSync(join(process.cwd(), "data", "index.json"));
+
+describe.skipIf(!hasRagIndex)("RAG search integration", () => {
   it("returns results for a known topic", async () => {
     const results = await localRAG.search("热解温度催化剂", { limit: 5 });
     expect(results.length).toBeGreaterThan(0);
