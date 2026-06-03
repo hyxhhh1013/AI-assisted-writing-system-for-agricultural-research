@@ -1,269 +1,257 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { logger } from "@/lib/logger";
+import type { Prisma } from "@prisma/client";
+import { getErrorMessage } from "@/lib/error-utils";
+import {
+  SafePathError,
+  resolveKnowledgeCategoryDir,
+  resolveKnowledgeFilePath,
+} from "@/lib/safe-path";
+import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
-import { exec } from "child_process";
-import { promisify } from "util";
-import { localRAG } from "@/lib/rag";
+import prisma from "@/lib/prisma";
+import type { KnowledgeFileRecord } from "@/contracts/knowledge";
+import { prismaRowToKnowledgeRecord } from "@/lib/knowledge-metadata";
+import { localRAG, invalidateBibCache } from "@/lib/rag";
+import { validateBody } from "@/lib/api-validate";
+import {
+  knowledgeBatchMoveSchema,
+  knowledgeCategoryPatchSchema,
+  knowledgeDeleteBatchSchema,
+  knowledgeDeleteQuerySchema,
+  knowledgeMetadataPatchSchema,
+  knowledgeUploadFieldsSchema,
+} from "@/lib/validations";
 
-const execPromise = promisify(exec);
-const ARTICLES_DIR = path.join(process.cwd(), "热化学小组文章-2024.12.27");
-const METADATA_PATH = path.join(process.cwd(), "data/metadata.json");
+const ARTICLES_DIR = path.join(process.cwd(), process.env.RAG_ARTICLES_DIR || "papers");
+
+// ====== GET ======
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category");
     const query = searchParams.get("q")?.toLowerCase();
-    const searchType = searchParams.get("type") || "name"; // name | semantic
+    const searchType = searchParams.get("type") || "name";
     const page = parseInt(searchParams.get("page") || "1");
     const pageSize = parseInt(searchParams.get("pageSize") || "10");
 
-    // RAG 语义搜索
     if (searchType === "semantic" && query) {
       const cat = category && category !== "全部" ? category : undefined;
-      // 检索更多 chunk，确保分页后有足够的来源多样性
       const results = await localRAG.search(query, { limit: 50, category: cat });
-
-      // 先按 source 分组（不分页 chunk），每个 source 收集其全部匹配 chunk
-      const grouped = new Map<string, { name: string; category: string; chunks: typeof results; chunkCount: number }>();
+      const grouped = new Map<string, { name: string; category: string; chunks: typeof results }>();
       for (const r of results) {
         const key = r.metadata.source;
-        if (!grouped.has(key)) {
-          grouped.set(key, { name: key, category: r.metadata.category, chunks: [], chunkCount: 0 });
-        }
-        const g = grouped.get(key)!;
-        g.chunks.push(r);
-        g.chunkCount++;
+        if (!grouped.has(key)) grouped.set(key, { name: key, category: r.metadata.category, chunks: [] });
+        grouped.get(key)!.chunks.push(r);
       }
-
-      // 按匹配 chunk 数量降序排列（最相关的文献排前面）
-      const sources = Array.from(grouped.values())
-        .sort((a, b) => b.chunkCount - a.chunkCount);
-
+      const sources = Array.from(grouped.values()).sort((a, b) => b.chunks.length - a.chunks.length);
       const total = sources.length;
-      const start = (page - 1) * pageSize;
-      const paged = sources.slice(start, start + pageSize);
-
+      const paged = sources.slice((page - 1) * pageSize, page * pageSize);
       return NextResponse.json({
-        files: paged.map(g => ({
-          name: g.name,
-          category: g.category,
-          documentType: g.chunks[0]?.metadata?.documentType || "paper",
-          chunkCount: g.chunkCount,
-          size: 0,
-          mtime: "",
-          // 返回完整 chunk 内容（截断到 300 字），方便前端展示相关片段
-          _snippets: g.chunks.map(c => c.content.slice(0, 300)),
+        files: await Promise.all(paged.map(async (g) => {
+          const db = await prisma.knowledgeFile.findUnique({ where: { name: g.name } });
+          if (db) {
+            const r = prismaRowToKnowledgeRecord({
+              ...db,
+              chunkCount: g.chunks.length,
+              _count: { chunks: g.chunks.length },
+            });
+            r._snippets = g.chunks.map(c => c.content.slice(0, 300));
+            return r;
+          }
+          return { name: g.name, category: g.category, documentType: "paper", chunkCount: g.chunks.length, size: 0, mtime: "", _snippets: g.chunks.map(c => c.content.slice(0, 300)) };
         })),
-        total,
-        page,
-        pageSize,
-        searchType: "semantic",
-        categories: [],
+        total, page, pageSize, searchType: "semantic", categories: [],
       });
     }
 
-    // 原有文件名搜索
-    if (!fs.existsSync(METADATA_PATH)) {
-      return NextResponse.json({ files: [], total: 0, categories: ["全部"] });
-    }
+    // 主路径：从 Prisma 读
+    const where: Prisma.KnowledgeFileWhereInput = {};
+    if (category && category !== "全部") where.category = category;
+    if (query) where.OR = [{ name: { contains: query } }, { category: { contains: query } }];
 
-    const metadata = JSON.parse(fs.readFileSync(METADATA_PATH, "utf-8"));
-    const categories = Array.from(new Set(metadata.map((m: any) => m.category)));
+    const [files, total] = await Promise.all([
+      prisma.knowledgeFile.findMany({
+        where,
+        orderBy: { name: "asc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { _count: { select: { chunks: true } } },
+      }),
+      prisma.knowledgeFile.count({ where }),
+    ]);
 
-    let filtered = metadata;
-    if (category && category !== "全部") {
-      filtered = filtered.filter((m: any) => m.category === category);
-    }
-    if (query) {
-      filtered = filtered.filter((m: any) =>
-        m.name.toLowerCase().includes(query) ||
-        m.category.toLowerCase().includes(query)
-      );
-    }
-
-    const total = filtered.length;
-    const start = (page - 1) * pageSize;
-    const end = start + pageSize;
-    const paginatedFiles = filtered.slice(start, end);
+    const allCategories = await prisma.knowledgeFile.groupBy({ by: ["category"], _count: true, orderBy: { _count: { category: "desc" } } });
 
     return NextResponse.json({
-      files: paginatedFiles,
-      total,
-      page,
-      pageSize,
-      categories: ["全部", ...categories],
+      files: files.map((f) => prismaRowToKnowledgeRecord(f)),
+      total, page, pageSize,
+      categories: ["全部", ...allCategories.map(c => c.category)],
       searchType: "name",
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? getErrorMessage(error) : "请求失败";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+// ====== POST (upload) ======
 
 export async function POST(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const action = searchParams.get("action");
-
     if (action === "reindex") {
-      // 运行索引脚本
-      const { stdout, stderr } = await execPromise("node scripts/index-pdfs.mjs");
-      console.log("Indexing output:", stdout);
-      if (stderr) console.error("Indexing stderr:", stderr);
-      
-      // 强制重新加载 RAG 索引以清除缓存
-      localRAG.reload();
-      
-      return NextResponse.json({ message: "索引更新成功", details: stdout });
+      return NextResponse.json({ error: "请使用 POST /api/knowledge/reindex 获取流式进度" }, { status: 410 });
     }
 
-    // 处理文件上传
     const formData = await req.formData();
-    const file = formData.get("file") as File;
-    const category = formData.get("category") as string || "未分类";
-    const documentType = formData.get("documentType") as string || "paper";
-
-    if (!file) {
+    const file = formData.get("file");
+    if (!(file instanceof File)) {
       return NextResponse.json({ error: "未发现上传文件" }, { status: 400 });
     }
 
+    const categoryRaw = formData.get("category");
+    const documentTypeRaw = formData.get("documentType");
+    const { data: uploadFields, errorResponse: fieldError } = await validateBody(
+      knowledgeUploadFieldsSchema,
+      {
+        category: typeof categoryRaw === "string" ? categoryRaw : undefined,
+        documentType: typeof documentTypeRaw === "string" ? documentTypeRaw : undefined,
+      },
+    );
+    if (fieldError) return fieldError;
+    const { category, documentType } = uploadFields;
+
     const buffer = Buffer.from(await file.arrayBuffer());
-    const targetDir = category === "未分类" 
-      ? ARTICLES_DIR 
-      : path.join(ARTICLES_DIR, category);
+    const targetPath = resolveKnowledgeFilePath(ARTICLES_DIR, category, file.name);
+    const targetDir = path.dirname(targetPath);
+    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+    fs.writeFileSync(targetPath, buffer);
 
-    if (!fs.existsSync(targetDir)) {
-      fs.mkdirSync(targetDir, { recursive: true });
-    }
-
-    const filePath = path.join(targetDir, file.name);
-    fs.writeFileSync(filePath, buffer);
-
-    // 同步更新 metadata.json，使文件立即可见于列表
-    if (fs.existsSync(METADATA_PATH)) {
-      const metadata = JSON.parse(fs.readFileSync(METADATA_PATH, "utf-8"));
-      const existingIdx = metadata.findIndex((m: any) => m.name === file.name);
-      const entry = {
-        name: file.name,
-        category,
-        documentType,
-        chunkCount: 0,
-        size: buffer.length,
-        mtime: new Date().toISOString(),
-      };
-      if (existingIdx >= 0) {
-        metadata[existingIdx] = entry;
-      } else {
-        metadata.push(entry);
-      }
-      fs.writeFileSync(METADATA_PATH, JSON.stringify(metadata, null, 2), "utf-8");
+    try {
+      await prisma.knowledgeFile.upsert({
+        where: { name: file.name },
+        update: { category, documentType, size: buffer.length, mtime: new Date() },
+        create: {
+          name: file.name,
+          category,
+          documentType,
+          size: buffer.length,
+          mtime: new Date(),
+          chunkCount: 0,
+        },
+      });
+      invalidateBibCache();
+    } catch (e) {
+      logger.error("Prisma upsert failed:", e);
     }
 
     return NextResponse.json({ message: "文件上传成功", name: file.name });
-
-  } catch (error: any) {
-    console.error("Knowledge API error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    if (error instanceof SafePathError) {
+      return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
+    }
+    logger.error("Knowledge API error:", error);
+    return NextResponse.json({ error: (error as Error).message || "上传失败" }, { status: 500 });
   }
 }
+
+// ====== PATCH ======
 
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
-    const { action, files, newCategory } = body;
+    const { action } = body;
+
+    if (action === "update_metadata") {
+      const { data: parsed, errorResponse: ve } = await validateBody(knowledgeMetadataPatchSchema, body);
+      if (ve) return ve;
+
+      // 更新 Prisma
+      await prisma.knowledgeFile.updateMany({
+        where: { name: parsed.name },
+        data: {
+          documentType: parsed.documentType || undefined,
+          gbTag: parsed.gbTag || undefined,
+          bib: parsed.bib ? JSON.stringify(parsed.bib) : undefined,
+          bibEdited: true,
+        },
+      });
+
+      invalidateBibCache();
+      return NextResponse.json({ message: "书目信息已保存" });
+    }
 
     if (action === "batch_move") {
-      if (!files || !Array.isArray(files) || !newCategory) {
-        return NextResponse.json({ error: "参数不完整" }, { status: 400 });
-      }
-
-      const results = { success: 0, failed: 0 };
-      const newDir = path.join(ARTICLES_DIR, newCategory === "未分类" ? "" : newCategory);
-      
-      if (!fs.existsSync(newDir)) {
-        fs.mkdirSync(newDir, { recursive: true });
-      }
-
-      for (const file of files) {
+      const { data: moveData, errorResponse: ve } = await validateBody(knowledgeBatchMoveSchema, body);
+      if (ve) return ve;
+      const { files, newCategory } = moveData;
+      const newDir = resolveKnowledgeCategoryDir(ARTICLES_DIR, newCategory);
+      if (!fs.existsSync(newDir)) fs.mkdirSync(newDir, { recursive: true });
+      let ok = 0, fail = 0;
+      for (const f of files) {
         try {
-          const oldPath = path.join(ARTICLES_DIR, file.category === "未分类" ? "" : file.category, file.name);
-          const newPath = path.join(newDir, file.name);
-          
+          const oldPath = resolveKnowledgeFilePath(ARTICLES_DIR, f.category, f.name);
+          const destPath = resolveKnowledgeFilePath(ARTICLES_DIR, newCategory, f.name);
           if (fs.existsSync(oldPath)) {
-            fs.renameSync(oldPath, newPath);
-            results.success++;
-          } else {
-            results.failed++;
-          }
-        } catch (e) {
-          results.failed++;
-        }
+            fs.renameSync(oldPath, destPath);
+            ok++;
+          } else fail++;
+        } catch { fail++; }
       }
-
-      // 同步更新 metadata.json
-      if (fs.existsSync(METADATA_PATH)) {
-        const metadata = JSON.parse(fs.readFileSync(METADATA_PATH, "utf-8"));
-        for (const file of files) {
-          const entry = metadata.find((m: any) => m.name === file.name);
-          if (entry) entry.category = newCategory;
-        }
-        fs.writeFileSync(METADATA_PATH, JSON.stringify(metadata, null, 2), "utf-8");
+      // 更新 Prisma
+      for (const f of files) {
+        await prisma.knowledgeFile.updateMany({ where: { name: f.name }, data: { category: newCategory } });
       }
-
-      return NextResponse.json({ message: `批量移动完成：成功 ${results.success}，失败 ${results.failed}` });
+      invalidateBibCache();
+      return NextResponse.json({ message: `批量移动完成：成功 ${ok}，失败 ${fail}` });
     }
 
-    // 原有的单文件修改逻辑
-    const { name, oldCategory, documentType } = body;
-    if (!name || !oldCategory || !newCategory) {
-      return NextResponse.json({ error: "参数不完整" }, { status: 400 });
-    }
+    // 单文件分类修改
+    const { data: categoryData, errorResponse: categoryError } = await validateBody(
+      knowledgeCategoryPatchSchema,
+      body,
+    );
+    if (categoryError) return categoryError;
+    const { name, oldCategory, newCategory, documentType } = categoryData;
 
-    // 在所有子目录中查找源文件（metadata 可能跟实际目录不一致）
-    let oldPath = path.join(ARTICLES_DIR, oldCategory === "未分类" ? "" : oldCategory, name);
+    let oldPath = resolveKnowledgeFilePath(ARTICLES_DIR, oldCategory, name);
     if (!fs.existsSync(oldPath)) {
-      // 搜索所有子目录
-      const found: string[] = [];
       for (const entry of fs.readdirSync(ARTICLES_DIR, { withFileTypes: true })) {
         if (!entry.isDirectory()) continue;
-        const candidate = path.join(ARTICLES_DIR, entry.name, name);
-        if (fs.existsSync(candidate)) found.push(candidate);
+        try {
+          const c = resolveKnowledgeFilePath(ARTICLES_DIR, entry.name, name);
+          if (fs.existsSync(c)) {
+            oldPath = c;
+            break;
+          }
+        } catch {
+          continue;
+        }
       }
-      if (found.length === 0) {
-        return NextResponse.json({ error: `文件不存在: ${name}` }, { status: 404 });
-      }
-      oldPath = found[0];
     }
+    if (!fs.existsSync(oldPath)) return NextResponse.json({ error: `文件不存在: ${name}` }, { status: 404 });
 
-    const newDir = path.join(ARTICLES_DIR, newCategory === "未分类" ? "" : newCategory);
-    const newPath = path.join(newDir, name);
+    const newDir = resolveKnowledgeCategoryDir(ARTICLES_DIR, newCategory);
+    if (!fs.existsSync(newDir)) fs.mkdirSync(newDir, { recursive: true });
+    fs.renameSync(oldPath, resolveKnowledgeFilePath(ARTICLES_DIR, newCategory, name));
 
-    if (!fs.existsSync(oldPath)) {
-      return NextResponse.json({ error: "源文件不存在" }, { status: 404 });
-    }
+    // 更新 Prisma
+    await prisma.knowledgeFile.updateMany({ where: { name }, data: { category: newCategory, ...(documentType ? { documentType } : {}) } });
 
-    if (!fs.existsSync(newDir)) {
-      fs.mkdirSync(newDir, { recursive: true });
-    }
-
-    fs.renameSync(oldPath, newPath);
-
-    // 同步更新 metadata.json
-    if (fs.existsSync(METADATA_PATH)) {
-      const metadata = JSON.parse(fs.readFileSync(METADATA_PATH, "utf-8"));
-      const entry = metadata.find((m: any) => m.name === name);
-      if (entry) {
-        entry.category = newCategory;
-        if (documentType) entry.documentType = documentType;
-      }
-      fs.writeFileSync(METADATA_PATH, JSON.stringify(metadata, null, 2), "utf-8");
-    }
-
+    invalidateBibCache();
     return NextResponse.json({ message: "分类更新成功" });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    if (error instanceof SafePathError) {
+      return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
+    }
+    return NextResponse.json({ error: (error as Error).message || "更新失败" }, { status: 500 });
   }
 }
+
+// ====== DELETE ======
 
 export async function DELETE(req: NextRequest) {
   try {
@@ -273,34 +261,46 @@ export async function DELETE(req: NextRequest) {
     const isBatch = searchParams.get("batch") === "true";
 
     if (isBatch) {
-      const { files } = await req.json();
-      if (!files || !Array.isArray(files)) {
-        return NextResponse.json({ error: "未提供待删除文件列表" }, { status: 400 });
-      }
-
-      let deletedCount = 0;
-      for (const file of files) {
-        const filePath = path.join(ARTICLES_DIR, file.category === "未分类" ? "" : file.category, file.name);
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-          deletedCount++;
+      const { data: batchData, errorResponse: ve } = await validateBody(
+        knowledgeDeleteBatchSchema,
+        await req.json(),
+      );
+      if (ve) return ve;
+      const { files } = batchData;
+      let deleted = 0;
+      for (const f of files) {
+        try {
+          const fp = resolveKnowledgeFilePath(ARTICLES_DIR, f.category, f.name);
+          if (fs.existsSync(fp)) {
+            fs.unlinkSync(fp);
+            deleted++;
+          }
+          await prisma.knowledgeFile.deleteMany({ where: { name: f.name } });
+        } catch (e) {
+          if (e instanceof SafePathError) {
+            return NextResponse.json({ error: e.message }, { status: 400 });
+          }
+          throw e;
         }
       }
-      return NextResponse.json({ message: `成功删除 ${deletedCount} 个文件` });
+      invalidateBibCache();
+      return NextResponse.json({ message: `删除 ${deleted} 个文件` });
     }
 
-    if (!name || !category) {
-      return NextResponse.json({ error: "参数不完整" }, { status: 400 });
+    const { data: deleteQuery, errorResponse: queryError } = await validateBody(
+      knowledgeDeleteQuerySchema,
+      { name, category },
+    );
+    if (queryError) return queryError;
+    const fp = resolveKnowledgeFilePath(ARTICLES_DIR, deleteQuery.category, deleteQuery.name);
+    if (fs.existsSync(fp)) fs.unlinkSync(fp);
+    await prisma.knowledgeFile.deleteMany({ where: { name: deleteQuery.name } });
+    invalidateBibCache();
+    return NextResponse.json({ message: "文件已删除" });
+  } catch (error: unknown) {
+    if (error instanceof SafePathError) {
+      return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
     }
-
-    const filePath = path.join(ARTICLES_DIR, category === "未分类" ? "" : category, name);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-      return NextResponse.json({ message: "文件已删除" });
-    } else {
-      return NextResponse.json({ error: "文件不存在" }, { status: 404 });
-    }
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || "删除失败" }, { status: 500 });
   }
 }

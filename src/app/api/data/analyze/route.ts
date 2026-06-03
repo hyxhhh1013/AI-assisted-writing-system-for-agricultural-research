@@ -1,5 +1,7 @@
+import { logger } from "@/lib/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeFile } from "@/services/data-analysis";
+import { getErrorMessage } from "@/lib/error-utils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,8 +51,8 @@ export async function POST(req: NextRequest) {
       claims: result.claims,
       chartConfigs: result.chartConfigs,
     });
-  } catch (error: any) {
-    console.error("Data analyze error:", error);
-    return NextResponse.json({ error: error.message || "分析失败" }, { status: 500 });
+  } catch (error: unknown) {
+    logger.error("Data analyze error:", error);
+    return NextResponse.json({ error: getErrorMessage(error) || "分析失败" }, { status: 500 });
   }
 }

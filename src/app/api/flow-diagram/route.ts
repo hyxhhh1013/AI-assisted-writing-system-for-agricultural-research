@@ -3,11 +3,12 @@ import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
+import { getErrorMessage } from "@/lib/error-utils";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-const CHARTS_DIR = path.join(process.cwd(), "public", "charts");
+const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
 import { PYTHON_CMD } from "@/services/xrd-runner";
 
@@ -98,10 +99,10 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       imageBase64: `data:image/png;base64,${base64}`,
-      imageUrl: `/charts/${outputName}`,
+      imageUrl: `/api/charts/${outputName}`,
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "未知错误";
+    const message = error instanceof Error ? getErrorMessage(error) : "未知错误";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

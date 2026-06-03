@@ -1,86 +1,46 @@
-import { chromium } from "playwright";
-import type { ProjectData } from "@/lib/store";
+﻿import { chromium } from "playwright";
+import type { ProjectData } from "@/contracts/project";
 import { formatClassification, formatKeywords } from "@/lib/paper-metadata";
 import { parseMarkdownBlocks, MarkdownBlock } from "@/lib/markdown-parser";
 import { normalizeMathDelimiters } from "@/lib/math-delimiter";
+import { formatReference } from "@/lib/ref-format";
 import katex from "katex";
 import fs from "fs";
 import path from "path";
 
 import { BodySectionKey } from "@/lib/imrad";
-import { pruneUncitedReferences, remapPrunedCitations, stripOutOfRangeCitations } from "@/lib/reference-reorder";
+import { stripOutOfRangeCitations } from "@/lib/reference-reorder";
+import { markOutOfBoundsCitations } from "@/lib/citation-bounds";
 import { cleanMarkdownArtifacts } from "@/lib/utils";
+import { getTemplateSections, type TemplateSectionDef } from "@/lib/template-sections";
 
 type PdfTemplate = "sci" | "ieee" | "gbt7713" | "nature" | "cas";
 
 const CHINESE_TEMPLATES = new Set<PdfTemplate>(["gbt7713", "cas"]);
 
-// 最小 KaTeX/MathML 样式（不依赖外部字体，Playwright PDF 安全）
-const katexCss = `
-  .katex { font-size: 1em !important; }
-  .katex-display { display: block; margin: 0.5em 0; text-align: center; }
-  .katex-display > .katex { display: inline-block; white-space: nowrap; }
-  .katex .mathnormal { font-style: italic; }
-  .katex .mathit { font-style: italic; }
-  .katex .mathrm { font-style: normal; }
-  .katex .mathbf { font-weight: bold; }
-  .katex .amsrm { font-style: normal; }
-  .katex .mathbb { font-style: normal; }
-  .katex .mathcal { font-style: normal; }
-  .katex .mathfrak { font-style: normal; }
-  .katex .mathtt { font-style: normal; font-family: monospace; }
-  .katex .mathsf { font-style: normal; }
-  .katex .mainit { font-style: italic; }
-  .katex .text { font-style: normal; }
-  .katex .boldsymbol { font-weight: bold; font-style: italic; }
-  .katex .overline { border-top: 1px solid; }
-  .katex .underline { border-bottom: 1px solid; }
-  .katex .stretchy { width: 100%; }
-  .katex .rule { border: 1px solid; position: relative; }
-  .katex .sqrt { border-top: 1px solid; }
-  .katex .widehat { border-bottom: 1px solid; }
-  .katex .widetilde { border-bottom: 1px solid; }
-  .katex .llap, .katex .rlap, .katex .clap { position: absolute; }
-  .katex .accent-body { position: relative; }
-  .katex .cjk_fallback { font-style: normal; }
-  .katex .base { display: inline-block; }
-  .katex .strut { display: inline-block; }
-  .katex .op-symbol { position: relative; }
-  .katex .mord { display: inline; }
-  .katex .mbin { display: inline; }
-  .katex .mrel { display: inline; }
-  .katex .mopen { display: inline; }
-  .katex .mclose { display: inline; }
-  .katex .mpunct { display: inline; }
-  .katex .minner { display: inline; }
-  .katex .mfrac { display: inline-block; text-align: center; vertical-align: middle; }
-  .katex .mfrac .numerator { display: block; border-bottom: 1px solid; padding-bottom: 1px; }
-  .katex .mfrac .denominator { display: block; padding-top: 1px; }
-  .katex .msupsub { display: inline-block; text-align: left; }
-  .katex .msup { display: inline-block; text-align: left; }
-  .katex .msub { display: inline-block; text-align: left; }
-  .katex .vlist-t { display: inline-table; table-layout: fixed; border-collapse: collapse; }
-  .katex .vlist-r { display: table-row; }
-  .katex .vlist { display: table-cell; vertical-align: bottom; position: relative; }
-  .katex .vlist > span { display: block; text-align: center; }
-  .katex .overline .overline-line { display: inline-block; border-top: 1px solid; }
-  .katex .underline .underline-line { display: inline-block; border-bottom: 1px solid; }
-  .katex .sqrt .sqrt-sign { position: relative; }
-  .katex .delimsizing { display: inline-block; }
-  .katex .nulldelimiter { display: inline-block; width: 0.12em; }
-  .katex .delimcenter { position: relative; }
-  .katex .op-limits { display: inline-table; }
-  .katex .accent { display: inline-block; }
-  .katex .accent .accent-body { position: relative; }
-  .katex .accent .accent-body:not(.accent-full) { width: 0; }
-  .katex .overlay { display: block; }
-  .katex .mtable .vertical-separator { display: inline-block; margin: 0 -0.025em; border-right: 0.05em solid; }
-  .katex .mtable .col-align-l > .vlist { text-align: left; }
-  .katex .mtable .col-align-c > .vlist { text-align: center; }
-  .katex .mtable .col-align-r > .vlist { text-align: right; }
-  .katex .html { display: inline-block; }
-  mark > .katex { color: inherit; }
-`;
+// KaTeX 官方 CSS（从 node_modules 读取，字体文件内联为 base64）
+const katexCss = (() => {
+  try {
+    const katexDir = path.resolve(process.cwd(), "node_modules/katex/dist");
+    let css = fs.readFileSync(path.join(katexDir, "katex.min.css"), "utf-8");
+    // 将字体文件引用转换为 base64 内联
+    css = css.replace(/url\(fonts\/([^)]+)\)/g, (_match, fontFile: string) => {
+      try {
+        const fontPath = path.join(katexDir, "fonts", fontFile);
+        const fontData = fs.readFileSync(fontPath);
+        const ext = path.extname(fontFile).slice(1);
+        const mimeType = ext === "woff2" ? "font/woff2" : ext === "woff" ? "font/woff" : "font/ttf";
+        return `url(data:${mimeType};base64,${fontData.toString("base64")})`;
+      } catch {
+        return _match;
+      }
+    });
+    return css;
+  } catch {
+    // fallback: 最小样式
+    return ".katex{font-size:1em!important}.katex-display{display:block;margin:.5em 0;text-align:center}";
+  }
+})();
 
 const escapeHtml = (value: string): string =>
   value
@@ -116,7 +76,7 @@ const renderMathInline = (text: string): string => {
     const inner = formula.slice(2, -2).trim();
     if (!inner) return _m;
     try {
-      mathTokens.push(katex.renderToString(inner, { output: "mathml", displayMode: true, throwOnError: false, strict: false }));
+      mathTokens.push(katex.renderToString(inner, { displayMode: true, throwOnError: false, strict: false }));
     } catch {
       mathTokens.push(`<code>${escapeHtml(inner)}</code>`);
     }
@@ -128,9 +88,29 @@ const renderMathInline = (text: string): string => {
     const inner = formula.trim();
     if (!inner || /^\d+$/.test(inner)) return _m;
     try {
-      mathTokens.push(katex.renderToString(inner, { output: "mathml", displayMode: false, throwOnError: false, strict: false }));
+      mathTokens.push(katex.renderToString(inner, { displayMode: false, throwOnError: false, strict: false }));
     } catch {
       mathTokens.push(`<code>${escapeHtml(inner)}</code>`);
+    }
+    return TK(mathTokens.length - 1);
+  });
+
+  // Step 2.5: 检测裸 LaTeX（已在 $...$ 内的已被 token 替换，不会误伤）
+  // 裸 \command（如 \times, \cdot, \alpha 等）
+  t = t.replace(/\\(?:times|cdot|div|pm|mp|leq|geq|neq|approx|equiv|alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|pi|rho|sigma|tau|upsilon|phi|chi|psi|omega|Gamma|Delta|Theta|Lambda|Xi|Pi|Sigma|Upsilon|Phi|Psi|Omega|partial|nabla|infty|forall|exists|in|notin|subset|supset|cup|cap|emptyset|ldots|cdots|vdots|ddots|quad|qquad|text|mathrm|mathbf|mathit|mathcal|mathbb|frac|sum|int|prod|lim|sqrt|overline|underline|overbrace|underbrace|binom)(?:\{[^}]*\})*(?:[_^](?:\{[^}]*\}|[^_^{}]))*/g, (m: string) => {
+    try {
+      mathTokens.push(katex.renderToString(m, { displayMode: false, throwOnError: false, strict: false }));
+    } catch {
+      mathTokens.push(`<code>${escapeHtml(m)}</code>`);
+    }
+    return TK(mathTokens.length - 1);
+  });
+  // 带下标的变量（如 Y_{biochar}, x_i）
+  t = t.replace(/(?<![A-Za-z])([A-Za-z](?:_\{[^}]+\}|_[A-Za-z0-9])(?:\^\{[^}]+\}|\^[A-Za-z0-9])?)/g, (m: string) => {
+    try {
+      mathTokens.push(katex.renderToString(m, { displayMode: false, throwOnError: false, strict: false }));
+    } catch {
+      mathTokens.push(`<code>${escapeHtml(m)}</code>`);
     }
     return TK(mathTokens.length - 1);
   });
@@ -160,11 +140,12 @@ const renderTableBlock = (block: MarkdownBlock): string => {
   const hasHeader = cells.length >= 2 && /^[\s|:\-]+$/.test(cells[1].join("|"));
   const headerRow = hasHeader ? 0 : -1;
   const dataStart = hasHeader ? 2 : 0;
-  let html = '<table style="border-collapse:collapse;width:100%;margin:10px 0;font-size:9pt;">';
+  // 细线分隔风格：仅表头下方有线，无边框
+  let html = '<table style="width:100%;margin:10px 0;font-size:9pt;border-collapse:collapse;">';
   if (headerRow >= 0) {
-    html += '<thead><tr>';
+    html += '<thead><tr style="border-bottom:1px solid #333;">';
     for (const cell of cells[headerRow]) {
-      html += `<th style="border:1px solid #333;padding:4px 8px;text-align:left;background:#f0f0f0;font-weight:600;">${inlineMarkdown(cell)}</th>`;
+      html += `<th style="padding:4px 8px;text-align:left;font-weight:600;">${inlineMarkdown(cell)}</th>`;
     }
     html += '</tr></thead>';
   }
@@ -172,7 +153,7 @@ const renderTableBlock = (block: MarkdownBlock): string => {
   for (let i = dataStart; i < cells.length; i++) {
     html += '<tr>';
     for (const cell of cells[i]) {
-      html += `<td style="border:1px solid #ccc;padding:4px 8px;text-align:left;">${inlineMarkdown(cell)}</td>`;
+      html += `<td style="padding:4px 8px;text-align:left;">${inlineMarkdown(cell)}</td>`;
     }
     html += '</tr>';
   }
@@ -184,9 +165,16 @@ const renderImageBlock = (block: MarkdownBlock): string => {
   const caption = inlineMarkdown(block.caption || "");
   const url = block.url || "";
 
-  // File-based chart image
-  if (url.startsWith("/charts/")) {
-    const filePath = path.join(process.cwd(), "public", url);
+  // File-based chart image — 兼容新旧两种路径
+  const isOldPath = url.startsWith("/charts/");
+  const isNewPath = url.startsWith("/api/charts/");
+  if (isOldPath || isNewPath) {
+    const filename = isOldPath ? url.slice("/charts/".length) : url.slice("/api/charts/".length);
+    // 新路径优先从 data/charts/ 读取，旧路径从 public/charts/ 读取
+    const candidates = isNewPath
+      ? [path.join(process.cwd(), "data", "charts", filename), path.join(process.cwd(), "public", "charts", filename)]
+      : [path.join(process.cwd(), "public", url)];
+    const filePath = candidates.find(p => fs.existsSync(p)) ?? candidates[0];
     try {
       const buf = fs.readFileSync(filePath);
       const imgSrc = `data:image/png;base64,${buf.toString("base64")}`;
@@ -205,10 +193,41 @@ const renderImageBlock = (block: MarkdownBlock): string => {
   return `<p style="color:#999;font-style:italic;">[图片: ${caption}]</p>`;
 };
 
+/** GB/T 7713 顶层章节标题 — 子标题中出现这些文本时视为冲突，应跳过 */
+const GBT_RESERVED_HEADINGS = new Set(["引言", "材料与方法", "结果与分析", "结论", "摘要", "参考文献", "Materials and Methods", "Results and Discussion", "Introduction", "Conclusion", "Abstract", "References"]);
+
 const renderMarkdown = (content: string, sectionNumber?: number, compact = false): string => {
   // 剥离系统内部占位符（越界引用标记），不输出到 PDF
-  const cleaned = content.replace(/\[引用\?\]/g, "");
-  const normalized = normalizeMathDelimiters(cleaned);
+  let preprocessed = content.replace(/\[引用\?\]/g, "");
+  // 剥离未渲染的 FIGURE JSON 标记 → 替换为图片引用文字
+  preprocessed = preprocessed.replace(/【FIGURE:\{[^】]*\}】/g, (_m: string) => {
+    try {
+      const json = _m.slice(8, -1); // extract {...}
+      const parsed = JSON.parse(json);
+      const cap = parsed.caption || parsed.config?.caption || "";
+      return cap ? `[图片: ${cap}]` : "[图片]";
+    } catch { return "[图片]"; }
+  });
+  // 剥离插图占位符（含常见笔误变体）
+  preprocessed = preprocessed.replace(/【插[图画]占[位位]：[^】]*】/g, "");
+  // 剥离"待补充数据"占位
+  preprocessed = preprocessed.replace(/（待补充数据）/g, "");
+  // 剥离 Verifier 内联审稿备注（以审稿特征词开头的整句）
+  preprocessed = preprocessed.replace(
+    /(?:需要注意的是，|若需确证|应在后续修改中|需在后续修改中|此处应|建议在)\s*[^。；\n]{20,}[。；]/g,
+    ""
+  );
+  let normalized = normalizeMathDelimiters(preprocessed);
+  // 包裹以反斜杠开头的独立公式行（AI 可能输出未包裹的 LaTeX）
+  normalized = normalized.split("\n").map(line => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("$")) return line;
+    // 包含 \frac, \times 等 LaTeX 命令且不在 $ 内 → 包裹为行内公式
+    if (/\\[a-zA-Z]+/.test(trimmed) && !trimmed.includes("$")) {
+      return `$${trimmed}$`;
+    }
+    return line;
+  }).join("\n");
   const blocks = parseMarkdownBlocks(normalized);
   const html: string[] = [];
   let h2Counter = 0;
@@ -228,6 +247,8 @@ const renderMarkdown = (content: string, sectionNumber?: number, compact = false
       case "heading": {
         const level = block.level ?? 2;
         let title = stripLeadingEnumeration(block.title ?? "");
+        // 跳过与顶层章节标题冲突的子标题（如 Results 中出现 "材料与方法"）
+        if (GBT_RESERVED_HEADINGS.has(title.trim())) break;
         if (sectionNumber && (level === 2 || level === 3)) {
           h2Counter += 1;
           h3Counter = 0;
@@ -268,9 +289,24 @@ const renderMarkdown = (content: string, sectionNumber?: number, compact = false
 
 const section = (project: ProjectData, key: BodySectionKey): string => project.sections[key] || "";
 
+/** 获取 section 内容，合并 mergeKeys（如 results + discussion） */
+const sectionWithMerge = (project: ProjectData, def: TemplateSectionDef): string => {
+  const main = project.sections[def.key] || "";
+  if (!def.mergeKeys || def.mergeKeys.length === 0) return main;
+  const merged = def.mergeKeys
+    .map(mk => project.sections[mk] || "")
+    .filter(Boolean)
+    .join("\n\n");
+  return merged ? `${main}\n\n${merged}` : main;
+};
+
 const referencesHtml = (references: string[] | undefined, isChinese: boolean): string => {
   const body = references?.length
-    ? references.map((ref, index) => `<p>[${index + 1}] ${inlineMarkdown(ref)}</p>`).join("")
+    ? references.map((ref, index) => {
+        const formatted = formatReference(ref, { style: "gbt7714" });
+        // GB/T 7714-2015: 编号用方括号，后跟空格
+        return `<p>[${index + 1}] ${inlineMarkdown(formatted)}</p>`;
+      }).join("")
     : `<p class="muted">${isChinese ? "暂无引用文献，请在扩写时通过 AI 自动引入。" : "No references cited yet. References will be added automatically during AI writing."}</p>`;
 
   return `
@@ -282,17 +318,17 @@ const referencesHtml = (references: string[] | undefined, isChinese: boolean): s
 };
 
 const pageMargins: Record<string, string> = {
-  sci: "16mm 20mm",
-  ieee: "14mm 15mm",
-  gbt7713: "20mm 22mm 20mm 28mm",
-  nature: "12mm 15mm",
-  cas: "16mm 20mm",
+  sci: "25mm 20mm",
+  ieee: "18mm 15mm",
+  gbt7713: "25mm 20mm",
+  nature: "18mm 17mm",
+  cas: "25mm 20mm",
 };
 
 const baseCss = (template: string) => `
   @page {
     size: A4;
-    margin: ${pageMargins[template] || "25mm 30mm"};
+    margin: ${pageMargins[template] || "25mm 20mm"};
   }
 
   * {
@@ -302,6 +338,7 @@ const baseCss = (template: string) => `
 
   body {
     margin: 0;
+    padding: 0;
     background: #fff;
     text-rendering: geometricPrecision;
     -webkit-print-color-adjust: exact;
@@ -309,9 +346,8 @@ const baseCss = (template: string) => `
   }
 
   .paper {
-    width: 210mm;
+    width: 100%;
     min-height: 297mm;
-    margin: 0 auto;
     background: #fff;
   }
 
@@ -319,7 +355,9 @@ const baseCss = (template: string) => `
     margin: 0 0 10px;
     text-align: justify;
     text-justify: inter-ideograph;
-    word-break: break-all;
+    word-break: normal;
+    overflow-wrap: break-word;
+    hyphens: auto;
     orphans: 3;
     widows: 3;
   }
@@ -378,28 +416,32 @@ const baseCss = (template: string) => `
   }
 `;
 
-const standardSciHtml = (project: ProjectData): string => `
-  <article class="paper sci">
-    <header>
-      <h1>${inlineMarkdown(project.title || "Untitled Research Paper")}</h1>
-      <p class="authors">${inlineMarkdown(project.authors || "Author Name Not Set")}</p>
-      <p class="affiliations">${inlineMarkdown(project.affiliations || "Agricultural Science Laboratory, Research Institute of Agriculture, 2024")}</p>
-    </header>
+const standardSciHtml = (project: ProjectData): string => {
+  const templateDefs = getTemplateSections("sci", project.mode);
+  const bodyHtml = templateDefs.map(def =>
+    sciSection(def.sectionNumber, def.label, sectionWithMerge(project, def))
+  ).join("\n");
 
-    <section class="abstract">
-      <h2>Abstract</h2>
-      <div>${renderMarkdown(project.abstract || "Abstract content will appear here after generation.")}</div>
-    </section>
+  return `
+    <article class="paper sci">
+      <header>
+        <h1>${inlineMarkdown(project.title || "Untitled Research Paper")}</h1>
+        <p class="authors">${inlineMarkdown(project.authors || "Author Name Not Set")}</p>
+        <p class="affiliations">${inlineMarkdown(project.affiliations || "Agricultural Science Laboratory, Research Institute of Agriculture, 2024")}</p>
+      </header>
 
-    <p class="keywords"><strong>Keywords: </strong>${inlineMarkdown(formatKeywords(project, "en") || "Keywords will appear here after generation.")}</p>
+      <section class="abstract">
+        <h2>Abstract</h2>
+        <div>${renderMarkdown(project.abstract || "Abstract content will appear here after generation.")}</div>
+      </section>
 
-    ${sciSection(1, "Introduction", section(project, "introduction"))}
-    ${sciSection(2, "Materials and Methods", section(project, "methods"))}
-    ${sciSection(3, "Results and Discussion", section(project, "results"))}
-    ${sciSection(4, "Conclusion", section(project, "conclusion"))}
-    ${referencesHtml(project.references, false)}
-  </article>
-`;
+      <p class="keywords"><strong>Keywords: </strong>${inlineMarkdown(formatKeywords(project, "en") || "Keywords will appear here after generation.")}</p>
+
+      ${bodyHtml}
+      ${referencesHtml(project.references, false)}
+    </article>
+  `;
+};
 
 const sciSection = (number: number, title: string, content: string): string => `
   <section class="sci-section">
@@ -408,27 +450,33 @@ const sciSection = (number: number, title: string, content: string): string => `
   </section>
 `;
 
-const ieeeHtml = (project: ProjectData): string => `
-  <article class="paper ieee">
-    <header>
-      <h1>${inlineMarkdown(project.title || "Untitled Paper")}</h1>
-      <p class="authors">${inlineMarkdown(project.authors || "")}</p>
-    </header>
+const ROMAN = ["I", "II", "III", "IV", "V", "VI"] as const;
 
-    <section class="ieee-abstract">
-      <p><strong><em>Abstract—</em></strong><span>${renderMarkdown(project.abstract || "Abstract content...", undefined, true)}</span></p>
-      <p><strong><em>Keywords—</em></strong>${inlineMarkdown(formatKeywords(project, "en"))}.</p>
-    </section>
+const ieeeHtml = (project: ProjectData): string => {
+  const templateDefs = getTemplateSections("ieee", project.mode);
+  const bodyHtml = templateDefs.map(def =>
+    ieeeSection(`${ROMAN[def.sectionNumber - 1] || def.sectionNumber}.`, def.label, sectionWithMerge(project, def), def.sectionNumber)
+  ).join("\n");
 
-    <div class="columns">
-      ${ieeeSection("I.", "Introduction", section(project, "introduction"), 1)}
-      ${ieeeSection("II.", "Materials and Methods", section(project, "methods"), 2)}
-      ${ieeeSection("III.", "Results", section(project, "results"), 3)}
-      ${ieeeSection("IV.", "Conclusion", section(project, "conclusion"), 4)}
-    </div>
-    ${referencesHtml(project.references, false)}
-  </article>
-`;
+  return `
+    <article class="paper ieee">
+      <header>
+        <h1>${inlineMarkdown(project.title || "Untitled Paper")}</h1>
+        <p class="authors">${inlineMarkdown(project.authors || "")}</p>
+      </header>
+
+      <section class="ieee-abstract">
+        <p><strong><em>Abstract—</em></strong><span>${renderMarkdown(project.abstract || "Abstract content...", undefined, true)}</span></p>
+        <p><strong><em>Keywords—</em></strong>${inlineMarkdown(formatKeywords(project, "en"))}.</p>
+      </section>
+
+      <div class="columns">
+        ${bodyHtml}
+      </div>
+      ${referencesHtml(project.references, false)}
+    </article>
+  `;
+};
 
 const ieeeSection = (number: string, title: string, content: string, secNum: number): string => `
   <section>
@@ -439,6 +487,11 @@ const ieeeSection = (number: string, title: string, content: string, secNum: num
 
 const gbtHtml = (project: ProjectData): string => {
   const classification = formatClassification(project);
+  const sections = getTemplateSections("gbt7713", project.mode);
+
+  const bodyHtml = sections.map(def =>
+    gbtSection(def.sectionNumber, def.label, sectionWithMerge(project, def))
+  ).join("\n");
 
   return `
     <article class="paper gbt">
@@ -449,15 +502,12 @@ const gbtHtml = (project: ProjectData): string => {
       </header>
 
       <section class="gbt-meta">
-        <p><strong>摘要：</strong>${renderMarkdown(project.abstract || "摘要内容...", undefined, true)}</p>
+        <p><strong>摘要：</strong>${renderMarkdown((project.abstract || "摘要内容...").replace(/^摘要[：:]\s*/, ""), undefined, true)}</p>
         <p><strong>关键词：</strong>${inlineMarkdown(formatKeywords(project, "zh"))}</p>
         ${classification ? `<p class="clc"><strong>中图分类号：</strong>${inlineMarkdown(classification)}</p>` : ""}
       </section>
 
-      ${gbtSection(1, "引言", section(project, "introduction"))}
-      ${gbtSection(2, "材料与方法", section(project, "methods"))}
-      ${gbtSection(3, "结果与分析", section(project, "results"))}
-      ${gbtSection(4, "结论", section(project, "conclusion"))}
+      ${bodyHtml}
       ${referencesHtml(project.references, true)}
     </article>
   `;
@@ -470,60 +520,63 @@ const gbtSection = (number: number, title: string, content: string): string => `
   </section>
 `;
 
-const natureHtml = (project: ProjectData): string => `
-  <article class="paper nature">
-    <header>
-      <h1>${inlineMarkdown(project.title || "Untitled Nature Article")}</h1>
-      <p class="authors">${inlineMarkdown(project.authors || "")}</p>
-    </header>
+const natureHtml = (project: ProjectData): string => {
+  const templateDefs = getTemplateSections("nature", project.mode);
+  const introDef = templateDefs.find(d => d.key === "introduction");
+  const resultsDef = templateDefs.find(d => d.key === "results");
+  const methodsDef = templateDefs.find(d => d.key === "methods");
+  const discussionDef = templateDefs.find(d => d.key === "discussion");
 
-    <section class="nature-abstract">
-      ${renderMarkdown(project.abstract || "Abstract without heading, as per Nature style.")}
-    </section>
+  return `
+    <article class="paper nature">
+      <header>
+        <h1>${inlineMarkdown(project.title || "Untitled Nature Article")}</h1>
+        <p class="authors">${inlineMarkdown(project.authors || "")}</p>
+      </header>
 
-    <div class="columns">
-      <div>
-        <section class="lead">${renderMarkdown(section(project, "introduction"))}</section>
-        <section>
-          <h2>Results</h2>
-          ${renderMarkdown(section(project, "results"))}
-        </section>
+      <section class="nature-abstract">
+        ${renderMarkdown(project.abstract || "Abstract without heading, as per Nature style.")}
+      </section>
+
+      <div class="columns">
+        <div>
+          ${introDef ? `<section class="lead">${renderMarkdown(sectionWithMerge(project, introDef))}</section>` : ""}
+          ${resultsDef ? `<section><h2>${resultsDef.label}</h2>${renderMarkdown(sectionWithMerge(project, resultsDef))}</section>` : ""}
+        </div>
+        <div>
+          ${methodsDef ? `<section><h2>${methodsDef.label}</h2><div class="methods-box">${renderMarkdown(sectionWithMerge(project, methodsDef))}</div></section>` : ""}
+          ${discussionDef ? `<section><h2>${discussionDef.label}</h2>${renderMarkdown(sectionWithMerge(project, discussionDef))}</section>` : ""}
+        </div>
       </div>
-      <div>
-        <section>
-          <h2>Methods</h2>
-          <div class="methods-box">${renderMarkdown(section(project, "methods"))}</div>
-        </section>
-        <section>
-          <h2>Discussion</h2>
-          ${renderMarkdown(section(project, "conclusion"))}
-        </section>
-      </div>
-    </div>
-    ${referencesHtml(project.references, false)}
-  </article>
-`;
+      ${referencesHtml(project.references, false)}
+    </article>
+  `;
+};
 
-const casHtml = (project: ProjectData): string => `
-  <article class="paper cas">
-    <header>
-      <h1>${inlineMarkdown(project.title || "中国科学院学术论文模板")}</h1>
-      <p class="authors">${inlineMarkdown(project.authors || "")}</p>
-      <p class="affiliations">（${inlineMarkdown(project.affiliations || "中国科学院农业资源研究中心，石家庄 050021")}）</p>
-    </header>
+const casHtml = (project: ProjectData): string => {
+  const templateDefs = getTemplateSections("cas", project.mode);
+  const bodyHtml = templateDefs.map(def =>
+    casSection(def.sectionNumber, def.label, sectionWithMerge(project, def))
+  ).join("\n");
 
-    <section class="cas-abstract">
-      <p><strong>摘要：</strong>${renderMarkdown(project.abstract || "", undefined, true)}</p>
-      <p><strong>关键词：</strong>${inlineMarkdown(formatKeywords(project, "zh"))}</p>
-    </section>
+  return `
+    <article class="paper cas">
+      <header>
+        <h1>${inlineMarkdown(project.title || "中国科学院学术论文模板")}</h1>
+        <p class="authors">${inlineMarkdown(project.authors || "")}</p>
+        <p class="affiliations">（${inlineMarkdown(project.affiliations || "中国科学院农业资源研究中心，石家庄 050021")}）</p>
+      </header>
 
-    ${casSection(1, "引言", section(project, "introduction"))}
-    ${casSection(2, "研究方法", section(project, "methods"))}
-    ${casSection(3, "结果与讨论", section(project, "results"))}
-    ${casSection(4, "结论", section(project, "conclusion"))}
-    ${referencesHtml(project.references, true)}
-  </article>
-`;
+      <section class="cas-abstract">
+        <p><strong>摘要：</strong>${renderMarkdown((project.abstract || "").replace(/^摘要[：:]\s*/, ""), undefined, true)}</p>
+        <p><strong>关键词：</strong>${inlineMarkdown(formatKeywords(project, "zh"))}</p>
+      </section>
+
+      ${bodyHtml}
+      ${referencesHtml(project.references, true)}
+    </article>
+  `;
+};
 
 const casSection = (number: number, title: string, content: string): string => `
   <section>
@@ -534,7 +587,7 @@ const casSection = (number: number, title: string, content: string): string => `
 
 const templateCss = `
   .sci {
-    padding: 20mm 18mm;
+    padding: 0;
     font-family: "Times New Roman", Georgia, serif;
     font-size: 10.5pt;
     line-height: 1.68;
@@ -608,40 +661,94 @@ const templateCss = `
     text-align: center;
   }
 
+  /* ── IEEE ── */
   .ieee {
-    padding: 16mm 15mm;
+    padding: 0;
     font-family: "Times New Roman", Georgia, serif;
     font-size: 9pt;
-    line-height: 1.18;
+    line-height: 1.24;
     word-spacing: normal;
     letter-spacing: normal;
+    color: #000;
   }
 
   .ieee header {
     text-align: center;
-    margin-bottom: 20px;
+    margin-bottom: 22px;
   }
 
   .ieee h1 {
-    margin: 0 0 18px;
+    margin: 0 0 20px;
     font-size: 24pt;
-    line-height: 1.1;
+    line-height: 1.12;
     font-weight: 400;
+    letter-spacing: -0.3pt;
   }
 
   .ieee .authors {
     text-align: center;
     font-size: 11pt;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
+    line-height: 1.3;
   }
 
   .ieee-abstract {
-    margin-bottom: 14px;
+    margin-bottom: 16px;
     break-inside: avoid;
   }
 
   .ieee-abstract p {
     margin-bottom: 6px;
+    line-height: 1.22;
+    text-indent: 0;
+  }
+
+  .ieee .columns {
+    columns: 2;
+    column-gap: 20px;
+    column-rule: none;
+  }
+
+  .ieee .columns section {
+    break-inside: auto;
+  }
+
+  .ieee h2 {
+    margin: 16px 0 8px;
+    font-size: 10pt;
+    font-weight: 400;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+  }
+
+  .ieee h3 {
+    margin: 10px 0 5px;
+    font-size: 9pt;
+    font-weight: 600;
+    font-style: italic;
+  }
+
+  .ieee h4 {
+    margin: 8px 0 4px;
+    font-size: 9pt;
+    font-weight: 600;
+    font-style: italic;
+  }
+
+  .ieee p {
+    margin-bottom: 6px;
+    line-height: 1.22;
+    text-indent: 1em;
+  }
+
+  .ieee section p:first-of-type {
+    text-indent: 0;
+  }
+
+  .ieee ul,
+  .ieee ol {
+    margin-left: 1.5em;
   }
 
   .nature .columns {
@@ -651,86 +758,109 @@ const templateCss = `
     align-items: start;
   }
 
-  .ieee .columns {
-    columns: 2;
-    column-gap: 22px;
-  }
-
-  .ieee h2 {
-    margin: 14px 0 7px;
-    font-size: 10pt;
-    font-weight: 400;
-    text-align: center;
-    text-transform: uppercase;
-    letter-spacing: 0;
-  }
-
-  .ieee p {
-    margin-bottom: 6px;
-    line-height: 1.22;
-    text-indent: 1em;
-  }
-
+  /* ── GB/T 7713 国标 ── */
   .gbt {
-    padding: 20mm;
-    font-family: "SimSun", "Microsoft YaHei", "Noto Sans CJK SC", serif;
+    padding: 0;
+    font-family: "SimSun", "Noto Serif CJK SC", "Source Han Serif SC", serif;
     font-size: 10.5pt;
-    line-height: 1.62;
+    line-height: 1.7;
+    color: #000;
   }
 
   .gbt header {
     text-align: center;
-    margin-bottom: 22px;
+    margin-bottom: 28px;
   }
 
   .gbt h1 {
-    margin: 0 0 15px;
-    font-family: "Microsoft YaHei", "SimHei", sans-serif;
+    margin: 0 0 18px;
+    font-family: "SimHei", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
     font-size: 16pt;
     font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: 0.5pt;
   }
 
   .gbt .authors {
-    margin-bottom: 5px;
+    margin-bottom: 6px;
     text-align: center;
     font-size: 12pt;
+    line-height: 1.5;
   }
 
   .gbt .affiliations {
-    margin-bottom: 18px;
+    margin-bottom: 24px;
     text-align: center;
     font-size: 9pt;
-    color: #555;
+    color: #444;
+    line-height: 1.4;
   }
 
   .gbt-meta {
-    margin-bottom: 22px;
+    margin-bottom: 24px;
+    padding: 14px 16px;
+    border-top: 1px solid #ccc;
+    border-bottom: 1px solid #ccc;
+    background: #fafafa;
     break-inside: avoid;
   }
 
   .gbt-meta p {
-    margin-bottom: 5px;
+    margin-bottom: 6px;
     text-indent: 0;
+    line-height: 1.65;
   }
 
   .gbt-meta .clc {
     font-size: 9pt;
+    color: #555;
   }
 
   .gbt h2 {
-    margin: 20px 0 10px;
-    padding-bottom: 3px;
-    border-bottom: 1px solid #ddd;
+    margin: 22px 0 12px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #333;
+    font-family: "SimHei", "Microsoft YaHei", sans-serif;
     font-size: 12pt;
     font-weight: 700;
+    line-height: 1.4;
   }
 
-  .gbt section > div p {
+  .gbt h3 {
+    margin: 14px 0 8px;
+    font-family: "SimHei", "Microsoft YaHei", sans-serif;
+    font-size: 10.5pt;
+    font-weight: 700;
+    line-height: 1.4;
+  }
+
+  .gbt h4 {
+    margin: 10px 0 6px;
+    font-family: "SimHei", "Microsoft YaHei", sans-serif;
+    font-size: 10.5pt;
+    font-weight: 600;
+    font-style: italic;
+    line-height: 1.4;
+  }
+
+  .gbt section p {
     text-indent: 2em;
+    margin-bottom: 4px;
+    line-height: 1.7;
+  }
+
+  .gbt section ul,
+  .gbt section ol {
+    margin-left: 2em;
+  }
+
+  .gbt section li {
+    text-indent: 0;
+    margin-bottom: 2px;
   }
 
   .nature {
-    padding: 18mm 17mm;
+    padding: 0;
     font-family: "Times New Roman", Georgia, serif;
     font-size: 10pt;
     line-height: 1.28;
@@ -786,7 +916,7 @@ const templateCss = `
   }
 
   .cas {
-    padding: 20mm 18mm;
+    padding: 0;
     font-family: "SimSun", "Microsoft YaHei", "Noto Sans CJK SC", serif;
     font-size: 10.5pt;
     line-height: 1.78;
@@ -882,29 +1012,30 @@ export function renderProjectPdfHtml(project: ProjectData): string {
   const template = normalizeTemplate(project.template);
   const isChinese = CHINESE_TEMPLATES.has(template);
 
-  // Step 1: 清理未引用文献，同时获取 old→new 索引映射
-  const { references: cleanRefs, indexMap } = pruneUncitedReferences({
-    abstract: project.abstract,
-    sections: project.sections,
-    references: project.references || [],
-  });
-  const refCount = cleanRefs.length;
+  // 导出保留全部引用（不剪枝），仅清理 Markdown 残余 + 越界引用
+  const refs = project.references || [];
+  const refCount = refs.length;
 
-  // Step 2: 重映射正文引用号 → Step 3: 剥离残存越界引用 + Markdown 残余
   const cleanSections: Record<string, string> = {};
   for (const [key, content] of Object.entries(project.sections)) {
-    cleanSections[key] = cleanMarkdownArtifacts(
-      stripOutOfRangeCitations(remapPrunedCitations(content || "", indexMap), refCount)
-    );
+    const { cleaned } = markOutOfBoundsCitations(content || "", refCount);
+    cleanSections[key] = cleanMarkdownArtifacts(cleaned);
   }
+
+  const { cleaned: cleanAbstract } = markOutOfBoundsCitations(project.abstract || "", refCount);
+
+  // 清理作者和单位占位符
+  const cleanPlaceholder = (s: string) =>
+    s?.replace(/【请填写作者姓名】/g, "")?.replace(/【作者信息待填写】/g, "")?.trim() || "";
 
   const cleanProject: ProjectData = {
     ...project,
-    abstract: cleanMarkdownArtifacts(
-      stripOutOfRangeCitations(remapPrunedCitations(project.abstract || "", indexMap), refCount)
-    ),
+    title: cleanMarkdownArtifacts(project.title || ""),
+    authors: cleanPlaceholder(project.authors || ""),
+    affiliations: cleanPlaceholder(project.affiliations || ""),
+    abstract: cleanMarkdownArtifacts(cleanAbstract),
     sections: cleanSections as ProjectData["sections"],
-    references: cleanRefs,
+    references: refs,
   };
 
   return `<!doctype html>

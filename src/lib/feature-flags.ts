@@ -1,3 +1,5 @@
+import type { AppModule } from "@/contracts/modules";
+
 /**
  * 功能开关：通过环境变量 NEXT_PUBLIC_ENABLE_* 控制功能可见性。
  * 默认全部开启，设为 "false" 即关闭，无需改代码。
@@ -26,6 +28,7 @@ export const featureFlags = {
   get xrd() { return isEnabled("XRD"); },
   get pdf() { return isEnabled("PDF"); },
   get experimentalDataInjection() { return isEnabled("EXPERIMENTAL_DATA_INJECTION"); },
+  get review() { return isEnabled("REVIEW"); },
   /** 返回所有当前开启的功能 */
   all(): Record<string, FlagValue> {
     return {
@@ -40,6 +43,13 @@ export const featureFlags = {
       xrd: this.xrd,
       pdf: this.pdf,
       experimentalDataInjection: this.experimentalDataInjection,
+      review: this.review,
     };
   },
 };
+
+/** 模块是否应展示（无 flag 的模块始终开启） */
+export function isModuleEnabled(module: Pick<AppModule, "flag">): boolean {
+  if (module.flag === null) return true;
+  return isEnabled(module.flag);
+}

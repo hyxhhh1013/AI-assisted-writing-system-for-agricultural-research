@@ -1,6 +1,8 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { IMRAD_LABELS_ZH, IMRAD_ORDER } from "@/lib/imrad"
+import { REVIEW_ORDER } from "@/lib/review-structure"
+import type { ProjectWritingMode } from "@/contracts/writing-mode"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -19,7 +21,7 @@ export interface OutlineSection {
 export interface OutlineTask {
   id: string;
   title: string;
-  sectionKey: string;  // IMRaD key: abstract | introduction | methods | results | conclusion
+  sectionKey: string;
   level: number;
   fullPath: string;
   content: string;
@@ -50,7 +52,24 @@ const IMRAD_KEYWORDS: { key: string; patterns: RegExp[] }[] = [
   },
 ];
 
-/** 将大纲标题映射到 IMRaD 节 key */
+const REVIEW_KEYWORDS: { key: string; patterns: RegExp[] }[] = [
+  { key: "abstract", patterns: [/摘要/i, /abstract/i] },
+  { key: "introduction", patterns: [/引言/i, /introduction/i, /前言/i] },
+  {
+    key: "background",
+    patterns: [/研究现状/i, /现状与问题/i, /概念/i, /问题框架/i, /background/i, /领域背景/i],
+  },
+  {
+    key: "literature_body",
+    patterns: [/进展综述/i, /研究进展/i, /文献综述/i, /literature review/i, /主题/i, /争议/i, /综合/i],
+  },
+  {
+    key: "conclusion",
+    patterns: [/结论/i, /展望/i, /conclusion/i, /未来方向/i, /研究空白/i],
+  },
+];
+
+/** 将大纲标题映射到 IMRaD 节 key（研究论文） */
 export function mapToIMRADSection(titleOrPath: string): string {
   const lower = titleOrPath.toLowerCase();
   for (const group of IMRAD_KEYWORDS) {
@@ -58,10 +77,98 @@ export function mapToIMRADSection(titleOrPath: string): string {
       if (pat.test(lower)) return group.key;
     }
   }
-  return "introduction"; // fallback
+  return "introduction";
+}
+
+/** 按项目写作模式映射大纲标题到 section key */
+export function mapToSectionForMode(
+  titleOrPath: string,
+  mode?: ProjectWritingMode,
+): string {
+  if (mode === "research") return mapToIMRADSection(titleOrPath);
+  const lower = titleOrPath.toLowerCase();
+  for (const group of REVIEW_KEYWORDS) {
+    for (const pat of group.patterns) {
+      if (pat.test(lower)) return group.key;
+    }
+  }
+  // 综述无 methods/results；仅用引言/结论的 IMRaD 弱匹配，避免落到无效章节
+  for (const key of ["introduction", "conclusion"] as const) {
+    const group = IMRAD_KEYWORDS.find((g) => g.key === key);
+    if (!group) continue;
+    for (const pat of group.patterns) {
+      if (pat.test(lower)) return group.key;
+    }
+  }
+  return "introduction";
 }
 
 // ==================== Expansion Context Builder ====================
+
+/** 按章节扩写完成后，应标记为已完成的大纲任务 id（含同级子节） */
+export function getOutlineTaskIdsForSectionCompletion(
+  outlineTasks: OutlineTask[],
+  targetSectionKey: string,
+  selectedSectionId?: string,
+): string[] {
+  const ids = outlineTasks.filter((t) => t.sectionKey === targetSectionKey).map((t) => t.id);
+  if (ids.length > 0) return ids;
+  return selectedSectionId ? [selectedSectionId] : [];
+}
+
+const OUTLINE_EXCERPT_MAX = 1000;
+
+/** 提取与当前任务所属一级章节相关的完整大纲片段（非全文前 N 字） */
+export function buildOutlineExcerptForSection(
+  section: OutlineSection,
+  allSections: OutlineSection[],
+): string {
+  if (allSections.length === 0) return "";
+
+  const formatBlock = (s: OutlineSection): string => {
+    const heading = `${"#".repeat(Math.min(Math.max(s.level, 1), 6))} ${s.title}`;
+    const body = s.content.trim();
+    return body ? `${heading}\n${body}` : heading;
+  };
+
+  // 子节任务：只展示同父路径下的兄弟子节要点，避免整章 dump
+  if (section.level > 1) {
+    const parentPath = section.fullPath.split(" > ").slice(0, -1).join(" > ");
+    const chapterRoot = section.fullPath.split(" > ")[0];
+    const peerSections = allSections.filter((s) => {
+      const sParent = s.fullPath.split(" > ").slice(0, -1).join(" > ");
+      return sParent === parentPath;
+    });
+    let body = peerSections.map(formatBlock).join("\n\n");
+    body = `【「${chapterRoot}」相关子节】\n${body}`;
+    if (body.length > OUTLINE_EXCERPT_MAX) {
+      return `${body.slice(0, OUTLINE_EXCERPT_MAX)}\n…（已截断）`;
+    }
+    return body;
+  }
+
+  const chapterRoot = section.fullPath.split(" > ")[0];
+  const inChapter = allSections.filter(
+    (s) => s.fullPath === chapterRoot || s.fullPath.startsWith(`${chapterRoot} > `),
+  );
+
+  let body = inChapter.map(formatBlock).join("\n\n");
+
+  const peerTitles = allSections
+    .filter((s) => s.level === 1 && s.fullPath !== chapterRoot)
+    .map((s) => s.title);
+
+  if (peerTitles.length > 0) {
+    body =
+      `【其他章节目录】${peerTitles.join("、")}\n\n` +
+      `【「${chapterRoot}」章节大纲（含子节要点）】\n${body}`;
+  }
+
+  if (body.length > OUTLINE_EXCERPT_MAX) {
+    return `${body.slice(0, OUTLINE_EXCERPT_MAX)}\n…（本章节大纲较长，已截断尾部）`;
+  }
+  return body;
+}
 
 /**
  * 为目标子节构建精准的扩写上下文，彻底替代"把整个大纲 dump 进去"的做法
@@ -70,9 +177,10 @@ export function buildExpansionContext(
   section: OutlineSection,
   allSections: OutlineSection[],
   outlineText?: string,
+  mode?: ProjectWritingMode,
 ): string {
-  const parentKey = mapToIMRADSection(section.fullPath);
-  const parentLabel = IMRAD_LABELS[parentKey] || parentKey;
+  const parentKey = mapToSectionForMode(section.fullPath, mode);
+  const parentLabel = IMRAD_LABELS[parentKey] || REVIEW_LABELS[parentKey] || parentKey;
 
   // 找到同级兄弟子节（同父路径下 level 相同的章节）
   const parentPath = section.fullPath.split(" > ").slice(0, -1).join(" > ");
@@ -85,18 +193,22 @@ export function buildExpansionContext(
 【所属章节】：${parentLabel}
 `;
 
-  if (section.content) {
-    ctx += `【子节要点】：${section.content}\n`;
+  if (section.content.trim()) {
+    ctx += `【子节要点】：${section.content.trim()}\n`;
   }
 
   if (siblings.length > 0) {
     ctx += `【同级子节（保持逻辑衔接）】：${siblings.map((s) => s.title).join("、")}\n`;
   }
 
-  // 附上精简的大纲结构概览（最多 300 字），帮助 AI 理解整体位置
-  if (outlineText && outlineText.trim()) {
-    const compact = outlineText.replace(/\n{3,}/g, "\n\n").slice(0, 400);
-    ctx += `\n【论文大纲概览】：\n${compact}\n`;
+  if (outlineText?.trim()) {
+    const excerpt =
+      allSections.length > 0
+        ? buildOutlineExcerptForSection(section, allSections)
+        : outlineText.replace(/\n{3,}/g, "\n\n").slice(0, 800);
+    if (excerpt.trim()) {
+      ctx += `\n【论文大纲概览】：\n${excerpt}\n`;
+    }
   }
 
   ctx += `\n【写作要求】：请针对「${section.title}」这一具体主题展开专业、深入的学术论述。结合文献库中的相关研究，遵循学术论文写作规范。`;
@@ -104,6 +216,11 @@ export function buildExpansionContext(
 }
 
 const IMRAD_LABELS: Record<string, string> = IMRAD_LABELS_ZH;
+
+const REVIEW_LABELS: Record<string, string> = {
+  background: "研究现状与问题",
+  literature_body: "研究进展综述",
+};
 
 // ==================== Outline Parser ====================
 
@@ -135,7 +252,7 @@ export function parseOutline(markdown: string): OutlineSection[] {
     if (!trimmed) return;
 
     // 1. 预处理
-    let cleanLine = trimmed
+    const cleanLine = trimmed
       .replace(/^[\*\-\+]\s+/, "")
       .replace(/\*\*/g, "")
       .trim();
@@ -251,12 +368,15 @@ export function parseOutline(markdown: string): OutlineSection[] {
 }
 
 /** 从解析后的大纲生成 OutlineTask 列表（供 WritingPanel 使用） */
-export function buildOutlineTasks(outlineText: string): OutlineTask[] {
+export function buildOutlineTasks(
+  outlineText: string,
+  mode?: ProjectWritingMode,
+): OutlineTask[] {
   const sections = parseOutline(outlineText);
   return sections.map((s) => ({
     id: s.id,
     title: s.fullPath,
-    sectionKey: mapToIMRADSection(s.fullPath),
+    sectionKey: mapToSectionForMode(s.fullPath, mode),
     level: s.level,
     fullPath: s.fullPath,
     content: s.content,
@@ -264,7 +384,10 @@ export function buildOutlineTasks(outlineText: string): OutlineTask[] {
 }
 
 /** 论文章节的标准顺序（用于跨章节图表全局编号） */
-export const SECTION_ORDER: Record<string, number> = IMRAD_ORDER;
+export const SECTION_ORDER: Record<string, number> = {
+  ...IMRAD_ORDER,
+  ...REVIEW_ORDER,
+};
 
 function countFiguresInText(text: string): number {
   const imgMatches = text.match(/!\[[^\]]*\]\([^)]+\)/g);
@@ -347,6 +470,22 @@ export function cleanMarkdownArtifacts(text: string): string {
   t = t.replace(/[📊📈📉]\s*/g, "");
   // 系统占位符
   t = t.replace(/\[引用\?\]/g, "");
+  // Verifier 审稿备注（以审稿特征词开头的句子）
+  t = t.replace(
+    /(?:需要注意的是，|若需确证|应在后续修改中|需在后续修改中|此处应|建议在后续)\s*[^。；\n]{10,}[。；]/g,
+    ""
+  );
+  // 未渲染的 FIGURE 标记 + 插图占位
+  t = t.replace(/【FIGURE:\{[^】]*\}】/g, "");
+  t = t.replace(/【插[图画]占[位位]：[^】]*】/g, "");
+  t = t.replace(/（待补充数据）/g, "");
+  // 【】占位符清理（请填写、待补充、待确认等）
+  t = t.replace(/【[^】]*(?:请填写|待补充|待确认|待完善|请补充|TODO|TBD)[^】]*】/g, "");
+  // GFM 删除线语法（~~text~~）→ 只保留文字
+  t = t.replace(/~~([^~]+)~~/g, "$1");
+  // em dash 替换为逗号（中文语境用全角逗号）
+  t = t.replace(/—/g, "，");
+  t = t.replace(/–/g, "，");
   return t;
 }
 

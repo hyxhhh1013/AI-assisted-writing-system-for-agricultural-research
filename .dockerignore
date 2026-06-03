@@ -1,7 +1,7 @@
 node_modules
 .next
-.env.local
 .env
+.env.*
 *.db
 *.db-journal
 data/
@@ -13,5 +13,9 @@ README.md
 docs/
 __pycache__
 *.pyc
-# 部署脚本不进镜像；运行时需要的 scripts 保留
-scripts/deploy/
+temp/
+.gstack/
+papers/
+*.log
+.DS_Store
+Thumbs.db

@@ -42,17 +42,20 @@ export async function fetchWithRetry(
       // 包装 json() / text() 接入超时
       const origJson = response.json.bind(response);
       const origText = response.text.bind(response);
-      response.json = () => raceWithAbort(origJson(), mergedSignal, timer) as Promise<any>;
+      response.json = () =>
+        raceWithAbort(origJson(), mergedSignal, timer) as Promise<unknown>;
       response.text = () => raceWithAbort(origText(), mergedSignal, timer) as Promise<string>;
 
+      // 流式 body 由调用方自行读取；此处必须清除总超时，否则会误 abort 已建立的 SSE/流
+      clearTimeout(timer);
       return response;
-    } catch (error: any) {
+    } catch (error: unknown) {
       clearTimeout(timer);
       // 清理事件监听
       if (externalSignal && mergedSignal !== timeoutController.signal) {
         // mergedController 是局部变量，GC 会处理
       }
-      if (error?.name === "AbortError") {
+      if (isAbortError(error)) {
         if (attempt === retries) {
           const reason = externalSignal?.aborted ? "请求已被取消" : `请求超时 (${totalTimeoutMs / 1000}s)`;
           throw new Error(reason);
@@ -60,10 +63,30 @@ export async function fetchWithRetry(
       } else if (attempt === retries) {
         throw error;
       }
+      // 不重试 4xx 客户端错误（模型名错误、参数非法等不会自己恢复）
+      const status = getErrorStatus(error);
+      if (status !== undefined && status >= 400 && status < 500) {
+        throw error;
+      }
       await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
     }
   }
   throw new Error("Request failed after retries");
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    (error instanceof DOMException && error.name === "AbortError") ||
+    (error instanceof Error && error.name === "AbortError")
+  );
+}
+
+function getErrorStatus(error: unknown): number | undefined {
+  if (typeof error !== "object" || error === null || !("status" in error)) {
+    return undefined;
+  }
+  const status = (error as { status: unknown }).status;
+  return typeof status === "number" ? status : undefined;
 }
 
 async function raceWithAbort<T>(promise: Promise<T>, signal: AbortSignal, timer: ReturnType<typeof setTimeout>): Promise<T> {

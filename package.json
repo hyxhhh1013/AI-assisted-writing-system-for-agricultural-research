@@ -14,8 +14,17 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "index-docs": "node scripts/index-pdfs.mjs",
-    "create-admin": "node scripts/create-admin.mjs"
+    "create-admin": "node scripts/create-admin.mjs",
+    "rag:convert-index": "node scripts/convert-index-to-binary.mjs",
+    "rag:convert-index:dry": "node scripts/convert-index-to-binary.mjs --dry-run",
+    "docs:api-index": "node scripts/generate-api-index.mjs",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "src/**/*.{ts,tsx}": "eslint"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
@@ -78,6 +87,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@next/bundle-analyzer": "^16.2.6",
     "@tailwindcss/postcss": "^4",
     "@types/file-saver": "^2.0.7",
@@ -89,6 +99,8 @@
     "@vitest/coverage-v8": "^4.1.5",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.2",
     "prisma": "^5.22.0",
     "tailwindcss": "^4",
     "typescript": "^5",

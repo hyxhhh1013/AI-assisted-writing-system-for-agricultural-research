@@ -9,6 +9,18 @@ import {
   plagiarismCheckSchema,
   plagiarismRewriteSchema,
   knowledgeAnalyzeSchema,
+  adminUserRolePatchSchema,
+  adminProjectDeleteSchema,
+  tableGenerateSchema,
+  xrdBraggSchema,
+  knowledgeDeleteBatchSchema,
+  knowledgeBatchMoveSchema,
+  projectMetaPatchSchema,
+  projectSectionPatchSchema,
+  projectReferencesPatchSchema,
+  projectAnalysisResultsPatchSchema,
+  plagiarismRewritePatchSchema,
+  reindexRequestSchema,
 } from "@/lib/validations";
 
 describe("writingSchema", () => {
@@ -73,5 +85,114 @@ describe("async validator helper", () => {
     if (result.success) {
       expect(result.data.language).toBe("zh");
     }
+  });
+});
+
+describe("adminUserRolePatchSchema", () => {
+  it("rejects invalid role", () => {
+    const result = adminUserRolePatchSchema.safeParse({ userId: "u1", role: "superadmin" });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts valid patch", () => {
+    const result = adminUserRolePatchSchema.safeParse({ userId: "u1", role: "admin" });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("adminProjectDeleteSchema", () => {
+  it("rejects missing projectId", () => {
+    expect(adminProjectDeleteSchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe("tableGenerateSchema", () => {
+  it("rejects fewer than 2 groups", () => {
+    const result = tableGenerateSchema.safeParse({
+      title: "表1",
+      groups: [{ label: "A", n: 3, mean: 1, sd: 0.1 }],
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("xrdBraggSchema", () => {
+  it("rejects empty hkl", () => {
+    const result = xrdBraggSchema.safeParse({
+      crystal_system: 1,
+      lattice_init: [4, 4, 4, 90, 90, 90],
+      hkl: [],
+      exp_angles: [38.2],
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("knowledgeBatchMoveSchema", () => {
+  it("rejects empty files", () => {
+    expect(
+      knowledgeBatchMoveSchema.safeParse({ action: "batch_move", files: [], newCategory: "A" }).success,
+    ).toBe(false);
+  });
+});
+
+describe("projectMetaPatchSchema", () => {
+  it("rejects empty patch", () => {
+    expect(projectMetaPatchSchema.safeParse({}).success).toBe(false);
+  });
+
+  it("accepts partial meta", () => {
+    expect(projectMetaPatchSchema.safeParse({ title: "新标题" }).success).toBe(true);
+  });
+});
+
+describe("plagiarismRewritePatchSchema", () => {
+  it("rejects invalid status", () => {
+    expect(
+      plagiarismRewritePatchSchema.safeParse({ suggestionId: "s1", status: "pending" }).success,
+    ).toBe(false);
+  });
+});
+
+describe("reindexRequestSchema", () => {
+  it("accepts empty body defaults", () => {
+    expect(reindexRequestSchema.safeParse({}).success).toBe(true);
+  });
+});
+
+describe("projectReferencesPatchSchema", () => {
+  it("rejects empty ops", () => {
+    expect(projectReferencesPatchSchema.safeParse({ ops: [] }).success).toBe(false);
+  });
+
+  it("accepts create/update/delete/replace ops", () => {
+    const result = projectReferencesPatchSchema.safeParse({
+      ops: [
+        { op: "create", content: "Author (2024). Title." },
+        { op: "update", id: "ref-1", content: "Updated." },
+        { op: "delete", id: "ref-2" },
+        { op: "replace", items: ["A", "B"] },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("projectAnalysisResultsPatchSchema", () => {
+  it("rejects empty ops", () => {
+    expect(projectAnalysisResultsPatchSchema.safeParse({ ops: [] }).success).toBe(
+      false,
+    );
+  });
+
+  it("accepts create/update/delete ops", () => {
+    const result = projectAnalysisResultsPatchSchema.safeParse({
+      ops: [
+        { op: "create", content: "ANOVA p<0.05" },
+        { op: "update", id: "ar-1", content: "Updated." },
+        { op: "delete", id: "ar-2" },
+      ],
+    });
+    expect(result.success).toBe(true);
   });
 });

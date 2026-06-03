@@ -1,23 +1,36 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, FileText, Trash2, Clock, ArrowLeft, MoreVertical, Layout } from "lucide-react";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Plus, Trash2, Clock, MoreVertical, Layout, BookOpen, FlaskConical } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
+import { CreateProjectDialog } from "@/components/shared/create-project-dialog";
+import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
 import { projectStore } from "@/lib/store";
+import { siteTheme } from "@/lib/site-theme";
 import { toast } from "sonner";
+import type { ProjectWritingMode } from "@/contracts/writing-mode";
+import type { ProjectListItem } from "@/services/project";
+import { cn } from "@/lib/utils";
+import { getModeAccent } from "@/lib/mode-theme";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
+type ModeFilter = "all" | ProjectWritingMode;
+
 export default function ProjectsPage() {
   const router = useRouter();
-  const [projects, setProjects] = useState<{ id: string; title: string; lastUpdated: number }[]>([]);
+  const [projects, setProjects] = useState<ProjectListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [modeFilter, setModeFilter] = useState<ModeFilter>("all");
 
   const fetchProjects = async () => {
     setIsLoading(true);
@@ -27,13 +40,35 @@ export default function ProjectsPage() {
   };
 
   useEffect(() => {
-    fetchProjects();
+    void fetchProjects();
   }, []);
 
-  const handleCreate = async () => {
-    const newProject = await projectStore.create();
-    if (newProject) {
-      router.push(`/workbench?id=${newProject.id}`);
+  const filteredProjects = useMemo(() => {
+    if (modeFilter === "all") return projects;
+    return projects.filter((p) => p.mode === modeFilter);
+  }, [projects, modeFilter]);
+
+  const counts = useMemo(
+    () => ({
+      all: projects.length,
+      review: projects.filter((p) => p.mode === "review").length,
+      research: projects.filter((p) => p.mode === "research").length,
+    }),
+    [projects],
+  );
+
+  const handleCreate = async (mode: ProjectWritingMode, title: string) => {
+    setIsCreating(true);
+    try {
+      const newProject = await projectStore.create(mode, title);
+      if (newProject) {
+        setCreateOpen(false);
+        router.push(`/workbench?id=${newProject.id}`);
+      } else {
+        toast.error("创建失败，请重试");
+      }
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -55,92 +90,163 @@ export default function ProjectsPage() {
   };
 
   const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
+    return new Date(timestamp).toLocaleString("zh-CN", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
+  const filterButtons: { id: ModeFilter; label: string }[] = [
+    { id: "all", label: `全部 (${counts.all})` },
+    { id: "review", label: `综述 (${counts.review})` },
+    { id: "research", label: `创新型 (${counts.research})` },
+  ];
+
   return (
-    <div className="min-h-screen bg-muted/20">
-      <header className="bg-background border-b h-16 flex items-center px-8 sticky top-0 z-10">
-        <div className="flex items-center gap-4 max-w-7xl mx-auto w-full">
-          <Button variant="ghost" size="icon" onClick={() => router.push("/")}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <Layout className="h-5 w-5 text-primary" />
-            项目中心
-          </h1>
-          <div className="flex-1" />
-          <Button onClick={handleCreate} className="gap-2">
+    <>
+      <PageHeader
+        title="项目中心"
+        subtitle="管理论文项目；类型在创建时选定，此处通过标签与卡片样式区分"
+        icon={Layout}
+        actions={
+          <Button onClick={() => setCreateOpen(true)} className={`gap-2 ${siteTheme.btnPrimary}`}>
             <Plus className="h-4 w-4" />
             新建论文项目
           </Button>
-        </div>
-      </header>
+        }
+      />
 
-      <main className="max-w-7xl mx-auto p-8">
-        {projects.length === 0 ? (
-          <div className="text-center py-20 bg-background rounded-2xl border border-dashed flex flex-col items-center gap-4">
-            <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center">
-              <FileText className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold">暂无论文项目</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                点击上方按钮，开始您的第一篇 AI 辅助论文创作。
-              </p>
-            </div>
-            <Button onClick={handleCreate} variant="outline" className="mt-2">
-              立即创建
+      {projects.length > 0 && (
+        <div className="mb-6 flex flex-wrap gap-2">
+          {filterButtons.map((btn) => (
+            <Button
+              key={btn.id}
+              variant={modeFilter === btn.id ? "default" : "outline"}
+              size="sm"
+              className={cn(
+                "h-8 rounded-full text-xs",
+                modeFilter === btn.id && btn.id === "review" && "bg-[#2563eb] hover:bg-[#1d4ed8]",
+                modeFilter === btn.id && btn.id === "research" && "bg-[#1a5632] hover:bg-[#144a2a]",
+              )}
+              onClick={() => setModeFilter(btn.id)}
+            >
+              {btn.label}
             </Button>
+          ))}
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="py-20 text-center text-sm text-[#6b7c72]">加载中...</div>
+      ) : projects.length === 0 ? (
+        <div
+          className={`flex flex-col items-center gap-4 py-20 text-center ${siteTheme.card} border-dashed`}
+        >
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#1a5632]/8">
+            <Layout className="h-8 w-8 text-[#1a5632]" />
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {projects.map((project) => (
-              <Card 
-                key={project.id} 
-                className="group hover:border-primary/50 transition-all cursor-pointer shadow-sm hover:shadow-md"
+          <div>
+            <h3 className="text-lg font-semibold text-[#122820]">暂无论文项目</h3>
+            <p className="mt-1 text-sm text-[#6b7c72]">
+              创建时可选择「文献综述」或「研究论文（创新型）」。
+            </p>
+          </div>
+          <Button onClick={() => setCreateOpen(true)} variant="outline" className="mt-2 border-[#1a5632]/20">
+            立即创建
+          </Button>
+        </div>
+      ) : filteredProjects.length === 0 ? (
+        <div className={`py-16 text-center text-sm text-[#6b7c72] ${siteTheme.card}`}>
+          该分类下暂无项目，试试切换筛选或新建项目。
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filteredProjects.map((project) => {
+            const isResearch = project.mode === "research";
+            const accent = getModeAccent(project.mode);
+            const Icon = isResearch ? FlaskConical : BookOpen;
+            return (
+              <Card
+                key={project.id}
+                className={cn(
+                  "group cursor-pointer border-l-4",
+                  siteTheme.card,
+                  siteTheme.cardHover,
+                  accent.borderLeft,
+                )}
                 onClick={() => handleOpen(project.id)}
               >
                 <CardHeader className="pb-3">
-                  <div className="flex justify-between items-start">
-                    <div className="h-10 w-10 bg-primary/10 rounded-lg flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                      <FileText className="h-5 w-5 text-primary" />
+                  <div className="flex items-start justify-between gap-2">
+                    <div
+                      className={cn(
+                        "flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
+                        accent.iconBg,
+                        "group-hover:opacity-90",
+                      )}
+                    >
+                      <Icon className={cn("h-5 w-5", accent.iconText)} />
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger 
-                        render={<Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                        onClick={e => e.stopPropagation()}
-                      >
-                        <MoreVertical className="h-4 w-4" />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={(e) => handleDelete(e, project.id)} className="text-destructive">
-                          <Trash2 className="h-4 w-4 mr-2" /> 删除项目
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <div className="flex items-center gap-1">
+                      <ProjectModeBadge mode={project.mode} />
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100"
+                            />
+                          }
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={(e) => handleDelete(e, project.id)}
+                            className="text-destructive"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" /> 删除项目
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
-                  <CardTitle className="text-base line-clamp-2 mt-4 leading-snug">
+                  <CardTitle className="mt-4 line-clamp-2 text-base leading-snug text-[#122820]">
                     {project.title || "未命名论文项目"}
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <div className="flex items-center text-xs text-muted-foreground gap-2">
+                <CardContent className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-black/5">
+                      <div
+                        className={cn("h-full rounded-full transition-all", accent.progress)}
+                        style={{ width: `${project.progress}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] tabular-nums text-[#9aa8a0]">{project.progress}%</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-[#6b7c72]">
                     <Clock className="h-3 w-3" />
                     上次编辑: {formatDate(project.lastUpdated)}
                   </div>
                 </CardContent>
               </Card>
-            ))}
-          </div>
-        )}
-      </main>
-    </div>
+            );
+          })}
+        </div>
+      )}
+
+      <CreateProjectDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreate={handleCreate}
+        isCreating={isCreating}
+      />
+    </>
   );
 }

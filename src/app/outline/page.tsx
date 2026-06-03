@@ -8,11 +8,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Loader2, Send, Copy, BookOpen, Save, Languages, Layout } from "lucide-react";
+import { Loader2, Send, Copy, BookOpen, Save, Languages, Layout } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
 import { toast } from "sonner";
-import { projectStore, ProjectData } from "@/lib/store";
+import { projectStore } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
+import { resolveOutlineResearchDirection, streamOutline } from "@/services/outline";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { getErrorMessage } from "@/lib/error-utils";
+import { workbenchFallback } from "@/lib/navigation";
 
 export default function OutlinePage() {
   return (
@@ -29,7 +34,8 @@ function OutlineContent() {
 
   const [title, setTitle] = useState("");
   const [researchDirection, setResearchDirection] = useState("");
-  const [language, setLanguage] = useState("zh");
+  const [projectMode, setProjectMode] = useState<ProjectData["mode"]>("review");
+  const [language, setLanguage] = useState<"zh" | "en">("zh");
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState("");
 
@@ -51,6 +57,7 @@ function OutlineContent() {
         if (data.title) setTitle(data.title);
         if (data.researchDirection) setResearchDirection(data.researchDirection);
         if (data.outline) setResult(data.outline);
+        setProjectMode(data.mode ?? "review");
       }
     };
     init();
@@ -81,8 +88,10 @@ function OutlineContent() {
   };
 
   const handleGenerate = async () => {
-    if (!title || !researchDirection) {
-      toast.error("请填写完整信息");
+    const effectiveTitle = title.trim();
+    const effectiveDirection = resolveOutlineResearchDirection(title, researchDirection);
+    if (!effectiveTitle) {
+      toast.error("请填写论文题目");
       return;
     }
 
@@ -90,52 +99,17 @@ function OutlineContent() {
     setResult("");
 
     try {
-      const response = await fetch("/api/outline", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      await streamOutline(
+        {
+          title: effectiveTitle,
+          researchDirection: effectiveDirection,
+          language,
+          projectMode: projectMode ?? "review",
         },
-        body: JSON.stringify({ title, researchDirection, language }),
-      });
-
-      if (!response.ok) {
-        throw new Error("生成失败，请检查配置或重试");
-      }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          
-          // 最后一行可能不完整，保留到下一次处理
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            const trimmedLine = line.trim();
-            if (!trimmedLine || trimmedLine === "data: [DONE]") continue;
-            
-            if (trimmedLine.startsWith("data:")) {
-              try {
-                const jsonStr = trimmedLine.slice(5).trim();
-                const data = JSON.parse(jsonStr);
-                const content = data.choices[0]?.delta?.content || "";
-                setResult((prev) => prev + content);
-              } catch (e) {
-                console.error("Error parsing streaming chunk:", e, "Line:", trimmedLine);
-              }
-            }
-          }
-        }
-      }
-    } catch (error: any) {
-      toast.error(error.message);
+        setResult,
+      );
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? getErrorMessage(error) : "生成失败");
     } finally {
       setIsGenerating(false);
     }
@@ -147,14 +121,13 @@ function OutlineContent() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <Button
-        variant="ghost"
-        className="mb-6"
-        onClick={() => router.push("/")}
-      >
-        <ArrowLeft className="mr-2 h-4 w-4" /> 返回首页
-      </Button>
+    <>
+      <PageHeader
+        title="论文大纲生成"
+        subtitle="输入研究题目与方向，结合实验室知识库生成结构化大纲"
+        icon={BookOpen}
+        backHref={workbenchFallback(projectId)}
+      />
 
       <div className="grid grid-cols-1 gap-8">
         <Card>
@@ -241,6 +214,6 @@ function OutlineContent() {
           </Card>
         )}
       </div>
-    </div>
+    </>
   );
 }

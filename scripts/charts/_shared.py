@@ -1,8 +1,13 @@
 """图表脚本共享工具 — 中文字体 + Unicode 上下标归一化"""
 import matplotlib.pyplot as plt
 
-# 中文字体
-plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "DejaVu Sans"]
+# 中文字体 — 优先系统可用字体，跨平台兼容
+plt.rcParams["font.sans-serif"] = [
+    "Noto Sans CJK JP", "Noto Serif CJK JP",     # Linux
+    "SimHei", "Microsoft YaHei",                   # Windows
+    "PingFang SC", "Heiti SC",                     # macOS
+    "DejaVu Sans",
+]
 plt.rcParams["axes.unicode_minus"] = False
 
 # Unicode 上下标 → ASCII（SimHei 对 Unicode 上标覆盖不全）

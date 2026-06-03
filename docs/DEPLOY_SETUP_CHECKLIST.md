@@ -1,135 +1,84 @@
-# 自动部署配置清单
+# 部署配置清单
 
-> 总规范：[DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md)  
-> 详细步骤：[DEPLOY_VPS.md](./DEPLOY_VPS.md)
+> 主文档：[DEPLOY.md](./DEPLOY.md)
 
-按顺序打勾，全部完成即可 `git push main` 自动上线。
+## 当前方案
 
-**当前方案**：VPS **本地 Docker build**，零镜像仓库费用（不用 TCR / GHCR）。
+**VPS 生产环境**：PM2 + Node.js standalone（数据库用 Docker PostgreSQL）
 
----
+| 项目 | 值 |
+|------|-----|
+| 服务器 IP | `159.75.106.21` |
+| 用户 | `ubuntu` |
+| 应用目录 | `/home/ubuntu/grainscript/` |
+| 数据库 | PostgreSQL Docker (`grainscript-db`, 端口 5432) |
+| 进程管理 | PM2 (`grainscript`, 2 实例 cluster) |
+| 域名 | aifascience.site (Nginx → localhost:3000) |
+| GitHub | `hyxhhh1013/AI-assisted-writing-system-for-agricultural-research` |
 
-## 阶段 0：代码进 main
+## 部署方式
 
-部署相关文件已在 `main`：
-
-- [x] `.github/workflows/deploy.yml`（SSH 触发 VPS build）
-- [x] `docker-compose.prod.yml`（含 `build: .`）
-- [x] `scripts/deploy/bootstrap-vps.sh`
-- [x] `scripts/deploy/vps-up.sh`
-- [x] 部署文档
-
----
-
-## 阶段 1：GitHub Secrets
-
-仓库 → **Settings → Secrets and variables → Actions**
-
-| Secret | 状态 | 说明 |
-|--------|------|------|
-| `DEPLOY_HOST` | ✅ 已配置 | `159.75.106.21` |
-| `DEPLOY_USER` | ✅ 已配置 | `ubuntu` |
-| `DEPLOY_PATH` | ✅ 已配置 | `/opt/grainscript` |
-| `DEPLOY_SSH_KEY` | ✅ 已配置 | `cursor.pem` 私钥 |
-| `DEPLOY_PORT` | 可选 | 默认 22 |
-
-**不需要** `TCR_*`、`GHCR_PULL_TOKEN` 等镜像仓库 Secret。
-
-验证 SSH：
+### 方式 A：本地 build + 上传（日常推荐）
 
 ```powershell
-ssh -i E:\Edownload\cursor.pem ubuntu@159.75.106.21
+# 一键：构建 → 打包 → 上传 → 服务器部署
+powershell -File scripts/deploy/package.ps1
 ```
 
----
+脚本自动完成：`npm run build` → 打包 standalone + static → SCP → SSH 部署
 
-## 阶段 2：VPS 一次性初始化
+### 方式 B：仅上传已打包文件 + 服务器部署
 
-> **GitHub 绑定（已完成）**：VPS 已配置 Deploy Key（`~/.ssh/grainscript_deploy`），可 `git pull` 同步 `main`。
+```powershell
+# 上传
+scp deploy.tar.gz ubuntu@159.75.106.21:/home/ubuntu/
 
-用腾讯云 **网页终端** 或 `ssh -i cursor.pem ubuntu@159.75.106.21` 登录。
+# SSH 部署
+ssh ubuntu@159.75.106.21 "cd /home/ubuntu/grainscript && bash scripts/deploy/apply.sh"
+```
 
-### 2.1 安装 Docker + 克隆仓库
+### 方式 C：服务器 git pull + build（CI / 手动）
 
 ```bash
-sudo mkdir -p /opt/grainscript
-sudo chown ubuntu:ubuntu /opt/grainscript
-git clone git@github.com:hyxhhh1013/AI-assisted-writing-system-for-agricultural-research.git /opt/grainscript
-cd /opt/grainscript
-git checkout main
-chmod +x scripts/deploy/vps-up.sh
+ssh ubuntu@159.75.106.21
+cd /home/ubuntu/grainscript
+bash scripts/deploy/pm2-up.sh
 ```
 
-### 2.2 配置 VPS 环境变量
-
-```bash
-cd /opt/grainscript
-cp .env.example .env
-nano .env
-```
-
-**必填：**
+## 服务器 .env 必填
 
 | 变量 | 说明 |
 |------|------|
-| `JWT_SECRET` | 随机长字符串（不要用模板默认值） |
+| `DATABASE_URL` | `postgresql://grainscript:grainscript_dev_2024@localhost:5432/grainscript` |
+| `JWT_SECRET` | 随机长字符串 |
 | `DEEPSEEK_API_KEY` | DeepSeek API Key |
 
-可选：`ZHIPU_API_KEY`（Verifier 用）
+## GitHub Secrets（CI/CD 用）
 
-生成 JWT：
+| Secret | 值 |
+|--------|-----|
+| `DEPLOY_HOST` | `159.75.106.21` |
+| `DEPLOY_USER` | `ubuntu` |
+| `DEPLOY_PATH` | `/home/ubuntu/grainscript` |
+| `DEPLOY_SSH_KEY` | 已配置 |
 
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
+## 部署包内容
 
-### 2.3 腾讯云安全组
+打包脚本 (`package.ps1`) 自动处理：
 
-- [ ] 放行 **22**（SSH）
-- [ ] 放行 **3000**（HTTP，或后续改 Nginx 80/443）
+**包含：**
+- `.next/` — 编译产出（server + static）
+- `prisma/` — schema + migrations
+- `public/` — 静态资源
+- `server.js` — Next.js standalone 入口
+- `ecosystem.config.cjs` — PM2 配置
+- `package.json` — 依赖声明
 
-### 2.4 VPS 规格建议
+**排除：**
+- `papers/` — PDF 知识库（服务器已有）
+- `node_modules/` — 服务器 `npm install` 安装
+- `data/` — RAG 索引（服务器已有）
 
-- [ ] 至少 **2 核 4GB**（本地 build Next.js + Playwright）
-- [ ] 若 build 被 Kill，加 **4GB swap**（见 DEPLOY_VPS.md FAQ）
+## Prisma 跨平台
 
----
-
-## 阶段 3：触发第一次部署
-
-- [x] 阶段 0 完成
-- [x] 阶段 1 SSH Secrets 已填
-- [ ] 阶段 2 VPS 已 clone + `.env` 已编辑
-
-然后：
-
-```powershell
-git push origin main
-```
-
-或 GitHub → **Actions** → **Deploy to VPS** → **Run workflow**
-
-- [ ] Actions 中 `deploy` 绿色（首次可能跑 **15～45 分钟**）
-- [ ] 浏览器打开 http://159.75.106.21:3000 能访问
-- [ ] 注册/登录 + 打开项目冒烟测试
-
----
-
-## 我还需要你提供什么？
-
-| 你需要做的 | AI **不能**代劳的 |
-|------------|-------------------|
-| VPS 上 `nano .env` 填 API Key | `DEEPSEEK_API_KEY` |
-| VPS 上 `nano .env` 填 JWT | `JWT_SECRET` |
-| 腾讯云安全组放行端口 | 控制台操作 |
-| 若 build OOM → 加 swap 或升配 | 控制台操作 |
-
-**请勿在聊天里发送：私钥、密码、API Key。**
-
----
-
-## 安全提醒
-
-- 公钥可公开；**私钥、API Key 绝不进 Git、不进聊天**
-- 生产环境 **不要** 设置 `AUTH_BYPASS=true`
-- 长期公网建议加 Nginx + HTTPS，不要裸奔 3000 端口
+`schema.prisma` 已配置 `binaryTargets = ["native", "debian-openssl-3.0.x"]`，本地 build 的 Prisma Client 同时包含 Windows + Linux 引擎。服务器端 `apply.sh` 仍会执行 `npx prisma generate` 确保兼容。

@@ -37,7 +37,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from plot_utils import load_dataframe  # noqa: E402
 import ase_compat  # noqa: E402, F401
 
-plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "DejaVu Sans"]
+plt.rcParams["font.sans-serif"] = ["Noto Sans CJK JP", "Noto Serif CJK JP", "SimHei", "Microsoft YaHei", "PingFang SC", "Heiti SC", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 plt.rcParams["font.size"] = 12
 plt.rcParams["figure.dpi"] = 200

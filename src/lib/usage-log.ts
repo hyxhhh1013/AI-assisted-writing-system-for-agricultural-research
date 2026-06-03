@@ -1,8 +1,10 @@
 /**
- * 轻量级功能使用日志。记录 AI 端点和关键功能调用，用于判断哪些功能是刚需。
- * 日志只存内存，重启丢失——如需持久化，在生产环境接入外部日志服务。
+ * 功能使用日志：内存环形缓冲（开发即时查看）+ Prisma AiUsageLog（持久化，供 Admin）。
  */
-type LogEntry = {
+import type { Prisma } from "@prisma/client";
+import prisma from "@/lib/prisma";
+
+export type UsageLogEntry = {
   feature: string;
   userId?: string;
   timestamp: number;
@@ -10,42 +12,76 @@ type LogEntry = {
 };
 
 const MAX_ENTRIES = 2000;
-const logs: LogEntry[] = [];
+const logs: UsageLogEntry[] = [];
 
 function prune() {
   while (logs.length > MAX_ENTRIES) logs.shift();
 }
 
+function extractTokens(metadata?: Record<string, unknown>): number | undefined {
+  if (!metadata) return undefined;
+  const candidates = [metadata.tokens, metadata.totalTokens, metadata.promptTokens, metadata.completionTokens];
+  for (const v of candidates) {
+    if (typeof v === "number" && Number.isFinite(v) && v >= 0) return Math.round(v);
+  }
+  return undefined;
+}
+
+function persistToDatabase(entry: UsageLogEntry) {
+  try {
+    const delegate = prisma.aiUsageLog;
+    if (!delegate?.create) return;
+
+    const userId = entry.userId && entry.userId !== "anonymous" ? entry.userId : null;
+    void delegate
+      .create({
+        data: {
+          userId,
+          feature: entry.feature,
+          tokens: extractTokens(entry.metadata),
+          metadata: entry.metadata as Prisma.InputJsonValue | undefined,
+        },
+      })
+      .catch(() => {
+        /* 持久化失败不阻塞 AI 主路径 */
+      });
+  } catch {
+    /* 旧版 Prisma 单例或表未迁移时跳过 */
+  }
+}
+
 export const usageLog = {
   record(feature: string, metadata?: Record<string, unknown>, userId?: string) {
-    logs.push({
-      feature,
-      userId: userId ?? "anonymous",
-      timestamp: Date.now(),
-      metadata,
-    });
-    prune();
+    try {
+      const entry: UsageLogEntry = {
+        feature,
+        userId: userId ?? "anonymous",
+        timestamp: Date.now(),
+        metadata,
+      };
+      logs.push(entry);
+      prune();
+      persistToDatabase(entry);
+    } catch {
+      /* 内存/DB 任一环节失败均不向外抛 */
+    }
   },
 
-  /** 过去 N 分钟的调用次数 */
   countSince(feature: string, minutes: number): number {
     const threshold = Date.now() - minutes * 60_000;
     return logs.filter((e) => e.feature === feature && e.timestamp >= threshold).length;
   },
 
-  /** 最近 N 条日志 */
-  recent(n = 50): LogEntry[] {
+  recent(n = 50): UsageLogEntry[] {
     return logs.slice(-n).reverse();
   },
 
-  /** 各功能调用分布 */
   stats(): Record<string, number> {
     const counts: Record<string, number> = {};
     for (const e of logs) counts[e.feature] = (counts[e.feature] || 0) + 1;
     return counts;
   },
 
-  /** 清空 */
   clear() {
     logs.length = 0;
   },

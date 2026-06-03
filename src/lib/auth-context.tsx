@@ -9,11 +9,13 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
+import { getMe, login as authLogin, logout as authLogout } from "@/services/auth";
 
 interface User {
   id: string;
   email: string;
   name: string;
+  role?: string;
 }
 
 interface AuthContextValue {
@@ -33,13 +35,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch("/api/auth/me");
-      if (res.ok) {
-        const data = await res.json();
-        setUser(data);
-      } else {
-        setUser(null);
-      }
+      const data = await getMe();
+      setUser(data);
     } catch {
       setUser(null);
     } finally {
@@ -53,25 +50,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string): Promise<boolean> => {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      if (res.ok) {
-        const data = await res.json();
+      try {
+        const data = await authLogin(email, password);
         setUser(data);
         router.refresh();
         return true;
+      } catch (err: unknown) {
+        throw err instanceof Error ? err : new Error("登录失败");
       }
-      const data = await res.json();
-      throw new Error(data.error || "登录失败");
     },
     [router]
   );
 
   const logout = useCallback(async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
+    await authLogout();
     setUser(null);
     router.push("/login");
     router.refresh();

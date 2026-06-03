@@ -1,6 +1,7 @@
 import { buildDomainExpertise } from "./domain";
+import type { ProjectWritingMode } from "@/contracts/writing-mode";
 
-export function buildOutlinePrompt(params: {
+function buildResearchOutlinePrompt(params: {
   title: string;
   researchDirection: string;
   language: string;
@@ -10,30 +11,24 @@ export function buildOutlinePrompt(params: {
   const domainExpertise = buildDomainExpertise(researchDirection);
 
   return `${domainExpertise}
-请根据论文题目和研究方向，结合提供的参考资料，生成一份专业且详细的论文大纲。
+请根据论文题目和研究方向，结合提供的参考资料，生成一份专业且详细的**原创研究论文**大纲。
 
-【论文类型识别】—— 先判断本文属于哪类，采用对应的叙事逻辑：
-· 发现/机理型（探究因果关系）→ 现象→未知机制→假设→实验设计→证据链→模型→局限
-· 方法/工具型（提出新方法）→ 当前瓶颈→本文方法→技术路线→性能对比→稳健性→适用边界
-· 资源/数据型（数据集、种质资源等）→ 为何需要→数据设计→生成流程→主要图景→验证→获取方式
-· 试验研究型 → 研究问题→试验设计→处理效应→指标响应→机理探讨→应用建议
-· 综述型 → 为何此时重要→概念框架→主题1→主题2→争议→作者综合→未来方向
+【论文类型】原创试验/机理/方法研究（IMRaD 结构）
 
 【大纲结构要求】—— 必须包含以下全部章节：
 ## 摘要 — 1-2句该章节的核心方向
 ## 引言
-  ### 研究背景与意义 — 说明领域重要性
-  ### 国内外研究现状 — 总结已有工作
-  ### 现有研究的不足 — 精准指出缺口（禁止用"从未有人研究"等夸张表述）
-  ### 本研究目标与内容 — 本文要回答的问题
+  ### 研究背景与意义
+  ### 国内外研究现状
+  ### 现有研究的不足
+  ### 本研究目标与内容
 ## 材料与方法
-  ### 试验材料与设计 — 材料来源、试验方案
+  ### 试验材料与设计
   ### 测定指标与方法
   ### 数据处理与统计分析
 ## 结果与分析
   ### [具体结果主题1]
   ### [具体结果主题2]
-  ### [具体结果主题3]
   ### 主要发现及可能机制
   ### 与已有研究的比较
   ### 研究局限
@@ -43,11 +38,11 @@ export function buildOutlinePrompt(params: {
   ### 展望
 
 【写作要求】：
-1. 每个标题独占一行，用 Markdown ##/###/#### 标题语法
-2. 每个子标题后紧跟 1-3 句要点说明（不必展开全文，提纲即可）
+1. 每个标题独占一行，用 Markdown ##/###/####
+2. 每个子标题后 1-3 句要点说明
 3. 术语准确，符合农业学科规范
 4. 深度参考提供的文献库内容
-5. 仅输出大纲本身，不要前言、后记或解释性文字
+5. 仅输出大纲本身
 6. 严禁使用 *** 或 --- 装饰线
 
 【输出语言】：${language === "en" ? "英文 (English)" : "中文 (Chinese)"}
@@ -57,4 +52,71 @@ ${contextText}
 
 论文题目：${title}
 研究方向：${researchDirection}`;
+}
+
+function buildReviewOutlinePrompt(params: {
+  title: string;
+  researchDirection: string;
+  language: string;
+  contextText: string;
+}): string {
+  const { title, researchDirection, language, contextText } = params;
+  const domainExpertise = buildDomainExpertise(researchDirection);
+
+  return `${domainExpertise}
+请根据题目和研究方向，结合参考资料，生成一份**文献综述**大纲（非原创试验论文）。
+
+【论文类型】文献综述 — 按主题/机制/应用维度综合已有研究，禁止安排「材料与方法」「试验设计」「本研究数据」等原创实验章节。
+
+【叙事逻辑】为何此时重要 → 概念与问题框架 → 主题1 → 主题2 → … → 争议与空白 → 综合判断 → 展望
+
+【大纲结构要求】—— 必须包含：
+## 摘要 — 综述范围、主要共识、空白与展望方向
+## 引言
+  ### 领域背景与综述必要性
+  ### 研究总体脉络（概括）
+  ### 现有综述或研究的不足
+  ### 本文综述范围与结构安排
+## 研究现状与问题
+  ### 核心概念与分类框架
+  ### 研究分布与主要问题
+  ### 不同研究路线或观点分野
+## 研究进展综述
+  ### [主题维度1 — 如机理/材料/工艺等]
+  ### [主题维度2]
+  ### [主题维度3]
+  ### 方法学或尺度差异（如适用）
+  ### 主要争议与不一致结论
+## 结论与展望
+  ### 综合性结论（3-5条）
+  ### 知识空白与未来研究方向
+  ### 应用或政策启示（如有文献支撑）
+
+【写作要求】：
+1. 「研究进展综述」下至少 3 个主题子节，子节名应体现分类逻辑而非试验步骤
+2. 禁止出现「材料与方法」「结果与分析」「试验设计」「样本量」等 IMRaD 试验章节
+3. 每个子标题后 1-3 句要点，说明该节要综合哪些类型的文献
+4. 仅输出大纲本身
+5. 严禁 *** 或 --- 装饰线
+
+【输出语言】：${language === "en" ? "英文 (English)" : "中文 (Chinese)"}
+
+【参考资料】：
+${contextText}
+
+论文题目：${title}
+研究方向：${researchDirection}`;
+}
+
+export function buildOutlinePrompt(params: {
+  title: string;
+  researchDirection: string;
+  language: string;
+  contextText: string;
+  projectMode?: ProjectWritingMode;
+}): string {
+  if (params.projectMode === "research") {
+    return buildResearchOutlinePrompt(params);
+  }
+  return buildReviewOutlinePrompt(params);
 }

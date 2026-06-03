@@ -5,13 +5,13 @@ export interface SSEDeltaEvent { type: "delta"; content: string }
 export interface SSEStatusEvent { type: "status"; status: "retrieving" | "building_context" | "writing" | "verifying" | "refining" | "checking_citations" | "generating_figures" | "completed" }
 export interface SSEPipelineStepEvent { type: "pipeline_step"; step: string; status: "pending" | "running" | "done" | "error"; detail?: string }
 export interface SSEVerificationEvent { type: "verification"; verification: string }
-export interface SSEReferencesEvent { type: "references"; references: string[] }
+export interface SSEReferencesEvent { type: "references"; references: string[]; refMapping?: Record<string, number> }
 export interface SSECitationWarningsEvent { type: "citation_warnings"; warnings: { num: number; overlap: number; context: string }[] }
 export interface SSEDataClaimWarningsEvent { type: "data_claim_warnings"; warnings: { claimId: string; claimText: string; found: boolean; citedCorrectly: boolean; issue?: string }[] }
 export interface SSECorrectedTextEvent { type: "corrected_text"; text: string }
 export interface SSEClearResultEvent { type: "clear_result" }
 export interface SSEErrorEvent { type: "error"; error: string }
-export interface SSEInfoEvent { type: "info"; info: string }
+export interface SSEInfoEvent { type: "info"; info: string; refMapping?: Record<string, number> }
 
 /** 写作 SSE 事件联合类型 */
 export type WritingSSEEvent =

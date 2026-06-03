@@ -1,10 +1,11 @@
 "use client";
 
 import { Suspense, useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getErrorMessage } from "@/lib/error-utils";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -15,11 +16,14 @@ import {
   Loader2, Box, Ruler, Layers, FileText, Download, Expand, X, ArrowLeft, Table2, Atom,
 } from "lucide-react";
 import { toast } from "sonner";
+import type { ProjectData } from "@/contracts/project";
 import { projectStore } from "@/lib/store";
 import { runSimulation } from "@/services/xrd";
 import type { SimulateData } from "@/services/xrd";
 import { XpsCard } from "@/components/shared/xrd/xps-card";
 import { MolDiagramPanel } from "@/components/shared/mol-diagram-panel";
+import { useGoBack } from "@/contexts/navigation-history";
+import { workbenchFallback } from "@/lib/navigation";
 
 export default function XrdLabPage() {
   return (
@@ -30,7 +34,7 @@ export default function XrdLabPage() {
 }
 
 function XrdLabContent() {
-  const router = useRouter();
+  const goBack = useGoBack();
   const searchParams = useSearchParams();
   const [activeTool, setActiveTool] = useState<"simulation" | "xps" | "mol">("simulation");
   const [projectId, setProjectId] = useState(searchParams.get("projectId") || "");
@@ -49,22 +53,33 @@ function XrdLabContent() {
       const mdImage = `\n\n![${caption}](${imageUrl})\n\n`;
       const section = activeSection === "abstract" ? "abstract" : (project.sections[activeSection] ? activeSection : "results");
       const current = section === "abstract" ? (project.abstract || "") : (project.sections[section] || "");
-      const updated = { ...project } as Record<string, unknown>;
-      if (section === "abstract") { updated.abstract = current + mdImage; }
-      else { updated.sections = { ...project.sections, [section]: current + mdImage }; }
-      await projectStore.save(updated as any);
+      const updated: ProjectData = { ...project };
+      if (section === "abstract") {
+        updated.abstract = current + mdImage;
+      } else {
+        updated.sections = { ...project.sections, [section]: current + mdImage };
+      }
+      await projectStore.save(updated);
       toast.success(`已插入到 ${section} 章节`);
-    } catch (err: any) { toast.error(err.message || "插入失败"); }
+    } catch (err: unknown) { toast.error(getErrorMessage(err) || "插入失败"); }
   };
 
   return (
     <Suspense fallback={<div className="h-screen flex items-center justify-center text-muted-foreground">加载中...</div>}>
-    <div className="h-screen flex flex-col bg-background">
-      <header className="h-14 border-b bg-card flex items-center px-4 shrink-0 gap-3">
-        <Button variant="ghost" size="icon" onClick={() => router.push(projectId ? `/workbench?id=${projectId}` : "/projects")}>
+    <div className="flex h-screen flex-col bg-[#faf9f6]">
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-[#1a5632]/10 bg-white/90 px-4 backdrop-blur-sm">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-[#3d4f46] hover:bg-[#1a5632]/8 hover:text-[#1a5632]"
+          onClick={() => goBack(workbenchFallback(projectId || searchParams.get("projectId")))}
+        >
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <div className="font-bold text-sm flex items-center gap-2"><Atom className="h-4 w-4 text-primary" />XRD 实验室</div>
+        <div className="flex items-center gap-2 text-sm font-bold text-[#122820]">
+          <Atom className="h-4 w-4 text-[#1a5632]" />
+          XRD 实验室
+        </div>
         <div className="flex-1" />
         <div className="flex items-center gap-2 text-xs">
           <Label className="text-xs text-muted-foreground">目标项目</Label>
@@ -86,7 +101,7 @@ function XrdLabContent() {
         </div>
       </header>
 
-      <div className="border-b bg-muted/20 shrink-0">
+      <div className="shrink-0 border-b border-[#1a5632]/10 bg-[#1a5632]/5">
         <div className="flex gap-1 px-4">
           <TabButton active={activeTool === "simulation"} onClick={() => setActiveTool("simulation")}><Ruler className="h-4 w-4" /> XRD 模拟</TabButton>
           <TabButton active={activeTool === "xps"} onClick={() => setActiveTool("xps")}><Layers className="h-4 w-4" /> XPS 分析</TabButton>
@@ -144,7 +159,7 @@ function SimulationCard({ onInsertToPaper }: { onInsertToPaper: (url: string, ca
       });
       setResult({ imageBase64: json.imageBase64, imageUrl: json.imageUrl, data: json.data });
       toast.success(`模拟完成，${json.data.n_peaks} 个衍射峰`);
-    } catch (err: any) { toast.error(err.message); }
+    } catch (err: unknown) { toast.error(getErrorMessage(err)); }
     finally { setLoading(false); }
   };
 

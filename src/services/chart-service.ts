@@ -6,7 +6,7 @@
 export interface ChartRequest {
   dataFile: File;
   mode: "generic" | "crd";
-  config: Record<string, any>;
+  config: Record<string, unknown>;
 }
 
 export interface ChartResponse {

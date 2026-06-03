@@ -1,3 +1,6 @@
+import { logger } from "@/lib/logger";
+import type { XrdPythonJsonResult } from "@/contracts/xrd-python";
+import { getErrorMessage } from "@/lib/error-utils";
 ﻿import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import fs from "fs";
@@ -7,9 +10,10 @@ import { randomUUID } from "crypto";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const CHARTS_DIR = path.join(process.cwd(), "public", "charts");
+const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
 import { PYTHON_CMD } from "@/services/xrd-runner";
+import { parseOptionalJsonConfig } from "@/lib/api-validate";
 
 if (!fs.existsSync(CHARTS_DIR)) {
   fs.mkdirSync(CHARTS_DIR, { recursive: true });
@@ -43,8 +47,13 @@ export async function POST(req: NextRequest) {
       args.push("--cif", cifPath);
 
       if (configStr) {
+        const { data: config, errorResponse: configError } = parseOptionalJsonConfig(configStr);
+        if (configError) {
+          fs.rmSync(tmpDir, { recursive: true, force: true });
+          return configError;
+        }
         const configPath = path.join(tmpDir, "config.json");
-        fs.writeFileSync(configPath, configStr, "utf-8");
+        fs.writeFileSync(configPath, JSON.stringify(config), "utf-8");
         args.push("--config", configPath);
       }
     } else {
@@ -81,7 +90,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let pyResult: any = {};
+    let pyResult: XrdPythonJsonResult = {};
     try {
       pyResult = JSON.parse(stdout.trim());
     } catch {
@@ -101,11 +110,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       imageBase64: `data:image/png;base64,${base64}`,
-      imageUrl: `/charts/${outputName}`,
+      imageUrl: `/api/charts/${outputName}`,
       data: pyResult.data,
     });
-  } catch (error: any) {
-    console.error("UnitCell API error:", error);
-    return NextResponse.json({ error: error.message || "可视化失败" }, { status: 500 });
+  } catch (error: unknown) {
+    logger.error("UnitCell API error:", error);
+    return NextResponse.json({ error: getErrorMessage(error) || "可视化失败" }, { status: 500 });
   }
 }

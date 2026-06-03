@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getErrorMessage } from "@/lib/error-utils";
 import {
   Card, CardContent, CardHeader, CardTitle, CardDescription,
 } from "@/components/ui/card";
@@ -12,7 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { runXpsAnalysis, runBackgroundSubtraction } from "@/services/xrd";
-import type { XpsData } from "@/services/xrd";
+import type { XpsConfig, XpsData } from "@/services/xrd";
 
 interface XpsCardProps {
   onInsertToPaper: (imageUrl: string, caption: string) => void;
@@ -68,20 +69,20 @@ export function XpsCard({ onInsertToPaper }: XpsCardProps) {
         a.element, a.orbital, parseFloat(a.energy),
       ]);
 
-      const config: Record<string, any> = {
+      const config: XpsConfig = {
         title: title || "XPS Analysis",
         atom_identifiers: atomIdentifiers,
-        iter_max: parseInt(iterMax),
+        iter_max: parseInt(iterMax, 10),
       };
       if (energyMin && energyMax) {
         config.energy_range = [parseFloat(energyMin), parseFloat(energyMax)];
       }
 
-      const json = await runXpsAnalysis(file, config as any);
+      const json = await runXpsAnalysis(file, config);
       setResult({ imageBase64: json.imageBase64, imageUrl: json.imageUrl, data: json.data });
       toast.success(`XPS 分析完成，R因子: ${json.data.rp?.toFixed(2) || "N/A"}`);
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err));
     } finally {
       setLoading(false);
     }

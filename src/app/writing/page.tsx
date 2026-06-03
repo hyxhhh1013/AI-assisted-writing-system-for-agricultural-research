@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,12 +8,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Loader2, Send, Copy, Eraser, FileText, Database, ScrollText } from "lucide-react";
+import { Loader2, Send, Copy, Eraser, FileText, Database, ScrollText, PenTool } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
 import { toast } from "sonner";
-import { projectStore, ProjectData } from "@/lib/store";
-import { buildSectionOptions } from "@/lib/imrad";
-
-const SECTIONS = buildSectionOptions();
+import { projectStore } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
+import { buildSectionOptionsForMode, getProjectWritingMode } from "@/lib/section-registry";
+import { postWritingStream } from "@/services/writing";
+import { getErrorMessage } from "@/lib/error-utils";
+import { workbenchFallback } from "@/lib/navigation";
 
 export default function WritingPage() {
   return (
@@ -36,6 +39,12 @@ function WritingContent() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState("");
 
+  const projectMode = getProjectWritingMode(project?.mode);
+  const sectionOptions = useMemo(
+    () => buildSectionOptionsForMode(projectMode),
+    [projectMode],
+  );
+
   // 加载项目数据
   useEffect(() => {
     const init = async () => {
@@ -53,10 +62,15 @@ function WritingContent() {
       if (data) {
         setProject(data);
         if (data.title) setTitle(data.title);
+        const mode = getProjectWritingMode(data.mode);
+        const options = buildSectionOptionsForMode(mode);
+        const defaultSection =
+          options.find((o) => o.value === "introduction")?.value ?? options[0]?.value ?? "";
+        setSection(defaultSection);
       }
     };
     init();
-  }, [projectId]);
+  }, [projectId, router]);
 
   const injectOutline = () => {
     if (project?.outline) {
@@ -85,16 +99,16 @@ function WritingContent() {
     setResult("");
 
     try {
-      const response = await fetch("/api/writing", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, section, context, language }),
+      const response = await postWritingStream({
+        title,
+        section,
+        context,
+        language: language as "zh" | "en",
+        template: project?.template || "sci",
+        existingReferences: project?.references || [],
+        researchDirection: project?.researchDirection,
+        projectMode,
       });
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || "生成失败");
-      }
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -124,8 +138,8 @@ function WritingContent() {
           }
         }
       }
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error));
     } finally {
       setIsGenerating(false);
     }
@@ -137,12 +151,15 @@ function WritingContent() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-5xl">
-      <Button variant="ghost" className="mb-6" onClick={() => router.push("/")}>
-        <ArrowLeft className="mr-2 h-4 w-4" /> 返回首页
-      </Button>
+    <>
+      <PageHeader
+        title="模块化扩写"
+        subtitle="选择章节与上下文，基于本地知识库进行学术化扩写"
+        icon={PenTool}
+        backHref={workbenchFallback(projectId)}
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
         {/* 输入面板 */}
         <Card className="h-fit">
           <CardHeader>
@@ -169,7 +186,7 @@ function WritingContent() {
                   <SelectValue placeholder="选择要扩写的章节" />
                 </SelectTrigger>
                 <SelectContent>
-                  {SECTIONS.map((s) => (
+                  {sectionOptions.map((s) => (
                     <SelectItem key={s.value} value={s.value}>
                       {s.label}
                     </SelectItem>
@@ -271,6 +288,6 @@ function WritingContent() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </>
   );
 }

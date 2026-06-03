@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import {
   Popover,
@@ -9,6 +9,9 @@ import {
 } from "@/components/ui/popover";
 import { BookOpen, ChevronDown, ChevronRight, Quote, FileText, Loader2 } from "lucide-react";
 import { CITATION_GROUP_RE, FULLWIDTH_CITATION_RE, expandCitationGroup } from "@/lib/citation";
+import { formatFilenames } from "@/services/references";
+import { searchKnowledge } from "@/services/knowledge";
+import { ReferenceProvenance } from "@/components/shared/reference-provenance";
 
 function collectUsedNumbers(text: string, refCount: number): Set<number> {
   const set = new Set<number>();
@@ -30,6 +33,16 @@ function getRefPreview(ref: string): string {
   return cleaned.length > cut ? cleaned.slice(0, cut) + " ..." : cleaned;
 }
 
+/** 简单清理：去掉 .pdf 后缀、替换下划线/连字符为空格 */
+function quickCleanFilename(raw: string): string {
+  return raw
+    .replace(/^\[\d+\]\s*/, "")
+    .replace(/\.pdf$/i, "")
+    .replace(/[_-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 interface LiteratureChunk {
   content: string;
   index: number;
@@ -37,6 +50,7 @@ interface LiteratureChunk {
 
 interface ReferenceBrowserProps {
   references: string[];
+  projectId?: string;
   activeSectionContent?: string;
   allContents?: Record<string, string>;
   className?: string;
@@ -44,6 +58,7 @@ interface ReferenceBrowserProps {
 
 export function ReferenceBrowser({
   references,
+  projectId,
   activeSectionContent,
   allContents,
   className,
@@ -51,6 +66,22 @@ export function ReferenceBrowser({
   const [collapsed, setCollapsed] = useState(false);
   const [loadingSource, setLoadingSource] = useState<number | null>(null);
   const [sourceChunks, setSourceChunks] = useState<Record<number, LiteratureChunk[]>>({});
+
+  // 批量格式化引用：文件名 → GB/T 7714
+  const [formattedRefs, setFormattedRefs] = useState<Record<string, string>>({});
+  const formatLoadedRef = useRef<string>("");
+
+  useEffect(() => {
+    if (references.length === 0) return;
+    const key = references.join("|");
+    if (key === formatLoadedRef.current) return;
+    formatLoadedRef.current = key;
+
+    const filenames = references;
+    formatFilenames(filenames)
+      .then((formatted) => setFormattedRefs(formatted))
+      .catch(() => {});
+  }, [references]);
 
   const usedInSection = useMemo(
     () => collectUsedNumbers(activeSectionContent || "", references.length),
@@ -82,9 +113,8 @@ export function ReferenceBrowser({
         return;
       }
 
-      const res = await fetch(`/api/knowledge?q=${encodeURIComponent(keywords)}&type=semantic&pageSize=5`);
-      const data = await res.json();
-      const chunks: LiteratureChunk[] = (data.files || []).flatMap((f: any) =>
+      const data = await searchKnowledge({ q: keywords, type: "semantic", pageSize: 5 });
+      const chunks: LiteratureChunk[] = (data.files || []).flatMap((f) =>
         (f._snippets || []).map((s: string, i: number) => ({
           content: s,
           index: i + 1,
@@ -126,12 +156,18 @@ export function ReferenceBrowser({
       </button>
 
       {!collapsed && (
-        <div className="space-y-0.5 max-h-[280px] overflow-y-auto pr-1 custom-scrollbar">
+        <div className="space-y-0.5">
           {references.map((ref, idx) => {
             const num = idx + 1;
             const isUsedInSection = usedInSection.has(num);
             const isUsedInPaper = usedInPaper.has(num);
-            const label = getRefPreview(ref);
+            const formatted = formattedRefs[ref];
+            const displayRef = formatted
+              ? `[${num}] ${formatted}`
+              : `[${num}] ${quickCleanFilename(ref)}`;
+            const label = formatted
+              ? (formatted.length > 65 ? formatted.slice(0, 65) + " ..." : formatted)
+              : getRefPreview(`[${num}] ${quickCleanFilename(ref)}`);
             const chunks = sourceChunks[num];
 
             return (
@@ -167,7 +203,7 @@ export function ReferenceBrowser({
                         </span>
                       </div>
                       <p className="text-xs leading-relaxed text-foreground bg-muted/20 p-2 rounded-md">
-                        {ref}
+                        {displayRef}
                       </p>
                     </div>
 
@@ -212,6 +248,10 @@ export function ReferenceBrowser({
         <p className="text-[9px] text-muted-foreground/60 px-1 pt-1">
           当前章节引用 [{Array.from(usedInSection).join(", ")}]
         </p>
+      )}
+
+      {projectId && !collapsed && (
+        <ReferenceProvenance projectId={projectId} />
       )}
     </div>
   );

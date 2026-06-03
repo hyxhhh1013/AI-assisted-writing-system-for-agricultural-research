@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
+import { forwardRequestHeadersWithUserId } from "@/lib/auth";
 
 const getJwtSecret = () => {
   const secret = process.env.JWT_SECRET;
@@ -7,16 +8,33 @@ const getJwtSecret = () => {
   return new TextEncoder().encode(secret);
 };
 
-const USER_ID_HEADER = "x-user-id";
 const TOKEN_COOKIE = "token";
+
+/** 开发环境 AUTH_BYPASS 注入的固定用户（勿用于生产） */
+const DEV_BYPASS_USER_ID = "cmotoc1u50000iey3u6ju4zia";
+
+function isAuthBypassEnabled(): boolean {
+  if (process.env.AUTH_BYPASS !== "true") return false;
+  if (process.env.NODE_ENV === "production") {
+    console.error("[proxy] AUTH_BYPASS 在生产环境无效，已忽略");
+    return false;
+  }
+  return true;
+}
+
+function nextWithOptionalUserId(request: NextRequest, userId: string | null): NextResponse {
+  return NextResponse.next({
+    request: { headers: forwardRequestHeadersWithUserId(request.headers, userId) },
+  });
+}
 
 // 需要登录的路由
 const protectedPages = ["/workbench", "/projects"];
 const protectedApis = [
   "/api/projects", "/api/writing", "/api/analysis", "/api/outline", "/api/export",
-  "/api/plagiarism", "/api/knowledge", "/api/chat", "/api/translate",
+  "/api/plagiarism", "/api/chat", "/api/translate",
   "/api/consistency", "/api/chart", "/api/flow-diagram", "/api/mol-diagram",
-  "/api/save-chart", "/api/references", "/api/xrd", "/api/pdf",
+  "/api/save-chart", "/api/references", "/api/xrd", "/api/admin",
 ];
 
 // AI 端点限流
@@ -45,30 +63,27 @@ function checkRateLimit(key: string): NextResponse | null {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // TODO: 临时关闭认证 — 所有请求注入默认用户 ID
-  const BYPASS_AUTH = true;
-  if (BYPASS_AUTH) {
-    const response = NextResponse.next();
-    response.headers.set(USER_ID_HEADER, "cmotoc1u50000iey3u6ju4zia");
-    return response;
-  }
-
-  const token = request.cookies.get(TOKEN_COOKIE)?.value;
-
   let userId: string | null = null;
 
-  if (token) {
-    try {
-      const { payload } = await jwtVerify(token, getJwtSecret());
-      userId = (payload.sub as string) || null;
-    } catch {
-      userId = null;
+  if (isAuthBypassEnabled()) {
+    userId = DEV_BYPASS_USER_ID;
+  } else {
+    const token = request.cookies.get(TOKEN_COOKIE)?.value;
+    if (token) {
+      try {
+        const { payload } = await jwtVerify(token, getJwtSecret());
+        userId = (payload.sub as string) || null;
+      } catch {
+        userId = null;
+      }
     }
   }
 
-  const isApiRoute = pathname.startsWith("/api/");
   const isProtectedPage = protectedPages.some((p) => pathname.startsWith(p));
-  const isProtectedApi = protectedApis.some((p) => pathname.startsWith(p));
+  // /api/knowledge、/api/pdf GET 公开读取；/api/knowledge/reindex 公开
+  const isProtectedApi = protectedApis.some((p) => pathname.startsWith(p))
+    || (pathname.startsWith("/api/knowledge") && request.method !== "GET" && !pathname.startsWith("/api/knowledge/reindex"))
+    || (pathname.startsWith("/api/pdf") && request.method !== "GET");
 
   // AI 端点限流
   if (aiEndpoints.some((p) => pathname.startsWith(p))) {
@@ -89,13 +104,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.json({ error: "未登录，请先登录" }, { status: 401 });
   }
 
-  // 已登录用户，传递 userId 给 API Route
-  const response = NextResponse.next();
-  if (userId) {
-    response.headers.set(USER_ID_HEADER, userId);
-  }
-
-  return response;
+  return nextWithOptionalUserId(request, userId);
 }
 
 export const config = {
@@ -119,5 +128,6 @@ export const config = {
     "/api/references/:path*",
     "/api/xrd/:path*",
     "/api/pdf/:path*",
+    "/api/admin/:path*",
   ],
 };

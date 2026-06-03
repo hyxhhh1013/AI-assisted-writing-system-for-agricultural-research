@@ -1,6 +1,8 @@
+import { logger } from "@/lib/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { localRAG } from "@/lib/rag";
 import { callAI, getAIError } from "@/lib/ai";
+import { getErrorMessage } from "@/lib/error-utils";
 import {
   KNOWLEDGE_ANALYZE_SYSTEM,
   buildFullAnalysisPrompt,
@@ -15,7 +17,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "未指定文件名" }, { status: 400 });
     }
 
-    const fullText = localRAG.getFullText(filename);
+    const fullText = await localRAG.getFullText(filename);
     if (!fullText) {
       return NextResponse.json({ error: "未找到该文献的索引内容，请先重建索引" }, { status: 404 });
     }
@@ -70,8 +72,9 @@ export async function POST(req: NextRequest) {
         "X-Analysis-Mode": mode,
       },
     });
-  } catch (error: any) {
-    console.error("Analysis API error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    logger.fail("analysis API error", error);
+    const message = error instanceof Error ? getErrorMessage(error) : "请求失败";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

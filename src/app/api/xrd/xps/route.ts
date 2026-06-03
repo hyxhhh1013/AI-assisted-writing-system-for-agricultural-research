@@ -1,3 +1,6 @@
+import { logger } from "@/lib/logger";
+import type { XrdPythonJsonResult } from "@/contracts/xrd-python";
+import { getErrorMessage } from "@/lib/error-utils";
 ﻿import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import fs from "fs";
@@ -7,9 +10,10 @@ import { randomUUID } from "crypto";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-const CHARTS_DIR = path.join(process.cwd(), "public", "charts");
+const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
 import { PYTHON_CMD } from "@/services/xrd-runner";
+import { parseOptionalJsonConfig } from "@/lib/api-validate";
 
 if (!fs.existsSync(CHARTS_DIR)) {
   fs.mkdirSync(CHARTS_DIR, { recursive: true });
@@ -30,11 +34,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "请上传 XPS 数据文件" }, { status: 400 });
     }
 
-    let config: Record<string, any> = {};
-    if (configStr) {
-      try { config = JSON.parse(configStr); }
-      catch { return NextResponse.json({ error: "配置格式错误" }, { status: 400 }); }
-    }
+    const { data: config, errorResponse: configError } = parseOptionalJsonConfig(configStr);
+    if (configError) return configError;
 
     if (!config.atom_identifiers || !Array.isArray(config.atom_identifiers) || config.atom_identifiers.length === 0) {
       return NextResponse.json({ error: "请提供原子标识符 (atom_identifiers)" }, { status: 400 });
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let pyResult: any = {};
+    let pyResult: XrdPythonJsonResult = {};
     try {
       // 从 stdout 提取最后一段完整 JSON（容忍前缀调试输出）
       const lines = stdout.trim().split("\n");
@@ -107,11 +108,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       imageBase64: `data:image/png;base64,${base64}`,
-      imageUrl: `/charts/${outputName}`,
+      imageUrl: `/api/charts/${outputName}`,
       data: pyResult.data,
     });
-  } catch (error: any) {
-    console.error("XPS API error:", error);
-    return NextResponse.json({ error: error.message || "分析失败" }, { status: 500 });
+  } catch (error: unknown) {
+    logger.error("XPS API error:", error);
+    return NextResponse.json({ error: getErrorMessage(error) || "分析失败" }, { status: 500 });
   }
 }

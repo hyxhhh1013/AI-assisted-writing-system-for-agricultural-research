@@ -7,7 +7,7 @@ export interface WritingRequest {
   existingReferences: string[];  // 修复：实际是数组，不是 string
   researchDirection?: string;
   retrievalMode?: "precise" | "balanced" | "extensive";
-  mode?: "fast" | "full";
+  mode?: "fast" | "full" | "audit_only" | "fix_only";
   subsectionTitle?: string;
   figureStart?: number;
   globalContext?: {
@@ -23,6 +23,8 @@ export interface WritingRequest {
   evidenceSummary?: string;
   /** 数据证据声明列表（前端传入，服务端构建 EvidencePack） */
   dataClaims?: import("./data-source").EvidenceClaim[];
+  /** 引用格式标准 */
+  citationStyle?: "gbt7714" | "vancouver" | "apa7" | "ieee";
 }
 
 export interface WritingStreamResult {

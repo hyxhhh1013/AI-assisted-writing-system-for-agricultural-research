@@ -1,3 +1,6 @@
+import { logger } from "@/lib/logger";
+import type { XrdPythonJsonResult } from "@/contracts/xrd-python";
+import { getErrorMessage } from "@/lib/error-utils";
 ﻿import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import fs from "fs";
@@ -7,11 +10,12 @@ import { randomUUID } from "crypto";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const CHARTS_DIR = path.join(process.cwd(), "public", "charts");
+const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
 
 // conda pyxplore 环境 Python 路径
 import { PYTHON_CMD } from "@/services/xrd-runner";
+import { parseOptionalJsonConfig } from "@/lib/api-validate";
 
 if (!fs.existsSync(CHARTS_DIR)) {
   fs.mkdirSync(CHARTS_DIR, { recursive: true });
@@ -45,14 +49,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "请上传 XRD 数据文件" }, { status: 400 });
     }
 
-    let config: Record<string, any> = {};
-    if (configStr) {
-      try {
-        config = JSON.parse(configStr);
-      } catch {
-        return NextResponse.json({ error: "配置格式错误" }, { status: 400 });
-      }
-    }
+    const { data: config, errorResponse: configError } = parseOptionalJsonConfig(configStr);
+    if (configError) return configError;
 
     // 保存上传文件到临时目录
     const tmpDir = path.join(process.cwd(), ".tmp", randomUUID());
@@ -107,7 +105,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 解析 Python 输出的 JSON
-    let pyResult: any = {};
+    let pyResult: XrdPythonJsonResult = {};
     try {
       pyResult = JSON.parse(stdout.trim());
     } catch {
@@ -138,13 +136,13 @@ export async function POST(req: NextRequest) {
     // 返回 base64（供面板预览）和 imageUrl（供插入编辑器，短而干净）
     return NextResponse.json({
       imageBase64: `data:image/png;base64,${base64}`,
-      imageUrl: `/charts/${outputName}`,
+      imageUrl: `/api/charts/${outputName}`,
       data: pyResult.data,
     });
-  } catch (error: any) {
-    console.error("XRD peakfit API error:", error);
+  } catch (error: unknown) {
+    logger.error("XRD peakfit API error:", error);
     return NextResponse.json(
-      { error: error.message || "分析失败" },
+      { error: getErrorMessage(error) || "分析失败" },
       { status: 500 }
     );
   }

@@ -2,17 +2,22 @@ import { PrismaClient } from '@prisma/client'
 import path from 'path'
 
 function resolveDbUrl(): string {
-  const url = process.env.DATABASE_URL ?? 'file:./prisma/dev.db'
+  const url = process.env.DATABASE_URL
 
-  // 将相对路径转为绝对路径，确保在任何 cwd 下都能正确打开数据库
-  if (url.startsWith('file:./') || url.startsWith('file:.\\')) {
-    const relativePart = url.slice(5) // 去掉 'file:'
-    // 相对于项目根目录（CWD）解析
+  // 如果是 PostgreSQL 连接字符串，直接返回
+  if (url && url.startsWith('postgresql://')) {
+    return url
+  }
+
+  // SQLite 兼容：将相对路径转为绝对路径
+  if (url && (url.startsWith('file:./') || url.startsWith('file:.\\'))) {
+    const relativePart = url.slice(5)
     const absolutePath = path.resolve(process.cwd(), relativePart)
     return `file:${absolutePath}`
   }
 
-  return url
+  // 默认使用 SQLite（开发环境）
+  return url ?? 'file:./prisma/dev.db'
 }
 
 const prismaClientSingleton = () => {
@@ -23,9 +28,11 @@ const prismaClientSingleton = () => {
     datasources: { db: { url: dbUrl } },
   })
 
-  // SQLite 专用：启用 WAL 模式，提升并发读性能
-  client.$queryRawUnsafe('PRAGMA journal_mode=WAL').catch(() => {})
-  client.$queryRawUnsafe('PRAGMA busy_timeout=5000').catch(() => {})
+  // SQLite 专用：启用 WAL 模式（仅当使用 SQLite 时）
+  if (dbUrl.startsWith('file:')) {
+    client.$queryRawUnsafe('PRAGMA journal_mode=WAL').catch(() => {})
+    client.$queryRawUnsafe('PRAGMA busy_timeout=5000').catch(() => {})
+  }
 
   return client
 }
@@ -34,8 +41,21 @@ declare global {
   var prisma: undefined | ReturnType<typeof prismaClientSingleton>
 }
 
-const prisma = globalThis.prisma ?? prismaClientSingleton()
+function getPrismaClient() {
+  // schema 变更后若仍缓存旧 Client（缺 aiUsageLog 等 delegate），在 dev 下自动重建
+  if (
+    process.env.NODE_ENV !== "production" &&
+    globalThis.prisma &&
+    typeof (globalThis.prisma as { aiUsageLog?: unknown }).aiUsageLog === "undefined"
+  ) {
+    globalThis.prisma = undefined;
+  }
+
+  const client = globalThis.prisma ?? prismaClientSingleton();
+  if (process.env.NODE_ENV !== "production") globalThis.prisma = client;
+  return client;
+}
+
+const prisma = getPrismaClient()
 
 export default prisma
-
-if (process.env.NODE_ENV !== 'production') globalThis.prisma = prisma

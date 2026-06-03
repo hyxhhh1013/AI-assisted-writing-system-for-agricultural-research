@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useState, useCallback, useEffect } from "react";
 import { Quote, BookOpen } from "lucide-react";
-import { ProjectData } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
 import { cn } from "@/lib/utils";
 import { findCiteContextsInProject, expandCiteGroup } from "@/components/shared/previews/shared";
 import { StandardSCIPreview } from "@/components/shared/previews/sci-standard";
@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { searchKnowledge } from "@/services/knowledge";
 
 interface SCIPreviewProps {
   project: ProjectData;
@@ -34,16 +35,13 @@ export default function SCIPreview({ project }: SCIPreviewProps) {
   const [ragLoading, setRagLoading] = useState(false);
 
   const refs = project.references || [];
-  console.log("[cite-dialog] SCIPreview loaded, refs:", refs.length, "intro has citations:", /\[\d+\]/.test(project.sections.introduction || ""));
 
   const handleCiteClick = useCallback((nums: number[]) => {
-    console.log("[cite-dialog] clicked nums:", nums, "refs count:", refs.length, "first ref:", refs[0]?.slice(0, 50));
     setSelectedCiteNums(nums);
     setCiteDialogOpen(true);
-  }, [refs]);
+  }, []);
 
   useEffect(() => {
-    console.log("[cite-dialog] dialog open:", citeDialogOpen, "nums:", selectedCiteNums, "refs count:", refs.length, "first ref:", refs[0]?.slice(0, 80));
     if (!citeDialogOpen || selectedCiteNums.length === 0) return;
     setRagLoading(true);
     const fetchResults = async () => {
@@ -53,10 +51,9 @@ export default function SCIPreview({ project }: SCIPreviewProps) {
         if (!ref) continue;
         try {
           const query = ref.slice(0, 100);
-          const res = await fetch(`/api/knowledge?q=${encodeURIComponent(query)}&type=semantic&pageSize=5`);
-          const json = await res.json();
+          const json = await searchKnowledge({ q: query, type: "semantic", pageSize: 5 });
           if (json?.files) {
-            results[n] = json.files.flatMap((f: any) =>
+            results[n] = json.files.flatMap((f) =>
               (f._snippets || []).map((s: string) => ({ content: s, source: f.name }))
             );
           }

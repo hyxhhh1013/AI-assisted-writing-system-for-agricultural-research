@@ -1,25 +1,28 @@
+import { logger } from "@/lib/logger";
 import { NextRequest } from "next/server";
 import { callAI, getAIError } from "@/lib/ai";
 import { buildConsistencyPrompt } from "@/lib/prompts";
 import type { ConsistencyIssue, ConsistencyReport } from "@/types/consistency";
+import { validateBody } from "@/lib/api-validate";
+import { consistencySchema } from "@/lib/validations";
+import { getErrorMessage } from "@/lib/error-utils";
 
 export async function POST(req: NextRequest) {
   try {
-    const { title, sections, outline, dataClaims } = await req.json();
+    const { data, errorResponse: ve } = await validateBody(consistencySchema, await req.json());
+    if (ve) return ve;
 
-    if (!sections || !Array.isArray(sections) || sections.length < 2) {
-      return new Response(
-        JSON.stringify({ error: "需要至少 2 个章节内容才能进行一致性检查" }),
-        { status: 400 },
-      );
-    }
+    const { title, sections, outline, projectMode } = data;
+    const dataClaims = (data.dataClaims ?? []) as {
+      id: string; text: string; values: Record<string, string | number>;
+    }[];
 
     const keyError = getAIError("deepseek");
     if (keyError) {
       return new Response(JSON.stringify({ error: keyError }), { status: 500 });
     }
 
-    const prompt = buildConsistencyPrompt({ title, sections, outline, dataClaims });
+    const prompt = buildConsistencyPrompt({ title, sections, outline, dataClaims, projectMode });
 
     const response = await callAI({
       provider: "deepseek",
@@ -101,8 +104,8 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify(report), {
       headers: { "Content-Type": "application/json" },
     });
-  } catch (error: any) {
-    console.error("Consistency Check Error:", error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+  } catch (error: unknown) {
+    logger.error("Consistency Check Error:", error);
+    return new Response(JSON.stringify({ error: getErrorMessage(error) }), { status: 500 });
   }
 }

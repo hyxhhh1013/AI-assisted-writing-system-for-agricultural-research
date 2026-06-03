@@ -77,7 +77,10 @@ describe("consistency API — input validation", () => {
   it("accepts valid request", () => {
     const r = consistencySchema.safeParse({
       title: "test",
-      sections: ["introduction content", "methods content"],
+      sections: [
+        { key: "introduction", content: "introduction content" },
+        { key: "methods", content: "methods content" },
+      ],
     });
     expect(r.success).toBe(true);
   });

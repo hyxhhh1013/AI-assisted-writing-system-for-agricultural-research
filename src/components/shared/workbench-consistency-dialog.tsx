@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -6,15 +6,17 @@ import {
   Dialog, DialogContent, DialogDescription,
   DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { DIALOG_WORK } from "@/components/ui/dialog-sizes";
 import {
   Loader2, AlertTriangle, CheckCheck, XCircle, RefreshCw,
   Wand2, Check, EyeOff, ArrowRight, ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
-import { ProjectData } from "@/lib/store";
-import { mergeEditorIntoProject } from "@/lib/export-content";
+import type { ProjectData } from "@/contracts/project";
+import { mergeEditorIntoProject, collectProjectSectionEntries } from "@/lib/export-content";
 import { useConsistency } from "@/hooks/use-consistency";
 import type { FixableIssue } from "@/contracts/consistency";
+import { getProjectWritingMode, getSectionLabelForMode } from "@/lib/section-registry";
 
 interface WorkbenchConsistencyDialogProps {
   open: boolean;
@@ -54,13 +56,7 @@ export function WorkbenchConsistencyDialog({
 
   const handleCheck = async () => {
     const merged = mergeEditorIntoProject(project, activeSection, editingContent);
-    const sections = [
-      { key: "abstract", content: merged.abstract || "" },
-      { key: "introduction", content: merged.sections.introduction || "" },
-      { key: "methods", content: merged.sections.methods || "" },
-      { key: "results", content: merged.sections.results || "" },
-      { key: "conclusion", content: merged.sections.conclusion || "" },
-    ].filter((s) => s.content.trim().length > 0);
+    const sections = collectProjectSectionEntries(merged);
 
     if (sections.length < 2) {
       toast.error("至少需要 2 个章节有内容才能进行一致性检查");
@@ -79,7 +75,7 @@ export function WorkbenchConsistencyDialog({
       }
     } catch { /* ignore */ }
 
-    const r = await ctrl.check(merged.title, contentMap, merged.outline, dataClaims);
+    const r = await ctrl.check(merged.title, contentMap, merged.outline, dataClaims, merged.mode);
     if (r.passed) toast.success("一致性检查通过！");
     else toast.warning(`发现 ${r.issues.length} 个一致性问题`);
   };
@@ -91,18 +87,16 @@ export function WorkbenchConsistencyDialog({
   const handleFix = async (index: number) => {
     const merged = mergeEditorIntoProject(project, activeSection, editingContent);
     const sections: Record<string, string> = {};
-    if (merged.abstract?.trim()) sections.abstract = merged.abstract;
-    if (merged.sections.introduction?.trim()) sections.introduction = merged.sections.introduction;
-    if (merged.sections.methods?.trim()) sections.methods = merged.sections.methods;
-    if (merged.sections.results?.trim()) sections.results = merged.sections.results;
-    if (merged.sections.conclusion?.trim()) sections.conclusion = merged.sections.conclusion;
+    for (const { key, content } of collectProjectSectionEntries(merged)) {
+      sections[key] = content;
+    }
 
     if (Object.keys(sections).length === 0) {
       toast.error("没有可用的章节内容");
       return;
     }
 
-    const result = await ctrl.fixIssue(index, sections, merged.title, merged.outline);
+    const result = await ctrl.fixIssue(index, sections, merged.title, merged.outline, merged.mode);
     if (result) {
       setFixedContents(prev => ({ ...prev, [index]: result }));
       toast.success("AI 修复完成，请预览后应用");
@@ -124,7 +118,8 @@ export function WorkbenchConsistencyDialog({
 
   const handleJump = (sectionKey: string) => {
     onJumpToSection?.(sectionKey);
-    toast.info(`已跳转到 ${sectionKey}`);
+    const label = getSectionLabelForMode(sectionKey, getProjectWritingMode(project.mode));
+    toast.info(`已跳转到 ${label}`);
   };
 
   const fixedCount = ctrl.report?.issues.filter(i => i.status === "fixed").length || 0;
@@ -132,7 +127,7 @@ export function WorkbenchConsistencyDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[760px] h-[88vh] max-h-[88vh] overflow-hidden flex flex-col p-0">
+      <DialogContent className={DIALOG_WORK}>
         <DialogHeader className="shrink-0">
           <div className="px-6 pt-6 pb-4 border-b">
             <DialogTitle className="flex items-center gap-2">

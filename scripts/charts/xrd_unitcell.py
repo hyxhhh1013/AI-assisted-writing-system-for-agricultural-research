@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ase_compat  # noqa: E402, F401
 from _shared import normalize_label
 
-plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "DejaVu Sans"]
+plt.rcParams["font.sans-serif"] = ["Noto Sans CJK JP", "Noto Serif CJK JP", "SimHei", "Microsoft YaHei", "PingFang SC", "Heiti SC", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
 

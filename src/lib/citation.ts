@@ -7,6 +7,16 @@
 export const CITATION_GROUP_RE = /\[([0-9,\s\-–—，、]+)\]/g;
 /** 全角方括号变体：［1］, ［1,2］ */
 export const FULLWIDTH_CITATION_RE = /［([0-9,\s\-–—，、]+)］/g;
+/** 误用中文角括号作引用：【16】、【16, 21】（不含 FIGURE/占位等长文本） */
+export const CORNER_BRACKET_CITATION_RE = /【([0-9,\s\-–—，、]+)】/g;
+
+/** 将全角/角括号引用统一为半角 [n] */
+export function normalizeCitationBrackets(text: string): string {
+  if (!text) return text;
+  let t = text.replace(FULLWIDTH_CITATION_RE, (_m, inner) => `[${inner}]`);
+  t = t.replace(CORNER_BRACKET_CITATION_RE, (_m, inner) => `[${inner}]`);
+  return t;
+}
 
 /** 展开引文组为数字数组，可选 refCount 上限校验 */
 export function expandCitationGroup(raw: string, refCount?: number): number[] {
@@ -51,7 +61,7 @@ export function expandCiteGroup(raw: string): number[] {
 
 /** 将正文中的 [n] 替换为可点击的 HTML 标签 */
 export function processCitations(text: string): string {
-  const normalized = text.replace(FULLWIDTH_CITATION_RE, (_m, inner) => `[${inner}]`);
+  const normalized = normalizeCitationBrackets(text);
   return normalized.replace(
     CITATION_GROUP_RE,
     (match, raw: string) =>

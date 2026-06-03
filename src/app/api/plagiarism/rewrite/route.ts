@@ -1,13 +1,28 @@
+import { createLogger } from "@/lib/logger";
+import { getErrorMessage } from "@/lib/error-utils";
+
+const log = createLogger("api/plagiarism/rewrite");
 import { NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 import { generateRewriteSuggestions } from "@/services/rewrite-service";
+import { validateBody } from "@/lib/api-validate";
+import { plagiarismRewriteSchema, plagiarismRewritePatchSchema } from "@/lib/validations";
 
 export async function POST(req: NextRequest) {
   try {
-    const { checkId, matchId, originalText, contextText } = await req.json();
+    const { data, errorResponse: ve } = await validateBody(plagiarismRewriteSchema, await req.json());
+    if (ve) return ve;
 
-    if (!checkId || !originalText) {
-      return Response.json({ error: "checkId and originalText are required" }, { status: 400 });
+    const { checkId, matchId, originalText, contextText } = data;
+
+    // 尝试获取项目的研究方向
+    let researchDirection: string | undefined;
+    if (checkId) {
+      const check = await prisma.plagiarismCheck.findUnique({
+        where: { id: checkId },
+        select: { project: { select: { researchDirection: true } } },
+      });
+      researchDirection = check?.project?.researchDirection ?? undefined;
     }
 
     const suggestions = await generateRewriteSuggestions({
@@ -15,22 +30,24 @@ export async function POST(req: NextRequest) {
       matchId,
       originalText,
       contextText,
+      researchDirection,
     });
 
     return Response.json({ suggestions });
-  } catch (error: any) {
-    console.error("[Rewrite]", error);
-    return Response.json({ error: error.message || "生成改写建议失败" }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? getErrorMessage(error) : "生成改写建议失败";
+    log.fail("rewrite suggestions failed", error);
+    return Response.json({ error: message }, { status: 500 });
   }
 }
 
 /** 接受/拒绝改写建议 */
 export async function PATCH(req: NextRequest) {
   try {
-    const { suggestionId, status } = await req.json();
-    if (!suggestionId || !["accepted", "rejected"].includes(status)) {
-      return Response.json({ error: "suggestionId and status(accepted|rejected) required" }, { status: 400 });
-    }
+    const { data, errorResponse: ve } = await validateBody(plagiarismRewritePatchSchema, await req.json());
+    if (ve) return ve;
+
+    const { suggestionId, status } = data;
 
     await prisma.rewriteSuggestion.update({
       where: { id: suggestionId },
@@ -38,7 +55,9 @@ export async function PATCH(req: NextRequest) {
     });
 
     return Response.json({ ok: true });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    log.fail("rewrite suggestion patch failed", error);
+    const message = error instanceof Error ? getErrorMessage(error) : "操作失败";
+    return Response.json({ error: message }, { status: 500 });
   }
 }

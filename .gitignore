@@ -53,18 +53,17 @@ prisma/dev.db-wal
 __pycache__/
 
 # PDF knowledge base (large binaries)
-/热化学小组文章-2024.12.27/
-文献/
+/papers/
+/temp/
 
 # Deploy output
 deploy/grainscript-deploy/
 deploy/grainscript-deploy.zip
+deploy-pkg/
+deploy.tar.gz
 
 # Generated temp files
 .tmp/
-
-# Generated chart images
-public/charts/
 
 # Backup files
 backup_*

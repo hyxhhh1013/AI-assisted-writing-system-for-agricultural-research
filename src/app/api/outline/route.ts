@@ -1,49 +1,23 @@
+import { logger } from "@/lib/logger";
 import { NextRequest } from "next/server";
-import fs from "fs";
-import path from "path";
+import { matchCategoryFromDirection } from "@/lib/knowledge-metadata";
 import { formatRagCitation, localRAG } from "@/lib/rag";
 import { callAI, getAgentModelConfig, streamAIResponse } from "@/lib/ai";
 import { buildOutlinePrompt } from "@/lib/prompts";
-
-const METADATA_PATH = path.join(process.cwd(), "data/metadata.json");
-
-/** 从 researchDirection 中匹配最相关的知识库分类 */
-function matchCategory(direction: string): string | null {
-  if (!fs.existsSync(METADATA_PATH)) return null;
-  try {
-    const metadata = JSON.parse(fs.readFileSync(METADATA_PATH, "utf-8")) as {
-      category: string;
-    }[];
-    const categories = Array.from(new Set(metadata.map((m) => m.category))).filter(
-      (c) => c && c !== "未分类",
-    );
-
-    if (categories.length === 0) return null;
-
-    const kw = direction.toLowerCase();
-    // 按匹配长度排序，取最长的匹配（"热化学" 比 "热" 更准确）
-    const matches = categories
-      .map((cat) => ({
-        cat,
-        score: cat.split(/[\s\-_]/).filter((w) => kw.includes(w.toLowerCase())).length,
-      }))
-      .filter((m) => m.score > 0)
-      .sort((a, b) => b.score - a.score);
-
-    return matches[0]?.cat || null;
-  } catch {
-    return null;
-  }
-}
+import { validateBody } from "@/lib/api-validate";
+import { outlineSchema } from "@/lib/validations";
+import { getErrorMessage } from "@/lib/error-utils";
 
 export async function POST(req: NextRequest) {
   try {
-    const { title, researchDirection, language = "zh", category } = await req.json();
+    const { data, errorResponse: ve } = await validateBody(outlineSchema, await req.json());
+    if (ve) return ve;
 
-    if (!title || !researchDirection) {
-      return new Response(JSON.stringify({ error: "Title and Research Direction are required" }), {
-        status: 400,
-      });
+    const { title, researchDirection: rawDir, language, category, projectMode } = data;
+    const researchDirection = (rawDir?.trim() || title.trim());
+
+    if (!researchDirection) {
+      return new Response(JSON.stringify({ error: "请填写论文题目或研究方向" }), { status: 400 });
     }
 
     const { provider, keyError } = getAgentModelConfig("writer");
@@ -52,7 +26,10 @@ export async function POST(req: NextRequest) {
     }
 
     // 手动指定分类优先，否则自动匹配研究方向到知识库分类
-    const targetCategory = category && category !== "全部" ? category : matchCategory(researchDirection);
+    const targetCategory =
+      category && category !== "全部"
+        ? category
+        : await matchCategoryFromDirection(researchDirection);
     const contextChunks = await localRAG.search(`${title} ${researchDirection}`, {
       limit: 10,
       category: targetCategory || undefined,
@@ -64,7 +41,13 @@ export async function POST(req: NextRequest) {
       })
       .join("\n\n");
 
-    const systemPrompt = buildOutlinePrompt({ title, researchDirection, language, contextText });
+    const systemPrompt = buildOutlinePrompt({
+      title,
+      researchDirection,
+      language,
+      contextText,
+      projectMode: projectMode ?? "review",
+    });
 
     const response = await callAI({
       provider,
@@ -87,8 +70,8 @@ export async function POST(req: NextRequest) {
           }
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();
-        } catch (error: any) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: error.message })}\n\n`));
+        } catch (error: unknown) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: getErrorMessage(error) })}\n\n`));
           controller.close();
         }
       }
@@ -101,9 +84,9 @@ export async function POST(req: NextRequest) {
         Connection: "keep-alive",
       },
     });
-  } catch (error: any) {
-    console.error("Outline Generation Error:", error);
-    return new Response(JSON.stringify({ error: error.message || "Internal Server Error" }), {
+  } catch (error: unknown) {
+    logger.error("Outline Generation Error:", error);
+    return new Response(JSON.stringify({ error: getErrorMessage(error) || "Internal Server Error" }), {
       status: 500,
     });
   }

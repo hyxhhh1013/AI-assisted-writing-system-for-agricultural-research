@@ -1,8 +1,12 @@
+import { logger } from "@/lib/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
+import { validateBody } from "@/lib/api-validate";
+import { tableGenerateSchema } from "@/lib/validations";
+import { getErrorMessage } from "@/lib/error-utils";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -21,14 +25,9 @@ const PYTHON_CMD = process.env.PYTHON_CMD || (process.platform === "win32" ? "py
  */
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-
-    if (!body.groups || !Array.isArray(body.groups) || body.groups.length < 2) {
-      return NextResponse.json(
-        { error: "请提供至少 2 个处理组数据（groups 数组）" },
-        { status: 400 }
-      );
-    }
+    const rawBody = await req.json().catch(() => null);
+    const { data: body, errorResponse: ve } = await validateBody(tableGenerateSchema, rawBody);
+    if (ve) return ve;
 
     // 写入临时配置文件
     const tmpDir = path.join(process.cwd(), ".tmp", randomUUID());
@@ -76,10 +75,10 @@ export async function POST(req: NextRequest) {
       statsText: resultJson.stats_text,
       letters: resultJson.letters,
     });
-  } catch (error: any) {
-    console.error("Table API error:", error);
+  } catch (error: unknown) {
+    logger.error("Table API error:", error);
     return NextResponse.json(
-      { error: error.message || "三线表生成失败" },
+      { error: getErrorMessage(error) || "三线表生成失败" },
       { status: 500 }
     );
   }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractNGrams, jaccardSimilarity, computeSimHash, hammingDistance } from "@/lib/similarity";
+import { extractNGrams, jaccardSimilarity, cosineSimilarity } from "@/lib/similarity";
 
 describe("plagiarism — n-gram similarity", () => {
   it("detects high similarity in near-identical text", () => {
@@ -25,30 +25,17 @@ describe("plagiarism — n-gram similarity", () => {
   });
 });
 
-describe("plagiarism — SimHash", () => {
-  it("produces same hash for same text", () => {
-    const grams = extractNGrams("热解温度对产率的影响", 4);
-    const hash1 = computeSimHash(grams);
-    const hash2 = computeSimHash(grams);
-    expect(hash1).toBe(hash2);
+describe("plagiarism — cosine similarity", () => {
+  it("returns 1 for identical vectors", () => {
+    const v = [1, 2, 3, 4, 5];
+    expect(cosineSimilarity(v, v)).toBeCloseTo(1.0);
   });
 
-  it("produces small Hamming distance for similar text", () => {
-    const a = "热解温度对生物炭产率的影响研究";
-    const b = "热解温度对于生物炭产率的影响分析";
-    const h1 = computeSimHash(extractNGrams(a, 4));
-    const h2 = computeSimHash(extractNGrams(b, 4));
-    const dist = hammingDistance(h1, h2);
-    // Similar CJK text should have relatively close SimHash
-    expect(dist).toBeLessThan(32);
+  it("returns 0 for orthogonal vectors", () => {
+    expect(cosineSimilarity([1, 0], [0, 1])).toBe(0);
   });
 
-  it("produces large Hamming distance for unrelated text", () => {
-    const a = "热解温度对生物炭产率的影响";
-    const b = "深度学习模型在图像分类中的应用";
-    const h1 = computeSimHash(extractNGrams(a, 4));
-    const h2 = computeSimHash(extractNGrams(b, 4));
-    const dist = hammingDistance(h1, h2);
-    expect(dist).toBeGreaterThan(10);
+  it("returns 0 for mismatched lengths", () => {
+    expect(cosineSimilarity([1, 2], [1, 2, 3])).toBe(0);
   });
 });

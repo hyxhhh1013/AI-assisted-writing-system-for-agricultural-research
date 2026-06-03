@@ -1,3 +1,6 @@
+import { logger } from "@/lib/logger";
+import type { XrdPythonJsonResult } from "@/contracts/xrd-python";
+import { getErrorMessage } from "@/lib/error-utils";
 ﻿import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import fs from "fs";
@@ -7,9 +10,11 @@ import { randomUUID } from "crypto";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const CHARTS_DIR = path.join(process.cwd(), "public", "charts");
+const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
 import { PYTHON_CMD } from "@/services/xrd-runner";
+import { validateBody } from "@/lib/api-validate";
+import { xrdBraggSchema } from "@/lib/validations";
 
 if (!fs.existsSync(CHARTS_DIR)) {
   fs.mkdirSync(CHARTS_DIR, { recursive: true });
@@ -22,15 +27,10 @@ if (!fs.existsSync(CHARTS_DIR)) {
  */
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const rawBody = await req.json().catch(() => null);
+    const { data: body, errorResponse: ve } = await validateBody(xrdBraggSchema, rawBody);
+    if (ve) return ve;
     const { crystal_system, lattice_init, hkl, exp_angles, wavelength, title } = body;
-
-    if (!crystal_system || !lattice_init || !hkl || !exp_angles) {
-      return NextResponse.json(
-        { error: "缺少必要参数: crystal_system, lattice_init, hkl, exp_angles" },
-        { status: 400 }
-      );
-    }
 
     const tmpDir = path.join(process.cwd(), ".tmp", randomUUID());
     fs.mkdirSync(tmpDir, { recursive: true });
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let pyResult: any = {};
+    let pyResult: XrdPythonJsonResult = {};
     try {
       pyResult = JSON.parse(stdout.trim());
     } catch {
@@ -93,11 +93,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       imageBase64: `data:image/png;base64,${base64}`,
-      imageUrl: `/charts/${outputName}`,
+      imageUrl: `/api/charts/${outputName}`,
       data: pyResult.data,
     });
-  } catch (error: any) {
-    console.error("Bragg API error:", error);
-    return NextResponse.json({ error: error.message || "优化失败" }, { status: 500 });
+  } catch (error: unknown) {
+    logger.error("Bragg API error:", error);
+    return NextResponse.json({ error: getErrorMessage(error) || "优化失败" }, { status: 500 });
   }
 }

@@ -1,6 +1,17 @@
+import { logger } from "@/lib/logger";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { unauthorizedResponse, notFoundResponse, errorResponse } from "@/lib/api-response";
+import { validateBody } from "@/lib/api-validate";
+import { projectEvidencePatchSchema } from "@/lib/validations";
+import type { ProjectDTO } from "@/contracts/project";
+import {
+  parseExpandedOutlineSections,
+  serializeExpandedOutlineSections,
+} from "@/contracts/project";
+import { getErrorMessage } from "@/lib/error-utils";
+
+import { getCoreSectionKeysForMode } from "@/lib/section-registry";
 
 type SectionRecord = Record<string, string>;
 
@@ -46,8 +57,10 @@ export async function GET(req: NextRequest) {
           .map(r => r.content),
         analysisResults: project.analysisResults.map(r => r.content),
         mode: project.mode || "review",
+        citationStyle: (project.citationStyle as ProjectDTO["citationStyle"]) || "gbt7714",
         dataClaims: project.dataClaims || undefined,
         dataSources: project.dataSources || undefined,
+        expandedOutlineSections: parseExpandedOutlineSections(project.expandedOutlineSections),
       };
 
       return NextResponse.json(formattedProject);
@@ -56,16 +69,36 @@ export async function GET(req: NextRequest) {
     const projects = await prisma.project.findMany({
       where: { userId },
       orderBy: { lastUpdated: 'desc' },
-      select: { id: true, title: true, lastUpdated: true }
+      select: {
+        id: true,
+        title: true,
+        mode: true,
+        lastUpdated: true,
+        sections: { select: { key: true, content: true } },
+      }
     });
 
-    return NextResponse.json(projects.map(p => ({
-      ...p,
-      lastUpdated: p.lastUpdated.getTime()
-    })));
+    return NextResponse.json(projects.map(p => {
+      const filledCount = p.sections.filter(s => s.content && s.content.trim().length > 10).length;
+      const mode = p.mode === "research" ? "research" : "review";
+      const coreKeys = getCoreSectionKeysForMode(mode);
+      const coreFilled = p.sections.filter(
+        s => coreKeys.includes(s.key) && s.content && s.content.trim().length > 10,
+      ).length;
+      const progress = Math.round((coreFilled / coreKeys.length) * 100);
+      return {
+        id: p.id,
+        title: p.title,
+        mode,
+        lastUpdated: p.lastUpdated.getTime(),
+        progress,
+        sectionCount: p.sections.length,
+        filledCount,
+      };
+    }));
   } catch (error: unknown) {
-    console.error("Projects GET error:", error);
-    return errorResponse(error instanceof Error ? error.message : "Projects GET failed");
+    logger.error("Projects GET error:", error);
+    return errorResponse(error instanceof Error ? getErrorMessage(error) : "Projects GET failed");
   }
 }
 
@@ -90,11 +123,13 @@ export async function POST(req: NextRequest) {
       outline,
       template,
       mode,
+      citationStyle,
       sections,
       references,
       analysisResults,
       dataClaims,
       dataSources,
+      expandedOutlineSections,
     } = data;
 
     if (!title) {
@@ -113,22 +148,34 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 创建或更新主记录
+    // 创建或更新主记录（mode 仅在新建时写入，更新时不允许切换类型）
     const project = projectId
       ? await prisma.project.update({
           where: { id: projectId },
           data: {
             title, authors, affiliations, abstract, keywords,
-            classification, researchDirection, outline, template, mode,
+            classification, researchDirection, outline, template, citationStyle,
             dataClaims, dataSources,
+            ...(expandedOutlineSections !== undefined
+              ? {
+                  expandedOutlineSections: serializeExpandedOutlineSections(
+                    Array.isArray(expandedOutlineSections) ? expandedOutlineSections : [],
+                  ),
+                }
+              : {}),
             lastUpdated: new Date(),
           },
         })
       : await prisma.project.create({
           data: {
             userId, title, authors, affiliations, abstract, keywords,
-            classification, researchDirection, outline, template, mode,
+            classification, researchDirection, outline, template,
+            mode: mode === "research" ? "research" : "review",
+            citationStyle,
             dataClaims, dataSources,
+            expandedOutlineSections: serializeExpandedOutlineSections(
+              Array.isArray(expandedOutlineSections) ? expandedOutlineSections : [],
+            ),
           },
         });
 
@@ -167,8 +214,52 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ id: project.id, message: "保存成功" });
   } catch (error: unknown) {
-    console.error("Projects POST error:", error);
-    return errorResponse(error instanceof Error ? error.message : "Projects POST failed");
+    logger.error("Projects POST error:", error);
+    return errorResponse(error instanceof Error ? getErrorMessage(error) : "Projects POST failed");
+  }
+}
+
+// 增量 PATCH：仅更新 dataClaims / dataSources
+export async function PATCH(req: NextRequest) {
+  try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return unauthorizedResponse();
+    }
+
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+    if (!id) {
+      return errorResponse("未指定项目ID", 400);
+    }
+
+    const existing = await prisma.project.findFirst({
+      where: { id, userId },
+      select: { id: true },
+    });
+    if (!existing) {
+      return notFoundResponse("项目未找到");
+    }
+
+    const { data, errorResponse: ve } = await validateBody(
+      projectEvidencePatchSchema,
+      await req.json(),
+    );
+    if (ve) return ve;
+
+    await prisma.project.update({
+      where: { id },
+      data: {
+        ...(data.dataClaims !== undefined ? { dataClaims: data.dataClaims } : {}),
+        ...(data.dataSources !== undefined ? { dataSources: data.dataSources } : {}),
+        lastUpdated: new Date(),
+      },
+    });
+
+    return NextResponse.json({ message: "更新成功" });
+  } catch (error: unknown) {
+    logger.error("Projects PATCH error:", error);
+    return errorResponse(error instanceof Error ? getErrorMessage(error) : "Projects PATCH failed");
   }
 }
 
@@ -198,7 +289,7 @@ export async function DELETE(req: NextRequest) {
     await prisma.project.delete({ where: { id } });
     return NextResponse.json({ message: "删除成功" });
   } catch (error: unknown) {
-    console.error("Projects DELETE error:", error);
-    return errorResponse(error instanceof Error ? error.message : "Projects DELETE failed");
+    logger.error("Projects DELETE error:", error);
+    return errorResponse(error instanceof Error ? getErrorMessage(error) : "Projects DELETE failed");
   }
 }

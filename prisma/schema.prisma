@@ -2,11 +2,12 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -57,8 +58,12 @@ model Project {
   charts            String?
   // 数据证据声明（JSON 数组 EvidenceClaim[]）
   dataClaims        String?
+  // 引用格式标准（gbt7714 | vancouver | apa7 | ieee）
+  citationStyle     String?   @default("gbt7714")
   // 数据源分析结果（JSON 数组 DataSourceAnalysis[]）
   dataSources       String?
+  // 大纲扩写已完成任务 id 列表（JSON string[]，stableHash(fullPath)）
+  expandedOutlineSections String?
 
   @@index([userId])
 }
@@ -81,6 +86,8 @@ model Reference {
   order     Int      @default(0)
   projectId String
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, order])
 }
 
 // 分析结果模型
@@ -89,6 +96,8 @@ model AnalysisResult {
   content   String
   projectId String
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
 }
 
 // 知识库文献模型 (用于同步文件系统和数据库)
@@ -98,8 +107,15 @@ model KnowledgeFile {
   category     String   @default("未分类")
   documentType String   @default("paper") // "paper" | "patent" | "other"
   size         Int
-  mtime        DateTime
+  mtime        DateTime?
+  bib          String?  // JSON string of KnowledgeBib
+  gbTag        String?
+  parseWarning String?  // "no_text" | "low_text" | null
+  bibEdited    Boolean  @default(false)
+  chunkCount   Int      @default(0) // RAG index_*.json 块数，非 KnowledgeChunk 行数
   chunks       KnowledgeChunk[]
+
+  @@index([category])
 }
 
 // 知识库分块模型 (存储向量 RAG 信息)
@@ -109,6 +125,8 @@ model KnowledgeChunk {
   embedding String?  // 存储为 JSON 字符串，因为 SQLite 不直接支持向量类型
   fileId    String
   file      KnowledgeFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([fileId])
 }
 
 // ==================== 查重功能模型 ====================
@@ -128,6 +146,8 @@ model PlagiarismCheck {
   project     Project?           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   matches     PlagiarismMatch[]
   rewrites    RewriteSuggestion[]
+
+  @@index([projectId])
 }
 
 // 查重匹配结果
@@ -150,6 +170,8 @@ model PlagiarismMatch {
   riskLevel    String           // high | medium | low
   createdAt    DateTime         @default(now())
   rewrites     RewriteSuggestion[]
+
+  @@index([checkId])
 }
 
 // 降重改写建议
@@ -164,10 +186,58 @@ model RewriteSuggestion {
   suggestedText String           // 改写建议
   strategy     String            // synonym（同义替换）| rephrase（改写语序）| summarize（概括）| expand（扩写）
   status       String            @default("pending") // pending | accepted | rejected
+  rewrittenSimilarity Float?     // 改写后预期相似度
   createdAt    DateTime          @default(now())
+
+  @@index([checkId])
 }
 
 // ==================== 引用-文献映射 ====================
+
+// ==================== 论文审查模型 ====================
+
+model ReviewCheck {
+  id            String   @id @default(cuid())
+  projectId     String?
+  title         String
+  content       String   // 审查的完整文本
+  status        String   @default("pending") // pending | running | done | failed
+  overallScore  Float?
+  overallGrade  String?  // A/B/C/D
+  summary       String?  // 总体评价
+  synopsis      String?  // 论文概要
+  dimensions    String?  // JSON: 各维度得分和统计
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  issues        ReviewIssue[]
+
+  @@index([projectId])
+  @@index([createdAt])
+}
+
+model ReviewIssue {
+  id          String   @id @default(cuid())
+  checkId     String
+  check       ReviewCheck @relation(fields: [checkId], references: [id], onDelete: Cascade)
+
+  dimension   String   // "academic" | "argument" | "structure" | "integrity"
+  type        String   // 具体问题类型
+  severity    String   // "high" | "medium" | "low"
+  location    String?  // 问题所在位置
+  evidence    String?  // 证据锚点
+  description String   // 问题描述
+  suggestion  String?  // 改进建议
+  originalText String? // 原文片段
+
+  status      String   @default("open")  // open | fixing | fixed | dismissed
+  fixedContent String? // AI 修复后的内容
+  createdAt   DateTime @default(now())
+
+  @@index([checkId])
+  @@index([dimension])
+  @@index([severity])
+}
 
 // 论文中 [N] 引用编号到知识库文献源的映射，用于前端溯源查看原文
 model ReferenceSource {
@@ -183,4 +253,25 @@ model ReferenceSource {
 
   @@index([projectId])
   @@unique([projectId, refIndex])
+}
+
+// 系统设置（加密 key-value 存储）
+model SystemSetting {
+  key       String   @id
+  value     String   // AES-256-GCM 加密
+  updatedAt DateTime @updatedAt
+}
+
+// AI / 功能调用用量（Admin 仪表盘持久化）
+model AiUsageLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  feature   String
+  tokens    Int?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([feature])
+  @@index([userId])
+  @@index([createdAt])
 }

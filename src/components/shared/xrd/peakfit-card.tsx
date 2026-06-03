@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getErrorMessage } from "@/lib/error-utils";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -77,7 +78,7 @@ export function PeakFitCard({ onInsertToPaper, onPreview }: PeakFitCardProps) {
       });
       setResult({ imageBase64: json.imageBase64, imageUrl: json.imageUrl, data: json.data });
       toast.success(`峰分解完成，检测到 ${json.data.n_peaks} 个峰`);
-    } catch (err: any) { toast.error(err.message); }
+    } catch (err: unknown) { toast.error(getErrorMessage(err)); }
     finally { setLoading(false); }
   };
 

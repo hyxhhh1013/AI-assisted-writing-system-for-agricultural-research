@@ -1,10 +1,22 @@
+import { logger } from "@/lib/logger";
+import { getErrorMessage } from "@/lib/error-utils";
+import {
+  SafePathError,
+  assertResolvedInsideBase,
+  assertSafePathSegment,
+  resolveInsideBaseDir,
+} from "@/lib/safe-path";
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 
-const ARTICLES_DIR = path.join(process.cwd(), "热化学小组文章-2024.12.27");
+const ARTICLES_DIR = path.join(
+  /*turbopackIgnore: true*/ process.cwd(),
+  process.env.RAG_ARTICLES_DIR || "papers",
+);
 
 function findFileInDir(dir: string, targetName: string): string | null {
+  assertSafePathSegment(targetName, "文件名");
   if (!fs.existsSync(dir)) return null;
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   for (const entry of entries) {
@@ -12,7 +24,9 @@ function findFileInDir(dir: string, targetName: string): string | null {
       const found = findFileInDir(path.join(dir, entry.name), targetName);
       if (found) return found;
     } else if (entry.name === targetName) {
-      return path.join(dir, entry.name);
+      const full = path.join(dir, entry.name);
+      assertResolvedInsideBase(ARTICLES_DIR, full);
+      return full;
     }
   }
   return null;
@@ -23,24 +37,26 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const filename = searchParams.get("file");
 
-    console.log("PDF Request for:", filename);
+    logger.info("PDF Request for:", filename);
 
     if (!filename) {
       return NextResponse.json({ error: "File name is required" }, { status: 400 });
     }
 
+    assertSafePathSegment(filename, "文件名");
+
     // 递归搜索所有子目录（文件可能存储在 ARTICLES_DIR 或子目录中）
-    let filePath = path.join(ARTICLES_DIR, filename);
+    let filePath = resolveInsideBaseDir(ARTICLES_DIR, filename);
     if (!fs.existsSync(filePath)) {
       const found = findFileInDir(ARTICLES_DIR, filename);
       if (found) {
         filePath = found;
       }
     }
-    console.log("Resolved path:", filePath);
+    logger.info("Resolved path:", filePath);
 
     if (!fs.existsSync(filePath)) {
-      console.error("File not found at:", filePath);
+      logger.error("File not found at:", filePath);
       return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
 
@@ -53,8 +69,12 @@ export async function GET(req: NextRequest) {
         "Cache-Control": "public, max-age=3600",
       },
     });
-  } catch (error: any) {
-    console.error("PDF Route Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    if (error instanceof SafePathError) {
+      return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
+    }
+    logger.error("PDF Route Error:", error);
+    const message = error instanceof Error ? getErrorMessage(error) : "请求失败";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

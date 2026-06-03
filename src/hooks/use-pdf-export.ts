@@ -1,8 +1,9 @@
-import { useCallback } from "react";
+﻿import { useCallback } from "react";
 import { toast } from "sonner";
 import { mergeEditorIntoProject } from "@/lib/export-content";
-import { ProjectData } from "@/lib/store";
+import type { ProjectData } from "@/contracts/project";
 import { exportProjectToPdf } from "@/services/pdf-export";
+import { getErrorMessage } from "@/lib/error-utils";
 
 /** PDF 导出：合并编辑器当前内容后调用后端生成 PDF */
 export function usePdfExport(
@@ -19,7 +20,7 @@ export function usePdfExport(
       toast.success("PDF 导出成功！");
     } catch (error: unknown) {
       console.error("PDF Export Error:", error);
-      const msg = error instanceof Error ? error.message : String(error);
+      const msg = error instanceof Error ? getErrorMessage(error) : String(error);
       toast.error(`PDF 导出失败: ${msg}`);
     }
   }, [project, activeSection, editingContent]);

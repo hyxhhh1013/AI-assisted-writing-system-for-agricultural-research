@@ -31,7 +31,7 @@ from plot_utils import load_dataframe, _normalize_label  # noqa: E402
 
 # 中文字体支持
 # 中文字体
-plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "DejaVu Sans"]
+plt.rcParams["font.sans-serif"] = ["Noto Sans CJK JP", "Noto Serif CJK JP", "SimHei", "Microsoft YaHei", "PingFang SC", "Heiti SC", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
 

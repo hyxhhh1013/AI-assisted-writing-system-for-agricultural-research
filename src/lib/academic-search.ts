@@ -14,6 +14,31 @@ export interface AcademicSearchResult {
 
 const TIMEOUT_MS = 5000;
 
+interface SemanticScholarAuthor {
+  name?: string;
+}
+
+interface SemanticScholarPaper {
+  title?: string;
+  authors?: SemanticScholarAuthor[];
+  year?: number;
+  url?: string;
+  abstract?: string;
+}
+
+interface CrossRefAuthor {
+  given?: string;
+  family?: string;
+}
+
+interface CrossRefItem {
+  title?: string[];
+  author?: CrossRefAuthor[];
+  published?: { "date-parts"?: number[][] };
+  URL?: string;
+  abstract?: string;
+}
+
 async function fetchWithTimeout(url: string, ms = TIMEOUT_MS): Promise<Response | null> {
   try {
     const controller = new AbortController();
@@ -37,10 +62,10 @@ async function searchSemanticScholar(query: string, limit = 5): Promise<Academic
   if (!res?.ok) return [];
 
   try {
-    const data = await res.json();
-    return (data.data ?? []).map((p: any) => ({
+    const data = (await res.json()) as { data?: SemanticScholarPaper[] };
+    return (data.data ?? []).map((p) => ({
       title: p.title ?? "Unknown",
-      authors: (p.authors ?? []).map((a: any) => a.name),
+      authors: (p.authors ?? []).map((a) => a.name ?? "").filter(Boolean),
       year: p.year,
       url: p.url ?? "",
       abstract: p.abstract ?? undefined,
@@ -61,11 +86,11 @@ async function searchCrossRef(query: string, limit = 3): Promise<AcademicSearchR
   if (!res?.ok) return [];
 
   try {
-    const data = await res.json();
+    const data = (await res.json()) as { message?: { items?: CrossRefItem[] } };
     const items = data.message?.items ?? [];
-    return items.map((item: any) => ({
+    return items.map((item) => ({
       title: item.title?.[0] ?? "Unknown",
-      authors: (item.author ?? []).map((a: any) => `${a.given ?? ""} ${a.family ?? ""}`.trim()),
+      authors: (item.author ?? []).map((a) => `${a.given ?? ""} ${a.family ?? ""}`.trim()),
       year: item.published?.["date-parts"]?.[0]?.[0],
       url: item.URL ?? "",
       snippet: item.abstract ?? item.title?.[0] ?? "",

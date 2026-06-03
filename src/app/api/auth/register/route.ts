@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { hashPassword, signToken, createTokenCookie } from "@/lib/auth";
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error("Register error:", error);
+    logger.error("Register error:", error);
     return NextResponse.json({ error: "注册失败" }, { status: 500 });
   }
 }

@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,7 +14,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ProjectData } from "@/lib/store";
+import { DIALOG_FULL } from "@/components/ui/dialog-sizes";
+import type { ProjectData } from "@/contracts/project";
+import { getWritingModeMeta } from "@/contracts/writing-mode";
+import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
 
 interface ProjectMetaDraft {
   title: string;
@@ -27,7 +30,7 @@ interface ProjectMetaDraft {
   outline: string;
   template: string;
   referencesText: string;
-  mode?: "review" | "research";
+  citationStyle?: "gbt7714" | "vancouver" | "apa7" | "ieee";
 }
 
 interface WorkbenchMetaDialogProps {
@@ -36,6 +39,15 @@ interface WorkbenchMetaDialogProps {
   project: ProjectData;
   onSave: (draft: ProjectMetaDraft) => void;
 }
+
+/** 模板 → 引用格式的默认映射 */
+const TEMPLATE_CITATION_MAP: Record<string, "gbt7714" | "vancouver" | "apa7" | "ieee"> = {
+  gbt7713: "gbt7714",
+  ieee: "ieee",
+  sci: "vancouver",
+  nature: "vancouver",
+  cas: "gbt7714",
+};
 
 export function WorkbenchMetaDialog({ open, onClose, project, onSave }: WorkbenchMetaDialogProps) {
   const [tempMeta, setTempMeta] = useState<ProjectMetaDraft>({
@@ -49,7 +61,7 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
     outline: project.outline || "",
     template: project.template || "sci",
     referencesText: (project.references || []).join("\n"),
-    mode: project.mode || "review",
+    citationStyle: project.citationStyle || "gbt7714",
   });
 
   useEffect(() => {
@@ -65,7 +77,7 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
         outline: project.outline || "",
         template: project.template || "sci",
         referencesText: (project.references || []).join("\n"),
-        mode: project.mode || "review",
+        citationStyle: project.citationStyle || "gbt7714",
       });
     }
   }, [open, project.id]);
@@ -77,7 +89,7 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[1040px] h-[90vh] max-h-[90vh] overflow-hidden flex flex-col p-0">
+      <DialogContent className={DIALOG_FULL}>
         <DialogHeader className="shrink-0">
           <div className="px-6 pt-6 pb-4 border-b">
             <DialogTitle>项目设置</DialogTitle>
@@ -100,7 +112,11 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="meta-template">期刊格式模板</Label>
-                  <Select value={tempMeta.template} onValueChange={(val) => setTempMeta({ ...tempMeta, template: val || "sci" })}>
+                  <Select value={tempMeta.template} onValueChange={(val) => {
+                    const tpl = val || "sci";
+                    const cit = TEMPLATE_CITATION_MAP[tpl] || "vancouver";
+                    setTempMeta({ ...tempMeta, template: tpl, citationStyle: cit });
+                  }}>
                     <SelectTrigger id="meta-template">
                       <SelectValue placeholder="选择期刊格式" />
                     </SelectTrigger>
@@ -115,17 +131,31 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
                 </div>
               </div>
 
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-[#1a5632]/15 bg-[#f6f5f1]/60 px-3 py-2">
+                <span className="text-xs text-[#6b7c72]">项目类型</span>
+                <ProjectModeBadge mode={project.mode} size="md" />
+                <span className="text-[11px] text-[#9aa8a0]">
+                  {getWritingModeMeta(project.mode).description} · 创建后不可更改
+                </span>
+              </div>
+
               <div className="grid gap-2">
-                <Label htmlFor="meta-mode">写作模式</Label>
-                <Select value={tempMeta.mode || "review"} onValueChange={(val) => setTempMeta({ ...tempMeta, mode: val as "review" | "research" })}>
-                  <SelectTrigger id="meta-mode">
-                    <SelectValue placeholder="选择写作模式" />
+                <Label htmlFor="meta-citation-style">引用格式标准</Label>
+                <Select
+                  value={tempMeta.citationStyle || "gbt7714"}
+                  onValueChange={(val) => setTempMeta({ ...tempMeta, citationStyle: val as "gbt7714" | "vancouver" | "apa7" | "ieee" })}
+                >
+                  <SelectTrigger id="meta-citation-style">
+                    <SelectValue placeholder="选择引用格式" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="review">综述模式 — 文献驱动，适合撰写文献综述</SelectItem>
-                    <SelectItem value="research">研究论文 — 数据驱动，定量结论需引用实验数据</SelectItem>
+                    <SelectItem value="gbt7714">GB/T 7714-2015（中文期刊国标）</SelectItem>
+                    <SelectItem value="vancouver">Vancouver / SCI 顺序编码制</SelectItem>
+                    <SelectItem value="apa7">APA 7th（作者-出版年制）</SelectItem>
+                    <SelectItem value="ieee">IEEE（工程类期刊）</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-[10px] text-muted-foreground">随期刊模板自动选定，也可独立覆盖。影响 AI 生成的参考文献条目格式</p>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">

@@ -8,6 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Loader2, Table2, FileText, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
+import { generateTable, type TableGenerateRequest } from "@/services/table";
+import { getErrorMessage } from "@/lib/error-utils";
 
 interface GroupInput {
   label: string;
@@ -66,7 +68,7 @@ export function TablePanel() {
     if (validGroups.length < 2) { toast.error("请填写至少 2 个处理组（标签和均值）"); return; }
     setLoading(true);
     try {
-      const body: any = {
+      const body: TableGenerateRequest = {
         title, columnHeader,
         groups: validGroups.map(g => ({
           label: g.label,
@@ -89,17 +91,11 @@ export function TablePanel() {
           p: parseFloat(ph.p),
         }));
       }
-      const res = await fetch("/api/table", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "生成失败");
+      const data = await generateTable(body);
       setResult(data);
       toast.success("三线表生成成功");
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? getErrorMessage(err) : "生成失败");
     } finally { setLoading(false); }
   };
 

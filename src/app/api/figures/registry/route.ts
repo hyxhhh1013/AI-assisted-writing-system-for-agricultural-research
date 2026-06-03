@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { getErrorMessage } from "@/lib/error-utils";
 
 /**
  * GET /api/figures/registry
@@ -15,7 +16,7 @@ export async function GET() {
     const raw = fs.readFileSync(registryPath, "utf-8");
     const registry = JSON.parse(raw);
     return NextResponse.json(registry);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }

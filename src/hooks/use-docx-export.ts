@@ -1,12 +1,32 @@
-import { useCallback } from "react";
+﻿import { useCallback } from "react";
 import { toast } from "sonner";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType, BorderStyle } from "docx";
 import { saveAs } from "file-saver";
-import { ProjectData } from "@/lib/store";
-import { mergeEditorIntoProject, stripHtmlToPlainForDocx } from "@/lib/export-content";
+import type { ProjectData } from "@/contracts/project";
+import { mergeEditorIntoProject, stripHtmlToPlainForDocx, getTemplateSectionContent } from "@/lib/export-content";
 import { formatKeywords } from "@/lib/paper-metadata";
-import { IMRAD_LABELS_SHORT_ZH, IMRAD_LABELS_EN } from "@/lib/imrad";
+import { getTemplateSections } from "@/lib/template-sections";
 import { parseMarkdownBlocks, MarkdownBlock } from "@/lib/markdown-parser";
+import { formatFilenames } from "@/services/references";
+
+/** 清理文件名用于兜底显示 */
+function cleanRefForDocx(raw: string): string {
+  return raw
+    .replace(/^\[\d+\]\s*/, "")
+    .replace(/\.pdf$/i, "")
+    .replace(/[_-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** 批量获取 GB/T 7714 格式化引用 */
+async function fetchFormattedRefs(references: string[]): Promise<Record<string, string>> {
+  try {
+    return await formatFilenames(references);
+  } catch {
+    return {};
+  }
+}
 
 interface UseDocxExportOptions {
   project: ProjectData;
@@ -81,7 +101,7 @@ export function useDocxExport({ project, activeSection, editingContent, saveProj
     /** 将标题 MarkdownBlock 转为 docx heading Paragraph */
     const renderHeadingBlock = (block: MarkdownBlock): Paragraph => {
       const level = block.level ?? 2;
-      let titleText = (block.title || "").replace(/^([\d.]+|[一二三四五六七八九十]+[、.\s])\s*/, "");
+      const titleText = (block.title || "").replace(/^([\d.]+|[一二三四五六七八九十]+[、.\s])\s*/, "");
       return new Paragraph({
         children: [new TextRun({ text: titleText, bold: true, size: config.heading1Size - 4, font: config.fontHeading })],
         heading: level <= 3 ? HeadingLevel.HEADING_2 : HeadingLevel.HEADING_3,
@@ -175,14 +195,23 @@ export function useDocxExport({ project, activeSection, editingContent, saveProj
       return runs;
     };
 
+    // 批量获取格式化引用
+    const formattedRefs = p.references && p.references.length > 0
+      ? await fetchFormattedRefs(p.references)
+      : {};
+
     const refParagraphs = (p.references && p.references.length > 0)
-      ? p.references.map((ref, idx) =>
-          new Paragraph({
-            children: [new TextRun({ text: `[${idx + 1}] ${ref}`, size: isChinese ? 18 : 16, font: config.fontMain })],
+      ? p.references.map((ref, idx) => {
+          const citation = formattedRefs[ref];
+          const display = citation
+            ? `[${idx + 1}] ${citation}`
+            : `[${idx + 1}] ${cleanRefForDocx(ref)}`;
+          return new Paragraph({
+            children: [new TextRun({ text: display, size: isChinese ? 18 : 16, font: config.fontMain })],
             spacing: { after: 100 },
             alignment: AlignmentType.LEFT,
-          })
-        )
+          });
+        })
       : [
           new Paragraph({
             children: [new TextRun({
@@ -263,16 +292,18 @@ export function useDocxExport({ project, activeSection, editingContent, saveProj
               indent: isChinese ? { firstLine: config.indent } : undefined,
             }),
             // Sections
-            ...(Object.entries(isChinese ? IMRAD_LABELS_SHORT_ZH : IMRAD_LABELS_EN) as [string, string][])
-              .filter(([key]) => key !== "abstract")
-              .flatMap(([key, label], index) => {
-              const raw = p.sections[key] || "";
+            ...getTemplateSections(template, p.mode)
+              .flatMap((def, index) => {
+              const raw = getTemplateSectionContent(p.sections, def);
               const content = stripHtmlToPlainForDocx(raw);
               if (!content) return [];
 
-              const sectionNumber = index + 1;
-              const romanNumerals = ["I", "II", "III", "IV"];
-              const fullLabel = isIEEE ? `${romanNumerals[index]}. ${label.toUpperCase()}` : `${sectionNumber} ${label}`;
+              const sectionNumber = def.sectionNumber;
+              const romanNumerals = ["I", "II", "III", "IV", "V", "VI"];
+              const label = def.label;
+              const fullLabel = isIEEE
+                ? `${romanNumerals[index] ?? String(index + 1)}. ${label.toUpperCase()}`
+                : `${sectionNumber} ${label}`;
               const elements: (Paragraph | Table)[] = [];
 
               elements.push(new Paragraph({

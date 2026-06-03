@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { getErrorMessage } from "@/lib/error-utils";
 import {
   Send, Loader2, Sparkles, MessageSquare, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { streamChat } from "@/services/chat";
 
 interface Message {
   role: "user" | "assistant";
@@ -57,62 +59,24 @@ export function ChatPanel({ filename }: ChatPanelProps) {
     setMessages(prev => [...prev, { role: "assistant", content: "" }]);
 
     try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      await streamChat(
+        {
           filename,
           messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
-        }),
-      });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "请求失败");
-      }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed === "data: [DONE]") continue;
-            if (trimmed.startsWith("data:")) {
-              try {
-                const data = JSON.parse(trimmed.slice(5).trim());
-                const content = data.choices?.[0]?.delta?.content || "";
-                if (content) {
-                  setMessages(prev => {
-                    const next = [...prev];
-                    const last = next[next.length - 1];
-                    if (last && last.role === "assistant") {
-                      next[next.length - 1] = {
-                        ...last,
-                        content: last.content + content,
-                      };
-                    }
-                    return next;
-                  });
-                }
-              } catch {
-                // skip malformed chunks
-              }
+        },
+        (assistantText) => {
+          setMessages(prev => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            if (last && last.role === "assistant") {
+              next[next.length - 1] = { ...last, content: assistantText };
             }
-          }
-        }
-      }
-    } catch (error: any) {
-      toast.error(error.message);
+            return next;
+          });
+        },
+      );
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? getErrorMessage(error) : "请求失败");
       // 移除占位消息
       setMessages(prev => prev.filter(m => m.content !== ""));
     } finally {

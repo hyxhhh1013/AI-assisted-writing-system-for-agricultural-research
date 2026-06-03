@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getErrorMessage } from "@/lib/error-utils";
 import {
   Card, CardContent, CardHeader, CardTitle, CardDescription,
 } from "@/components/ui/card";
@@ -82,7 +83,7 @@ export function MolDiagramPanel({ onInsertToPaper }: MolDiagramPanelProps) {
       }
       toast.success("分子结构图生成成功");
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "渲染失败");
+      toast.error(err instanceof Error ? getErrorMessage(err) : "渲染失败");
     } finally { setLoading(false); }
   };
 

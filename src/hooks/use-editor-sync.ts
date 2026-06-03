@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { ProjectData } from "@/lib/store";
+﻿import { useEffect } from "react";
+import type { ProjectData } from "@/contracts/project";
 
 /**
  * 实时将编辑器内容同步到 project state（500ms 防抖），确保预览和导出始终最新。
