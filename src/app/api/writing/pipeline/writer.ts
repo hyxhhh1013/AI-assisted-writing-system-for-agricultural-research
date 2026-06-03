@@ -40,7 +40,7 @@ export async function runWriterPhase(
 
   let initialDraft = "";
   let finalDraft = "";
-  for await (const chunk of streamAIResponse(writerResponse, signal)) {
+  for await (const chunk of streamAIResponse(writerResponse, signal, 300_000)) {
     if (chunk.content) {
       initialDraft += chunk.content;
       finalDraft += chunk.content;

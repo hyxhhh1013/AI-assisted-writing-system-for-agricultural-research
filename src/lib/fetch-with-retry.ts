@@ -46,6 +46,8 @@ export async function fetchWithRetry(
         raceWithAbort(origJson(), mergedSignal, timer) as Promise<unknown>;
       response.text = () => raceWithAbort(origText(), mergedSignal, timer) as Promise<string>;
 
+      // 流式 body 由调用方自行读取；此处必须清除总超时，否则会误 abort 已建立的 SSE/流
+      clearTimeout(timer);
       return response;
     } catch (error: unknown) {
       clearTimeout(timer);

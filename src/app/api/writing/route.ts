@@ -11,6 +11,10 @@ import { writingSchema } from "@/lib/validations";
 import { runWritingPipeline } from "./run-pipeline";
 import type { WritingGlobalContext } from "./types";
 
+export const runtime = "nodejs";
+/** 写作全管道（检索 + 写作 + 核查 + 修正）可超过 5 分钟 */
+export const maxDuration = 600;
+
 export async function POST(req: NextRequest) {
   try {
     const userId = req.headers.get("x-user-id") || undefined;

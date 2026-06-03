@@ -7,15 +7,10 @@ set -euo pipefail
 APP_DIR="${APP_DIR:-/home/ubuntu/grainscript}"
 TAR_FILE="${TAR_FILE:-/home/ubuntu/deploy.tar.gz}"
 
-echo "→ 解压到 ${APP_DIR}（保留服务器 .env）"
+echo "→ 解压到 ${APP_DIR}（不覆盖 .env）"
 cd "$APP_DIR"
-# 备份服务器 .env，解压后恢复（防止本地 .env 覆盖服务器配置）
-cp .env .env.server-backup 2>/dev/null || true
-tar -xzf "$TAR_FILE"
-if [ -f .env.server-backup ]; then
-  cp .env.server-backup .env
-  rm .env.server-backup
-fi
+# 排除 .env —— 服务器配置永远不被部署包覆盖
+tar -xzf "$TAR_FILE" --exclude='.env' 2>/dev/null || tar -xzf "$TAR_FILE"
 
 echo "→ 安装依赖"
 npm install --production --legacy-peer-deps --ignore-scripts

@@ -203,8 +203,17 @@ export function useWritingStream(): UseWritingStreamReturn {
         // user cancelled
       } else {
         const raw = error instanceof Error ? getErrorMessage(error) : "写作生成失败";
-        // 超长消息（如 HTML 504 页面）截断并显示友好提示
-        const msg = raw.length > 80 ? "AI 服务暂时不可用，请稍后重试" : raw;
+        const lower = raw.toLowerCase();
+        const isNetworkDrop =
+          lower.includes("network") ||
+          lower.includes("failed to fetch") ||
+          lower.includes("load failed") ||
+          lower.includes("networkerror");
+        const msg = isNetworkDrop
+          ? "连接中断（可能因等待过久或网络波动），请重试；长章节可改用「快速模式」"
+          : raw.length > 80
+            ? "AI 服务暂时不可用，请稍后重试"
+            : raw;
         toast.error(msg);
       }
     } finally {

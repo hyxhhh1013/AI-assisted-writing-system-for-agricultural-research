@@ -69,7 +69,7 @@ export async function runRefinerPhase(
           { role: "user", content: refinerPrompt },
         ],
         signal,
-        timeoutMs: 90_000,
+        timeoutMs: 180_000,
       });
 
       if (correctedText && correctedText.trim().length > 10) {

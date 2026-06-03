@@ -25,9 +25,18 @@ export async function runVerifierPhase(
   const MAX_FULL_SOURCES = 5;
   const fullSourceChunks: string[] = [];
   let sourceIdx = 0;
+  let loadedSources = 0;
+  const citedList = citedIndices.filter((idx) => referencesByIndex[idx - 1]);
   for (const idx of citedIndices) {
     const sourceName = referencesByIndex[idx - 1];
     if (!sourceName) continue;
+    loadedSources += 1;
+    emit({
+      type: "pipeline_step",
+      step: "verifying",
+      status: "running",
+      detail: `加载引用原文 ${loadedSources}/${citedList.length || "?"}…`,
+    });
     const fullText = await localRAG.getFullText(sourceName);
     if (!fullText) continue;
     sourceIdx++;
@@ -77,11 +86,11 @@ export async function runVerifierPhase(
         { role: "user", content: verifierPrompt },
       ],
       signal,
-      timeoutMs: 60_000,
+      timeoutMs: 180_000,
     });
 
     if (verifierResponse.ok && verifierResponse.body) {
-      for await (const chunk of streamAIResponse(verifierResponse, signal)) {
+      for await (const chunk of streamAIResponse(verifierResponse, signal, 180_000)) {
         if (chunk.content) {
           verificationReport += chunk.content;
           emit({ type: "verification", verification: chunk.content });
