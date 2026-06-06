@@ -11,7 +11,11 @@ import fs from "fs";
 import path from "path";
 import prisma from "@/lib/prisma";
 import type { KnowledgeFileRecord } from "@/contracts/knowledge";
-import { prismaRowToKnowledgeRecord } from "@/lib/knowledge-metadata";
+import {
+  enrichKnowledgeRecordFromDisk,
+  persistKnowledgeFileSizeIfMissing,
+  prismaRowToKnowledgeRecord,
+} from "@/lib/knowledge-metadata";
 import { localRAG, invalidateBibCache } from "@/lib/rag";
 import { validateBody } from "@/lib/api-validate";
 import {
@@ -58,9 +62,20 @@ export async function GET(req: NextRequest) {
               _count: { chunks: g.chunks.length },
             });
             r._snippets = g.chunks.map(c => c.content.slice(0, 300));
+            if (r.size > 0) persistKnowledgeFileSizeIfMissing(r.name, r.category, r.size);
             return r;
           }
-          return { name: g.name, category: g.category, documentType: "paper", chunkCount: g.chunks.length, size: 0, mtime: "", _snippets: g.chunks.map(c => c.content.slice(0, 300)) };
+          const fallback = enrichKnowledgeRecordFromDisk({
+            name: g.name,
+            category: g.category,
+            documentType: "paper",
+            chunkCount: g.chunks.length,
+            size: 0,
+            mtime: "",
+          });
+          fallback._snippets = g.chunks.map((c) => c.content.slice(0, 300));
+          if (fallback.size > 0) persistKnowledgeFileSizeIfMissing(fallback.name, fallback.category, fallback.size);
+          return fallback;
         })),
         total, page, pageSize, searchType: "semantic", categories: [],
       });
@@ -84,8 +99,16 @@ export async function GET(req: NextRequest) {
 
     const allCategories = await prisma.knowledgeFile.groupBy({ by: ["category"], _count: true, orderBy: { _count: { category: "desc" } } });
 
+    const records = files.map((f) => {
+      const record = prismaRowToKnowledgeRecord(f);
+      if (record.size > 0 && f.size === 0) {
+        persistKnowledgeFileSizeIfMissing(record.name, record.category, record.size);
+      }
+      return record;
+    });
+
     return NextResponse.json({
-      files: files.map((f) => prismaRowToKnowledgeRecord(f)),
+      files: records,
       total, page, pageSize,
       categories: ["全部", ...allCategories.map(c => c.category)],
       searchType: "name",

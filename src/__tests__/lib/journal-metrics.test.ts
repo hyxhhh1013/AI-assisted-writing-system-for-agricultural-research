@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import fs from "fs";
+import { describe, expect, it, vi } from "vitest";
+import { enrichKnowledgeRecordFromDisk } from "@/lib/knowledge-metadata";
 import {
   lookupMetricsForBib,
   mergeJournalMetrics,
@@ -30,6 +32,33 @@ describe("lookupMetricsForBib", () => {
     const map = parseJournalMetricsCsv("issn,impactFactor\n1234-5678,3.1");
     const m = lookupMetricsForBib({ issn: "1234-5678" }, map);
     expect(m?.impactFactor).toBe(3.1);
+  });
+});
+
+describe("enrichKnowledgeRecordFromDisk", () => {
+  it("keeps non-zero size without disk access", () => {
+    const record = {
+      name: "a.pdf",
+      category: "未分类",
+      chunkCount: 1,
+      size: 4096,
+      mtime: "",
+    };
+    expect(enrichKnowledgeRecordFromDisk(record).size).toBe(4096);
+  });
+
+  it("fills size from disk when prisma stored 0", () => {
+    vi.spyOn(fs, "existsSync").mockReturnValue(true);
+    vi.spyOn(fs, "statSync").mockReturnValue({ size: 8192 } as fs.Stats);
+    const record = {
+      name: "b.pdf",
+      category: "水稻",
+      chunkCount: 1,
+      size: 0,
+      mtime: "",
+    };
+    expect(enrichKnowledgeRecordFromDisk(record).size).toBe(8192);
+    vi.restoreAllMocks();
   });
 });
 

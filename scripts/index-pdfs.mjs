@@ -498,7 +498,16 @@ function syncMetadataToPrisma(metadataRecords) {
   }
 }
 
-function stage2_filterAndWrite(allRawChunks, existingMetaByName) {
+function resolveFileSize(filename, sizeByName, prev, existingMetaByName) {
+  const fromScan = sizeByName?.get(filename);
+  if (typeof fromScan === "number" && fromScan > 0) return fromScan;
+  if (typeof prev?.size === "number" && prev.size > 0) return prev.size;
+  const fromExisting = existingMetaByName.get(filename)?.size;
+  if (typeof fromExisting === "number" && fromExisting > 0) return fromExisting;
+  return 0;
+}
+
+function stage2_filterAndWrite(allRawChunks, existingMetaByName, sizeByName = new Map()) {
   const existingEmbMap = loadExistingEmbMap();
   if (existingEmbMap.size > 0) console.log(`  Preserved ${existingEmbMap.size} existing embeddings`);
   const existingFilteredBySource = loadExistingFilteredBySource();
@@ -547,7 +556,7 @@ function stage2_filterAndWrite(allRawChunks, existingMetaByName) {
         name: filename,
         category,
         chunkCount: reused.length,
-        size: prev?.size || 0,
+        size: resolveFileSize(filename, sizeByName, prev, existingMetaByName),
         mtime: new Date().toISOString(),
         documentType: (() => {
           if (prev?.bibEdited && prev?.documentType) return prev.documentType;
@@ -600,7 +609,7 @@ function stage2_filterAndWrite(allRawChunks, existingMetaByName) {
       name: filename,
       category,
       chunkCount: filtered.length,
-      size: existingMetaByName.get(filename)?.size || 0,
+      size: resolveFileSize(filename, sizeByName, existingMetaByName.get(filename), existingMetaByName),
       mtime: new Date().toISOString(),
       documentType: (() => {
         const prevEntry = existingMetaByName.get(filename);
@@ -778,7 +787,9 @@ function scanFiles() {
       const fullPath = path.join(dir, item);
       const stat = fs.statSync(fullPath);
       if (stat.isDirectory()) { walkDir(fullPath, item); }
-      else if (item.toLowerCase().endsWith(".pdf")) { allFiles.push({ path: fullPath, name: item, category, mtime: stat.mtimeMs }); }
+      else if (item.toLowerCase().endsWith(".pdf")) {
+        allFiles.push({ path: fullPath, name: item, category, mtime: stat.mtimeMs, size: stat.size });
+      }
     }
   }
   walkDir(ARTICLES_DIR);
@@ -877,7 +888,8 @@ async function main() {
 
   console.log("\n── Stage 2: Filter + Write ──");
   const existingMetaByName = await loadExistingMetaByNameFromPrisma();
-  const { allChunks, categoryCount, reusedFiles } = stage2_filterAndWrite(allRawChunks, existingMetaByName);
+  const sizeByName = new Map(filesToProcess.map((f) => [f.name, f.size ?? 0]));
+  const { allChunks, categoryCount, reusedFiles } = stage2_filterAndWrite(allRawChunks, existingMetaByName, sizeByName);
   if (reusedFiles > 0) {
     console.log(`  Incremental: reused filtered chunks for ${reusedFiles} unchanged files`);
   }

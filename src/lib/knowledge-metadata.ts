@@ -11,9 +11,11 @@ import {
   serializeMetrics,
   type ApplyJournalMetricsResult,
 } from "@/lib/journal-metrics";
+import { resolveKnowledgeFilePath } from "@/lib/safe-path";
 
 const METADATA_PATH = path.join(process.cwd(), "data/metadata.json");
 const DATA_DIR = path.join(process.cwd(), "data");
+const ARTICLES_DIR = path.join(process.cwd(), process.env.RAG_ARTICLES_DIR || "papers");
 
 /** 仅迁移/应急：只读 data/metadata.json，默认关闭 */
 export function isMetadataJsonFallbackEnabled(): boolean {
@@ -53,10 +55,42 @@ type KnowledgeFileRow = {
   _count?: { chunks: number };
 };
 
+/** 从磁盘 stat PDF 字节数（Prisma size 为 0 时回退） */
+export function statKnowledgeFileDiskSize(name: string, category: string): number | null {
+  try {
+    const filePath = resolveKnowledgeFilePath(ARTICLES_DIR, category, name);
+    if (!fs.existsSync(filePath)) return null;
+    return fs.statSync(filePath).size;
+  } catch {
+    return null;
+  }
+}
+
+export function enrichKnowledgeRecordFromDisk(record: KnowledgeFileRecord): KnowledgeFileRecord {
+  if (record.size > 0) return record;
+  const diskSize = statKnowledgeFileDiskSize(record.name, record.category);
+  if (diskSize != null && diskSize > 0) {
+    return { ...record, size: diskSize };
+  }
+  return record;
+}
+
+/** 列表 API 发现 size=0 时异步回写 Prisma，避免每次 stat */
+export function persistKnowledgeFileSizeIfMissing(
+  name: string,
+  category: string,
+  size: number,
+): void {
+  if (size <= 0) return;
+  void prisma.knowledgeFile
+    .updateMany({ where: { name, size: 0 }, data: { size } })
+    .catch(() => {});
+}
+
 export function prismaRowToKnowledgeRecord(row: KnowledgeFileRow): KnowledgeFileRecord {
   const prismaChunks = row._count?.chunks ?? 0;
   const chunkCount = Math.max(row.chunkCount ?? 0, prismaChunks);
-  return {
+  const record: KnowledgeFileRecord = {
     name: row.name,
     category: row.category,
     documentType: row.documentType,
@@ -69,6 +103,7 @@ export function prismaRowToKnowledgeRecord(row: KnowledgeFileRow): KnowledgeFile
     bibEdited: row.bibEdited,
     metrics: parseMetricsJson(row.metrics ?? null),
   };
+  return enrichKnowledgeRecordFromDisk(record);
 }
 
 /** 将实验室 CSV 期刊指标按 ISSN 写入 KnowledgeFile.metrics */
