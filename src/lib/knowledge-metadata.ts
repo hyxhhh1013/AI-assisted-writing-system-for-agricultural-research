@@ -3,6 +3,14 @@ import path from "path";
 import prisma from "@/lib/prisma";
 import type { KnowledgeBib, KnowledgeFileRecord } from "@/contracts/knowledge";
 import type { BibEntry } from "@/lib/rag";
+import {
+  lookupMetricsForBib,
+  mergeJournalMetrics,
+  parseJournalMetricsCsv,
+  parseMetricsJson,
+  serializeMetrics,
+  type ApplyJournalMetricsResult,
+} from "@/lib/journal-metrics";
 
 const METADATA_PATH = path.join(process.cwd(), "data/metadata.json");
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -41,6 +49,7 @@ type KnowledgeFileRow = {
   parseWarning: string | null;
   bibEdited: boolean;
   chunkCount?: number;
+  metrics?: string | null;
   _count?: { chunks: number };
 };
 
@@ -58,7 +67,43 @@ export function prismaRowToKnowledgeRecord(row: KnowledgeFileRow): KnowledgeFile
     gbTag: row.gbTag,
     parseWarning: row.parseWarning as KnowledgeFileRecord["parseWarning"],
     bibEdited: row.bibEdited,
+    metrics: parseMetricsJson(row.metrics ?? null),
   };
+}
+
+/** 将实验室 CSV 期刊指标按 ISSN 写入 KnowledgeFile.metrics */
+export async function applyJournalMetricsFromCsv(
+  csvText: string,
+  options?: { dryRun?: boolean },
+): Promise<ApplyJournalMetricsResult & { lookupSize: number }> {
+  const lookup = parseJournalMetricsCsv(csvText);
+  const files = await prisma.knowledgeFile.findMany({
+    select: { id: true, bib: true, metrics: true },
+  });
+
+  let matched = 0;
+  let updated = 0;
+  let skipped = 0;
+
+  for (const file of files) {
+    const bib = parseBibField(file.bib);
+    const incoming = lookupMetricsForBib(bib, lookup);
+    if (!incoming) {
+      skipped++;
+      continue;
+    }
+    matched++;
+    const merged = mergeJournalMetrics(parseMetricsJson(file.metrics), incoming);
+    if (!options?.dryRun) {
+      await prisma.knowledgeFile.update({
+        where: { id: file.id },
+        data: { metrics: serializeMetrics(merged) },
+      });
+    }
+    updated++;
+  }
+
+  return { matched, updated, skipped, lookupSize: lookup.size };
 }
 
 export async function getKnowledgeFileByName(name: string): Promise<KnowledgeFileRecord | null> {

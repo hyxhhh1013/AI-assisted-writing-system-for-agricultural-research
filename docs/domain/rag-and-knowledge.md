@@ -124,3 +124,13 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 ## 路线图（Phase 7）
 
 文献库列表书目列、期刊 IF/分区、外部检索与 RIS 导入见 [`plans/ENG-PR-090-knowledge-enrichment.md`](../plans/ENG-PR-090-knowledge-enrichment.md)（ENG-PR-090～094）；队列登记见 [`ENGINEERING_OPTIMIZATION_QUEUE.md`](../ENGINEERING_OPTIMIZATION_QUEUE.md) §1 Phase 7。
+
+### 期刊指标（ENG-PR-091）
+
+| 操作 | 说明 |
+|------|------|
+| Admin 上传 CSV | `/admin/knowledge` → `POST /api/admin/journal-metrics` |
+| CLI 导入 | `node scripts/import-journal-metrics.mjs [csv] [--dry-run]` |
+| OpenAlex 补全 | `node scripts/enrich-knowledge-openalex.mjs [--dry-run] [--limit=50]` |
+
+CSV 列：`issn,impactFactor,impactFactorYear,jcrQuartile,casPartition,isCoreJournal`。按 `bib.issn` / `bib.eissn` 匹配后写入 `KnowledgeFile.metrics`。

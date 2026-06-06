@@ -13,7 +13,7 @@
 <!-- API_INDEX:AUTO:START -->
 ## 路由表（自动生成）
 
-> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-06-02 01:45:47**（共 **57** 个 route 文件，validateBody **23**，SSE **9**，requireAdmin **13**）。
+> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-06-06 04:45:06**（共 **58** 个 route 文件，validateBody **23**，SSE **9**，requireAdmin **14**）。
 
 图例：zod = 使用 validateBody；SSE = 含 text/event-stream / ReadableStream；admin = 含 requireAdmin。
 
@@ -181,6 +181,7 @@
 | 方法 | 路径 | zod | SSE | admin |
 |------|------|-----|-----|-------|
 | GET | `/api/admin/health` | — | — | ✓ |
+| POST | `/api/admin/journal-metrics` | — | — | ✓ |
 | GET, DELETE, POST | `/api/admin/knowledge` | ✓ | — | ✓ |
 | GET | `/api/admin/plagiarism` | — | — | ✓ |
 | GET | `/api/admin/plagiarism/[id]` | — | — | ✓ |
