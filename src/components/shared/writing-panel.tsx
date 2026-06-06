@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,16 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Send, Eraser, Database } from "lucide-react";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { projectStore } from "@/lib/store";
+import { getMinDraftChars, getWritingContextPlaceholder } from "@/contracts/writing";
 import type { ProjectData } from "@/contracts/project";
 import { useWritingStream } from "@/hooks/use-writing-stream";
 import {
@@ -61,7 +70,8 @@ export function WritingPanel({
   const [targetSectionKey, setTargetSectionKey] = useState<string>("introduction");
   const [language, setLanguage] = useState("zh");
   const [retrievalMode, setRetrievalMode] = useState<"precise" | "balanced" | "extensive">("precise");
-  const [fastMode, setFastMode] = useState(false);
+  const [fastMode, setFastMode] = useState(true);
+  const [showFullModeConfirm, setShowFullModeConfirm] = useState(false);
   const [context, setContext] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>("idle");
@@ -274,6 +284,25 @@ export function WritingPanel({
   })();
   const refCount = (project.references || []).length;
   const isResearch = project.mode === "research";
+  const minDraftChars = getMinDraftChars(targetSectionKey);
+  const contextCharCount = context.trim().length;
+  const draftReady = contextCharCount >= minDraftChars;
+  const canGenerate = Boolean(selectedSectionId) && draftReady;
+  const generateDisabledReason = !selectedSectionId
+    ? "请先选择左侧大纲任务"
+    : !draftReady
+      ? `请先写出至少 ${minDraftChars} 字的写作思路（当前 ${contextCharCount} 字）`
+      : undefined;
+
+  const handleRequestFullMode = () => {
+    if (!fastMode) return;
+    setShowFullModeConfirm(true);
+  };
+
+  const handleConfirmFullMode = () => {
+    setFastMode(false);
+    setShowFullModeConfirm(false);
+  };
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -352,21 +381,21 @@ export function WritingPanel({
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">快速模式</Label>
+                <Label className="text-xs">扩写模式</Label>
                 <div className="flex h-8 border rounded-md overflow-hidden">
                   <button
                     type="button"
                     className={`flex-1 text-xs ${fastMode ? "bg-primary text-primary-foreground" : "bg-background"}`}
                     onClick={() => setFastMode(true)}
                   >
-                    快速
+                    快速预览
                   </button>
                   <button
                     type="button"
                     className={`flex-1 text-xs ${!fastMode ? "bg-primary text-primary-foreground" : "bg-background"}`}
-                    onClick={() => setFastMode(false)}
+                    onClick={handleRequestFullMode}
                   >
-                    完整
+                    深度核查
                   </button>
                 </div>
               </div>
@@ -419,11 +448,15 @@ export function WritingPanel({
               </div>
               <Textarea
                 id="context"
-                placeholder="选择左侧大纲任务后，这里会自动填入写作要求..."
+                placeholder={getWritingContextPlaceholder(targetSectionKey)}
                 className="text-xs min-h-[88px] max-h-[160px] overflow-y-auto resize-none bg-muted/5"
                 value={context}
                 onChange={(e) => setContext(e.target.value)}
               />
+              <p className="text-[10px] text-muted-foreground">
+                {contextCharCount}/{minDraftChars} 字
+                {!draftReady ? " · 字数不足时无法生成" : ""}
+              </p>
             </div>
           </CardContent>
           <CardFooter className="flex gap-2">
@@ -435,9 +468,15 @@ export function WritingPanel({
                 <Loader2 className="mr-1 h-3 w-3 animate-spin" /> 取消扩写
               </Button>
             ) : (
-              <Button size="sm" className="flex-[2] text-xs" onClick={handleGenerate} disabled={!selectedSectionId}>
+              <Button
+                size="sm"
+                className="flex-[2] text-xs"
+                onClick={handleGenerate}
+                disabled={!canGenerate}
+                title={generateDisabledReason}
+              >
                 <Send className="mr-1 h-3 w-3" />
-                {selectedSectionId ? "扩写选定章节" : "请先选择任务"}
+                {canGenerate ? "扩写选定章节" : generateDisabledReason}
               </Button>
             )}
           </CardFooter>
@@ -457,6 +496,25 @@ export function WritingPanel({
           />
         )}
       </div>
+
+      <Dialog open={showFullModeConfirm} onOpenChange={setShowFullModeConfirm}>
+        <DialogContent showCloseButton>
+          <DialogHeader>
+            <DialogTitle>切换到深度核查？</DialogTitle>
+            <DialogDescription>
+              深度核查会依次运行写作、独立审稿与主编修正，耗时更长且占用更多服务器资源。建议先用「快速预览」起草，满意后再对单节做深度核查。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setShowFullModeConfirm(false)}>
+              保持快速预览
+            </Button>
+            <Button size="sm" onClick={handleConfirmFullMode}>
+              确认使用深度核查
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

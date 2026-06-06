@@ -183,7 +183,12 @@ export function useWritingStream(): UseWritingStreamReturn {
               setPipelineSteps([...stepsRef.current]);
               hasPipelineUpdate = true;
             } else if (isErrorEvent(event)) {
-              toast.error(event.error);
+              const partial = resultRef.current.trim().length > 0;
+              toast.error(
+                partial
+                  ? `${event.error}（已保留已生成内容，可编辑后重试）`
+                  : event.error,
+              );
             } else if (isInfoEvent(event)) {
               if (event.refMapping) {
                 refMappingRef.current = { ...refMappingRef.current, ...event.refMapping };
@@ -199,21 +204,38 @@ export function useWritingStream(): UseWritingStreamReturn {
         }
       }
     } catch (error: unknown) {
+      const partial = resultRef.current.trim().length > 0;
       if (error instanceof DOMException && error.name === "AbortError") {
-        // user cancelled
+        if (partial) {
+          toast.info("已取消扩写，已生成内容已保留");
+        }
       } else {
         const raw = error instanceof Error ? getErrorMessage(error) : "写作生成失败";
         const lower = raw.toLowerCase();
+        const isBusy =
+          lower.includes("系统繁忙") || lower.includes("writing_concurrency");
         const isNetworkDrop =
           lower.includes("network") ||
           lower.includes("failed to fetch") ||
           lower.includes("load failed") ||
           lower.includes("networkerror");
-        const msg = isNetworkDrop
-          ? "连接中断（可能因等待过久或网络波动），请重试；长章节可改用「快速模式」"
-          : raw.length > 80
-            ? "AI 服务暂时不可用，请稍后重试"
-            : raw;
+        let msg: string;
+        if (isBusy) {
+          msg = raw;
+        } else if (isNetworkDrop) {
+          msg = partial
+            ? "连接中断，已保留已生成内容；可编辑后重试，或改用「快速预览」"
+            : "连接中断（可能因等待过久或网络波动），请重试；长章节可改用「快速预览」";
+        } else {
+          msg =
+            raw.length > 80
+              ? partial
+                ? "AI 服务暂时不可用，已保留已生成内容，请稍后重试"
+                : "AI 服务暂时不可用，请稍后重试"
+              : partial
+                ? `${raw}（已保留已生成内容）`
+                : raw;
+        }
         toast.error(msg);
       }
     } finally {

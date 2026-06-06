@@ -1,5 +1,6 @@
 import { createLogger } from "@/lib/logger";
 import { getErrorMessage } from "@/lib/error-utils";
+import { releaseWritingSlot, tryAcquireWritingSlot } from "@/lib/writing-concurrency";
 
 const log = createLogger("api/writing");
 import { NextRequest } from "next/server";
@@ -38,10 +39,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (!tryAcquireWritingSlot()) {
+      return new Response(
+        JSON.stringify({
+          error: "系统繁忙，请稍后再试",
+          code: "WRITING_CONCURRENCY_LIMIT",
+        }),
+        { status: 503, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
         let streamClosed = false;
+        let slotReleased = false;
+        const releaseSlotOnce = () => {
+          if (slotReleased) return;
+          slotReleased = true;
+          releaseWritingSlot();
+        };
+
         const emit = (event: WritingSSEEvent) => {
           if (streamClosed) return;
           try {
@@ -58,8 +76,13 @@ export async function POST(req: NextRequest) {
             streamClosed = true;
           } catch {
             streamClosed = true;
+          } finally {
+            releaseSlotOnce();
           }
         };
+
+        req.signal.addEventListener("abort", releaseSlotOnce, { once: true });
+
         try {
           await runWritingPipeline({
             req,
@@ -84,6 +107,8 @@ export async function POST(req: NextRequest) {
           } catch {
             /* already closed */
           }
+        } finally {
+          releaseSlotOnce();
         }
       },
     });

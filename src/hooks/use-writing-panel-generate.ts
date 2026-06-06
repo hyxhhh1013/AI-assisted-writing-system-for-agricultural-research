@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useRef, useCallback, type Dispatch, type SetStateAction } from "react";
 import { toast } from "sonner";
@@ -11,6 +11,7 @@ import type { UseWritingStreamReturn } from "@/hooks/use-writing-stream";
 import { batchUpsertReferences } from "@/services/references";
 import type { WritingPreviewPayload } from "@/components/shared/writing/writing-types";
 import type { GenerationStatus } from "@/components/shared/writing/writing-types";
+import { getMinDraftChars } from "@/contracts/writing";
 import { createLogger } from "@/lib/logger";
 import { getErrorMessage } from "@/lib/error-utils";
 
@@ -93,6 +94,13 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
   const handleGenerate = useCallback(async () => {
     if (!title || !context) {
       toast.error("请填写完整信息");
+      return;
+    }
+
+    const minDraft = getMinDraftChars(targetSectionKey);
+    const draftLen = context.trim().length;
+    if (draftLen < minDraft) {
+      toast.error(`请先写出至少 ${minDraft} 字的写作思路或要点`);
       return;
     }
 
