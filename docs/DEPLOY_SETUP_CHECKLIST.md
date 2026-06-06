@@ -1,19 +1,20 @@
 # 部署配置清单
 
-> 主文档：[DEPLOY.md](./DEPLOY.md)
+> 主文档：[DEPLOY.md](./DEPLOY.md)  
+> **推荐部署路径**：PM2 + standalone 上传（方式 A）。全 Docker 见 [DEPLOY_VPS.md](./DEPLOY_VPS.md)，勿与 PM2 混用 `DATABASE_URL` 主机名。
 
 ## 当前方案
 
-**VPS 生产环境**：PM2 + Node.js standalone（数据库用 Docker PostgreSQL）
+**VPS 生产环境**：PM2 + Node.js standalone（PostgreSQL 用 Docker，应用在宿主机）
 
 | 项目 | 值 |
 |------|-----|
 | 服务器 IP | `159.75.106.21` |
 | 用户 | `ubuntu` |
 | 应用目录 | `/home/ubuntu/grainscript/` |
-| 数据库 | PostgreSQL Docker (`grainscript-db`, 端口 5432) |
-| 进程管理 | PM2 (`grainscript`, 2 实例 cluster) |
-| 域名 | aifascience.site (Nginx → localhost:3000) |
+| 数据库 | PostgreSQL Docker（`grainscript-db`，映射 **127.0.0.1:5432**） |
+| 进程管理 | PM2（`grainscript`，**1 实例 fork**，见 `ecosystem.config.cjs`） |
+| 域名 | aifascience.site（Nginx → localhost:3000） |
 | GitHub | `hyxhhh1013/AI-assisted-writing-system-for-agricultural-research` |
 
 ## 部署方式
@@ -21,23 +22,19 @@
 ### 方式 A：本地 build + 上传（日常推荐）
 
 ```powershell
-# 一键：构建 → 打包 → 上传 → 服务器部署
 powershell -File scripts/deploy/package.ps1
 ```
 
-脚本自动完成：`npm run build` → 打包 standalone + static → SCP → SSH 部署
+构建 → 打包（含 `ecosystem.config.cjs`、`scripts/deploy/`、`prisma/`）→ SCP → 服务器 `apply.sh` → **preflight** → `pm2 reload`
 
-### 方式 B：仅上传已打包文件 + 服务器部署
+### 方式 B：仅上传包 + 服务器部署
 
 ```powershell
-# 上传
 scp deploy.tar.gz ubuntu@159.75.106.21:/home/ubuntu/
-
-# SSH 部署
 ssh ubuntu@159.75.106.21 "cd /home/ubuntu/grainscript && bash scripts/deploy/apply.sh"
 ```
 
-### 方式 C：服务器 git pull + build（CI / 手动）
+### 方式 C：服务器 git pull + build
 
 ```bash
 ssh ubuntu@159.75.106.21
@@ -45,15 +42,141 @@ cd /home/ubuntu/grainscript
 bash scripts/deploy/pm2-up.sh
 ```
 
-## 服务器 .env 必填
+---
+
+## 服务器生产 `.env`（只维护这一份）
+
+部署包**不会覆盖**服务器上的 `.env`。请 SSH 到 `APP_DIR` 单独编辑，**不要**从本机整文件复制（易带上 `file:./prisma/dev.db` 或 `@db:`）。
+
+```bash
+# /home/ubuntu/grainscript/.env
+
+# 数据库 — PM2 在宿主机运行，必须用 127.0.0.1，不能用 docker 服务名 db
+DATABASE_URL=postgresql://grainscript:grainscript_dev_2024@127.0.0.1:5432/grainscript
+
+JWT_SECRET=<随机长串，勿用模板>
+DEEPSEEK_API_KEY=sk-<真实 Key>
+
+# 可选：Verifier 独立模型
+# ZHIPU_API_KEY=
+
+# 文献 PDF — 建议绝对路径，避免 cwd 歧义
+RAG_ARTICLES_DIR=/home/ubuntu/grainscript/papers
+
+PYTHON_CMD=python3
+
+# 可选：RAG 向量（不配则仅 BM25）
+# RAG_EMBEDDINGS_URL=https://open.bigmodel.cn/api/paas/v4/embeddings
+# RAG_EMBEDDING_MODEL=embedding-3
+# RAG_EMBEDDING_API_KEY=<智谱 Key>
+```
 
 | 变量 | 说明 |
 |------|------|
-| `DATABASE_URL` | `postgresql://grainscript:grainscript_dev_2024@localhost:5432/grainscript` |
+| `DATABASE_URL` | 必须 `postgresql://...@127.0.0.1:5432/...`（非 `db:`、非 SQLite） |
 | `JWT_SECRET` | 随机长字符串 |
-| `DEEPSEEK_API_KEY` | DeepSeek API Key |
+| `DEEPSEEK_API_KEY` | 扩写必填 |
+| `RAG_ARTICLES_DIR` | PDF 根目录，推荐绝对路径 |
+| `ZHIPU_API_KEY` | 可选；Verifier 用 |
 
-## GitHub Secrets（CI/CD 用）
+### 多 API Key（可选）
+
+用于在 **DeepSeek/智谱按 Key 限流（429）** 时分摊请求；`src/lib/ai.ts` 每次 `callAI` 轮转变量。
+
+| 变量 | 说明 |
+|------|------|
+| `DEEPSEEK_API_KEY` | 主 Key（必填） |
+| `DEEPSEEK_API_KEY_2` … `_10` | 额外 DeepSeek Key，写入 `.env` 后 `pm2 reload --update-env` |
+| `ZHIPU_API_KEY_2` … `_10` | 可选，Verifier 阶段 |
+
+```bash
+# .env 示例
+DEEPSEEK_API_KEY=sk-主账号
+DEEPSEEK_API_KEY_2=sk-备用1
+ZHIPU_API_KEY=...
+ZHIPU_API_KEY_2=...
+```
+
+也可在 **Admin → 设置** 新增键名 `DEEPSEEK_API_KEY_2`（加密存 DB，约 30 秒热加载）。
+
+**不能替代**：8GB VPS 上同时多条扩写管道的内存压力；多人并发仍建议做写作全局限流（ENG-PR-087）。多 Key ≠ 提高本机并发上限。
+
+`ecosystem.config.cjs` 会把 `.env` 中的 `DEEPSEEK_API_KEY_*`、`ZHIPU_API_KEY_*` 注入 PM2 子进程。
+
+生成 JWT：
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+---
+
+## 首次 / 索引更新：同步大目录
+
+`package.ps1` **不打进包**（服务器需已存在）：
+
+| 目录 | 用途 |
+|------|------|
+| `papers/` | PDF 文献 |
+| `data/` | RAG 索引 `index_*.json` + `.emb` |
+
+本机示例（按需 rsync/scp）：
+
+```powershell
+scp -r papers ubuntu@159.75.106.21:/home/ubuntu/grainscript/
+scp -r data    ubuntu@159.75.106.21:/home/ubuntu/grainscript/
+```
+
+---
+
+## 部署前自检（preflight）
+
+每次 `apply.sh` / `package.ps1` 在 `pm2 reload` 前会自动执行：
+
+```bash
+cd /home/ubuntu/grainscript
+bash scripts/deploy/preflight.sh
+```
+
+检查项：`.env`、PostgreSQL 连通、`papers`/`data`、API Key、Docker `grainscript-db`。
+
+失败则**不要** reload，按脚本 `FAIL` 提示修复。
+
+部署后深度排查：
+
+```bash
+bash scripts/deploy/server-check.sh
+pm2 logs grainscript --lines 50
+```
+
+---
+
+## PM2 与 `.env`
+
+`ecosystem.config.cjs` 会从项目根读取 `.env` 并注入子进程（`DATABASE_URL`、`DEEPSEEK_API_KEY`、`RAG_ARTICLES_DIR` 等）。
+
+修改 `.env` 后务必：
+
+```bash
+pm2 reload ecosystem.config.cjs --update-env
+```
+
+---
+
+## 常见故障对照
+
+| 现象 | 原因 | 处理 |
+|------|------|------|
+| 数据库连不上 | `.env` 用了 `@db:` 或 SQLite | 改为 `127.0.0.1:5432` |
+| 扩写 API Key 错误 | 服务器 `.env` 未配或 PM2 未 `--update-env` | 填 Key + reload |
+| 429 / 上游限流 | 单 Key 配额用尽 | 增加 `DEEPSEEK_API_KEY_2` 等；仍须控制同时扩写数 |
+| 文献库路径不对 | 无 `papers/` 或 `RAG_ARTICLES_DIR` 指错 | scp `papers` 或设绝对路径 |
+| RAG 无结果 | 无 `data/index_*.json` | 同步 `data/` 或服务器重建索引 |
+| `grainscript-db` 未运行 | Docker 未启动 | `docker start grainscript-db` |
+
+---
+
+## GitHub Secrets（CI/CD）
 
 | Secret | 值 |
 |--------|-----|
@@ -62,23 +185,20 @@ bash scripts/deploy/pm2-up.sh
 | `DEPLOY_PATH` | `/home/ubuntu/grainscript` |
 | `DEPLOY_SSH_KEY` | 已配置 |
 
+---
+
 ## 部署包内容
 
-打包脚本 (`package.ps1`) 自动处理：
+`package.ps1` 包含：
 
-**包含：**
-- `.next/` — 编译产出（server + static）
-- `prisma/` — schema + migrations
-- `public/` — 静态资源
-- `server.js` — Next.js standalone 入口
-- `ecosystem.config.cjs` — PM2 配置
-- `package.json` — 依赖声明
+- `.next/standalone/*` + `.next/static`
+- `ecosystem.config.cjs`、`package.json`、`prisma/`
+- `scripts/deploy/`（`apply.sh`、`preflight.sh`、`server-check.sh` 等）
 
-**排除：**
-- `papers/` — PDF 知识库（服务器已有）
-- `node_modules/` — 服务器 `npm install` 安装
-- `data/` — RAG 索引（服务器已有）
+**排除（服务器保留）：**
+
+- `papers/`、`data/`、`node_modules/`、`.env`
 
 ## Prisma 跨平台
 
-`schema.prisma` 已配置 `binaryTargets = ["native", "debian-openssl-3.0.x"]`，本地 build 的 Prisma Client 同时包含 Windows + Linux 引擎。服务器端 `apply.sh` 仍会执行 `npx prisma generate` 确保兼容。
+`schema.prisma` 含 `binaryTargets = ["native", "debian-openssl-3.0.x"]`。服务器 `apply.sh` 会执行 `prisma generate` + `db push`。

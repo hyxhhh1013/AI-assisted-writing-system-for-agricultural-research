@@ -35,6 +35,19 @@ foreach ($f in $skipFiles) {
 New-Item -ItemType Directory -Force "deploy-pkg\.next" | Out-Null
 Copy-Item -Recurse ".next\static" "deploy-pkg\.next\static"
 
+# standalone 未包含的部署与 DB 文件
+$extraCopy = @(
+    @{ Src = "ecosystem.config.cjs"; Dest = "deploy-pkg\ecosystem.config.cjs" },
+    @{ Src = "package.json"; Dest = "deploy-pkg\package.json" },
+    @{ Src = "prisma"; Dest = "deploy-pkg\prisma" },
+    @{ Src = "scripts\deploy"; Dest = "deploy-pkg\scripts\deploy" }
+)
+foreach ($item in $extraCopy) {
+    if (Test-Path $item.Src) {
+        Copy-Item -Recurse -Force $item.Src $item.Dest
+    }
+}
+
 Write-Host "=== 3/4 压缩 ===" -ForegroundColor Cyan
 tar -czf deploy.tar.gz -C deploy-pkg .
 $sizeMB = [math]::Round((Get-Item deploy.tar.gz).Length / 1MB, 1)
@@ -56,6 +69,7 @@ tar -xzf $remotePath
 npm install --production --legacy-peer-deps --ignore-scripts
 npx prisma generate
 npx prisma db push --skip-generate
+bash scripts/deploy/preflight.sh
 pm2 reload ecosystem.config.cjs --update-env
 sleep 2
 curl -sf -o /dev/null http://127.0.0.1:3000 && echo 'DEPLOY OK' || echo 'WARN: HTTP check failed'

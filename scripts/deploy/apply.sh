@@ -24,6 +24,10 @@ echo "→ Prisma Generate（生成 Debian 引擎）"
 echo "→ Prisma DB Push"
 ./node_modules/.bin/prisma db push --skip-generate
 
+echo "→ 部署前自检"
+chmod +x scripts/deploy/preflight.sh 2>/dev/null || true
+bash scripts/deploy/preflight.sh
+
 echo "→ PM2 零停机重启"
 pm2 reload ecosystem.config.cjs --update-env
 

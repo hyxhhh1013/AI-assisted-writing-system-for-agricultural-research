@@ -50,9 +50,10 @@ ssh ubuntu@159.75.106.21 "cd /home/ubuntu/grainscript && bash scripts/deploy/app
 
 | 脚本 | 用途 |
 |------|------|
-| `scripts/deploy/apply.sh` | 解压 + npm install + prisma + pm2 reload |
+| `scripts/deploy/apply.sh` | 解压 + npm install + prisma + **preflight** + pm2 reload |
 | `scripts/deploy/pm2-up.sh` | git pull + build（CI 用） |
-| `ecosystem.config.cjs` | PM2 配置（2 实例 cluster, port 3000） |
+| `ecosystem.config.cjs` | PM2 配置（**1 实例 fork**，非 cluster；从 `.env` 注入变量） |
+| `scripts/deploy/preflight.sh` | 部署前自检（DB / papers / data / API Key） |
 
 ### 常用排查
 
@@ -91,6 +92,7 @@ cp .env.example .env
 
 ```env
 DEEPSEEK_API_KEY=sk-xxx
+# 可选多 Key 轮转：DEEPSEEK_API_KEY_2 … _10（缓解 429，见 DEPLOY_SETUP_CHECKLIST.md）
 ZHIPU_API_KEY=xxx      # 可选，不配则自动降级为 DeepSeek
 JWT_SECRET=你的随机密钥  # 改掉默认值！
 DATABASE_URL=file:./prisma/dev.db
@@ -204,6 +206,20 @@ npm run rag:convert-index
 
 **Q: 内存不够？**
 Docker Desktop 设置里把内存限制调到 6 GB。完整镜像包含 Playwright 和 Python 科学计算依赖，首次构建/安装依赖会占用更多内存。
+
+**Q: VPS 多人同时扩写卡顿或 PM2 频繁重启？**
+
+8GB 单机建议：
+
+| 项 | 建议 |
+|----|------|
+| PM2 | **单实例 fork**（`ecosystem.config.cjs` 已配置 `instances: 1`）；勿开 cluster，避免双份 RAG 热数据 |
+| 内存 | `max_memory_restart: 3000M`；预留 ~2GB 给 PostgreSQL + OS |
+| 扩写并发 | `.env` 设置 `WRITING_MAX_CONCURRENT=2`（默认）；超限返回 503 |
+| 默认模式 | `WRITING_DEFAULT_MODE=fast`；UI 默认「快速预览」，深度核查需用户确认 |
+| Verifier | `WRITING_VERIFIER_MAX_FULL_SOURCES=5`；高负载自动降为 2；设为 `0` 可跳过全文加载 |
+
+压测：2 个客户端同时「深度核查」扩写时，用 `pm2 monit` 观察内存应稳定、无连续 restart。
 
 **Q: Windows 上 Docker 很慢？**
 确保项目在 WSL2 文件系统中（不要放在 Windows 桌面路径），性能差 5-10 倍。
