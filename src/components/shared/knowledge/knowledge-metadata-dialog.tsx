@@ -50,6 +50,8 @@ function bibFromFile(file: KnowledgeFileRecord): KnowledgeBib {
     issue: file.bib?.issue || "",
     pages: file.bib?.pages || "",
     doi: file.bib?.doi || "",
+    issn: file.bib?.issn || "",
+    eissn: file.bib?.eissn || "",
     patentNumber: file.bib?.patentNumber || "",
     inventors: file.bib?.inventors || [],
     applicant: file.bib?.applicant || "",
@@ -106,6 +108,11 @@ export function KnowledgeMetadataDialog({
           applicant: bib.applicant?.trim() || undefined,
           publisher: bib.publisher?.trim() || undefined,
           doi: bib.doi?.trim() || undefined,
+          issn: bib.issn?.trim() || undefined,
+          eissn: bib.eissn?.trim() || undefined,
+          volume: bib.volume?.trim() || undefined,
+          issue: bib.issue?.trim() || undefined,
+          pages: bib.pages?.trim() || undefined,
         },
       });
       toast.success("书目信息已保存，重建索引时不会覆盖");
@@ -241,6 +248,35 @@ export function KnowledgeMetadataDialog({
             </div>
           )}
 
+          {!isPatent && !isBook && (
+            <div className="grid gap-3 lg:col-span-2 lg:grid-cols-3">
+              <div className="grid gap-2">
+                <Label htmlFor="bib-volume">卷</Label>
+                <Input
+                  id="bib-volume"
+                  value={bib.volume || ""}
+                  onChange={(e) => setBib((prev) => ({ ...prev, volume: e.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="bib-issue">期</Label>
+                <Input
+                  id="bib-issue"
+                  value={bib.issue || ""}
+                  onChange={(e) => setBib((prev) => ({ ...prev, issue: e.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="bib-pages">页码</Label>
+                <Input
+                  id="bib-pages"
+                  value={bib.pages || ""}
+                  onChange={(e) => setBib((prev) => ({ ...prev, pages: e.target.value }))}
+                />
+              </div>
+            </div>
+          )}
+
           <div className="grid gap-3 lg:col-span-2 lg:grid-cols-2">
             {!isPatent && (
               <div className="grid gap-2">
@@ -263,10 +299,33 @@ export function KnowledgeMetadataDialog({
                   id="bib-doi"
                   value={bib.doi || ""}
                   onChange={(e) => setBib((prev) => ({ ...prev, doi: e.target.value }))}
+                  placeholder="10.xxxx/..."
                 />
               </div>
             )}
           </div>
+
+          {!isPatent && !isBook && (
+            <div className="grid gap-3 lg:col-span-2 lg:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="bib-issn">ISSN</Label>
+                <Input
+                  id="bib-issn"
+                  value={bib.issn || ""}
+                  onChange={(e) => setBib((prev) => ({ ...prev, issn: e.target.value }))}
+                  placeholder="xxxx-xxxx"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="bib-eissn">eISSN</Label>
+                <Input
+                  id="bib-eissn"
+                  value={bib.eissn || ""}
+                  onChange={(e) => setBib((prev) => ({ ...prev, eissn: e.target.value }))}
+                />
+              </div>
+            </div>
+          )}
         </div>
         </div>
 

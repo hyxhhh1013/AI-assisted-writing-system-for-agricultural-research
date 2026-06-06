@@ -120,3 +120,7 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 - `src/app/knowledge/page.tsx` — 搜索、分类 Tab、语义/文件名模式
 - `knowledge-reindex-progress.tsx` — SSE 进度
 - 页头「共 N 篇」与重建索引；勿恢复中间重复状态条（已精简）
+
+## 路线图（Phase 7）
+
+文献库列表书目列、期刊 IF/分区、外部检索与 RIS 导入见 [`plans/ENG-PR-090-knowledge-enrichment.md`](../plans/ENG-PR-090-knowledge-enrichment.md)（ENG-PR-090～094）；队列登记见 [`ENGINEERING_OPTIMIZATION_QUEUE.md`](../ENGINEERING_OPTIMIZATION_QUEUE.md) §1 Phase 7。

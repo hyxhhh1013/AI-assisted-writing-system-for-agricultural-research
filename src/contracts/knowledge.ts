@@ -20,6 +20,8 @@ export interface KnowledgeBib {
   issue?: string;
   pages?: string;
   doi?: string;
+  issn?: string;
+  eissn?: string;
   patentNumber?: string;
   inventors?: string[];
   applicant?: string;
@@ -45,6 +47,28 @@ export interface KnowledgeFileRecord {
   parseWarning?: "no_text" | "low_text" | null;
   /** 语义搜索时附带的匹配片段（仅 API 响应） */
   _snippets?: string[];
+  /** 期刊指标（ENG-PR-091 写入；090 预留展示） */
+  metrics?: JournalMetrics | null;
+}
+
+/** 期刊影响因子 / 分区等指标（实验室 CSV 或 OpenAlex  enrichment） */
+export interface JournalMetrics {
+  impactFactor?: number;
+  impactFactorYear?: number;
+  jcrQuartile?: string;
+  casPartition?: string;
+  isCoreJournal?: boolean;
+  citedByCount?: number;
+  openAccessUrl?: string;
+}
+
+export type KnowledgeDoiFilter = "all" | "has" | "missing";
+export type KnowledgeIndexStatusFilter = "all" | KnowledgeIndexStatus;
+
+export interface KnowledgeListFilters {
+  journalContains?: string;
+  indexStatus?: KnowledgeIndexStatusFilter;
+  doi?: KnowledgeDoiFilter;
 }
 
 export type KnowledgeIndexStatus = "unindexed" | "partial" | "ready";
@@ -180,6 +204,72 @@ export function getKnowledgeSubtitleLine(file: Pick<KnowledgeFileRecord, "bib" |
   }
 
   return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+/** 卷(期):页 展示行 */
+export function getKnowledgeVolumeIssueLine(bib?: KnowledgeBib | null): string | null {
+  if (!bib) return null;
+  const parts: string[] = [];
+  if (bib.volume) parts.push(bib.volume);
+  if (bib.issue) parts.push(`(${bib.issue})`);
+  if (bib.pages) {
+    parts.push(parts.length > 0 ? `:${bib.pages}` : bib.pages);
+  }
+  return parts.length > 0 ? parts.join("") : null;
+}
+
+/** 规范化 DOI 为可点击 URL */
+export function normalizeKnowledgeDoiUrl(doi?: string | null): string | null {
+  const raw = doi?.trim();
+  if (!raw) return null;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const id = raw.replace(/^https?:\/\/(dx\.)?doi\.org\//i, "");
+  return `https://doi.org/${id}`;
+}
+
+/** 期刊指标一行（无数据返回 null） */
+export function getKnowledgeMetricsLine(metrics?: JournalMetrics | null): string | null {
+  if (!metrics) return null;
+  const parts: string[] = [];
+  if (metrics.impactFactor != null) {
+    const year = metrics.impactFactorYear ? ` (${metrics.impactFactorYear})` : "";
+    parts.push(`IF ${metrics.impactFactor}${year}`);
+  }
+  if (metrics.jcrQuartile) parts.push(metrics.jcrQuartile);
+  if (metrics.casPartition) parts.push(`中科院${metrics.casPartition}`);
+  if (metrics.isCoreJournal) parts.push("北大核心");
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+/** 客户端书目筛选（与分页配合：激活筛选时拉全量再过滤） */
+export function filterKnowledgeFiles(
+  files: KnowledgeFileRecord[],
+  filters: KnowledgeListFilters,
+): KnowledgeFileRecord[] {
+  let result = files;
+  const journal = filters.journalContains?.trim().toLowerCase();
+  if (journal) {
+    result = result.filter((f) => f.bib?.journal?.toLowerCase().includes(journal));
+  }
+  if (filters.doi === "has") {
+    result = result.filter((f) => Boolean(f.bib?.doi?.trim()));
+  } else if (filters.doi === "missing") {
+    result = result.filter((f) => !f.bib?.doi?.trim());
+  }
+  if (filters.indexStatus && filters.indexStatus !== "all") {
+    result = result.filter(
+      (f) => getKnowledgeIndexStatus(f).status === filters.indexStatus,
+    );
+  }
+  return result;
+}
+
+export function hasActiveKnowledgeListFilters(filters: KnowledgeListFilters): boolean {
+  return Boolean(
+    filters.journalContains?.trim()
+    || (filters.indexStatus && filters.indexStatus !== "all")
+    || (filters.doi && filters.doi !== "all"),
+  );
 }
 
 /** PATCH 更新书目元数据请求体 */

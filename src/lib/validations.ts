@@ -143,6 +143,8 @@ export const knowledgeBibSchema = z.object({
   issue: z.string().optional(),
   pages: z.string().optional(),
   doi: z.string().optional(),
+  issn: z.string().optional(),
+  eissn: z.string().optional(),
   patentNumber: z.string().optional(),
   inventors: z.array(z.string()).optional(),
   applicant: z.string().optional(),

@@ -9,6 +9,7 @@ import { useKnowledgeList } from "@/hooks/use-knowledge-list";
 import { KnowledgeReindexProgress } from "@/components/shared/knowledge/knowledge-reindex-progress";
 import { KnowledgeBatchToolbar } from "@/components/shared/knowledge/knowledge-batch-toolbar";
 import { KnowledgeSearchFilters } from "@/components/shared/knowledge/knowledge-search-filters";
+import { KnowledgeBibFilters } from "@/components/shared/knowledge/knowledge-bib-filters";
 import { KnowledgeFileTable } from "@/components/shared/knowledge/knowledge-file-table";
 import { KnowledgePageDialogs } from "@/components/shared/knowledge/knowledge-page-dialogs";
 
@@ -47,6 +48,7 @@ export default function KnowledgePage() {
         />
         <KnowledgeBatchToolbar {...kb} />
         <KnowledgeSearchFilters kb={kb} />
+        <KnowledgeBibFilters kb={kb} />
         <KnowledgeFileTable router={router} kb={kb} />
       </div>
 
