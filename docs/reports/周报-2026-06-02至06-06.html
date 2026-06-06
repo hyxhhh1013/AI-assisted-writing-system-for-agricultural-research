@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>禾书耕文 — 工作周报（2026.6.2—6.6）</title>
+  <style>
+    :root {
+      --ink: #1a1a1a;
+      --muted: #555;
+      --accent: #1e4a6e;
+      --accent-light: #e8eef3;
+      --border: #d4d4d4;
+      --paper: #fafaf8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Source Han Serif SC", "Noto Serif SC", "SimSun", serif;
+      font-size: 10.5pt;
+      line-height: 1.6;
+      color: var(--ink);
+      background: #e8e6e1;
+      margin: 0;
+      padding: 1.5rem;
+    }
+    .page {
+      max-width: 210mm;
+      margin: 0 auto;
+      background: var(--paper);
+      padding: 20mm 18mm 22mm;
+      box-shadow: 0 2px 24px rgba(0,0,0,.08);
+    }
+    header.doc-header {
+      border-bottom: 2px solid var(--accent);
+      padding-bottom: 0.9rem;
+      margin-bottom: 1.2rem;
+    }
+    h1 {
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin: 0 0 0.4rem;
+    }
+    .meta { color: var(--muted); font-size: 0.88rem; display: grid; gap: 0.15rem; }
+    .part-break { page-break-before: always; margin-top: 2rem; }
+    h2 {
+      font-size: 1.08rem;
+      color: var(--accent);
+      margin: 1.35rem 0 0.6rem;
+      padding-bottom: 0.3rem;
+      border-bottom: 1px solid var(--border);
+      page-break-after: avoid;
+    }
+    h3 { font-size: 0.98rem; margin: 0.9rem 0 0.4rem; color: #333; }
+    p { margin: 0.45rem 0; text-align: justify; }
+    ul, ol { margin: 0.35rem 0 0.65rem 1.2rem; padding: 0; }
+    li { margin: 0.2rem 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      margin: 0.55rem 0 0.85rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.4rem 0.5rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--accent-light); font-weight: 600; color: var(--accent); }
+    .summary-box {
+      background: var(--accent-light);
+      border-left: 4px solid var(--accent);
+      padding: 0.75rem 1rem;
+      margin: 0.75rem 0 1rem;
+      font-size: 0.95rem;
+    }
+    .flow, pre.commit {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.78rem;
+      background: #f4f4f2;
+      border: 1px solid var(--border);
+      padding: 0.6rem 0.75rem;
+      white-space: pre-wrap;
+      line-height: 1.45;
+      margin: 0.5rem 0;
+    }
+    .sign-block {
+      margin-top: 1.8rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      font-size: 0.92rem;
+    }
+    .sign-line { border-bottom: 1px solid var(--ink); min-height: 1.8rem; margin-top: 1.5rem; }
+    @media print {
+      body { background: white; padding: 0; }
+      .page { box-shadow: none; max-width: none; padding: 0; }
+      .no-print { display: none !important; }
+      h2, table, .summary-box { page-break-inside: avoid; }
+    }
+    .toolbar { max-width: 210mm; margin: 0 auto 1rem; text-align: right; }
+    .toolbar button {
+      font-family: system-ui, sans-serif;
+      padding: 0.45rem 1rem;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar no-print">
+    <button type="button" onclick="window.print()">打印 / 另存为 PDF</button>
+  </div>
+
+  <article class="page">
+    <header class="doc-header">
+      <h1>禾书耕文（GrainScript）<br />工作周报</h1>
+      <div class="meta">
+        <span><strong>汇报周期</strong>：2026 年 6 月 2 日 — 6 月 6 日</span>
+        <span><strong>统计截止</strong>：2026 年 6 月 6 日</span>
+        <span><strong>项目</strong>：农业科研 AI 辅助写作系统</span>
+        <span><strong>汇报人</strong>：________________</span>
+      </div>
+    </header>
+
+    <div class="summary-box">
+      <strong>摘要：</strong>本周在「能跑」基础上推进「稳跑、好维护、方向清晰」：合并工程化与线上修复；梳理人机协作产品路线并产出导师确认材料；加固 VPS 部署流程。大功能改造待导师确认后按 ENG-PR-087 → 080 系列分阶段实施。
+    </div>
+
+    <section>
+      <h2>一、本周核心工作（6.2 — 6.6）</h2>
+
+      <h3>1.1 工程规范与架构整理</h3>
+      <ul>
+        <li>建立 L1～L4 文档分层（AGENTS.md、领域索引、API 索引自动生成）。</li>
+        <li>ENG-PR-023～031：写作 pipeline 拆分（030）；references/analysis 增量 PATCH；知识库 Prisma 主源（027/028）；UI 迁 services（020～022）；工作台引用溯源侧栏可滚动。</li>
+      </ul>
+
+      <h3>1.2 RAG 与知识库</h3>
+      <ul>
+        <li>二进制索引、异步加载、检索超时与预热。</li>
+        <li>书目补全、索引修复、引用编号归一化。</li>
+        <li>路径穿越拦截；proxy 注入 x-user-id。</li>
+      </ul>
+
+      <h3>1.3 质量、审查与 Admin</h3>
+      <ul>
+        <li>质量模块 Phase 3、审查/查重、Admin 增强。</li>
+        <li>CI 绿门；手动 PM2 部署；无索引时跳过部分 RAG 集成测。</li>
+      </ul>
+
+      <h3>1.4 生产部署与线上稳定性</h3>
+      <table>
+        <thead><tr><th>事项</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>部署架构</td><td>PM2 + standalone；PostgreSQL @127.0.0.1:5432</td></tr>
+          <tr><td>PM2</td><td>单实例 fork；max_memory_restart 3GB</td></tr>
+          <tr><td>扩写 SSE</td><td>超时与 fetch 清理，减少 Network Error</td></tr>
+          <tr><td>进程崩溃</td><td>断开连接、reader.cancel 等 unhandledRejection 修复</td></tr>
+          <tr><td>配置</td><td>部署不覆盖 .env；JWT 变更不覆盖 DB API Key</td></tr>
+          <tr><td>备份</td><td>服务器 cron + 本机 pull 脚本</td></tr>
+        </tbody>
+      </table>
+
+      <h3>1.5 产品规划与导师材料</h3>
+      <ul>
+        <li>ENG-PR-080 系列计划：087（P0 稳定性）+ 080～086 + 088 规划。</li>
+        <li>导师确认方案（MD/HTML/PDF）：定位、分阶段、勾选请示项。</li>
+        <li>部署加固：preflight.sh、打包/apply 集成自检、多 API Key 注入、文档更新。</li>
+      </ul>
+
+      <h3>1.6 技术调研结论</h3>
+      <ul>
+        <li>多 API Key 轮转可缓解 429，不能替代 VPS 写作并发控制。</li>
+        <li>ENG-PR-087 应优先于 081 分步 UI。</li>
+        <li>卡顿 = 机器资源 + 管道过重 + 配置错误，需双线并行。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>二、前期延续工作汇总（5.31 — 6.1）</h2>
+      <p>下列为本周基线之前完成的工作，已并入或支撑当前 main。</p>
+
+      <h3>2.1 部署路线（5.31）</h3>
+      <ul>
+        <li>VPS 收敛为 PM2 + 宿主机 Node；修复 Prisma/openssl、端口、进程冲突等。</li>
+        <li>文档：PostgreSQL 与认证头指引。</li>
+      </ul>
+
+      <h3>2.2 RAG（6.1）</h3>
+      <ul>
+        <li>index-pdfs 拆分 JSON + 二进制 embedding；异步加载与路由 await 修复。</li>
+        <li>语义检索前延迟加载 embedding。</li>
+      </ul>
+
+      <h3>2.3 功能与质量（6.1）</h3>
+      <ul>
+        <li>Admin、审查、查重、UI；quality 绿门；RAG 迁移验证清单。</li>
+      </ul>
+
+      <h3>2.4 6.2 集中合并</h3>
+      <ul>
+        <li>references PATCH、validateBody、analysis PATCH 等与 6.3 CI/写作修复形成当前 main。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>三、线上问题与处理状态</h2>
+      <table>
+        <thead><tr><th>现象</th><th>已做</th><th>待做</th></tr></thead>
+        <tbody>
+          <tr><td>多人扩写卡顿</td><td>PM2 单实例、3GB</td><td>ENG-PR-087 限流</td></tr>
+          <tr><td>扩写中断/报错</td><td>SSE、崩溃修复</td><td>087 + 默认 fast</td></tr>
+          <tr><td>部署配置错误</td><td>preflight、文档</td><td>每次发布自检</td></tr>
+          <tr><td>像一键出论文</td><td>080 方案+导师稿</td><td>待导师确认后开发</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>四、主要产出物</h2>
+      <table>
+        <thead><tr><th>类别</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>代码</td><td>main @ 2026-06-03（20+ commits）</td></tr>
+          <tr><td>计划</td><td>docs/plans/ENG-PR-080-human-in-the-loop.md</td></tr>
+          <tr><td>导师材料</td><td>docs/plans/ENG-PR-080-导师确认方案.*</td></tr>
+          <tr><td>本周报</td><td>docs/reports/周报-2026-06-02至06-06.*</td></tr>
+          <tr><td>部署</td><td>preflight.sh、DEPLOY_SETUP_CHECKLIST.md</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>五、下周计划（6.9 起）</h2>
+      <ol>
+        <li>6.6 汇报：导师确认 A/B/C 三项。</li>
+        <li>本地改动 commit 入库。</li>
+        <li>开发：087 → 080+083 → 081→082 → 084/085；086 远期。</li>
+        <li>运维：发布前 preflight；按需多 Key。</li>
+      </ol>
+      <p><strong>一句话：</strong>本周完成工程拆分、RAG/引用、PM2 与扩写稳定性修复；明确人机协作路线并备导师材料；部署加自检与多 Key。大改等老师确认，优先 087。</p>
+    </section>
+
+    <section>
+      <h2>附录 A：6.2—6.3 主要提交摘要</h2>
+      <pre class="commit">docs: L1-L4 + API index generator
+refactor(writing): pipeline split (ENG-PR-030)
+feat(knowledge): Prisma metadata (027/028)
+feat(data): analysis PATCH (026/025b)
+feat: quality Phase 3 + CI/CD (023~030)
+feat: RAG 书目、索引、引用归一化
+fix(pm2): fork + 3GB memory
+fix(writing): SSE; disconnect crash
+fix(ai): reader.cancel crash
+fix(settings): DB keys safe
+fix(deploy): .env protect; prisma
+feat: backup cron + pull
+ci: manual PM2; legacy-peer-deps
+merge: main sync PM2 + writing</pre>
+    </section>
+
+    <section>
+      <h2>附录 B：导师确认三项（详见专册）</h2>
+      <table>
+        <thead><tr><th>项</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td>A</td><td>人机协作辅助写作，作者主笔</td></tr>
+          <tr><td>B</td><td>三阶段 4～6 周；先稳定性</td></tr>
+          <tr><td>C</td><td>对话助手答辩前不承诺</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:0.88rem;color:#555;">完整方案见：docs/plans/ENG-PR-080-导师确认方案.pdf</p>
+    </section>
+
+    <div class="sign-block">
+      <div>
+        <p><strong>汇报人签名</strong></p>
+        <div class="sign-line"></div>
+        <p>日期：________________</p>
+      </div>
+      <div>
+        <p><strong>导师意见（可选）</strong></p>
+        <div class="sign-line"></div>
+        <p>日期：________________</p>
+      </div>
+    </div>
+  </article>
+</body>
+</html>
