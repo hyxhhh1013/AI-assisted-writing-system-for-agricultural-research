@@ -417,3 +417,41 @@ export const xrdBraggSchema = z.object({
   tao: z.number().optional(),
 });
 export type XrdBraggInput = z.infer<typeof xrdBraggSchema>;
+
+const literatureSourceSchema = z.enum([
+  "openalex",
+  "semantic-scholar",
+  "crossref",
+  "pubmed",
+]);
+
+export const externalLiteratureHitSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  authors: z.array(z.string()),
+  year: z.number().int().min(1800).max(2100).optional(),
+  journal: z.string().optional(),
+  volume: z.string().optional(),
+  issue: z.string().optional(),
+  pages: z.string().optional(),
+  doi: z.string().optional(),
+  url: z.string().optional(),
+  abstract: z.string().optional(),
+  citedByCount: z.number().int().min(0).optional(),
+  openAccessUrl: z.string().optional(),
+  isOpenAccess: z.boolean().optional(),
+  source: literatureSourceSchema,
+  sources: z.array(literatureSourceSchema).optional(),
+});
+
+export const literatureSearchSchema = z.object({
+  query: z.string().trim().min(2, "检索词至少 2 个字符").max(300),
+  limit: z.number().int().min(1).max(20).optional(),
+});
+export type LiteratureSearchInput = z.infer<typeof literatureSearchSchema>;
+
+export const importExternalReferenceSchema = z.object({
+  hit: externalLiteratureHitSchema,
+  index: z.number().int().min(0).optional(),
+});
+export type ImportExternalReferenceInput = z.infer<typeof importExternalReferenceSchema>;

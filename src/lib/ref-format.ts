@@ -197,3 +197,5 @@ export function formatReference(
   }
   return `${cleanedName}[${docTag}]`;
 }
+
+export { formatExternalLiteratureHit } from "@/lib/external-literature-format";

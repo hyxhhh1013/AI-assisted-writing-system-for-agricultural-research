@@ -13,7 +13,7 @@
 <!-- API_INDEX:AUTO:START -->
 ## 路由表（自动生成）
 
-> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-06-06 04:45:06**（共 **58** 个 route 文件，validateBody **23**，SSE **9**，requireAdmin **14**）。
+> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-06-06 04:53:38**（共 **60** 个 route 文件，validateBody **25**，SSE **9**，requireAdmin **14**）。
 
 图例：zod = 使用 validateBody；SSE = 含 text/event-stream / ReadableStream；admin = 含 requireAdmin。
 
@@ -34,6 +34,7 @@
 | PATCH | `/api/projects/[id]/analysis-results` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/meta` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/references` | ✓ | — | — |
+| POST | `/api/projects/[id]/references/import-external` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/sections/[key]` | ✓ | — | — |
 
 ### AI 写作
@@ -194,6 +195,12 @@
 | GET | `/api/admin/usage` | — | — | ✓ |
 | GET, PATCH, DELETE | `/api/admin/users` | ✓ | — | ✓ |
 | GET | `/api/admin/users/[id]` | — | — | ✓ |
+
+### 其他
+
+| 方法 | 路径 | zod | SSE | admin |
+|------|------|-----|-----|-------|
+| POST | `/api/literature/search` | ✓ | — | — |
 <!-- API_INDEX:AUTO:END -->
 
 ## 人工备注（不随脚本覆盖）

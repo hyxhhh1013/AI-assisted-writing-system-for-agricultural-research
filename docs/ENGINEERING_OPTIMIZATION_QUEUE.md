@@ -104,7 +104,7 @@
 | **Phase 7 — 文献库书目增强 + 外部文献发现** |
 | ENG-PR-090 | 文献库列表：期刊/DOI 列 + 筛选 + 契约扩展 | ENG-PR-027 | 1～2d | todo | 任务单 → [`plans/ENG-PR-090-knowledge-enrichment.md`](./plans/ENG-PR-090-knowledge-enrichment.md) §二 |
 | ENG-PR-091 | 期刊指标 enrichment（CSV IF/分区 + OpenAlex） | ENG-PR-090 | 2～3d | todo | §三；Prisma `metrics` 列 |
-| ENG-PR-092 | 外部文献检索 Tab + 加入参考文献 | — | 3～5d | todo | §四；与 091 可并行 |
+| ENG-PR-092 | 外部文献检索 Tab + 加入参考文献 | — | 3～5d | done | §四；`eng/pr-092-external-literature-search` |
 | ENG-PR-093 | RIS / BibTeX 批量导入 | ENG-PR-090 | 2d | todo | §五 |
 | ENG-PR-094 | OA 全文自动入库 | ENG-PR-092, 093 | 1～2w | todo | backlog P3；§六 |
 
