@@ -1,4 +1,13 @@
 import { z } from "zod";
+import {
+  getMinDraftChars,
+  isWritingDraftReady,
+  MAX_WRITING_BULLETS,
+  MIN_DRAFT_CHARS_SHORT,
+  MIN_WRITING_BULLETS,
+  normalizeWritingBullets,
+  resolveWritingDraftContext,
+} from "@/contracts/writing";
 import { IMRAD_SECTION_KEYS } from "@/lib/imrad";
 import { REVIEW_SECTION_KEYS } from "@/lib/review-structure";
 import { isSectionValidForMode } from "@/lib/section-registry";
@@ -26,7 +35,7 @@ export const writingSchema = z
     template: z.enum(["sci", "ieee", "gbt7713", "nature"]).optional().default("sci"),
     existingReferences: z.array(z.string()).optional(),
     globalContext: z.unknown().optional(),
-    mode: z.enum(["full", "fast", "audit_only", "fix_only"]).optional().default("full"),
+    mode: z.enum(["full", "fast", "audit_only", "fix_only", "expand_bullet"]).optional().default("full"),
     verificationFeedback: z.string().optional(),
     retrievalMode: z.enum(["balanced", "precise", "extensive"]).optional().default("balanced"),
     researchDirection: z.string().optional(),
@@ -36,6 +45,10 @@ export const writingSchema = z
     projectMode: z.enum(["review", "research"]).optional(),
     dataClaims: z.array(z.unknown()).optional().default([]),
     citationStyle: z.enum(["gbt7714", "vancouver", "apa7", "ieee"]).optional().default("gbt7714"),
+    selectedSourceIds: z.array(z.string()).optional(),
+    bullets: z.array(z.string()).max(MAX_WRITING_BULLETS).optional(),
+    bulletIndex: z.number().int().min(0).optional(),
+    draftSoFar: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     if (!isSectionValidForMode(data.section, data.projectMode)) {
@@ -45,8 +58,115 @@ export const writingSchema = z
         path: ["section"],
       });
     }
+    if (data.mode === "expand_bullet") {
+      const normalized = normalizeWritingBullets(data.bullets);
+      if (normalized.length < MIN_WRITING_BULLETS) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `expand_bullet 至少需要 ${MIN_WRITING_BULLETS} 条有效要点`,
+          path: ["bullets"],
+        });
+      }
+      if (data.bulletIndex === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "expand_bullet 需要 bulletIndex",
+          path: ["bulletIndex"],
+        });
+      } else if (data.bulletIndex >= normalized.length) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "bulletIndex 超出要点范围",
+          path: ["bulletIndex"],
+        });
+      }
+      return;
+    }
+    if (data.mode === "audit_only" || data.mode === "fix_only") {
+      if (!data.context?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "缺少待处理正文",
+          path: ["context"],
+        });
+      }
+      return;
+    }
+
+    const normalized = normalizeWritingBullets(data.bullets);
+    const resolved = resolveWritingDraftContext(data.context, data.bullets);
+    if (!resolved.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "请填写扩写要点或补充说明",
+        path: ["bullets"],
+      });
+      return;
+    }
+
+    if (normalized.length >= MIN_WRITING_BULLETS) {
+      if (!isWritingDraftReady(data.context, data.bullets, data.section)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "要点总字数或单条长度不足",
+          path: ["bullets"],
+        });
+      }
+      return;
+    }
+
+    // 有效要点不足 3 条：与 isWritingDraftReady 一致，仅校验补充说明/段落长度
+    const minContext =
+      data.mode === "fast" ? MIN_DRAFT_CHARS_SHORT : getMinDraftChars(data.section);
+    if ((data.context?.trim().length ?? 0) < minContext) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          data.mode === "fast"
+            ? `请至少输入 ${minContext} 字后再发起 AI 扩写`
+            : `请填写 ${minContext} 字以上补充说明，或补全 ${MIN_WRITING_BULLETS} 条要点`,
+        path: ["context"],
+      });
+    }
   });
 export type WritingInput = z.infer<typeof writingSchema>;
+
+export const retrievePreviewSchema = z
+  .object({
+    title: z.string().min(1, "标题不能为空"),
+    section: z.enum(WRITING_SECTION_ENUM),
+    context: z.string().optional(),
+    bullets: z.array(z.string()).max(MAX_WRITING_BULLETS).optional(),
+    language: z.enum(["zh", "en"]).optional().default("zh"),
+    existingReferences: z.array(z.string()).optional().default([]),
+    researchDirection: z.string().optional(),
+    retrievalMode: z.enum(["balanced", "precise", "extensive"]).optional().default("balanced"),
+    projectMode: z.enum(["review", "research"]).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (!isSectionValidForMode(data.section, data.projectMode)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `章节 "${data.section}" 与项目类型 ${data.projectMode ?? "review"} 不匹配`,
+        path: ["section"],
+      });
+    }
+    if (!resolveWritingDraftContext(data.context, data.bullets).trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "请先填写扩写要点",
+        path: ["bullets"],
+      });
+    }
+    if (!isWritingDraftReady(data.context, data.bullets, data.section)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "要点字数不足或单条过短",
+        path: ["bullets"],
+      });
+    }
+  });
+export type RetrievePreviewInput = z.infer<typeof retrievePreviewSchema>;
 
 // === Outline ===
 export const outlineSchema = z.object({

@@ -8,7 +8,7 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-06-12（同步 087/080 已合并；093 待本分支提交）
+> **最后更新**：2026-06-13（096a～c done；081 done；093 done）
 
 ---
 
@@ -92,13 +92,17 @@
 | ENG-PR-060 | Bundle analyze + 重路由 lazy | ENG-PR-031 | 3h | done | plot/reader/admin dynamic client；`npm run analyze` |
 | ENG-PR-061 | pre-commit：`check` + lint-staged | ENG-PR-002 | 2h | done | husky: typecheck + lint-staged(src) |
 | ENG-PR-062 | `ProjectData` 类型统一（contracts 为准） | ENG-PR-025b | 4h | done | store 停 re-export；全库改 contracts |
-| **Phase 6 — 人机协作 + 扩写稳定性（辅助写作定位）** |
+| **Phase 6 — 协作扩写（096 主轴 + 087～086 辅助）** |
 | ENG-PR-087 | 扩写 P0：全局限流 + 默认 fast + Verifier 降级 | ENG-PR-031 | 1～2d | done | 2026-06-06；`c506020`；信号量 + Verifier 降级 + fast 默认 |
 | ENG-PR-080 | 扩写入口：草稿门槛 + 章节引导 | ENG-PR-031 | 4h | done | 2026-06-06；同 `c506020`；`MIN_DRAFT_CHARS` + 章节 placeholder |
-| ENG-PR-081 | 写作分步 UI（write→audit→fix） | ENG-PR-080, **087** | 1d | todo | §五；087/080 已合并，待本分支第二 commit |
-| ENG-PR-082 | Verifier 结构化 + 选择性 Refiner | ENG-PR-081 | 2d | todo | §六 |
-| ENG-PR-083 | 大纲骨架化 `userSkeleton` | — | 1d | todo | 与 080/087 可并行；§七 |
-| ENG-PR-084 | 入口重构：`/writing` 废弃 + 选区 AI | ENG-PR-082 | 2d | todo | §八 |
+| ENG-PR-081 | 写作分步 UI（write→audit→fix） | ENG-PR-080, **087** | 1d | done | 管道可分步调用；**≠** 协作扩写产品完成 |
+| **ENG-PR-096a** | **检索预览 + 用户勾选文献** | ENG-PR-081 | 1d | done | 2026-06-13；`retrieve-preview` + source picker |
+| **ENG-PR-096b** | **要点列表 + `bullets[]` 契约** | 096a | 1d | done | 2026-06-13；`WritingBulletList` + schema |
+| **ENG-PR-096c** | **`expand_bullet` 逐条扩写 + 合并** | 096b | 2d | done | 2026-06-13；`bullet_done` SSE + `use-writing-bullet-expand` |
+| **ENG-PR-096d** | **工作台默认段落模式 + 选区助手** | 096c | 1～2d | **done** | **P1**；`paragraph-editor` / `use-ai-paragraph` 为主路径 |
+| ENG-PR-082 | Verifier 结构化 + 选择性 Refiner | **096c** | 2d | todo | **P2 辅助**；整节写完后可选核查，非主轴 |
+| ENG-PR-083 | 大纲骨架化 `userSkeleton` | — | 1d | todo | 与 096b 同源；可并行 |
+| ENG-PR-084 | 入口重构：`/writing` 废弃 + 选区 AI | **096d** | 2d | todo | §八；与 096d 合并规划 |
 | ENG-PR-085 | 分析页 AI 免责标注 | — | 2h | todo | §九 |
 | ENG-PR-086 | 编辑器对话面板（Phase C） | ENG-PR-084 | 2～4w | todo | backlog；§十 |
 | **Phase 7 — 文献库书目增强 + 外部文献发现** |
@@ -107,6 +111,13 @@
 | ENG-PR-092 | 外部文献检索 Tab + 加入参考文献 | — | 3～5d | done | §四；`eng/pr-092-external-literature-search` |
 | ENG-PR-093 | RIS / BibTeX 批量导入 | ENG-PR-090 | 2d | done | 2026-06-12；`import-bibliography` + 向导 + Crossref |
 | ENG-PR-094 | OA 全文自动入库 | ENG-PR-092, 093 | 1～2w | todo | backlog P3；§六 |
+| **Phase 8 — RAG 运行时性能（库变大后卡顿/内存）** |
+| RAG-PR-006 | 两阶段检索：BM25 候选 → 候选集向量精排 | RAG-PR-002 | 1d | done | 2026-06-13；向量 O(全库)→O(候选)；去 ~770MB JS 向量内存 |
+| RAG-PR-007 | Query Embedding LRU 缓存（`(model,query)→向量`） | RAG-PR-006 | 0.5h | done | 2026-06-13；上限 256 |
+| RAG-PR-008 | 倒排索引协作式构建 + 合并代替重建 + 并发去重 | RAG-PR-002 | 1d | done | 2026-06-13；`buildInvertedIndexAsync`/`mergeInvertedIndexInto`；不冻结事件循环 |
+| RAG-PR-009 | warmup 真预加载 + `RAG_WARMUP`/`RAG_PERF_LOG` 开关 | RAG-PR-008 | 0.5h | done | 2026-06-13；冷启动移出首检索 |
+| RAG-PR-010 | `.emb` 按需 pread（去常驻内存） | RAG-PR-006 | 0.5d | done | 2026-06-13；`EmbeddingStore` 文件句柄 + `readSync`；省 ~885MB |
+| RAG-PR-011 | 扩写范围检索（按已选文献分类 scope） | RAG-PR-010 | 0.5d | done | 2026-06-13；`search({categories})` + `deriveScopeCategories`；无引用回退全库 |
 
 ### 1.1 与既有队列的关系
 
@@ -116,7 +127,7 @@
 | `ADMIN_ENHANCEMENT` 全部 `done` | ENG-PR-021 补 admin **页面** 直连 fetch；ENG-PR-040 实现 ADMIN-013 文档中的 DB 持久化 |
 | `rag-index-refactor.md` | RAG-PR-001～005 原样纳入 §1；细节见该文 §3 |
 | `CLAUDE.md` p1-1～p3-5 | 映射见 §8 |
-| `docs/plans/ENG-PR-080-human-in-the-loop.md` | ENG-PR-087～086 任务单以该文 §0～§十六 为准；**087 优先于 081**；合并时同步 §1 Phase 6 |
+| `docs/plans/ENG-PR-080-human-in-the-loop.md` | ENG-PR-087～086 + **096a～d** 任务单以该文 §0～§十六 为准；**096 为产品主轴**；合并时同步 §1 Phase 6 |
 | `docs/plans/ENG-PR-090-knowledge-enrichment.md` | ENG-PR-090～094 任务单以该文 §0～§十 为准；**090 先于 091**；合并时同步 §1 Phase 7 |
 
 ### 1.2 已完成（勿重复开 PR）
@@ -864,8 +875,11 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-06-01 | 技术债清扫 | AI | src 内 `: any`/`as any` 清零；chart-panel→`postChartForm`；Prisma WhereInput；workbench 拆 `workbench-page-client`；`.github/workflows/ci.yml`；`npm run check` 绿（167 warn） |
 | 2026-06-06 | 计划 | AI | 新增 Phase 7：ENG-PR-090～094 文献库书目/IF/外部检索；[`plans/ENG-PR-090-knowledge-enrichment.md`](./plans/ENG-PR-090-knowledge-enrichment.md) |
 | 2026-06-06 | ENG-PR-087, 080 | AI | 扩写信号量 + fast 默认 + 草稿门槛（`c506020`） |
+| 2026-06-12 | Phase 6 重排 | AI | 主轴改为 **协作扩写 096a～d**；081 标 done；082 降为 P2 可选核查 |
 | 2026-06-06 | ENG-PR-090, 091, 092 | AI | 列表增强、期刊指标、外部检索（`af70b34`～`6d10f22`） |
 | 2026-06-12 | ENG-PR-093 | AI | RIS/BibTeX 导入 + 091 脚本/Admin 增强 + reindex 后台续跑 |
+| 2026-06-13 | ENG-PR-096a, 096b, 096c | AI | 协作扩写 MVP：retrieve-preview + bullets[] + expand_bullet；`isWritingDraftReady` 条数门槛 |
+| 2026-06-13 | RAG-PR-006～011 | AI | 新增 Phase 8 RAG 运行时性能：两阶段检索 + embedding LRU + 协作式构建/合并/并发去重 + warmup 预加载 + `.emb` 按需 pread + 扩写按分类 scope；`npm run check` 绿（库变大后卡顿/内存优化） |
 
 ---
 
@@ -884,10 +898,10 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | Session 6 | ENG-PR-040 → 041 → 042 → 043 | 运维可观测 |
 | Session 7 | ENG-PR-050 → 051 → 052 → 053 → 054 | 质量与测试 |
 | Session 8 | ENG-PR-060、061、062 | 可选增强 |
-| Session 9+ | **087** + 080 + 083 并行 → 081 → 082 → 084 → 085 → 086 | 详见 [`plans/ENG-PR-080-human-in-the-loop.md`](./plans/ENG-PR-080-human-in-the-loop.md) |
+| Session 9+ | 087/080/081 done → **096a → 096b → 096c**（MVP）→ 096d；083 与 096b 并行；082/084/085/086 辅助 | 详见 [`plans/ENG-PR-080-human-in-the-loop.md`](./plans/ENG-PR-080-human-in-the-loop.md) |
 | Session 10+ | **090** → 091 ∥ 092 → 093 → 094（评估） | 详见 [`plans/ENG-PR-090-knowledge-enrichment.md`](./plans/ENG-PR-090-knowledge-enrichment.md) |
 
-**若只能做一个 PR**：**ENG-PR-081**（087/080 已合并；分步 UI 代码已就绪待 commit）。文献库 **093** 本 commit 落地后评估 **094**。
+**若只能做一个 PR**：**ENG-PR-096a**（检索预览 + 文献勾选；协作扩写 MVP 第一步）。081 管道已就绪；082 整节审查非当前主轴。
 
 ---
 

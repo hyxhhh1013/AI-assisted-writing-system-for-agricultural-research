@@ -112,7 +112,20 @@ else
   fail "未找到 data/index_*.json（部署包不含 data/，需单独同步或服务器上 npm run index-docs）"
 fi
 
-# --- 可选 HTTP（应用已运行时） ---
+# --- Python（图表 / 表格 / XRD）---
+PYTHON_CMD_VAL="$(env_val PYTHON_CMD)"
+PYTHON_CMD_VAL="${PYTHON_CMD_VAL:-python3}"
+if [[ "$PYTHON_CMD_VAL" == "python" ]] && [[ "$(uname -s 2>/dev/null)" != MINGW* ]]; then
+  warn "PYTHON_CMD=python（Linux 上通常应改为 python3）"
+  PYTHON_CMD_VAL="python3"
+fi
+if command -v "$PYTHON_CMD_VAL" >/dev/null 2>&1; then
+  PY_VER="$("$PYTHON_CMD_VAL" --version 2>&1 | head -1)"
+  ok "Python: $PY_VER (PYTHON_CMD=$PYTHON_CMD_VAL)"
+else
+  fail "找不到 Python: $PYTHON_CMD_VAL。请: sudo apt install -y python3 python3-pip && pip3 install matplotlib numpy pandas scipy && .env 中 PYTHON_CMD=python3"
+fi
+
 if curl -sf -o /dev/null --max-time 3 http://127.0.0.1:3000 2>/dev/null; then
   ok "HTTP :3000 可访问（应用已在运行）"
 else

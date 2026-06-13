@@ -2,7 +2,7 @@ import type { EvidenceClaim } from "@/contracts/data-source";
 import type { WritingInput } from "@/lib/validations";
 import { prepareWritingContext } from "./prepare-context";
 import { runAuditOnlyMode, runFixOnlyMode } from "./pipeline/modes";
-import { runWriterPhase } from "./pipeline/writer";
+import { runWriterPhase, runExpandBulletPhase } from "./pipeline/writer";
 import { runVerifierPhase } from "./pipeline/verifier";
 import { runRefinerPhase } from "./pipeline/refiner";
 import { runFinalizePhase } from "./pipeline/finalize";
@@ -39,6 +39,12 @@ export async function runWritingPipeline(params: {
       { req, data, context, dataClaims, globalContext, userId, emit, signal, finishStream },
       prepared,
     );
+    return;
+  }
+
+  if (mode === "expand_bullet") {
+    await runExpandBulletPhase(data, prepared, emit, signal);
+    finishStream();
     return;
   }
 

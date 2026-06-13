@@ -15,6 +15,7 @@ export interface PersistedWritingSession {
   targetSectionKey: string;
   language: string;
   context: string;
+  bullets?: string[];
   result: string;
   verificationFeedback: string;
   generationStatus: string;
@@ -28,6 +29,7 @@ export interface WritingPanelSessionState {
   targetSectionKey: string;
   language: string;
   context: string;
+  bullets?: string[];
   result: string;
   verificationFeedback: string;
   generationStatus: string;
@@ -41,6 +43,7 @@ export interface WritingPanelSessionSetters {
   setTargetSectionKey: (v: string) => void;
   setLanguage: (v: string) => void;
   setContext: (v: string) => void;
+  setBullets?: (v: string[]) => void;
   setResult: (v: string) => void;
   setVerificationFeedback: (v: string) => void;
   setGenerationStatus: (v: import("@/components/shared/writing/writing-types").GenerationStatus) => void;
@@ -89,6 +92,7 @@ export function useWritingPanelSession({
       }
       if (typeof s.language === "string") setters.setLanguage(s.language);
       if (typeof s.context === "string") setters.setContext(s.context);
+      if (Array.isArray(s.bullets) && setters.setBullets) setters.setBullets(s.bullets);
       if (typeof s.result === "string") setters.setResult(s.result);
       if (typeof s.verificationFeedback === "string") setters.setVerificationFeedback(s.verificationFeedback);
       if (s.generationStatus) {
@@ -123,6 +127,7 @@ export function useWritingPanelSession({
           targetSectionKey: state.targetSectionKey,
           language: state.language,
           context: state.context,
+          bullets: state.bullets,
           result: state.result,
           verificationFeedback: state.verificationFeedback,
           generationStatus: state.generationStatus,

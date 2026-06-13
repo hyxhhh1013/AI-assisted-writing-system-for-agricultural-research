@@ -7,12 +7,12 @@ import { randomUUID } from "crypto";
 import { validateBody } from "@/lib/api-validate";
 import { tableGenerateSchema } from "@/lib/validations";
 import { getErrorMessage } from "@/lib/error-utils";
+import { PYTHON_CMD, formatPythonSpawnError } from "@/lib/python-cmd";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
-const PYTHON_CMD = process.env.PYTHON_CMD || (process.platform === "win32" ? "python" : "python3");
 
 /**
  * 生成 GB/T 7714 三线表 + 统计文字
@@ -52,7 +52,9 @@ export async function POST(req: NextRequest) {
         if (code !== 0) reject(new Error(stderr || `Python 进程退出码 ${code}`));
         else resolve();
       });
-      proc.on("error", reject);
+      proc.on("error", (err) => {
+        reject(new Error(formatPythonSpawnError(getErrorMessage(err))));
+      });
     });
 
     // 从文件读取结果，绕开管道编码问题

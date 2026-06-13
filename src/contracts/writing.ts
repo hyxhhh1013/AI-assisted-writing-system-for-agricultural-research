@@ -1,6 +1,21 @@
+/** 扩写 UI 流程（ENG-PR-081） */
+export type WritingFlowMode = "standard" | "preview" | "full";
+
+/** 标准人控流程阶段 */
+export type ManualWritingPhase = "idle" | "draft_ready" | "review_ready" | "done";
+
+export function toApiWriteMode(flowMode: WritingFlowMode): "fast" | "full" {
+  return flowMode === "full" ? "full" : "fast";
+}
+
 /** 扩写草稿最低字数（ENG-PR-080） */
 export const MIN_DRAFT_CHARS = 50;
 export const MIN_DRAFT_CHARS_SHORT = 20;
+
+/** ENG-PR-096b：要点列表 */
+export const MIN_WRITING_BULLETS = 3;
+export const MAX_WRITING_BULLETS = 8;
+export const MIN_BULLET_CHARS = 8;
 
 const SHORT_DRAFT_SECTIONS = new Set(["abstract", "keywords"]);
 
@@ -31,6 +46,78 @@ export function getWritingContextPlaceholder(sectionKey: string): string {
   );
 }
 
+/** 去除空项并截断上限 */
+export function normalizeWritingBullets(bullets: string[] | undefined): string[] {
+  if (!bullets?.length) return [];
+  return bullets.map((b) => b.trim()).filter(Boolean).slice(0, MAX_WRITING_BULLETS);
+}
+
+export function formatWritingBulletsForPrompt(bullets: string[]): string {
+  return normalizeWritingBullets(bullets)
+    .map((b, i) => `${i + 1}. ${b}`)
+    .join("\n");
+}
+
+/** 要点 + 可选补充说明 → RAG / 管道用统一上下文 */
+export function resolveWritingDraftContext(context: string | undefined, bullets: string[] | undefined): string {
+  const normalized = normalizeWritingBullets(bullets);
+  const parts: string[] = [];
+  if (normalized.length > 0) {
+    parts.push(`【本节扩写要点】\n${formatWritingBulletsForPrompt(normalized)}`);
+  }
+  const extra = context?.trim();
+  if (extra) parts.push(`【补充说明】\n${extra}`);
+  return parts.join("\n\n");
+}
+
+export function isWritingDraftReady(
+  context: string | undefined,
+  bullets: string[] | undefined,
+  sectionKey: string,
+): boolean {
+  const minDraft = getMinDraftChars(sectionKey);
+  const normalized = normalizeWritingBullets(bullets);
+  if (normalized.length >= MIN_WRITING_BULLETS) {
+    const eachLongEnough = normalized.every((b) => b.length >= MIN_BULLET_CHARS);
+    if (!eachLongEnough) return false;
+    const totalChars = normalized.join("").length + (context?.trim().length ?? 0);
+    // 3+ 条有效要点即满足「条数门槛」；否则与 legacy context 一样看总字数
+    return totalChars >= minDraft || normalized.length >= MIN_WRITING_BULLETS;
+  }
+  return (context?.trim().length ?? 0) >= minDraft;
+}
+
+/** 从大纲/旧 context 文本拆成要点行（不足则补空行） */
+export function contextLinesToBullets(text: string): string[] {
+  const lines = text
+    .split(/\n+/)
+    .map((line) => line.replace(/^[\d\-•*.、)）\]]+\s*/, "").trim())
+    .filter(Boolean);
+  if (lines.length === 0) {
+    return Array.from({ length: MIN_WRITING_BULLETS }, () => "");
+  }
+  const result = lines.slice(0, MAX_WRITING_BULLETS);
+  while (result.length < MIN_WRITING_BULLETS) result.push("");
+  return result;
+}
+
+/** 标准人控流程 + 有效要点 → 走 096c 逐条扩写，非整节一次 SSE */
+export function shouldUseCollaborativeBulletExpand(
+  flowMode: WritingFlowMode,
+  bullets: string[] | undefined,
+): boolean {
+  return flowMode === "standard" && normalizeWritingBullets(bullets).length >= MIN_WRITING_BULLETS;
+}
+
+/** 合并已采纳草稿与当前要点段落 */
+export function mergeWritingDraftParagraphs(existing: string, paragraph: string): string {
+  const head = existing.trim();
+  const tail = paragraph.trim();
+  if (!head) return tail;
+  if (!tail) return head;
+  return `${head}\n\n${tail}`;
+}
+
 export interface WritingRequest {
   title: string;
   section: string;
@@ -40,7 +127,7 @@ export interface WritingRequest {
   existingReferences: string[];  // 修复：实际是数组，不是 string
   researchDirection?: string;
   retrievalMode?: "precise" | "balanced" | "extensive";
-  mode?: "fast" | "full" | "audit_only" | "fix_only";
+  mode?: "fast" | "full" | "audit_only" | "fix_only" | "expand_bullet";
   subsectionTitle?: string;
   figureStart?: number;
   globalContext?: {
@@ -58,6 +145,14 @@ export interface WritingRequest {
   dataClaims?: import("./data-source").EvidenceClaim[];
   /** 引用格式标准 */
   citationStyle?: "gbt7714" | "vancouver" | "apa7" | "ieee";
+  /** ENG-PR-096a：用户勾选的 RAG 来源；未传则沿用全量检索结果 */
+  selectedSourceIds?: string[];
+  /** ENG-PR-096b：本节扩写要点（3～8 条） */
+  bullets?: string[];
+  /** ENG-PR-096c：逐条扩写 — 当前要点下标（0-based） */
+  bulletIndex?: number;
+  /** ENG-PR-096c：已采纳并合并的章节草稿 */
+  draftSoFar?: string;
 }
 
 export interface WritingStreamResult {

@@ -1,7 +1,14 @@
-/** 写作上下文构建 — 从 writing/route.ts 提取的 RAG + prompt 逻辑 */
+/** 写作上下文构建 — RAG 检索、预览与引用映射 */
 
 import { ensureBibMapLoaded, localRAG, formatRagCitation, cleanSourceName, resolveBibEntry } from "@/lib/rag";
+import type { RagChunk } from "@/lib/rag";
 import type { WritingRequest } from "@/contracts/writing";
+import { resolveWritingDraftContext } from "@/contracts/writing";
+import type {
+  RetrievePreviewHit,
+  RetrievePreviewRequest,
+  RetrievePreviewResponse,
+} from "@/contracts/writing-retrieve-preview";
 
 export interface WritingContext {
   contextText: string;
@@ -40,35 +47,206 @@ const retrievalConfigs: Record<string, { limit: number; maxPerSource: number }> 
   extensive: { limit: 60, maxPerSource: 6 },
 };
 
+export function buildWritingRetrievalQuery(params: {
+  title: string;
+  section: string;
+  context?: string;
+  bullets?: string[];
+  researchDirection?: string;
+  projectMode?: "review" | "research";
+}): string {
+  const sectionBoost = sectionKeywordsForMode(params.section, params.projectMode);
+  const directionBoost = params.researchDirection || "";
+  const draftContext = resolveWritingDraftContext(params.context, params.bullets);
+  return [sectionBoost, directionBoost, params.title, draftContext].filter(Boolean).join(" ");
+}
+
+function getRetrievalConfig(retrievalMode?: string) {
+  return retrievalConfigs[retrievalMode || "balanced"] || retrievalConfigs.balanced;
+}
+
+/**
+ * 从已选参考文献反推知识库分类，用于把扩写检索收敛到相关分类（省内存/省加载）。
+ * 解析不到分类时返回 undefined → search 回退全库（无引用的新项目即此情况）。
+ */
+function deriveScopeCategories(existingReferences?: string[]): string[] | undefined {
+  if (!existingReferences || existingReferences.length === 0) return undefined;
+  const cats = new Set<string>();
+  for (const ref of existingReferences) {
+    const entry = resolveBibEntry(ref);
+    if (entry?.category && entry.category !== "未分类") cats.add(entry.category);
+  }
+  return cats.size > 0 ? Array.from(cats) : undefined;
+}
+
+/** 与扩写管道一致的 RAG 检索（含 fallback 查询） */
+export async function searchWritingRagChunks(
+  params: RetrievePreviewRequest,
+): Promise<{ chunks: RagChunk[]; query: string; ragLimit: number; ragMaxPerSource: number }> {
+  const { title, section, context, researchDirection, retrievalMode = "balanced", projectMode } = params;
+  const { limit: ragLimit, maxPerSource: ragMaxPerSource } = getRetrievalConfig(retrievalMode);
+
+  await ensureBibMapLoaded();
+
+  // 已选文献所属分类 → 范围检索；解析不到则全库（向后兼容）
+  const scopeCategories = deriveScopeCategories(params.existingReferences);
+
+  const enhancedQuery = buildWritingRetrievalQuery({
+    title,
+    section,
+    context,
+    bullets: params.bullets,
+    researchDirection,
+    projectMode,
+  });
+
+  let chunks = await localRAG.search(enhancedQuery, {
+    limit: ragLimit,
+    maxPerSource: ragMaxPerSource,
+    categories: scopeCategories,
+  });
+
+  if (chunks.length === 0) {
+    const sectionBoost = sectionKeywordsForMode(section, projectMode);
+    const directionBoost = researchDirection || "";
+    const fallbackQuery = [sectionBoost, directionBoost, title].filter(Boolean).join(" ");
+    chunks = await localRAG.search(fallbackQuery, {
+      limit: ragLimit,
+      maxPerSource: Math.max(1, Math.floor(ragMaxPerSource / 2)),
+      categories: scopeCategories,
+    });
+  }
+
+  return { chunks, query: enhancedQuery, ragLimit, ragMaxPerSource };
+}
+
+function buildExistingRefMapping(existingReferences: string[]) {
+  const refMapping: Record<string, number> = {};
+  existingReferences.forEach((ref, i) => {
+    refMapping[ref] = i + 1;
+  });
+  return refMapping;
+}
+
+function resolveRefIndexForSource(
+  rawSource: string,
+  refMapping: Record<string, number>,
+): number | null {
+  if (refMapping[rawSource] != null) return refMapping[rawSource];
+  const cleaned = cleanSourceName(rawSource);
+  if (refMapping[cleaned] != null) return refMapping[cleaned];
+  return null;
+}
+
+function normalizeSourceKey(rawSource: string): string | null {
+  if (!rawSource || rawSource === "unknown") return null;
+  return rawSource;
+}
+
+function chunkMatchesSelectedSource(rawSource: string, selectedSourceIds: string[]): boolean {
+  const key = normalizeSourceKey(rawSource);
+  if (!key) return false;
+  if (selectedSourceIds.includes(key)) return true;
+  return selectedSourceIds.includes(cleanSourceName(key));
+}
+
+function filterChunksBySelection(chunks: RagChunk[], selectedSourceIds: string[] | undefined): RagChunk[] {
+  if (selectedSourceIds === undefined) return chunks;
+  if (selectedSourceIds.length === 0) return [];
+  return chunks.filter((c) => chunkMatchesSelectedSource(c.metadata.source, selectedSourceIds));
+}
+
+/** 将 RAG chunks 聚合为预览列表（按 source 分组） */
+export function buildRetrievePreviewFromChunks(
+  chunks: RagChunk[],
+  existingReferences: string[],
+  query: string,
+): RetrievePreviewResponse {
+  const refMapping = buildExistingRefMapping(existingReferences);
+  const grouped = new Map<
+    string,
+    { chunks: RagChunk[]; category: string }
+  >();
+
+  for (const chunk of chunks) {
+    const sourceKey = normalizeSourceKey(chunk.metadata.source);
+    if (!sourceKey) continue;
+    const existing = grouped.get(sourceKey);
+    if (existing) {
+      existing.chunks.push(chunk);
+    } else {
+      grouped.set(sourceKey, { chunks: [chunk], category: chunk.metadata.category || "" });
+    }
+  }
+
+  const hits: RetrievePreviewHit[] = [];
+  for (const [sourceKey, { chunks: sourceChunks, category }] of grouped) {
+    const best = sourceChunks[0];
+    const snippet = best.content.replace(/\n/g, " ").slice(0, 220).trim();
+    const refIndex = resolveRefIndexForSource(sourceKey, refMapping);
+    const entry = resolveBibEntry(sourceKey);
+    const bib = entry?.bib;
+
+    hits.push({
+      sourceKey,
+      displayName: bib?.title?.slice(0, 80) || cleanSourceName(sourceKey),
+      refIndex,
+      isNew: refIndex == null,
+      snippet: snippet + (best.content.length > 220 ? "…" : ""),
+      chunkCount: sourceChunks.length,
+      category,
+      bib: bib
+        ? {
+            title: bib.title,
+            firstAuthor: bib.firstAuthor,
+            year: bib.year,
+            journal: bib.journal,
+            doi: bib.doi,
+          }
+        : undefined,
+    });
+  }
+
+  hits.sort((a, b) => {
+    if (a.isNew !== b.isNew) return a.isNew ? -1 : 1;
+    return b.chunkCount - a.chunkCount;
+  });
+
+  return {
+    hits,
+    defaultSelectedSourceIds: hits.map((h) => h.sourceKey),
+    query,
+    hitCount: hits.length,
+  };
+}
+
+export async function retrieveWritingPreview(
+  params: RetrievePreviewRequest,
+): Promise<RetrievePreviewResponse> {
+  const { chunks, query } = await searchWritingRagChunks(params);
+  return buildRetrievePreviewFromChunks(chunks, params.existingReferences || [], query);
+}
+
 export async function retrieveWritingContext(
   params: WritingRequest,
   existingReferences: string[],
 ): Promise<WritingContext> {
-  const { title, section, context, researchDirection, retrievalMode = "balanced", projectMode } = params;
-  const { limit: ragLimit, maxPerSource: ragMaxPerSource } = retrievalConfigs[retrievalMode] || retrievalConfigs.balanced;
+  const { retrievalMode = "balanced", selectedSourceIds } = params;
+  const { limit: ragLimit, maxPerSource: ragMaxPerSource } = getRetrievalConfig(retrievalMode);
 
-  await ensureBibMapLoaded();
-
-  const sectionBoost = sectionKeywordsForMode(section, projectMode);
-  const directionBoost = researchDirection || "";
-  const enhancedQuery = [sectionBoost, directionBoost, title, context].filter(Boolean).join(" ");
-  const matchedCategory = null;
-
-  let contextChunks = await localRAG.search(enhancedQuery, {
-    limit: ragLimit,
-    maxPerSource: ragMaxPerSource,
-    category: matchedCategory || undefined,
+  const { chunks: rawChunks } = await searchWritingRagChunks({
+    title: params.title,
+    section: params.section,
+    context: params.context,
+    bullets: params.bullets,
+    researchDirection: params.researchDirection,
+    retrievalMode,
+    projectMode: params.projectMode,
+    existingReferences,
   });
-  if (contextChunks.length === 0) {
-    const fallbackQuery = [sectionBoost, directionBoost, title].filter(Boolean).join(" ");
-    contextChunks = await localRAG.search(fallbackQuery, {
-      limit: ragLimit,
-      maxPerSource: Math.max(1, Math.floor(ragMaxPerSource / 2)),
-      category: matchedCategory || undefined,
-    });
-  }
 
-  // 构建引用映射
+  const contextChunks = filterChunksBySelection(rawChunks, selectedSourceIds);
+
   const refMapping: Record<string, number> = {};
   const referencesByIndex: string[] = [];
   const newSources: string[] = [];
@@ -79,37 +257,38 @@ export async function retrieveWritingContext(
 
   const contextRefIndices: number[] = [];
 
-  const contextText = contextChunks.length > 0
-    ? contextChunks.map((c) => {
-        const rawSource = c.metadata.source;
-        if (!rawSource || rawSource === "unknown") return c.content;
-        // 用原始文件名（含 .pdf）作为 key，确保 resolveBibEntry 能匹配 metadata
-        const sourceKey = rawSource;
-        const sourceDisplay = cleanSourceName(rawSource);
-        let globalIndex: number;
-        if (refMapping[sourceKey] != null) {
-          globalIndex = refMapping[sourceKey];
-        } else if (refMapping[sourceDisplay] != null) {
-          // 兼容旧数据：已存的是去除 .pdf 的 cleaned name
-          globalIndex = refMapping[sourceDisplay];
-        } else {
-          globalIndex = Object.keys(refMapping).length + 1;
-          refMapping[sourceKey] = globalIndex;
-          referencesByIndex[globalIndex - 1] = sourceKey;
-          newSources.push(sourceKey);
-        }
-        if (!contextRefIndices.includes(globalIndex)) contextRefIndices.push(globalIndex);
-        const cleanedContent = c.content.replace(/\[(\d+[\d,\s\-–—，、]*)\]/g, "[文献$1]");
-        return `[参考来源 [${globalIndex}]: ${formatRagCitation(c)}]\n${cleanedContent}`;
-      }).join("\n\n")
-    : "（未找到直接相关的文献参考，请根据通用学术知识扩写）";
+  const contextText =
+    contextChunks.length > 0
+      ? contextChunks
+          .map((c) => {
+            const rawSource = c.metadata.source;
+            if (!rawSource || rawSource === "unknown") return c.content;
+            const sourceKey = rawSource;
+            const sourceDisplay = cleanSourceName(rawSource);
+            let globalIndex: number;
+            if (refMapping[sourceKey] != null) {
+              globalIndex = refMapping[sourceKey];
+            } else if (refMapping[sourceDisplay] != null) {
+              globalIndex = refMapping[sourceDisplay];
+            } else {
+              globalIndex = Object.keys(refMapping).length + 1;
+              refMapping[sourceKey] = globalIndex;
+              referencesByIndex[globalIndex - 1] = sourceKey;
+              newSources.push(sourceKey);
+            }
+            if (!contextRefIndices.includes(globalIndex)) contextRefIndices.push(globalIndex);
+            const cleanedContent = c.content.replace(/\[(\d+[\d,\s\-–—，、]*)\]/g, "[文献$1]");
+            return `[参考来源 [${globalIndex}]: ${formatRagCitation(c)}]\n${cleanedContent}`;
+          })
+          .join("\n\n")
+      : selectedSourceIds !== undefined && selectedSourceIds.length === 0
+        ? "（未选择任何文献来源，请根据通用学术知识扩写，避免编造具体数据）"
+        : "（未找到直接相关的文献参考，请根据通用学术知识扩写）";
 
   const totalRefs = referencesByIndex.length;
   const contextRefs = contextRefIndices.sort((a, b) => a - b);
   const contextRefSet = new Set(contextRefs);
 
-  // 生成完整文献清单：ALL 项目引用（含本次 RAG 新检索的 + 已有文献）
-  // 标注 ★本次新增 帮助 AI 识别哪些是有原文上下文的、哪些仅可引用摘要
   const allRefListLines: string[] = [];
   for (let i = 0; i < referencesByIndex.length; i++) {
     const filename = referencesByIndex[i];
@@ -125,9 +304,9 @@ export async function retrieveWritingContext(
         ? `${bib.firstAuthor}${Array.isArray(bib.authors) && bib.authors.length > 1 ? " 等" : ""}`
         : "";
       const year = bib.year ? ` (${bib.year})` : "";
-      const title = bib.title ? ` "${bib.title.slice(0, 60)}${bib.title.length > 60 ? "…" : ""}"` : "";
+      const titleText = bib.title ? ` "${bib.title.slice(0, 60)}${bib.title.length > 60 ? "…" : ""}"` : "";
       const journal = bib.journal ? ` ${bib.journal}` : "";
-      line = `  [${idx}]${gbTag} ${author}${year}${title}${journal}`;
+      line = `  [${idx}]${gbTag} ${author}${year}${titleText}${journal}`;
     } else {
       line = `  [${idx}] ${cleanSourceName(filename)}`;
     }
@@ -135,9 +314,10 @@ export async function retrieveWritingContext(
     allRefListLines.push(line);
   }
 
-  const refRangeHint = totalRefs > 0
-    ? `\n⚠️ 项目共有 ${totalRefs} 篇文献。★本次检索 表示有全文RAG上下文可深度引用；未标星的为已在项目中的文献，可引用但仅有标题/作者信息。引用时一律使用 [n] 编号，编号须与下列列表严格对应。\n完整文献列表：\n${allRefListLines.join("\n")}`
-    : "";
+  const refRangeHint =
+    totalRefs > 0
+      ? `\n⚠️ 项目共有 ${totalRefs} 篇文献。★本次检索 表示有全文RAG上下文可深度引用；未标星的为已在项目中的文献，可引用但仅有标题/作者信息。引用时一律使用 [n] 编号，编号须与下列列表严格对应。\n完整文献列表：\n${allRefListLines.join("\n")}`
+      : "";
 
   return { contextText, refMapping, referencesByIndex, newSources, ragLimit, ragMaxPerSource, refRangeHint };
 }

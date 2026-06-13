@@ -42,6 +42,7 @@
 | 方法 | 路径 | zod | SSE | admin |
 |------|------|-----|-----|-------|
 | POST | `/api/writing` | ✓ | ✓ | — |
+| POST | `/api/writing/retrieve-preview` | ✓ | — | — |
 
 ### 大纲
 

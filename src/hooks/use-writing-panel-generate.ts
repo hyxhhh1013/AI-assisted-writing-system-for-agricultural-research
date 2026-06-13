@@ -11,7 +11,9 @@ import type { UseWritingStreamReturn } from "@/hooks/use-writing-stream";
 import { batchUpsertReferences } from "@/services/references";
 import type { WritingPreviewPayload } from "@/components/shared/writing/writing-types";
 import type { GenerationStatus } from "@/components/shared/writing/writing-types";
-import { getMinDraftChars } from "@/contracts/writing";
+import { getMinDraftChars, isWritingDraftReady, normalizeWritingBullets, shouldUseCollaborativeBulletExpand, toApiWriteMode, type ManualWritingPhase, type WritingFlowMode, type WritingRequest } from "@/contracts/writing";
+import type { WritingStreamResult } from "@/hooks/use-writing-stream";
+import { useWritingBulletExpand } from "@/hooks/use-writing-bullet-expand";
 import { createLogger } from "@/lib/logger";
 import { getErrorMessage } from "@/lib/error-utils";
 
@@ -22,11 +24,15 @@ interface UseWritingPanelGenerateParams {
   project: ProjectData;
   title: string;
   context: string;
+  bullets: string[];
   targetSectionKey: string;
   selectedSectionId: string;
   language: string;
   retrievalMode: "precise" | "balanced" | "extensive";
-  fastMode: boolean;
+  flowMode: WritingFlowMode;
+  setManualPhase: (phase: ManualWritingPhase) => void;
+  verificationFeedback: string;
+  selectedSourceIds: string[] | undefined;
   outlineTasks: OutlineTask[];
   writingStream: UseWritingStreamReturn;
   onUpdateProject?: (updates: Partial<ProjectData>) => void;
@@ -36,7 +42,7 @@ interface UseWritingPanelGenerateParams {
   setGenerationStatus: (v: GenerationStatus) => void;
   setResult: (v: string) => void;
   setVerificationFeedback: (v: string) => void;
-  setDetectedRefs: (v: string[]) => void;
+  setDetectedRefs: Dispatch<SetStateAction<string[]>>;
   setCitationWarnings: (v: WritingPreviewPayload["citationWarnings"]) => void;
   setDataClaimWarnings: (v: WritingPreviewPayload["dataClaimWarnings"]) => void;
   setLastRefMapping: (v: Record<string, number> | null) => void;
@@ -47,6 +53,7 @@ interface UseWritingPanelGenerateParams {
     >
   >;
   applyToEditor: (content: string, section: string, subsection?: string) => void;
+  onDraftApplied?: (section: string, subsection?: string) => void;
 }
 
 export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
@@ -61,11 +68,15 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
     project,
     title,
     context,
+    bullets,
     targetSectionKey,
     selectedSectionId,
     language,
     retrievalMode,
-    fastMode,
+    flowMode,
+    setManualPhase,
+    verificationFeedback,
+    selectedSourceIds,
     outlineTasks,
     writingStream,
     onUpdateProject,
@@ -82,6 +93,7 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
     setSubsectionTitle,
     setPendingFigures,
     applyToEditor,
+    onDraftApplied,
   } = params;
 
   const handleCancel = useCallback(() => {
@@ -91,28 +103,8 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
     setGenerationStatus("idle");
   }, [writingStream, setIsGenerating, setGenerationStatus]);
 
-  const handleGenerate = useCallback(async () => {
-    if (!title || !context) {
-      toast.error("请填写完整信息");
-      return;
-    }
-
-    const minDraft = getMinDraftChars(targetSectionKey);
-    const draftLen = context.trim().length;
-    if (draftLen < minDraft) {
-      toast.error(`请先写出至少 ${minDraft} 字的写作思路或要点`);
-      return;
-    }
-
-    setIsGenerating(true);
-    setGenerationStatus("writing");
-    setResult("");
-    setVerificationFeedback("");
-    setDetectedRefs([]);
-    setCitationWarnings([]);
-    setDataClaimWarnings([]);
-
-    try {
+  const buildWritingRequest = useCallback(
+    (draftContext: string, mode: WritingRequest["mode"], subTitle?: string): WritingRequest => {
       const sectionPreviews: Record<string, string> = {};
       Object.entries(project.sections).forEach(([key, content]) => {
         if (content && key !== targetSectionKey) {
@@ -120,13 +112,7 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
         }
       });
 
-      const selectedTask = outlineTasks.find((t) => t.id === selectedSectionId);
-      const subTitle = selectedTask && selectedTask.level > 1 ? selectedTask.title : undefined;
-      const isChapterScope = !selectedTask || selectedTask.level <= 1;
-      setSubsectionTitle(subTitle);
-
       const existingFigures = countProjectFigures(project, targetSectionKey);
-
       const dataClaims = (() => {
         try {
           return project.dataClaims ? JSON.parse(project.dataClaims) : [];
@@ -135,16 +121,17 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
         }
       })();
 
-      const streamResult = await writingStream.start({
+      return {
         title,
         section: targetSectionKey,
-        context,
+        context: draftContext,
+        bullets: normalizeWritingBullets(bullets),
         language: language as "zh" | "en",
         template: project.template,
         existingReferences: project.references || [],
         researchDirection: project.researchDirection,
         retrievalMode,
-        mode: fastMode ? "fast" : "full",
+        mode,
         subsectionTitle: subTitle,
         figureStart: existingFigures + 1,
         projectMode: project.mode || "review",
@@ -156,30 +143,17 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
           sectionPreviews,
           analysisResults: project.analysisResults || [],
         },
-      });
+        ...(selectedSourceIds !== undefined ? { selectedSourceIds } : {}),
+      };
+    },
+    [project, targetSectionKey, title, language, retrievalMode, selectedSourceIds, bullets],
+  );
 
-      setResult(streamResult.content);
-      resultRef.current = streamResult.content;
-      setVerificationFeedback(streamResult.verification);
-      setDetectedRefs(streamResult.references);
-      setCitationWarnings(streamResult.citationWarnings);
-      setDataClaimWarnings(streamResult.dataClaimWarnings);
-      if (streamResult.references.length > 0 && onUpdateProject) {
-        onUpdateProject({ references: streamResult.references });
-      }
+  const applyGenerationResult = useCallback(
+    async (fullText: string, subTitle: string | undefined, isChapterScope: boolean) => {
+      setResult(fullText);
+      resultRef.current = fullText;
 
-      if (streamResult.refMapping && Object.keys(streamResult.refMapping).length > 0) {
-        setLastRefMapping(streamResult.refMapping);
-        const mappings = Object.entries(streamResult.refMapping).map(([sourceName, refIndex]) => ({
-          refIndex,
-          sourceName,
-          category: "",
-          citation: "",
-        }));
-        batchUpsertReferences({ projectId, mappings }).catch(() => {});
-      }
-
-      const fullText = resultRef.current;
       const { processedText: phText, count: placeholderCount } = replacePlaceholders(fullText);
       if (placeholderCount > 0) {
         setResult(phText);
@@ -257,6 +231,11 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
           }
           toast.success("配图生成完成");
           setGenerationStatus("completed");
+          if (flowMode === "standard") {
+            setManualPhase("draft_ready");
+          } else {
+            setManualPhase("done");
+          }
           if (onPreviewUpdate) {
             onPreviewUpdate({
               content: resultRef.current,
@@ -271,9 +250,30 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
             });
           }
           applyToEditor(resultRef.current, targetSectionKey, subTitle);
+          onDraftApplied?.(targetSectionKey, subTitle);
         })();
       } else {
         setGenerationStatus("completed");
+        if (flowMode === "standard") {
+          setManualPhase("draft_ready");
+        } else {
+          setManualPhase("done");
+        }
+        if (onPreviewUpdate) {
+          onPreviewUpdate({
+            content: fullText,
+            pipelineSteps: writingStream.pipelineSteps,
+            verification: writingStream.verificationFeedback,
+            citationWarnings: writingStream.citationWarnings,
+            dataClaimWarnings: writingStream.dataClaimWarnings,
+            detectedRefs: writingStream.detectedRefs,
+            targetSection: targetSectionKey,
+            subsectionTitle: subTitle,
+            isStreaming: false,
+          });
+        }
+        applyToEditor(fullText, targetSectionKey, subTitle);
+        onDraftApplied?.(targetSectionKey, subTitle);
       }
       const completedIds = isChapterScope
         ? getOutlineTaskIdsForSectionCompletion(outlineTasks, targetSectionKey, selectedSectionId)
@@ -283,6 +283,149 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
       if (completedIds.length > 0 && onTaskExpanded) {
         onTaskExpanded(completedIds);
       }
+    },
+    [
+      flowMode,
+      onPreviewUpdate,
+      onTaskExpanded,
+      outlineTasks,
+      selectedSectionId,
+      targetSectionKey,
+      writingStream,
+      applyToEditor,
+      onDraftApplied,
+      setGenerationStatus,
+      setManualPhase,
+      setPendingFigures,
+      setResult,
+    ],
+  );
+
+  const handleBulletStreamResult = useCallback(
+    (streamResult: WritingStreamResult) => {
+      if (streamResult.references.length > 0) {
+        setDetectedRefs((prev) => Array.from(new Set([...prev, ...streamResult.references])));
+      }
+      setCitationWarnings(streamResult.citationWarnings);
+      setDataClaimWarnings(streamResult.dataClaimWarnings);
+      if (streamResult.refMapping && Object.keys(streamResult.refMapping).length > 0) {
+        setLastRefMapping(streamResult.refMapping);
+        const mappings = Object.entries(streamResult.refMapping).map(([sourceName, refIndex]) => ({
+          refIndex,
+          sourceName,
+          category: "",
+          citation: "",
+        }));
+        batchUpsertReferences({ projectId, mappings }).catch(() => {});
+      }
+    },
+    [projectId, setCitationWarnings, setDataClaimWarnings, setDetectedRefs, setLastRefMapping],
+  );
+
+  const buildExpandRequest = useCallback(
+    (bulletIndex: number, draftSoFar: string): WritingRequest => {
+      const selectedTask = outlineTasks.find((t) => t.id === selectedSectionId);
+      const subTitle = selectedTask && selectedTask.level > 1 ? selectedTask.title : undefined;
+      return {
+        ...buildWritingRequest(context, "expand_bullet", subTitle),
+        bulletIndex,
+        draftSoFar,
+      };
+    },
+    [buildWritingRequest, context, outlineTasks, selectedSectionId],
+  );
+
+  const bulletExpand = useWritingBulletExpand({
+    bullets,
+    buildExpandRequest,
+    writingStream,
+    resultRef,
+    setResult,
+    setIsGenerating,
+    setGenerationStatus,
+    onStreamResult: handleBulletStreamResult,
+    onAllBulletsComplete: async (mergedDraft) => {
+      const selectedTask = outlineTasks.find((t) => t.id === selectedSectionId);
+      const subTitle = selectedTask && selectedTask.level > 1 ? selectedTask.title : undefined;
+      const isChapterScope = !selectedTask || selectedTask.level <= 1;
+      await applyGenerationResult(mergedDraft, subTitle, isChapterScope);
+    },
+  });
+
+  const syncDraft = useCallback(
+    (text: string) => {
+      resultRef.current = text;
+      setResult(text);
+    },
+    [setResult],
+  );
+
+  const handleGenerate = useCallback(async () => {
+    if (!title) {
+      toast.error("请填写完整信息");
+      return;
+    }
+
+    if (!isWritingDraftReady(context, bullets, targetSectionKey)) {
+      const minDraft = getMinDraftChars(targetSectionKey);
+      toast.error(`请先填写 ${minDraft} 字以上的扩写要点（每条至少 8 字）`);
+      return;
+    }
+
+    const selectedTask = outlineTasks.find((t) => t.id === selectedSectionId);
+    const subTitle = selectedTask && selectedTask.level > 1 ? selectedTask.title : undefined;
+    const isChapterScope = !selectedTask || selectedTask.level <= 1;
+    setSubsectionTitle(subTitle);
+
+    const useCollaborative = shouldUseCollaborativeBulletExpand(flowMode, bullets);
+
+    setIsGenerating(true);
+    setManualPhase("idle");
+    if (!useCollaborative) {
+      setResult("");
+      setVerificationFeedback("");
+      setDetectedRefs([]);
+      setCitationWarnings([]);
+      setDataClaimWarnings([]);
+    }
+
+    try {
+      if (useCollaborative) {
+        setGenerationStatus("writing");
+        await bulletExpand.start();
+        return;
+      }
+
+      setGenerationStatus("writing");
+      setVerificationFeedback("");
+      setDetectedRefs([]);
+      setCitationWarnings([]);
+      setDataClaimWarnings([]);
+
+      const streamResult = await writingStream.start(
+        buildWritingRequest(context, toApiWriteMode(flowMode), subTitle),
+      );
+
+      setVerificationFeedback(streamResult.verification);
+      setDetectedRefs(streamResult.references);
+      setCitationWarnings(streamResult.citationWarnings);
+      setDataClaimWarnings(streamResult.dataClaimWarnings);
+      if (streamResult.references.length > 0 && onUpdateProject) {
+        onUpdateProject({ references: streamResult.references });
+      }
+
+      if (streamResult.refMapping && Object.keys(streamResult.refMapping).length > 0) {
+        setLastRefMapping(streamResult.refMapping);
+        const mappings = Object.entries(streamResult.refMapping).map(([sourceName, refIndex]) => ({
+          refIndex,
+          sourceName,
+          category: "",
+          citation: "",
+        }));
+        batchUpsertReferences({ projectId, mappings }).catch(() => {});
+      }
+
+      await applyGenerationResult(streamResult.content, subTitle, isChapterScope);
     } catch (error: unknown) {
       if (!(error instanceof DOMException && error.name === "AbortError")) {
         toast.error(error instanceof Error ? getErrorMessage(error) : "写作生成失败");
@@ -294,18 +437,20 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
   }, [
     title,
     context,
+    bullets,
     targetSectionKey,
     selectedSectionId,
     language,
     retrievalMode,
-    fastMode,
+    flowMode,
+    buildWritingRequest,
     outlineTasks,
     project,
     projectId,
     writingStream,
     onUpdateProject,
-    onPreviewUpdate,
-    onTaskExpanded,
+    bulletExpand,
+    applyGenerationResult,
     setIsGenerating,
     setGenerationStatus,
     setResult,
@@ -315,7 +460,139 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
     setDataClaimWarnings,
     setLastRefMapping,
     setSubsectionTitle,
-    setPendingFigures,
+    setManualPhase,
+  ]);
+
+  const handleSubmitAudit = useCallback(async () => {
+    const draft = (resultRef.current || "").trim();
+    if (!draft) {
+      toast.error("请先生成或填写初稿内容");
+      return;
+    }
+    if (!title) {
+      toast.error("请填写论文题目");
+      return;
+    }
+
+    setIsGenerating(true);
+    setGenerationStatus("verifying");
+    setVerificationFeedback("");
+
+    try {
+      const selectedTask = outlineTasks.find((t) => t.id === selectedSectionId);
+      const subTitle = selectedTask && selectedTask.level > 1 ? selectedTask.title : undefined;
+
+      resultRef.current = draft;
+      setResult(draft);
+
+      const streamResult = await writingStream.start(
+        buildWritingRequest(draft, "audit_only", subTitle),
+        { keepDraft: true },
+      );
+
+      setVerificationFeedback(streamResult.verification);
+      setManualPhase("review_ready");
+      setGenerationStatus("completed");
+
+      if (onPreviewUpdate) {
+        onPreviewUpdate({
+          content: draft,
+          pipelineSteps: writingStream.pipelineSteps,
+          verification: streamResult.verification,
+          citationWarnings: writingStream.citationWarnings,
+          dataClaimWarnings: writingStream.dataClaimWarnings,
+          detectedRefs: writingStream.detectedRefs,
+          targetSection: targetSectionKey,
+          subsectionTitle: subTitle,
+          isStreaming: false,
+        });
+      }
+    } catch (error: unknown) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        toast.error(error instanceof Error ? getErrorMessage(error) : "审查失败");
+      }
+      setGenerationStatus("completed");
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [
+    title,
+    outlineTasks,
+    selectedSectionId,
+    writingStream,
+    buildWritingRequest,
+    onPreviewUpdate,
+    targetSectionKey,
+    setIsGenerating,
+    setGenerationStatus,
+    setVerificationFeedback,
+    setManualPhase,
+    setResult,
+  ]);
+
+  const handleApplyFix = useCallback(async () => {
+    const draft = (resultRef.current || "").trim();
+    const feedback = verificationFeedback.trim();
+    if (!draft) {
+      toast.error("缺少待修正的初稿");
+      return;
+    }
+    if (!feedback) {
+      toast.error("请先提交审查或填写审查意见");
+      return;
+    }
+
+    setIsGenerating(true);
+    setGenerationStatus("refining");
+
+    try {
+      const selectedTask = outlineTasks.find((t) => t.id === selectedSectionId);
+      const subTitle = selectedTask && selectedTask.level > 1 ? selectedTask.title : undefined;
+
+      const request = buildWritingRequest(draft, "fix_only", subTitle);
+      request.verificationFeedback = feedback;
+
+      const streamResult = await writingStream.start(request);
+
+      setResult(streamResult.content);
+      resultRef.current = streamResult.content;
+      setManualPhase("done");
+      setGenerationStatus("completed");
+
+      if (onPreviewUpdate) {
+        onPreviewUpdate({
+          content: streamResult.content,
+          pipelineSteps: writingStream.pipelineSteps,
+          verification: feedback,
+          citationWarnings: writingStream.citationWarnings,
+          dataClaimWarnings: writingStream.dataClaimWarnings,
+          detectedRefs: writingStream.detectedRefs,
+          targetSection: targetSectionKey,
+          subsectionTitle: subTitle,
+          isStreaming: false,
+        });
+      }
+      applyToEditor(streamResult.content, targetSectionKey, subTitle);
+    } catch (error: unknown) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        toast.error(error instanceof Error ? getErrorMessage(error) : "修正失败");
+      }
+      setGenerationStatus("completed");
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [
+    verificationFeedback,
+    writingStream,
+    outlineTasks,
+    selectedSectionId,
+    buildWritingRequest,
+    onPreviewUpdate,
+    targetSectionKey,
+    setIsGenerating,
+    setGenerationStatus,
+    setResult,
+    setManualPhase,
     applyToEditor,
   ]);
 
@@ -325,5 +602,9 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
     writingAbortRef,
     handleCancel,
     handleGenerate,
+    handleSubmitAudit,
+    handleApplyFix,
+    syncDraft,
+    bulletExpand,
   };
 }

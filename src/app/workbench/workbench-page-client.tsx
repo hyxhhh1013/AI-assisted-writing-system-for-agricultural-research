@@ -38,7 +38,8 @@ import { EditorImageGallery } from "@/components/shared/editor-image-gallery";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { ReferenceBrowser } from "@/components/shared/reference-browser";
 import { WorkbenchTabSwitcher } from "@/components/shared/workbench-tab-switcher";
-import { useAiParagraph } from "@/hooks/use-ai-paragraph";
+import { useAiParagraph, type AiParagraphAction } from "@/hooks/use-ai-paragraph";
+import type { ParagraphSelectionAction } from "@/components/shared/writing/paragraph-selection-toolbar";
 import { WorkbenchEditorArea } from "@/components/shared/workbench-editor-area";
 import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
 import { getModeAccent, getStructurePanelTitle, getStructurePanelHint } from "@/lib/mode-theme";
@@ -136,6 +137,14 @@ const WORKBENCH_TABS: WorkbenchTab[] = [
 const isWorkbenchTab = (value: string | null): value is WorkbenchTab =>
   value !== null && WORKBENCH_TABS.includes(value as WorkbenchTab);
 
+const EDITOR_MODE_STORAGE_KEY = "grainscript_editor_mode";
+
+function readStoredEditorMode(): "classic" | "paragraph" {
+  if (typeof window === "undefined") return "paragraph";
+  const stored = localStorage.getItem(EDITOR_MODE_STORAGE_KEY);
+  return stored === "classic" || stored === "paragraph" ? stored : "paragraph";
+}
+
 export default function WorkbenchPageClient() {
   return (
     <Suspense fallback={<div className="flex h-screen items-center justify-center">正在加载工作台...</div>}>
@@ -156,7 +165,7 @@ function WorkbenchContent() {
   const [activeTab, setActiveTab] = useState<WorkbenchTab>("structure");
   const [isPreviewOpen, setIsPreviewOpen] = useState(true);
   const [rightPanelMode, setRightPanelMode] = useState<"preview" | "reader">("preview");
-  const [editorMode, setEditorMode] = useState<"classic" | "paragraph">("classic");
+  const [editorMode, setEditorMode] = useState<"classic" | "paragraph">("paragraph");
   const [currentPdf, setCurrentPdf] = useState<string | null>(null);
   const [isWritingGenerating, setIsWritingGenerating] = useState(false);
   const [aiPreview, setAiPreview] = useState<{
@@ -208,6 +217,14 @@ function WorkbenchContent() {
       setActiveTab("structure");
     }
   }, [project.mode, activeTab]);
+
+  useEffect(() => {
+    setEditorMode(readStoredEditorMode());
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(EDITOR_MODE_STORAGE_KEY, editorMode);
+  }, [editorMode]);
 
   useEffect(() => {
     const initProject = async () => {
@@ -277,6 +294,13 @@ function WorkbenchContent() {
       return { ...prev, expandedOutlineSections };
     });
   }, [expandedOutlineSections]);
+
+  const focusEditorAfterDraft = useCallback((sectionId: string) => {
+    setEditorMode("paragraph");
+    setActiveSection(sectionId);
+    setActiveTab("structure");
+    setAiPreview(null);
+  }, []);
 
   const handleApplyAiContent = (content: string, sectionId: string, subsectionTitle?: string) => {
     const currentProject = projectRef.current;
@@ -483,6 +507,11 @@ function WorkbenchContent() {
   const handleExpandParagraph = (content: string) => aiParagraph.run("expand", content);
   const handleAuditParagraph = (content: string) => aiParagraph.run("audit", content);
   const handleFixParagraph = (content: string, feedback: string) => aiParagraph.run("fix", content, feedback);
+  const handleSelectionAction = useCallback(
+    (text: string, action: ParagraphSelectionAction) =>
+      aiParagraph.run(action as AiParagraphAction, text),
+    [aiParagraph],
+  );
 
   const handleExportDoc = useDocxExport({
     project, activeSection, editingContent, saveProject: handleSave,
@@ -559,7 +588,7 @@ function WorkbenchContent() {
                   {activeTab === "structure" && getStructurePanelTitle(writingMode)}
                   {activeTab === "data" && "实验数据"}
                   {activeTab === "outline" && "论证提纲"}
-                  {activeTab === "writing" && "侧栏扩写"}
+                  {activeTab === "writing" && "章节协作向导"}
                   {activeTab === "reader" && "文献库"}
                   {activeTab === "plagiarism" && "论文质量检测"}
                   {activeTab === "xrd" && "XRD 分析"}
@@ -707,6 +736,7 @@ function WorkbenchContent() {
                     onTaskExpanded={handleTaskExpanded}
                     onClearPreselected={handleClearPreselected}
                     onGenerate={handleApplyAiContent}
+                    onDraftApplied={focusEditorAfterDraft}
                     onGeneratingChange={handleGeneratingChange}
                     onPreviewUpdate={handlePreviewUpdate}
                     onUpdateProject={handleUpdateProject}
@@ -773,12 +803,15 @@ function WorkbenchContent() {
             onExpandParagraph={handleExpandParagraph}
             onAuditParagraph={handleAuditParagraph}
             onFixParagraph={handleFixParagraph}
+            onSelectionAction={handleSelectionAction}
             aiPreview={aiPreview}
             onApplyAiOutput={() => {
               if (aiPreview?.content) {
                 handleApplyAiContent(aiPreview.content, aiPreview.targetSection, aiPreview.subsectionTitle);
+                focusEditorAfterDraft(aiPreview.targetSection);
+              } else {
+                setAiPreview(null);
               }
-              setAiPreview(null);
             }}
             onCancelAiOutput={() => {
               setAiPreview(null);

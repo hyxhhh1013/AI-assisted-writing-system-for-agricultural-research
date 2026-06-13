@@ -14,17 +14,22 @@ export async function postWritingStream(
     body: JSON.stringify(request),
   });
   if (!res.ok) {
-    if (res.status === 503) {
-      let message = "系统繁忙，请稍后再试";
-      try {
-        const body = (await res.json()) as { error?: string };
-        if (body.error) message = body.error;
-      } catch {
-        /* ignore parse */
+    let message = "写作请求失败";
+    try {
+      const body = (await res.json()) as {
+        error?: string;
+        details?: Record<string, string[]>;
+      };
+      const detailMessages = body.details ? Object.values(body.details).flat() : [];
+      if (detailMessages.length > 0) {
+        message = detailMessages.join("；");
+      } else if (body.error) {
+        message = body.error;
       }
-      throw new Error(message);
+    } catch {
+      /* 非 JSON 响应，保留默认提示 */
     }
-    throw new Error("写作请求失败");
+    throw new Error(message);
   }
   return res;
 }

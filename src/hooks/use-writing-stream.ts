@@ -8,7 +8,7 @@ import { getErrorMessage } from "@/lib/error-utils";
 import {
   isDeltaEvent, isStatusEvent, isPipelineStepEvent, isVerificationEvent,
   isReferencesEvent, isCitationWarningsEvent, isDataClaimWarningsEvent,
-  isCorrectedTextEvent, isClearResultEvent, isErrorEvent, isInfoEvent,
+  isCorrectedTextEvent, isClearResultEvent, isErrorEvent, isInfoEvent, isBulletDoneEvent,
   type SSEEvent,
 } from "@/contracts/sse";
 
@@ -27,6 +27,14 @@ export interface WritingStreamResult {
   citationWarnings: { num: number; overlap: number; context: string }[];
   dataClaimWarnings: { claimId: string; claimText: string; found: boolean; citedCorrectly: boolean; issue?: string }[];
   pipelineSteps: PipelineStep[];
+  bulletDone?: { bulletIndex: number; content: string; bulletCount: number };
+}
+
+export interface WritingStreamStartOptions {
+  /** 流式开始前保留 resultRef 已有内容 */
+  keepDraft?: boolean;
+  /** 单条要点扩写：delta 从空串累积，不拼接 keepDraft */
+  replaceStream?: boolean;
 }
 
 export interface UseWritingStreamReturn {
@@ -38,7 +46,7 @@ export interface UseWritingStreamReturn {
   citationWarnings: { num: number; overlap: number; context: string }[];
   dataClaimWarnings: { claimId: string; claimText: string; found: boolean; citedCorrectly: boolean; issue?: string }[];
   pipelineSteps: PipelineStep[];
-  start: (request: WritingRequest) => Promise<WritingStreamResult>;
+  start: (request: WritingRequest, options?: WritingStreamStartOptions) => Promise<WritingStreamResult>;
   cancel: () => void;
   reset: () => void;
 }
@@ -62,6 +70,7 @@ export function useWritingStream(): UseWritingStreamReturn {
   const warningsRef = useRef<{ num: number; overlap: number; context: string }[]>([]);
   const dcWarningsRef = useRef<{ claimId: string; claimText: string; found: boolean; citedCorrectly: boolean; issue?: string }[]>([]);
   const stepsRef = useRef<PipelineStep[]>([]);
+  const bulletDoneRef = useRef<WritingStreamResult["bulletDone"]>(undefined);
 
   const reset = useCallback(() => {
     if (renderTimerRef.current) {
@@ -82,6 +91,7 @@ export function useWritingStream(): UseWritingStreamReturn {
     warningsRef.current = [];
     dcWarningsRef.current = [];
     stepsRef.current = [];
+    bulletDoneRef.current = undefined;
   }, []);
 
   const cancel = useCallback(() => {
@@ -92,14 +102,25 @@ export function useWritingStream(): UseWritingStreamReturn {
     toast.info("已取消扩写");
   }, []);
 
-  const start = useCallback(async (request: WritingRequest): Promise<WritingStreamResult> => {
+  const start = useCallback(async (
+    request: WritingRequest,
+    options?: WritingStreamStartOptions,
+  ): Promise<WritingStreamResult> => {
     if (abortRef.current) abortRef.current.abort();
     const abortController = new AbortController();
     abortRef.current = abortController;
 
+    const draftToKeep = options?.keepDraft ? resultRef.current : "";
+    const replaceStream = options?.replaceStream === true;
+
     setIsGenerating(true);
     setGenerationStatus("writing");
     reset();
+
+    if (options?.keepDraft && draftToKeep && !replaceStream) {
+      resultRef.current = draftToKeep;
+      setResult(draftToKeep);
+    }
 
     // 初始化管道步骤（从 pending 开始，由 SSE pipeline_step 事件逐步更新）
     const defaultSteps: PipelineStep[] = [
@@ -195,6 +216,14 @@ export function useWritingStream(): UseWritingStreamReturn {
               } else {
                 toast.info(event.info);
               }
+            } else if (isBulletDoneEvent(event)) {
+              bulletDoneRef.current = {
+                bulletIndex: event.bulletIndex,
+                content: event.content,
+                bulletCount: event.bulletCount,
+              };
+              resultRef.current = event.content;
+              setResult(event.content);
             }
           } catch { /* skip malformed */ }
         }
@@ -258,6 +287,7 @@ export function useWritingStream(): UseWritingStreamReturn {
       citationWarnings: warningsRef.current,
       dataClaimWarnings: dcWarningsRef.current,
       pipelineSteps: stepsRef.current,
+      bulletDone: bulletDoneRef.current,
     };
   }, [reset]);
 

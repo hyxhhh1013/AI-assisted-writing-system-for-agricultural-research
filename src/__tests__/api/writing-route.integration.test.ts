@@ -21,7 +21,7 @@ import { POST } from "@/app/api/writing/route";
 const VALID_BODY = {
   title: "热解温度对生物炭产率的影响",
   section: "introduction",
-  context: "本研究关注生物质热解工艺参数。",
+  context: "本研究关注生物质热解工艺参数及其对生物炭产率的影响机制。",
   mode: "fast",
 };
 

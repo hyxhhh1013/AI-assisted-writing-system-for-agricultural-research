@@ -9,6 +9,7 @@ import type { EvidenceClaim } from "@/contracts/data-source";
 import { getAgentModelConfig } from "@/lib/ai";
 import { validateBody } from "@/lib/api-validate";
 import { writingSchema } from "@/lib/validations";
+import { resolveWritingDraftContext } from "@/contracts/writing";
 import { runWritingPipeline } from "./run-pipeline";
 import type { WritingGlobalContext } from "./types";
 
@@ -22,12 +23,13 @@ export async function POST(req: NextRequest) {
     const { data, errorResponse: ve } = await validateBody(writingSchema, await req.json());
     if (ve) return ve;
 
-    const { context, globalContext: rawGlobalContext, dataClaims: rawDataClaims } = data;
+    const { context, bullets, globalContext: rawGlobalContext, dataClaims: rawDataClaims } = data;
     const dataClaims = (rawDataClaims ?? []) as EvidenceClaim[];
     const globalContext = rawGlobalContext as WritingGlobalContext | undefined;
 
-    if (!context) {
-      return new Response(JSON.stringify({ error: "Missing required field: context" }), {
+    const draftContext = resolveWritingDraftContext(context, bullets);
+    if (!draftContext) {
+      return new Response(JSON.stringify({ error: "请填写扩写要点或补充说明" }), {
         status: 400,
       });
     }
@@ -87,7 +89,7 @@ export async function POST(req: NextRequest) {
           await runWritingPipeline({
             req,
             data,
-            context,
+            context: draftContext,
             dataClaims,
             globalContext,
             userId,

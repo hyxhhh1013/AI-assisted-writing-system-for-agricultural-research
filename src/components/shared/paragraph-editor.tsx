@@ -13,12 +13,18 @@ import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
+import {
+  ParagraphSelectionToolbar,
+  type ParagraphSelectionAction,
+} from "@/components/shared/writing/paragraph-selection-toolbar";
+
 interface ParagraphEditorProps {
   content: string;
   onChange: (newContent: string) => void;
   onExpand?: (paragraphContent: string, index: number) => Promise<string>;
   onAudit?: (paragraphContent: string) => Promise<string>;
   onFix?: (paragraphContent: string, feedback: string) => Promise<string>;
+  onSelectionAction?: (selectedText: string, action: ParagraphSelectionAction) => Promise<string>;
   projectId: string;
   activeSection: string;
 }
@@ -29,6 +35,7 @@ export function ParagraphEditor({
   onExpand, 
   onAudit,
   onFix,
+  onSelectionAction,
   projectId,
   activeSection
 }: ParagraphEditorProps) {
@@ -38,6 +45,8 @@ export function ParagraphEditor({
   const [auditingIndex, setAuditingIndex] = useState<number | null>(null);
   const [fixingIndex, setFixingIndex] = useState<number | null>(null);
   const [auditFeedback, setAuditFeedback] = useState<Record<number, string>>({});
+  const [selectionUi, setSelectionUi] = useState<{ index: number; start: number; end: number } | null>(null);
+  const [selectionBusy, setSelectionBusy] = useState(false);
 
   // 初始化段落
   useEffect(() => {
@@ -149,7 +158,6 @@ export function ParagraphEditor({
     }
   };
 
-  // 处理一键优化
   const handleFix = async (index: number) => {
     if (!onFix || !auditFeedback[index] || fixingIndex !== null) return;
 
@@ -173,6 +181,50 @@ export function ParagraphEditor({
       toast.error("优化失败");
     } finally {
       setFixingIndex(null);
+    }
+  };
+
+  const captureSelection = (index: number, el: HTMLTextAreaElement) => {
+    if (el.selectionStart !== el.selectionEnd) {
+      setSelectionUi({ index, start: el.selectionStart, end: el.selectionEnd });
+    } else if (selectionUi?.index === index) {
+      setSelectionUi(null);
+    }
+  };
+
+  const handleSelectionToolbarAction = async (action: ParagraphSelectionAction) => {
+    if (!selectionUi || !onSelectionAction || selectionBusy) return;
+    const { index, start, end } = selectionUi;
+    const para = paragraphs[index] ?? "";
+    const selected = para.slice(start, end);
+    if (!selected.trim()) {
+      toast.error("请先选中有效文本");
+      return;
+    }
+
+    setSelectionBusy(true);
+    const actionLabel =
+      action === "expand" ? "扩写" : action === "polish" ? "润色" : action === "shorten" ? "精简" : "审查";
+    toast.info(`正在对选区进行${actionLabel}…`);
+
+    try {
+      const result = await onSelectionAction(selected, action);
+      if (action === "audit") {
+        if (result) {
+          setAuditFeedback((prev) => ({ ...prev, [index]: `【选区审查】\n${result}` }));
+          toast.success("选区审查完成");
+        }
+      } else if (result) {
+        const newParagraphs = [...paragraphs];
+        newParagraphs[index] = para.slice(0, start) + result + para.slice(end);
+        updateTotalContent(newParagraphs);
+        toast.success(`选区${actionLabel}完成`);
+      }
+    } catch {
+      toast.error(`选区${actionLabel}失败`);
+    } finally {
+      setSelectionBusy(false);
+      setSelectionUi(null);
     }
   };
 
@@ -202,11 +254,23 @@ export function ParagraphEditor({
           <div className="p-1">
             <Textarea
               className="min-h-[120px] w-full border-none focus-visible:ring-0 resize-none p-6 text-base leading-relaxed font-serif bg-transparent placeholder:italic scrollbar-hide"
-              placeholder={`在这里输入第 ${index + 1} 段的内容...`}
+              placeholder={`在这里输入第 ${index + 1} 段的内容…`}
               value={para}
               onChange={(e) => handleParagraphChange(index, e.target.value)}
+              onSelect={(e) => captureSelection(index, e.currentTarget)}
+              onMouseUp={(e) => captureSelection(index, e.currentTarget)}
+              onKeyUp={(e) => captureSelection(index, e.currentTarget)}
             />
           </div>
+
+          {selectionUi?.index === index && onSelectionAction && (
+            <div className="mx-4 mb-2 animate-in fade-in slide-in-from-top-1 duration-200">
+              <ParagraphSelectionToolbar
+                disabled={selectionBusy}
+                onAction={handleSelectionToolbarAction}
+              />
+            </div>
+          )}
 
           {/* 审计建议显示区域 */}
           {auditFeedback[index] && (
@@ -323,7 +387,7 @@ export function ParagraphEditor({
       </Button>
 
       <div className="text-center text-[10px] text-muted-foreground uppercase tracking-widest mt-8 pb-10">
-        Paragraph Block Editor • Academic Assistant
+        段落块编辑器 · 选区助手 · 学术写作
       </div>
     </div>
   );
