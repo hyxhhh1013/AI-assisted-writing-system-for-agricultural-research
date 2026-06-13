@@ -90,6 +90,10 @@ export async function searchWritingRagChunks(
 
   // 已选文献所属分类 → 范围检索；解析不到则全库（向后兼容）
   const scopeCategories = deriveScopeCategories(params.existingReferences);
+  const searchScope =
+    scopeCategories?.length === 1
+      ? { category: scopeCategories[0] }
+      : {};
 
   const enhancedQuery = buildWritingRetrievalQuery({
     title,
@@ -103,7 +107,7 @@ export async function searchWritingRagChunks(
   let chunks = await localRAG.search(enhancedQuery, {
     limit: ragLimit,
     maxPerSource: ragMaxPerSource,
-    categories: scopeCategories,
+    ...searchScope,
   });
 
   if (chunks.length === 0) {
@@ -113,7 +117,7 @@ export async function searchWritingRagChunks(
     chunks = await localRAG.search(fallbackQuery, {
       limit: ragLimit,
       maxPerSource: Math.max(1, Math.floor(ragMaxPerSource / 2)),
-      categories: scopeCategories,
+      ...searchScope,
     });
   }
 
