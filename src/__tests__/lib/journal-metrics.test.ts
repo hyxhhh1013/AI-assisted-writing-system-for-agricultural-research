@@ -15,23 +15,47 @@ describe("normalizeIssn", () => {
 });
 
 describe("parseJournalMetricsCsv", () => {
-  it("parses header and one row", () => {
+  it("parses header and one row by issn", () => {
     const csv = `issn,impactFactor,impactFactorYear,jcrQuartile,casPartition,isCoreJournal
 1234-5678,5.2,2024,Q1,1区,true`;
-    const map = parseJournalMetricsCsv(csv);
-    expect(map.size).toBe(1);
-    const m = map.get("12345678");
+    const lookup = parseJournalMetricsCsv(csv);
+    expect(lookup.byIssn.size).toBe(1);
+    const m = lookup.byIssn.get("12345678");
     expect(m?.impactFactor).toBe(5.2);
     expect(m?.jcrQuartile).toBe("Q1");
     expect(m?.isCoreJournal).toBe(true);
+  });
+
+  it("parses journal column for name match", () => {
+    const lookup = parseJournalMetricsCsv(
+      "journal,impactFactor\nPlant Physiology,8.1",
+    );
+    expect(lookup.byJournal.size).toBe(1);
+    expect(lookup.byJournal.get("plant physiology")?.impactFactor).toBe(8.1);
+  });
+
+  it("accepts Chinese column headers", () => {
+    const lookup = parseJournalMetricsCsv(
+      "刊名,影响因子,JCR分区\n土壤学报,3.5,Q1",
+    );
+    expect(lookup.byJournal.get("土壤学报")?.impactFactor).toBe(3.5);
+    expect(lookup.byJournal.get("土壤学报")?.jcrQuartile).toBe("Q1");
   });
 });
 
 describe("lookupMetricsForBib", () => {
   it("matches bib issn", () => {
-    const map = parseJournalMetricsCsv("issn,impactFactor\n1234-5678,3.1");
-    const m = lookupMetricsForBib({ issn: "1234-5678" }, map);
+    const lookup = parseJournalMetricsCsv("issn,impactFactor\n1234-5678,3.1");
+    const m = lookupMetricsForBib({ issn: "1234-5678" }, lookup);
     expect(m?.impactFactor).toBe(3.1);
+  });
+
+  it("falls back to journal name", () => {
+    const lookup = parseJournalMetricsCsv(
+      "journal,impactFactor\nNature Plants,15.0",
+    );
+    const m = lookupMetricsForBib({ journal: "Nature Plants, 2023" }, lookup);
+    expect(m?.impactFactor).toBe(15);
   });
 });
 

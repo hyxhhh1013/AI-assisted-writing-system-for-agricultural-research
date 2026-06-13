@@ -1,7 +1,7 @@
 # 部署配置清单
 
 > 主文档：[DEPLOY.md](./DEPLOY.md)  
-> **推荐部署路径**：PM2 + standalone 上传（方式 A）。全 Docker 见 [DEPLOY_VPS.md](./DEPLOY_VPS.md)，勿与 PM2 混用 `DATABASE_URL` 主机名。
+> **推荐部署路径**：`git push origin main` 触发 Actions（方式 A）。本地 SCP 备用见方式 B。全 Docker 见 [DEPLOY_VPS.md](./DEPLOY_VPS.md)，勿与 PM2 混用 `DATABASE_URL` 主机名。
 
 ## 当前方案
 
@@ -19,22 +19,44 @@
 
 ## 部署方式
 
-### 方式 A：本地 build + 上传（日常推荐）
+### 方式 A：`git push` 自动部署（日常推荐）
+
+```bash
+git checkout main
+git merge your-feature-branch
+git push origin main
+```
+
+GitHub Actions（`.github/workflows/deploy.yml`）在云端 build → 上传 `deploy.tar.gz` → `apply.sh` → **preflight** → `pm2 reload`。
+
+**仓库 Secrets**（Settings → Secrets and variables → Actions）：
+
+| Secret | 必填 | 说明 |
+|--------|------|------|
+| `DEPLOY_HOST` | 是 | VPS 公网 IP，如 `159.75.106.21` |
+| `DEPLOY_USER` | 是 | SSH 用户，如 `ubuntu` |
+| `DEPLOY_SSH_KEY` | 是 | 私钥全文（与 VPS `authorized_keys` 对应） |
+| `DEPLOY_PATH` | 否 | 应用目录，默认 `/home/ubuntu/grainscript` |
+| `DEPLOY_PORT` | 否 | SSH 端口，默认 `22` |
+
+进度：**Actions → Deploy to VPS (PM2)**。失败时看日志；也可 **Run workflow** 手动重发。
+
+### 方式 B：本地 build + 上传（备用）
 
 ```powershell
 powershell -File scripts/deploy/package.ps1
 ```
 
-构建 → 打包（含 `ecosystem.config.cjs`、`scripts/deploy/`、`prisma/`）→ SCP → 服务器 `apply.sh` → **preflight** → `pm2 reload`
+构建 → 打包 → SCP → 服务器 `apply.sh` → **preflight** → `pm2 reload`
 
-### 方式 B：仅上传包 + 服务器部署
+### 方式 C：仅上传包 + 服务器部署
 
 ```powershell
 scp deploy.tar.gz ubuntu@159.75.106.21:/home/ubuntu/
 ssh ubuntu@159.75.106.21 "cd /home/ubuntu/grainscript && bash scripts/deploy/apply.sh"
 ```
 
-### 方式 C：服务器 git pull + build
+### 方式 D：服务器 git pull + build（不推荐，慢）
 
 ```bash
 ssh ubuntu@159.75.106.21

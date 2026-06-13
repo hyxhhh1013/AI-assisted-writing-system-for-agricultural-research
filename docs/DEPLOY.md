@@ -5,8 +5,9 @@
 | 方式 | 适用场景 | 文档 |
 |------|---------|------|
 | **PM2 + SCP 上传** | VPS 生产环境（aifascience.site） | 见下方 § PM2 部署 |
+| **Git push 自动部署** | 推荐日常：`git push origin main` | 见 `.github/workflows/deploy.yml` |
 | **Docker Compose** | 实验室电脑本地运行 | 见下方 § Docker 部署 |
-| **GitHub Actions** | CI 自动部署（git push 触发） | 见 `.github/workflows/deploy.yml` |
+| **GitHub Actions 手动** | 紧急重发、不 push 时 | Actions → Deploy to VPS (PM2) |
 
 配置清单见 [DEPLOY_SETUP_CHECKLIST.md](./DEPLOY_SETUP_CHECKLIST.md)。
 
@@ -14,23 +15,44 @@
 
 ## PM2 部署（VPS 生产环境）
 
-### 部署包结构
+### 日常发布（推荐）
 
-Next.js standalone 模式：本地 `npm run build` → `.next/standalone/` 包含运行时所需文件。打包脚本 (`scripts/deploy/package.ps1`) 自动：
-1. 取出 standalone 输出
-2. 排除服务器已有的目录（`papers/`, `node_modules/`, `data/`）
-3. 补上 `.next/static/`（不在 standalone 内，需单独复制）
-4. 压缩为 `deploy.tar.gz`
-5. SCP 上传 + SSH 远程部署
+合并到 `main` 并推送后，GitHub Actions 会自动：
 
-### 日常部署
+1. 在云端 `npm run build` + 打 `deploy.tar.gz`（`scripts/deploy/package.sh`）
+2. SCP 到 VPS `/home/ubuntu/deploy.tar.gz`
+3. SSH 执行 `scripts/deploy/apply.sh` → preflight → `pm2 reload`
+
+```bash
+git checkout main
+git merge your-feature-branch
+git push origin main
+```
+
+在仓库 **Actions → Deploy to VPS (PM2)** 查看进度。也可 **Run workflow** 手动重发（不 push 时）。
+
+**前提**：仓库 Secrets 已配置 `DEPLOY_HOST`、`DEPLOY_USER`、`DEPLOY_SSH_KEY`（可选 `DEPLOY_PATH`、`DEPLOY_PORT`）。清单见 [DEPLOY_SETUP_CHECKLIST.md](./DEPLOY_SETUP_CHECKLIST.md)。
+
+### 本地打包（备用 / 无 GitHub 时）
 
 ```powershell
 # 一键完成：build → 打包 → 上传 → 服务器重启
 powershell -File scripts/deploy/package.ps1
 ```
 
-### 手动分步
+Linux / CI 等价脚本：`bash scripts/deploy/package.sh`（仅产出 tar，不上传）。
+
+### 部署包结构
+
+Next.js standalone 模式：本地 `npm run build` → `.next/standalone/` 包含运行时所需文件。打包脚本（`package.sh` / `package.ps1`）会：
+
+1. 取出 standalone 输出
+2. 排除服务器已有的目录（`papers/`, `node_modules/`, `data/`）
+3. 补上 `.next/static/`（不在 standalone 内，需单独复制）
+4. 压缩为 `deploy.tar.gz`
+5. （本地 `package.ps1` 或 CI）SCP 上传 + `apply.sh`
+
+### 手动分步（无 CI 时）
 
 ```powershell
 # 1. 构建
@@ -51,7 +73,8 @@ ssh ubuntu@159.75.106.21 "cd /home/ubuntu/grainscript && bash scripts/deploy/app
 | 脚本 | 用途 |
 |------|------|
 | `scripts/deploy/apply.sh` | 解压 + npm install + prisma + **preflight** + pm2 reload |
-| `scripts/deploy/pm2-up.sh` | git pull + build（CI 用） |
+| `scripts/deploy/package.sh` | CI / Linux 本地：build + 打 `deploy.tar.gz` |
+| `scripts/deploy/pm2-up.sh` | 服务器 git pull + build（备用，非 push 自动部署） |
 | `ecosystem.config.cjs` | PM2 配置（**1 实例 fork**，非 cluster；从 `.env` 注入变量） |
 | `scripts/deploy/preflight.sh` | 部署前自检（DB / papers / data / API Key） |
 

@@ -1,4 +1,4 @@
-# GrainScript 本地打包脚本
+# GrainScript 本地打包脚本（Windows 备用；日常请 git push main 触发 CI）
 # 用法: powershell -File scripts/deploy/package.ps1
 # 产出: deploy.tar.gz (上传到服务器后执行 scripts/deploy/apply.sh)
 

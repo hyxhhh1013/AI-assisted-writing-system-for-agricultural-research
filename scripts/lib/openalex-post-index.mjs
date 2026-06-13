@@ -1,16 +1,13 @@
 /**
- * 按 DOI 调用 OpenAlex，补 citedByCount / OA 链接 / ISSN
- * 用法：node scripts/enrich-knowledge-openalex.mjs [--dry-run] [--limit=50]
+ * 索引完成后按文献名批量 OpenAlex enrichment（限流，供 index-pdfs 调用）
  */
 import { PrismaClient } from "@prisma/client";
-import { extractDoiFromBib } from "./lib/bib-doi-utils.mjs";
+import { extractDoiFromBib } from "./bib-doi-utils.mjs";
 import {
   mergeJournalMetrics,
   parseMetricsJson,
   serializeMetrics,
-} from "./lib/journal-metrics-utils.mjs";
-
-const prisma = new PrismaClient();
+} from "./journal-metrics-utils.mjs";
 
 function parseBib(raw) {
   if (!raw) return null;
@@ -27,6 +24,10 @@ function pickIssn(source) {
   if (typeof raw === "string" && raw.trim()) return raw.trim();
   if (Array.isArray(raw) && typeof raw[0] === "string") return raw[0].trim();
   return undefined;
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 async function fetchOpenAlex(doi, mailto) {
@@ -48,33 +49,22 @@ async function fetchOpenAlex(doi, mailto) {
   return { metrics, issn };
 }
 
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
-}
+/** @param {string[]} names 本次索引涉及的文件名 */
+export async function enrichKnowledgeFilesByNames(names, options = {}) {
+  const prisma = new PrismaClient();
+  const mailto = options.mailto?.trim() || process.env.OPENALEX_MAILTO?.trim() || "";
+  const limit = options.limit ?? 20;
+  const nameSet = new Set(names);
 
-async function main() {
-  const dryRun = process.argv.includes("--dry-run");
-  const all = process.argv.includes("--all");
-  const limitArg = process.argv.find((a) => a.startsWith("--limit="));
-  const limit = all
-    ? Infinity
-    : limitArg
-      ? Number(limitArg.split("=")[1])
-      : 100;
-  const mailto = process.env.OPENALEX_MAILTO?.trim() || "";
-
-  const files = await prisma.knowledgeFile.findMany({
+  const rows = await prisma.knowledgeFile.findMany({
+    where: { name: { in: [...nameSet] } },
     select: { id: true, name: true, bib: true, metrics: true },
   });
 
-  const targetsAll = files
+  const targets = rows
     .map((f) => ({ ...f, bibObj: parseBib(f.bib) }))
-    .filter((f) => extractDoiFromBib(f.bibObj));
-  const targets = all
-    ? targetsAll
-    : targetsAll.slice(0, Number.isFinite(limit) ? limit : 100);
-
-  console.log(`OpenAlex enrichment：${targets.length} 篇${dryRun ? "（dry-run）" : ""}`);
+    .filter((f) => extractDoiFromBib(f.bibObj))
+    .slice(0, limit);
 
   let updated = 0;
   for (const file of targets) {
@@ -88,26 +78,16 @@ async function main() {
     const bibPatch = { ...file.bibObj };
     if (result.issn && !bibPatch.issn) bibPatch.issn = result.issn;
 
-    if (!dryRun) {
-      await prisma.knowledgeFile.update({
-        where: { id: file.id },
-        data: {
-          metrics: serializeMetrics(mergedMetrics),
-          bib: JSON.stringify(bibPatch),
-        },
-      });
-    }
+    await prisma.knowledgeFile.update({
+      where: { id: file.id },
+      data: {
+        metrics: serializeMetrics(mergedMetrics),
+        bib: JSON.stringify(bibPatch),
+      },
+    });
     updated++;
-    if (updated <= 5) {
-      console.log(`  ✓ ${file.name} cited=${mergedMetrics.citedByCount ?? "—"}`);
-    }
   }
 
-  console.log(`完成：${dryRun ? "将更新" : "已更新"} ${updated} 篇`);
   await prisma.$disconnect();
+  return updated;
 }
-
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});

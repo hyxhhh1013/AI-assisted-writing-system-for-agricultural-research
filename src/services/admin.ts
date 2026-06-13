@@ -178,12 +178,17 @@ export interface JournalMetricsImportResult {
   message?: string;
   matched?: number;
   updated?: number;
+  skipped?: number;
+  totalFiles?: number;
   lookupSize?: number;
+  lookupIssn?: number;
+  lookupJournal?: number;
+  matchRate?: number;
   dryRun?: boolean;
   error?: string;
 }
 
-/** POST /api/admin/journal-metrics — 上传 CSV 导入期刊 IF/分区 */
+/** POST /api/admin/journal-metrics — 上传 CSV/Excel 导入期刊 IF/分区 */
 export async function importAdminJournalMetrics(
   file: File,
   options?: { dryRun?: boolean },

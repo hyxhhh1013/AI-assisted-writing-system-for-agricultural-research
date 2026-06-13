@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, RefreshCw, Database, Upload, Globe } from "lucide-react";
+import { Loader2, RefreshCw, Database, Upload, Globe, BookOpen } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { siteTheme } from "@/lib/site-theme";
 import { useKnowledgeList } from "@/hooks/use-knowledge-list";
@@ -15,11 +15,13 @@ import { KnowledgeBibFilters } from "@/components/shared/knowledge/knowledge-bib
 import { KnowledgeFileTable } from "@/components/shared/knowledge/knowledge-file-table";
 import { KnowledgePageDialogs } from "@/components/shared/knowledge/knowledge-page-dialogs";
 import { KnowledgeExternalSearch } from "@/components/shared/knowledge/knowledge-external-search";
+import { KnowledgeBibliographyImportDialog } from "@/components/shared/knowledge/knowledge-bibliography-import-dialog";
 
 export default function KnowledgePage() {
   const router = useRouter();
   const kb = useKnowledgeList();
   const [mainTab, setMainTab] = useState<"local" | "external">("local");
+  const [isBibImportOpen, setIsBibImportOpen] = useState(false);
 
   return (
     <>
@@ -29,7 +31,10 @@ export default function KnowledgePage() {
         icon={Database}
         actions={
           mainTab === "local" ? (
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              <Button variant="outline" className="border-[#1a5632]/20" onClick={() => setIsBibImportOpen(true)}>
+                <BookOpen className="mr-2 h-4 w-4" /> 导入书目
+              </Button>
               <Button variant="outline" className="border-[#1a5632]/20" onClick={() => kb.setIsUploadOpen(true)}>
                 <Upload className="mr-2 h-4 w-4" /> 上传文献
               </Button>
@@ -76,6 +81,12 @@ export default function KnowledgePage() {
       </Tabs>
 
       <KnowledgePageDialogs router={router} kb={kb} />
+      <KnowledgeBibliographyImportDialog
+        open={isBibImportOpen}
+        onOpenChange={setIsBibImportOpen}
+        categories={kb.categories}
+        onImported={() => void kb.fetchFiles()}
+      />
     </>
   );
 }

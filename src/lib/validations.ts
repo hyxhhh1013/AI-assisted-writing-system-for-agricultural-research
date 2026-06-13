@@ -199,6 +199,22 @@ export const knowledgeDeleteQuerySchema = z.object({
 });
 export type KnowledgeDeleteQueryInput = z.infer<typeof knowledgeDeleteQuerySchema>;
 
+// === Knowledge Bibliography Import (ENG-PR-093) ===
+export const bibliographyImportCommitItemSchema = z.object({
+  tempId: z.string().min(1),
+  action: z.enum(["create", "merge", "skip"]),
+  bib: knowledgeBibSchema,
+  documentType: z.enum(["paper", "journal", "patent", "book", "other"]).optional(),
+  suggestedName: z.string().min(1).optional(),
+  targetName: z.string().min(1).optional(),
+});
+
+export const bibliographyImportCommitSchema = z.object({
+  category: z.string().min(1, "分类不能为空"),
+  items: z.array(bibliographyImportCommitItemSchema).min(1, "至少选择一条书目").max(500),
+});
+export type BibliographyImportCommitInput = z.infer<typeof bibliographyImportCommitSchema>;
+
 export const reindexRequestSchema = z.object({
   files: z.array(z.string().min(1)).optional(),
   forceStage1: z.boolean().optional(),

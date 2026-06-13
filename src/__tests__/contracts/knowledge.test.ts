@@ -10,8 +10,18 @@ import {
 
 describe("getKnowledgeIndexStatus", () => {
   it("marks unindexed files when chunkCount is zero", () => {
-    const info = getKnowledgeIndexStatus({ chunkCount: 0, bib: null });
+    const info = getKnowledgeIndexStatus({ chunkCount: 0, bib: null, size: 1024 });
     expect(info.status).toBe("unindexed");
+  });
+
+  it("marks bibliography-only imports as awaiting PDF upload", () => {
+    const info = getKnowledgeIndexStatus({
+      chunkCount: 0,
+      size: 0,
+      bib: { title: "Imported reference" },
+    });
+    expect(info.status).toBe("partial");
+    expect(info.label).toBe("待上传 PDF");
   });
 
   it("marks partial when chunks exist but bib is missing", () => {
@@ -81,7 +91,7 @@ describe("getKnowledgeMetricsLine", () => {
         impactFactorYear: 2024,
         jcrQuartile: "Q1",
       }),
-    ).toBe("IF 5.2 (2024) · Q1");
+    ).toBe("IF 5.2 · Q1");
   });
 
   it("returns null when no metrics", () => {

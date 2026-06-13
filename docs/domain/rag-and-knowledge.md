@@ -129,8 +129,10 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 
 | 操作 | 说明 |
 |------|------|
-| Admin 上传 CSV | `/admin/knowledge` → `POST /api/admin/journal-metrics` |
-| CLI 导入 | `node scripts/import-journal-metrics.mjs [csv] [--dry-run]` |
-| OpenAlex 补全 | `node scripts/enrich-knowledge-openalex.mjs [--dry-run] [--limit=50]` |
+| Admin 上传表 | `/admin/knowledge` → `POST /api/admin/journal-metrics`（**CSV / Excel**，列名中英文均可） |
+| CLI 导入 | `node scripts/import-journal-metrics.mjs [path] [--dry-run]` |
+| OpenAlex 篇级 | `node scripts/enrich-knowledge-openalex.mjs [--all]` → `citedByCount`、ISSN、OA |
+| OpenAlex 刊级 | `node scripts/enrich-journal-openalex-sources.mjs [--all]` → `oa2yrCitedness`、`hIndex` |
+| 索引后自动 | `ENRICH_OPENALEX_AFTER_INDEX=true` 或 `index-pdfs.mjs --enrich-metrics` |
 
-CSV 列：`issn,impactFactor,impactFactorYear,jcrQuartile,casPartition,isCoreJournal`。按 `bib.issn` / `bib.eissn` 匹配后写入 `KnowledgeFile.metrics`。
+**JCR 影响因子**须来自实验室表（`issn` 或 `journal/刊名` 列 + `影响因子` 等别名）。**OpenAlex 不提供 IF**，仅补被引与 2yr 均值。模板：`data/journal-metrics.example.csv`。

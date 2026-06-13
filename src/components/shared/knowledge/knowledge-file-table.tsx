@@ -55,10 +55,28 @@ interface KnowledgeFileTableProps {
 function MetricsCell({ file }: { file: KnowledgeFile }) {
   const line = getKnowledgeMetricsLine(file.metrics);
   if (line) {
-    return <span className="text-xs">{line}</span>;
+    const year = file.metrics?.impactFactorYear;
+    return (
+      <span className="text-xs inline-flex items-center gap-1">
+        <span>{line}</span>
+        {year != null && file.metrics?.impactFactor != null ? (
+          <span
+            className="text-[10px] leading-none text-muted-foreground border rounded px-1 py-0.5"
+            title={`IF 数据年份 ${year}`}
+          >
+            {year}
+          </span>
+        ) : null}
+      </span>
+    );
   }
+  const hint = file.bib?.issn || file.bib?.eissn
+    ? "已有 ISSN：在 Admin 上传课题组 Excel/CSV 即可显示 IF"
+    : file.bib?.doi || file.bib?.journal
+      ? "可上传 Excel 按刊名匹配；或运行 OpenAlex 补 ISSN"
+      : "待书目补全 DOI/期刊；被引与 2yr 均值可自动 enrichment";
   return (
-    <span className="text-xs text-muted-foreground" title="待指标导入（ENG-PR-091）">
+    <span className="text-xs text-muted-foreground" title={hint}>
       —
     </span>
   );

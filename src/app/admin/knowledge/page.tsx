@@ -92,14 +92,14 @@ export default function AdminKnowledgePage() {
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-[#1a5632]/10 bg-[#faf9f6] p-4 space-y-2">
-        <p className="text-sm font-medium text-[#122820]">期刊指标 CSV（ISSN → IF/分区）</p>
+        <p className="text-sm font-medium text-[#122820]">期刊指标表（CSV / Excel）</p>
         <p className="text-xs text-[#6b7c72]">
-          列：issn, impactFactor, impactFactorYear, jcrQuartile, casPartition, isCoreJournal。匹配文献 bib.issn / eissn 后写入 metrics。
+          直接上传课题组 Excel 即可；列名支持中英文（如 issn/刊号、journal/刊名、影响因子、分区）。优先 ISSN 匹配，否则刊名。JCR 影响因子须来自实验室表；被引与 2yr 均值由 OpenAlex 自动补全。
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <Input
             type="file"
-            accept=".csv,text/csv"
+            accept=".csv,.xlsx,.xls,text/csv"
             className="h-9 max-w-xs text-sm"
             disabled={metricsImporting}
             onChange={(e) => {
@@ -116,7 +116,7 @@ export default function AdminKnowledgePage() {
             onClick={() => {
               const input = document.createElement("input");
               input.type = "file";
-              input.accept = ".csv,text/csv";
+              input.accept = ".csv,.xlsx,.xls,text/csv";
               input.onchange = () => {
                 const f = input.files?.[0];
                 if (f) void handleMetricsImport(f, true);

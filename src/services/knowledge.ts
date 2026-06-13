@@ -1,6 +1,11 @@
 /** 知识库 API 服务封装 */
 
 import type {
+  BibliographyImportCommitItem,
+  BibliographyImportPreviewResponse,
+  BibliographyImportResult,
+} from "@/contracts/bib-import";
+import type {
   KnowledgeFileRecord,
   KnowledgeMetadataPatch,
   KnowledgeSearchParams,
@@ -211,6 +216,36 @@ export async function deleteKnowledgeFile(name: string, category: string): Promi
     const data = await res.json().catch(() => ({})) as { error?: string };
     throw new Error(data.error || "删除失败");
   }
+}
+
+/** POST /api/knowledge/import-bibliography — 预览 RIS/BibTeX 导入 */
+export async function previewBibliographyImport(
+  file: File,
+  category: string,
+): Promise<BibliographyImportPreviewResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("category", category);
+  formData.append("dryRun", "true");
+  const res = await fetch("/api/knowledge/import-bibliography", { method: "POST", body: formData });
+  const data = await res.json() as BibliographyImportPreviewResponse & { error?: string };
+  if (!res.ok) throw new Error(data.error || "书目预览失败");
+  return data;
+}
+
+/** POST /api/knowledge/import-bibliography — 确认写入 Prisma */
+export async function commitBibliographyImport(
+  category: string,
+  items: BibliographyImportCommitItem[],
+): Promise<BibliographyImportResult & { message?: string }> {
+  const res = await fetch("/api/knowledge/import-bibliography", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ category, items }),
+  });
+  const data = await res.json() as BibliographyImportResult & { error?: string; message?: string };
+  if (!res.ok) throw new Error(data.error || "书目导入失败");
+  return data;
 }
 
 export async function batchDeleteKnowledgeFiles(files: { name: string; category: string }[]): Promise<string> {

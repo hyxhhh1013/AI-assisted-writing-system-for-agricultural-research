@@ -11,10 +11,10 @@
 
 | 层级 | ID | 标题 | 依赖 | 估时 | 状态 | 说明 |
 |------|-----|------|------|------|------|------|
-| **P1** | **ENG-PR-090** | 文献库列表：书目列 + 筛选 + 契约扩展 | ENG-PR-027 | 1～2d | todo | 列表可见期刊/卷期/DOI；IF 列预留 |
-| P1 | **ENG-PR-091** | 期刊指标 enrichment（CSV + OpenAlex） | 090 | 2～3d | todo | ISSN 匹配 IF/分区；夜间补 citedBy |
-| P1 | **ENG-PR-092** | 外部文献检索 Tab + 加入参考文献 | — | 3～5d | done | `literature-search.ts` + 知识库 Tab |
-| P2 | **ENG-PR-093** | RIS / BibTeX 批量导入 | 090 | 2d | todo | 知网/EndNote 导出接入 |
+| **P1** | **ENG-PR-090** | 文献库列表：书目列 + 筛选 + 契约扩展 | ENG-PR-027 | 1～2d | done | 2026-06-06 |
+| P1 | **ENG-PR-091** | 期刊指标 enrichment（CSV + OpenAlex） | 090 | 2～3d | done | 导入批次 UI 待二期 |
+| P1 | **ENG-PR-092** | 外部文献检索 Tab + 加入参考文献 | — | 3～5d | done | 2026-06-06 |
+| P2 | **ENG-PR-093** | RIS / BibTeX 批量导入 | 090 | 2d | doing | 代码就绪，待 commit |
 | P3 | **ENG-PR-094** | OA 全文自动入库（可选） | 092, 093 | 1～2w | todo | backlog；有 OA 链则进 RAG |
 
 **推荐接力顺序**：

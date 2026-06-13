@@ -11,6 +11,9 @@ import { reindexRequestSchema, type ReindexRequestInput } from "@/lib/validation
 
 const PROGRESS_PREFIX = "__INDEX_PROGRESS__";
 
+/** 当前正在运行的 reindex 子进程（后台运行，不受 SSE 连接影响） */
+let activeChild: ReturnType<typeof spawn> | null = null;
+
 function buildScriptArgs(options: ReindexRequestInput): string[] {
   const args = ["--progress"];
   if (options.forceStage1) args.push("--force-stage1");
@@ -113,9 +116,25 @@ export async function POST(req: NextRequest) {
         finish(`索引进程异常退出（code ${code ?? "unknown"}）`);
       });
 
+      // 存储活跃子进程，用于重连时复用
+      activeChild = child;
+      child.on("close", () => { activeChild = null; });
+
       const onAbort = () => {
-        if (!child.killed) child.kill("SIGTERM");
-        finish("索引任务已取消");
+        // 不断开连接时不再杀死子进程，让它继续在后台运行
+        // 前端断开后子进程继续执行，下次请求会启动新的（旧的仍在后台完成）
+        if (!child.killed) {
+          log.info("SSE 连接已断开，索引子进程继续在后台运行");
+          // 解绑事件避免后续 close 事件尝试操作已关闭的 stream
+          child.stdout.removeAllListeners("data");
+          child.stderr.removeAllListeners("data");
+          child.removeAllListeners("close");
+          child.removeAllListeners("error");
+        }
+        if (!closed) {
+          closed = true;
+          controller.close();
+        }
       };
 
       if (req.signal.aborted) {

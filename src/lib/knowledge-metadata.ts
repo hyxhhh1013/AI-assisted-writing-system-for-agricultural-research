@@ -6,10 +6,11 @@ import type { BibEntry } from "@/lib/rag";
 import {
   lookupMetricsForBib,
   mergeJournalMetrics,
-  parseJournalMetricsCsv,
+  parseJournalMetricsUpload,
   parseMetricsJson,
   serializeMetrics,
   type ApplyJournalMetricsResult,
+  type JournalMetricsLookup,
 } from "@/lib/journal-metrics";
 import { resolveKnowledgeFilePath } from "@/lib/safe-path";
 
@@ -106,12 +107,18 @@ export function prismaRowToKnowledgeRecord(row: KnowledgeFileRow): KnowledgeFile
   return enrichKnowledgeRecordFromDisk(record);
 }
 
-/** 将实验室 CSV 期刊指标按 ISSN 写入 KnowledgeFile.metrics */
-export async function applyJournalMetricsFromCsv(
-  csvText: string,
+export interface JournalMetricsImportSummary extends ApplyJournalMetricsResult {
+  lookupSize: number;
+  lookupIssn: number;
+  lookupJournal: number;
+  totalFiles: number;
+}
+
+/** 将实验室期刊表（CSV/Excel）指标写入 KnowledgeFile.metrics */
+export async function applyJournalMetricsFromLookup(
+  lookup: JournalMetricsLookup,
   options?: { dryRun?: boolean },
-): Promise<ApplyJournalMetricsResult & { lookupSize: number }> {
-  const lookup = parseJournalMetricsCsv(csvText);
+): Promise<JournalMetricsImportSummary> {
   const files = await prisma.knowledgeFile.findMany({
     select: { id: true, bib: true, metrics: true },
   });
@@ -138,7 +145,24 @@ export async function applyJournalMetricsFromCsv(
     updated++;
   }
 
-  return { matched, updated, skipped, lookupSize: lookup.size };
+  return {
+    matched,
+    updated,
+    skipped,
+    totalFiles: files.length,
+    lookupSize: lookup.byIssn.size + lookup.byJournal.size,
+    lookupIssn: lookup.byIssn.size,
+    lookupJournal: lookup.byJournal.size,
+  };
+}
+
+/** 解析上传文件并导入期刊指标 */
+export async function applyJournalMetricsFromUpload(
+  content: string | ArrayBuffer,
+  options?: { dryRun?: boolean; filename?: string },
+): Promise<JournalMetricsImportSummary> {
+  const lookup = await parseJournalMetricsUpload(content, options?.filename);
+  return applyJournalMetricsFromLookup(lookup, options);
 }
 
 export async function getKnowledgeFileByName(name: string): Promise<KnowledgeFileRecord | null> {

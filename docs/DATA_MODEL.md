@@ -41,7 +41,7 @@ KnowledgeFile 1──* KnowledgeChunk
 | `name` | 与 `data/pdfs/` 文件名唯一对应 |
 | `documentType` | `paper` \| `patent` \| `other` |
 | `bib` | JSON 书目信息（含 `issn` / `eissn` / `doi` 等，见 `contracts/knowledge.ts`） |
-| `metrics` | JSON 期刊指标（ENG-PR-091：`impactFactor`、`jcrQuartile`、`citedByCount` 等） |
+| `metrics` | JSON 期刊指标（ENG-PR-091：`impactFactor`、`jcrQuartile`、`citedByCount`、`oa2yrCitedness`、`hIndex` 等） |
 | `chunkCount` | RAG `index_*.json` 块数（非 Chunk 表行数） |
 
 **数据源真相**

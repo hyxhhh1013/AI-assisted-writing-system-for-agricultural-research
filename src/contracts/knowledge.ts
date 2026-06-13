@@ -51,7 +51,7 @@ export interface KnowledgeFileRecord {
   metrics?: JournalMetrics | null;
 }
 
-/** 期刊影响因子 / 分区等指标（实验室 CSV 或 OpenAlex  enrichment） */
+/** 期刊影响因子 / 分区等指标（实验室表或 OpenAlex enrichment） */
 export interface JournalMetrics {
   impactFactor?: number;
   impactFactorYear?: number;
@@ -60,6 +60,9 @@ export interface JournalMetrics {
   isCoreJournal?: boolean;
   citedByCount?: number;
   openAccessUrl?: string;
+  /** OpenAlex 期刊 2 年均被引（非 JCR IF） */
+  oa2yrCitedness?: number;
+  hIndex?: number;
 }
 
 export type KnowledgeDoiFilter = "all" | "has" | "missing";
@@ -119,12 +122,28 @@ function hasNonEmptyBibField(bib: KnowledgeBib | null | undefined, key: keyof Kn
 }
 
 /** 判断索引与书目元数据是否达标 */
-export function getKnowledgeIndexStatus(file: Pick<KnowledgeFileRecord, "chunkCount" | "bib" | "bibEdited" | "documentType" | "parseWarning">): KnowledgeIndexStatusInfo {
+export function getKnowledgeIndexStatus(
+  file: Pick<KnowledgeFileRecord, "chunkCount" | "bib" | "bibEdited" | "documentType" | "parseWarning"> & {
+    size?: number;
+  },
+): KnowledgeIndexStatusInfo {
   if (file.parseWarning === "no_text" || (file.chunkCount === 0 && file.parseWarning)) {
     return {
       status: "partial",
       label: "无文本层",
       missingFields: ["需 OCR 或换 PDF"],
+    };
+  }
+
+  if (
+    (!file.chunkCount || file.chunkCount <= 0)
+    && file.size === 0
+    && hasNonEmptyBibField(file.bib, "title")
+  ) {
+    return {
+      status: "partial",
+      label: "待上传 PDF",
+      missingFields: ["PDF"],
     };
   }
 
@@ -232,12 +251,14 @@ export function getKnowledgeMetricsLine(metrics?: JournalMetrics | null): string
   if (!metrics) return null;
   const parts: string[] = [];
   if (metrics.impactFactor != null) {
-    const year = metrics.impactFactorYear ? ` (${metrics.impactFactorYear})` : "";
-    parts.push(`IF ${metrics.impactFactor}${year}`);
+    parts.push(`IF ${metrics.impactFactor}`);
   }
   if (metrics.jcrQuartile) parts.push(metrics.jcrQuartile);
   if (metrics.casPartition) parts.push(`中科院${metrics.casPartition}`);
   if (metrics.isCoreJournal) parts.push("北大核心");
+  if (metrics.citedByCount != null) parts.push(`被引 ${metrics.citedByCount}`);
+  if (metrics.oa2yrCitedness != null) parts.push(`2yr ${metrics.oa2yrCitedness.toFixed(1)}`);
+  if (metrics.hIndex != null && metrics.impactFactor == null) parts.push(`h${metrics.hIndex}`);
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
