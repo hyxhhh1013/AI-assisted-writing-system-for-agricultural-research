@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>禾书耕文 — 汇报汇编（2026.6.6）</title>
+  <style>
+    :root {
+      --ink: #1a1a1a;
+      --muted: #555;
+      --accent: #1e4a6e;
+      --accent-light: #e8eef3;
+      --border: #d4d4d4;
+      --paper: #fafaf8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Source Han Serif SC", "Noto Serif SC", "SimSun", serif;
+      font-size: 10.5pt;
+      line-height: 1.6;
+      color: var(--ink);
+      background: #e8e6e1;
+      margin: 0;
+      padding: 1.5rem;
+    }
+    .page {
+      max-width: 210mm;
+      margin: 0 auto;
+      background: var(--paper);
+      padding: 20mm 18mm 22mm;
+      box-shadow: 0 2px 24px rgba(0,0,0,.08);
+    }
+    header.doc-header {
+      border-bottom: 2px solid var(--accent);
+      padding-bottom: 0.9rem;
+      margin-bottom: 1.2rem;
+    }
+    h1 {
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin: 0 0 0.4rem;
+    }
+    .meta { color: var(--muted); font-size: 0.88rem; display: grid; gap: 0.15rem; }
+    .part-break { page-break-before: always; margin-top: 2rem; }
+    h2 {
+      font-size: 1.08rem;
+      color: var(--accent);
+      margin: 1.35rem 0 0.6rem;
+      padding-bottom: 0.3rem;
+      border-bottom: 1px solid var(--border);
+      page-break-after: avoid;
+    }
+    h3 { font-size: 0.98rem; margin: 0.9rem 0 0.4rem; color: #333; }
+    p { margin: 0.45rem 0; text-align: justify; }
+    ul, ol { margin: 0.35rem 0 0.65rem 1.2rem; padding: 0; }
+    li { margin: 0.2rem 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      margin: 0.55rem 0 0.85rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.4rem 0.5rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--accent-light); font-weight: 600; color: var(--accent); }
+    .summary-box {
+      background: var(--accent-light);
+      border-left: 4px solid var(--accent);
+      padding: 0.75rem 1rem;
+      margin: 0.75rem 0 1rem;
+      font-size: 0.95rem;
+    }
+    .flow, pre.commit {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.78rem;
+      background: #f4f4f2;
+      border: 1px solid var(--border);
+      padding: 0.6rem 0.75rem;
+      white-space: pre-wrap;
+      line-height: 1.45;
+      margin: 0.5rem 0;
+    }
+    .sign-block {
+      margin-top: 1.8rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      font-size: 0.92rem;
+    }
+    .sign-line { border-bottom: 1px solid var(--ink); min-height: 1.8rem; margin-top: 1.5rem; }
+    @media print {
+      body { background: white; padding: 0; }
+      .page { box-shadow: none; max-width: none; padding: 0; }
+      .no-print { display: none !important; }
+      h2, table, .summary-box { page-break-inside: avoid; }
+    }
+    .toolbar { max-width: 210mm; margin: 0 auto 1rem; text-align: right; }
+    .toolbar button {
+      font-family: system-ui, sans-serif;
+      padding: 0.45rem 1rem;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+  </style>
+  <style>
+    :root {
+      --ink: #1a1a1a;
+      --muted: #555;
+      --accent: #2d5a3d;
+      --accent-light: #e8f0eb;
+      --border: #d4d4d4;
+      --paper: #fafaf8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Source Han Serif SC", "Noto Serif SC", "SimSun", serif;
+      font-size: 11pt;
+      line-height: 1.65;
+      color: var(--ink);
+      background: #e8e6e1;
+      margin: 0;
+      padding: 1.5rem;
+    }
+    .page {
+      max-width: 210mm;
+      margin: 0 auto;
+      background: var(--paper);
+      padding: 22mm 20mm 24mm;
+      box-shadow: 0 2px 24px rgba(0,0,0,.08);
+    }
+    header.doc-header {
+      border-bottom: 2px solid var(--accent);
+      padding-bottom: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    h1 {
+      font-size: 1.55rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin: 0 0 0.5rem;
+      letter-spacing: 0.02em;
+    }
+    .meta {
+      font-size: 0.9rem;
+      color: var(--muted);
+      display: grid;
+      gap: 0.2rem;
+    }
+    h2 {
+      font-size: 1.15rem;
+      color: var(--accent);
+      margin: 1.6rem 0 0.75rem;
+      padding-bottom: 0.35rem;
+      border-bottom: 1px solid var(--border);
+    }
+    h3 {
+      font-size: 1rem;
+      margin: 1.1rem 0 0.5rem;
+      color: #333;
+    }
+    p { margin: 0.5rem 0; text-align: justify; }
+    ul, ol { margin: 0.4rem 0 0.8rem 1.25rem; padding: 0; }
+    li { margin: 0.25rem 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+      margin: 0.75rem 0 1rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.45rem 0.6rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--accent-light);
+      font-weight: 600;
+      color: var(--accent);
+    }
+    .approval-box {
+      background: var(--accent-light);
+      border: 1px solid #b8cfc0;
+      border-radius: 6px;
+      padding: 1rem 1.1rem;
+      margin: 1rem 0;
+    }
+    .approval-box h2 { margin-top: 0; border: none; padding: 0; }
+    .checkbox-item {
+      display: flex;
+      gap: 0.5rem;
+      margin: 0.5rem 0;
+      align-items: flex-start;
+    }
+    .checkbox-item input { margin-top: 0.35rem; }
+    .flow {
+      font-family: "Consolas", "Menlo", monospace;
+      font-size: 0.85rem;
+      background: #f4f4f2;
+      border: 1px solid var(--border);
+      padding: 0.75rem 1rem;
+      white-space: pre-wrap;
+      line-height: 1.5;
+      margin: 0.6rem 0;
+    }
+    .timeline {
+      display: grid;
+      gap: 0.5rem;
+      margin: 0.75rem 0;
+    }
+    .timeline-item {
+      display: grid;
+      grid-template-columns: 5.5rem 1fr;
+      gap: 0.75rem;
+      padding: 0.5rem 0;
+      border-bottom: 1px dashed var(--border);
+    }
+    .timeline-item strong { color: var(--accent); }
+    .sign-block {
+      margin-top: 2.5rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      font-size: 0.95rem;
+    }
+    .sign-line {
+      border-bottom: 1px solid var(--ink);
+      min-height: 2rem;
+      margin-top: 2rem;
+    }
+    .note {
+      font-size: 0.88rem;
+      color: var(--muted);
+      font-style: italic;
+    }
+    @media print {
+      body { background: white; padding: 0; }
+      .page {
+        box-shadow: none;
+        max-width: none;
+        padding: 0;
+      }
+      h2 { page-break-after: avoid; }
+      table, .approval-box { page-break-inside: avoid; }
+      .no-print { display: none !important; }
+    }
+    .toolbar {
+      max-width: 210mm;
+      margin: 0 auto 1rem;
+      text-align: right;
+    }
+    .toolbar button {
+      font-family: system-ui, sans-serif;
+      font-size: 0.9rem;
+      padding: 0.5rem 1rem;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .toolbar button:hover { opacity: 0.9; }
+  
+    .part-break { page-break-before: always; }
+    .cover-page h1 { border: none !important; }
+    .approval-box { background: #e8f0eb; border: 1px solid #b8cfc0; border-radius: 6px; padding: 1rem; margin: 1rem 0; }
+    .checkbox-item { display: flex; gap: 0.5rem; margin: 0.5rem 0; }
+    .flow { font-family: Consolas, monospace; font-size: 0.85rem; background: #f4f4f2; border: 1px solid #d4d4d4; padding: 0.75rem; white-space: pre-wrap; }
+    .timeline-item { display: grid; grid-template-columns: 5.5rem 1fr; gap: 0.75rem; padding: 0.5rem 0; border-bottom: 1px dashed #d4d4d4; }
+  </style>
+</head>
+<body>
+  <div class="toolbar no-print" style="max-width:210mm;margin:0 auto 1rem;text-align:right;">
+    <button type="button" onclick="window.print()" style="padding:0.5rem 1rem;background:#1e4a6e;color:#fff;border:none;border-radius:4px;cursor:pointer;">打印 / 另存为 PDF</button>
+  </div>
+  
+<article class="page cover-page" style="text-align:center;padding-top:35mm;">
+  <h1 style="font-size:1.6rem;color:#1e4a6e;border:none;">禾书耕文（GrainScript）<br/>汇报汇编</h1>
+  <p style="margin-top:2rem;font-size:1rem;color:#555;">统计截止：2026 年 6 月 6 日</p>
+  <table style="margin:2.5rem auto 0;font-size:0.95rem;text-align:left;border-collapse:collapse;">
+    <tr><td style="padding:0.4rem 1rem;border:1px solid #ccc;"><strong>第一篇</strong></td><td style="padding:0.4rem 1rem;border:1px solid #ccc;">工作周报（6.2 — 6.6，含 5.31—6.1 延续工作）</td></tr>
+    <tr><td style="padding:0.4rem 1rem;border:1px solid #ccc;"><strong>第二篇</strong></td><td style="padding:0.4rem 1rem;border:1px solid #ccc;">产品方向调整方案（导师确认稿）</td></tr>
+  </table>
+  <p style="margin-top:3rem;">汇报人：________________</p>
+</article>
+  <article class="page">
+    <header class="doc-header">
+      <h1>禾书耕文（GrainScript）<br />工作周报</h1>
+      <div class="meta">
+        <span><strong>汇报周期</strong>：2026 年 6 月 2 日 — 6 月 6 日</span>
+        <span><strong>统计截止</strong>：2026 年 6 月 6 日</span>
+        <span><strong>项目</strong>：农业科研 AI 辅助写作系统</span>
+        <span><strong>汇报人</strong>：________________</span>
+      </div>
+    </header>
+
+    <div class="summary-box">
+      <strong>摘要：</strong>本周在「能跑」基础上推进「稳跑、好维护、方向清晰」：合并工程化与线上修复；梳理人机协作产品路线并产出导师确认材料；加固 VPS 部署流程。大功能改造待导师确认后按 ENG-PR-087 → 080 系列分阶段实施。
+    </div>
+
+    <section>
+      <h2>一、本周核心工作（6.2 — 6.6）</h2>
+
+      <h3>1.1 工程规范与架构整理</h3>
+      <ul>
+        <li>建立 L1～L4 文档分层（AGENTS.md、领域索引、API 索引自动生成）。</li>
+        <li>ENG-PR-023～031：写作 pipeline 拆分（030）；references/analysis 增量 PATCH；知识库 Prisma 主源（027/028）；UI 迁 services（020～022）；工作台引用溯源侧栏可滚动。</li>
+      </ul>
+
+      <h3>1.2 RAG 与知识库</h3>
+      <ul>
+        <li>二进制索引、异步加载、检索超时与预热。</li>
+        <li>书目补全、索引修复、引用编号归一化。</li>
+        <li>路径穿越拦截；proxy 注入 x-user-id。</li>
+      </ul>
+
+      <h3>1.3 质量、审查与 Admin</h3>
+      <ul>
+        <li>质量模块 Phase 3、审查/查重、Admin 增强。</li>
+        <li>CI 绿门；手动 PM2 部署；无索引时跳过部分 RAG 集成测。</li>
+      </ul>
+
+      <h3>1.4 生产部署与线上稳定性</h3>
+      <table>
+        <thead><tr><th>事项</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>部署架构</td><td>PM2 + standalone；PostgreSQL @127.0.0.1:5432</td></tr>
+          <tr><td>PM2</td><td>单实例 fork；max_memory_restart 3GB</td></tr>
+          <tr><td>扩写 SSE</td><td>超时与 fetch 清理，减少 Network Error</td></tr>
+          <tr><td>进程崩溃</td><td>断开连接、reader.cancel 等 unhandledRejection 修复</td></tr>
+          <tr><td>配置</td><td>部署不覆盖 .env；JWT 变更不覆盖 DB API Key</td></tr>
+          <tr><td>备份</td><td>服务器 cron + 本机 pull 脚本</td></tr>
+        </tbody>
+      </table>
+
+      <h3>1.5 产品规划与导师材料</h3>
+      <ul>
+        <li>ENG-PR-080 系列计划：087（P0 稳定性）+ 080～086 + 088 规划。</li>
+        <li>导师确认方案（MD/HTML/PDF）：定位、分阶段、勾选请示项。</li>
+        <li>部署加固：preflight.sh、打包/apply 集成自检、多 API Key 注入、文档更新。</li>
+      </ul>
+
+      <h3>1.6 技术调研结论</h3>
+      <ul>
+        <li>多 API Key 轮转可缓解 429，不能替代 VPS 写作并发控制。</li>
+        <li>ENG-PR-087 应优先于 081 分步 UI。</li>
+        <li>卡顿 = 机器资源 + 管道过重 + 配置错误，需双线并行。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>二、前期延续工作汇总（5.31 — 6.1）</h2>
+      <p>下列为本周基线之前完成的工作，已并入或支撑当前 main。</p>
+
+      <h3>2.1 部署路线（5.31）</h3>
+      <ul>
+        <li>VPS 收敛为 PM2 + 宿主机 Node；修复 Prisma/openssl、端口、进程冲突等。</li>
+        <li>文档：PostgreSQL 与认证头指引。</li>
+      </ul>
+
+      <h3>2.2 RAG（6.1）</h3>
+      <ul>
+        <li>index-pdfs 拆分 JSON + 二进制 embedding；异步加载与路由 await 修复。</li>
+        <li>语义检索前延迟加载 embedding。</li>
+      </ul>
+
+      <h3>2.3 功能与质量（6.1）</h3>
+      <ul>
+        <li>Admin、审查、查重、UI；quality 绿门；RAG 迁移验证清单。</li>
+      </ul>
+
+      <h3>2.4 6.2 集中合并</h3>
+      <ul>
+        <li>references PATCH、validateBody、analysis PATCH 等与 6.3 CI/写作修复形成当前 main。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>三、线上问题与处理状态</h2>
+      <table>
+        <thead><tr><th>现象</th><th>已做</th><th>待做</th></tr></thead>
+        <tbody>
+          <tr><td>多人扩写卡顿</td><td>PM2 单实例、3GB</td><td>ENG-PR-087 限流</td></tr>
+          <tr><td>扩写中断/报错</td><td>SSE、崩溃修复</td><td>087 + 默认 fast</td></tr>
+          <tr><td>部署配置错误</td><td>preflight、文档</td><td>每次发布自检</td></tr>
+          <tr><td>像一键出论文</td><td>080 方案+导师稿</td><td>待导师确认后开发</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>四、主要产出物</h2>
+      <table>
+        <thead><tr><th>类别</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>代码</td><td>main @ 2026-06-03（20+ commits）</td></tr>
+          <tr><td>计划</td><td>docs/plans/ENG-PR-080-human-in-the-loop.md</td></tr>
+          <tr><td>导师材料</td><td>docs/plans/ENG-PR-080-导师确认方案.*</td></tr>
+          <tr><td>本周报</td><td>docs/reports/周报-2026-06-02至06-06.*</td></tr>
+          <tr><td>部署</td><td>preflight.sh、DEPLOY_SETUP_CHECKLIST.md</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>五、下周计划（6.9 起）</h2>
+      <ol>
+        <li>6.6 汇报：导师确认 A/B/C 三项。</li>
+        <li>本地改动 commit 入库。</li>
+        <li>开发：087 → 080+083 → 081→082 → 084/085；086 远期。</li>
+        <li>运维：发布前 preflight；按需多 Key。</li>
+      </ol>
+      <p><strong>一句话：</strong>本周完成工程拆分、RAG/引用、PM2 与扩写稳定性修复；明确人机协作路线并备导师材料；部署加自检与多 Key。大改等老师确认，优先 087。</p>
+    </section>
+
+    <section>
+      <h2>附录 A：6.2—6.3 主要提交摘要</h2>
+      <pre class="commit">docs: L1-L4 + API index generator
+refactor(writing): pipeline split (ENG-PR-030)
+feat(knowledge): Prisma metadata (027/028)
+feat(data): analysis PATCH (026/025b)
+feat: quality Phase 3 + CI/CD (023~030)
+feat: RAG 书目、索引、引用归一化
+fix(pm2): fork + 3GB memory
+fix(writing): SSE; disconnect crash
+fix(ai): reader.cancel crash
+fix(settings): DB keys safe
+fix(deploy): .env protect; prisma
+feat: backup cron + pull
+ci: manual PM2; legacy-peer-deps
+merge: main sync PM2 + writing</pre>
+    </section>
+
+    <section>
+      <h2>附录 B：导师确认三项（详见专册）</h2>
+      <table>
+        <thead><tr><th>项</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td>A</td><td>人机协作辅助写作，作者主笔</td></tr>
+          <tr><td>B</td><td>三阶段 4～6 周；先稳定性</td></tr>
+          <tr><td>C</td><td>对话助手答辩前不承诺</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:0.88rem;color:#555;">完整方案见：docs/plans/ENG-PR-080-导师确认方案.pdf</p>
+    </section>
+
+    <div class="sign-block">
+      <div>
+        <p><strong>汇报人签名</strong></p>
+        <div class="sign-line"></div>
+        <p>日期：________________</p>
+      </div>
+      <div>
+        <p><strong>导师意见（可选）</strong></p>
+        <div class="sign-line"></div>
+        <p>日期：________________</p>
+      </div>
+    </div>
+  </article>
+  <article class="page part-break">
+    <header class="doc-header">
+      <h1>禾书耕文（GrainScript）<br />产品方向调整方案</h1>
+      <div class="meta">
+        <span><strong>呈报</strong>：指导教师审阅</span>
+        <span><strong>撰写日期</strong>：2026 年 6 月</span>
+        <span><strong>文档性质</strong>：实施前确认稿（非最终技术规格）</span>
+        <span><strong>版本</strong>：v1.0</span>
+      </div>
+    </header>
+
+    <section class="approval-box">
+      <h2>一、请示事项（请老师勾选或批注）</h2>
+      <p>请您确认以下三项是否同意作为下一阶段开发方向：</p>
+      <label class="checkbox-item">
+        <input type="checkbox" disabled />
+        <span><strong>A. 产品定位</strong>：由「一键生成论文」调整为「<strong>人机协作的辅助写作</strong>」，作者始终是主笔，系统提供草稿、审查建议与文献支持。</span>
+      </label>
+      <label class="checkbox-item">
+        <input type="checkbox" disabled />
+        <span><strong>B. 实施范围</strong>：同意按 <strong>三阶段、约 4～6 周</strong>（单人开发）分步实施；<strong>第一阶段</strong>先做稳定性与入口约束，<strong>不一次性大改界面</strong>。</span>
+      </label>
+      <label class="checkbox-item">
+        <input type="checkbox" disabled />
+        <span><strong>C. 暂不实施项</strong>：对话式 AI 助手侧边栏（终局形态）列入远期规划，<strong>本次答辩/演示前不承诺交付</strong>。</span>
+      </label>
+      <table>
+        <thead>
+          <tr><th>项目</th><th>同意 / 修改 / 不同意</th><th>批注</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>A 产品定位</td><td></td><td></td></tr>
+          <tr><td>B 实施范围</td><td></td><td></td></tr>
+          <tr><td>C 暂不实施项</td><td></td><td></td></tr>
+          <tr><td>其他</td><td></td><td></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>二、背景与问题</h2>
+      <h3>2.1 系统简介</h3>
+      <p>「禾书耕文」面向<strong>农业科研</strong>场景的论文写作辅助平台，已具备：选题与大纲、分章节 AI 扩写、文献知识库检索、引用核查、审查与查重、图表与导出等功能。</p>
+      <h3>2.2 当前偏差</h3>
+      <p>系统最初目标是提升<strong>初稿写作效率</strong>，但在功能迭代后，完整使用路径接近：填写题目 → 选择方向 → 点击生成 → 等待 → 导出。作者在大纲结构、章节初稿、自动修改等环节<strong>参与不足</strong>，容易给使用者（及评审）造成「一键出论文」的印象，与辅助写作、学术规范要求不符。</p>
+      <h3>2.3 线上使用反馈</h3>
+      <p>在实验室 VPS（4 核 CPU / 8GB 内存）试运行中，还存在：多用户同时扩写时响应变慢；偶发扩写中断；部署配置（数据库、文献目录）繁琐。<span class="note">上述问题将通过「稳定性专项」优先缓解，与产品交互改造并行。</span></p>
+    </section>
+
+    <section>
+      <h2>三、调整目标与四项原则</h2>
+      <h3>3.1 目标陈述</h3>
+      <p>将交互模型从「人设定参数 → 机器全自动完成 → 人接收结果」，调整为「人表达思路 → 系统给建议/草稿 → 人审阅修改 → 系统按反馈迭代 → 人定稿」。</p>
+      <table>
+        <thead>
+          <tr><th>原则</th><th>含义</th><th>可观察结果</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>人先机后</td><td>无实质输入不启动生成</td><td>扩写前需有草稿要点；大纲需先由人给出章节骨架</td></tr>
+          <tr><td>可见可控</td><td>机器修改对人透明</td><td>审查结果以「待办清单」展示，作者逐条决定是否采纳</td></tr>
+          <tr><td>增量迭代</td><td>可中途修改方向</td><td>初稿可编辑后再提交审查；可忽略部分建议</td></tr>
+          <tr><td>透明有据</td><td>建议可核对</td><td>审查意见关联原文片段；引用可回溯文献</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>四、分阶段实施方案</h2>
+      <h3>阶段 0：稳定性与部署（约 1～2 周，优先）</h3>
+      <table>
+        <thead><tr><th>措施</th><th>用户可感知变化</th></tr></thead>
+        <tbody>
+          <tr><td>限制同时进行的扩写任务数</td><td>高峰期提示「系统繁忙」，而非长时间无响应</td></tr>
+          <tr><td>默认使用较轻量的「快速预览」模式</td><td>减少单次点击触发的后台计算量</td></tr>
+          <tr><td>部署前自动检查配置</td><td>降低每次上线配置错误</td></tr>
+          <tr><td>扩写失败时保留已生成文字</td><td>减少「白屏重来」</td></tr>
+        </tbody>
+      </table>
+      <p class="note">本阶段不改变「必须从草稿开始写」等产品规则（留给阶段 1）。</p>
+
+      <h3>阶段 1：人机协作核心（约 2～3 周）</h3>
+      <table>
+        <thead>
+          <tr><th>序号</th><th>内容</th><th>用户侧变化</th><th>预估工期</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1.1</td><td>扩写入口约束</td><td>须先输入不少于约 50 字的思路/要点；按章节给出写作引导</td><td>0.5 天</td></tr>
+          <tr><td>1.2</td><td>大纲协作</td><td>作者先填写 3 个以上一级章节标题，AI 仅补全子节与要点</td><td>1 天</td></tr>
+          <tr><td>1.3</td><td>扩写分步流程</td><td>先生成初稿 → 作者可改 → <strong>手动</strong>提交审查 → 勾选要改的问题 → 再修复</td><td>3～4 天</td></tr>
+          <tr><td>1.4</td><td>审查清单化</td><td>审查结果以列表展示，非静默自动改全文</td><td>2 天</td></tr>
+        </tbody>
+      </table>
+      <p><strong>阶段 1 结束时可演示</strong>：没有干货不能点生成；AI 只补骨架不全包；作者决定采纳哪条修改意见。</p>
+
+      <h3>阶段 2：入口整合（约 1～2 周，可选）</h3>
+      <ul>
+        <li>写作统一在工作台，取消与项目脱节的独立「一键扩写页」</li>
+        <li>编辑器选中段落提供扩写、润色、检查</li>
+        <li>数据分析页标明「AI 生成，仅供参考」</li>
+      </ul>
+      <p class="note">时间紧可只做阶段 1；是否纳入答辩前交付请与老师确认。</p>
+
+      <h3>阶段 3：对话式助手（远期，本次不承诺）</h3>
+      <p>编辑器旁可持续对话的 AI 面板，依赖阶段 1、2 稳定后再做。</p>
+    </section>
+
+    <section>
+      <h2>五、实施节奏建议</h2>
+      <div class="timeline">
+        <div class="timeline-item"><strong>第 1 周</strong><span>阶段 0（稳定性）+ 1.1 扩写门槛 + 1.2 大纲骨架</span></div>
+        <div class="timeline-item"><strong>第 2～3 周</strong><span>1.3 分步扩写 + 1.4 审查清单</span></div>
+        <div class="timeline-item"><strong>第 4 周+</strong><span>阶段 2（视答辩节点取舍）→ 阶段 3 远期</span></div>
+      </div>
+      <table>
+        <thead><tr><th>时间点</th><th>交付物</th></tr></thead>
+        <tbody>
+          <tr><td>第 1 周末</td><td>多人试用不明显卡顿；扩写需先写要点</td></tr>
+          <tr><td>第 3 周末</td><td>完整「生成—审查—选择性修改」流程可演示</td></tr>
+          <tr><td>答辩前</td><td>按老师意见裁剪阶段 2</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>六、不在本次方案内的事项</h2>
+      <ul>
+        <li>不更换大模型供应商或重新训练模型</li>
+        <li>不改动文献知识库核心检索算法</li>
+        <li>不承诺批量自动生成整篇论文</li>
+        <li>不做移动端适配</li>
+        <li>阶段 3 对话助手不纳入近期必交付范围</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>七、风险与对策</h2>
+      <table>
+        <thead><tr><th>风险</th><th>对策</th></tr></thead>
+        <tbody>
+          <tr><td>操作步骤变多，抱怨「变慢」</td><td>保留「快速预览」仅生成初稿；深度审查需主动选择</td></tr>
+          <tr><td>开发周期超出预期</td><td>严格分阶段；阶段 2、3 可延后</td></tr>
+          <tr><td>改交互后仍卡顿</td><td>阶段 0 全局限流与默认轻量模式</td></tr>
+          <tr><td>与「提高效率」看似矛盾</td><td>强调减少返工与合规风险</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>八、预期成效</h2>
+      <ol>
+        <li><strong>合规与形象</strong>：系统明确为写作辅助工具，降低学术不端争议空间。</li>
+        <li><strong>论文质量</strong>：结构由作者主导，AI 负责扩展与提示问题。</li>
+        <li><strong>可演示性</strong>：答辩可展示「作者决策点」。</li>
+        <li><strong>可维护性</strong>：分阶段实施，避免一次性重构导致不可用。</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>九、附录：流程对照</h2>
+      <p><strong>现状（简化）</strong></p>
+      <div class="flow">题目 + 方向 → AI 生成完整大纲 → 选节 → 一键扩写（自动写+自动审+自动改）→ 导出</div>
+      <p><strong>目标（简化）</strong></p>
+      <div class="flow">题目 + 方向 → 作者写章节骨架 → AI 补子节
+→ 作者写章节要点 → AI 扩写初稿 → 作者修改
+→ 作者提交审查 → 看待办清单 → 勾选后修复 → 导出</div>
+    </section>
+
+    <div class="sign-block">
+      <div>
+        <p><strong>学生签名</strong></p>
+        <div class="sign-line"></div>
+        <p>日期：________________</p>
+      </div>
+      <div>
+        <p><strong>指导教师意见</strong></p>
+        <div class="sign-line"></div>
+        <p>日期：________________</p>
+      </div>
+    </div>
+  </article>
+</body>
+</html>

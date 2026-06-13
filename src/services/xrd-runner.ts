@@ -2,10 +2,9 @@
 
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { PYTHON_CMD } from "@/lib/python-cmd";
 
 const execFileAsync = promisify(execFile);
-
-const PYTHON_CMD = process.env.PYTHON_CMD || (process.platform === "win32" ? "python" : "python3");
 
 export interface XrdResult {
   stdout: string;

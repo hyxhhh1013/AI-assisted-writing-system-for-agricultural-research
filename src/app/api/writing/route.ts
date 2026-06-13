@@ -1,5 +1,6 @@
 import { createLogger } from "@/lib/logger";
 import { getErrorMessage } from "@/lib/error-utils";
+import { releaseWritingSlot, tryAcquireWritingSlot } from "@/lib/writing-concurrency";
 
 const log = createLogger("api/writing");
 import { NextRequest } from "next/server";
@@ -8,6 +9,7 @@ import type { EvidenceClaim } from "@/contracts/data-source";
 import { getAgentModelConfig } from "@/lib/ai";
 import { validateBody } from "@/lib/api-validate";
 import { writingSchema } from "@/lib/validations";
+import { resolveWritingDraftContext } from "@/contracts/writing";
 import { runWritingPipeline } from "./run-pipeline";
 import type { WritingGlobalContext } from "./types";
 
@@ -21,12 +23,13 @@ export async function POST(req: NextRequest) {
     const { data, errorResponse: ve } = await validateBody(writingSchema, await req.json());
     if (ve) return ve;
 
-    const { context, globalContext: rawGlobalContext, dataClaims: rawDataClaims } = data;
+    const { context, bullets, globalContext: rawGlobalContext, dataClaims: rawDataClaims } = data;
     const dataClaims = (rawDataClaims ?? []) as EvidenceClaim[];
     const globalContext = rawGlobalContext as WritingGlobalContext | undefined;
 
-    if (!context) {
-      return new Response(JSON.stringify({ error: "Missing required field: context" }), {
+    const draftContext = resolveWritingDraftContext(context, bullets);
+    if (!draftContext) {
+      return new Response(JSON.stringify({ error: "请填写扩写要点或补充说明" }), {
         status: 400,
       });
     }
@@ -38,10 +41,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (!tryAcquireWritingSlot()) {
+      return new Response(
+        JSON.stringify({
+          error: "系统繁忙，请稍后再试",
+          code: "WRITING_CONCURRENCY_LIMIT",
+        }),
+        { status: 503, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
         let streamClosed = false;
+        let slotReleased = false;
+        const releaseSlotOnce = () => {
+          if (slotReleased) return;
+          slotReleased = true;
+          releaseWritingSlot();
+        };
+
         const emit = (event: WritingSSEEvent) => {
           if (streamClosed) return;
           try {
@@ -58,13 +78,18 @@ export async function POST(req: NextRequest) {
             streamClosed = true;
           } catch {
             streamClosed = true;
+          } finally {
+            releaseSlotOnce();
           }
         };
+
+        req.signal.addEventListener("abort", releaseSlotOnce, { once: true });
+
         try {
           await runWritingPipeline({
             req,
             data,
-            context,
+            context: draftContext,
             dataClaims,
             globalContext,
             userId,
@@ -84,6 +109,8 @@ export async function POST(req: NextRequest) {
           } catch {
             /* already closed */
           }
+        } finally {
+          releaseSlotOnce();
         }
       },
     });

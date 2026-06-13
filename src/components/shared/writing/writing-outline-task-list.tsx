@@ -92,7 +92,7 @@ export function WritingOutlineTaskList({
           <RefreshCw className="h-3 w-3" />
         </Button>
       </div>
-      <div className="border rounded-md max-h-[240px] overflow-y-auto bg-muted/20">{listBody}</div>
+      <div className="border rounded-md max-h-[160px] overflow-y-auto bg-muted/20">{listBody}</div>
     </div>
   );
 }

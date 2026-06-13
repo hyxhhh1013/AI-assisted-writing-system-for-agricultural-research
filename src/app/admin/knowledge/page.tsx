@@ -6,11 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Search, Trash2, RefreshCw } from "lucide-react";
+import { Loader2, Search, Trash2, RefreshCw, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   bulkDeleteAdminKnowledge,
   deleteAdminKnowledge,
+  importAdminJournalMetrics,
   listAdminKnowledge,
   reindexAdminKnowledge,
   type AdminKnowledgeFile,
@@ -26,6 +27,7 @@ export default function AdminKnowledgePage() {
   const [deleteTarget, setDeleteTarget] = useState<AdminKnowledgeFile | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [reindexing, setReindexing] = useState<string | null>(null);
+  const [metricsImporting, setMetricsImporting] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -70,8 +72,63 @@ export default function AdminKnowledgePage() {
   const toggleSelect = (id: string) => setSelected(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
   const toggleAll = () => { if (selected.size === files.length) setSelected(new Set()); else setSelected(new Set(files.map(f => f.id))); };
 
+  const handleMetricsImport = async (file: File | undefined, dryRun: boolean) => {
+    if (!file) return;
+    setMetricsImporting(true);
+    try {
+      const result = await importAdminJournalMetrics(file, { dryRun });
+      if (!result.ok) {
+        toast.error(result.error ?? "导入失败");
+        return;
+      }
+      toast.success(result.message ?? (dryRun ? "试运行完成" : "指标已导入"));
+    } catch {
+      toast.error("导入失败");
+    } finally {
+      setMetricsImporting(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
+      <div className="rounded-xl border border-[#1a5632]/10 bg-[#faf9f6] p-4 space-y-2">
+        <p className="text-sm font-medium text-[#122820]">期刊指标表（CSV / Excel）</p>
+        <p className="text-xs text-[#6b7c72]">
+          直接上传课题组 Excel 即可；列名支持中英文（如 issn/刊号、journal/刊名、影响因子、分区）。优先 ISSN 匹配，否则刊名。JCR 影响因子须来自实验室表；被引与 2yr 均值由 OpenAlex 自动补全。
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            type="file"
+            accept=".csv,.xlsx,.xls,text/csv"
+            className="h-9 max-w-xs text-sm"
+            disabled={metricsImporting}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void handleMetricsImport(f, false);
+              e.target.value = "";
+            }}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9"
+            disabled={metricsImporting}
+            onClick={() => {
+              const input = document.createElement("input");
+              input.type = "file";
+              input.accept = ".csv,.xlsx,.xls,text/csv";
+              input.onchange = () => {
+                const f = input.files?.[0];
+                if (f) void handleMetricsImport(f, true);
+              };
+              input.click();
+            }}
+          >
+            {metricsImporting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Upload className="h-4 w-4 mr-1" />}
+            试运行
+          </Button>
+        </div>
+      </div>
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-[#122820]">文献管理</h2>
         {selected.size > 0 && <Button variant="destructive" size="sm" onClick={handleBulkDelete} disabled={bulkDeleting}>删除选中 ({selected.size})</Button>}

@@ -8,6 +8,27 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 const defaultPath = path.join(process.cwd(), "data/metadata.json");
+const ARTICLES_DIR = path.join(process.cwd(), process.env.RAG_ARTICLES_DIR || "papers");
+
+function resolvePdfPath(category, name) {
+  const base = path.resolve(ARTICLES_DIR);
+  const dirSeg = category && category !== "未分类" ? category : "";
+  const resolved = path.resolve(base, dirSeg, name);
+  const rel = path.relative(base, resolved);
+  if (rel.startsWith("..") || path.isAbsolute(rel)) return null;
+  return resolved;
+}
+
+function diskSizeForRecord(record) {
+  if (typeof record.size === "number" && record.size > 0) return record.size;
+  const fp = resolvePdfPath(record.category || "未分类", record.name);
+  if (!fp || !fs.existsSync(fp)) return 0;
+  try {
+    return fs.statSync(fp).size;
+  } catch {
+    return 0;
+  }
+}
 
 async function main() {
   const inputPath = process.argv[2] ? path.resolve(process.argv[2]) : defaultPath;
@@ -35,7 +56,7 @@ async function main() {
         name: r.name,
         category: r.category || "未分类",
         documentType: r.documentType || "paper",
-        size: r.size || 0,
+        size: diskSizeForRecord(r),
         mtime: r.mtime ? new Date(r.mtime) : new Date(),
         bib: r.bib ? JSON.stringify(r.bib) : null,
         gbTag: r.gbTag || null,

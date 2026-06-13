@@ -25,7 +25,11 @@ import {
 
 describe("writingSchema", () => {
   it("accepts valid input", () => {
-    const result = writingSchema.safeParse({ title: "test", section: "abstract" });
+    const result = writingSchema.safeParse({
+      title: "test",
+      section: "abstract",
+      context: "研究背景、方法、主要结果与结论方向摘要。",
+    });
     expect(result.success).toBe(true);
   });
 
@@ -40,7 +44,15 @@ describe("writingSchema", () => {
   });
 
   it("applies defaults", () => {
-    const result = writingSchema.safeParse({ title: "test", section: "introduction" });
+    const result = writingSchema.safeParse({
+      title: "test",
+      section: "introduction",
+      bullets: [
+        "研究背景与问题陈述足够长",
+        "主要方法或材料说明足够长",
+        "预期结果或讨论方向足够长",
+      ],
+    });
     if (result.success) {
       expect(result.data.language).toBe("zh");
       expect(result.data.template).toBe("sci");

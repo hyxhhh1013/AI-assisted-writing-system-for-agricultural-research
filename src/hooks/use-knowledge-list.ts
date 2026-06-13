@@ -23,8 +23,16 @@ import {
   type ReindexProgressState,
   type ReindexRequest,
 } from "@/contracts/reindex";
+import {
+  filterKnowledgeFiles,
+  hasActiveKnowledgeListFilters,
+  type KnowledgeDoiFilter,
+  type KnowledgeIndexStatusFilter,
+  type KnowledgeListFilters,
+} from "@/contracts/knowledge";
 
 const PAGE_SIZE = 10;
+const FILTER_FETCH_CAP = 5000;
 
 export function useKnowledgeList() {
   const [files, setFiles] = useState<KnowledgeFile[]>([]);
@@ -38,6 +46,10 @@ export function useKnowledgeList() {
   const [searchType, setSearchType] = useState<"name" | "semantic">("name");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalFiles, setTotalFiles] = useState(0);
+  const [journalFilter, setJournalFilter] = useState("");
+  const [indexStatusFilter, setIndexStatusFilter] = useState<KnowledgeIndexStatusFilter>("all");
+  const [doiFilter, setDoiFilter] = useState<KnowledgeDoiFilter>("all");
+  const [allFilesForFilter, setAllFilesForFilter] = useState<KnowledgeFile[]>([]);
 
   const [selectedFiles, setSelectedFiles] = useState<KnowledgeFile[]>([]);
   const [selectAllPages, setSelectAllPages] = useState(false);
@@ -65,19 +77,43 @@ export function useKnowledgeList() {
   const [parseWarningFile, setParseWarningFile] = useState<KnowledgeFile | null>(null);
   const [isParseWarningOpen, setIsParseWarningOpen] = useState(false);
 
+  const listFilters: KnowledgeListFilters = {
+    journalContains: journalFilter,
+    indexStatus: indexStatusFilter,
+    doi: doiFilter,
+  };
+  const bibFiltersActive = hasActiveKnowledgeListFilters(listFilters);
+
   const fetchFiles = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await searchKnowledge({
-        q: searchQuery || undefined,
-        category: selectedCategory !== "全部" ? selectedCategory : undefined,
-        type: searchType,
-        page: currentPage,
-        pageSize: PAGE_SIZE,
-      });
-      if (data.files) setFiles(data.files);
-      if (data.total !== undefined) setTotalFiles(data.total);
-      if (data.categories) setCategories(data.categories);
+      if (bibFiltersActive && searchType === "name") {
+        const data = await searchKnowledge({
+          q: searchQuery || undefined,
+          category: selectedCategory !== "全部" ? selectedCategory : undefined,
+          type: searchType,
+          page: 1,
+          pageSize: FILTER_FETCH_CAP,
+        });
+        const filtered = filterKnowledgeFiles(data.files ?? [], listFilters);
+        const start = (currentPage - 1) * PAGE_SIZE;
+        setAllFilesForFilter(filtered);
+        setFiles(filtered.slice(start, start + PAGE_SIZE));
+        setTotalFiles(filtered.length);
+        if (data.categories) setCategories(data.categories);
+      } else {
+        setAllFilesForFilter([]);
+        const data = await searchKnowledge({
+          q: searchQuery || undefined,
+          category: selectedCategory !== "全部" ? selectedCategory : undefined,
+          type: searchType,
+          page: currentPage,
+          pageSize: PAGE_SIZE,
+        });
+        if (data.files) setFiles(data.files);
+        if (data.total !== undefined) setTotalFiles(data.total);
+        if (data.categories) setCategories(data.categories);
+      }
       setSelectedFiles([]);
       setSelectAllPages(false);
     } catch {
@@ -85,7 +121,16 @@ export function useKnowledgeList() {
     } finally {
       setIsLoading(false);
     }
-  }, [searchQuery, selectedCategory, currentPage, searchType]);
+  }, [
+    searchQuery,
+    selectedCategory,
+    currentPage,
+    searchType,
+    bibFiltersActive,
+    journalFilter,
+    indexStatusFilter,
+    doiFilter,
+  ]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -96,7 +141,7 @@ export function useKnowledgeList() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedCategory, searchType]);
+  }, [searchQuery, selectedCategory, searchType, journalFilter, indexStatusFilter, doiFilter]);
 
   const runReindex = useCallback(
     async (options?: ReindexKnowledgeOptions, startMessage?: string) => {
@@ -165,6 +210,11 @@ export function useKnowledgeList() {
 
   const selectAllAcrossPages = useCallback(async () => {
     try {
+      if (bibFiltersActive && allFilesForFilter.length > 0) {
+        setSelectedFiles([...allFilesForFilter]);
+        setSelectAllPages(true);
+        return;
+      }
       const data = await searchKnowledge({
         q: searchQuery || undefined,
         category: selectedCategory !== "全部" ? selectedCategory : undefined,
@@ -178,7 +228,14 @@ export function useKnowledgeList() {
     } catch {
       toast.error("全选失败");
     }
-  }, [searchQuery, selectedCategory, searchType, totalFiles]);
+  }, [
+    searchQuery,
+    selectedCategory,
+    searchType,
+    totalFiles,
+    bibFiltersActive,
+    allFilesForFilter,
+  ]);
 
   const toggleSelectFile = useCallback((file: KnowledgeFile) => {
     setSelectedFiles((prev) =>
@@ -372,6 +429,13 @@ export function useKnowledgeList() {
     handleCancelReindex,
     handleDeleteFile,
     formatSize,
+    journalFilter,
+    setJournalFilter,
+    indexStatusFilter,
+    setIndexStatusFilter,
+    doiFilter,
+    setDoiFilter,
+    bibFiltersActive,
   };
 }
 

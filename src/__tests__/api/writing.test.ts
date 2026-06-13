@@ -12,6 +12,11 @@ describe("writing API — input validation", () => {
     const result = writingSchema.safeParse({
       title: "热解温度对生物炭产率的影响",
       section: "introduction",
+      bullets: [
+        "研究背景与生物炭改良土壤的机制要点",
+        "实验设计与主要处理方法说明",
+        "预期结果与讨论方向要点说明",
+      ],
     });
     expect(result.success).toBe(true);
   });
@@ -38,9 +43,69 @@ describe("writing API — input validation", () => {
     expect(result.success).toBe(false);
   });
 
+  it("accepts two bullets plus long supplemental context (full mode)", () => {
+    const longContext = "补充说明".repeat(20);
+    const r = writingSchema.safeParse({
+      title: "test",
+      section: "introduction",
+      mode: "full",
+      bullets: ["要点一足够长用于校验通过", "要点二足够长用于校验通过", ""],
+      context: longContext,
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("accepts fast mode with short paragraph context", () => {
+    const r = writingSchema.safeParse({
+      title: "test",
+      section: "introduction",
+      mode: "fast",
+      context: "这是一段足够长的段落内容用于快速扩写测试。",
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejects fast mode when context is too short", () => {
+    const r = writingSchema.safeParse({
+      title: "test",
+      section: "introduction",
+      mode: "fast",
+      context: "太短",
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues.some((i) => i.path.includes("context"))).toBe(true);
+    }
+  });
+
   it("accepts all valid modes with defaults", () => {
-    for (const mode of ["full", "fast", "audit_only", "fix_only"]) {
-      const r = writingSchema.safeParse({ title: "t", section: "abstract", mode });
+    const readyBullets = [
+      "要点一足够长用于校验通过",
+      "要点二足够长用于校验通过",
+      "要点三足够长用于校验通过",
+    ];
+    const draftBody = "这是一段足够长的正文，用于 audit 或 fix 模式校验。";
+    for (const mode of ["full", "fast", "audit_only", "fix_only", "expand_bullet"]) {
+      const payload =
+        mode === "expand_bullet"
+          ? {
+              title: "t",
+              section: "introduction",
+              mode,
+              bullets: readyBullets,
+              bulletIndex: 0,
+            }
+          : mode === "audit_only" || mode === "fix_only"
+            ? { title: "t", section: "abstract", mode, context: draftBody }
+            : mode === "fast"
+              ? { title: "t", section: "abstract", mode, context: "x".repeat(20) }
+              : {
+                  title: "t",
+                  section: "abstract",
+                  mode,
+                  bullets: readyBullets,
+                };
+      const r = writingSchema.safeParse(payload);
       expect(r.success).toBe(true);
     }
   });

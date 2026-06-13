@@ -173,6 +173,44 @@ export async function bulkDeleteAdminKnowledge(
   return res.ok;
 }
 
+export interface JournalMetricsImportResult {
+  ok: boolean;
+  message?: string;
+  matched?: number;
+  updated?: number;
+  skipped?: number;
+  totalFiles?: number;
+  lookupSize?: number;
+  lookupIssn?: number;
+  lookupJournal?: number;
+  matchRate?: number;
+  dryRun?: boolean;
+  error?: string;
+}
+
+/** POST /api/admin/journal-metrics — 上传 CSV/Excel 导入期刊 IF/分区 */
+export async function importAdminJournalMetrics(
+  file: File,
+  options?: { dryRun?: boolean },
+): Promise<JournalMetricsImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const q = options?.dryRun ? "?dryRun=true" : "";
+  const res = await fetch(`/api/admin/journal-metrics${q}`, { method: "POST", body: form });
+  const data = await parseJson<JournalMetricsImportResult & { error?: string }>(res);
+  if (!res.ok) {
+    return { ok: false, error: data.error ?? "导入失败" };
+  }
+  return {
+    ok: true,
+    message: data.message,
+    matched: data.matched,
+    updated: data.updated,
+    lookupSize: data.lookupSize,
+    dryRun: data.dryRun,
+  };
+}
+
 /** GET /api/admin/settings */
 export async function listAdminSettings(): Promise<AdminSettingRecord[]> {
   const res = await fetch("/api/admin/settings");

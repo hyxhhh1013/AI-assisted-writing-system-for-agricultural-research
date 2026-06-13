@@ -12,6 +12,8 @@
  *   node scripts/index-pdfs.mjs --skip-stage3    跳过 embedding（仅 BM25）
  *   node scripts/index-pdfs.mjs --stage2-only    仅运行过滤+写出（最快，改过滤规则后使用）
  *   node scripts/index-pdfs.mjs --files=a.pdf,b.pdf  仅处理指定文献（可配合 force-stage1/3）
+ *   node scripts/index-pdfs.mjs --enrich-metrics     Stage 2 后对本次文献 OpenAlex 补被引/ISSN（限 20 篇）
+ *   ENRICH_OPENALEX_AFTER_INDEX=true                   同上，环境变量开启
  */
 
 import fs from "fs";
@@ -498,7 +500,16 @@ function syncMetadataToPrisma(metadataRecords) {
   }
 }
 
-function stage2_filterAndWrite(allRawChunks, existingMetaByName) {
+function resolveFileSize(filename, sizeByName, prev, existingMetaByName) {
+  const fromScan = sizeByName?.get(filename);
+  if (typeof fromScan === "number" && fromScan > 0) return fromScan;
+  if (typeof prev?.size === "number" && prev.size > 0) return prev.size;
+  const fromExisting = existingMetaByName.get(filename)?.size;
+  if (typeof fromExisting === "number" && fromExisting > 0) return fromExisting;
+  return 0;
+}
+
+function stage2_filterAndWrite(allRawChunks, existingMetaByName, sizeByName = new Map()) {
   const existingEmbMap = loadExistingEmbMap();
   if (existingEmbMap.size > 0) console.log(`  Preserved ${existingEmbMap.size} existing embeddings`);
   const existingFilteredBySource = loadExistingFilteredBySource();
@@ -547,7 +558,7 @@ function stage2_filterAndWrite(allRawChunks, existingMetaByName) {
         name: filename,
         category,
         chunkCount: reused.length,
-        size: prev?.size || 0,
+        size: resolveFileSize(filename, sizeByName, prev, existingMetaByName),
         mtime: new Date().toISOString(),
         documentType: (() => {
           if (prev?.bibEdited && prev?.documentType) return prev.documentType;
@@ -600,7 +611,7 @@ function stage2_filterAndWrite(allRawChunks, existingMetaByName) {
       name: filename,
       category,
       chunkCount: filtered.length,
-      size: existingMetaByName.get(filename)?.size || 0,
+      size: resolveFileSize(filename, sizeByName, existingMetaByName.get(filename), existingMetaByName),
       mtime: new Date().toISOString(),
       documentType: (() => {
         const prevEntry = existingMetaByName.get(filename);
@@ -778,7 +789,9 @@ function scanFiles() {
       const fullPath = path.join(dir, item);
       const stat = fs.statSync(fullPath);
       if (stat.isDirectory()) { walkDir(fullPath, item); }
-      else if (item.toLowerCase().endsWith(".pdf")) { allFiles.push({ path: fullPath, name: item, category, mtime: stat.mtimeMs }); }
+      else if (item.toLowerCase().endsWith(".pdf")) {
+        allFiles.push({ path: fullPath, name: item, category, mtime: stat.mtimeMs, size: stat.size });
+      }
     }
   }
   walkDir(ARTICLES_DIR);
@@ -877,9 +890,26 @@ async function main() {
 
   console.log("\n── Stage 2: Filter + Write ──");
   const existingMetaByName = await loadExistingMetaByNameFromPrisma();
-  const { allChunks, categoryCount, reusedFiles } = stage2_filterAndWrite(allRawChunks, existingMetaByName);
+  const sizeByName = new Map(filesToProcess.map((f) => [f.name, f.size ?? 0]));
+  const { allChunks, categoryCount, reusedFiles } = stage2_filterAndWrite(allRawChunks, existingMetaByName, sizeByName);
   if (reusedFiles > 0) {
     console.log(`  Incremental: reused filtered chunks for ${reusedFiles} unchanged files`);
+  }
+
+  const shouldEnrichMetrics =
+    process.env.ENRICH_OPENALEX_AFTER_INDEX === "true" || process.argv.includes("--enrich-metrics");
+  if (shouldEnrichMetrics && filesToProcess.length > 0) {
+    console.log("\n── OpenAlex metrics (post-index) ──");
+    try {
+      const { enrichKnowledgeFilesByNames } = await import("./lib/openalex-post-index.mjs");
+      const n = await enrichKnowledgeFilesByNames(
+        filesToProcess.map((f) => f.name),
+        { limit: Math.min(filesToProcess.length, 20) },
+      );
+      console.log(`  OpenAlex enrichment updated ${n} files`);
+    } catch (err) {
+      console.warn("  OpenAlex enrichment skipped:", err instanceof Error ? err.message : err);
+    }
   }
 
   const doStage3 = !FLAGS.stage2Only && !FLAGS.skipStage3;

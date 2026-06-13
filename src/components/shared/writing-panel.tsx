@@ -1,15 +1,24 @@
-﻿"use client";
+"use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Send, Eraser, Database } from "lucide-react";
+import { Loader2, Send, Eraser, Database, SearchCheck, Wrench, Search } from "lucide-react";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { projectStore } from "@/lib/store";
+import { getMinDraftChars, getWritingContextPlaceholder, isWritingDraftReady, contextLinesToBullets, MIN_WRITING_BULLETS, normalizeWritingBullets, shouldUseCollaborativeBulletExpand, type ManualWritingPhase, type WritingFlowMode } from "@/contracts/writing";
 import type { ProjectData } from "@/contracts/project";
 import { useWritingStream } from "@/hooks/use-writing-stream";
 import {
@@ -28,12 +37,18 @@ import type { WritingPreviewPayload, GenerationStatus, CitationWarning, DataClai
 import { useWritingPanelSession } from "@/hooks/use-writing-panel-session";
 import { useWritingPanelPreviewSync } from "@/hooks/use-writing-panel-preview-sync";
 import { useWritingPanelGenerate } from "@/hooks/use-writing-panel-generate";
+import { useWritingSourceSelection } from "@/hooks/use-writing-source-selection";
+import { WritingSourcePicker } from "@/components/shared/writing/writing-source-picker";
+import { WritingBulletList } from "@/components/shared/writing/writing-bullet-list";
+import { WritingBulletExpand } from "@/components/shared/writing/writing-bullet-expand";
+import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
 
 interface WritingPanelProps {
   projectId: string;
   project: ProjectData;
   editorActiveSection?: string;
   onGenerate?: (content: string, section: string, subsectionTitle?: string) => void;
+  onDraftApplied?: (section: string, subsectionTitle?: string) => void;
   onUpdateProject?: (updates: Partial<ProjectData>) => void;
   onGeneratingChange?: (generating: boolean) => void;
   onPreviewUpdate?: (data: WritingPreviewPayload) => void;
@@ -48,6 +63,7 @@ export function WritingPanel({
   project,
   editorActiveSection,
   onGenerate,
+  onDraftApplied,
   onUpdateProject,
   onGeneratingChange,
   onPreviewUpdate,
@@ -61,8 +77,13 @@ export function WritingPanel({
   const [targetSectionKey, setTargetSectionKey] = useState<string>("introduction");
   const [language, setLanguage] = useState("zh");
   const [retrievalMode, setRetrievalMode] = useState<"precise" | "balanced" | "extensive">("precise");
-  const [fastMode, setFastMode] = useState(false);
+  const [flowMode, setFlowMode] = useState<WritingFlowMode>("standard");
+  const [manualPhase, setManualPhase] = useState<ManualWritingPhase>("idle");
+  const [showFullModeConfirm, setShowFullModeConfirm] = useState(false);
   const [context, setContext] = useState("");
+  const [bullets, setBullets] = useState<string[]>(() =>
+    Array.from({ length: MIN_WRITING_BULLETS }, () => ""),
+  );
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>("idle");
   const [subsectionTitle, setSubsectionTitle] = useState<string | undefined>();
@@ -75,6 +96,7 @@ export function WritingPanel({
   const [, setPendingFigures] = useState<
     { spec: string; tool: string; config: string; caption: string; status: string; imageUrl?: string }[]
   >([]);
+  const literatureSectionRef = useRef<HTMLDivElement>(null);
 
   const writingStream = useWritingStream();
   const projectMode = project.mode ?? "review";
@@ -120,6 +142,7 @@ export function WritingPanel({
       targetSectionKey,
       language,
       context,
+      bullets,
       result,
       verificationFeedback,
       generationStatus,
@@ -132,6 +155,7 @@ export function WritingPanel({
       setTargetSectionKey,
       setLanguage,
       setContext,
+      setBullets,
       setResult,
       setVerificationFeedback,
       setGenerationStatus,
@@ -154,10 +178,13 @@ export function WritingPanel({
       const currentSection = allSections.find((s) => s.id === task.id);
       if (currentSection) {
         setContext(buildExpansionContext(currentSection, allSections, project.outline || "", projectMode));
+        const seed = currentSection.content.trim() || currentSection.title;
+        setBullets(contextLinesToBullets(seed));
       } else {
         setContext(
           `【扩写目标子节】：${task.fullPath}\n【写作要求】：请针对此主题展开学术论述。\n\n【论文大纲参考】：\n${(project.outline || "").slice(0, 400)}`,
         );
+        setBullets(contextLinesToBullets(task.title));
       }
     },
     [project.outline, projectMode],
@@ -212,16 +239,33 @@ export function WritingPanel({
     [onGenerate],
   );
 
-  const { resultRef, figureAbortRef, writingAbortRef, handleCancel, handleGenerate } = useWritingPanelGenerate({
+  const sourceSelection = useWritingSourceSelection({
+    title,
+    section: targetSectionKey,
+    context,
+    bullets,
+    language,
+    retrievalMode,
+    existingReferences: project.references || [],
+    researchDirection: project.researchDirection,
+    projectMode,
+    draftReady: isWritingDraftReady(context, bullets, targetSectionKey),
+  });
+
+  const { resultRef, figureAbortRef, writingAbortRef, handleCancel, handleGenerate, handleSubmitAudit, handleApplyFix, syncDraft, bulletExpand } = useWritingPanelGenerate({
     projectId,
     project,
     title,
     context,
+    bullets,
     targetSectionKey,
     selectedSectionId,
     language,
     retrievalMode,
-    fastMode,
+    flowMode,
+    setManualPhase,
+    verificationFeedback,
+    selectedSourceIds: sourceSelection.confirmed ? sourceSelection.selectedSourceIds : undefined,
     outlineTasks,
     writingStream,
     onUpdateProject,
@@ -238,6 +282,7 @@ export function WritingPanel({
     setSubsectionTitle,
     setPendingFigures,
     applyToEditor,
+    onDraftApplied,
   });
 
   useEffect(() => {
@@ -249,10 +294,12 @@ export function WritingPanel({
 
   const handleApplyToEditor = () => {
     applyToEditor(resultRef.current || result, targetSectionKey, subsectionTitle);
+    onDraftApplied?.(targetSectionKey, subsectionTitle);
   };
 
   const handleReset = () => {
     setContext("");
+    setBullets(Array.from({ length: MIN_WRITING_BULLETS }, () => ""));
     setResult("");
     setSelectedSectionId("");
     setVerificationFeedback("");
@@ -260,8 +307,11 @@ export function WritingPanel({
     setLastRefMapping(null);
     setCitationWarnings([]);
     setDataClaimWarnings([]);
+    setManualPhase("idle");
     writingStream.reset();
     setGenerationStatus("idle");
+    sourceSelection.resetSelection();
+    bulletExpand.reset();
     clearSession();
   };
 
@@ -274,17 +324,76 @@ export function WritingPanel({
   })();
   const refCount = (project.references || []).length;
   const isResearch = project.mode === "research";
+  const normalizedBullets = normalizeWritingBullets(bullets);
+  const useCollaborativeExpand = shouldUseCollaborativeBulletExpand(flowMode, bullets);
+  const minDraftChars = getMinDraftChars(targetSectionKey);
+  const supplementCharCount = context.trim().length;
+  const bulletCharCount = normalizedBullets.join("").length;
+  const draftReady = isWritingDraftReady(context, bullets, targetSectionKey);
+  const canGenerate = Boolean(selectedSectionId) && draftReady && sourceSelection.canGenerate;
+  const generateDisabledReason = !selectedSectionId
+    ? "请先选择左侧大纲任务"
+    : !draftReady
+      ? normalizedBullets.length >= MIN_WRITING_BULLETS
+        ? `请确保每条要点至少 8 字，合计达到 ${minDraftChars} 字（当前 ${bulletCharCount + supplementCharCount} 字）`
+        : `请填写至少 ${MIN_WRITING_BULLETS} 条扩写要点，或写出 ${minDraftChars} 字补充说明`
+      : !sourceSelection.fetchedOnce
+        ? "请先检索并确认文献"
+        : sourceSelection.previewStale
+          ? "要点已变更，请重新检索文献"
+          : !sourceSelection.confirmed
+            ? "请先确认文献选择"
+            : undefined;
+
+  const handleFetchLiterature = useCallback(async () => {
+    await sourceSelection.fetchPreview();
+    requestAnimationFrame(() => {
+      literatureSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  }, [sourceSelection.fetchPreview]);
+
+  const handleFlowModeChange = (value: WritingFlowMode) => {
+    if (value === "full") {
+      setShowFullModeConfirm(true);
+      return;
+    }
+    setFlowMode(value);
+    setManualPhase("idle");
+  };
+
+  const handleConfirmFullMode = () => {
+    setFlowMode("full");
+    setManualPhase("idle");
+    setShowFullModeConfirm(false);
+  };
+
+  const showManualDraftEditor =
+    flowMode === "standard" && manualPhase !== "idle" && Boolean(result) && !onPreviewUpdate;
+  const canSubmitAudit =
+    flowMode === "standard" &&
+    (manualPhase === "draft_ready" || manualPhase === "review_ready") &&
+    Boolean((resultRef.current || result).trim()) &&
+    !isGenerating;
+  const canApplyFix =
+    flowMode === "standard" &&
+    manualPhase === "review_ready" &&
+    Boolean(verificationFeedback.trim()) &&
+    !isGenerating;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-6 pb-10">
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-bold">大纲驱动扩写</CardTitle>
-            <CardDescription className="text-xs leading-relaxed">
-              基于「论证提纲」（Outline 页）拆任务扩写；「存储至章节」会随工作台左侧 IMRaD
-              当前章同步，也可改存到其他章。
-            </CardDescription>
+            <div className="flex items-start justify-between gap-2">
+              <div className="space-y-1">
+                <CardTitle className="text-sm font-bold">章节协作向导</CardTitle>
+                <CardDescription className="text-xs leading-relaxed">
+                  ① 选任务 → ② 写要点 → ③ 检索并确认文献 → ④ 扩写
+                </CardDescription>
+              </div>
+              <ProjectModeBadge mode={projectMode} className="shrink-0" />
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-1.5">
@@ -316,7 +425,7 @@ export function WritingPanel({
               }}
             />
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">目标章节</Label>
                 <Select onValueChange={(val) => setTargetSectionKey(val || "")} value={targetSectionKey}>
@@ -351,26 +460,7 @@ export function WritingPanel({
                   </button>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">快速模式</Label>
-                <div className="flex h-8 border rounded-md overflow-hidden">
-                  <button
-                    type="button"
-                    className={`flex-1 text-xs ${fastMode ? "bg-primary text-primary-foreground" : "bg-background"}`}
-                    onClick={() => setFastMode(true)}
-                  >
-                    快速
-                  </button>
-                  <button
-                    type="button"
-                    className={`flex-1 text-xs ${!fastMode ? "bg-primary text-primary-foreground" : "bg-background"}`}
-                    onClick={() => setFastMode(false)}
-                  >
-                    完整
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-1.5 col-span-3">
+              <div className="space-y-1.5 col-span-2 sm:col-span-1">
                 <Label className="text-xs">检索精度</Label>
                 <Select
                   onValueChange={(val) => setRetrievalMode((val as "precise" | "balanced" | "extensive") || "balanced")}
@@ -392,12 +482,77 @@ export function WritingPanel({
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1.5 col-span-2 sm:col-span-3">
+                <Label className="text-xs">扩写流程</Label>
+                <Select value={flowMode} onValueChange={(val) => handleFlowModeChange(val as WritingFlowMode)}>
+                  <SelectTrigger className="text-xs h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="standard" className="text-xs">
+                      标准（人控）：初稿 → 审查 → 修正
+                    </SelectItem>
+                    <SelectItem value="preview" className="text-xs">
+                      快速预览：仅 AI 起草
+                    </SelectItem>
+                    <SelectItem value="full" className="text-xs">
+                      完整模式（实验）：自动核查并修正
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                {flowMode === "standard" && (
+                  <p className="text-[10px] text-muted-foreground leading-relaxed">
+                    生成初稿后请人工审阅，再「提交审查」与「按意见修正」；不会自动跑完全管道。
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <WritingBulletList
+              bullets={bullets}
+              disabled={isGenerating}
+              onChange={setBullets}
+            />
+
+            <div ref={literatureSectionRef} className="space-y-2 rounded-lg border border-primary/20 bg-primary/[0.03] p-3">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-xs font-medium">③ 文献来源</Label>
+                <Button
+                  type="button"
+                  variant={sourceSelection.previewStale ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 text-[10px]"
+                  disabled={!draftReady || sourceSelection.loading || isGenerating}
+                  onClick={() => void handleFetchLiterature()}
+                >
+                  {sourceSelection.loading ? (
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  ) : (
+                    <Search className="mr-1 h-3 w-3" />
+                  )}
+                  {sourceSelection.previewStale ? "重新检索" : "检索文献"}
+                </Button>
+              </div>
+              <WritingSourcePicker
+                hits={sourceSelection.hits}
+                selectedSourceIds={sourceSelection.selectedSourceIds}
+                previewQuery={sourceSelection.previewQuery}
+                loading={sourceSelection.loading}
+                confirmed={sourceSelection.confirmed}
+                fetchedOnce={sourceSelection.fetchedOnce}
+                fetchError={sourceSelection.fetchError}
+                previewStale={sourceSelection.previewStale}
+                onToggle={sourceSelection.toggleSource}
+                onSelectAll={sourceSelection.selectAll}
+                onDeselectAll={sourceSelection.deselectAll}
+                onConfirm={sourceSelection.confirmSelection}
+              />
             </div>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="context" className="text-xs">
-                  任务上下文
+                  补充说明（可选）
                 </Label>
                 <div className="flex items-center gap-1">
                   {((isResearch && dataClaimsPreview.length > 0) || refCount > 0) && (
@@ -419,12 +574,32 @@ export function WritingPanel({
               </div>
               <Textarea
                 id="context"
-                placeholder="选择左侧大纲任务后，这里会自动填入写作要求..."
-                className="text-xs min-h-[88px] max-h-[160px] overflow-y-auto resize-none bg-muted/5"
+                placeholder={`大纲背景、实验数据或 ${getWritingContextPlaceholder(targetSectionKey).slice(0, 40)}…`}
+                className="text-xs min-h-[64px] max-h-[120px] overflow-y-auto resize-none bg-muted/5"
                 value={context}
                 onChange={(e) => setContext(e.target.value)}
               />
+              <p className="text-[10px] text-muted-foreground">
+                要点 {normalizedBullets.length}/{MIN_WRITING_BULLETS} 条 · 补充 {supplementCharCount} 字
+                {!draftReady ? " · 要点未就绪，无法检索/扩写" : ""}
+              </p>
             </div>
+
+            {bulletExpand.active && (
+              <WritingBulletExpand
+                bulletIndex={bulletExpand.bulletIndex}
+                totalBullets={bulletExpand.totalBullets}
+                bulletLabel={bulletExpand.normalizedBullets[bulletExpand.bulletIndex] ?? ""}
+                currentText={bulletExpand.currentBulletText}
+                onCurrentTextChange={bulletExpand.setCurrentBulletText}
+                mergePreview={bulletExpand.mergePreview}
+                showMergePreview={bulletExpand.showMergePreview}
+                onToggleMergePreview={() => bulletExpand.setShowMergePreview((v) => !v)}
+                isGenerating={isGenerating}
+                onAdoptAndNext={() => void bulletExpand.adoptAndNext()}
+                onRewrite={() => void bulletExpand.rewriteCurrent()}
+              />
+            )}
           </CardContent>
           <CardFooter className="flex gap-2">
             <Button variant="outline" size="sm" className="flex-1 text-xs" disabled={isGenerating} onClick={handleReset}>
@@ -434,14 +609,84 @@ export function WritingPanel({
               <Button size="sm" variant="destructive" className="flex-[2] text-xs" onClick={handleCancel}>
                 <Loader2 className="mr-1 h-3 w-3 animate-spin" /> 取消扩写
               </Button>
+            ) : bulletExpand.active ? (
+              <Button size="sm" className="flex-[2] text-xs" disabled title="请在上方逐条面板中采纳或重写">
+                逐条扩写进行中…
+              </Button>
             ) : (
-              <Button size="sm" className="flex-[2] text-xs" onClick={handleGenerate} disabled={!selectedSectionId}>
+              <Button
+                size="sm"
+                className="flex-[2] text-xs"
+                onClick={handleGenerate}
+                disabled={!canGenerate}
+                title={generateDisabledReason}
+              >
                 <Send className="mr-1 h-3 w-3" />
-                {selectedSectionId ? "扩写选定章节" : "请先选择任务"}
+                {canGenerate
+                  ? useCollaborativeExpand
+                    ? "开始逐条扩写"
+                    : "扩写选定章节"
+                  : generateDisabledReason}
               </Button>
             )}
           </CardFooter>
         </Card>
+
+        {flowMode === "standard" && manualPhase !== "idle" && (
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-bold">人控审查流程</CardTitle>
+              <CardDescription className="text-xs">
+                {manualPhase === "draft_ready" && "初稿已就绪：可编辑后提交审查。"}
+                {manualPhase === "review_ready" && "审查完成：可编辑意见后按意见修正。"}
+                {manualPhase === "done" && "修正已完成，可应用到编辑器或继续修改。"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {showManualDraftEditor && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">编辑初稿</Label>
+                  <Textarea
+                    className="text-xs min-h-[120px] max-h-[240px] resize-y"
+                    value={result}
+                    onChange={(e) => syncDraft(e.target.value)}
+                  />
+                </div>
+              )}
+              {manualPhase === "review_ready" && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">审查意见（可编辑）</Label>
+                  <Textarea
+                    className="text-xs min-h-[88px] max-h-[200px] resize-y"
+                    value={verificationFeedback}
+                    onChange={(e) => setVerificationFeedback(e.target.value)}
+                  />
+                </div>
+              )}
+            </CardContent>
+            <CardFooter className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs"
+                disabled={!canSubmitAudit}
+                onClick={handleSubmitAudit}
+              >
+                <SearchCheck className="mr-1 h-3 w-3" />
+                提交审查
+              </Button>
+              <Button
+                size="sm"
+                className="text-xs"
+                disabled={!canApplyFix}
+                onClick={handleApplyFix}
+              >
+                <Wrench className="mr-1 h-3 w-3" />
+                按意见修正
+              </Button>
+            </CardFooter>
+          </Card>
+        )}
 
         {result && !onPreviewUpdate && (
           <WritingExpandResult
@@ -457,6 +702,25 @@ export function WritingPanel({
           />
         )}
       </div>
+
+      <Dialog open={showFullModeConfirm} onOpenChange={setShowFullModeConfirm}>
+        <DialogContent showCloseButton>
+          <DialogHeader>
+            <DialogTitle>切换到完整模式（实验）？</DialogTitle>
+            <DialogDescription>
+              将自动依次运行写作、审稿核查与主编修正，耗时更长且占用更多服务器资源。推荐使用「标准（人控）」或「快速预览」。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setShowFullModeConfirm(false)}>
+              取消
+            </Button>
+            <Button size="sm" onClick={handleConfirmFullMode}>
+              确认使用完整模式
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

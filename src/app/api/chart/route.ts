@@ -14,7 +14,7 @@ export const maxDuration = 120;
 const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
 
-const PYTHON_CMD = process.env.PYTHON_CMD || (process.platform === "win32" ? "python" : "python3");
+import { PYTHON_CMD, formatPythonSpawnError } from "@/lib/python-cmd";
 
 // 确保图表输出目录存在
 if (!fs.existsSync(CHARTS_DIR)) {
@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
         });
 
         proc.on("error", (err) => {
-          resolve({ success: false, error: getErrorMessage(err) });
+          resolve({ success: false, error: formatPythonSpawnError(getErrorMessage(err)) });
         });
       }
     );

@@ -113,6 +113,7 @@ model KnowledgeFile {
   parseWarning String?  // "no_text" | "low_text" | null
   bibEdited    Boolean  @default(false)
   chunkCount   Int      @default(0) // RAG index_*.json 块数，非 KnowledgeChunk 行数
+  metrics      String?  // JSON JournalMetrics（ENG-PR-091：IF/分区/OpenAlex）
   chunks       KnowledgeChunk[]
 
   @@index([category])

@@ -13,7 +13,7 @@
 <!-- API_INDEX:AUTO:START -->
 ## 路由表（自动生成）
 
-> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-06-02 01:45:47**（共 **57** 个 route 文件，validateBody **23**，SSE **9**，requireAdmin **13**）。
+> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-06-06 08:35:24**（共 **61** 个 route 文件，validateBody **26**，SSE **9**，requireAdmin **14**）。
 
 图例：zod = 使用 validateBody；SSE = 含 text/event-stream / ReadableStream；admin = 含 requireAdmin。
 
@@ -34,6 +34,7 @@
 | PATCH | `/api/projects/[id]/analysis-results` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/meta` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/references` | ✓ | — | — |
+| POST | `/api/projects/[id]/references/import-external` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/sections/[key]` | ✓ | — | — |
 
 ### AI 写作
@@ -41,6 +42,7 @@
 | 方法 | 路径 | zod | SSE | admin |
 |------|------|-----|-----|-------|
 | POST | `/api/writing` | ✓ | ✓ | — |
+| POST | `/api/writing/retrieve-preview` | ✓ | — | — |
 
 ### 大纲
 
@@ -60,6 +62,7 @@
 |------|------|-----|-----|-------|
 | GET, POST, PATCH, DELETE | `/api/knowledge` | ✓ | — | — |
 | POST | `/api/knowledge/analyze` | — | — | — |
+| POST | `/api/knowledge/import-bibliography` | ✓ | — | — |
 | POST | `/api/knowledge/reindex` | ✓ | ✓ | — |
 | GET | `/api/knowledge/source` | — | — | — |
 
@@ -181,6 +184,7 @@
 | 方法 | 路径 | zod | SSE | admin |
 |------|------|-----|-----|-------|
 | GET | `/api/admin/health` | — | — | ✓ |
+| POST | `/api/admin/journal-metrics` | — | — | ✓ |
 | GET, DELETE, POST | `/api/admin/knowledge` | ✓ | — | ✓ |
 | GET | `/api/admin/plagiarism` | — | — | ✓ |
 | GET | `/api/admin/plagiarism/[id]` | — | — | ✓ |
@@ -193,6 +197,12 @@
 | GET | `/api/admin/usage` | — | — | ✓ |
 | GET, PATCH, DELETE | `/api/admin/users` | ✓ | — | ✓ |
 | GET | `/api/admin/users/[id]` | — | — | ✓ |
+
+### 其他
+
+| 方法 | 路径 | zod | SSE | admin |
+|------|------|-----|-----|-------|
+| POST | `/api/literature/search` | ✓ | — | — |
 <!-- API_INDEX:AUTO:END -->
 
 ## 人工备注（不随脚本覆盖）

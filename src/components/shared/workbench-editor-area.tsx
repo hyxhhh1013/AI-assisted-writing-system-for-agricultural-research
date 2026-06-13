@@ -28,6 +28,7 @@ import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
 import { siteTheme } from "@/lib/site-theme";
 import { getProjectWritingMode } from "@/lib/section-registry";
 import dynamic from "next/dynamic";
+import type { ParagraphSelectionAction } from "@/components/shared/writing/paragraph-selection-toolbar";
 
 const ParagraphEditor = dynamic(
   () => import("@/components/shared/paragraph-editor").then(mod => mod.ParagraphEditor),
@@ -72,6 +73,7 @@ interface WorkbenchEditorAreaProps {
   onExpandParagraph?: (content: string) => Promise<string>;
   onAuditParagraph?: (content: string) => Promise<string>;
   onFixParagraph?: (content: string, feedback: string) => Promise<string>;
+  onSelectionAction?: (selectedText: string, action: ParagraphSelectionAction) => Promise<string>;
   onApplyAiOutput?: () => void;
   onCancelAiOutput?: () => void;
   onCleanReferences?: () => void;
@@ -127,7 +129,7 @@ function WorkbenchEditorToolbar({
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onEditorModeChange("paragraph")}>
               {editorMode === "paragraph" ? <Check className="h-3.5 w-3.5" /> : <span className="w-3.5" />}
-              段落模式
+              段落模式（推荐）
             </DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
@@ -198,7 +200,7 @@ export function WorkbenchEditorArea({
   onContentChange, onEditorModeChange, onRightPanelModeChange,
   onOpenMetaDialog, onConsistencyCheck, onReorderReferences,
   onExportDoc, onExportMarkdown, onExportPDF,
-  onExpandParagraph, onAuditParagraph, onFixParagraph,
+  onExpandParagraph, onAuditParagraph, onFixParagraph, onSelectionAction,
   onApplyAiOutput, onCancelAiOutput, onCleanReferences, aiPreview,
   projectId,
 }: WorkbenchEditorAreaProps) {
@@ -358,6 +360,7 @@ export function WorkbenchEditorArea({
                 onExpand={onExpandParagraph}
                 onAudit={onAuditParagraph}
                 onFix={onFixParagraph}
+                onSelectionAction={onSelectionAction}
                 projectId={projectId || "default"}
                 activeSection={activeSection}
               />

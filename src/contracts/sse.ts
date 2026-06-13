@@ -12,6 +12,12 @@ export interface SSECorrectedTextEvent { type: "corrected_text"; text: string }
 export interface SSEClearResultEvent { type: "clear_result" }
 export interface SSEErrorEvent { type: "error"; error: string }
 export interface SSEInfoEvent { type: "info"; info: string; refMapping?: Record<string, number> }
+export interface SSEBulletDoneEvent {
+  type: "bullet_done";
+  bulletIndex: number;
+  content: string;
+  bulletCount: number;
+}
 
 /** 写作 SSE 事件联合类型 */
 export type WritingSSEEvent =
@@ -25,7 +31,8 @@ export type WritingSSEEvent =
   | SSECorrectedTextEvent
   | SSEClearResultEvent
   | SSEErrorEvent
-  | SSEInfoEvent;
+  | SSEInfoEvent
+  | SSEBulletDoneEvent;
 
 /** 通用 SSE 事件（unknown shape） */
 export type SSEEvent = Record<string, unknown>;
@@ -42,3 +49,4 @@ export function isCorrectedTextEvent(e: unknown): e is SSECorrectedTextEvent { r
 export function isClearResultEvent(e: unknown): e is SSEClearResultEvent { return (e as SSEEvent).type === "clear_result"; }
 export function isErrorEvent(e: unknown): e is SSEErrorEvent { return (e as SSEEvent).type === "error"; }
 export function isInfoEvent(e: unknown): e is SSEInfoEvent { return (e as SSEEvent).type === "info"; }
+export function isBulletDoneEvent(e: unknown): e is SSEBulletDoneEvent { return (e as SSEEvent).type === "bullet_done"; }

@@ -38,7 +38,8 @@ export async function prepareWritingContext(
   emit({ type: "status", status: "retrieving" });
   emit({ type: "pipeline_step", step: "retrieving", status: "running", detail: "正在检索相关文献..." });
 
-  // 检索超时保护：最多 25 秒，超时用降级结果
+  // 检索超时保护：60 秒（全库 10 个分类索引加载需要约 30-40 秒）
+  const RETRIEVAL_TIMEOUT_MS = 60_000;
   let contextText = "";
   let refMapping: Record<string, number> = {};
   let referencesByIndex: string[] = [];
@@ -58,11 +59,12 @@ export async function prepareWritingContext(
           researchDirection,
           retrievalMode,
           projectMode,
+          selectedSourceIds: data.selectedSourceIds,
         },
         existingReferences,
       ),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new DOMException("检索超时", "TimeoutError")), 25_000)
+        setTimeout(() => reject(new DOMException("检索超时", "TimeoutError")), RETRIEVAL_TIMEOUT_MS)
       ),
     ]);
     contextText = result.contextText;

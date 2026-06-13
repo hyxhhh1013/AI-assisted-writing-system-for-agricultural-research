@@ -3,9 +3,20 @@ import path from "path";
 import prisma from "@/lib/prisma";
 import type { KnowledgeBib, KnowledgeFileRecord } from "@/contracts/knowledge";
 import type { BibEntry } from "@/lib/rag";
+import {
+  lookupMetricsForBib,
+  mergeJournalMetrics,
+  parseJournalMetricsUpload,
+  parseMetricsJson,
+  serializeMetrics,
+  type ApplyJournalMetricsResult,
+  type JournalMetricsLookup,
+} from "@/lib/journal-metrics";
+import { resolveKnowledgeFilePath } from "@/lib/safe-path";
 
 const METADATA_PATH = path.join(process.cwd(), "data/metadata.json");
 const DATA_DIR = path.join(process.cwd(), "data");
+const ARTICLES_DIR = path.join(process.cwd(), process.env.RAG_ARTICLES_DIR || "papers");
 
 /** 仅迁移/应急：只读 data/metadata.json，默认关闭 */
 export function isMetadataJsonFallbackEnabled(): boolean {
@@ -41,13 +52,46 @@ type KnowledgeFileRow = {
   parseWarning: string | null;
   bibEdited: boolean;
   chunkCount?: number;
+  metrics?: string | null;
   _count?: { chunks: number };
 };
+
+/** 从磁盘 stat PDF 字节数（Prisma size 为 0 时回退） */
+export function statKnowledgeFileDiskSize(name: string, category: string): number | null {
+  try {
+    const filePath = resolveKnowledgeFilePath(ARTICLES_DIR, category, name);
+    if (!fs.existsSync(filePath)) return null;
+    return fs.statSync(filePath).size;
+  } catch {
+    return null;
+  }
+}
+
+export function enrichKnowledgeRecordFromDisk(record: KnowledgeFileRecord): KnowledgeFileRecord {
+  if (record.size > 0) return record;
+  const diskSize = statKnowledgeFileDiskSize(record.name, record.category);
+  if (diskSize != null && diskSize > 0) {
+    return { ...record, size: diskSize };
+  }
+  return record;
+}
+
+/** 列表 API 发现 size=0 时异步回写 Prisma，避免每次 stat */
+export function persistKnowledgeFileSizeIfMissing(
+  name: string,
+  category: string,
+  size: number,
+): void {
+  if (size <= 0) return;
+  void prisma.knowledgeFile
+    .updateMany({ where: { name, size: 0 }, data: { size } })
+    .catch(() => {});
+}
 
 export function prismaRowToKnowledgeRecord(row: KnowledgeFileRow): KnowledgeFileRecord {
   const prismaChunks = row._count?.chunks ?? 0;
   const chunkCount = Math.max(row.chunkCount ?? 0, prismaChunks);
-  return {
+  const record: KnowledgeFileRecord = {
     name: row.name,
     category: row.category,
     documentType: row.documentType,
@@ -58,7 +102,67 @@ export function prismaRowToKnowledgeRecord(row: KnowledgeFileRow): KnowledgeFile
     gbTag: row.gbTag,
     parseWarning: row.parseWarning as KnowledgeFileRecord["parseWarning"],
     bibEdited: row.bibEdited,
+    metrics: parseMetricsJson(row.metrics ?? null),
   };
+  return enrichKnowledgeRecordFromDisk(record);
+}
+
+export interface JournalMetricsImportSummary extends ApplyJournalMetricsResult {
+  lookupSize: number;
+  lookupIssn: number;
+  lookupJournal: number;
+  totalFiles: number;
+}
+
+/** 将实验室期刊表（CSV/Excel）指标写入 KnowledgeFile.metrics */
+export async function applyJournalMetricsFromLookup(
+  lookup: JournalMetricsLookup,
+  options?: { dryRun?: boolean },
+): Promise<JournalMetricsImportSummary> {
+  const files = await prisma.knowledgeFile.findMany({
+    select: { id: true, bib: true, metrics: true },
+  });
+
+  let matched = 0;
+  let updated = 0;
+  let skipped = 0;
+
+  for (const file of files) {
+    const bib = parseBibField(file.bib);
+    const incoming = lookupMetricsForBib(bib, lookup);
+    if (!incoming) {
+      skipped++;
+      continue;
+    }
+    matched++;
+    const merged = mergeJournalMetrics(parseMetricsJson(file.metrics), incoming);
+    if (!options?.dryRun) {
+      await prisma.knowledgeFile.update({
+        where: { id: file.id },
+        data: { metrics: serializeMetrics(merged) },
+      });
+    }
+    updated++;
+  }
+
+  return {
+    matched,
+    updated,
+    skipped,
+    totalFiles: files.length,
+    lookupSize: lookup.byIssn.size + lookup.byJournal.size,
+    lookupIssn: lookup.byIssn.size,
+    lookupJournal: lookup.byJournal.size,
+  };
+}
+
+/** 解析上传文件并导入期刊指标 */
+export async function applyJournalMetricsFromUpload(
+  content: string | ArrayBuffer,
+  options?: { dryRun?: boolean; filename?: string },
+): Promise<JournalMetricsImportSummary> {
+  const lookup = await parseJournalMetricsUpload(content, options?.filename);
+  return applyJournalMetricsFromLookup(lookup, options);
 }
 
 export async function getKnowledgeFileByName(name: string): Promise<KnowledgeFileRecord | null> {

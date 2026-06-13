@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<title>禾书耕文（GrainScript）工作周报</title>
+<style>
+:root { --ink:#1a1a1a; --muted:#555; --accent:#1e4a6e; --accent-light:#e8eef3; --border:#d4d4d4; --paper:#fafaf8; }
+* { box-sizing: border-box; }
+body { font-family: "Source Han Serif SC","Noto Serif SC","SimSun",serif; font-size:10.5pt; line-height:1.6; color:var(--ink); background:#e8e6e1; margin:0; padding:1.5rem; }
+.page { max-width:210mm; margin:0 auto; background:var(--paper); padding:20mm 18mm 22mm; box-shadow:0 2px 24px rgba(0,0,0,.08); }
+header.doc-header { border-bottom:2px solid var(--accent); padding-bottom:0.9rem; margin-bottom:1.2rem; }
+h1 { font-size:1.45rem; font-weight:700; color:var(--accent); margin:0 0 0.5rem; }
+.meta { color:var(--muted); font-size:0.88rem; margin:0.25rem 0; }
+h2 { font-size:1.08rem; color:var(--accent); margin:1.35rem 0 0.6rem; padding-bottom:0.3rem; border-bottom:1px solid var(--border); page-break-after:avoid; }
+h3 { font-size:0.98rem; margin:0.9rem 0 0.4rem; color:#333; }
+p { margin:0.45rem 0; text-align:justify; }
+ul,ol { margin:0.35rem 0 0.65rem 1.2rem; }
+li { margin:0.2rem 0; }
+table { width:100%; border-collapse:collapse; font-size:0.88rem; margin:0.55rem 0 0.85rem; }
+th,td { border:1px solid var(--border); padding:0.4rem 0.5rem; text-align:left; vertical-align:top; }
+th { background:var(--accent-light); font-weight:600; color:var(--accent); }
+blockquote { margin:0.6rem 0; padding:0.5rem 0.75rem; border-left:4px solid var(--accent); background:var(--accent-light); }
+code { font-family:Consolas,monospace; font-size:0.85em; background:#f4f4f2; padding:0.1em 0.35em; }
+pre { font-family:Consolas,monospace; font-size:0.78rem; background:#f4f4f2; border:1px solid var(--border); padding:0.6rem 0.75rem; white-space:pre-wrap; }
+.summary-box { background:var(--accent-light); border-left:4px solid var(--accent); padding:0.75rem 1rem; margin:0.75rem 0 1rem; }
+.sign-block { margin-top:1.8rem; display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; }
+.sign-line { border-bottom:1px solid var(--ink); min-height:1.8rem; margin-top:1.5rem; }
+@media print { body{background:white;padding:0} .page{box-shadow:none;max-width:none;padding:0} .no-print{display:none!important} h2,table,blockquote{page-break-inside:avoid} }
+</style>
+</head>
+<body>
+<div class="toolbar no-print" style="max-width:210mm;margin:0 auto 1rem;text-align:right">
+<button type="button" onclick="window.print()" style="padding:0.45rem 1rem;background:#1e4a6e;color:#fff;border:none;border-radius:4px;cursor:pointer">打印 / 另存为 PDF</button>
+</div>
+<article class="page">
+<header class="doc-header"><h1>禾书耕文（GrainScript）工作周报</h1>
+<p class="meta"><strong>周期</strong>：2026-05-26（周一）— 2026-06-01（周日）</p>
+</header>
+<h2>本周工作摘要</h2>
+<p>本周是<strong>上线与架构升级周</strong>：论文质量/查重/审查、<strong>SQLite → PostgreSQL</strong>、VPS <strong>部署路线收敛（PM2）</strong>、RAG <strong>二进制索引</strong> 与工程 <strong>绿门 CI</strong> 集中落地。</p>
+<h3>功能开发</h3>
+<ul>
+<li><strong>论文质量模块</strong>：Phase 3 审查架构、查重 service、降重重写、质量页 UI；Phase 4 联调与功能开关。</li>
+<li><strong>知识库 UI</strong>：数据证据 Tab 合并；UI 队列 030～034 相关完善。</li>
+<li><strong>Admin 增强</strong>、审查、查重、UI 打磨（6/1）。</li>
+</ul>
+<h3>基础设施</h3>
+<ul>
+<li>数据库切换 <strong>PostgreSQL</strong>；部署就绪检查修复。</li>
+<li>VPS：<strong>GitHub Actions</strong>、Docker/PM2 切换、Prisma/openssl、端口与 git reset 等一系列部署修复。</li>
+<li>部署最终收敛方向：<strong>PM2 + 宿主机 Node</strong>（替代纯 Docker 应用容器等尝试）。</li>
+</ul>
+<h3>RAG 与性能（6/1）</h3>
+<ul>
+<li>index-pdfs 输出 <strong>拆分 JSON + 二进制 embedding</strong>；转换脚本。</li>
+<li>RAG <strong>异步加载</strong>；chat/knowledge <strong>await</strong> 修复。</li>
+<li><strong>路径穿越</strong>安全修复；proxy 注入 <strong>x-user-id</strong>。</li>
+<li><code>npm run check</code> <strong>绿门</strong>；RAG 部署迁移文档。</li>
+</ul>
+<h3>工程队列</h3>
+<ul>
+<li>6/1 起 [<code>ENGINEERING_OPTIMIZATION_QUEUE.md</code>](../ENGINEERING_OPTIMIZATION_QUEUE.md) 大规模接力（Session 0～3 多项 PR），详见该文档 <strong>§4 会话日志</strong>。</li>
+</ul>
+<h3>备注</h3>
+<blockquote><p>本周重点：从「本地能演示」迈向「VPS 可多人用 + 数据与索引可维护」。</p></blockquote>
+<h2>主要 Git 提交（节选）</h2>
+<table>
+<thead><tr>
+<tr><th>日期</th><th>说明</th></tr>
+</thead>
+<tr><td>05-29</td><td>质量模块 + 查重 service + 降重</td></tr>
+<tr><td>05-30</td><td>Phase 4 联调；审查 Tab；PostgreSQL</td></tr>
+<tr><td>05-31</td><td>VPS 部署/PM2/Docker 系列修复；知识库 UI</td></tr>
+<tr><td>06-01</td><td>RAG 二进制；Admin/审查；安全与 CI 绿门</td></tr>
+</tbody></table>
+<p>完整列表：<code>git log --since=2026-05-26 --until=2026-06-02 --oneline</code></p>
+</article>
+</body>
+</html>

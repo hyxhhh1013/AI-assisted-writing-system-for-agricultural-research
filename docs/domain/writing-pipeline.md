@@ -8,8 +8,32 @@
 |--------|------|
 | `full`（默认） | Writer → Verifier → Refiner → 引用/数据校验 |
 | `fast` | 仅 Writer |
+| `expand_bullet` | 单条要点 Writer（096c）；SSE `bullet_done` |
 | `audit_only` | 仅 Verifier 报告流 |
 | `fix_only` | 按 `verificationFeedback` Refiner 流式修正 |
+
+## UI 流程（ENG-PR-081）
+
+扩写面板 `WritingFlowMode`：
+
+| 流程 | API `mode` | 行为 |
+|------|------------|------|
+| **标准（人控，默认）** | 初稿 `fast` → `audit_only` → `fix_only` | Writer 后停；用户点「提交审查」「按意见修正」 |
+| 快速预览 | `fast` | 仅 Writer |
+| 完整模式（实验） | `full` | 自动全管道（需二次确认） |
+
+## 规划：协作扩写（ENG-PR-096）
+
+目标流程：**选文献（096a）→ 定要点 `bullets[]`（096b）→ 逐条 `expand_bullet`（096c）→ 段落/选区微调（096d）**。
+
+| 阶段 | 状态 | 说明 |
+|------|------|------|
+| 096a 检索预览 | done | 扩写前 API 返回 RAG 命中，用户勾选后进引用池 |
+| 096b 要点列表 | done | `WritingRequest.bullets[]` + UI 要点列表 |
+| 096c 逐条扩写 | done | 标准人控流程默认 `mode: expand_bullet`；采纳后合并 |
+| 096d 段落微调 | done | 工作台默认段落模式；`paragraph-editor` 选区助手（扩写/润色/审查/精简） |
+
+任务单：[`docs/plans/ENG-PR-080-human-in-the-loop.md`](../plans/ENG-PR-080-human-in-the-loop.md) §五B。
 
 ## 阶段与文件
 
@@ -39,6 +63,7 @@ route.ts               SSE 外壳
 | `citation_warnings` | 引用风险 |
 | `data_claim_warnings` | 数据证据异常 |
 | `error` | 失败 |
+| `bullet_done` | 单条要点扩写完成（096c）：`bulletIndex`、`content`、`bulletCount` |
 
 ## 业务不变量（热规则摘要）
 
