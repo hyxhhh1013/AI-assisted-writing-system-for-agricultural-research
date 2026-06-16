@@ -22,7 +22,8 @@ import {
 
 export type AnySectionKey = string;
 
-const RESEARCH_KEYS = new Set<string>(IMRAD_SECTION_KEYS);
+// discussion 在 Nature 等模板中为独立章节，需在研究模式下可用
+const RESEARCH_KEYS = new Set<string>([...IMRAD_SECTION_KEYS, "discussion"]);
 const REVIEW_KEYS = new Set<string>(REVIEW_SECTION_KEYS);
 
 export function getProjectWritingMode(mode: ProjectWritingMode | undefined): ProjectWritingMode {
@@ -46,6 +47,7 @@ export function isSectionValidForMode(section: string, mode: ProjectWritingMode 
 export function getSectionOrderForMode(section: string, mode: ProjectWritingMode | undefined): number {
   const m = getProjectWritingMode(mode);
   if (m === "research" && RESEARCH_KEYS.has(section)) {
+    if (section === "discussion") return 4;
     return IMRAD_ORDER[section as keyof typeof IMRAD_ORDER];
   }
   if (m === "review" && isReviewSectionKey(section)) {
@@ -60,6 +62,7 @@ export function getSectionNumberForMode(
 ): number | undefined {
   const m = getProjectWritingMode(mode);
   if (m === "research" && RESEARCH_KEYS.has(section)) {
+    if (section === "discussion") return 4;
     return IMRAD_SECTION_NUMBER[section as keyof typeof IMRAD_SECTION_NUMBER];
   }
   if (m === "review" && isReviewSectionKey(section)) {
@@ -75,6 +78,7 @@ export function getSectionLabelForMode(
 ): string {
   const m = getProjectWritingMode(mode);
   if (m === "research" && RESEARCH_KEYS.has(section)) {
+    if (section === "discussion") return lang === "zh" ? "讨论 (Discussion)" : "Discussion";
     return getSectionLabel(section as keyof typeof IMRAD_ORDER, lang);
   }
   if (m === "review" && isReviewSectionKey(section)) {
