@@ -1,10 +1,19 @@
 import { describe, expect, it } from "vitest";
 import type { ChartConfig, DataSourceAnalysis } from "@/contracts/data-source";
 import {
+  buildPlotPageHref,
   chartConfigToPasteText,
   chartConfigToPrefill,
   chartTypeToFigureId,
   collectChartConfigsFromSources,
+  decodeFigureSpecParam,
+  detectedFigureToPlotHref,
+  encodeFigureSpecParam,
+  figureBlockJsonToPlotHref,
+  figureChartConfigToPrefill,
+  figureSpecToFlowPrefill,
+  figureSpecToPrefill,
+  figureToolToRegistryId,
   parseProjectCharts,
 } from "@/contracts/figure";
 
@@ -90,5 +99,68 @@ describe("chart prefill contracts", () => {
       },
     ]);
     expect(parseProjectCharts(raw)).toHaveLength(1);
+  });
+
+  it("maps FIGURE chart config to plot prefill and href", () => {
+    const block = {
+      tool: "chart",
+      config: {
+        type: "bar",
+        data: {
+          labels: ["A", "B"],
+          datasets: [{ label: "产量", data: [10, 20] }],
+        },
+      },
+      caption: "图3 产量对比",
+    };
+    const prefill = figureChartConfigToPrefill(block.config, block.caption);
+    expect(prefill?.figureId).toBe("bar_grouped");
+    expect(prefill?.pasteText).toContain("A,10");
+    expect(figureToolToRegistryId("chart", block.config)).toBe("bar_grouped");
+    expect(figureToolToRegistryId("mechanism", {})).toBe("flow");
+
+    const spec = { tool: "chart" as const, config: block.config, caption: block.caption };
+    const encoded = encodeFigureSpecParam(spec);
+    expect(decodeFigureSpecParam(encoded)?.caption).toBe("图3 产量对比");
+    expect(figureSpecToPrefill(spec)?.title).toBe("图3 产量对比");
+
+    const href = figureBlockJsonToPlotHref("proj-1", block);
+    expect(href).toContain("/plot?");
+    expect(href).toContain("id=proj-1");
+    expect(href).toContain("figure=bar_grouped");
+    expect(href).toContain("figureSpec=");
+
+    const fromBuild = buildPlotPageHref({
+      projectId: "p1",
+      figureId: "line",
+      chartIdx: 2,
+    });
+    expect(fromBuild).toBe("/plot?id=p1&figure=line&chartIdx=2");
+  });
+
+  it("builds flow prefill and detected figure plot href", () => {
+    const flowSpec = {
+      tool: "flow" as const,
+      config: {
+        title: "流程",
+        direction: "horizontal",
+        nodes: [{ id: "1", label: "A" }, { id: "2", label: "B" }],
+        edges: [{ from: "1", to: "2" }],
+      },
+      caption: "图2 流程",
+    };
+    const flowPrefill = figureSpecToFlowPrefill(flowSpec);
+    expect(flowPrefill?.direction).toBe("horizontal");
+    expect(flowPrefill?.nodes).toHaveLength(2);
+
+    const href = detectedFigureToPlotHref("p1", {
+      tool: "chart",
+      config: JSON.stringify({
+        type: "bar",
+        data: { labels: ["A"], datasets: [{ label: "y", data: [1] }] },
+      }),
+      caption: "图2",
+    });
+    expect(href).toContain("/plot?");
   });
 });

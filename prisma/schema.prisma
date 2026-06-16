@@ -64,6 +64,8 @@ model Project {
   dataSources       String?
   // 大纲扩写已完成任务 id 列表（JSON string[]，stableHash(fullPath)）
   expandedOutlineSections String?
+  // 写作蓝图（JSON WritingBlueprint）
+  writingBlueprint      String?
 
   @@index([userId])
 }

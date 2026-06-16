@@ -10,6 +10,7 @@ import {
   serializeExpandedOutlineSections,
 } from "@/contracts/project";
 import { getErrorMessage } from "@/lib/error-utils";
+import type { Prisma } from "@prisma/client";
 
 import { getCoreSectionKeysForMode } from "@/lib/section-registry";
 
@@ -60,6 +61,7 @@ export async function GET(req: NextRequest) {
         citationStyle: (project.citationStyle as ProjectDTO["citationStyle"]) || "gbt7714",
         dataClaims: project.dataClaims || undefined,
         dataSources: project.dataSources || undefined,
+        writingBlueprint: (project as { writingBlueprint?: string | null }).writingBlueprint || undefined,
         expandedOutlineSections: parseExpandedOutlineSections(project.expandedOutlineSections),
       };
 
@@ -130,6 +132,7 @@ export async function POST(req: NextRequest) {
       dataClaims,
       dataSources,
       expandedOutlineSections,
+      writingBlueprint,
     } = data;
 
     if (!title) {
@@ -156,6 +159,7 @@ export async function POST(req: NextRequest) {
             title, authors, affiliations, abstract, keywords,
             classification, researchDirection, outline, template, citationStyle,
             dataClaims, dataSources,
+            ...(writingBlueprint !== undefined ? { writingBlueprint } : {}),
             ...(expandedOutlineSections !== undefined
               ? {
                   expandedOutlineSections: serializeExpandedOutlineSections(
@@ -164,7 +168,7 @@ export async function POST(req: NextRequest) {
                 }
               : {}),
             lastUpdated: new Date(),
-          },
+          } as Prisma.ProjectUpdateInput,
         })
       : await prisma.project.create({
           data: {
@@ -173,10 +177,11 @@ export async function POST(req: NextRequest) {
             mode: mode === "research" ? "research" : "review",
             citationStyle,
             dataClaims, dataSources,
+            writingBlueprint,
             expandedOutlineSections: serializeExpandedOutlineSections(
               Array.isArray(expandedOutlineSections) ? expandedOutlineSections : [],
             ),
-          },
+          } as Prisma.ProjectUncheckedCreateInput,
         });
 
     projectId = project.id;

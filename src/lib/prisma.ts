@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import path from 'path'
+import { resolveProjectRuntimePath } from '@/lib/runtime-paths'
 
 function resolveDbUrl(): string {
   const url = process.env.DATABASE_URL
@@ -12,7 +12,7 @@ function resolveDbUrl(): string {
   // SQLite 兼容：将相对路径转为绝对路径
   if (url && (url.startsWith('file:./') || url.startsWith('file:.\\'))) {
     const relativePart = url.slice(5)
-    const absolutePath = path.resolve(process.cwd(), relativePart)
+    const absolutePath = resolveProjectRuntimePath(relativePart)
     return `file:${absolutePath}`
   }
 

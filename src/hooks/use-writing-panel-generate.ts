@@ -6,8 +6,9 @@ import type { ProjectData } from "@/contracts/project";
 import { parseWritingBlueprint } from "@/contracts/writing-blueprint";
 import type { OutlineTask } from "@/lib/utils";
 import { countProjectFigures, getOutlineTaskIdsForSectionCompletion } from "@/lib/utils";
-import { findFigureBlocks, replacePlaceholders } from "@/hooks/use-figure-pipeline";
+import { detectedFigureToPlotHref } from "@/contracts/figure";
 import { generateFigure } from "@/services/figures";
+import { findFigureBlocks, replacePlaceholders } from "@/hooks/use-figure-pipeline";
 import type { UseWritingStreamReturn } from "@/hooks/use-writing-stream";
 import { batchUpsertReferences } from "@/services/references";
 import type { WritingPreviewPayload } from "@/components/shared/writing/writing-types";
@@ -261,7 +262,11 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
                 );
               } else {
                 const reason = genResult.error || "生成失败";
-                const fallback = `\n\n> 📊 **${fig.caption}**（${reason}，请手动补充）\n\n`;
+                const plotHref = detectedFigureToPlotHref(projectId, fig);
+                const editHint = plotHref
+                  ? `\n\n[在绘图页编辑](${plotHref})`
+                  : "";
+                const fallback = `\n\n> 📊 **${fig.caption}**（${reason}，请手动补充）${editHint}\n\n`;
                 resultRef.current = resultRef.current.replace(tag, fallback);
                 setResult(resultRef.current);
                 setPendingFigures((prev) =>
@@ -271,7 +276,9 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
             } catch (e) {
               log.fail("figure generation failed", e, { caption: fig.caption });
               const tag = `*[正在生成 ${fig.caption}...]*`;
-              const fallback = `\n\n> 📊 **${fig.caption}**（生成异常，请手动补充）\n\n`;
+              const plotHref = detectedFigureToPlotHref(projectId, fig);
+              const editHint = plotHref ? `\n\n[在绘图页编辑](${plotHref})` : "";
+              const fallback = `\n\n> 📊 **${fig.caption}**（生成异常，请手动补充）${editHint}\n\n`;
               resultRef.current = resultRef.current.replace(tag, fallback);
               setResult(resultRef.current);
               setPendingFigures((prev) =>
@@ -318,6 +325,7 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
       setResult,
       setDetectedRefs,
       setIsGenerating,
+      projectId,
     ],
   );
 
