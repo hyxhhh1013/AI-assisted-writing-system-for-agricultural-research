@@ -12,7 +12,7 @@ import { mergeEditorIntoProject, buildPlagiarismContentFromProject } from "@/lib
 import { ensureSubsectionNumbering, majorNumberFromSectionId, maxSecondLevelInText } from "@/lib/academic-numbering";
 import { useDocxExport } from "@/hooks/use-docx-export";
 import { useReferenceReorder } from "@/hooks/use-reference-reorder";
-import { pruneUncitedReferences, collectAllCitedIndices, stripOutOfRangeCitations, remapPrunedCitations } from "@/lib/reference-reorder";
+import { pruneUncitedReferences, collectAllCitedIndices, stripOutOfRangeCitations, remapPrunedCitations, buildPreviewReferencesFromContent } from "@/lib/reference-reorder";
 import { normalizeAllCitationFormats } from "@/lib/citation-bounds";
 import { useEditorSync } from "@/hooks/use-editor-sync";
 import { useAutoSave } from "@/hooks/use-auto-save";
@@ -209,8 +209,34 @@ function WorkbenchContent() {
   }, [project.abstract, project.sections]);
 
   const previewProject = useMemo<ProjectData>(() => {
-    return mergeEditorIntoProject(project, activeSection, editingContent);
-  }, [project, activeSection, editingContent]);
+    const base = mergeEditorIntoProject(project, activeSection, editingContent);
+    if (!aiPreview?.content?.trim()) return base;
+
+    const previewRefs = buildPreviewReferencesFromContent(
+      aiPreview.content,
+      base.references || [],
+      aiPreview.detectedRefs,
+    );
+
+    const sectionKey = aiPreview.targetSection;
+    let next: ProjectData = {
+      ...base,
+      references: previewRefs.length > 0 ? previewRefs : base.references,
+    };
+
+    if (!aiPreview.subsectionTitle && sectionKey) {
+      if (sectionKey === "abstract") {
+        next = { ...next, abstract: aiPreview.content };
+      } else {
+        next = {
+          ...next,
+          sections: { ...next.sections, [sectionKey]: aiPreview.content },
+        };
+      }
+    }
+
+    return next;
+  }, [project, activeSection, editingContent, aiPreview]);
 
   useEffect(() => {
     if (project.mode !== "research" && activeTab === "data") {
@@ -577,10 +603,10 @@ function WorkbenchContent() {
         className={cn(
           "border-r flex flex-col transition-all duration-300 ease-in-out overflow-hidden bg-white/90",
           modeAccent.borderTint,
-          isSidebarOpen ? "w-80" : "w-0",
+          isSidebarOpen ? (activeTab === "writing" ? "w-96" : "w-80") : "w-0",
         )}
       >
-        <div className="flex flex-col h-full w-80">
+        <div className={cn("flex flex-col h-full", activeTab === "writing" ? "w-96" : "w-80")}>
           <header className={cn("h-14 border-b flex items-center justify-between px-4 shrink-0", modeAccent.headerTint, modeAccent.borderTint)}>
             <div className="flex flex-col min-w-0 gap-0.5">
               <div className="flex items-center gap-2 min-w-0">
@@ -606,7 +632,7 @@ function WorkbenchContent() {
             </Button>
           </header>
           
-          <div className="flex-1 overflow-hidden p-4">
+          <div className={cn("flex-1 overflow-hidden", activeTab === "writing" ? "p-3" : "p-4")}>
             {activeTab === "plagiarism" && (
               <div className="h-full min-h-0 flex flex-col overflow-hidden">
                 <ErrorBoundary>

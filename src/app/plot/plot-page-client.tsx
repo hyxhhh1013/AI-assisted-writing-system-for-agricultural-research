@@ -1,13 +1,17 @@
 "use client";
 
-import { useState, useEffect, Suspense, useMemo, useCallback, type ReactNode } from "react";
+import { useState, useEffect, Suspense, useMemo, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { getFigureRegistry } from "@/services/figures";
+import type { FigureDef, FigureRegistry } from "@/services/figures";
 import { getProject } from "@/services/project";
 import {
   chartConfigToPrefill,
   chartTypeToFigureId,
   collectChartConfigsFromSources,
+  decodeFigureSpecParam,
+  figureSpecToPrefill,
+  figureToolToRegistryId,
   type ChartPanelPrefill,
 } from "@/contracts/figure";
 import { parseDataSources } from "@/contracts/project";
@@ -28,56 +32,20 @@ import {
   Layers,
   GitBranch as ForestIcon,
 } from "lucide-react";
-import { ChartPanel } from "@/components/shared/chart-panel";
-import { TablePanel } from "@/components/shared/table-panel";
-import { FlowCard } from "@/components/shared/xrd/flow-card";
-import { MolCard } from "@/components/shared/xrd/mol-card";
-import { PeakFitCard } from "@/components/shared/xrd/peakfit-card";
-import { BackgroundCard } from "@/components/shared/xrd/background-card";
-import { UnitCellCard } from "@/components/shared/xrd/unitcell-card";
-import { AmorphousCard } from "@/components/shared/xrd/amorphous-card";
-import { BraggCard } from "@/components/shared/xrd/bragg-card";
-import { XpsCard } from "@/components/shared/xrd/xps-card";
-import { XrdSimulatePanel } from "@/components/shared/xrd/xrd-simulate-panel";
+import type { ElementType } from "react";
+import { PlotFigurePanel } from "@/components/shared/plot/plot-figure-panel";
 import { PlotInsertDialog } from "@/components/shared/plot-insert-dialog";
 import { useGoBack } from "@/contexts/navigation-history";
 import { workbenchFallback } from "@/lib/navigation";
 
-import type { ChartRegistryField } from "@/contracts/chart-style";
-
-/* ─── 类型 ─── */
-interface FigureDef {
-  id: string;
-  name: string;
-  category: string;
-  description: string;
-  endpoint: string;
-  input_type: "tabular" | "json" | "form";
-  example?: string;
-  config_fields?: ChartRegistryField[];
-}
-interface CategoryDef {
-  id: string;
-  name: string;
-  icon: string;
-  order: number;
-}
-interface Registry {
-  categories: CategoryDef[];
-  figures: FigureDef[];
-  global_style_fields?: FigureDef["config_fields"];
-}
-
-/* ─── 分类图标映射 ─── */
-const CATEGORY_ICONS: Record<string, React.ElementType> = {
+const CATEGORY_ICONS: Record<string, ElementType> = {
   chart: BarChart,
   table: Table2,
   diagram: GitBranch,
   xrd: Radar,
 };
 
-/* ─── 图表类型图标映射 ─── */
-const FIGURE_ICONS: Record<string, React.ElementType> = {
+const FIGURE_ICONS: Record<string, ElementType> = {
   bar_grouped: BarChart,
   bar_stacked: BarChart,
   bar_pct_stacked: BarChart,
@@ -100,25 +68,24 @@ const FIGURE_ICONS: Record<string, React.ElementType> = {
   xrd_xps: Radar,
 };
 
-/* ─── 主组件 ─── */
 function PlotContent() {
   const searchParams = useSearchParams();
   const goBack = useGoBack();
   const routeProjectId = searchParams.get("id");
   const figureParam = searchParams.get("figure");
   const chartIdxParam = searchParams.get("chartIdx");
+  const figureSpecParam = searchParams.get("figureSpec");
   const chartIdx =
     chartIdxParam !== null && chartIdxParam !== "" ? Number.parseInt(chartIdxParam, 10) : null;
   const projectId = routeProjectId || "default";
 
-  const [registry, setRegistry] = useState<Registry | null>(null);
+  const [registry, setRegistry] = useState<FigureRegistry | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState("chart");
   const [selectedFigure, setSelectedFigure] = useState<FigureDef | null>(null);
   const [chartPrefill, setChartPrefill] = useState<ChartPanelPrefill | null>(null);
   const [prefillApplied, setPrefillApplied] = useState(false);
 
-  // 插入对话框状态
   const [insertDialog, setInsertDialog] = useState<{
     open: boolean;
     imageUrl: string;
@@ -151,10 +118,31 @@ function PlotContent() {
       const first = registry.figures[0];
       if (first) setSelectedFigure(first);
     }
-  }, [registry]);
+  }, [registry, selectedFigure]);
 
   useEffect(() => {
-    if (prefillApplied || !registry || !routeProjectId) return;
+    if (prefillApplied || !registry) return;
+
+    const applyFigureSelection = (figureId: string) => {
+      const fig = registry.figures.find((f) => f.id === figureId);
+      if (fig) {
+        setActiveCategory(fig.category);
+        setSelectedFigure(fig);
+      }
+    };
+
+    if (figureSpecParam) {
+      const spec = decodeFigureSpecParam(figureSpecParam);
+      if (spec) {
+        applyFigureSelection(figureToolToRegistryId(spec.tool, spec.config));
+        const prefill = figureSpecToPrefill(spec);
+        if (prefill) setChartPrefill(prefill);
+        setPrefillApplied(true);
+        return;
+      }
+    }
+
+    if (!routeProjectId) return;
     if (figureParam === null && chartIdxParam === null) return;
 
     void getProject(routeProjectId).then((project) => {
@@ -169,19 +157,19 @@ function PlotContent() {
         prefill = chartConfigToPrefill(cfg, targetFigureId);
       }
 
-      if (targetFigureId) {
-        const fig = registry.figures.find((f) => f.id === targetFigureId);
-        if (fig) {
-          setActiveCategory(fig.category);
-          setSelectedFigure(fig);
-        }
-      }
-      if (prefill) {
-        setChartPrefill(prefill);
-      }
+      if (targetFigureId) applyFigureSelection(targetFigureId);
+      if (prefill) setChartPrefill(prefill);
       setPrefillApplied(true);
     });
-  }, [registry, routeProjectId, figureParam, chartIdxParam, chartIdx, prefillApplied]);
+  }, [
+    registry,
+    routeProjectId,
+    figureParam,
+    chartIdxParam,
+    chartIdx,
+    figureSpecParam,
+    prefillApplied,
+  ]);
 
   useEffect(() => {
     if (prefillApplied) return;
@@ -203,62 +191,6 @@ function PlotContent() {
     };
   }, [selectedFigure, handleInsertToPaper]);
 
-  /* ─── 渲染主内容区 ─── */
-  const renderMainContent = () => {
-    if (!selectedFigure || !toolProps) return null;
-
-    // 数据图表
-    if (selectedFigure.category === "chart") {
-      const activePrefill =
-        chartPrefill && selectedFigure.id === chartPrefill.figureId ? chartPrefill : null;
-      return (
-        <ChartPanel
-          key={`${selectedFigure.id}-${activePrefill ? "prefill" : "default"}`}
-          projectId={projectId}
-          onInsertToPaper={handleInsertToPaper}
-          registryEntry={selectedFigure}
-          globalStyleFields={registry?.global_style_fields}
-          prefill={activePrefill}
-        />
-      );
-    }
-
-    // 统计表格
-    if (selectedFigure.category === "table") {
-      return <TablePanel key={selectedFigure.id} {...toolProps} />;
-    }
-
-    // 示意图
-    if (selectedFigure.id === "flow") {
-      return <FlowCard key={selectedFigure.id} {...toolProps} />;
-    }
-    if (selectedFigure.id === "molecule") {
-      return <MolCard key={selectedFigure.id} {...toolProps} />;
-    }
-
-    // XRD / XPS 系列
-    const xrdPanels: Record<string, ReactNode> = {
-      xrd_peakfit: <PeakFitCard key={selectedFigure.id} {...toolProps} />,
-      xrd_background: <BackgroundCard key={selectedFigure.id} {...toolProps} />,
-      xrd_unitcell: <UnitCellCard key={selectedFigure.id} {...toolProps} />,
-      xrd_amorphous: <AmorphousCard key={selectedFigure.id} {...toolProps} />,
-      xrd_bragg: <BraggCard key={selectedFigure.id} {...toolProps} />,
-      xrd_xps: <XpsCard key={selectedFigure.id} {...toolProps} />,
-      xrd_simulate: (
-        <XrdSimulatePanel
-          key={selectedFigure.id}
-          {...toolProps}
-          projectId={projectId}
-        />
-      ),
-    };
-    if (selectedFigure.category === "xrd") {
-      return xrdPanels[selectedFigure.id] ?? null;
-    }
-
-    return null;
-  };
-
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#faf9f6]">
@@ -267,7 +199,7 @@ function PlotContent() {
     );
   }
 
-  if (!registry) {
+  if (!registry || !selectedFigure || !toolProps) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#faf9f6] text-sm text-[#6b7c72]">
         无法加载图形注册表，请检查服务是否正常启动。
@@ -277,7 +209,6 @@ function PlotContent() {
 
   return (
     <div className="flex h-screen flex-col bg-[#faf9f6]">
-      {/* ─── 顶部导航 ─── */}
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-[#1a5632]/10 bg-white/90 px-4 backdrop-blur-sm">
         <Button
           variant="ghost"
@@ -293,7 +224,6 @@ function PlotContent() {
           科学绘图
         </span>
 
-        {/* 分类 Tab 栏 */}
         <div className="flex flex-1 justify-center">
           <div className="flex gap-1 rounded-lg bg-[#1a5632]/6 p-0.5">
             {categories.map((cat) => {
@@ -329,7 +259,7 @@ function PlotContent() {
           <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
             {categoryFigures.map((fig) => {
               const Icon = FIGURE_ICONS[fig.id] ?? BarChart3;
-              const active = selectedFigure?.id === fig.id;
+              const active = selectedFigure.id === fig.id;
               return (
                 <button
                   key={fig.id}
@@ -356,11 +286,17 @@ function PlotContent() {
         </aside>
 
         <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-          {renderMainContent()}
+          <PlotFigurePanel
+            figure={selectedFigure}
+            registry={registry}
+            projectId={projectId}
+            toolProps={toolProps}
+            chartPrefill={chartPrefill}
+            onInsertToPaper={handleInsertToPaper}
+          />
         </main>
       </div>
 
-      {/* ─── 插入对话框 ─── */}
       <PlotInsertDialog
         open={insertDialog.open}
         onOpenChange={(open) => setInsertDialog((s) => ({ ...s, open }))}
@@ -369,7 +305,7 @@ function PlotContent() {
         svgUrl={insertDialog.svgUrl}
         pdfUrl={insertDialog.pdfUrl}
         defaultProjectId={routeProjectId ?? undefined}
-        figureId={selectedFigure?.id}
+        figureId={selectedFigure.id}
       />
     </div>
   );

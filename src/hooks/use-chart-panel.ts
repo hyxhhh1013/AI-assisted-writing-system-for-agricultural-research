@@ -255,6 +255,7 @@ export function useChartPanel(
   const [filePreviewText, setFilePreviewText] = useState<string | null>(null);
   const [pasteText, setPasteText] = useState(registryEntry?.example || "");
   const [loading, setLoading] = useState(false);
+  const [generateStage, setGenerateStage] = useState<string | null>(null);
   const [fieldValues, setFieldValues] = useState<Record<string, string | number | boolean>>(() =>
     initFieldValues(basicFields, styleFields),
   );
@@ -458,6 +459,7 @@ export function useChartPanel(
       return;
     }
     setLoading(true);
+    setGenerateStage("正在提交数据…");
     try {
       const config = buildConfig();
       let body: FormData;
@@ -477,6 +479,7 @@ export function useChartPanel(
         return;
       }
 
+      setGenerateStage("正在运行 Python 绘图…");
       const data = await postChartForm(body);
       setResult({
         imageBase64: data.imageBase64 ?? "",
@@ -493,6 +496,7 @@ export function useChartPanel(
       toast.error(getErrorMessage(err));
     } finally {
       setLoading(false);
+      setGenerateStage(null);
     }
   }, [
     canGenerate,
@@ -546,6 +550,7 @@ export function useChartPanel(
     pasteText,
     updatePasteText,
     loading,
+    generateStage,
     fieldValues,
     result,
     chartType,

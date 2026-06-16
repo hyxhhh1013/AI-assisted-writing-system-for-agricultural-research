@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { EditorImageGallery } from "@/components/shared/editor-image-gallery";
 import { PipelineTimeline } from "@/components/shared/pipeline-timeline";
-import { MarkdownContent } from "@/components/shared/previews/shared";
+import { MarkdownContent, ReferencesSection } from "@/components/shared/previews/shared";
 import type { PipelineStep } from "@/hooks/use-writing-stream";
 import type { ProjectData } from "@/contracts/project";
 import { getTemplateSections } from "@/lib/template-sections";
@@ -27,6 +27,7 @@ import { getModeAccent } from "@/lib/mode-theme";
 import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
 import { siteTheme } from "@/lib/site-theme";
 import { getProjectWritingMode } from "@/lib/section-registry";
+import { buildPreviewReferencesFromContent } from "@/lib/reference-reorder";
 import dynamic from "next/dynamic";
 import type { ParagraphSelectionAction } from "@/components/shared/writing/paragraph-selection-toolbar";
 
@@ -211,9 +212,16 @@ export function WorkbenchEditorArea({
   const sectionMeta = templateDefs.find(s => s.key === activeSection);
   const sectionLabel = sectionMeta?.label || activeSection;
   const sectionPlaceholder = sectionMeta ? `${sectionMeta.label}内容…` : "";
+  const previewReferencesChinese =
+    writingMode === "review" || project.template === "gbt7713" || project.template === "cas";
 
   // AI 预览模式 — 扩写时中间编辑器显示输出内容
   if (aiPreview) {
+    const aiPreviewReferences = buildPreviewReferencesFromContent(
+      aiPreview.content,
+      project.references || [],
+      aiPreview.detectedRefs,
+    );
     return (
       <div className={cn("flex flex-col h-full relative", siteTheme.bgSoft)}>
         <header className={cn("h-12 border-b flex items-center justify-between px-4 shrink-0", accent.headerTint, accent.borderTint)}>
@@ -294,7 +302,8 @@ export function WorkbenchEditorArea({
             <div className="max-w-3xl mx-auto min-h-full">
               {aiPreview.content ? (
                 <div className="prose prose-sm max-w-none text-sm leading-relaxed">
-                  <MarkdownContent content={aiPreview.content} />
+                  <MarkdownContent content={aiPreview.content} refCount={aiPreviewReferences.length || project.references?.length} />
+                  <ReferencesSection references={aiPreviewReferences.length > 0 ? aiPreviewReferences : undefined} isChinese={previewReferencesChinese} />
                 </div>
               ) : (
                 <div className="flex items-center justify-center h-full text-muted-foreground">

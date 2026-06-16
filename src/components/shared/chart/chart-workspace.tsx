@@ -41,6 +41,7 @@ export function ChartWorkspace({
     pasteText,
     updatePasteText,
     loading,
+    generateStage,
     fieldValues,
     result,
     chartType,
@@ -345,6 +346,7 @@ export function ChartWorkspace({
       <section className="flex min-h-0 min-w-0 flex-1 flex-col">
         <ChartPreviewPane
           loading={loading}
+          loadingMessage={generateStage}
           canGenerate={canGenerate}
           result={result}
           title={title}

@@ -1,0 +1,88 @@
+"use client";
+
+import type { ReactNode } from "react";
+import { ChartPanel } from "@/components/shared/chart-panel";
+import { TablePanel } from "@/components/shared/table-panel";
+import { FlowCard } from "@/components/shared/xrd/flow-card";
+import { MolCard } from "@/components/shared/xrd/mol-card";
+import { PeakFitCard } from "@/components/shared/xrd/peakfit-card";
+import { BackgroundCard } from "@/components/shared/xrd/background-card";
+import { UnitCellCard } from "@/components/shared/xrd/unitcell-card";
+import { AmorphousCard } from "@/components/shared/xrd/amorphous-card";
+import { BraggCard } from "@/components/shared/xrd/bragg-card";
+import { XpsCard } from "@/components/shared/xrd/xps-card";
+import { XrdSimulatePanel } from "@/components/shared/xrd/xrd-simulate-panel";
+import type { ChartPanelPrefill } from "@/contracts/figure";
+import type { ChartRegistryField } from "@/contracts/chart-style";
+import type { FigureDef, FigureRegistry } from "@/services/figures";
+import type { PlotToolProps } from "@/components/shared/plot/plot-tool-props";
+
+/** registry figure id → 专用面板（未列出的 xrd 图走默认 null） */
+const XRD_PANELS: Record<string, (props: PlotToolProps & { projectId?: string }) => ReactNode> = {
+  xrd_peakfit: (props) => <PeakFitCard key="xrd_peakfit" {...props} />,
+  xrd_background: (props) => <BackgroundCard key="xrd_background" {...props} />,
+  xrd_unitcell: (props) => <UnitCellCard key="xrd_unitcell" {...props} />,
+  xrd_amorphous: (props) => <AmorphousCard key="xrd_amorphous" {...props} />,
+  xrd_bragg: (props) => <BraggCard key="xrd_bragg" {...props} />,
+  xrd_xps: (props) => <XpsCard key="xrd_xps" {...props} />,
+  xrd_simulate: (props) => (
+    <XrdSimulatePanel key="xrd_simulate" {...props} projectId={props.projectId ?? "default"} />
+  ),
+};
+
+const DIAGRAM_PANELS: Record<string, (props: PlotToolProps) => ReactNode> = {
+  flow: (props) => <FlowCard key="flow" {...props} />,
+  molecule: (props) => <MolCard key="molecule" {...props} />,
+};
+
+export interface PlotFigurePanelProps {
+  figure: FigureDef;
+  registry: FigureRegistry;
+  projectId: string;
+  toolProps: PlotToolProps;
+  chartPrefill: ChartPanelPrefill | null;
+  onInsertToPaper: (imageUrl: string, caption: string) => void;
+}
+
+/** 按 registry 条目渲染作图主内容区（替代 plot-page-client 内大 switch） */
+export function PlotFigurePanel({
+  figure,
+  registry,
+  projectId,
+  toolProps,
+  chartPrefill,
+  onInsertToPaper,
+}: PlotFigurePanelProps) {
+  if (figure.category === "chart") {
+    const activePrefill =
+      chartPrefill && figure.id === chartPrefill.figureId ? chartPrefill : null;
+    return (
+      <ChartPanel
+        key={`${figure.id}-${activePrefill ? "prefill" : "default"}`}
+        projectId={projectId}
+        onInsertToPaper={onInsertToPaper}
+        registryEntry={figure}
+        globalStyleFields={registry.global_style_fields as ChartRegistryField[] | undefined}
+        prefill={activePrefill}
+      />
+    );
+  }
+
+  if (figure.category === "table") {
+    return <TablePanel key={figure.id} {...toolProps} />;
+  }
+
+  const diagramRender = DIAGRAM_PANELS[figure.id];
+  if (diagramRender) {
+    return diagramRender(toolProps);
+  }
+
+  if (figure.category === "xrd") {
+    const xrdRender = XRD_PANELS[figure.id];
+    if (xrdRender) {
+      return xrdRender({ ...toolProps, projectId });
+    }
+  }
+
+  return null;
+}

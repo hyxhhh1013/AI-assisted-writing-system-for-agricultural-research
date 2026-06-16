@@ -6,6 +6,7 @@ import type { ChartPanelResult } from "@/hooks/use-chart-panel";
 
 interface ChartPreviewPaneProps {
   loading: boolean;
+  loadingMessage?: string | null;
   canGenerate: boolean;
   result: ChartPanelResult | null;
   title: string;
@@ -16,6 +17,7 @@ interface ChartPreviewPaneProps {
 
 export function ChartPreviewPane({
   loading,
+  loadingMessage,
   canGenerate,
   result,
   title,
@@ -32,7 +34,7 @@ export function ChartPreviewPane({
           <p className="text-sm font-semibold text-[#122820]">图表预览</p>
           <p className="truncate text-xs text-[#6b7c72]">
             {loading
-              ? "正在渲染，请稍候…"
+              ? loadingMessage ?? "正在渲染，请稍候…"
               : result
                 ? "调整左侧参数后可重新生成"
                 : canGenerate
@@ -67,7 +69,7 @@ export function ChartPreviewPane({
           {loading ? (
             <div className="flex flex-col items-center gap-3 text-[#6b7c72]">
               <Loader2 className="h-10 w-10 animate-spin text-[#1a5632]" />
-              <p className="text-sm">正在生成图表…</p>
+              <p className="text-sm">{loadingMessage ?? "正在生成图表…"}</p>
             </div>
           ) : result ? (
             <div className="flex h-full w-full items-center justify-center p-4">
