@@ -131,7 +131,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 读取生成的图片（保留文件供插入论文使用）
+    const baseName = outputName.replace(/\.png$/i, "");
+    const svgName = `${baseName}.svg`;
+    const pdfName = `${baseName}.pdf`;
+    const svgPath = path.join(CHARTS_DIR, svgName);
+    const pdfPath = path.join(CHARTS_DIR, pdfName);
+
     const imageBuffer = fs.readFileSync(outputPath);
     const base64 = imageBuffer.toString("base64");
     const mimeType = "image/png";
@@ -139,7 +144,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       imageBase64: `data:${mimeType};base64,${base64}`,
       imageUrl: `/api/charts/${outputName}`,
+      svgUrl: fs.existsSync(svgPath) ? `/api/charts/${svgName}` : undefined,
+      pdfUrl: fs.existsSync(pdfPath) ? `/api/charts/${pdfName}` : undefined,
       fileName: outputName,
+      baseName,
     });
   } catch (error: unknown) {
     logger.error("Chart API error:", error);
