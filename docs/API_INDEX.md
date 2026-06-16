@@ -13,7 +13,7 @@
 <!-- API_INDEX:AUTO:START -->
 ## 路由表（自动生成）
 
-> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-06-06 08:35:24**（共 **61** 个 route 文件，validateBody **26**，SSE **9**，requireAdmin **14**）。
+> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-06-16 07:45:30**（共 **65** 个 route 文件，validateBody **29**，SSE **9**，requireAdmin **14**）。
 
 图例：zod = 使用 validateBody；SSE = 含 text/event-stream / ReadableStream；admin = 含 requireAdmin。
 
@@ -32,6 +32,7 @@
 |------|------|-----|-----|-------|
 | GET, POST, PATCH, DELETE | `/api/projects` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/analysis-results` | ✓ | — | — |
+| PATCH | `/api/projects/[id]/charts` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/meta` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/references` | ✓ | — | — |
 | POST | `/api/projects/[id]/references/import-external` | ✓ | — | — |
@@ -49,6 +50,7 @@
 | 方法 | 路径 | zod | SSE | admin |
 |------|------|-----|-----|-------|
 | POST | `/api/outline` | ✓ | ✓ | — |
+| POST | `/api/outline/blueprint` | ✓ | — | — |
 
 ### 文献对话
 
@@ -203,6 +205,7 @@
 | 方法 | 路径 | zod | SSE | admin |
 |------|------|-----|-----|-------|
 | POST | `/api/literature/search` | ✓ | — | — |
+| GET | `/api/presentation/stats` | — | — | — |
 <!-- API_INDEX:AUTO:END -->
 
 ## 人工备注（不随脚本覆盖）

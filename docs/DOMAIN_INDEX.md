@@ -16,7 +16,7 @@
 
 | 功能 | 页面 | API | 核心代码 |
 |------|------|-----|----------|
-| 扩写流水线 | 工作台 `writing-panel` | `POST /api/writing` SSE | `api/writing/pipeline/*`, `lib/prompts.ts` |
+| 扩写流水线 | 工作台 `writing-panel` | `POST /api/writing` SSE；**096a** `POST /api/writing/retrieve-preview` | `api/writing/pipeline/*`, `services/writing-context.ts` |
 | 大纲生成 | `src/app/outline/page.tsx` | `POST /api/outline` | `lib/prompts/outline.ts` |
 | 一致性检查 | 工作台 | `POST /api/consistency` | `consistency/fix` |
 | 翻译 | — | `POST /api/translate` | — |
@@ -35,7 +35,7 @@
 | 书目自动解析 | （索引 Stage 1） | — | `scripts/doc-type-registry.mjs`, `scripts/extractors/*` |
 | 引用括号归一化 | 扩写/预览/应用章节 | — | `src/lib/citation-bounds.ts`, `src/lib/citation.ts` |
 | 文献对话 | — | `POST /api/chat` SSE | `lib/rag.ts` |
-| 写作检索上下文 | — | （writing 内） | `services/writing-context.ts` |
+| 写作检索上下文 / 预览 | `writing-retrieve-preview` service | `POST /api/writing/retrieve-preview` | `services/writing-context.ts` |
 
 详见 [`domain/rag-and-knowledge.md`](./domain/rag-and-knowledge.md)。
 

@@ -25,6 +25,7 @@ KnowledgeFile 1──* KnowledgeChunk
 | `dataClaims` | JSON `EvidenceClaim[]` |
 | `dataSources` | JSON `DataSourceAnalysis[]` |
 | `expandedOutlineSections` | JSON `string[]`，大纲扩写已完成任务 id（`stableHash(fullPath)`）；整章扩写时同 `sectionKey` 下子节一并标记 |
+| `writingBlueprint` | JSON `WritingBlueprint`（`src/contracts/writing-blueprint.ts`），扩写前全局叙事与配图规划 |
 
 **保存策略（当前）**
 

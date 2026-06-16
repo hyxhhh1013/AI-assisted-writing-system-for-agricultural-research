@@ -42,6 +42,8 @@ export interface WritingBlueprint {
   sectionGuides: SectionGuide[];
   writingOrder: string[];
   prerequisites: string[];
+  /** 生成时对应的大纲指纹，用于检测大纲变更后蓝图过期 */
+  outlineHash?: string;
   generatedAt: number;
 }
 

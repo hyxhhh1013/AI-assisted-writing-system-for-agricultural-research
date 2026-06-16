@@ -4,6 +4,9 @@ import {
   figureBelongsToSection,
   formatBlueprintSectionHint,
   formatBlueprintGlobalSummary,
+  computeOutlineHash,
+  isBlueprintStale,
+  blueprintFigureToPlotHref,
 } from "@/lib/blueprint-utils";
 import type { WritingBlueprint } from "@/contracts/writing-blueprint";
 import { parseWritingBlueprint, serializeWritingBlueprint } from "@/contracts/writing-blueprint";
@@ -94,5 +97,29 @@ describe("parseWritingBlueprint", () => {
   it("returns null for invalid json", () => {
     expect(parseWritingBlueprint("{")).toBeNull();
     expect(parseWritingBlueprint(undefined)).toBeNull();
+  });
+});
+
+describe("computeOutlineHash / isBlueprintStale", () => {
+  it("detects outline changes", () => {
+    const hash = computeOutlineHash("# 引言\n内容");
+    const bp: WritingBlueprint = { ...sampleBlueprint, outlineHash: hash };
+    expect(isBlueprintStale(bp, "# 引言\n内容")).toBe(false);
+    expect(isBlueprintStale(bp, "# 引言\n已修改")).toBe(true);
+  });
+
+  it("treats missing outlineHash as not stale", () => {
+    expect(isBlueprintStale(sampleBlueprint, "任意大纲")).toBe(false);
+  });
+});
+
+describe("blueprintFigureToPlotHref", () => {
+  it("builds plot link for chart and flow types", () => {
+    const chartHref = blueprintFigureToPlotHref("p1", sampleBlueprint.figurePlan.items[1]);
+    expect(chartHref).toContain("/plot?");
+    expect(chartHref).toContain("id=p1");
+
+    const flowHref = blueprintFigureToPlotHref("p1", sampleBlueprint.figurePlan.items[0]);
+    expect(flowHref).toContain("figure=flow");
   });
 });

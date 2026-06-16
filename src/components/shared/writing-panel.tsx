@@ -94,7 +94,7 @@ export function WritingPanel({
   const [lastRefMapping, setLastRefMapping] = useState<Record<string, number> | null>(null);
   const [citationWarnings, setCitationWarnings] = useState<CitationWarning[]>([]);
   const [dataClaimWarnings, setDataClaimWarnings] = useState<DataClaimWarning[]>([]);
-  const [, setPendingFigures] = useState<
+  const [pendingFigures, setPendingFigures] = useState<
     { spec: string; tool: string; config: string; caption: string; status: string; imageUrl?: string }[]
   >([]);
   const [literatureOpen, setLiteratureOpen] = useState(false);
@@ -649,6 +649,7 @@ export function WritingPanel({
 
         {result && !onPreviewUpdate && (
           <WritingExpandResult
+            projectId={projectId}
             result={result}
             generationStatus={generationStatus}
             citationWarnings={citationWarnings}
@@ -657,6 +658,11 @@ export function WritingPanel({
             detectedRefs={detectedRefs}
             verificationFeedback={verificationFeedback}
             pipelineSteps={writingStream.pipelineSteps}
+            detectedFigures={pendingFigures.map(({ tool, config, caption }) => ({
+              tool,
+              config,
+              caption,
+            }))}
             onApplyToEditor={handleApplyToEditor}
           />
         )}

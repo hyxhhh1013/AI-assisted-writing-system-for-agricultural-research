@@ -12,7 +12,7 @@ import { AmorphousCard } from "@/components/shared/xrd/amorphous-card";
 import { BraggCard } from "@/components/shared/xrd/bragg-card";
 import { XpsCard } from "@/components/shared/xrd/xps-card";
 import { XrdSimulatePanel } from "@/components/shared/xrd/xrd-simulate-panel";
-import type { ChartPanelPrefill } from "@/contracts/figure";
+import type { ChartPanelPrefill, FlowPanelPrefill } from "@/contracts/figure";
 import type { ChartRegistryField } from "@/contracts/chart-style";
 import type { FigureDef, FigureRegistry } from "@/services/figures";
 import type { PlotToolProps } from "@/components/shared/plot/plot-tool-props";
@@ -30,7 +30,10 @@ const XRD_PANELS: Record<string, (props: PlotToolProps & { projectId?: string })
   ),
 };
 
-const DIAGRAM_PANELS: Record<string, (props: PlotToolProps) => ReactNode> = {
+const DIAGRAM_PANELS: Record<
+  string,
+  (props: PlotToolProps & { prefill?: FlowPanelPrefill | null }) => ReactNode
+> = {
   flow: (props) => <FlowCard key="flow" {...props} />,
   molecule: (props) => <MolCard key="molecule" {...props} />,
 };
@@ -41,6 +44,7 @@ export interface PlotFigurePanelProps {
   projectId: string;
   toolProps: PlotToolProps;
   chartPrefill: ChartPanelPrefill | null;
+  flowPrefill?: FlowPanelPrefill | null;
   onInsertToPaper: (imageUrl: string, caption: string) => void;
 }
 
@@ -51,6 +55,7 @@ export function PlotFigurePanel({
   projectId,
   toolProps,
   chartPrefill,
+  flowPrefill,
   onInsertToPaper,
 }: PlotFigurePanelProps) {
   if (figure.category === "chart") {
@@ -74,7 +79,10 @@ export function PlotFigurePanel({
 
   const diagramRender = DIAGRAM_PANELS[figure.id];
   if (diagramRender) {
-    return diagramRender(toolProps);
+    return diagramRender({
+      ...toolProps,
+      prefill: figure.id === "flow" ? flowPrefill : undefined,
+    });
   }
 
   if (figure.category === "xrd") {

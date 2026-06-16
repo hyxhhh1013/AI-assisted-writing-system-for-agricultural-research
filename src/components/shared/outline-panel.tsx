@@ -18,7 +18,7 @@ import { listKnowledgeFiles } from "@/services/knowledge";
 import { resolveOutlineResearchDirection, streamOutline } from "@/services/outline";
 import { generateWritingBlueprint } from "@/services/blueprint";
 import { parseOutline, OutlineSection } from "@/lib/utils";
-import { countFiguresForSection } from "@/lib/blueprint-utils";
+import { countFiguresForSection, isBlueprintStale } from "@/lib/blueprint-utils";
 import { OutlineBlueprintSummary } from "@/components/shared/outline-blueprint-summary";
 import { OutlineBlueprintDialog } from "@/components/shared/outline-blueprint-dialog";
 
@@ -46,6 +46,11 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
   const blueprint = useMemo(
     () => parseWritingBlueprint(project.writingBlueprint),
     [project.writingBlueprint],
+  );
+
+  const blueprintStale = useMemo(
+    () => Boolean(blueprint && result.trim() && isBlueprintStale(blueprint, result)),
+    [blueprint, result],
   );
 
   useEffect(() => {
@@ -159,6 +164,9 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
   };
 
   const handleExpandTask = (task: OutlineSection) => {
+    if (blueprintStale) {
+      toast.warning("写作蓝图与当前大纲不一致，建议先刷新蓝图");
+    }
     onExpandTask?.(task.id);
     onTabChange?.("writing");
   };
@@ -216,6 +224,7 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
       <OutlineBlueprintSummary
         blueprint={blueprint}
         isGenerating={isBlueprintGenerating}
+        isStale={blueprintStale}
         hasOutline={Boolean(result.trim())}
         onGenerate={handleGenerateBlueprint}
         onOpenDetail={() => setBlueprintDialogOpen(true)}
@@ -225,6 +234,8 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
         open={blueprintDialogOpen}
         onOpenChange={setBlueprintDialogOpen}
         blueprint={blueprint}
+        projectId={projectId}
+        isStale={blueprintStale}
       />
 
       <div className="flex-1 min-h-0 overflow-y-auto">

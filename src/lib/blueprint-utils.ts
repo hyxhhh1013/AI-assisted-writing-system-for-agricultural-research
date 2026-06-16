@@ -1,8 +1,79 @@
 import type {
   FigurePlanItem,
+  FigurePlanType,
   SectionGuide,
   WritingBlueprint,
 } from "@/contracts/writing-blueprint";
+import { buildPlotPageHref } from "@/contracts/figure";
+
+/** 大纲文本指纹（大纲变更后用于标记蓝图过期） */
+export function computeOutlineHash(outline: string): string {
+  const normalized = outline.replace(/\r\n/g, "\n").trim();
+  let h = 5381;
+  for (let i = 0; i < normalized.length; i++) {
+    h = (Math.imul(33, h) ^ normalized.charCodeAt(i)) >>> 0;
+  }
+  return `oh-${h.toString(36)}`;
+}
+
+export function isBlueprintStale(
+  blueprint: WritingBlueprint,
+  currentOutline: string,
+): boolean {
+  if (!blueprint.outlineHash) return false;
+  return blueprint.outlineHash !== computeOutlineHash(currentOutline);
+}
+
+const BLUEPRINT_TYPE_TO_FIGURE: Record<FigurePlanType, string | null> = {
+  flow: "flow",
+  chart: "bar_grouped",
+  xrd: "xrd_bragg",
+  table: "table_three_line",
+  schematic: "flow",
+  other: null,
+};
+
+/** 蓝图配图项 → /plot 深链（无对应工具时返回 null） */
+export function blueprintFigureToPlotHref(
+  projectId: string,
+  item: FigurePlanItem,
+): string | null {
+  const figureId = BLUEPRINT_TYPE_TO_FIGURE[item.type];
+  if (!figureId) return null;
+
+  if (item.type === "flow" || item.type === "schematic") {
+    return buildPlotPageHref({
+      projectId,
+      figureId: "flow",
+      figureSpec: {
+        tool: "flow",
+        config: { title: item.suggestedCaption },
+        caption: item.suggestedCaption,
+      },
+    });
+  }
+
+  if (item.type === "chart") {
+    return buildPlotPageHref({
+      projectId,
+      figureId,
+      figureSpec: {
+        tool: "chart",
+        config: {
+          type: "bar",
+          title: item.suggestedCaption,
+          data: {
+            labels: ["组1", "组2", "组3"],
+            datasets: [{ label: "数值", data: [0, 0, 0] }],
+          },
+        },
+        caption: item.suggestedCaption,
+      },
+    });
+  }
+
+  return buildPlotPageHref({ projectId, figureId });
+}
 
 /** 配图是否归属该大纲节点（自身或子节） */
 export function figureBelongsToSection(itemPath: string, taskPath: string): boolean {

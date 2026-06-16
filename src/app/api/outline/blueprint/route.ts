@@ -6,6 +6,7 @@ import { validateBody } from "@/lib/api-validate";
 import { blueprintSchema, writingBlueprintPayloadSchema } from "@/lib/validations";
 import { getErrorMessage } from "@/lib/error-utils";
 import type { WritingBlueprint } from "@/contracts/writing-blueprint";
+import { computeOutlineHash } from "@/lib/blueprint-utils";
 
 function extractJsonObject(rawText: string): unknown {
   const trimmed = rawText.trim();
@@ -25,7 +26,7 @@ function extractJsonObject(rawText: string): unknown {
   }
 }
 
-function normalizeBlueprint(data: WritingBlueprint): WritingBlueprint {
+function normalizeBlueprint(data: WritingBlueprint, outline: string): WritingBlueprint {
   const items = data.figurePlan.items.map((item, index) => ({
     ...item,
     id: item.id?.trim() || `fig-${index + 1}`,
@@ -35,6 +36,7 @@ function normalizeBlueprint(data: WritingBlueprint): WritingBlueprint {
   return {
     ...data,
     version: 1,
+    outlineHash: computeOutlineHash(outline),
     generatedAt: Date.now(),
     figurePlan: {
       totalMin,
@@ -108,7 +110,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const blueprint = normalizeBlueprint(validated.data as WritingBlueprint);
+    const blueprint = normalizeBlueprint(validated.data as WritingBlueprint, outline);
     return NextResponse.json(blueprint);
   } catch (error: unknown) {
     logger.error("Blueprint Generation Error:", error);

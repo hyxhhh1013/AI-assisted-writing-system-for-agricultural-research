@@ -211,6 +211,7 @@ export const writingBlueprintPayloadSchema = z.object({
   sectionGuides: z.array(sectionGuideSchema).min(1),
   writingOrder: z.array(z.string()),
   prerequisites: z.array(z.string()),
+  outlineHash: z.string().optional(),
   generatedAt: z.number().optional(),
 });
 

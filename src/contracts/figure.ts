@@ -126,6 +126,14 @@ export interface ChartPanelPrefill {
   figureId?: string;
 }
 
+/** 流程图 panel 预填（来自 FIGURE flow / mechanism） */
+export interface FlowPanelPrefill {
+  title?: string;
+  direction?: "vertical" | "horizontal";
+  nodes?: { id: string; label: string; shape?: string }[];
+  edges?: { from: string; to: string }[];
+}
+
 export function chartConfigToPrefill(cfg: ChartConfig, figureId?: string): ChartPanelPrefill {
   return {
     pasteText: chartConfigToPasteText(cfg),
@@ -204,6 +212,56 @@ export function figureChartConfigToPrefill(
 export function figureSpecToPrefill(spec: FigureSpec): ChartPanelPrefill | null {
   if (spec.tool !== "chart" || !isRecord(spec.config)) return null;
   return figureChartConfigToPrefill(spec.config, spec.caption);
+}
+
+/** FigureSpec → FlowPanelPrefill（flow / mechanism） */
+export function figureSpecToFlowPrefill(spec: FigureSpec): FlowPanelPrefill | null {
+  if (spec.tool !== "flow" && spec.tool !== "mechanism") return null;
+  if (!isRecord(spec.config)) return null;
+  const direction = spec.config.direction;
+  const nodesRaw = spec.config.nodes;
+  const edgesRaw = spec.config.edges;
+  const nodes: FlowPanelPrefill["nodes"] = [];
+  if (Array.isArray(nodesRaw)) {
+    for (const item of nodesRaw) {
+      if (!isRecord(item) || typeof item.id !== "string") continue;
+      nodes.push({
+        id: item.id,
+        label: typeof item.label === "string" ? item.label : "",
+        shape: typeof item.shape === "string" ? item.shape : undefined,
+      });
+    }
+  }
+  const edges: FlowPanelPrefill["edges"] = [];
+  if (Array.isArray(edgesRaw)) {
+    for (const item of edgesRaw) {
+      if (!isRecord(item) || typeof item.from !== "string" || typeof item.to !== "string") continue;
+      edges.push({ from: item.from, to: item.to });
+    }
+  }
+  return {
+    title: typeof spec.config.title === "string" ? spec.config.title : spec.caption,
+    direction: direction === "horizontal" ? "horizontal" : "vertical",
+    nodes: nodes.length > 0 ? nodes : undefined,
+    edges: edges.length > 0 ? edges : undefined,
+  };
+}
+
+/** 扩写检测到的配图 → plot 深链 */
+export function detectedFigureToPlotHref(
+  projectId: string,
+  figure: { tool: string; config: string; caption: string },
+): string | null {
+  try {
+    const config = JSON.parse(figure.config) as Record<string, unknown>;
+    return figureBlockJsonToPlotHref(projectId, {
+      tool: figure.tool,
+      config,
+      caption: figure.caption,
+    });
+  } catch {
+    return null;
+  }
 }
 
 function utf8ToBase64Url(text: string): string {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,11 +10,21 @@ import { toast } from "sonner";
 import { renderFlowChart } from "@/services/mol-diagram";
 import type { FlowNode, FlowEdge } from "@/services/mol-diagram";
 import { getErrorMessage } from "@/lib/error-utils";
+import type { FlowPanelPrefill } from "@/contracts/figure";
 import { PlotWorkspace } from "@/components/shared/plot/plot-workspace";
 import { PlotPreviewPane } from "@/components/shared/plot/plot-preview-pane";
 import type { PlotToolProps } from "@/components/shared/plot/plot-tool-props";
 
-export function FlowCard({ title: toolTitle, description, onInsertToPaper }: PlotToolProps) {
+interface FlowCardProps extends PlotToolProps {
+  prefill?: FlowPanelPrefill | null;
+}
+
+export function FlowCard({
+  title: toolTitle,
+  description,
+  onInsertToPaper,
+  prefill,
+}: FlowCardProps) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ imageBase64: string; imageUrl: string } | null>(null);
   const [title, setTitle] = useState("实验流程图");
@@ -30,6 +40,28 @@ export function FlowCard({ title: toolTitle, description, onInsertToPaper }: Plo
     { from: "2", to: "3" },
   ]);
   const [nextId, setNextId] = useState(4);
+
+  useEffect(() => {
+    if (!prefill) return;
+    if (prefill.title) setTitle(prefill.title);
+    if (prefill.direction) setDirection(prefill.direction);
+    if (prefill.nodes && prefill.nodes.length > 0) {
+      const mapped: FlowNode[] = prefill.nodes.map((n) => ({
+        id: n.id,
+        label: n.label,
+        shape: (n.shape === "oval" || n.shape === "diamond" ? n.shape : "box") as FlowNode["shape"],
+      }));
+      setNodes(mapped);
+      const maxNum = mapped.reduce((max, n) => {
+        const num = Number.parseInt(n.id, 10);
+        return Number.isNaN(num) ? max : Math.max(max, num);
+      }, 0);
+      setNextId(maxNum + 1);
+    }
+    if (prefill.edges && prefill.edges.length > 0) {
+      setEdges(prefill.edges);
+    }
+  }, [prefill]);
 
   const addNode = () => {
     const id = String(nextId);

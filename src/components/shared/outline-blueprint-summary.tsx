@@ -7,6 +7,7 @@ import type { WritingBlueprint } from "@/contracts/writing-blueprint";
 interface OutlineBlueprintSummaryProps {
   blueprint: WritingBlueprint | null;
   isGenerating: boolean;
+  isStale: boolean;
   hasOutline: boolean;
   onGenerate: () => void;
   onOpenDetail: () => void;
@@ -15,6 +16,7 @@ interface OutlineBlueprintSummaryProps {
 export function OutlineBlueprintSummary({
   blueprint,
   isGenerating,
+  isStale,
   hasOutline,
   onGenerate,
   onOpenDetail,
@@ -25,6 +27,11 @@ export function OutlineBlueprintSummary({
     <div className="shrink-0 mx-2 mt-2 mb-1 rounded-lg border border-primary/15 bg-primary/[0.04] p-2.5 space-y-2">
       {blueprint ? (
         <>
+          {isStale && (
+            <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 rounded px-2 py-1 leading-relaxed">
+              大纲已修改，蓝图可能过期。请刷新蓝图后再扩写。
+            </p>
+          )}
           <div className="flex items-start gap-2">
             <Map className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
             <div className="min-w-0 flex-1 space-y-1">
@@ -58,12 +65,12 @@ export function OutlineBlueprintSummary({
             <Button
               type="button"
               size="sm"
-              variant="ghost"
+              variant={isStale ? "default" : "ghost"}
               className="h-6 text-[10px] px-2"
               disabled={isGenerating}
               onClick={onGenerate}
             >
-              刷新
+              {isStale ? "刷新蓝图" : "刷新"}
             </Button>
           </div>
         </>

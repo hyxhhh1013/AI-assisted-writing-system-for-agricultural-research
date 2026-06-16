@@ -8,18 +8,23 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { WritingBlueprint } from "@/contracts/writing-blueprint";
-import { figureTypeLabel } from "@/lib/blueprint-utils";
+import { blueprintFigureToPlotHref, figureTypeLabel } from "@/lib/blueprint-utils";
+import Link from "next/link";
 
 interface OutlineBlueprintDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   blueprint: WritingBlueprint | null;
+  projectId?: string;
+  isStale?: boolean;
 }
 
 export function OutlineBlueprintDialog({
   open,
   onOpenChange,
   blueprint,
+  projectId,
+  isStale = false,
 }: OutlineBlueprintDialogProps) {
   if (!blueprint) return null;
 
@@ -32,6 +37,11 @@ export function OutlineBlueprintDialog({
           <DialogTitle>写作蓝图</DialogTitle>
           <DialogDescription>
             扩写前的全局导航：叙事、配图与章节分工（可在扩写时自动注入 AI 上下文）。
+            {isStale && (
+              <span className="block mt-1 text-amber-700">
+                当前大纲已变更，建议返回侧栏刷新蓝图。
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -87,10 +97,13 @@ export function OutlineBlueprintDialog({
                     <th className="text-left p-2 font-medium w-16">类型</th>
                     <th className="text-left p-2 font-medium">图题 / 用途</th>
                     <th className="text-left p-2 font-medium w-12">优先级</th>
+                    {projectId && <th className="text-left p-2 font-medium w-14">操作</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {figurePlan.items.map((item) => (
+                  {figurePlan.items.map((item) => {
+                    const plotHref = projectId ? blueprintFigureToPlotHref(projectId, item) : null;
+                    return (
                     <tr key={item.id} className="border-t">
                       <td className="p-2 align-top text-muted-foreground">{item.sectionPath}</td>
                       <td className="p-2 align-top">{figureTypeLabel(item.type)}</td>
@@ -101,8 +114,25 @@ export function OutlineBlueprintDialog({
                       <td className="p-2 align-top">
                         {item.priority === "required" ? "必需" : "可选"}
                       </td>
+                      {projectId && (
+                        <td className="p-2 align-top">
+                          {plotHref ? (
+                            <Link
+                              href={plotHref}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary hover:underline whitespace-nowrap"
+                            >
+                              绘图 →
+                            </Link>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                      )}
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

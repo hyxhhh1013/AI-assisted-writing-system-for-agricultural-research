@@ -10,9 +10,11 @@ import {
   chartTypeToFigureId,
   collectChartConfigsFromSources,
   decodeFigureSpecParam,
+  figureSpecToFlowPrefill,
   figureSpecToPrefill,
   figureToolToRegistryId,
   type ChartPanelPrefill,
+  type FlowPanelPrefill,
 } from "@/contracts/figure";
 import { parseDataSources } from "@/contracts/project";
 import { Button } from "@/components/ui/button";
@@ -84,6 +86,7 @@ function PlotContent() {
   const [activeCategory, setActiveCategory] = useState("chart");
   const [selectedFigure, setSelectedFigure] = useState<FigureDef | null>(null);
   const [chartPrefill, setChartPrefill] = useState<ChartPanelPrefill | null>(null);
+  const [flowPrefill, setFlowPrefill] = useState<FlowPanelPrefill | null>(null);
   const [prefillApplied, setPrefillApplied] = useState(false);
 
   const [insertDialog, setInsertDialog] = useState<{
@@ -137,6 +140,8 @@ function PlotContent() {
         applyFigureSelection(figureToolToRegistryId(spec.tool, spec.config));
         const prefill = figureSpecToPrefill(spec);
         if (prefill) setChartPrefill(prefill);
+        const flow = figureSpecToFlowPrefill(spec);
+        if (flow) setFlowPrefill(flow);
         setPrefillApplied(true);
         return;
       }
@@ -292,6 +297,7 @@ function PlotContent() {
             projectId={projectId}
             toolProps={toolProps}
             chartPrefill={chartPrefill}
+            flowPrefill={flowPrefill}
             onInsertToPaper={handleInsertToPaper}
           />
         </main>

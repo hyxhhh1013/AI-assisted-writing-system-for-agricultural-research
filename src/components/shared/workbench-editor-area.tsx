@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { EditorImageGallery } from "@/components/shared/editor-image-gallery";
+import { WritingFigureEditLinks } from "@/components/shared/writing/writing-figure-edit-links";
 import { PipelineTimeline } from "@/components/shared/pipeline-timeline";
 import { MarkdownContent, ReferencesSection } from "@/components/shared/previews/shared";
 import type { PipelineStep } from "@/hooks/use-writing-stream";
@@ -254,6 +255,12 @@ export function WorkbenchEditorArea({
 
             {/* 警告摘要 — 填充剩余空间 */}
             <div className="flex-1 overflow-y-auto min-h-0 space-y-2">
+              <WritingFigureEditLinks
+                projectId={projectId}
+                text={aiPreview.content}
+                compact
+              />
+
               {aiPreview.verification && (
                 <details className="text-[10px]" open>
                   <summary className="font-bold text-amber-700 cursor-pointer sticky top-0 bg-card py-1">审稿核查</summary>
@@ -350,6 +357,11 @@ export function WorkbenchEditorArea({
           "max-w-4xl mx-auto min-h-full flex flex-col",
           editorMode === "classic" ? "bg-white rounded-2xl shadow-xl border border-[#1a5632]/10 overflow-hidden" : ""
         )}>
+          {projectId && (
+            <div className="px-6 pt-4 md:px-10">
+              <WritingFigureEditLinks projectId={projectId} text={editingContent} compact />
+            </div>
+          )}
           {editorMode === "classic" ? (
             <>
               <Textarea
