@@ -178,6 +178,51 @@ export const outlineSchema = z.object({
 });
 export type OutlineInput = z.infer<typeof outlineSchema>;
 
+const figurePlanItemSchema = z.object({
+  id: z.string(),
+  sectionPath: z.string().min(1),
+  type: z.enum(["flow", "chart", "xrd", "table", "schematic", "other"]),
+  purpose: z.string().min(1),
+  suggestedCaption: z.string().min(1),
+  priority: z.enum(["required", "optional"]),
+  dataSource: z.enum(["experiment", "literature", "synthesis"]).optional(),
+});
+
+const sectionGuideSchema = z.object({
+  sectionPath: z.string().min(1),
+  purpose: z.string().min(1),
+  keyPoints: z.array(z.string()).min(1),
+  estimatedParagraphs: z.number().int().positive().optional(),
+});
+
+export const writingBlueprintPayloadSchema = z.object({
+  version: z.literal(1),
+  narrativeSummary: z.string().min(1),
+  thesis: z.string().min(1),
+  estimatedWordCount: z.object({
+    min: z.number().int().nonnegative(),
+    max: z.number().int().nonnegative(),
+  }),
+  figurePlan: z.object({
+    totalMin: z.number().int().nonnegative(),
+    totalMax: z.number().int().nonnegative(),
+    items: z.array(figurePlanItemSchema).min(1),
+  }),
+  sectionGuides: z.array(sectionGuideSchema).min(1),
+  writingOrder: z.array(z.string()),
+  prerequisites: z.array(z.string()),
+  generatedAt: z.number().optional(),
+});
+
+export const blueprintSchema = z.object({
+  title: z.string().min(1, "标题不能为空"),
+  outline: z.string().min(20, "大纲内容过短"),
+  researchDirection: z.string().optional(),
+  language: z.enum(["zh", "en"]).optional().default("zh"),
+  projectMode: z.enum(["review", "research"]).optional(),
+});
+export type BlueprintInput = z.infer<typeof blueprintSchema>;
+
 // === Translation ===
 export const translateSchema = z.object({
   text: z.string().min(1, "文本不能为空"),
@@ -370,6 +415,30 @@ export const projectEvidencePatchSchema = z
   );
 export type ProjectEvidencePatchInput = z.infer<typeof projectEvidencePatchSchema>;
 
+const chartPatchOpSchema = z.discriminatedUnion("op", [
+  z.object({
+    op: z.literal("append"),
+    asset: z.object({
+      id: z.string().optional(),
+      figureId: z.string().min(1),
+      caption: z.string(),
+      imageUrl: z.string().min(1),
+      svgUrl: z.string().optional(),
+      pdfUrl: z.string().optional(),
+      sectionKey: z.string().optional(),
+    }),
+  }),
+  z.object({
+    op: z.literal("delete"),
+    id: z.string().min(1),
+  }),
+]);
+
+export const projectChartsPatchSchema = z.object({
+  ops: z.array(chartPatchOpSchema).min(1),
+});
+export type ProjectChartsPatchInput = z.infer<typeof projectChartsPatchSchema>;
+
 export const projectMetaPatchSchema = z
   .object({
     title: z.string().optional(),
@@ -382,6 +451,7 @@ export const projectMetaPatchSchema = z
     outline: z.string().optional(),
     template: z.string().optional(),
     mode: z.string().optional(),
+    writingBlueprint: z.string().optional(),
   })
   .refine(
     (data) => Object.values(data).some((v) => v !== undefined),

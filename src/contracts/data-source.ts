@@ -43,6 +43,8 @@ export interface DataSourceAnalysis {
   columns: ColumnInfo[];
   stats: VariableStats[];
   generatedAt: number;
+  /** 分析时生成的推荐图表（随 dataSources JSON 持久化） */
+  chartConfigs?: ChartConfig[];
 }
 
 // === 证据声明 ===
@@ -92,8 +94,8 @@ export type ChartType = "bar" | "grouped_bar" | "line" | "scatter" | "box";
 export interface ChartConfig {
   type: ChartType;
   title: string;
-  xLabel: string;
-  yLabel: string;
+  xLabel?: string;
+  yLabel?: string;
   labels: string[];
   datasets: { label: string; data: number[] }[];
 }

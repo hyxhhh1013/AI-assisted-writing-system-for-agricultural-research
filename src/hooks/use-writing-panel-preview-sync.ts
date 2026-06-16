@@ -2,10 +2,12 @@
 
 import { useEffect, useRef } from "react";
 import type { UseWritingStreamReturn } from "@/hooks/use-writing-stream";
-import type { WritingPreviewPayload } from "@/components/shared/writing/writing-types";
+import type { GenerationStatus, WritingPreviewPayload } from "@/components/shared/writing/writing-types";
 
 interface UseWritingPanelPreviewSyncParams {
   isGenerating: boolean;
+  generationStatus: GenerationStatus;
+  panelResult: string;
   targetSectionKey: string;
   subsectionTitle: string | undefined;
   onPreviewUpdate?: (data: WritingPreviewPayload) => void;
@@ -20,9 +22,18 @@ interface UseWritingPanelPreviewSyncParams {
   >;
 }
 
+function shouldDeferPreviewFinalize(panelResult: string, generationStatus: GenerationStatus): boolean {
+  if (generationStatus === "generating_figures") return true;
+  if (panelResult.includes("*[正在生成")) return true;
+  if (/[【\[]FIG(?:URE)?:\s*\{/i.test(panelResult)) return true;
+  return false;
+}
+
 /** 扩写过程中节流推送预览到工作台中间栏 */
 export function useWritingPanelPreviewSync({
   isGenerating,
+  generationStatus,
+  panelResult,
   targetSectionKey,
   subsectionTitle,
   onPreviewUpdate,
@@ -39,17 +50,20 @@ export function useWritingPanelPreviewSync({
         clearTimeout(previewTimerRef.current);
         previewTimerRef.current = null;
       }
-      onPreviewUpdate({
-        content: writingStream.result,
-        pipelineSteps: writingStream.pipelineSteps,
-        verification: writingStream.verificationFeedback,
-        citationWarnings: writingStream.citationWarnings,
-        dataClaimWarnings: writingStream.dataClaimWarnings,
-        detectedRefs: writingStream.detectedRefs,
-        targetSection: targetSectionKey,
-        subsectionTitle,
-        isStreaming: false,
-      });
+      if (!shouldDeferPreviewFinalize(panelResult, generationStatus)) {
+        const content = panelResult.trim() ? panelResult : writingStream.result;
+        onPreviewUpdate({
+          content,
+          pipelineSteps: writingStream.pipelineSteps,
+          verification: writingStream.verificationFeedback,
+          citationWarnings: writingStream.citationWarnings,
+          dataClaimWarnings: writingStream.dataClaimWarnings,
+          detectedRefs: writingStream.detectedRefs,
+          targetSection: targetSectionKey,
+          subsectionTitle,
+          isStreaming: false,
+        });
+      }
       prevGeneratingRef.current = isGenerating;
       return;
     }
@@ -60,7 +74,7 @@ export function useWritingPanelPreviewSync({
     previewTimerRef.current = setTimeout(() => {
       previewTimerRef.current = null;
       onPreviewUpdate({
-        content: writingStream.result,
+        content: panelResult.trim() ? panelResult : writingStream.result,
         pipelineSteps: writingStream.pipelineSteps,
         verification: writingStream.verificationFeedback,
         citationWarnings: writingStream.citationWarnings,
@@ -78,6 +92,8 @@ export function useWritingPanelPreviewSync({
     };
   }, [
     isGenerating,
+    generationStatus,
+    panelResult,
     writingStream.result,
     writingStream.pipelineSteps,
     writingStream.verificationFeedback,

@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { ChartConfig, DataSourceSummary, EvidenceClaim } from "@/contracts/data-source";
+import { buildPlotPageHref, chartTypeToFigureId } from "@/contracts/figure";
 import {
   BarChart3,
   Check,
@@ -239,14 +240,21 @@ export function EvidenceHubSections({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {chartConfigs.map((cfg, i) => (
+            {chartConfigs.map((cfg, i) => {
+              const figureId = chartTypeToFigureId(cfg.type);
+  const plotHref = buildPlotPageHref({
+                projectId,
+                figureId,
+                chartIdx: i,
+              });
+              return (
               <div key={i} className="flex items-center gap-2 p-2 bg-muted/20 rounded-md text-[10px]">
                 <span className="flex-1 truncate font-medium">{cfg.title}</span>
-                <a href={`/plot?id=${projectId}`} target="_blank" rel="noreferrer" className="text-primary shrink-0">
+                <a href={plotHref} target="_blank" rel="noreferrer" className="text-primary shrink-0">
                   绘图 →
                 </a>
               </div>
-            ))}
+            );})}
           </CardContent>
         </Card>
       )}

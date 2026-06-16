@@ -51,6 +51,10 @@ export function WritingOutlineTaskList({
       );
       for (const task of tasks) {
         const isExpanded = expandedSections?.includes(task.id);
+        const sameTitleCount = tasks.filter((t) => t.title === task.title).length;
+        const sameTitleIndex = tasks.filter((t) => t.title === task.title).indexOf(task);
+        const displayTitle =
+          sameTitleCount > 1 ? `${task.title} (${sameTitleIndex + 1})` : task.title;
         rows.push(
           <div
             key={task.id}
@@ -61,7 +65,9 @@ export function WritingOutlineTaskList({
             )}
           >
             <div className="flex items-center gap-2 overflow-hidden min-w-0">
-              <span className="truncate text-xs">{task.title}</span>
+              <span className="truncate text-xs" title={task.fullPath}>
+                {displayTitle}
+              </span>
             </div>
             <div className="flex items-center gap-1 shrink-0">
               {isExpanded && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
@@ -92,7 +98,7 @@ export function WritingOutlineTaskList({
           <RefreshCw className="h-3 w-3" />
         </Button>
       </div>
-      <div className="border rounded-md max-h-[160px] overflow-y-auto bg-muted/20">{listBody}</div>
+      <div className="border rounded-md max-h-[140px] overflow-y-auto bg-muted/20">{listBody}</div>
     </div>
   );
 }

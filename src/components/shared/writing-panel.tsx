@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Send, Eraser, Database, SearchCheck, Wrench, Search } from "lucide-react";
+import { Loader2, Send, Eraser, Database, SearchCheck, Wrench, Search, ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -20,6 +21,7 @@ import {
 import { projectStore } from "@/lib/store";
 import { getMinDraftChars, getWritingContextPlaceholder, isWritingDraftReady, contextLinesToBullets, MIN_WRITING_BULLETS, normalizeWritingBullets, shouldUseCollaborativeBulletExpand, type ManualWritingPhase, type WritingFlowMode } from "@/contracts/writing";
 import type { ProjectData } from "@/contracts/project";
+import { parseWritingBlueprint } from "@/contracts/writing-blueprint";
 import { useWritingStream } from "@/hooks/use-writing-stream";
 import {
   parseOutline,
@@ -38,10 +40,9 @@ import { useWritingPanelSession } from "@/hooks/use-writing-panel-session";
 import { useWritingPanelPreviewSync } from "@/hooks/use-writing-panel-preview-sync";
 import { useWritingPanelGenerate } from "@/hooks/use-writing-panel-generate";
 import { useWritingSourceSelection } from "@/hooks/use-writing-source-selection";
-import { WritingSourcePicker } from "@/components/shared/writing/writing-source-picker";
 import { WritingBulletList } from "@/components/shared/writing/writing-bullet-list";
 import { WritingBulletExpand } from "@/components/shared/writing/writing-bullet-expand";
-import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
+import { WritingSourcePicker } from "@/components/shared/writing/writing-source-picker";
 
 interface WritingPanelProps {
   projectId: string;
@@ -96,10 +97,14 @@ export function WritingPanel({
   const [, setPendingFigures] = useState<
     { spec: string; tool: string; config: string; caption: string; status: string; imageUrl?: string }[]
   >([]);
-  const literatureSectionRef = useRef<HTMLDivElement>(null);
+  const [literatureOpen, setLiteratureOpen] = useState(false);
 
   const writingStream = useWritingStream();
   const projectMode = project.mode ?? "review";
+  const writingBlueprint = useMemo(
+    () => parseWritingBlueprint(project.writingBlueprint),
+    [project.writingBlueprint],
+  );
 
   useEffect(() => {
     onGeneratingChange?.(isGenerating);
@@ -107,6 +112,8 @@ export function WritingPanel({
 
   useWritingPanelPreviewSync({
     isGenerating,
+    generationStatus,
+    panelResult: result,
     targetSectionKey,
     subsectionTitle,
     onPreviewUpdate,
@@ -177,7 +184,7 @@ export function WritingPanel({
       const allSections = parseOutline(project.outline || "");
       const currentSection = allSections.find((s) => s.id === task.id);
       if (currentSection) {
-        setContext(buildExpansionContext(currentSection, allSections, project.outline || "", projectMode));
+        setContext(buildExpansionContext(currentSection, allSections, project.outline || "", projectMode, writingBlueprint));
         const seed = currentSection.content.trim() || currentSection.title;
         setBullets(contextLinesToBullets(seed));
       } else {
@@ -187,7 +194,7 @@ export function WritingPanel({
         setBullets(contextLinesToBullets(task.title));
       }
     },
-    [project.outline, projectMode],
+    [project.outline, projectMode, writingBlueprint],
   );
 
   useEffect(() => {
@@ -281,6 +288,7 @@ export function WritingPanel({
     setLastRefMapping,
     setSubsectionTitle,
     setPendingFigures,
+    lastRefMapping,
     applyToEditor,
     onDraftApplied,
   });
@@ -346,10 +354,8 @@ export function WritingPanel({
             : undefined;
 
   const handleFetchLiterature = useCallback(async () => {
+    setLiteratureOpen(true);
     await sourceSelection.fetchPreview();
-    requestAnimationFrame(() => {
-      literatureSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    });
   }, [sourceSelection.fetchPreview]);
 
   const handleFlowModeChange = (value: WritingFlowMode) => {
@@ -382,24 +388,138 @@ export function WritingPanel({
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-6 pb-10">
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="space-y-1">
-                <CardTitle className="text-sm font-bold">章节协作向导</CardTitle>
-                <CardDescription className="text-xs leading-relaxed">
-                  ① 选任务 → ② 写要点 → ③ 检索并确认文献 → ④ 扩写
-                </CardDescription>
-              </div>
-              <ProjectModeBadge mode={projectMode} className="shrink-0" />
+      <div className="flex-1 min-h-0 overflow-y-auto pr-1 custom-scrollbar space-y-3 pb-4">
+        <WritingOutlineTaskList
+          outlineTasks={outlineTasks}
+          selectedSectionId={selectedSectionId}
+          expandedSections={expandedSections}
+          projectMode={projectMode}
+          onSelectTask={handleSelectTask}
+          onRefreshOutline={async () => {
+            const latest = await projectStore.get(projectId);
+            if (latest && onUpdateProject) {
+              onUpdateProject({ outline: latest.outline });
+              toast.success("已同步最新大纲");
+            }
+          }}
+        />
+
+        <WritingBulletList bullets={bullets} disabled={isGenerating} onChange={setBullets} />
+
+        <div className="rounded-lg border bg-muted/10 p-3 space-y-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-xs font-medium">③ 文献来源</span>
+            {sourceSelection.confirmed && !sourceSelection.previewStale && (
+              <span className="text-[10px] text-green-700">
+                已确认 {sourceSelection.selectedSourceIds.length} 篇
+              </span>
+            )}
+            {sourceSelection.previewStale && (
+              <span className="text-[10px] text-amber-700">要点已变，需重新检索</span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Select
+              value={retrievalMode}
+              onValueChange={(val) =>
+                setRetrievalMode((val as "precise" | "balanced" | "extensive") || "balanced")
+              }
+              disabled={isGenerating}
+            >
+              <SelectTrigger className="h-8 flex-1 min-w-0 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="precise" className="text-xs">精确 · 约 10 篇</SelectItem>
+                <SelectItem value="balanced" className="text-xs">平衡 · 约 20 篇</SelectItem>
+                <SelectItem value="extensive" className="text-xs">广泛 · 约 60 篇</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              variant={sourceSelection.previewStale ? "default" : "outline"}
+              size="sm"
+              className="h-8 shrink-0 text-xs px-3"
+              disabled={!draftReady || sourceSelection.loading || isGenerating}
+              onClick={() => void handleFetchLiterature()}
+            >
+              {sourceSelection.loading ? (
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              ) : (
+                <Search className="mr-1 h-3 w-3" />
+              )}
+              {sourceSelection.previewStale ? "重新检索" : "检索"}
+            </Button>
+          </div>
+
+          {(literatureOpen || sourceSelection.fetchedOnce) && (
+            <WritingSourcePicker
+              hits={sourceSelection.hits}
+              selectedSourceIds={sourceSelection.selectedSourceIds}
+              previewQuery={sourceSelection.previewQuery}
+              loading={sourceSelection.loading}
+              confirmed={sourceSelection.confirmed}
+              fetchedOnce={sourceSelection.fetchedOnce}
+              fetchError={sourceSelection.fetchError}
+              previewStale={sourceSelection.previewStale}
+              listMaxHeight="max-h-40"
+              onToggle={sourceSelection.toggleSource}
+              onSelectAll={sourceSelection.selectAll}
+              onDeselectAll={sourceSelection.deselectAll}
+              onConfirm={sourceSelection.confirmSelection}
+            />
+          )}
+
+          {!sourceSelection.fetchedOnce && !literatureOpen && (
+            <p className="text-[10px] text-muted-foreground leading-relaxed">
+              选好检索范围后点「检索」，勾选文献并确认即可扩写。
+            </p>
+          )}
+        </div>
+
+        <details className="group rounded-lg border bg-muted/10">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2.5 text-xs font-medium [&::-webkit-details-marker]:hidden">
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
+            补充说明（可选）
+            {supplementCharCount > 0 && (
+              <span className="text-[10px] font-normal text-muted-foreground">· {supplementCharCount} 字</span>
+            )}
+          </summary>
+          <div className="space-y-2 border-t px-3 pb-3 pt-2">
+            <div className="flex items-center justify-end gap-1">
+              {((isResearch && dataClaimsPreview.length > 0) || refCount > 0) && (
+                <span className="text-[9px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded flex items-center gap-1 mr-auto">
+                  <Database className="h-2.5 w-2.5" />
+                  {isResearch && dataClaimsPreview.length > 0 && <span>{dataClaimsPreview.length} 数据证据</span>}
+                  {isResearch && dataClaimsPreview.length > 0 && refCount > 0 && <span>·</span>}
+                  {refCount > 0 && <span>{refCount} 文献</span>}
+                </span>
+              )}
+              {project.mode === "research" && (
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={injectAnalysis} title="注入实验数据">
+                  <Database className="h-3 w-3" />
+                </Button>
+              )}
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
+            <Textarea
+              id="context"
+              placeholder={`大纲背景、实验数据或 ${getWritingContextPlaceholder(targetSectionKey).slice(0, 40)}…`}
+              className="text-xs min-h-[72px] max-h-[120px] resize-none"
+              value={context}
+              onChange={(e) => setContext(e.target.value)}
+            />
+          </div>
+        </details>
+
+        <details className="group rounded-lg border bg-muted/10">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2.5 text-xs font-medium [&::-webkit-details-marker]:hidden">
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
+            扩写设置
+          </summary>
+          <div className="space-y-3 border-t px-3 pb-3 pt-2">
             <div className="space-y-1.5">
-              <Label htmlFor="title" className="text-xs">
-                论文题目
-              </Label>
+              <Label htmlFor="title" className="text-xs">论文题目</Label>
               <Input
                 id="title"
                 placeholder="拟定的论文题目"
@@ -409,23 +529,7 @@ export function WritingPanel({
                 onBlur={handleTitleBlur}
               />
             </div>
-
-            <WritingOutlineTaskList
-              outlineTasks={outlineTasks}
-              selectedSectionId={selectedSectionId}
-              expandedSections={expandedSections}
-              projectMode={projectMode}
-              onSelectTask={handleSelectTask}
-              onRefreshOutline={async () => {
-                const latest = await projectStore.get(projectId);
-                if (latest && onUpdateProject) {
-                  onUpdateProject({ outline: latest.outline });
-                  toast.success("已同步最新大纲");
-                }
-              }}
-            />
-
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
                 <Label className="text-xs">目标章节</Label>
                 <Select onValueChange={(val) => setTargetSectionKey(val || "")} value={targetSectionKey}>
@@ -446,191 +550,57 @@ export function WritingPanel({
                 <div className="flex h-8 border rounded-md overflow-hidden">
                   <button
                     type="button"
-                    className={`flex-1 text-xs ${language === "zh" ? "bg-primary text-primary-foreground" : "bg-background"}`}
+                    className={cn("flex-1 text-xs", language === "zh" ? "bg-primary text-primary-foreground" : "bg-background")}
                     onClick={() => setLanguage("zh")}
                   >
                     中文
                   </button>
                   <button
                     type="button"
-                    className={`flex-1 text-xs ${language === "en" ? "bg-primary text-primary-foreground" : "bg-background"}`}
+                    className={cn("flex-1 text-xs", language === "en" ? "bg-primary text-primary-foreground" : "bg-background")}
                     onClick={() => setLanguage("en")}
                   >
                     EN
                   </button>
                 </div>
               </div>
-              <div className="space-y-1.5 col-span-2 sm:col-span-1">
-                <Label className="text-xs">检索精度</Label>
-                <Select
-                  onValueChange={(val) => setRetrievalMode((val as "precise" | "balanced" | "extensive") || "balanced")}
-                  value={retrievalMode}
-                >
-                  <SelectTrigger className="text-xs h-8">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="precise" className="text-xs">
-                      精确（5篇）
-                    </SelectItem>
-                    <SelectItem value="balanced" className="text-xs">
-                      平衡（20篇）
-                    </SelectItem>
-                    <SelectItem value="extensive" className="text-xs">
-                      广泛（50篇）
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5 col-span-2 sm:col-span-3">
+              <div className="space-y-1.5 col-span-2">
                 <Label className="text-xs">扩写流程</Label>
                 <Select value={flowMode} onValueChange={(val) => handleFlowModeChange(val as WritingFlowMode)}>
                   <SelectTrigger className="text-xs h-8">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="standard" className="text-xs">
-                      标准（人控）：初稿 → 审查 → 修正
-                    </SelectItem>
-                    <SelectItem value="preview" className="text-xs">
-                      快速预览：仅 AI 起草
-                    </SelectItem>
-                    <SelectItem value="full" className="text-xs">
-                      完整模式（实验）：自动核查并修正
-                    </SelectItem>
+                    <SelectItem value="standard" className="text-xs">标准（人控）</SelectItem>
+                    <SelectItem value="preview" className="text-xs">快速预览</SelectItem>
+                    <SelectItem value="full" className="text-xs">完整模式（实验）</SelectItem>
                   </SelectContent>
                 </Select>
-                {flowMode === "standard" && (
-                  <p className="text-[10px] text-muted-foreground leading-relaxed">
-                    生成初稿后请人工审阅，再「提交审查」与「按意见修正」；不会自动跑完全管道。
-                  </p>
-                )}
               </div>
             </div>
+          </div>
+        </details>
 
-            <WritingBulletList
-              bullets={bullets}
-              disabled={isGenerating}
-              onChange={setBullets}
-            />
+        <p className="text-[10px] text-muted-foreground px-1">
+          要点 {normalizedBullets.length}/{MIN_WRITING_BULLETS} 条
+          {!draftReady ? ` · 需至少 ${minDraftChars} 字才可扩写` : ""}
+        </p>
 
-            <div ref={literatureSectionRef} className="space-y-2 rounded-lg border border-primary/20 bg-primary/[0.03] p-3">
-              <div className="flex items-center justify-between gap-2">
-                <Label className="text-xs font-medium">③ 文献来源</Label>
-                <Button
-                  type="button"
-                  variant={sourceSelection.previewStale ? "default" : "outline"}
-                  size="sm"
-                  className="h-7 text-[10px]"
-                  disabled={!draftReady || sourceSelection.loading || isGenerating}
-                  onClick={() => void handleFetchLiterature()}
-                >
-                  {sourceSelection.loading ? (
-                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                  ) : (
-                    <Search className="mr-1 h-3 w-3" />
-                  )}
-                  {sourceSelection.previewStale ? "重新检索" : "检索文献"}
-                </Button>
-              </div>
-              <WritingSourcePicker
-                hits={sourceSelection.hits}
-                selectedSourceIds={sourceSelection.selectedSourceIds}
-                previewQuery={sourceSelection.previewQuery}
-                loading={sourceSelection.loading}
-                confirmed={sourceSelection.confirmed}
-                fetchedOnce={sourceSelection.fetchedOnce}
-                fetchError={sourceSelection.fetchError}
-                previewStale={sourceSelection.previewStale}
-                onToggle={sourceSelection.toggleSource}
-                onSelectAll={sourceSelection.selectAll}
-                onDeselectAll={sourceSelection.deselectAll}
-                onConfirm={sourceSelection.confirmSelection}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="context" className="text-xs">
-                  补充说明（可选）
-                </Label>
-                <div className="flex items-center gap-1">
-                  {((isResearch && dataClaimsPreview.length > 0) || refCount > 0) && (
-                    <span className="text-[9px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded flex items-center gap-1">
-                      <Database className="h-2.5 w-2.5" />
-                      {isResearch && dataClaimsPreview.length > 0 && (
-                        <span>{dataClaimsPreview.length} 数据证据</span>
-                      )}
-                      {isResearch && dataClaimsPreview.length > 0 && refCount > 0 && <span>·</span>}
-                      {refCount > 0 && <span>{refCount} 文献</span>}
-                    </span>
-                  )}
-                  {project.mode === "research" && (
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={injectAnalysis} title="注入实验数据">
-                      <Database className="h-3 w-3" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-              <Textarea
-                id="context"
-                placeholder={`大纲背景、实验数据或 ${getWritingContextPlaceholder(targetSectionKey).slice(0, 40)}…`}
-                className="text-xs min-h-[64px] max-h-[120px] overflow-y-auto resize-none bg-muted/5"
-                value={context}
-                onChange={(e) => setContext(e.target.value)}
-              />
-              <p className="text-[10px] text-muted-foreground">
-                要点 {normalizedBullets.length}/{MIN_WRITING_BULLETS} 条 · 补充 {supplementCharCount} 字
-                {!draftReady ? " · 要点未就绪，无法检索/扩写" : ""}
-              </p>
-            </div>
-
-            {bulletExpand.active && (
-              <WritingBulletExpand
-                bulletIndex={bulletExpand.bulletIndex}
-                totalBullets={bulletExpand.totalBullets}
-                bulletLabel={bulletExpand.normalizedBullets[bulletExpand.bulletIndex] ?? ""}
-                currentText={bulletExpand.currentBulletText}
-                onCurrentTextChange={bulletExpand.setCurrentBulletText}
-                mergePreview={bulletExpand.mergePreview}
-                showMergePreview={bulletExpand.showMergePreview}
-                onToggleMergePreview={() => bulletExpand.setShowMergePreview((v) => !v)}
-                isGenerating={isGenerating}
-                onAdoptAndNext={() => void bulletExpand.adoptAndNext()}
-                onRewrite={() => void bulletExpand.rewriteCurrent()}
-              />
-            )}
-          </CardContent>
-          <CardFooter className="flex gap-2">
-            <Button variant="outline" size="sm" className="flex-1 text-xs" disabled={isGenerating} onClick={handleReset}>
-              <Eraser className="mr-1 h-3 w-3" /> 重置
-            </Button>
-            {isGenerating ? (
-              <Button size="sm" variant="destructive" className="flex-[2] text-xs" onClick={handleCancel}>
-                <Loader2 className="mr-1 h-3 w-3 animate-spin" /> 取消扩写
-              </Button>
-            ) : bulletExpand.active ? (
-              <Button size="sm" className="flex-[2] text-xs" disabled title="请在上方逐条面板中采纳或重写">
-                逐条扩写进行中…
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                className="flex-[2] text-xs"
-                onClick={handleGenerate}
-                disabled={!canGenerate}
-                title={generateDisabledReason}
-              >
-                <Send className="mr-1 h-3 w-3" />
-                {canGenerate
-                  ? useCollaborativeExpand
-                    ? "开始逐条扩写"
-                    : "扩写选定章节"
-                  : generateDisabledReason}
-              </Button>
-            )}
-          </CardFooter>
-        </Card>
+        {bulletExpand.active && (
+          <WritingBulletExpand
+            bulletIndex={bulletExpand.bulletIndex}
+            totalBullets={bulletExpand.totalBullets}
+            bulletLabel={bulletExpand.normalizedBullets[bulletExpand.bulletIndex] ?? ""}
+            currentText={bulletExpand.currentBulletText}
+            onCurrentTextChange={bulletExpand.setCurrentBulletText}
+            mergePreview={bulletExpand.mergePreview}
+            showMergePreview={bulletExpand.showMergePreview}
+            onToggleMergePreview={() => bulletExpand.setShowMergePreview((v) => !v)}
+            isGenerating={isGenerating}
+            onAdoptAndNext={() => void bulletExpand.adoptAndNext()}
+            onRewrite={() => void bulletExpand.rewriteCurrent()}
+          />
+        )}
 
         {flowMode === "standard" && manualPhase !== "idle" && (
           <Card className="border-primary/20 bg-primary/5">
@@ -665,22 +635,11 @@ export function WritingPanel({
               )}
             </CardContent>
             <CardFooter className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-xs"
-                disabled={!canSubmitAudit}
-                onClick={handleSubmitAudit}
-              >
+              <Button size="sm" variant="outline" className="text-xs" disabled={!canSubmitAudit} onClick={handleSubmitAudit}>
                 <SearchCheck className="mr-1 h-3 w-3" />
                 提交审查
               </Button>
-              <Button
-                size="sm"
-                className="text-xs"
-                disabled={!canApplyFix}
-                onClick={handleApplyFix}
-              >
+              <Button size="sm" className="text-xs" disabled={!canApplyFix} onClick={handleApplyFix}>
                 <Wrench className="mr-1 h-3 w-3" />
                 按意见修正
               </Button>
@@ -700,6 +659,36 @@ export function WritingPanel({
             pipelineSteps={writingStream.pipelineSteps}
             onApplyToEditor={handleApplyToEditor}
           />
+        )}
+      </div>
+
+      <div className="shrink-0 pt-3 border-t flex gap-2">
+        <Button variant="outline" size="sm" className="flex-1 text-xs" disabled={isGenerating} onClick={handleReset}>
+          <Eraser className="mr-1 h-3 w-3" /> 重置
+        </Button>
+        {isGenerating ? (
+          <Button size="sm" variant="destructive" className="flex-[2] text-xs" onClick={handleCancel}>
+            <Loader2 className="mr-1 h-3 w-3 animate-spin" /> 取消扩写
+          </Button>
+        ) : bulletExpand.active ? (
+          <Button size="sm" className="flex-[2] text-xs" disabled title="请在上方逐条面板中采纳或重写">
+            逐条扩写进行中…
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            className="flex-[2] text-xs"
+            onClick={handleGenerate}
+            disabled={!canGenerate}
+            title={generateDisabledReason}
+          >
+            <Send className="mr-1 h-3 w-3" />
+            {canGenerate
+              ? useCollaborativeExpand
+                ? "开始逐条扩写"
+                : "扩写选定章节"
+              : generateDisabledReason}
+          </Button>
         )}
       </div>
 

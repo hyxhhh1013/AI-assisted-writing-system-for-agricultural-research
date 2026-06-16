@@ -3,6 +3,8 @@ import { twMerge } from "tailwind-merge"
 import { IMRAD_LABELS_ZH, IMRAD_ORDER } from "@/lib/imrad"
 import { REVIEW_ORDER } from "@/lib/review-structure"
 import type { ProjectWritingMode } from "@/contracts/writing-mode"
+import type { WritingBlueprint } from "@/contracts/writing-blueprint"
+import { formatBlueprintSectionHint } from "@/lib/blueprint-utils"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -178,6 +180,7 @@ export function buildExpansionContext(
   allSections: OutlineSection[],
   outlineText?: string,
   mode?: ProjectWritingMode,
+  blueprint?: WritingBlueprint | null,
 ): string {
   const parentKey = mapToSectionForMode(section.fullPath, mode);
   const parentLabel = IMRAD_LABELS[parentKey] || REVIEW_LABELS[parentKey] || parentKey;
@@ -212,6 +215,12 @@ export function buildExpansionContext(
   }
 
   ctx += `\n【写作要求】：请针对「${section.title}」这一具体主题展开专业、深入的学术论述。结合文献库中的相关研究，遵循学术论文写作规范。`;
+
+  if (blueprint) {
+    const hint = formatBlueprintSectionHint(blueprint, section.fullPath);
+    if (hint) ctx += `\n${hint}`;
+  }
+
   return ctx;
 }
 
@@ -327,7 +336,7 @@ export function parseOutline(markdown: string): OutlineSection[] {
       pathStack.push({ title, level });
 
       currentSection = {
-        id: stableHash(pathStack.map((p) => p.title).join(" > ")),
+        id: stableHash(`${pathStack.map((p) => p.title).join(" > ")}#${sections.length}`),
         title,
         level,
         content: "",
@@ -355,7 +364,7 @@ export function parseOutline(markdown: string): OutlineSection[] {
         .replace(/^[#*\-\s]+/, "")
         .slice(0, 60);
       sections.push({
-        id: stableHash(firstLine || `para-${i}`),
+        id: stableHash(`${firstLine || `para-${i}`}#${i}`),
         title: firstLine || `章节 ${i + 1}`,
         level: 2,
         content: p.trim(),
@@ -375,7 +384,7 @@ export function buildOutlineTasks(
   const sections = parseOutline(outlineText);
   return sections.map((s) => ({
     id: s.id,
-    title: s.fullPath,
+    title: s.title,
     sectionKey: mapToSectionForMode(s.fullPath, mode),
     level: s.level,
     fullPath: s.fullPath,

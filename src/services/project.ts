@@ -8,6 +8,7 @@ import type {
   AnalysisResultPatchOp,
   ProjectAnalysisRecord,
 } from "@/contracts/project";
+import type { ChartPatchOp, ProjectChartAsset } from "@/contracts/figure";
 import {
   serializeDataClaims,
   serializeDataSources,
@@ -152,4 +153,61 @@ export async function appendAnalysisResult(
 ): Promise<string[]> {
   const rows = await patchAnalysisResults(projectId, [{ op: "create", content }]);
   return rows.map((r) => r.content);
+}
+
+/** PATCH /api/projects/:id/sections/:key — 单章节增量保存 */
+export async function patchProjectSection(
+  projectId: string,
+  sectionKey: string,
+  content: string,
+): Promise<void> {
+  const res = await fetch(
+    `/api/projects/${encodeURIComponent(projectId)}/sections/${encodeURIComponent(sectionKey)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    },
+  );
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "保存章节失败");
+  }
+}
+
+/** 在章节末尾追加 Markdown（先读再 PATCH，仍只写单 section） */
+export async function appendProjectSectionMarkdown(
+  projectId: string,
+  sectionKey: string,
+  markdown: string,
+): Promise<void> {
+  const project = await getProject(projectId);
+  if (!project) throw new Error("项目未找到");
+  const current = project.sections[sectionKey] ?? "";
+  await patchProjectSection(projectId, sectionKey, current + markdown);
+}
+
+/** PATCH /api/projects/:id/charts — 登记图表资产 */
+export async function patchProjectCharts(
+  projectId: string,
+  ops: ChartPatchOp[],
+): Promise<ProjectChartAsset[]> {
+  const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/charts`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ops }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "保存图表资产失败");
+  }
+  const data = (await res.json()) as { charts: ProjectChartAsset[] };
+  return data.charts;
+}
+
+export async function appendChartAsset(
+  projectId: string,
+  asset: Extract<ChartPatchOp, { op: "append" }>["asset"],
+): Promise<ProjectChartAsset[]> {
+  return patchProjectCharts(projectId, [{ op: "append", asset }]);
 }

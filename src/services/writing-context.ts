@@ -187,6 +187,11 @@ export function buildRetrievePreviewFromChunks(
   for (const [sourceKey, { chunks: sourceChunks, category }] of grouped) {
     const best = sourceChunks[0];
     const snippet = best.content.replace(/\n/g, " ").slice(0, 220).trim();
+    const fullText = sourceChunks
+      .map((c) => c.content)
+      .join("\n\n")
+      .slice(0, 3000)
+      .trim();
     const refIndex = resolveRefIndexForSource(sourceKey, refMapping);
     const entry = resolveBibEntry(sourceKey);
     const bib = entry?.bib;
@@ -197,6 +202,7 @@ export function buildRetrievePreviewFromChunks(
       refIndex,
       isNew: refIndex == null,
       snippet: snippet + (best.content.length > 220 ? "…" : ""),
+      fullText,
       chunkCount: sourceChunks.length,
       category,
       bib: bib

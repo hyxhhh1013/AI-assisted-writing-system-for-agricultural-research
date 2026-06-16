@@ -16,6 +16,8 @@ export interface RetrievePreviewHit {
   refIndex: number | null;
   isNew: boolean;
   snippet: string;
+  /** 该来源所有 chunk 拼接的完整文本（最多 3000 字），用于展开阅读 */
+  fullText: string;
   chunkCount: number;
   category: string;
   bib?: RetrievePreviewBib;

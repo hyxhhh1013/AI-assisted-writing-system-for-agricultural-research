@@ -7,6 +7,7 @@ import type {
   DataSourceSummary,
   EvidenceClaim,
 } from "@/contracts/data-source";
+import { collectChartConfigsFromSources } from "@/contracts/figure";
 import { parseDataClaims, parseDataSources, serializeDataClaims, serializeDataSources } from "@/contracts/project";
 import type { ProjectData } from "@/contracts/project";
 import { analyzeDataFile } from "@/services/data-source";
@@ -89,7 +90,6 @@ export function useEvidence({
   const [isSaving, setIsSaving] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [chartConfigs, setChartConfigs] = useState<ChartConfig[]>([]);
 
   const reload = useCallback(() => {
     setClaims(parseDataClaims(project));
@@ -166,7 +166,6 @@ export function useEvidence({
         const sourceId = normalizeSourceId(result.analysis.fileName);
         const nextSources = mergeSources(sources, result.analysis);
         const nextClaims = mergeClaimsForSource(claims, result.claims, sourceId);
-        setChartConfigs(result.chartConfigs ?? []);
         await persist(nextClaims, nextSources);
       } catch (err) {
         const message = err instanceof Error ? err.message : "证据提取失败";
@@ -182,6 +181,11 @@ export function useEvidence({
   const summaries = useMemo(
     () => buildSummaries(sources, claims),
     [sources, claims],
+  );
+
+  const chartConfigs = useMemo(
+    (): ChartConfig[] => collectChartConfigsFromSources(sources),
+    [sources],
   );
 
   const injectionPreview = useMemo(() => {
