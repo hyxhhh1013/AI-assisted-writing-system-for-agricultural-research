@@ -47,6 +47,10 @@ export interface KnowledgeFileRecord {
   parseWarning?: "no_text" | "low_text" | null;
   /** 语义搜索时附带的匹配片段（仅 API 响应） */
   _snippets?: string[];
+  /** 磁盘上是否存在可读 PDF（列表 API 填充） */
+  hasPdfOnDisk?: boolean;
+  /** PDF 实际所在分类，与 category 不一致时表示元数据漂移 */
+  diskCategory?: string;
   /** 期刊指标（ENG-PR-091 写入；090 预留展示） */
   metrics?: JournalMetrics | null;
 }
@@ -121,9 +125,17 @@ function hasNonEmptyBibField(bib: KnowledgeBib | null | undefined, key: keyof Kn
   return true;
 }
 
-/** 判断索引与书目元数据是否达标 */
+/** 是否可在阅读器 / PDF 接口中打开 */
+export function canOpenKnowledgePdf(
+  file: Pick<KnowledgeFileRecord, "hasPdfOnDisk" | "size">,
+): boolean {
+  if (file.hasPdfOnDisk === false) return false;
+  if (file.hasPdfOnDisk === true) return true;
+  return (file.size ?? 0) > 0;
+}
+
 export function getKnowledgeIndexStatus(
-  file: Pick<KnowledgeFileRecord, "chunkCount" | "bib" | "bibEdited" | "documentType" | "parseWarning"> & {
+  file: Pick<KnowledgeFileRecord, "chunkCount" | "bib" | "bibEdited" | "documentType" | "parseWarning" | "hasPdfOnDisk"> & {
     size?: number;
   },
 ): KnowledgeIndexStatusInfo {
@@ -137,7 +149,7 @@ export function getKnowledgeIndexStatus(
 
   if (
     (!file.chunkCount || file.chunkCount <= 0)
-    && file.size === 0
+    && (file.size === 0 || file.hasPdfOnDisk === false)
     && hasNonEmptyBibField(file.bib, "title")
   ) {
     return {

@@ -5,13 +5,14 @@ import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { success, badRequest } from "@/lib/admin-response";
+import { resolveProjectRuntimePath } from "@/lib/runtime-paths";
 import { validateBody } from "@/lib/api-validate";
 import {
   adminKnowledgeDeleteSchema,
   adminKnowledgeReindexSchema,
 } from "@/lib/validations";
 
-const ARTICLES_DIR = path.join(process.cwd(), process.env.RAG_ARTICLES_DIR || "papers");
+const ARTICLES_DIR = resolveProjectRuntimePath(process.env.RAG_ARTICLES_DIR || "papers");
 
 export async function GET(req: NextRequest) {
   const { error } = await requireAdmin(req);

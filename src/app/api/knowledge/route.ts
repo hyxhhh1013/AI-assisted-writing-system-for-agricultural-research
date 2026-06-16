@@ -10,11 +10,13 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import prisma from "@/lib/prisma";
+import { resolveProjectRuntimePath } from "@/lib/runtime-paths";
 import type { KnowledgeFileRecord } from "@/contracts/knowledge";
 import {
   enrichKnowledgeRecordFromDisk,
   persistKnowledgeFileSizeIfMissing,
   prismaRowToKnowledgeRecord,
+  clearKnowledgePdfDiskCache,
 } from "@/lib/knowledge-metadata";
 import { localRAG, invalidateBibCache } from "@/lib/rag";
 import { validateBody } from "@/lib/api-validate";
@@ -27,11 +29,14 @@ import {
   knowledgeUploadFieldsSchema,
 } from "@/lib/validations";
 
-const ARTICLES_DIR = path.join(process.cwd(), process.env.RAG_ARTICLES_DIR || "papers");
+const ARTICLES_DIR = resolveProjectRuntimePath(process.env.RAG_ARTICLES_DIR || "papers");
+/** 超过此 pageSize 的列表请求不做磁盘扫描（书目筛选会一次拉 5000 条） */
+const DISK_ENRICH_MAX_PAGE_SIZE = 100;
 
 // ====== GET ======
 
 export async function GET(req: NextRequest) {
+  clearKnowledgePdfDiskCache();
   try {
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category");
@@ -42,7 +47,24 @@ export async function GET(req: NextRequest) {
 
     if (searchType === "semantic" && query) {
       const cat = category && category !== "全部" ? category : undefined;
-      const results = await localRAG.search(query, { limit: 50, category: cat });
+      let results: Awaited<ReturnType<typeof localRAG.search>> = [];
+      try {
+        results = await localRAG.search(query, { limit: 50, category: cat });
+      } catch (ragError: unknown) {
+        logger.fail("semantic knowledge search failed", ragError);
+        return NextResponse.json(
+          {
+            error: "语义检索暂时不可用，请改用文件名搜索或稍后重建索引",
+            files: [],
+            total: 0,
+            page,
+            pageSize,
+            searchType: "semantic",
+            categories: [],
+          },
+          { status: 503 },
+        );
+      }
       const grouped = new Map<string, { name: string; category: string; chunks: typeof results }>();
       for (const r of results) {
         const key = r.metadata.source;
@@ -52,27 +74,40 @@ export async function GET(req: NextRequest) {
       const sources = Array.from(grouped.values()).sort((a, b) => b.chunks.length - a.chunks.length);
       const total = sources.length;
       const paged = sources.slice((page - 1) * pageSize, page * pageSize);
+      const enrichDisk = pageSize <= DISK_ENRICH_MAX_PAGE_SIZE;
       return NextResponse.json({
         files: await Promise.all(paged.map(async (g) => {
           const db = await prisma.knowledgeFile.findUnique({ where: { name: g.name } });
           if (db) {
-            const r = prismaRowToKnowledgeRecord({
-              ...db,
-              chunkCount: g.chunks.length,
-              _count: { chunks: g.chunks.length },
-            });
+            const r = prismaRowToKnowledgeRecord(
+              {
+                ...db,
+                chunkCount: g.chunks.length,
+                _count: { chunks: g.chunks.length },
+              },
+              { enrichDisk },
+            );
             r._snippets = g.chunks.map(c => c.content.slice(0, 300));
             if (r.size > 0) persistKnowledgeFileSizeIfMissing(r.name, r.category, r.size);
             return r;
           }
-          const fallback = enrichKnowledgeRecordFromDisk({
-            name: g.name,
-            category: g.category,
-            documentType: "paper",
-            chunkCount: g.chunks.length,
-            size: 0,
-            mtime: "",
-          });
+          const fallback = enrichDisk
+            ? enrichKnowledgeRecordFromDisk({
+                name: g.name,
+                category: g.category,
+                documentType: "paper",
+                chunkCount: g.chunks.length,
+                size: 0,
+                mtime: "",
+              })
+            : {
+                name: g.name,
+                category: g.category,
+                documentType: "paper" as const,
+                chunkCount: g.chunks.length,
+                size: 0,
+                mtime: "",
+              };
           fallback._snippets = g.chunks.map((c) => c.content.slice(0, 300));
           if (fallback.size > 0) persistKnowledgeFileSizeIfMissing(fallback.name, fallback.category, fallback.size);
           return fallback;
@@ -86,6 +121,8 @@ export async function GET(req: NextRequest) {
     if (category && category !== "全部") where.category = category;
     if (query) where.OR = [{ name: { contains: query } }, { category: { contains: query } }];
 
+    const enrichDisk = pageSize <= DISK_ENRICH_MAX_PAGE_SIZE;
+
     const [files, total] = await Promise.all([
       prisma.knowledgeFile.findMany({
         where,
@@ -97,25 +134,32 @@ export async function GET(req: NextRequest) {
       prisma.knowledgeFile.count({ where }),
     ]);
 
-    const allCategories = await prisma.knowledgeFile.groupBy({ by: ["category"], _count: true, orderBy: { _count: { category: "desc" } } });
+    const allCategories =
+      page === 1
+        ? await prisma.knowledgeFile.groupBy({
+            by: ["category"],
+            _count: true,
+            orderBy: { _count: { category: "desc" } },
+          })
+        : null;
 
-    const records = files.map((f) => {
-      const record = prismaRowToKnowledgeRecord(f);
-      if (record.size > 0 && f.size === 0) {
-        persistKnowledgeFileSizeIfMissing(record.name, record.category, record.size);
-      }
-      return record;
-    });
+    const records = files.map((f) => prismaRowToKnowledgeRecord(f, { enrichDisk }));
 
     return NextResponse.json({
       files: records,
       total, page, pageSize,
-      categories: ["全部", ...allCategories.map(c => c.category)],
+      ...(allCategories
+        ? { categories: ["全部", ...allCategories.map((c) => c.category)] }
+        : {}),
       searchType: "name",
     });
   } catch (error: unknown) {
+    logger.fail("knowledge list GET failed", error);
     const message = error instanceof Error ? getErrorMessage(error) : "请求失败";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const hint = message.includes("connect") || message.includes("Connection")
+      ? "数据库连接失败，请检查 PostgreSQL 与 DATABASE_URL"
+      : message;
+    return NextResponse.json({ error: hint }, { status: 500 });
   }
 }
 
