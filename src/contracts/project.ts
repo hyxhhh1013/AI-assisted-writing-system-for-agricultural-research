@@ -27,6 +27,8 @@ export interface ProjectDTO {
   dataClaims?: string;
   /** JSON string: DataSourceAnalysis[] */
   dataSources?: string;
+  /** JSON string: WritingBlueprint — 扩写前写作蓝图 */
+  writingBlueprint?: string;
 }
 
 /** Alias kept for backward compat — prefer ProjectDTO in new code */
@@ -118,6 +120,7 @@ export interface ProjectMetaPatch {
   template?: string;
   citationStyle?: "gbt7714" | "vancouver" | "apa7" | "ieee";
   expandedOutlineSections?: string[];
+  writingBlueprint?: string;
 }
 
 export interface SectionPatch {

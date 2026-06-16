@@ -9,6 +9,7 @@ export {
   buildRefinerPrompt,
 } from "./writing";
 export { buildOutlinePrompt } from "./outline";
+export { buildBlueprintPrompt } from "./blueprint";
 export { buildAnalysisPrompt } from "./analysis";
 export { TRANSLATE_SYSTEM_PROMPT, buildTranslateUserPrompt } from "./translate";
 export { KNOWLEDGE_ANALYZE_SYSTEM, buildFullAnalysisPrompt, buildChunkAnalysisPrompt } from "./knowledge";
