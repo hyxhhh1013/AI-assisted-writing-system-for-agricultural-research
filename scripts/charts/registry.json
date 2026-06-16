@@ -7,6 +7,24 @@
     {"id": "xrd", "name": "XRD 分析", "icon": "Radar", "order": 3},
     {"id": "table", "name": "表格", "icon": "Table2", "order": 4}
   ],
+  "global_style_fields": [
+    {"key": "preset", "label": "期刊预设", "type": "select", "group": "style", "default": "nature", "options": ["nature", "agr_journal", "slide"]},
+    {"key": "palette", "label": "配色方案", "type": "select", "group": "style", "default": "nature", "options": ["nature", "agr", "pastel"]},
+    {"key": "fig_width", "label": "图宽 (inch)", "type": "number", "group": "style", "default": 3.5, "min": 2, "max": 14, "step": 0.5},
+    {"key": "fig_height", "label": "图高 (inch)", "type": "number", "group": "style", "default": 2.5, "min": 2, "max": 10, "step": 0.5},
+    {"key": "font_size", "label": "字号 (pt)", "type": "number", "group": "style", "default": 8, "min": 6, "max": 18, "step": 1},
+    {"key": "dpi", "label": "导出 DPI", "type": "number", "group": "style", "default": 600, "min": 150, "max": 600, "step": 50},
+    {"key": "panel_label", "label": "子图标注 (a/b/c)", "type": "text", "group": "style", "default": ""},
+    {"key": "legend_loc", "label": "图例位置", "type": "select", "group": "style", "default": "best", "options": ["best", "upper right", "upper left", "lower right", "lower left", "center left", "center right"]},
+    {"key": "show_grid", "label": "显示网格", "type": "boolean", "group": "style", "default": false},
+    {"key": "legend_frame", "label": "图例边框", "type": "boolean", "group": "style", "default": false},
+    {"key": "show_values", "label": "柱顶数值", "type": "boolean", "group": "style", "default": false},
+    {"key": "bar_edge", "label": "柱边框 (Nature)", "type": "boolean", "group": "style", "default": true},
+    {"key": "export_formats", "label": "导出格式", "type": "select", "group": "style", "default": "png,svg", "options": ["png,svg", "png,svg,pdf", "png,pdf", "png"]},
+    {"key": "axes_linewidth", "label": "轴线粗细", "type": "number", "group": "advanced", "default": 0.8, "min": 0.5, "max": 3, "step": 0.1},
+    {"key": "x_tick_rotation", "label": "X 刻度旋转 (°)", "type": "number", "group": "advanced", "default": 0, "min": 0, "max": 90, "step": 5},
+    {"key": "y_sci_notation", "label": "Y 轴科学计数法", "type": "boolean", "group": "advanced", "default": false}
+  ],
   "figures": [
     {
       "id": "bar_grouped",
@@ -19,7 +37,8 @@
       "config_fields": [
         {"key": "title", "label": "图表标题", "type": "text"},
         {"key": "x_label", "label": "X 轴标签", "type": "text"},
-        {"key": "y_label", "label": "Y 轴标签", "type": "text"}
+        {"key": "y_label", "label": "Y 轴标签", "type": "text"},
+        {"key": "y_log_scale", "label": "Y 轴对数刻度", "type": "boolean", "default": false}
       ]
     },
     {
@@ -60,7 +79,8 @@
       "config_fields": [
         {"key": "title", "label": "图表标题", "type": "text"},
         {"key": "x_label", "label": "X 轴标签", "type": "text"},
-        {"key": "y_label", "label": "Y 轴标签", "type": "text"}
+        {"key": "y_label", "label": "Y 轴标签", "type": "text"},
+        {"key": "show_shadow", "label": "误差阴影带", "type": "boolean", "default": false, "group": "advanced"}
       ]
     },
     {
@@ -74,7 +94,8 @@
       "config_fields": [
         {"key": "title", "label": "图表标题", "type": "text"},
         {"key": "x_label", "label": "X 轴标签", "type": "text"},
-        {"key": "y_label", "label": "Y 轴标签", "type": "text"}
+        {"key": "y_label", "label": "Y 轴标签", "type": "text"},
+        {"key": "show_trendline", "label": "线性趋势线", "type": "boolean", "default": false, "group": "advanced"}
       ]
     },
     {
@@ -85,6 +106,63 @@
       "endpoint": "/api/chart",
       "input_type": "tabular",
       "example": "组分,比例\n生物炭,35\n生物油,30\n热解气,35",
+      "config_fields": [
+        {"key": "title", "label": "图表标题", "type": "text"}
+      ]
+    },
+    {
+      "id": "heatmap",
+      "name": "热力图",
+      "category": "chart",
+      "description": "矩阵热力图，适合相关矩阵、基因表达、处理×指标对比",
+      "endpoint": "/api/chart",
+      "input_type": "tabular",
+      "example": "指标,处理A,处理B,处理C\n叶绿素,0.82,0.65,0.71\n株高,0.45,0.88,0.62\n产量,0.55,0.72,0.91",
+      "config_fields": [
+        {"key": "title", "label": "图表标题", "type": "text"},
+        {"key": "x_label", "label": "X 轴标签", "type": "text"},
+        {"key": "y_label", "label": "色标标签", "type": "text"},
+        {"key": "cmap", "label": "配色", "type": "select", "default": "YlGnBu", "options": ["YlGnBu", "magma", "viridis", "RdYlGn", "coolwarm"]},
+        {"key": "heatmap_annotate", "label": "格内标注数值", "type": "boolean", "default": true}
+      ]
+    },
+    {
+      "id": "area",
+      "name": "面积图",
+      "category": "chart",
+      "description": "堆叠或分层面积趋势，适合时序累积、组分变化",
+      "endpoint": "/api/chart",
+      "input_type": "tabular",
+      "example": "年份,生物炭,生物油,热解气\n2020,10,8,5\n2021,18,12,9\n2022,25,15,12\n2023,32,18,15",
+      "config_fields": [
+        {"key": "title", "label": "图表标题", "type": "text"},
+        {"key": "x_label", "label": "X 轴标签", "type": "text"},
+        {"key": "y_label", "label": "Y 轴标签", "type": "text"},
+        {"key": "area_stacked", "label": "堆叠面积", "type": "boolean", "default": true}
+      ]
+    },
+    {
+      "id": "forest",
+      "name": "森林图",
+      "category": "chart",
+      "description": "效应量与置信区间，适合 Meta 分析、亚组效应",
+      "endpoint": "/api/chart",
+      "input_type": "tabular",
+      "example": "研究,估计值,CI下限,CI上限\n试验A,0.65,0.42,0.88\n试验B,0.48,0.22,0.74\n试验C,0.72,0.55,0.89",
+      "config_fields": [
+        {"key": "title", "label": "图表标题", "type": "text"},
+        {"key": "x_label", "label": "X 轴标签", "type": "text", "default": "效应量"},
+        {"key": "forest_ref", "label": "参考线 (无效线)", "type": "number", "default": 0}
+      ]
+    },
+    {
+      "id": "radar",
+      "name": "雷达图",
+      "category": "chart",
+      "description": "多指标多维对比，适合方法/品种综合评价",
+      "endpoint": "/api/chart",
+      "input_type": "tabular",
+      "example": "指标,品种A,品种B,品种C\n产量,85,72,90\n抗病性,70,88,65\n品质,78,80,82\n耐旱性,60,75,68",
       "config_fields": [
         {"key": "title", "label": "图表标题", "type": "text"}
       ]
