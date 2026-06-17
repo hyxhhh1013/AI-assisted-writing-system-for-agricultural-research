@@ -49,8 +49,8 @@ export const APP_MODULES: AppModule[] = [
   },
   {
     id: "plagiarism",
-    title: "论文查重与降重",
-    description: "检测论文重复率，AI 辅助降重改写，支持本地库 + 联网比对",
+    title: "论文质量中心",
+    description: "提交前一站式质量检查：多源查重、AI 降重、四维度论文审查",
     href: "/plagiarism",
     flag: "PLAGIARISM",
     placement: ["home"],

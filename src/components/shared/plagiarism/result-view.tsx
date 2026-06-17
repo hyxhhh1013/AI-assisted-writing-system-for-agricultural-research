@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import type { PlagiarismCheckResult } from "@/contracts/plagiarism";
 import { MATCH_ICONS, riskBadgeClass, riskLabel } from "./constants";
 import { PlagiarismMatchRow } from "./match-row";
+import { PlagiarismStatsReport } from "@/components/shared/quality/stats-report";
 
 interface PlagiarismResultViewProps {
   result: PlagiarismCheckResult;
@@ -75,6 +76,12 @@ export function PlagiarismResultView({ result, compact = false, onRewrite, onReC
                 </span>
               ))}
             </div>
+            {result.stats && (
+              <div className="mt-3 border-t pt-3">
+                <p className="mb-2 text-xs font-medium text-[#122820]">分层检测统计</p>
+                <PlagiarismStatsReport stats={result.stats} />
+              </div>
+            )}
           </>
         )}
       </div>
