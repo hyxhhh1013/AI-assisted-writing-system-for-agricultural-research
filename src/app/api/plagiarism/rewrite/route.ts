@@ -33,7 +33,14 @@ export async function POST(req: NextRequest) {
       researchDirection,
     });
 
-    return Response.json({ suggestions });
+    return Response.json({
+      suggestions: suggestions.map((s) => ({
+        id: s.id,
+        strategy: s.strategy,
+        suggestedText: s.suggestedText,
+        similarityAfter: s.similarityAfter,
+      })),
+    });
   } catch (error: unknown) {
     const message = error instanceof Error ? getErrorMessage(error) : "生成改写建议失败";
     log.fail("rewrite suggestions failed", error);

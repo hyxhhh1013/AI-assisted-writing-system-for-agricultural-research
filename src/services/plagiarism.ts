@@ -28,11 +28,11 @@ export type {
   RewriteSuggestionUpdateRequest,
 } from "@/contracts/plagiarism";
 
-/** POST /api/plagiarism/check — 同步查重 */
+/** POST /api/plagiarism/v2 — 同步查重 */
 export async function checkPlagiarism(
   payload: PlagiarismCheckRequest,
 ): Promise<PlagiarismCheckResult> {
-  const res = await fetch("/api/plagiarism/check", {
+  const res = await fetch("/api/plagiarism/v2", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -44,13 +44,13 @@ export async function checkPlagiarism(
   return res.json() as Promise<PlagiarismCheckResult>;
 }
 
-/** POST /api/plagiarism/check — SSE 进度流（供 UI-PR-050 hook 使用） */
+/** POST /api/plagiarism/v2 — SSE 进度流 */
 export async function checkPlagiarismStream(
   payload: PlagiarismCheckRequest,
   onEvent: (event: PlagiarismCheckStreamEvent) => void,
   signal?: AbortSignal,
 ): Promise<PlagiarismCheckResult> {
-  const res = await fetch("/api/plagiarism/check", {
+  const res = await fetch("/api/plagiarism/v2", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
