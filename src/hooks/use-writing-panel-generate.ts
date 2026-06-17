@@ -5,7 +5,12 @@ import { toast } from "sonner";
 import type { ProjectData } from "@/contracts/project";
 import { parseWritingBlueprint } from "@/contracts/writing-blueprint";
 import type { OutlineTask } from "@/lib/utils";
-import { countProjectFigures, getOutlineTaskIdsForSectionCompletion } from "@/lib/utils";
+import {
+  countProjectFigures,
+  getOutlineTaskIdsForSectionCompletion,
+  parseOutline,
+} from "@/lib/utils";
+import { applyBlueprintSectionHintToContext } from "@/lib/blueprint-utils";
 import { detectedFigureToPlotHref } from "@/contracts/figure";
 import { generateFigure } from "@/services/figures";
 import { findFigureBlocks, replacePlaceholders } from "@/hooks/use-figure-pipeline";
@@ -126,10 +131,20 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
         }
       })();
 
+      const blueprint = parseWritingBlueprint(project.writingBlueprint);
+      const selectedTask = outlineTasks.find((t) => t.id === selectedSectionId);
+      const resolvedContext = selectedTask
+        ? applyBlueprintSectionHintToContext(
+            draftContext,
+            blueprint,
+            selectedTask.fullPath,
+          )
+        : draftContext;
+
       return {
         title,
         section: targetSectionKey,
-        context: draftContext,
+        context: resolvedContext,
         bullets: normalizeWritingBullets(bullets),
         language: language as "zh" | "en",
         template: project.template,
@@ -147,12 +162,12 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
           outline: project.outline,
           sectionPreviews,
           analysisResults: project.analysisResults || [],
-          blueprint: parseWritingBlueprint(project.writingBlueprint),
+          blueprint,
         },
         ...(selectedSourceIds !== undefined ? { selectedSourceIds } : {}),
       };
     },
-    [project, targetSectionKey, title, language, retrievalMode, selectedSourceIds, bullets],
+    [project, targetSectionKey, title, language, retrievalMode, selectedSourceIds, bullets, outlineTasks, selectedSectionId],
   );
 
   const applyGenerationResult = useCallback(

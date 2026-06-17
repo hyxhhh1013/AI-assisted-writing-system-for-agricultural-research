@@ -12,6 +12,7 @@ import { projectStore } from "@/lib/store";
 import { siteTheme } from "@/lib/site-theme";
 import { toast } from "sonner";
 import type { ProjectWritingMode } from "@/contracts/writing-mode";
+import type { ProjectLanguage } from "@/contracts/project";
 import type { ProjectListItem } from "@/services/project";
 import { cn } from "@/lib/utils";
 import { getModeAccent } from "@/lib/mode-theme";
@@ -57,10 +58,10 @@ export default function ProjectsPageClient() {
     [projects],
   );
 
-  const handleCreate = async (mode: ProjectWritingMode, title: string) => {
+  const handleCreate = async (mode: ProjectWritingMode, title: string, language: ProjectLanguage) => {
     setIsCreating(true);
     try {
-      const newProject = await projectStore.create(mode, title);
+      const newProject = await projectStore.create(mode, title, language);
       if (newProject) {
         setCreateOpen(false);
         router.push(`/workbench?id=${newProject.id}`);

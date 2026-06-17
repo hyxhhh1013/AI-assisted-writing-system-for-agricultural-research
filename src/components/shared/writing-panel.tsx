@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { projectStore } from "@/lib/store";
 import { getMinDraftChars, getWritingContextPlaceholder, isWritingDraftReady, contextLinesToBullets, MIN_WRITING_BULLETS, normalizeWritingBullets, shouldUseCollaborativeBulletExpand, type ManualWritingPhase, type WritingFlowMode } from "@/contracts/writing";
-import type { ProjectData } from "@/contracts/project";
+import { resolveProjectLanguage, type ProjectData } from "@/contracts/project";
 import { parseWritingBlueprint } from "@/contracts/writing-blueprint";
 import { useWritingStream } from "@/hooks/use-writing-stream";
 import {
@@ -73,10 +73,11 @@ export function WritingPanel({
   onTaskExpanded,
   onClearPreselected,
 }: WritingPanelProps) {
+  const projectMode = project.mode ?? "review";
+  const language = resolveProjectLanguage(project);
   const [title, setTitle] = useState(project.title || "");
   const [selectedSectionId, setSelectedSectionId] = useState<string>("");
   const [targetSectionKey, setTargetSectionKey] = useState<string>("introduction");
-  const [language, setLanguage] = useState("zh");
   const [retrievalMode, setRetrievalMode] = useState<"precise" | "balanced" | "extensive">("precise");
   const [flowMode, setFlowMode] = useState<WritingFlowMode>("standard");
   const [manualPhase, setManualPhase] = useState<ManualWritingPhase>("idle");
@@ -100,7 +101,6 @@ export function WritingPanel({
   const [literatureOpen, setLiteratureOpen] = useState(false);
 
   const writingStream = useWritingStream();
-  const projectMode = project.mode ?? "review";
   const writingBlueprint = useMemo(
     () => parseWritingBlueprint(project.writingBlueprint),
     [project.writingBlueprint],
@@ -147,7 +147,6 @@ export function WritingPanel({
       title,
       selectedSectionId,
       targetSectionKey,
-      language,
       context,
       bullets,
       result,
@@ -160,7 +159,6 @@ export function WritingPanel({
       setTitle,
       setSelectedSectionId,
       setTargetSectionKey,
-      setLanguage,
       setContext,
       setBullets,
       setResult,
@@ -529,54 +527,33 @@ export function WritingPanel({
                 onBlur={handleTitleBlur}
               />
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1.5">
-                <Label className="text-xs">目标章节</Label>
-                <Select onValueChange={(val) => setTargetSectionKey(val || "")} value={targetSectionKey}>
-                  <SelectTrigger className="text-xs h-8">
-                    <SelectValue placeholder="目标章节" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {templateSections.map((s) => (
-                      <SelectItem key={s.value} value={s.value} className="text-xs">
-                        {s.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">语言</Label>
-                <div className="flex h-8 border rounded-md overflow-hidden">
-                  <button
-                    type="button"
-                    className={cn("flex-1 text-xs", language === "zh" ? "bg-primary text-primary-foreground" : "bg-background")}
-                    onClick={() => setLanguage("zh")}
-                  >
-                    中文
-                  </button>
-                  <button
-                    type="button"
-                    className={cn("flex-1 text-xs", language === "en" ? "bg-primary text-primary-foreground" : "bg-background")}
-                    onClick={() => setLanguage("en")}
-                  >
-                    EN
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-1.5 col-span-2">
-                <Label className="text-xs">扩写流程</Label>
-                <Select value={flowMode} onValueChange={(val) => handleFlowModeChange(val as WritingFlowMode)}>
-                  <SelectTrigger className="text-xs h-8">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="standard" className="text-xs">标准（人控）</SelectItem>
-                    <SelectItem value="preview" className="text-xs">快速预览</SelectItem>
-                    <SelectItem value="full" className="text-xs">完整模式（实验）</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">目标章节</Label>
+              <Select onValueChange={(val) => setTargetSectionKey(val || "")} value={targetSectionKey}>
+                <SelectTrigger className="text-xs h-8">
+                  <SelectValue placeholder="目标章节" />
+                </SelectTrigger>
+                <SelectContent>
+                  {templateSections.map((s) => (
+                    <SelectItem key={s.value} value={s.value} className="text-xs">
+                      {s.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">扩写流程</Label>
+              <Select value={flowMode} onValueChange={(val) => handleFlowModeChange(val as WritingFlowMode)}>
+                <SelectTrigger className="text-xs h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="standard" className="text-xs">标准（人控）</SelectItem>
+                  <SelectItem value="preview" className="text-xs">快速预览</SelectItem>
+                  <SelectItem value="full" className="text-xs">完整模式（实验）</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </details>

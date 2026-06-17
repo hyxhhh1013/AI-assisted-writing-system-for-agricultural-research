@@ -8,7 +8,7 @@ import {
   patchAnalysisResults,
   replaceReferences as replaceReferencesApi,
 } from "@/services/project";
-import type { ProjectData } from "@/contracts/project";
+import type { ProjectData, ProjectLanguage } from "@/contracts/project";
 import type { ProjectWritingMode } from "@/contracts/writing-mode";
 import { getDefaultProjectTitle } from "@/contracts/writing-mode";
 import type { ProjectListItem } from "@/services/project";
@@ -47,15 +47,20 @@ export const projectStore = {
   async create(
     mode: ProjectWritingMode = "review",
     title?: string,
+    language: ProjectLanguage = "zh",
   ): Promise<ProjectData | null> {
-    const newProject = this.getDefault("", mode);
+    const newProject = this.getDefault("", mode, language);
     newProject.title = title?.trim() || getDefaultProjectTitle(mode);
     const id = await saveProject(newProject);
     if (!id) return null;
     return getProject(id);
   },
 
-  getDefault(id: string = "", mode: ProjectWritingMode = "review"): ProjectData {
+  getDefault(
+    id: string = "",
+    mode: ProjectWritingMode = "review",
+    language: ProjectLanguage = "zh",
+  ): ProjectData {
     return {
       id,
       title: "",
@@ -68,6 +73,7 @@ export const projectStore = {
       outline: "",
       template: mode === "research" ? "sci" : "gbt7713",
       mode,
+      language,
       sections:
         mode === "research"
           ? { ...RESEARCH_DEFAULT_SECTIONS }

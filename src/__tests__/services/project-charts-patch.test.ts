@@ -46,6 +46,7 @@ describe("plot project services", () => {
       caption: "Fig 1",
       imageUrl: "/api/charts/x.png",
       sectionKey: "results",
+      figureSpecEnc: "enc-snapshot",
     });
 
     expect(rows).toHaveLength(1);
@@ -61,6 +62,7 @@ describe("plot project services", () => {
               caption: "Fig 1",
               imageUrl: "/api/charts/x.png",
               sectionKey: "results",
+              figureSpecEnc: "enc-snapshot",
             },
           },
         ],

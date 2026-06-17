@@ -13,6 +13,11 @@ import {
   ClipboardPaste, Upload, Table2, Type, Palette, Sparkles, BookmarkPlus,
 } from "lucide-react";
 import type { ChartPanelPrefill } from "@/contracts/figure";
+import {
+  buildChartReplayFigureSpec,
+  encodeChartAssetReplay,
+  type PlotInsertReplay,
+} from "@/contracts/figure";
 import { ChartFieldForm } from "@/components/shared/chart/chart-field-form";
 import { ChartPreviewPane } from "@/components/shared/chart/chart-preview-pane";
 import { useChartPanel, type ChartRegistryEntry } from "@/hooks/use-chart-panel";
@@ -23,7 +28,7 @@ interface ChartWorkspaceProps {
   globalStyleFields?: ChartRegistryField[];
   prefill?: ChartPanelPrefill | null;
   projectId?: string;
-  onInsertToPaper: (imageUrl: string, caption: string) => void;
+  onInsertToPaper: (imageUrl: string, caption: string, replay?: PlotInsertReplay) => void;
 }
 
 export function ChartWorkspace({
@@ -63,6 +68,30 @@ export function ChartWorkspace({
     title,
     idToType,
   } = panel;
+
+  const handleInsertToPaper = (imageUrl: string, caption: string) => {
+    const spec = buildChartReplayFigureSpec({
+      caption,
+      chartType,
+      title: title || caption,
+      xLabel: String(fieldValues.x_label ?? ""),
+      yLabel: String(fieldValues.y_label ?? ""),
+      parsedData:
+        inputMode === "paste" && parsedData
+          ? {
+              labels: parsedData.labels,
+              datasets: parsedData.datasets.map((d) => ({
+                label: d.label,
+                data: d.data,
+              })),
+            }
+          : null,
+    });
+    const replay: PlotInsertReplay | undefined = spec
+      ? { figureSpecEnc: encodeChartAssetReplay(spec) }
+      : undefined;
+    onInsertToPaper(imageUrl, caption, replay);
+  };
 
   return (
     <div className="flex h-full min-h-0 w-full bg-[#faf9f6]">
@@ -351,7 +380,7 @@ export function ChartWorkspace({
           result={result}
           title={title}
           onGenerate={handleGenerate}
-          onInsert={onInsertToPaper}
+          onInsert={handleInsertToPaper}
           onDownload={downloadUrl}
         />
       </section>

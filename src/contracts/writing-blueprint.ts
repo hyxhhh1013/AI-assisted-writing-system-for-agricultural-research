@@ -12,6 +12,15 @@ export type FigurePlanPriority = "required" | "optional";
 
 export type FigureDataSource = "experiment" | "literature" | "synthesis";
 
+/** 配图与项目实验数据的绑定（作图页 chartIdx 预填） */
+export interface FigureDataBinding {
+  kind: "chartConfig";
+  chartConfigIndex: number;
+  sourceFileName?: string;
+  variable?: string;
+  chartTitle?: string;
+}
+
 export interface FigurePlanItem {
   id: string;
   sectionPath: string;
@@ -20,6 +29,7 @@ export interface FigurePlanItem {
   suggestedCaption: string;
   priority: FigurePlanPriority;
   dataSource?: FigureDataSource;
+  dataBinding?: FigureDataBinding;
 }
 
 export interface SectionGuide {
@@ -90,6 +100,17 @@ function isFigurePlan(value: unknown): value is WritingBlueprint["figurePlan"] {
   return true;
 }
 
+function isFigureDataBinding(value: unknown): value is FigureDataBinding {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    v.kind === "chartConfig" &&
+    typeof v.chartConfigIndex === "number" &&
+    Number.isInteger(v.chartConfigIndex) &&
+    v.chartConfigIndex >= 0
+  );
+}
+
 function isFigurePlanItem(value: unknown): value is FigurePlanItem {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
@@ -103,7 +124,8 @@ function isFigurePlanItem(value: unknown): value is FigurePlanItem {
     typeof v.purpose === "string" &&
     typeof v.suggestedCaption === "string" &&
     typeof v.priority === "string" &&
-    priorities.has(v.priority)
+    priorities.has(v.priority) &&
+    (v.dataBinding === undefined || isFigureDataBinding(v.dataBinding))
   );
 }
 

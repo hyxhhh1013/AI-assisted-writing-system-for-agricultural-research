@@ -13,7 +13,6 @@ export interface PersistedWritingSession {
   title: string;
   selectedSectionId: string;
   targetSectionKey: string;
-  language: string;
   context: string;
   bullets?: string[];
   result: string;
@@ -27,7 +26,6 @@ export interface WritingPanelSessionState {
   title: string;
   selectedSectionId: string;
   targetSectionKey: string;
-  language: string;
   context: string;
   bullets?: string[];
   result: string;
@@ -41,7 +39,6 @@ export interface WritingPanelSessionSetters {
   setTitle: (v: string) => void;
   setSelectedSectionId: (v: string) => void;
   setTargetSectionKey: (v: string) => void;
-  setLanguage: (v: string) => void;
   setContext: (v: string) => void;
   setBullets?: (v: string[]) => void;
   setResult: (v: string) => void;
@@ -90,7 +87,6 @@ export function useWritingPanelSession({
       if (typeof s.targetSectionKey === "string" && templateSectionIds.has(s.targetSectionKey)) {
         setters.setTargetSectionKey(s.targetSectionKey);
       }
-      if (typeof s.language === "string") setters.setLanguage(s.language);
       if (typeof s.context === "string") setters.setContext(s.context);
       if (Array.isArray(s.bullets) && setters.setBullets) setters.setBullets(s.bullets);
       if (typeof s.result === "string") setters.setResult(s.result);
@@ -125,7 +121,6 @@ export function useWritingPanelSession({
           title: state.title,
           selectedSectionId: state.selectedSectionId,
           targetSectionKey: state.targetSectionKey,
-          language: state.language,
           context: state.context,
           bullets: state.bullets,
           result: state.result,

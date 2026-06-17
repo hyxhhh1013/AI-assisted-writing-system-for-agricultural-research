@@ -16,7 +16,7 @@ export function SectionSidebar({ sections, activeScope, onSelectScope, className
   const total = sections.reduce((n, s) => n + s.wordCount, 0);
 
   return (
-    <aside className={cn("flex w-52 shrink-0 flex-col border-r border-[#1a5632]/10 bg-[#faf9f6]/80", className)}>
+    <aside className={cn("flex w-56 shrink-0 flex-col border-r border-[#1a5632]/10 bg-[#faf9f6]/80 xl:w-64", className)}>
       <div className="border-b border-[#1a5632]/10 px-3 py-2.5">
         <p className="text-xs font-semibold text-[#122820]">论文章节</p>
         <p className="text-[10px] text-[#9aa8a0]">共 {total.toLocaleString()} 字 · {sections.length} 章</p>

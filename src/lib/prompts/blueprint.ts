@@ -1,5 +1,6 @@
 import { buildDomainExpertise } from "./domain";
 import type { ProjectWritingMode } from "@/contracts/writing-mode";
+import type { BlueprintChartCatalogEntry } from "@/lib/blueprint-utils";
 
 export function buildBlueprintPrompt(params: {
   title: string;
@@ -7,8 +8,9 @@ export function buildBlueprintPrompt(params: {
   outline: string;
   language: string;
   projectMode?: ProjectWritingMode;
+  chartCatalog?: BlueprintChartCatalogEntry[];
 }): string {
-  const { title, researchDirection, outline, language, projectMode } = params;
+  const { title, researchDirection, outline, language, projectMode, chartCatalog } = params;
   const domainExpertise = buildDomainExpertise(researchDirection);
   const isResearch = projectMode === "research";
   const lang = language === "en" ? "English" : "Chinese";
@@ -37,6 +39,13 @@ ${figureRules}
 - type 只能是：flow | chart | xrd | table | schematic | other
 - priority：required（强烈建议）或 optional
 - 每项配图须有清晰 purpose 与 suggestedCaption（图题草案）
+${chartCatalog && chartCatalog.length > 0 ? `
+【项目已有试验数据图表】
+以下为已上传/分析得到的推荐图表（chartConfigIndex 从 0 起，与下表 index 一致）。
+type=chart 且 dataSource=experiment 的配图项，必须填写 dataBinding，指向最匹配的一行：
+${chartCatalog.map((c) => `- [${c.index}] ${c.title}${c.variable ? `（${c.variable}）` : ""} ← ${c.sourceFileName}`).join("\n")}
+- dataBinding 格式：{ "kind": "chartConfig", "chartConfigIndex": 0, "sourceFileName": "...", "variable": "...", "chartTitle": "..." }
+- 无合适数据时勿虚构 binding，可标 optional 并在 purpose 说明需补数据` : ""}
 
 【输出要求】
 - 仅输出一个 JSON 对象，不要 markdown 代码块，不要其他文字。
@@ -61,6 +70,22 @@ ${figureRules}
         "suggestedCaption": "图1 试验流程示意图",
         "priority": "required",
         "dataSource": "experiment"
+      },
+      {
+        "id": "fig-2",
+        "sectionPath": "结果与分析 > 产量",
+        "type": "chart",
+        "purpose": "各处理产量对比",
+        "suggestedCaption": "图2 各处理产量对比",
+        "priority": "required",
+        "dataSource": "experiment",
+        "dataBinding": {
+          "kind": "chartConfig",
+          "chartConfigIndex": 0,
+          "sourceFileName": "试验数据.xlsx",
+          "variable": "产量",
+          "chartTitle": "各处理产量对比"
+        }
       }
     ]
   },

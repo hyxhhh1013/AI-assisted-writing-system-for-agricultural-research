@@ -45,6 +45,10 @@ interface PlotInsertDialogProps {
   figureId?: string;
   svgUrl?: string;
   pdfUrl?: string;
+  figureSpecEnc?: string;
+  /** 为 false 时只追加章节 Markdown，不新增 charts 资产（用于已登记图再次插入） */
+  registerAsset?: boolean;
+  onSuccess?: (payload: { projectId: string; sectionKey: string }) => void;
 }
 
 export function PlotInsertDialog({
@@ -56,6 +60,9 @@ export function PlotInsertDialog({
   figureId = "chart",
   svgUrl,
   pdfUrl,
+  figureSpecEnc,
+  registerAsset = true,
+  onSuccess,
 }: PlotInsertDialogProps) {
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
   const [selectedProject, setSelectedProject] = useState<string>("");
@@ -102,11 +109,11 @@ export function PlotInsertDialog({
       }
       const chartCount = parseProjectCharts(project.charts).length;
       const numbered = caption.match(/^图\s*\d+/);
-      if (!numbered) {
+      if (!numbered && registerAsset) {
         setInsertCaption(`图${chartCount + 1} ${caption}`.trim());
       }
     });
-  }, [open, selectedProject, caption]);
+  }, [open, selectedProject, caption, registerAsset]);
 
   const markdown = `\n\n![${insertCaption}](${imageUrl})\n\n`;
 
@@ -122,16 +129,20 @@ export function PlotInsertDialog({
     setInserting(true);
     try {
       await appendProjectSectionMarkdown(selectedProject, selectedSection, markdown);
-      await appendChartAsset(selectedProject, {
-        figureId,
-        caption: insertCaption,
-        imageUrl,
-        svgUrl,
-        pdfUrl,
-        sectionKey: selectedSection,
-      });
+      if (registerAsset) {
+        await appendChartAsset(selectedProject, {
+          figureId,
+          caption: insertCaption,
+          imageUrl,
+          svgUrl,
+          pdfUrl,
+          sectionKey: selectedSection,
+          figureSpecEnc,
+        });
+      }
       setDone(true);
-      toast.success("已插入章节并登记图表资产");
+      onSuccess?.({ projectId: selectedProject, sectionKey: selectedSection });
+      toast.success(registerAsset ? "已插入章节并登记图表资产" : "已再次插入到章节");
     } catch (err: unknown) {
       toast.error(getErrorMessage(err));
     } finally {
@@ -143,7 +154,7 @@ export function PlotInsertDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>插入到论文</DialogTitle>
+          <DialogTitle>{registerAsset ? "插入到论文" : "再次插入到章节"}</DialogTitle>
         </DialogHeader>
 
         {done ? (

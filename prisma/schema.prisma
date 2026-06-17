@@ -54,6 +54,8 @@ model Project {
   referenceSources  ReferenceSource[]
   // 写作模式
   mode              String?   @default("review") // "review" | "research"
+  // 写作语言（zh | en）
+  language          String?   @default("zh")
   // 图表元数据（JSON 字符串）
   charts            String?
   // 数据证据声明（JSON 数组 EvidenceClaim[]）

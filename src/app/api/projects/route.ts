@@ -13,6 +13,10 @@ import { getErrorMessage } from "@/lib/error-utils";
 import type { Prisma } from "@prisma/client";
 
 import { getCoreSectionKeysForMode } from "@/lib/section-registry";
+import {
+  readWritingBlueprint,
+  writeWritingBlueprint,
+} from "@/lib/project-writing-blueprint-db";
 
 type SectionRecord = Record<string, string>;
 
@@ -46,6 +50,7 @@ export async function GET(req: NextRequest) {
         return notFoundResponse("项目未找到");
       }
 
+      const langRaw = (project as { language?: string | null }).language;
       const formattedProject = {
         ...project,
         lastUpdated: project.lastUpdated.getTime(),
@@ -58,10 +63,11 @@ export async function GET(req: NextRequest) {
           .map(r => r.content),
         analysisResults: project.analysisResults.map(r => r.content),
         mode: project.mode || "review",
+        language: langRaw === "en" ? "en" : "zh",
         citationStyle: (project.citationStyle as ProjectDTO["citationStyle"]) || "gbt7714",
         dataClaims: project.dataClaims || undefined,
         dataSources: project.dataSources || undefined,
-        writingBlueprint: (project as { writingBlueprint?: string | null }).writingBlueprint || undefined,
+        writingBlueprint: (await readWritingBlueprint(project.id)) || undefined,
         expandedOutlineSections: parseExpandedOutlineSections(project.expandedOutlineSections),
       };
 
@@ -125,6 +131,7 @@ export async function POST(req: NextRequest) {
       outline,
       template,
       mode,
+      language,
       citationStyle,
       sections,
       references,
@@ -158,8 +165,10 @@ export async function POST(req: NextRequest) {
           data: {
             title, authors, affiliations, abstract, keywords,
             classification, researchDirection, outline, template, citationStyle,
+            ...(language !== undefined
+              ? { language: language === "en" ? "en" : "zh" }
+              : {}),
             dataClaims, dataSources,
-            ...(writingBlueprint !== undefined ? { writingBlueprint } : {}),
             ...(expandedOutlineSections !== undefined
               ? {
                   expandedOutlineSections: serializeExpandedOutlineSections(
@@ -175,9 +184,9 @@ export async function POST(req: NextRequest) {
             userId, title, authors, affiliations, abstract, keywords,
             classification, researchDirection, outline, template,
             mode: mode === "research" ? "research" : "review",
+            language: language === "en" ? "en" : "zh",
             citationStyle,
             dataClaims, dataSources,
-            writingBlueprint,
             expandedOutlineSections: serializeExpandedOutlineSections(
               Array.isArray(expandedOutlineSections) ? expandedOutlineSections : [],
             ),
@@ -185,6 +194,14 @@ export async function POST(req: NextRequest) {
         });
 
     projectId = project.id;
+
+    // writingBlueprint 列可能尚未进入已 generate 的 Client，单独 raw 写入
+    if (writingBlueprint !== undefined) {
+      await writeWritingBlueprint(
+        projectId,
+        writingBlueprint === null || writingBlueprint === "" ? null : writingBlueprint,
+      );
+    }
 
     // 增量保存 sections（逐条 upsert，不 deleteMany）
     if (sections) {

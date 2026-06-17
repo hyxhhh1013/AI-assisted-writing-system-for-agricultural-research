@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,13 +9,21 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { WritingBlueprint } from "@/contracts/writing-blueprint";
-import { blueprintFigureToPlotHref, figureTypeLabel } from "@/lib/blueprint-utils";
+import type { ProjectData } from "@/contracts/project";
+import { parseDataSources } from "@/contracts/project";
+import { collectChartConfigsFromSources } from "@/contracts/figure";
+import {
+  blueprintFigureToPlotHref,
+  blueprintFigureDataBindingLabel,
+  figureTypeLabel,
+} from "@/lib/blueprint-utils";
 import Link from "next/link";
 
 interface OutlineBlueprintDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   blueprint: WritingBlueprint | null;
+  project?: Pick<ProjectData, "dataSources">;
   projectId?: string;
   isStale?: boolean;
 }
@@ -23,9 +32,15 @@ export function OutlineBlueprintDialog({
   open,
   onOpenChange,
   blueprint,
+  project,
   projectId,
   isStale = false,
 }: OutlineBlueprintDialogProps) {
+  const chartConfigs = useMemo(
+    () => collectChartConfigsFromSources(parseDataSources(project ?? {})),
+    [project],
+  );
+
   if (!blueprint) return null;
 
   const { figurePlan } = blueprint;
@@ -102,7 +117,11 @@ export function OutlineBlueprintDialog({
                 </thead>
                 <tbody>
                   {figurePlan.items.map((item) => {
-                    const plotHref = projectId ? blueprintFigureToPlotHref(projectId, item) : null;
+                    const plotHref = projectId
+                      ? blueprintFigureToPlotHref(projectId, item, chartConfigs)
+                      : null;
+                    const bindingLabel =
+                      item.type === "chart" ? blueprintFigureDataBindingLabel(item) : null;
                     return (
                     <tr key={item.id} className="border-t">
                       <td className="p-2 align-top text-muted-foreground">{item.sectionPath}</td>
@@ -110,6 +129,17 @@ export function OutlineBlueprintDialog({
                       <td className="p-2 align-top">
                         <div className="font-medium">{item.suggestedCaption}</div>
                         <div className="text-muted-foreground mt-0.5">{item.purpose}</div>
+                        {item.type === "chart" && (
+                          <div className="text-[10px] mt-1">
+                            {bindingLabel ? (
+                              <span className="text-emerald-700">数据：{bindingLabel}</span>
+                            ) : chartConfigs.length > 0 ? (
+                              <span className="text-amber-700">未绑定试验数据</span>
+                            ) : (
+                              <span className="text-muted-foreground">请先在「实验数据」上传并分析</span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="p-2 align-top">
                         {item.priority === "required" ? "必需" : "可选"}

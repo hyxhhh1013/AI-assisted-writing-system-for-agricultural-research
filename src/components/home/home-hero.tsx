@@ -19,6 +19,7 @@ import { projectStore } from "@/lib/store";
 import { searchKnowledge } from "@/services/knowledge";
 import type { ProjectListItem } from "@/services/project";
 import type { ProjectWritingMode } from "@/contracts/writing-mode";
+import type { ProjectLanguage } from "@/contracts/project";
 import { CreateProjectDialog } from "@/components/shared/create-project-dialog";
 import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
 import { cn } from "@/lib/utils";
@@ -84,10 +85,10 @@ export function HomeHero({ projects }: HomeHeroProps) {
     };
   }, []);
 
-  const handleCreate = async (mode: ProjectWritingMode, title: string) => {
+  const handleCreate = async (mode: ProjectWritingMode, title: string, language: ProjectLanguage) => {
     setIsCreating(true);
     try {
-      const created = await projectStore.create(mode, title);
+      const created = await projectStore.create(mode, title, language);
       if (created) {
         setCreateOpen(false);
         router.push(`/workbench?id=${created.id}`);

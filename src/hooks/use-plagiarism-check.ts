@@ -30,6 +30,8 @@ export interface UsePlagiarismCheckReturn {
   cancel: () => void;
   /** 重置状态 */
   reset: () => void;
+  /** 从 DB 恢复已保存的查重结果 */
+  restoreResult: (result: PlagiarismCheckResult) => void;
 }
 
 // ==================== Hook ====================
@@ -54,6 +56,13 @@ export function usePlagiarismCheck(): UsePlagiarismCheckReturn {
     setStage(null);
     setError(null);
     abortRef.current = null;
+  }, []);
+
+  const restoreResult = useCallback((restored: PlagiarismCheckResult) => {
+    setResult(restored);
+    setChecking(false);
+    setStage({ stage: "done", label: "已恢复上次查重" });
+    setError(null);
   }, []);
 
   const check = useCallback(async (payload: PlagiarismCheckRequest) => {
@@ -104,5 +113,6 @@ export function usePlagiarismCheck(): UsePlagiarismCheckReturn {
     check,
     cancel,
     reset,
+    restoreResult,
   };
 }

@@ -6,7 +6,11 @@ import { validateBody } from "@/lib/api-validate";
 import { blueprintSchema, writingBlueprintPayloadSchema } from "@/lib/validations";
 import { getErrorMessage } from "@/lib/error-utils";
 import type { WritingBlueprint } from "@/contracts/writing-blueprint";
-import { computeOutlineHash } from "@/lib/blueprint-utils";
+import {
+  computeOutlineHash,
+  enrichBlueprintChartBindingsFromCatalog,
+  type BlueprintChartCatalogEntry,
+} from "@/lib/blueprint-utils";
 
 function extractJsonObject(rawText: string): unknown {
   const trimmed = rawText.trim();
@@ -26,14 +30,18 @@ function extractJsonObject(rawText: string): unknown {
   }
 }
 
-function normalizeBlueprint(data: WritingBlueprint, outline: string): WritingBlueprint {
+function normalizeBlueprint(
+  data: WritingBlueprint,
+  outline: string,
+  chartCatalog: BlueprintChartCatalogEntry[] | undefined,
+): WritingBlueprint {
   const items = data.figurePlan.items.map((item, index) => ({
     ...item,
     id: item.id?.trim() || `fig-${index + 1}`,
   }));
   const totalMin = Math.max(data.figurePlan.totalMin, 0);
   const totalMax = Math.max(data.figurePlan.totalMax, totalMin);
-  return {
+  const base: WritingBlueprint = {
     ...data,
     version: 1,
     outlineHash: computeOutlineHash(outline),
@@ -44,6 +52,9 @@ function normalizeBlueprint(data: WritingBlueprint, outline: string): WritingBlu
       items,
     },
   };
+  return chartCatalog && chartCatalog.length > 0
+    ? enrichBlueprintChartBindingsFromCatalog(base, chartCatalog)
+    : base;
 }
 
 /** POST /api/outline/blueprint — 基于大纲生成写作蓝图（JSON） */
@@ -52,7 +63,7 @@ export async function POST(req: NextRequest) {
     const { data, errorResponse: ve } = await validateBody(blueprintSchema, await req.json());
     if (ve) return ve;
 
-    const { title, outline, researchDirection, language, projectMode } = data;
+    const { title, outline, researchDirection, language, projectMode, chartCatalog } = data;
     const direction = (researchDirection?.trim() || title.trim());
     if (!outline.trim()) {
       return NextResponse.json({ error: "请先生成或填写大纲" }, { status: 400 });
@@ -69,6 +80,7 @@ export async function POST(req: NextRequest) {
       outline,
       language,
       projectMode: projectMode ?? "review",
+      chartCatalog,
     });
 
     const response = await callAI({
@@ -110,7 +122,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const blueprint = normalizeBlueprint(validated.data as WritingBlueprint, outline);
+    const blueprint = normalizeBlueprint(
+      validated.data as WritingBlueprint,
+      outline,
+      chartCatalog,
+    );
     return NextResponse.json(blueprint);
   } catch (error: unknown) {
     logger.error("Blueprint Generation Error:", error);

@@ -4,7 +4,12 @@ import type {
   SectionGuide,
   WritingBlueprint,
 } from "@/contracts/writing-blueprint";
-import { buildPlotPageHref } from "@/contracts/figure";
+import type { ChartConfig, DataSourceAnalysis } from "@/contracts/data-source";
+import {
+  buildPlotPageHref,
+  chartTypeToFigureId,
+  collectChartConfigsFromSources,
+} from "@/contracts/figure";
 
 /** 大纲文本指纹（大纲变更后用于标记蓝图过期） */
 export function computeOutlineHash(outline: string): string {
@@ -33,10 +38,140 @@ const BLUEPRINT_TYPE_TO_FIGURE: Record<FigurePlanType, string | null> = {
   other: null,
 };
 
-/** 蓝图配图项 → /plot 深链（无对应工具时返回 null） */
+/** 供蓝图生成 Prompt 使用的项目图表目录（index 与 collectChartConfigsFromSources 一致） */
+export interface BlueprintChartCatalogEntry {
+  index: number;
+  title: string;
+  sourceFileName: string;
+  variable?: string;
+}
+
+export function buildBlueprintChartCatalog(
+  sources: DataSourceAnalysis[],
+): BlueprintChartCatalogEntry[] {
+  const configs = collectChartConfigsFromSources(sources);
+  return configs.map((cfg, index) => ({
+    index,
+    title: cfg.title,
+    sourceFileName: findChartConfigSourceFile(sources, cfg) ?? "试验数据",
+    variable: cfg.yLabel,
+  }));
+}
+
+function findChartConfigSourceFile(
+  sources: DataSourceAnalysis[],
+  target: ChartConfig,
+): string | null {
+  for (const source of sources) {
+    if (source.chartConfigs?.some((c) => chartConfigsEqual(c, target))) {
+      return source.fileName;
+    }
+  }
+  for (const source of sources) {
+    if (source.stats.some((s) => s.variable === target.yLabel)) {
+      return source.fileName;
+    }
+  }
+  return sources[0]?.fileName ?? null;
+}
+
+function chartConfigsEqual(a: ChartConfig, b: ChartConfig): boolean {
+  return a.title === b.title && a.type === b.type && a.yLabel === b.yLabel;
+}
+
+/** 为 chart 项解析 chartConfig 全局下标 */
+export function resolveChartConfigIndex(
+  item: FigurePlanItem,
+  chartConfigs: ChartConfig[],
+): number | null {
+  if (chartConfigs.length === 0) return null;
+
+  const bound = item.dataBinding;
+  if (bound?.kind === "chartConfig") {
+    const idx = bound.chartConfigIndex;
+    if (idx >= 0 && idx < chartConfigs.length) return idx;
+  }
+
+  const needle = [
+    item.suggestedCaption,
+    item.purpose,
+    bound?.variable,
+    bound?.chartTitle,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  for (let i = 0; i < chartConfigs.length; i++) {
+    const cfg = chartConfigs[i];
+    const title = cfg.title.toLowerCase();
+    const yLabel = cfg.yLabel?.toLowerCase() ?? "";
+    if (bound?.variable && yLabel && yLabel === bound.variable.toLowerCase()) return i;
+    if (yLabel && needle.includes(yLabel)) return i;
+    if (title && (needle.includes(title) || title.includes(needle.slice(0, 6)))) return i;
+  }
+
+  return chartConfigs.length === 1 ? 0 : null;
+}
+
+export function enrichBlueprintChartBindings(
+  blueprint: WritingBlueprint,
+  sources: DataSourceAnalysis[],
+): WritingBlueprint {
+  const catalog = buildBlueprintChartCatalog(sources);
+  return enrichBlueprintChartBindingsFromCatalog(blueprint, catalog);
+}
+
+export function enrichBlueprintChartBindingsFromCatalog(
+  blueprint: WritingBlueprint,
+  catalog: BlueprintChartCatalogEntry[],
+): WritingBlueprint {
+  if (catalog.length === 0) return blueprint;
+
+  const chartConfigs = catalog.map((entry) => ({
+    type: "bar" as const,
+    title: entry.title,
+    yLabel: entry.variable,
+    labels: [] as string[],
+    datasets: [{ label: entry.variable ?? "数值", data: [] as number[] }],
+  }));
+
+  const items = blueprint.figurePlan.items.map((item) => {
+    if (item.type !== "chart") return item;
+    const idx = resolveChartConfigIndex(item, chartConfigs);
+    if (idx === null) return item;
+    const entry = catalog[idx];
+    if (!entry) return item;
+    return {
+      ...item,
+      dataBinding: {
+        kind: "chartConfig" as const,
+        chartConfigIndex: idx,
+        sourceFileName: entry.sourceFileName,
+        variable: entry.variable,
+        chartTitle: entry.title,
+      },
+    };
+  });
+
+  return {
+    ...blueprint,
+    figurePlan: { ...blueprint.figurePlan, items },
+  };
+}
+
+export function blueprintFigureDataBindingLabel(item: FigurePlanItem): string | null {
+  const b = item.dataBinding;
+  if (b?.kind !== "chartConfig") return null;
+  const parts = [b.chartTitle, b.variable, b.sourceFileName].filter(Boolean);
+  return parts.length > 0 ? parts.join(" · ") : `推荐图表 #${b.chartConfigIndex + 1}`;
+}
+
+/** 蓝图配图项 → /plot 深链（chart 类优先 chartIdx 载入项目试验数据） */
 export function blueprintFigureToPlotHref(
   projectId: string,
   item: FigurePlanItem,
+  chartConfigs: ChartConfig[] = [],
 ): string | null {
   const figureId = BLUEPRINT_TYPE_TO_FIGURE[item.type];
   if (!figureId) return null;
@@ -54,6 +189,15 @@ export function blueprintFigureToPlotHref(
   }
 
   if (item.type === "chart") {
+    const idx = resolveChartConfigIndex(item, chartConfigs);
+    if (idx !== null) {
+      const cfg = chartConfigs[idx];
+      return buildPlotPageHref({
+        projectId,
+        figureId: chartTypeToFigureId(cfg.type),
+        chartIdx: idx,
+      });
+    }
     return buildPlotPageHref({
       projectId,
       figureId,
@@ -102,6 +246,32 @@ export function findSectionGuide(
   );
 }
 
+const BLUEPRINT_SECTION_HINT_HEAD = "【写作蓝图（本节）】";
+
+/** 去掉扩写上下文中旧的「本节蓝图」块（保存后重注入前用） */
+export function stripBlueprintSectionHint(context: string): string {
+  const marker = `\n${BLUEPRINT_SECTION_HINT_HEAD}`;
+  const idx = context.indexOf(marker);
+  if (idx === -1) {
+    if (context.startsWith(BLUEPRINT_SECTION_HINT_HEAD)) return "";
+    return context.trimEnd();
+  }
+  return context.slice(0, idx).trimEnd();
+}
+
+/** 用已保存蓝图刷新扩写上下文中的本节提示（发起扩写时调用） */
+export function applyBlueprintSectionHintToContext(
+  context: string,
+  blueprint: WritingBlueprint | null | undefined,
+  sectionFullPath: string,
+): string {
+  const base = stripBlueprintSectionHint(context);
+  if (!blueprint || !sectionFullPath.trim()) return base;
+  const hint = formatBlueprintSectionHint(blueprint, sectionFullPath);
+  if (!hint.trim()) return base;
+  return base ? `${base}\n${hint}` : hint.trimEnd();
+}
+
 /** 注入扩写上下文的蓝图片段（仅当前节相关） */
 export function formatBlueprintSectionHint(
   blueprint: WritingBlueprint,
@@ -110,7 +280,7 @@ export function formatBlueprintSectionHint(
   const guide = findSectionGuide(blueprint, sectionFullPath);
   const figures = figuresForSection(sectionFullPath, blueprint.figurePlan.items);
 
-  const parts: string[] = ["【写作蓝图（本节）】"];
+  const parts: string[] = [BLUEPRINT_SECTION_HINT_HEAD];
   if (guide) {
     parts.push(`- 本节目的：${guide.purpose}`);
     if (guide.keyPoints.length > 0) {
@@ -156,4 +326,21 @@ const FIGURE_TYPE_LABELS: Record<string, string> = {
 
 export function figureTypeLabel(type: string): string {
   return FIGURE_TYPE_LABELS[type] ?? type;
+}
+
+/** 保存前同步 figurePlan 总量区间 */
+export function normalizeBlueprintDraft(blueprint: WritingBlueprint): WritingBlueprint {
+  const items = blueprint.figurePlan.items;
+  const required = items.filter((i) => i.priority === "required").length;
+  const optional = items.filter((i) => i.priority === "optional").length;
+  const totalMin = Math.max(required, 0);
+  const totalMax = Math.max(totalMin, required + optional);
+  return {
+    ...blueprint,
+    figurePlan: {
+      ...blueprint.figurePlan,
+      totalMin,
+      totalMax,
+    },
+  };
 }

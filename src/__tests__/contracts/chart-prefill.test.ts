@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ChartConfig, DataSourceAnalysis } from "@/contracts/data-source";
 import {
+  buildChartReplayFigureSpec,
   buildPlotPageHref,
+  chartAssetToPlotHref,
   chartConfigToPasteText,
   chartConfigToPrefill,
   chartTypeToFigureId,
@@ -136,6 +138,43 @@ describe("chart prefill contracts", () => {
       chartIdx: 2,
     });
     expect(fromBuild).toBe("/plot?id=p1&figure=line&chartIdx=2");
+  });
+
+  it("stores and replays chart asset figureSpecEnc via chartAssetId href", () => {
+    const spec = buildChartReplayFigureSpec({
+      caption: "图1 产量",
+      chartType: "bar",
+      title: "产量",
+      xLabel: "处理",
+      yLabel: "kg",
+      parsedData: {
+        labels: ["A", "B"],
+        datasets: [{ label: "产量", data: [1, 2] }],
+      },
+    });
+    expect(spec).not.toBeNull();
+    const enc = encodeFigureSpecParam(spec!);
+    const raw = JSON.stringify([
+      {
+        id: "asset-1",
+        figureId: "bar_grouped",
+        caption: "图1 产量",
+        imageUrl: "/x.png",
+        figureSpecEnc: enc,
+        createdAt: 100,
+      },
+    ]);
+    const assets = parseProjectCharts(raw);
+    expect(assets[0].figureSpecEnc).toBe(enc);
+
+    const href = chartAssetToPlotHref("proj-1", assets[0]);
+    expect(href).toContain("chartAssetId=asset-1");
+    expect(href).toContain("figure=bar_grouped");
+    expect(href).not.toContain("figureSpec=");
+
+    const replay = figureSpecToPrefill(decodeFigureSpecParam(enc)!);
+    expect(replay?.pasteText).toContain("A,1");
+    expect(replay?.figureId).toBe("bar_grouped");
   });
 
   it("builds flow prefill and detected figure plot href", () => {

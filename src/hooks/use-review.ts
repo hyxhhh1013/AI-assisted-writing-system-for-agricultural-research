@@ -47,6 +47,8 @@ export interface UseReviewReturn {
   dismissIssue: (dimension: ReviewDimension, issueIndex: number) => void;
   /** 重置状态 */
   reset: () => void;
+  /** 从 DB 恢复已保存的审查报告 */
+  restoreReport: (report: FixableReviewReport) => void;
 }
 
 /**
@@ -255,6 +257,14 @@ export function useReview(): UseReviewReturn {
     setFixingIssueIndex(null);
   }, []);
 
+  const restoreReport = useCallback((restored: FixableReviewReport) => {
+    setReport(restored);
+    setIsReviewing(false);
+    setProgress("");
+    setError(null);
+    setFixingIssueIndex(null);
+  }, []);
+
   return {
     report,
     isReviewing,
@@ -266,5 +276,6 @@ export function useReview(): UseReviewReturn {
     applyFix,
     dismissIssue,
     reset,
+    restoreReport,
   };
 }

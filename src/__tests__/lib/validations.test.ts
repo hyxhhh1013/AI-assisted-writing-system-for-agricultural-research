@@ -156,6 +156,10 @@ describe("projectMetaPatchSchema", () => {
   it("accepts partial meta", () => {
     expect(projectMetaPatchSchema.safeParse({ title: "新标题" }).success).toBe(true);
   });
+
+  it("accepts language patch", () => {
+    expect(projectMetaPatchSchema.safeParse({ language: "en" }).success).toBe(true);
+  });
 });
 
 describe("plagiarismRewritePatchSchema", () => {

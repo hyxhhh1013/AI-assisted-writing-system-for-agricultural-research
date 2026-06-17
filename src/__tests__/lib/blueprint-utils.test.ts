@@ -4,10 +4,15 @@ import {
   figureBelongsToSection,
   formatBlueprintSectionHint,
   formatBlueprintGlobalSummary,
+  stripBlueprintSectionHint,
+  applyBlueprintSectionHintToContext,
   computeOutlineHash,
   isBlueprintStale,
   blueprintFigureToPlotHref,
+  resolveChartConfigIndex,
+  enrichBlueprintChartBindingsFromCatalog,
 } from "@/lib/blueprint-utils";
+import type { ChartConfig } from "@/contracts/data-source";
 import type { WritingBlueprint } from "@/contracts/writing-blueprint";
 import { parseWritingBlueprint, serializeWritingBlueprint } from "@/contracts/writing-blueprint";
 
@@ -86,6 +91,25 @@ describe("formatBlueprintGlobalSummary", () => {
   });
 });
 
+describe("applyBlueprintSectionHintToContext", () => {
+  it("replaces stale section hint with saved blueprint", () => {
+    const stale = `【扩写目标】材料与方法
+【写作蓝图（本节）】
+- 本节目的：旧目的`;
+    const next = applyBlueprintSectionHintToContext(stale, sampleBlueprint, "材料与方法");
+    expect(next).not.toContain("旧目的");
+    expect(next).toContain("说明试验设计");
+    expect(next).toContain("试验流程");
+  });
+});
+
+describe("stripBlueprintSectionHint", () => {
+  it("removes blueprint block from context", () => {
+    const ctx = "前文\n【写作蓝图（本节）】\n- 要点";
+    expect(stripBlueprintSectionHint(ctx)).toBe("前文");
+  });
+});
+
 describe("parseWritingBlueprint", () => {
   it("round-trips valid blueprint", () => {
     const raw = serializeWritingBlueprint(sampleBlueprint);
@@ -114,6 +138,16 @@ describe("computeOutlineHash / isBlueprintStale", () => {
 });
 
 describe("blueprintFigureToPlotHref", () => {
+  const sampleChartConfigs: ChartConfig[] = [
+    {
+      type: "bar",
+      title: "各处理产量对比",
+      yLabel: "产量",
+      labels: ["CK", "T1", "T2"],
+      datasets: [{ label: "产量", data: [10, 12, 15] }],
+    },
+  ];
+
   it("builds plot link for chart and flow types", () => {
     const chartHref = blueprintFigureToPlotHref("p1", sampleBlueprint.figurePlan.items[1]);
     expect(chartHref).toContain("/plot?");
@@ -121,5 +155,63 @@ describe("blueprintFigureToPlotHref", () => {
 
     const flowHref = blueprintFigureToPlotHref("p1", sampleBlueprint.figurePlan.items[0]);
     expect(flowHref).toContain("figure=flow");
+  });
+
+  it("uses chartIdx when project chartConfigs are bound", () => {
+    const item = {
+      ...sampleBlueprint.figurePlan.items[1],
+      dataBinding: {
+        kind: "chartConfig" as const,
+        chartConfigIndex: 0,
+        chartTitle: "各处理产量对比",
+        variable: "产量",
+      },
+    };
+    const href = blueprintFigureToPlotHref("p1", item, sampleChartConfigs);
+    expect(href).toContain("chartIdx=0");
+    expect(href).not.toContain("figureSpec=");
+  });
+});
+
+describe("resolveChartConfigIndex", () => {
+  const configs: ChartConfig[] = [
+    {
+      type: "bar",
+      title: "各处理pH对比",
+      yLabel: "pH",
+      labels: ["A", "B"],
+      datasets: [{ label: "pH", data: [1, 2] }],
+    },
+    {
+      type: "bar",
+      title: "各处理产量对比",
+      yLabel: "产量",
+      labels: ["A", "B"],
+      datasets: [{ label: "产量", data: [3, 4] }],
+    },
+  ];
+
+  it("matches by dataBinding index and caption keywords", () => {
+    const byIndex = resolveChartConfigIndex(
+      {
+        ...sampleBlueprint.figurePlan.items[1],
+        dataBinding: { kind: "chartConfig", chartConfigIndex: 1 },
+      },
+      configs,
+    );
+    expect(byIndex).toBe(1);
+
+    const byCaption = resolveChartConfigIndex(sampleBlueprint.figurePlan.items[1], configs);
+    expect(byCaption).toBe(1);
+  });
+});
+
+describe("enrichBlueprintChartBindingsFromCatalog", () => {
+  it("auto-binds chart items to catalog entries", () => {
+    const enriched = enrichBlueprintChartBindingsFromCatalog(sampleBlueprint, [
+      { index: 0, title: "各处理产量对比", sourceFileName: "data.xlsx", variable: "产量" },
+    ]);
+    const chartItem = enriched.figurePlan.items.find((i) => i.type === "chart");
+    expect(chartItem?.dataBinding?.chartConfigIndex).toBe(0);
   });
 });

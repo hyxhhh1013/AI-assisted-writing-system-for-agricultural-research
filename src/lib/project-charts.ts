@@ -27,6 +27,7 @@ export async function applyChartPatchOps(
         svgUrl: op.asset.svgUrl,
         pdfUrl: op.asset.pdfUrl,
         sectionKey: op.asset.sectionKey,
+        figureSpecEnc: op.asset.figureSpecEnc,
         createdAt: Date.now(),
       };
       assets = [...assets, next];

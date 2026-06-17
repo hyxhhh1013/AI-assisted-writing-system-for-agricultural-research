@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { ChartConfig, DataSourceSummary, EvidenceClaim } from "@/contracts/data-source";
 import { buildPlotPageHref, chartTypeToFigureId } from "@/contracts/figure";
+import type { ProjectChartAsset } from "@/contracts/figure";
+import { RegisteredChartsCard } from "@/components/shared/plot/registered-charts-card";
 import {
   BarChart3,
   Check,
@@ -35,11 +37,13 @@ interface EvidenceHubSectionsProps {
   summaries: DataSourceSummary[];
   injectionPreview: string;
   chartConfigs: ChartConfig[];
+  projectCharts?: ProjectChartAsset[];
   projectId: string;
   isSaving: boolean;
   onUpdateClaim: (id: string, patch: Partial<EvidenceClaim>) => Promise<void>;
   onRemoveClaim: (id: string) => Promise<void>;
   onInsertClaim?: (claimText: string, claimId: string) => void;
+  onChartInserted?: (payload: { projectId: string; sectionKey: string }) => void;
 }
 
 export function EvidenceHubSections({
@@ -47,11 +51,13 @@ export function EvidenceHubSections({
   summaries,
   injectionPreview,
   chartConfigs,
+  projectCharts = [],
   projectId,
   isSaving,
   onUpdateClaim,
   onRemoveClaim,
   onInsertClaim,
+  onChartInserted,
 }: EvidenceHubSectionsProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftText, setDraftText] = useState("");
@@ -242,7 +248,7 @@ export function EvidenceHubSections({
           <CardContent className="space-y-2">
             {chartConfigs.map((cfg, i) => {
               const figureId = chartTypeToFigureId(cfg.type);
-  const plotHref = buildPlotPageHref({
+              const plotHref = buildPlotPageHref({
                 projectId,
                 figureId,
                 chartIdx: i,
@@ -258,6 +264,12 @@ export function EvidenceHubSections({
           </CardContent>
         </Card>
       )}
+
+      <RegisteredChartsCard
+        projectId={projectId}
+        charts={projectCharts}
+        onInserted={onChartInserted}
+      />
 
       <Card>
         <CardHeader className="pb-2">

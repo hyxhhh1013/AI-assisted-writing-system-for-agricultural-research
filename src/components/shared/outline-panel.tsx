@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Send, FileText, ChevronRight, PenTool, CheckCircle2, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
-import type { ProjectData } from "@/contracts/project";
+import { resolveProjectLanguage, type ProjectData } from "@/contracts/project";
 import {
   parseWritingBlueprint,
   serializeWritingBlueprint,
@@ -18,9 +18,9 @@ import { listKnowledgeFiles } from "@/services/knowledge";
 import { resolveOutlineResearchDirection, streamOutline } from "@/services/outline";
 import { generateWritingBlueprint } from "@/services/blueprint";
 import { parseOutline, OutlineSection } from "@/lib/utils";
-import { countFiguresForSection, isBlueprintStale } from "@/lib/blueprint-utils";
+import { countFiguresForSection, isBlueprintStale, buildBlueprintChartCatalog } from "@/lib/blueprint-utils";
+import { parseDataSources } from "@/contracts/project";
 import { OutlineBlueprintSummary } from "@/components/shared/outline-blueprint-summary";
-import { OutlineBlueprintDialog } from "@/components/shared/outline-blueprint-dialog";
 
 interface OutlinePanelProps {
   projectId: string;
@@ -29,18 +29,26 @@ interface OutlinePanelProps {
   onTabChange?: (tab: "structure" | "data" | "outline" | "writing" | "reader" | "plagiarism" | "xrd") => void;
   expandedSections?: string[];
   onExpandTask?: (taskId: string) => void;
+  onOpenBlueprint?: () => void;
 }
 
-export function OutlinePanel({ projectId, project, onSave, onTabChange, expandedSections, onExpandTask }: OutlinePanelProps) {
+export function OutlinePanel({
+  projectId,
+  project,
+  onSave,
+  onTabChange,
+  expandedSections,
+  onExpandTask,
+  onOpenBlueprint,
+}: OutlinePanelProps) {
   const isReview = (project.mode ?? "review") === "review";
+  const language = resolveProjectLanguage(project);
   const [title, setTitle] = useState(project.title || "");
   const [researchDirection, setResearchDirection] = useState(project.researchDirection || "");
-  const [language, setLanguage] = useState("zh");
   const [category, setCategory] = useState("全部");
   const [categories, setCategories] = useState<string[]>(["全部"]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isBlueprintGenerating, setIsBlueprintGenerating] = useState(false);
-  const [blueprintDialogOpen, setBlueprintDialogOpen] = useState(false);
   const [result, setResult] = useState(project.outline || "");
 
   const blueprint = useMemo(
@@ -90,9 +98,9 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
       outline: customOutline ?? result,
     };
     if (customBlueprint !== undefined) {
-      updates.writingBlueprint = customBlueprint
-        ? serializeWritingBlueprint(customBlueprint)
-        : undefined;
+      updates.writingBlueprint = customBlueprint === null
+        ? null
+        : serializeWritingBlueprint(customBlueprint);
     }
     onSave?.(updates);
   }, [projectId, title, researchDirection, result, onSave]);
@@ -117,8 +125,9 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
         title: effectiveTitle,
         outline: outlineText,
         researchDirection: effectiveDirection,
-        language: language as "zh" | "en",
+        language,
         projectMode: project.mode ?? "review",
+        chartCatalog: buildBlueprintChartCatalog(parseDataSources(project)),
       });
       handleSave(undefined, next);
       toast.success(`写作蓝图已生成：预计 ${next.figurePlan.totalMin}–${next.figurePlan.totalMax} 张图`);
@@ -127,7 +136,7 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
     } finally {
       setIsBlueprintGenerating(false);
     }
-  }, [title, researchDirection, result, language, project.mode, handleSave]);
+  }, [title, researchDirection, result, language, project.mode, project, handleSave]);
 
   const handleGenerate = async () => {
     const effectiveTitle = title.trim();
@@ -148,7 +157,7 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
         {
           title: effectiveTitle,
           researchDirection: effectiveDirection,
-          language: language as "zh" | "en",
+          language,
           category,
           projectMode: project.mode ?? "review",
         },
@@ -206,13 +215,6 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
             </SelectContent>
           </Select>
           <div className="flex gap-1">
-            <Select value={language} onValueChange={v => v && setLanguage(v)}>
-              <SelectTrigger className="text-xs h-7 w-16"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="zh">中文</SelectItem>
-                <SelectItem value="en">EN</SelectItem>
-              </SelectContent>
-            </Select>
             <Button size="sm" className="h-7 text-xs" disabled={isGenerating} onClick={handleGenerate}>
               {isGenerating ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Send className="h-3 w-3 mr-1" />}
               生成
@@ -227,15 +229,13 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
         isStale={blueprintStale}
         hasOutline={Boolean(result.trim())}
         onGenerate={handleGenerateBlueprint}
-        onOpenDetail={() => setBlueprintDialogOpen(true)}
-      />
-
-      <OutlineBlueprintDialog
-        open={blueprintDialogOpen}
-        onOpenChange={setBlueprintDialogOpen}
-        blueprint={blueprint}
-        projectId={projectId}
-        isStale={blueprintStale}
+        onOpenDetail={() => {
+          if (!blueprint) {
+            toast.error("请先生成写作蓝图");
+            return;
+          }
+          onOpenBlueprint?.();
+        }}
       />
 
       <div className="flex-1 min-h-0 overflow-y-auto">

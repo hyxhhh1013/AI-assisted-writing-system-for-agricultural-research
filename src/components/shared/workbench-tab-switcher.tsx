@@ -4,11 +4,7 @@ import { useRouter } from "next/navigation";
 import { useGoBack } from "@/contexts/navigation-history";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import {
-  getModeAccent,
-  getStructureTabTooltip,
-  getOutlineTabTooltip,
-} from "@/lib/mode-theme";
+import { getModeAccent, getDataPanelTitle, getDataTabTooltip, getOutlineTabTooltip, getStructureTabTooltip } from "@/lib/mode-theme";
 import { siteTheme } from "@/lib/site-theme";
 import {
   ArrowLeft, Layout, Database, Radar, BookOpen,
@@ -28,9 +24,9 @@ interface WorkbenchTabSwitcherProps {
   setIsPreviewOpen: (open: boolean) => void;
 }
 
-const TAB_DEFS: { id: WorkbenchTab; icon: typeof Layout; researchOnly?: boolean }[] = [
+const TAB_DEFS: { id: WorkbenchTab; icon: typeof Layout }[] = [
   { id: "structure", icon: Layout },
-  { id: "data", icon: Database, researchOnly: true },
+  { id: "data", icon: Database },
   { id: "xrd", icon: Radar },
   { id: "outline", icon: BookOpen },
   { id: "writing", icon: FileText },
@@ -43,7 +39,7 @@ function getTabTitle(tab: WorkbenchTab, mode: "review" | "research"): string {
     case "structure":
       return getStructureTabTooltip(mode);
     case "data":
-      return "实验数据：上传 CSV/Excel、证据提取、AI 趋势描述（仅研究论文模式）";
+      return getDataTabTooltip(mode);
     case "xrd":
       return "XRD 分析：峰分解 / 背景扣除 / 晶胞可视化";
     case "outline":
@@ -67,7 +63,7 @@ export function WorkbenchTabSwitcher({
   const goBack = useGoBack();
   const router = useRouter();
   const sidebarModules = listModules({ placement: "workbench-sidebar" });
-  const visibleTabs = TAB_DEFS.filter((tab) => !tab.researchOnly || projectMode === "research");
+  const visibleTabs = TAB_DEFS;
   const accent = getModeAccent(projectMode);
 
   return (

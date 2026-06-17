@@ -1,6 +1,6 @@
 # UI-PR-073 — 作图板块数据闭环与增量插入
 
-> 状态：P0～P2 + 写作编辑入口 done（待手动验收）  
+> 状态：P0～P3 done（待手动验收）  
 > 分支：`ui/pr-073-plot-data-loop`  
 > 依赖：UI-PR-072（Project.charts 契约，此前标记 done 但未落地）
 
@@ -15,8 +15,9 @@
 | `ProjectChartAsset` 契约 + PATCH `/api/projects/:id/charts` | 工作台内嵌 ChartPanel |
 | `patchProjectSection` / `appendChartAsset` service | Python 子进程跨请求缓存 |
 | 分析结果持久化 `chartConfigs`（写入 `dataSources` JSON） | flow/XRD 面板从 URL JSON 预填（后续） |
-| URL 深链 `/plot?id=&figure=&chartIdx=&figureSpec=` | Python 子进程跨请求缓存 |
+| URL 深链 `/plot?id=&figure=&chartIdx=&figureSpec=&chartAssetId=` | Python 子进程跨请求缓存 |
 | 写作 FIGURE → 绘图页编辑入口 | XRD 从 URL 预填表单 |
+| 综述模式「图表资产」侧栏（已登记图表 + 绘图入口） | flow/XRD 从 URL 预填表单 |
 | `PlotInsertDialog` 增量插入 + 自动图号 | — |
 | P1：示例、解析提示、预览、样式预设 | — |
 | P2：registry panel 映射、FIGURE 深链、生成进度 | — |
@@ -53,6 +54,11 @@ FIGURE 标记 → `figureBlockJsonToPlotHref` → `/plot?figureSpec=…` → 同
 - [x] 配图生成失败时 Markdown 追加 `[在绘图页编辑](...)`
 - [x] `figureSpecToFlowPrefill` + FlowCard 预填节点/连线
 - [x] `detectedFigureToPlotHref` / `collectWritingFigureEditItems`
+
+### P3 — 已登记 charts 资产
+
+- [x] Evidence「已登记图表」列表（缩略图 + 题注 + 绘图页深链）
+- [x] `chartAssetToPlotHref` / `parseProjectCharts(project.charts)` 接入 DataPanel
 
 ### 验证
 

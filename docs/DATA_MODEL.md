@@ -20,6 +20,7 @@ KnowledgeFile 1──* KnowledgeChunk
 |------|------|
 | `template` | `sci` \| `ieee` \| `gbt7713` \| `nature` |
 | `mode` | `review` \| `research`（证据包口径） |
+| `language` | `zh` \| `en`（写作/大纲/扩写输出语言，创建时选定） |
 | `citationStyle` | `gbt7714` \| `vancouver` \| `apa7` \| `ieee` |
 | `charts` | JSON 字符串，图表元数据 |
 | `dataClaims` | JSON `EvidenceClaim[]` |

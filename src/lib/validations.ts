@@ -178,6 +178,14 @@ export const outlineSchema = z.object({
 });
 export type OutlineInput = z.infer<typeof outlineSchema>;
 
+const figureDataBindingSchema = z.object({
+  kind: z.literal("chartConfig"),
+  chartConfigIndex: z.number().int().nonnegative(),
+  sourceFileName: z.string().optional(),
+  variable: z.string().optional(),
+  chartTitle: z.string().optional(),
+});
+
 const figurePlanItemSchema = z.object({
   id: z.string(),
   sectionPath: z.string().min(1),
@@ -186,6 +194,7 @@ const figurePlanItemSchema = z.object({
   suggestedCaption: z.string().min(1),
   priority: z.enum(["required", "optional"]),
   dataSource: z.enum(["experiment", "literature", "synthesis"]).optional(),
+  dataBinding: figureDataBindingSchema.optional(),
 });
 
 const sectionGuideSchema = z.object({
@@ -215,12 +224,21 @@ export const writingBlueprintPayloadSchema = z.object({
   generatedAt: z.number().optional(),
 });
 
+const blueprintChartCatalogEntrySchema = z.object({
+  index: z.number().int().nonnegative(),
+  title: z.string(),
+  sourceFileName: z.string(),
+  variable: z.string().optional(),
+});
+
 export const blueprintSchema = z.object({
   title: z.string().min(1, "标题不能为空"),
   outline: z.string().min(20, "大纲内容过短"),
   researchDirection: z.string().optional(),
   language: z.enum(["zh", "en"]).optional().default("zh"),
   projectMode: z.enum(["review", "research"]).optional(),
+  /** 项目已分析图表目录，供 AI 绑定 dataBinding.chartConfigIndex */
+  chartCatalog: z.array(blueprintChartCatalogEntrySchema).optional(),
 });
 export type BlueprintInput = z.infer<typeof blueprintSchema>;
 
@@ -427,6 +445,7 @@ const chartPatchOpSchema = z.discriminatedUnion("op", [
       svgUrl: z.string().optional(),
       pdfUrl: z.string().optional(),
       sectionKey: z.string().optional(),
+      figureSpecEnc: z.string().optional(),
     }),
   }),
   z.object({
@@ -452,7 +471,8 @@ export const projectMetaPatchSchema = z
     outline: z.string().optional(),
     template: z.string().optional(),
     mode: z.string().optional(),
-    writingBlueprint: z.string().optional(),
+    language: z.enum(["zh", "en"]).optional(),
+    writingBlueprint: z.string().nullable().optional(),
   })
   .refine(
     (data) => Object.values(data).some((v) => v !== undefined),

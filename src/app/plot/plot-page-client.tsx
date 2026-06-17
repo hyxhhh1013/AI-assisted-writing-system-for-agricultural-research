@@ -13,8 +13,10 @@ import {
   figureSpecToFlowPrefill,
   figureSpecToPrefill,
   figureToolToRegistryId,
+  parseProjectCharts,
   type ChartPanelPrefill,
   type FlowPanelPrefill,
+  type PlotInsertReplay,
 } from "@/contracts/figure";
 import { parseDataSources } from "@/contracts/project";
 import { Button } from "@/components/ui/button";
@@ -77,6 +79,7 @@ function PlotContent() {
   const figureParam = searchParams.get("figure");
   const chartIdxParam = searchParams.get("chartIdx");
   const figureSpecParam = searchParams.get("figureSpec");
+  const chartAssetIdParam = searchParams.get("chartAssetId");
   const chartIdx =
     chartIdxParam !== null && chartIdxParam !== "" ? Number.parseInt(chartIdxParam, 10) : null;
   const projectId = routeProjectId || "default";
@@ -95,6 +98,7 @@ function PlotContent() {
     caption: string;
     svgUrl?: string;
     pdfUrl?: string;
+    figureSpecEnc?: string;
   }>({ open: false, imageUrl: "", caption: "" });
 
   useEffect(() => {
@@ -147,6 +151,27 @@ function PlotContent() {
       }
     }
 
+    if (chartAssetIdParam && routeProjectId) {
+      void getProject(routeProjectId).then((project) => {
+        if (!project) return;
+        const assets = parseProjectCharts(project.charts);
+        const asset = assets.find((a) => a.id === chartAssetIdParam);
+        if (!asset) return;
+        applyFigureSelection(asset.figureId);
+        if (asset.figureSpecEnc) {
+          const spec = decodeFigureSpecParam(asset.figureSpecEnc);
+          if (spec) {
+            const prefill = figureSpecToPrefill(spec);
+            if (prefill) setChartPrefill(prefill);
+            const flow = figureSpecToFlowPrefill(spec);
+            if (flow) setFlowPrefill(flow);
+          }
+        }
+        setPrefillApplied(true);
+      });
+      return;
+    }
+
     if (!routeProjectId) return;
     if (figureParam === null && chartIdxParam === null) return;
 
@@ -173,6 +198,7 @@ function PlotContent() {
     chartIdxParam,
     chartIdx,
     figureSpecParam,
+    chartAssetIdParam,
     prefillApplied,
   ]);
 
@@ -183,9 +209,17 @@ function PlotContent() {
     }
   }, [activeCategory, categoryFigures, prefillApplied]);
 
-  const handleInsertToPaper = useCallback((imageUrl: string, caption: string) => {
-    setInsertDialog({ open: true, imageUrl, caption });
-  }, []);
+  const handleInsertToPaper = useCallback(
+    (imageUrl: string, caption: string, replay?: PlotInsertReplay) => {
+      setInsertDialog({
+        open: true,
+        imageUrl,
+        caption,
+        figureSpecEnc: replay?.figureSpecEnc,
+      });
+    },
+    [],
+  );
 
   const toolProps = useMemo(() => {
     if (!selectedFigure) return null;
@@ -310,6 +344,7 @@ function PlotContent() {
         caption={insertDialog.caption}
         svgUrl={insertDialog.svgUrl}
         pdfUrl={insertDialog.pdfUrl}
+        figureSpecEnc={insertDialog.figureSpecEnc}
         defaultProjectId={routeProjectId ?? undefined}
         figureId={selectedFigure.id}
       />

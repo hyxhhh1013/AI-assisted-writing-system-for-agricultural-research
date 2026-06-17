@@ -1,5 +1,10 @@
 import type { ChartConfig, ChartType, DataSourceAnalysis } from "@/contracts/data-source";
 
+/** 插入论文时可选携带，用于 plot 页回放编辑 */
+export interface PlotInsertReplay {
+  figureSpecEnc?: string;
+}
+
 export type FigureTool = "chart" | "flow" | "mechanism";
 
 export interface FigureSpec {
@@ -26,6 +31,8 @@ export interface ProjectChartAsset {
   svgUrl?: string;
   pdfUrl?: string;
   sectionKey?: string;
+  /** base64url 编码的 FigureSpec，插入时快照；用于从资产列表回放 plot 预填 */
+  figureSpecEnc?: string;
   createdAt: number;
 }
 
@@ -52,6 +59,7 @@ function isProjectChartAsset(value: unknown): value is ProjectChartAsset {
     && typeof value.caption === "string"
     && typeof value.imageUrl === "string"
     && typeof value.createdAt === "number"
+    && (value.figureSpecEnc === undefined || typeof value.figureSpecEnc === "string")
   );
 }
 
@@ -266,7 +274,12 @@ export function detectedFigureToPlotHref(
 
 function utf8ToBase64Url(text: string): string {
   if (typeof Buffer !== "undefined") {
-    return Buffer.from(text, "utf8").toString("base64url");
+    // 避免 Buffer.toString("base64url") 在旧 Node / 部分 polyfill 上报 Unknown encoding
+    return Buffer.from(text, "utf8")
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
   }
   const bytes = new TextEncoder().encode(text);
   let binary = "";
@@ -313,7 +326,68 @@ export interface PlotPageHrefParams {
   projectId?: string;
   figureId?: string;
   chartIdx?: number;
+  chartAssetId?: string;
   figureSpec?: FigureSpec;
+}
+
+/** 已登记 ProjectChartAsset → plot 深链（有快照则带 chartAssetId 回放） */
+export function chartAssetToPlotHref(
+  projectId: string,
+  asset: Pick<ProjectChartAsset, "id" | "figureId" | "caption" | "figureSpecEnc">,
+): string {
+  return buildPlotPageHref({
+    projectId,
+    figureId: asset.figureId,
+    chartAssetId: asset.figureSpecEnc ? asset.id : undefined,
+  });
+}
+
+/** 从 chart 面板当前状态构建可回放的 FigureSpec */
+export function buildChartReplayFigureSpec(params: {
+  caption: string;
+  chartType: string;
+  title: string;
+  xLabel: string;
+  yLabel: string;
+  parsedData: {
+    labels: string[];
+    datasets: { label: string; data: number[] }[];
+  } | null;
+}): FigureSpec | null {
+  if (!params.parsedData || params.parsedData.labels.length === 0) return null;
+  return {
+    tool: "chart",
+    caption: params.caption,
+    config: {
+      type: params.chartType,
+      title: params.title || params.caption,
+      x_label: params.xLabel,
+      y_label: params.yLabel,
+      data: {
+        labels: params.parsedData.labels,
+        datasets: params.parsedData.datasets.map((d) => ({
+          label: d.label,
+          data: d.data,
+        })),
+      },
+    },
+  };
+}
+
+/** 将 FigureSpec 编码为可存入 ProjectChartAsset 的字符串 */
+export function encodeChartAssetReplay(spec: FigureSpec): string {
+  return encodeFigureSpecParam(spec);
+}
+
+/** 从资产快照解码并应用 plot 预填 */
+export function applyFigureSpecToPlotPrefill(spec: FigureSpec): {
+  chartPrefill: ChartPanelPrefill | null;
+  flowPrefill: FlowPanelPrefill | null;
+} {
+  return {
+    chartPrefill: figureSpecToPrefill(spec),
+    flowPrefill: figureSpecToFlowPrefill(spec),
+  };
 }
 
 /** 构建 /plot 深链（Evidence、FIGURE 标记、charts 资产复用） */
@@ -324,6 +398,7 @@ export function buildPlotPageHref(params: PlotPageHrefParams): string {
   if (params.chartIdx !== undefined && !Number.isNaN(params.chartIdx)) {
     q.set("chartIdx", String(params.chartIdx));
   }
+  if (params.chartAssetId) q.set("chartAssetId", params.chartAssetId);
   if (params.figureSpec) {
     q.set("figureSpec", encodeFigureSpecParam(params.figureSpec));
   }
