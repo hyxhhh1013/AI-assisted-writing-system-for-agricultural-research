@@ -3,11 +3,15 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Check, CheckCircle2, Loader2, Search, Sparkles, X } from "lucide-react";
+import { Check, CheckCircle2, Loader2, Save, Search, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getErrorMessage } from "@/lib/error-utils";
-import { applyAcceptedRewritesToContent } from "@/lib/plagiarism-utils";
+import {
+  applyAcceptedRewritesToContent,
+  applyAcceptedRewritesToSections,
+} from "@/lib/plagiarism-utils";
+import { buildCheckContentFromSections, type QualitySection } from "@/lib/quality-sections";
 import { rewriteMatch, updateRewriteSuggestion } from "@/services/plagiarism";
 import type { PlagiarismMatchResult, RewriteSuggestion } from "@/contracts/plagiarism";
 import { STRATEGY_LABELS } from "./constants";
@@ -17,6 +21,9 @@ interface PlagiarismRewriteViewProps {
   matches: PlagiarismMatchResult[];
   fullContent: string;
   compact?: boolean;
+  scope?: "full" | string;
+  qualitySections?: QualitySection[];
+  onSaveToProject?: (updated: QualitySection[], changedKeys: string[]) => Promise<void>;
   onBack?: () => void;
   onApplied: (newContent: string) => void;
 }
@@ -26,10 +33,14 @@ export function PlagiarismRewriteView({
   matches,
   fullContent,
   compact = false,
+  scope = "full",
+  qualitySections,
+  onSaveToProject,
   onBack,
   onApplied,
 }: PlagiarismRewriteViewProps) {
   const [rewriting, setRewriting] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [suggestions, setSuggestions] = useState<Record<string, RewriteSuggestion[]>>({});
   const [accepted, setAccepted] = useState<Record<string, boolean | undefined>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -57,7 +68,7 @@ export function PlagiarismRewriteView({
       setTimeout(() => setCopiedId(null), 1500);
     }).catch(() => {});
     setAccepted((p) => ({ ...p, [`${mid}-${s.strategy}`]: true }));
-    toast.success("已采纳并复制");
+    toast.success("已采纳");
   };
 
   const reject = (mid: string, s: RewriteSuggestion) => {
@@ -69,6 +80,34 @@ export function PlagiarismRewriteView({
     const next = applyAcceptedRewritesToContent(fullContent, matches, suggestions, accepted);
     onApplied(next);
   };
+
+  const saveToProjectAndRecheck = async () => {
+    if (!qualitySections?.length || !onSaveToProject) {
+      applyAndRecheck();
+      return;
+    }
+    const { sections: updated, changedKeys } = applyAcceptedRewritesToSections(
+      qualitySections,
+      matches,
+      suggestions,
+      accepted,
+    );
+    if (changedKeys.length === 0) {
+      toast.error("没有可写回的章节变更");
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSaveToProject(updated, changedKeys);
+      onApplied(buildCheckContentFromSections(updated, scope));
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? getErrorMessage(err) : "写回项目失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const canSaveToProject = Boolean(qualitySections?.length && onSaveToProject);
 
   if (highRisk.length === 0) {
     return (
@@ -93,10 +132,18 @@ export function PlagiarismRewriteView({
         </span>
         <div className="flex items-center gap-2">
           {hasAccepted && !compact && (
-            <Button size="sm" onClick={applyAndRecheck}>
-              <Search className="mr-1 h-3.5 w-3.5" />
-              应用改写并重新查重
-            </Button>
+            <div className="flex gap-2">
+              {canSaveToProject && (
+                <Button size="sm" variant="default" className="bg-[#1a5632] hover:bg-[#144a2a]" disabled={saving} onClick={saveToProjectAndRecheck}>
+                  {saving ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1 h-3.5 w-3.5" />}
+                  写回项目
+                </Button>
+              )}
+              <Button size="sm" variant="outline" onClick={applyAndRecheck}>
+                <Search className="mr-1 h-3.5 w-3.5" />
+                仅应用并重新查重
+              </Button>
+            </div>
           )}
           {onBack && (
             <Button variant="ghost" size="sm" className={compact ? "h-6 text-[10px]" : ""} onClick={onBack}>
@@ -197,10 +244,18 @@ export function PlagiarismRewriteView({
 
       {hasAccepted && (
         <div className={cn("shrink-0 border-t", compact ? "pt-1.5" : "pt-2")}>
-          <Button size="sm" className={cn(compact ? "h-7 w-full text-xs" : "")} onClick={applyAndRecheck}>
-            <Search className={compact ? "mr-1 h-3 w-3" : "mr-1.5 h-3.5 w-3.5"} />
-            应用改写并重新查重
-          </Button>
+          <div className={cn("flex gap-2", compact ? "flex-col" : "flex-row")}>
+            {canSaveToProject && (
+              <Button size="sm" className={cn("bg-[#1a5632] hover:bg-[#144a2a]", compact ? "h-7 w-full text-xs" : "flex-1")} disabled={saving} onClick={saveToProjectAndRecheck}>
+                {saving ? <Loader2 className={cn("animate-spin", compact ? "mr-1 h-3 w-3" : "mr-1.5 h-3.5 w-3.5")} /> : <Save className={compact ? "mr-1 h-3 w-3" : "mr-1.5 h-3.5 w-3.5"} />}
+                写回项目并重新查重
+              </Button>
+            )}
+            <Button size="sm" variant={canSaveToProject ? "outline" : "default"} className={compact ? "h-7 w-full text-xs" : canSaveToProject ? "flex-1" : ""} onClick={applyAndRecheck}>
+              <Search className={compact ? "mr-1 h-3 w-3" : "mr-1.5 h-3.5 w-3.5"} />
+              {canSaveToProject ? "仅应用并重新查重" : "应用改写并重新查重"}
+            </Button>
+          </div>
         </div>
       )}
     </div>

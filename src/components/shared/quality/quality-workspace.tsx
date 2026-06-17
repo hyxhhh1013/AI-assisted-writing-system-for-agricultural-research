@@ -31,6 +31,7 @@ import { OverviewPanel, type QualityTab } from "@/components/shared/quality/over
 import { SectionSidebar } from "@/components/shared/quality/section-sidebar";
 import { DetectionScopePanel } from "@/components/shared/quality/detection-scope";
 import { UnifiedHistoryPanel } from "@/components/shared/quality/unified-history-panel";
+import { persistQualitySections } from "@/lib/quality-persist";
 
 const TAB_DEFS: { id: QualityTab; label: string; icon: typeof Search; requiresResult?: boolean }[] = [
   { id: "overview", label: "概览", icon: LayoutDashboard },
@@ -91,6 +92,10 @@ export function QualityWorkspace() {
     params.set("tab", next);
     router.replace(`/plagiarism?${params.toString()}`, { scroll: false });
   }, [activeProjectId, router, searchParams]);
+
+  useEffect(() => {
+    setTabState(parseTab(searchParams.get("tab")));
+  }, [searchParams]);
 
   useEffect(() => {
     listProjects().then((d) => { if (Array.isArray(d)) setPlist(d); }).catch(() => {});
@@ -180,6 +185,14 @@ export function QualityWorkspace() {
       webSearch: web,
     });
   };
+
+  const handleSaveToProject = useCallback(async (updated: QualitySection[], changedKeys: string[]) => {
+    if (!activeProjectId) return;
+    await persistQualitySections(activeProjectId, sections, updated, changedKeys);
+    const d = await getProject(activeProjectId);
+    if (d) applyProject(d, activeProjectId);
+    toast.success(`已写回 ${changedKeys.length} 个章节到项目`);
+  }, [activeProjectId, sections, applyProject]);
 
   const handleAppliedRewrite = (newContent: string) => {
     setContent(newContent);
@@ -291,6 +304,7 @@ export function QualityWorkspace() {
               <div className="mx-auto max-w-4xl">
                 <PlagiarismResultView
                   result={result}
+                  sourceContent={content}
                   onRewrite={() => setTab("rewrite")}
                   onReCheck={() => setTab("check")}
                 />
@@ -303,6 +317,9 @@ export function QualityWorkspace() {
                   checkId={result.checkId}
                   matches={result.matches}
                   fullContent={content}
+                  scope={scope}
+                  qualitySections={sections.length > 0 ? sections : undefined}
+                  onSaveToProject={activeProjectId ? handleSaveToProject : undefined}
                   onApplied={handleAppliedRewrite}
                 />
               </div>

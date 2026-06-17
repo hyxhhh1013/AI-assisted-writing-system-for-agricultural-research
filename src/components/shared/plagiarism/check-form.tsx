@@ -148,6 +148,18 @@ export function PlagiarismCheckForm({
           </Button>
         </div>
       </div>
+
+      {checking && stage && (
+        <div className={cn("rounded-lg border border-[#1a5632]/15 bg-[#1a5632]/5", compact ? "px-2 py-2" : "px-3 py-2.5")}>
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <span className={cn("text-[#1a5632]", compact ? "text-[10px]" : "text-xs")}>{stage.label}</span>
+            <Loader2 className={cn("animate-spin text-[#1a5632]", compact ? "h-3 w-3" : "h-3.5 w-3.5")} />
+          </div>
+          <div className="h-1 overflow-hidden rounded-full bg-[#1a5632]/10">
+            <div className="h-full w-2/3 animate-pulse rounded-full bg-[#1a5632]/50" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

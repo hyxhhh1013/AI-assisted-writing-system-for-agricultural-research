@@ -8,15 +8,17 @@ import type { PlagiarismCheckResult } from "@/contracts/plagiarism";
 import { MATCH_ICONS, riskBadgeClass, riskLabel } from "./constants";
 import { PlagiarismMatchRow } from "./match-row";
 import { PlagiarismStatsReport } from "@/components/shared/quality/stats-report";
+import { MatchContentPreview } from "@/components/shared/quality/match-content-preview";
 
 interface PlagiarismResultViewProps {
   result: PlagiarismCheckResult;
   compact?: boolean;
+  sourceContent?: string;
   onRewrite: () => void;
   onReCheck: () => void;
 }
 
-export function PlagiarismResultView({ result, compact = false, onRewrite, onReCheck }: PlagiarismResultViewProps) {
+export function PlagiarismResultView({ result, compact = false, sourceContent, onRewrite, onReCheck }: PlagiarismResultViewProps) {
   const typeStats = result.matches.reduce<Record<string, number>>((acc, m) => {
     acc[m.matchType] = (acc[m.matchType] || 0) + 1;
     return acc;
@@ -93,6 +95,10 @@ export function PlagiarismResultView({ result, compact = false, onRewrite, onReC
             style={{ width: `${result.maxSimilarity * 100}%` }}
           />
         </div>
+      )}
+
+      {!compact && sourceContent && result.matches.length > 0 && (
+        <MatchContentPreview content={sourceContent} matches={result.matches} />
       )}
 
       <div className={cn(compact ? "min-h-0 flex-1 overflow-y-auto -mx-1 px-1" : "")}>
