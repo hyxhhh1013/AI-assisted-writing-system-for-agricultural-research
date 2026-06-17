@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -82,6 +82,8 @@ export function QualityWorkspace() {
     [project],
   );
 
+  const lastToastCheckIdRef = useRef<string | null>(null);
+
   const setTab = useCallback((next: QualityTab) => {
     setTabState(next);
     const params = new URLSearchParams(searchParams.toString());
@@ -126,12 +128,23 @@ export function QualityWorkspace() {
   }, [scope, sections]);
 
   useEffect(() => {
-    if (checkResult && !checking) {
-      setHistoryResult(null);
-      setTab("result");
-      toast.success(`检测完成，${checkResult.totalMatches} 处匹配`);
-    }
-  }, [checkResult, checking, setTab]);
+    if (checking || !checkResult?.checkId) return;
+    if (lastToastCheckIdRef.current === checkResult.checkId) return;
+
+    lastToastCheckIdRef.current = checkResult.checkId;
+    setHistoryResult(null);
+    setTabState("result");
+    const params = new URLSearchParams(searchParams.toString());
+    if (activeProjectId) params.set("id", activeProjectId);
+    params.set("tab", "result");
+    router.replace(`/plagiarism?${params.toString()}`, { scroll: false });
+    toast.success(`检测完成，${checkResult.totalMatches} 处匹配`);
+  }, [checkResult, checking, activeProjectId, router, searchParams]);
+
+  const resetCheckSession = useCallback(() => {
+    lastToastCheckIdRef.current = null;
+    resetPlagiarism();
+  }, [resetPlagiarism]);
 
   const loadP = async (id: string) => {
     if (!id) return;
@@ -140,7 +153,7 @@ export function QualityWorkspace() {
       const d = await getProject(id);
       if (!d) throw new Error("加载失败");
       applyProject(d, id);
-      resetPlagiarism();
+      resetCheckSession();
       setHistoryResult(null);
       setTab("overview");
       const params = new URLSearchParams(searchParams.toString());
@@ -170,7 +183,7 @@ export function QualityWorkspace() {
 
   const handleAppliedRewrite = (newContent: string) => {
     setContent(newContent);
-    resetPlagiarism();
+    resetCheckSession();
     setHistoryResult(null);
     setTab("check");
     toast.success("已应用改写，请重新查重验证");
@@ -262,7 +275,7 @@ export function QualityWorkspace() {
                   onCancel={cancel}
                   onClear={() => {
                     setContent(sections.length ? buildCheckContentFromSections(sections, scope) : "");
-                    resetPlagiarism();
+                    resetCheckSession();
                     setHistoryResult(null);
                   }}
                   plist={plist}
