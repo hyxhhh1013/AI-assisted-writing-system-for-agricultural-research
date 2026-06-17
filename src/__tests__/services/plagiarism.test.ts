@@ -16,7 +16,7 @@ describe("plagiarism service", () => {
     vi.unstubAllGlobals();
   });
 
-  it("checkPlagiarism posts to /api/plagiarism/check", async () => {
+  it("checkPlagiarism posts to /api/plagiarism/v2", async () => {
     vi.mocked(fetch).mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -34,7 +34,7 @@ describe("plagiarism service", () => {
     });
 
     expect(result.checkId).toBe("chk-1");
-    expect(fetch).toHaveBeenCalledWith("/api/plagiarism/check", {
+    expect(fetch).toHaveBeenCalledWith("/api/plagiarism/v2", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

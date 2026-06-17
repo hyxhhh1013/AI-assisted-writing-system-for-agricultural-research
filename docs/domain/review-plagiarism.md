@@ -40,7 +40,7 @@
 | 改写 | `POST /api/plagiarism/rewrite`、`PATCH` 接受/拒绝建议 |
 | 历史 | `GET /api/plagiarism/history` |
 | Service | `plagiarism-service.ts`（**唯一业务实现**） |
-| 前端 hook | `use-plagiarism-check` → `services/plagiarism.ts` |
+| 前端 hook | `use-plagiarism-check` → `services/plagiarism.ts`（SSE 调 **v2**） |
 | Admin | `GET /api/admin/plagiarism`、`GET /api/admin/plagiarism/[id]` |
 
 ### 检测层（`PlagiarismConfig`）

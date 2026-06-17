@@ -9,6 +9,9 @@ vi.mock("@/services/plagiarism-service", () => ({
 }));
 
 import { POST } from "@/app/api/plagiarism/v2/route";
+import { USER_ID_HEADER } from "@/lib/auth";
+
+const AUTH_HEADERS = { [USER_ID_HEADER]: "user-test-1" };
 
 const LONG_CONTENT =
   "本研究采用热重分析法对生物质样品进行了系统分析，考察了不同热解温度对生物炭产率与表面性质的影响，实验在惰性气氛下完成。";
@@ -55,6 +58,7 @@ describe("POST /api/plagiarism/v2 — SSE integration", () => {
       headers: {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
+        ...AUTH_HEADERS,
       },
       body: JSON.stringify({
         title: "测试论文",
@@ -84,7 +88,7 @@ describe("POST /api/plagiarism/v2 — SSE integration", () => {
   it("returns JSON body in non-SSE mode", async () => {
     const req = new NextRequest("http://localhost/api/plagiarism/v2", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
       body: JSON.stringify({
         title: "测试论文",
         content: LONG_CONTENT,

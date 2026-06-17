@@ -4,6 +4,8 @@ import { validateBody } from "@/lib/api-validate";
 import { plagiarismCheckSchema } from "@/lib/validations";
 import { runPlagiarismCheck } from "@/services/plagiarism-service";
 import { getErrorMessage } from "@/lib/error-utils";
+import { getUserIdFromRequest } from "@/lib/auth";
+import { assertProjectOwnedByUser } from "@/lib/plagiarism-access";
 
 export const maxDuration = 180;
 
@@ -11,10 +13,24 @@ const log = createLogger("api/plagiarism/check");
 
 export async function POST(req: NextRequest) {
   try {
+    const userId = getUserIdFromRequest(req);
+    if (!userId) {
+      return Response.json({ error: "未登录，请先登录" }, { status: 401 });
+    }
+
     const { data, errorResponse: ve } = await validateBody(plagiarismCheckSchema, await req.json());
     if (ve) return ve;
 
-    const { projectId, title, content } = data;
+    const { projectId, title, content, webSearch } = data;
+
+    if (projectId) {
+      const owned = await assertProjectOwnedByUser(projectId, userId);
+      if (!owned) {
+        return Response.json({ error: "项目不存在或无权访问" }, { status: 403 });
+      }
+    }
+
+    const checkInput = { projectId, userId, title, content, webSearch };
 
     // 检查是否需要 SSE 进度推送
     const accept = req.headers.get("accept") || "";
@@ -31,7 +47,7 @@ export async function POST(req: NextRequest) {
 
           try {
             const result = await runPlagiarismCheck(
-              { projectId, title, content, webSearch: false },
+              checkInput,
               (event) => {
                 send({ type: "progress", stage: event.stage, message: event.message });
               }
@@ -56,7 +72,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 普通模式：直接返回结果
-    const result = await runPlagiarismCheck({ projectId, title, content, webSearch: false });
+    const result = await runPlagiarismCheck(checkInput);
     return Response.json(result);
   } catch (error: unknown) {
     log.fail("plagiarism check failed", error);
