@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { getProject, listProjects } from "@/services/project";
 import { buildPlagiarismContentFromProject } from "@/lib/export-content";
@@ -32,6 +32,7 @@ export function PlagiarismPanel({
   const [loadingProject, setLoadingProject] = useState(false);
 
   const { result, checking, stage, error, check, cancel, reset } = usePlagiarismCheck();
+  const lastToastCheckIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (showProjectSelector) {
@@ -43,10 +44,12 @@ export function PlagiarismPanel({
   useEffect(() => { if (projectTitle) setCheckTitle(projectTitle); }, [projectTitle]);
 
   useEffect(() => {
-    if (result && !checking) {
-      setView("result");
-      toast.success(`检测完成，${result.totalMatches} 处匹配`);
-    }
+    if (checking || !result?.checkId) return;
+    if (lastToastCheckIdRef.current === result.checkId) return;
+
+    lastToastCheckIdRef.current = result.checkId;
+    setView("result");
+    toast.success(`检测完成，${result.totalMatches} 处匹配`);
   }, [result, checking]);
 
   const loadProject = useCallback(async (pid: string) => {
@@ -58,6 +61,7 @@ export function PlagiarismPanel({
       setSelectedProjectId(pid);
       setCheckTitle(p.title || "");
       setCheckContent(buildPlagiarismContentFromProject(p));
+      lastToastCheckIdRef.current = null;
       reset();
       setView("check");
       toast.success(`已导入「${p.title}」`);
@@ -93,7 +97,12 @@ export function PlagiarismPanel({
         error={error}
         onCheck={handleCheck}
         onCancel={cancel}
-        onClear={() => { setCheckContent(""); reset(); setSelectedProjectId(""); }}
+        onClear={() => {
+          setCheckContent("");
+          lastToastCheckIdRef.current = null;
+          reset();
+          setSelectedProjectId("");
+        }}
         plist={showProjectSelector && !initialContent ? projects : undefined}
         selPid={selectedProjectId}
         loadingP={loadingProject}
@@ -111,7 +120,11 @@ export function PlagiarismPanel({
         result={result}
         compact
         onRewrite={() => setView("rewrite")}
-        onReCheck={() => { reset(); setView("check"); }}
+        onReCheck={() => {
+          lastToastCheckIdRef.current = null;
+          reset();
+          setView("check");
+        }}
       />
     );
   }
@@ -126,6 +139,7 @@ export function PlagiarismPanel({
       onApplied={(newContent) => {
         setCheckContent(newContent);
         reset();
+        lastToastCheckIdRef.current = null;
         setView("check");
         toast.success("已应用改写，点击「查重」验证");
       }}
