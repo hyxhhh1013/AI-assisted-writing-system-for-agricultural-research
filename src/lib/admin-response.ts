@@ -59,5 +59,6 @@ export function parseListParams(searchParams: URLSearchParams): AdminListParams 
     grade: searchParams.get("grade") || undefined,
     userId: searchParams.get("userId") || undefined,
     projectId: searchParams.get("projectId") || undefined,
+    indexStatus: searchParams.get("indexStatus") || undefined,
   };
 }

@@ -6,10 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Loader2, Plus, Trash2, Eye, EyeOff, Key, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, Plus, Trash2, Key, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import {
-  checkAdminSettingKey,
   deleteAdminSetting,
   listAdminSettings,
   saveAdminSetting,
@@ -29,8 +28,6 @@ export default function AdminSettingsPage() {
   const [editValue, setEditValue] = useState("");
   const [editPreset, setEditPreset] = useState("");
   const [saving, setSaving] = useState(false);
-  const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
-  const [fullValues, setFullValues] = useState<Record<string, string>>({});
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -42,17 +39,6 @@ export default function AdminSettingsPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
-
-  const toggleVisible = async (key: string) => {
-    if (visibleKeys.has(key)) {
-      setVisibleKeys(prev => { const n = new Set(prev); n.delete(key); return n; });
-      return;
-    }
-    const exists = await checkAdminSettingKey(key);
-    if (exists) {
-      setVisibleKeys(prev => new Set(prev).add(key));
-    }
-  };
 
   const handleSave = async () => {
     if (!editKey.trim()) { toast.error("Key 不能为空"); return; }
@@ -80,8 +66,6 @@ export default function AdminSettingsPage() {
     setEditPreset(presetKey || "");
     setShowAdd(true);
   };
-
-  const existingKeys = new Set(settings.map(s => s.key));
 
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-[#6b7c72]" /></div>;
 

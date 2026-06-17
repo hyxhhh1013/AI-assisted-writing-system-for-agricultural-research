@@ -7,15 +7,18 @@ import type {
   AdminKnowledgeFile,
   AdminKnowledgeListResponse,
   AdminListParams,
+  AdminListResult,
   AdminPlagiarismDetail,
   AdminPlagiarismRecord,
   AdminProjectRecord,
   AdminReviewDetail,
   AdminReviewRecord,
+  AdminSearchResponse,
   AdminSettingRecord,
   AdminStats,
   AdminSuccessResponse,
   AdminUsageStats,
+  AdminUsageTrends,
   AdminUserDetail,
   AdminUserRecord,
 } from "@/contracts/admin";
@@ -32,6 +35,7 @@ export type {
   AdminSettingRecord,
   AdminStats,
   AdminUsageStats,
+  AdminUsageTrends,
   AdminUserDetail,
   AdminUserRecord,
 } from "@/contracts/admin";
@@ -53,6 +57,22 @@ async function parseJson<T>(res: Response): Promise<T> {
 async function parseError(res: Response, fallback: string): Promise<string> {
   const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
   return data.error || data.message || fallback;
+}
+
+async function parsePaginated<T>(res: Response): Promise<AdminListResult<T>> {
+  const data = await parseJson<{
+    data?: T[];
+    total?: number;
+    page?: number;
+    pageSize?: number;
+    totalPages?: number;
+  }>(res);
+  const list = data.data ?? [];
+  const total = data.total ?? list.length;
+  const page = data.page ?? 1;
+  const pageSize = data.pageSize ?? (list.length || 20);
+  const totalPages = data.totalPages ?? Math.max(1, Math.ceil(total / pageSize));
+  return { data: list, meta: { total, page, pageSize, totalPages } };
 }
 
 /** GET /api/admin/stats */
@@ -77,11 +97,27 @@ export async function getAdminUsage(): Promise<AdminUsageStats> {
   return parseJson<AdminUsageStats>(res);
 }
 
+/** GET /api/admin/usage/trends */
+export async function getAdminUsageTrends(range: "30d" | "12w" = "30d"): Promise<AdminUsageTrends> {
+  const res = await fetch(`/api/admin/usage/trends?range=${range}`);
+  if (!res.ok) throw new Error("加载趋势失败");
+  const data = await parseJson<AdminUsageTrends & { success?: boolean }>(res);
+  return { range: data.range, points: data.points };
+}
+
+/** GET /api/admin/search */
+export async function searchAdmin(q: string): Promise<AdminSearchResponse> {
+  const res = await fetch(`/api/admin/search?q=${encodeURIComponent(q)}`);
+  const data = await parseJson<AdminSuccessResponse<AdminSearchResponse>>(res);
+  return data.data ?? { users: [], projects: [], knowledge: [] };
+}
+
 /** GET /api/admin/users */
-export async function listAdminUsers(params?: Pick<AdminListParams, "q">): Promise<AdminUserRecord[]> {
+export async function listAdminUsers(
+  params?: Pick<AdminListParams, "q" | "page" | "pageSize" | "sortBy" | "sortOrder">,
+): Promise<AdminListResult<AdminUserRecord>> {
   const res = await fetch(`/api/admin/users${buildQuery(params)}`);
-  const data = await parseJson<{ data?: AdminUserRecord[] }>(res);
-  return data.data ?? [];
+  return parsePaginated<AdminUserRecord>(res);
 }
 
 /** GET /api/admin/users/[id] */
@@ -113,11 +149,10 @@ export async function deleteAdminUser(userId: string): Promise<{ ok: boolean; me
 
 /** GET /api/admin/projects */
 export async function listAdminProjects(
-  params?: Pick<AdminListParams, "q" | "template" | "mode">,
-): Promise<AdminProjectRecord[]> {
+  params?: Pick<AdminListParams, "q" | "template" | "mode" | "page" | "pageSize" | "sortBy" | "sortOrder">,
+): Promise<AdminListResult<AdminProjectRecord>> {
   const res = await fetch(`/api/admin/projects${buildQuery(params)}`);
-  const data = await parseJson<{ data?: AdminProjectRecord[] }>(res);
-  return data.data ?? [];
+  return parsePaginated<AdminProjectRecord>(res);
 }
 
 /** DELETE /api/admin/projects */
@@ -134,11 +169,28 @@ export async function deleteAdminProject(projectId: string): Promise<{ ok: boole
 
 /** GET /api/admin/knowledge */
 export async function listAdminKnowledge(
-  params?: Pick<AdminListParams, "q" | "category">,
+  params?: Pick<AdminListParams, "q" | "category" | "indexStatus" | "page" | "pageSize" | "sortBy" | "sortOrder">,
 ): Promise<AdminKnowledgeListResponse> {
   const res = await fetch(`/api/admin/knowledge${buildQuery(params)}`);
-  const data = await parseJson<Partial<AdminKnowledgeListResponse>>(res);
-  return { files: data.files ?? [], categoryStats: data.categoryStats ?? [] };
+  const data = await parseJson<{
+    data?: AdminKnowledgeFile[];
+    files?: AdminKnowledgeFile[];
+    categoryStats?: { category: string; count: number }[];
+    total?: number;
+    page?: number;
+    pageSize?: number;
+    totalPages?: number;
+  }>(res);
+  const list = data.data ?? data.files ?? [];
+  const total = data.total ?? list.length;
+  const page = data.page ?? 1;
+  const pageSize = data.pageSize ?? (list.length || 20);
+  const totalPages = data.totalPages ?? Math.max(1, Math.ceil(total / pageSize));
+  return {
+    data: list,
+    meta: { total, page, pageSize, totalPages },
+    categoryStats: data.categoryStats ?? [],
+  };
 }
 
 /** POST /api/admin/knowledge — 单篇重索引 */
@@ -251,11 +303,11 @@ export async function deleteAdminSetting(key: string): Promise<boolean> {
 }
 
 /** GET /api/admin/plagiarism */
-export async function listAdminPlagiarism(risk?: string): Promise<AdminPlagiarismRecord[]> {
-  const q = risk ? `?risk=${encodeURIComponent(risk)}` : "";
-  const res = await fetch(`/api/admin/plagiarism${q}`);
-  const data = await parseJson<{ data?: AdminPlagiarismRecord[] }>(res);
-  return data.data ?? [];
+export async function listAdminPlagiarism(
+  params?: Pick<AdminListParams, "risk" | "page" | "pageSize">,
+): Promise<AdminListResult<AdminPlagiarismRecord>> {
+  const res = await fetch(`/api/admin/plagiarism${buildQuery(params)}`);
+  return parsePaginated<AdminPlagiarismRecord>(res);
 }
 
 /** GET /api/admin/plagiarism/[id] */
@@ -266,11 +318,11 @@ export async function getAdminPlagiarismDetail(id: string): Promise<AdminPlagiar
 }
 
 /** GET /api/admin/reviews */
-export async function listAdminReviews(grade?: string): Promise<AdminReviewRecord[]> {
-  const q = grade ? `?grade=${encodeURIComponent(grade)}` : "";
-  const res = await fetch(`/api/admin/reviews${q}`);
-  const data = await parseJson<{ data?: AdminReviewRecord[] }>(res);
-  return data.data ?? [];
+export async function listAdminReviews(
+  params?: Pick<AdminListParams, "grade" | "page" | "pageSize">,
+): Promise<AdminListResult<AdminReviewRecord>> {
+  const res = await fetch(`/api/admin/reviews${buildQuery(params)}`);
+  return parsePaginated<AdminReviewRecord>(res);
 }
 
 /** GET /api/admin/reviews/[id] */

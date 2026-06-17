@@ -4,49 +4,95 @@ import path from "path";
 import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
-import { success, badRequest } from "@/lib/admin-response";
+import { success, paginated, parseListParams } from "@/lib/admin-response";
 import { resolveProjectRuntimePath } from "@/lib/runtime-paths";
 import { validateBody } from "@/lib/api-validate";
 import {
   adminKnowledgeDeleteSchema,
   adminKnowledgeReindexSchema,
 } from "@/lib/validations";
+import { mapAdminKnowledgeFile } from "@/lib/admin-knowledge-map";
 
 const ARTICLES_DIR = resolveProjectRuntimePath(process.env.RAG_ARTICLES_DIR || "papers");
+
+const SORTABLE_FIELDS = new Set(["name", "category", "size", "chunkCount", "mtime"]);
+
+function buildOrderBy(
+  sortBy?: string,
+  sortOrder?: "asc" | "desc",
+): Prisma.KnowledgeFileOrderByWithRelationInput {
+  const field = sortBy && SORTABLE_FIELDS.has(sortBy) ? sortBy : "name";
+  const dir = sortOrder === "desc" ? "desc" : "asc";
+  if (field === "chunkCount") return { chunkCount: dir };
+  if (field === "mtime") return { mtime: dir };
+  if (field === "size") return { size: dir };
+  if (field === "category") return { category: dir };
+  return { name: dir };
+}
 
 export async function GET(req: NextRequest) {
   const { error } = await requireAdmin(req);
   if (error) return error;
 
   const { searchParams } = new URL(req.url);
-  const q = searchParams.get("q") || "";
-  const category = searchParams.get("category") || "";
+  const params = parseListParams(searchParams);
+  const q = params.q || "";
+  const category = params.category || "";
+  const indexStatus = params.indexStatus || "";
 
   const where: Prisma.KnowledgeFileWhereInput = {};
   if (q) where.name = { contains: q };
   if (category) where.category = category;
 
-  const [files, allForCats] = await Promise.all([
+  const page = params.page ?? 1;
+  const pageSize = params.pageSize ?? 20;
+
+  const [allForCats, rawFiles] = await Promise.all([
+    prisma.knowledgeFile.groupBy({
+      by: ["category"],
+      _count: true,
+      orderBy: { _count: { category: "desc" } },
+    }),
     prisma.knowledgeFile.findMany({
       where,
-      orderBy: { name: "asc" },
+      orderBy: indexStatus ? { name: "asc" } : buildOrderBy(params.sortBy, params.sortOrder),
+      ...(indexStatus
+        ? {}
+        : { skip: (page - 1) * pageSize, take: pageSize }),
       include: { _count: { select: { chunks: true } } },
     }),
-    prisma.knowledgeFile.groupBy({ by: ["category"], _count: true, orderBy: { _count: { category: "desc" } } }),
   ]);
 
-  return NextResponse.json({
-    files: files.map(f => ({
+  let mapped = rawFiles.map((f) =>
+    mapAdminKnowledgeFile({
       id: f.id,
       name: f.name,
       category: f.category,
       documentType: f.documentType,
       size: f.size,
-      chunkCount: f._count.chunks,
-      mtime: f.mtime?.toISOString() ?? null,
-    })),
-    categoryStats: allForCats.map(c => ({ category: c.category, count: c._count })),
-    total: files.length,
+      mtime: f.mtime,
+      bib: f.bib,
+      bibEdited: f.bibEdited,
+      parseWarning: f.parseWarning,
+      chunkCount: f.chunkCount,
+      chunkRowCount: f._count.chunks,
+    }),
+  );
+
+  let total: number;
+  if (indexStatus) {
+    mapped = mapped.filter((f) => f.indexStatus === indexStatus);
+    total = mapped.length;
+    mapped = mapped.slice((page - 1) * pageSize, page * pageSize);
+  } else {
+    total = await prisma.knowledgeFile.count({ where });
+  }
+
+  const response = paginated(mapped, total, params);
+  const body = (await response.json()) as Record<string, unknown>;
+  return NextResponse.json({
+    ...body,
+    categoryStats: allForCats.map((c) => ({ category: c.category, count: c._count })),
   });
 }
 

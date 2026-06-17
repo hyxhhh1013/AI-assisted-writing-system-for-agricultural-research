@@ -65,9 +65,17 @@
 
 | 功能 | 页面 | API | 核心代码 |
 |------|------|-----|----------|
-| 后台布局 | `src/app/admin/layout.tsx` | — | `requireAdmin` |
+| 后台布局（RSC 鉴权） | `admin/layout.tsx`, `admin-shell.tsx` | — | `lib/admin-auth-page.ts` |
+| 全局搜索 | `admin-global-search.tsx` | `GET /api/admin/search` | Ctrl+K |
+| 仪表盘 | `admin/page.tsx` | `GET /api/admin/stats` | `admin-dashboard-client.tsx` |
+| 用户/项目 | `admin/users`, `projects` | `/api/admin/users`, `projects` | `admin-data-table.tsx`, `use-admin-list.ts` |
+| 文献运维 | `admin/knowledge` | `GET/POST/DELETE /api/admin/knowledge` | 索引状态、SSE 重索引、`admin-knowledge-map.ts` |
+| 审查/查重记录 | `admin/reviews`, `plagiarism` | `/api/admin/reviews`, `plagiarism` | `admin-record-project-links.tsx` |
+| 使用统计 | `admin/usage` | `GET /api/admin/usage`, `usage/trends` | `services/admin-usage.ts` |
+| 系统健康 | `admin/health` | `GET /api/admin/health` | 可点击告警 |
 | 设置/Key | `admin/settings` | `PUT /api/admin/settings` | `lib/settings.ts` |
-| 用户/项目/文献 | `admin/*` | `/api/admin/*` | `src/services/admin.ts` |
+
+详见 [`ADMIN_ENHANCEMENT_PLAN.md`](./ADMIN_ENHANCEMENT_PLAN.md)。
 
 ## 认证与导出
 
