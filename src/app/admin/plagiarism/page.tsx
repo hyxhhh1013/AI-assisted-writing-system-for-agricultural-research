@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import type { AdminPlagiarismDetail, AdminPlagiarismMatchRow } from "@/contracts/admin";
 import {
@@ -23,7 +24,8 @@ const RISK_OPTIONS = [
 ];
 
 export default function AdminPlagiarismPage() {
-  const [riskFilter, setRiskFilter] = useState("");
+  const searchParams = useSearchParams();
+  const [riskFilter, setRiskFilter] = useState(() => searchParams.get("risk") ?? "");
   const [detail, setDetail] = useState<AdminPlagiarismDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
@@ -35,6 +37,7 @@ export default function AdminPlagiarismPage() {
   const { page, setPage, data: checks, meta, loading } = useAdminList({
     fetcher: listAdminPlagiarism,
     filters: listFilters,
+    urlSync: true,
   });
 
   const loadDetail = async (id: string) => {

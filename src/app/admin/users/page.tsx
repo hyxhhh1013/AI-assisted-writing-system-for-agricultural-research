@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Shield, ShieldOff, Trash2, ChevronRight } from "lucide-react";
@@ -32,6 +33,7 @@ export default function AdminUsersPage() {
     fetcher: listAdminUsers,
     defaultSortBy: "createdAt",
     defaultSortOrder: "desc",
+    urlSync: true,
   });
 
   const [deleteTarget, setDeleteTarget] = useState<AdminUserRecord | null>(null);

@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -33,8 +34,9 @@ const INDEX_STATUS_OPTIONS = [
 ];
 
 export default function AdminKnowledgePage() {
-  const [cat, setCat] = useState("");
-  const [indexStatus, setIndexStatus] = useState("");
+  const searchParams = useSearchParams();
+  const [cat, setCat] = useState(() => searchParams.get("category") ?? "");
+  const [indexStatus, setIndexStatus] = useState(() => searchParams.get("indexStatus") ?? "");
   const [cats, setCats] = useState<{ category: string; count: number }[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<AdminKnowledgeFile | null>(null);
@@ -81,6 +83,7 @@ export default function AdminKnowledgePage() {
     filters: listFilters,
     defaultSortBy: "name",
     defaultSortOrder: "asc",
+    urlSync: true,
   });
 
   const runReindex = async (names: string[], label?: string) => {

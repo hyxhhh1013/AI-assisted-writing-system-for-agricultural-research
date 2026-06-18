@@ -1,23 +1,31 @@
 # 论文质量模块完整开发计划
 
-> 更新时间：2026-06-02
-> 状态：Phase 1～3 已在 main 落地；Phase 4 文档收尾见 ENG-PR-050
+> 更新时间：2026-06-17
+> 状态：Phase 1～3 已完成；统一质量中心 `QualityWorkspace` 已落地（ENG-PR-093）
 
-## 实现状态对照（2026-06-02）
+## 实现状态对照（2026-06-17）
 
 | 计划项 | 状态 | 实际路径 / 说明 |
 |--------|------|-----------------|
-| 统一查重 service | **已实现** | `src/services/plagiarism-service.ts`；`api/plagiarism/v2`、`check` 为薄路由 |
-| 降重 service | **已实现** | `src/services/rewrite-service.ts` + `api/plagiarism/rewrite` |
-| 审查四维度 | **已实现** | `src/services/review-service.ts`、`/review` 页面、`api/review/*` |
-| 查重 SSE 进度 | **已实现** | v2/check 路由 `Accept: text/event-stream` |
-| 旧 `plagiarism-check.ts` | **已删除** | 无引用；勿恢复 |
+| 统一查重 service | ✅ 已实现 | `src/services/plagiarism-service.ts`；`api/plagiarism/v2`、`check` 为薄路由 |
+| 降重 service | ✅ 已实现 | `src/services/rewrite-service.ts` + `api/plagiarism/rewrite`；支持采纳写回原文 |
+| 审查四维度 | ✅ 已实现 | `src/services/review-service.ts`、`/review` → 质量中心审查 Tab |
+| 查重 SSE 进度 | ✅ 已实现 | v2/check 路由 `Accept: text/event-stream` |
+| 统一质量中心 | ✅ 已实现 | `QualityWorkspace` 组件（查重/降重/审查三 Tab），共享于 `/plagiarism` + 工作台 panel |
+| 匹配内容预览 | ✅ 已实现 | `quality/match-content-preview.tsx`：原文 vs 匹配源高亮对照 |
+| 审查侧栏筛选 | ✅ 已实现 | `quality/section-sidebar.tsx`：按维度/严重度过滤 |
+| 会话持久化 | ✅ 已实现 | `quality-persist.ts` + `quality-restore.ts`：刷新/切项目恢复状态 |
+| 写作蓝图系统 | ✅ 已实现 | `writing-blueprint.ts` + `blueprint-workspace.tsx` + `project-writing-blueprint-db.ts` |
+| 蓝图恢复 | ✅ 已实现 | `blueprint-utils.ts`：切换项目自动恢复蓝图 |
+| 旧 `plagiarism-check.ts` | ✅ 已删除 | 无引用；勿恢复 |
 | `similarity.ts` 算法 | **保留** | `extractNGrams` / `jaccard` / `cosine` 被 service 与 RAG 使用 |
-| 统一 `/quality` 单页三 Tab | **跳过** | 保留 `/plagiarism` + `/review` + 工作台 panel |
-| `reviewIntegrity` 独立 flag | **跳过** | 仅 `NEXT_PUBLIC_ENABLE_REVIEW` 总开关 |
+| 查重共享 UI | ✅ 已实现 | `plagiarism/check-form.tsx`、`result-view.tsx`、`rewrite-view.tsx` 独立组件 |
+| 查重 toast/tab 修复 | ✅ 已修复 | 防止 SSE 完成后重复触发跳转 |
+| 统一统计报告 | ✅ 已实现 | `quality/stats-report.tsx`：历史检查统计 |
+| 检测范围选择 | ✅ 已实现 | `quality/detection-scope.tsx`：勾选查重层级 |
 | Phase 4.5 清 any | **另 PR** | ENG-PR-054 |
 
-**手动验收**（发布前）：查重 → 降重建议 → 审查 → 单项 fix 各走通一条。
+**手动验收**（发布前）：查重 → 降重建议 → 采纳写回 → 审查 → 单项 fix 各走通一条。
 
 ---
 

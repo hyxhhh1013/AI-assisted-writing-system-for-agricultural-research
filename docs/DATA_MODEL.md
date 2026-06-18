@@ -27,6 +27,7 @@ KnowledgeFile 1──* KnowledgeChunk
 | `dataSources` | JSON `DataSourceAnalysis[]` |
 | `expandedOutlineSections` | JSON `string[]`，大纲扩写已完成任务 id（`stableHash(fullPath)`）；整章扩写时同 `sectionKey` 下子节一并标记 |
 | `writingBlueprint` | JSON `WritingBlueprint`（`src/contracts/writing-blueprint.ts`），扩写前全局叙事与配图规划 |
+| `qualitySession` | JSON 质量中心会话快照（查重配置、审查展开状态、降重采纳记录），刷新/切项目恢复 |
 
 **保存策略（当前）**
 
@@ -34,6 +35,7 @@ KnowledgeFile 1──* KnowledgeChunk
 - `Reference`：**增量 PATCH** `/api/projects/[id]/references`（含 `replace`）
 - `AnalysisResult`：**增量 PATCH** `/api/projects/[id]/analysis-results`
 - `expandedOutlineSections`：随项目 **POST** `/api/projects` 写入（JSON 列）；自动保存/手动保存均走此路径
+- `writingBlueprint`：`project-writing-blueprint-db.ts` 统一读写蓝图数据
 - 禁止前端 `saveProject` 全量覆盖 refs/analysis（已迁移，见 ENG-PR-025b）
 
 ## 知识库（KnowledgeFile）
@@ -57,11 +59,19 @@ KnowledgeFile 1──* KnowledgeChunk
 | 模型 | 用途 |
 |------|------|
 | `ReviewCheck` | 四维度审查报告（JSON 存 `content` / 维度分） |
+| `ReviewIssue` | 单条审查问题（`dimension`、`severity`、`status`，支持 fix/dismiss） |
 | `PlagiarismCheck` | 查重会话（`status`、`maxSimilarity`、`overallRisk`） |
-| `PlagiarismMatch` | 单条匹配（`matchType`: local / web / cross） |
-| `RewriteSuggestion` | 降重建议（`strategy`、`status`） |
+| `PlagiarismMatch` | 单条匹配（`matchType`: local / web / cross / self / ai） |
+| `RewriteSuggestion` | 降重建议（`strategy`、`status`、采纳后可写回原文） |
 
 业务说明：[`domain/review-plagiarism.md`](./domain/review-plagiarism.md)。
+
+### 质量会话持久化
+
+刷新页面或切换项目时，质量中心状态通过以下机制恢复：
+- 前端 `quality-persist.ts` 序列化当前 Tab、展开状态、已采纳项到内存
+- 后端 `quality-restore.ts` 从 `ReviewCheck` / `PlagiarismCheck` 恢复历史结果
+- 蓝图工作区通过 `blueprint-utils.ts` 从 `Project.writingBlueprint` 恢复
 
 ## 系统与质量
 

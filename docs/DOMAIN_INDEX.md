@@ -17,7 +17,9 @@
 | 功能 | 页面 | API | 核心代码 |
 |------|------|-----|----------|
 | 扩写流水线 | 工作台 `writing-panel` | `POST /api/writing` SSE；**096a** `POST /api/writing/retrieve-preview` | `api/writing/pipeline/*`, `services/writing-context.ts` |
-| 大纲生成 | `src/app/outline/page.tsx` | `POST /api/outline` | `lib/prompts/outline.ts` |
+| 证据中心 | 工作台侧栏 | — | `evidence-hub-sections.tsx`、`data-panel.tsx` |
+| 配图编辑 | 写作面板内联 | — | `writing-figure-edit-links.tsx` |
+| 大纲生成 | `src/app/outline/page.tsx` | `POST /api/outline` SSE | `lib/prompts/outline.ts` |
 | 一致性检查 | 工作台 | `POST /api/consistency` | `consistency/fix` |
 | 翻译 | — | `POST /api/translate` | — |
 
@@ -54,10 +56,22 @@
 
 | 功能 | 页面 | API | 核心代码 |
 |------|------|-----|----------|
-| 审查中心 | `src/app/review/page.tsx` | `POST /api/review` | `review-service.ts`, `components/shared/review/` |
-| 查重 | `src/app/plagiarism/page.tsx` | `POST /api/plagiarism/v2` | `plagiarism-service.ts`, `use-plagiarism-check` |
-| 降重改写 | 查重页 | `/api/plagiarism/rewrite` | `rewrite-service.ts` |
+| 统一质量中心 | `src/app/plagiarism/page.tsx`（查重 Tab）| `/api/plagiarism/v2` SSE | `QualityWorkspace`、`quality-persist.ts`、`quality-restore.ts` |
+| 审查 Tab | `/plagiarism?tab=review`（内联） | `POST /api/review` | `review-tab.tsx`、`review-service.ts` |
+| 查重 | 质量中心 | `POST /api/plagiarism/v2` | `plagiarism-service.ts`、`use-plagiarism-check` |
+| 降重改写 | 质量中心降重 Tab | `/api/plagiarism/rewrite` | `rewrite-service.ts`、`rewrite-view.tsx`（支持写回） |
+| 匹配预览 | 查重结果 | — | `match-content-preview.tsx` |
+| 历史统计 | 质量中心底部 | `GET /api/plagiarism/history`、`GET /api/review/history` | `stats-report.tsx` |
 | 数据源分析 | `src/app/analysis/page.tsx` | `/api/analysis`, `/api/data/analyze` | `contracts/data-source.ts` |
+
+## 大纲与蓝图
+
+| 功能 | 页面 | API | 核心代码 |
+|------|------|-----|----------|
+| 大纲生成 | `src/app/outline/page.tsx` | `POST /api/outline` SSE | `outline-panel.tsx`、`lib/prompts/outline.ts` |
+| 写作蓝图 | 大纲页 → 蓝图弹窗 | `POST /api/outline/blueprint` | `blueprint-workspace.tsx`、`contracts/writing-blueprint.ts` |
+| 蓝图恢复 | 工作台 | — | `blueprint-utils.ts`、`project-writing-blueprint-db.ts` |
+| 蓝图编辑器 | 大纲页 | — | `use-blueprint-editor.ts`、`blueprint-workspace-dialog.tsx` |
 
 详见 [`domain/review-plagiarism.md`](./domain/review-plagiarism.md)。
 
@@ -68,7 +82,7 @@
 | 后台布局（RSC 鉴权） | `admin/layout.tsx`, `admin-shell.tsx` | — | `lib/admin-auth-page.ts` |
 | 全局搜索 | `admin-global-search.tsx` | `GET /api/admin/search` | Ctrl+K |
 | 仪表盘 | `admin/page.tsx` | `GET /api/admin/stats` | `admin-dashboard-client.tsx` |
-| 用户/项目 | `admin/users`, `projects` | `/api/admin/users`, `projects` | `admin-data-table.tsx`, `use-admin-list.ts` |
+| 用户/项目 | `admin/users`, `projects` | `/api/admin/users`, `projects` | `admin-data-table.tsx`, `use-admin-list.ts`, `admin-stat-card.tsx` 等视觉组件 |
 | 文献运维 | `admin/knowledge` | `GET/POST/DELETE /api/admin/knowledge` | 索引状态、SSE 重索引、`admin-knowledge-map.ts` |
 | 审查/查重记录 | `admin/reviews`, `plagiarism` | `/api/admin/reviews`, `plagiarism` | `admin-record-project-links.tsx` |
 | 使用统计 | `admin/usage` | `GET /api/admin/usage`, `usage/trends` | `services/admin-usage.ts` |

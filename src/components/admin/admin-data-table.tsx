@@ -45,8 +45,8 @@ export function AdminDataTable<T>({
 }: AdminDataTableProps<T>) {
   if (loading) {
     return (
-      <div className="flex justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-[#6b7c72]" />
+      <div className="flex justify-center py-14">
+        <Loader2 className="h-6 w-6 animate-spin text-[#1a5632]/40" />
       </div>
     );
   }
@@ -62,7 +62,7 @@ export function AdminDataTable<T>({
   }
 
   return (
-    <div className="border border-[#1a5632]/10 rounded-xl overflow-hidden">
+    <div className="overflow-hidden rounded-xl border border-[#1a5632]/10 bg-white">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-[#1a5632]/10 bg-[#faf9f6] text-left text-[#6b7c72]">
@@ -70,7 +70,7 @@ export function AdminDataTable<T>({
               <th
                 key={col.key}
                 className={cn(
-                  "py-2.5 px-4 font-medium",
+                  "px-4 py-2.5 text-xs font-medium",
                   col.hideOnMobile && "hidden sm:table-cell",
                   col.className,
                 )}
@@ -79,7 +79,7 @@ export function AdminDataTable<T>({
                   <button
                     type="button"
                     onClick={() => onSort(col.key)}
-                    className="inline-flex items-center gap-1 hover:text-[#1a5632] transition-colors"
+                    className="inline-flex items-center gap-1 hover:text-[#1a5632]"
                   >
                     {col.header}
                     <SortIcon active={sortBy === col.key} order={sortOrder} />
@@ -93,12 +93,15 @@ export function AdminDataTable<T>({
         </thead>
         <tbody>
           {data.map((row) => (
-            <tr key={rowKey(row)} className="border-b border-[#1a5632]/5 hover:bg-[#1a5632]/[0.02]">
+            <tr
+              key={rowKey(row)}
+              className="border-b border-[#1a5632]/5 last:border-0 hover:bg-[#1a5632]/[0.03]"
+            >
               {columns.map((col) => (
                 <td
                   key={col.key}
                   className={cn(
-                    "py-2.5 px-4",
+                    "px-4 py-2.5",
                     col.hideOnMobile && "hidden sm:table-cell",
                     col.className,
                   )}

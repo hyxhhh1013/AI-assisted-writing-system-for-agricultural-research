@@ -3,6 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import {
+  readAdminUrlPage,
+  readAdminUrlParam,
+  readAdminUrlSortOrder,
+  useAdminUrlInit,
+  useAdminUrlWriter,
+} from "@/hooks/use-admin-url-sync";
 import type { AdminListMeta, AdminListParams, AdminListResult } from "@/contracts/admin";
 
 interface UseAdminListOptions<T> {
@@ -12,6 +19,8 @@ interface UseAdminListOptions<T> {
   debounceMs?: number;
   defaultSortBy?: string;
   defaultSortOrder?: "asc" | "desc";
+  /** 将 q/page/sort/筛选项同步到 URL，支持分享与深链 */
+  urlSync?: boolean;
 }
 
 /** 查询签名变化且不在第 1 页时，应先翻页再请求 */
@@ -30,6 +39,29 @@ export function buildAdminListQuerySignature(filterKey: string, debouncedQ: stri
   return `${filterKey}\0${debouncedQ}`;
 }
 
+function buildUrlPatch(args: {
+  q: string;
+  page: number;
+  sortBy?: string;
+  sortOrder: "asc" | "desc";
+  defaultSortBy?: string;
+  defaultSortOrder: "asc" | "desc";
+  parsedFilters: Record<string, unknown>;
+}): Record<string, string | number | undefined> {
+  const patch: Record<string, string | number | undefined> = {
+    ...Object.fromEntries(
+      Object.entries(args.parsedFilters).filter(
+        ([, v]) => v !== undefined && v !== "",
+      ),
+    ) as Record<string, string>,
+  };
+  if (args.q) patch.q = args.q;
+  if (args.page > 1) patch.page = args.page;
+  if (args.sortBy && args.sortBy !== args.defaultSortBy) patch.sortBy = args.sortBy;
+  if (args.sortBy && args.sortOrder !== args.defaultSortOrder) patch.sortOrder = args.sortOrder;
+  return patch;
+}
+
 export function useAdminList<T>({
   fetcher,
   filters,
@@ -37,11 +69,23 @@ export function useAdminList<T>({
   debounceMs = 300,
   defaultSortBy,
   defaultSortOrder = "desc",
+  urlSync = false,
 }: UseAdminListOptions<T>) {
-  const [q, setQ] = useState("");
-  const [page, setPage] = useState(1);
-  const [sortBy, setSortBy] = useState<string | undefined>(defaultSortBy);
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(defaultSortOrder);
+  const searchParams = useAdminUrlInit();
+
+  const [q, setQ] = useState(() =>
+    urlSync ? readAdminUrlParam(searchParams, "q") : "",
+  );
+  const [page, setPage] = useState(() =>
+    urlSync ? readAdminUrlPage(searchParams) : 1,
+  );
+  const [sortBy, setSortBy] = useState<string | undefined>(() => {
+    if (!urlSync) return defaultSortBy;
+    return readAdminUrlParam(searchParams, "sortBy") || defaultSortBy;
+  });
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(() =>
+    urlSync ? readAdminUrlSortOrder(searchParams, defaultSortOrder) : defaultSortOrder,
+  );
   const [data, setData] = useState<T[]>([]);
   const [meta, setMeta] = useState<AdminListMeta>({ total: 0, page: 1, pageSize, totalPages: 1 });
   const [loading, setLoading] = useState(true);
@@ -54,6 +98,21 @@ export function useAdminList<T>({
   );
   const sortKey = `${sortBy ?? ""}\0${sortOrder}`;
   const querySignature = buildAdminListQuerySignature(`${filterKey}\0${sortKey}`, debouncedQ);
+
+  const urlPatch = useMemo(
+    () => buildUrlPatch({
+      q,
+      page,
+      sortBy,
+      sortOrder,
+      defaultSortBy,
+      defaultSortOrder,
+      parsedFilters,
+    }),
+    [q, page, sortBy, sortOrder, defaultSortBy, defaultSortOrder, parsedFilters],
+  );
+
+  useAdminUrlWriter({ patch: urlPatch, enabled: urlSync });
 
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import {
   getAdminReviewDetail,
@@ -24,7 +25,8 @@ const GRADE_OPTIONS = [
 ];
 
 export default function AdminReviewsPage() {
-  const [gradeFilter, setGradeFilter] = useState("");
+  const searchParams = useSearchParams();
+  const [gradeFilter, setGradeFilter] = useState(() => searchParams.get("grade") ?? "");
   const [detail, setDetail] = useState<AdminReviewDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
@@ -36,6 +38,7 @@ export default function AdminReviewsPage() {
   const { page, setPage, data: reviews, meta, loading } = useAdminList({
     fetcher: listAdminReviews,
     filters: listFilters,
+    urlSync: true,
   });
 
   const loadDetail = async (id: string) => {
