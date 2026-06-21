@@ -70,12 +70,21 @@ export function ChartWorkspace({
   } = panel;
 
   const handleInsertToPaper = (imageUrl: string, caption: string) => {
+    // 收集当前样式字段值，保存到回放快照中
+    const stylePayload: Record<string, unknown> = {};
+    for (const f of (globalStyleFields ?? [])) {
+      const v = fieldValues[f.key];
+      if (v !== undefined && v !== "") {
+        stylePayload[f.key] = v;
+      }
+    }
     const spec = buildChartReplayFigureSpec({
       caption,
       chartType,
       title: title || caption,
       xLabel: String(fieldValues.x_label ?? ""),
       yLabel: String(fieldValues.y_label ?? ""),
+      style: Object.keys(stylePayload).length > 0 ? stylePayload : undefined,
       parsedData:
         inputMode === "paste" && parsedData
           ? {

@@ -265,8 +265,19 @@ export function useChartPanel(
   useEffect(() => {
     if (prefill) {
       setPasteText(prefill.pasteText);
+      const initVals = initFieldValues(basicFields, styleFields);
+      // 恢复保存时的样式配置
+      const savedStyle: Record<string, string | number | boolean> = {};
+      if (prefill.style && typeof prefill.style === "object") {
+        for (const [k, v] of Object.entries(prefill.style)) {
+          if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+            savedStyle[k] = v;
+          }
+        }
+      }
       setFieldValues({
-        ...initFieldValues(basicFields, styleFields),
+        ...initVals,
+        ...savedStyle,
         ...(prefill.title !== undefined ? { title: prefill.title } : {}),
         ...(prefill.xLabel !== undefined ? { x_label: prefill.xLabel } : {}),
         ...(prefill.yLabel !== undefined ? { y_label: prefill.yLabel } : {}),

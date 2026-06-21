@@ -79,6 +79,9 @@ export function buildChartStylePayload(
   if (values.font_size !== undefined && values.font_size !== "") {
     style.font_size = Number(values.font_size);
   }
+  if (values.title_font_size !== undefined && values.title_font_size !== "") {
+    style.title_font_size = Number(values.title_font_size);
+  }
   if (values.dpi !== undefined && values.dpi !== "") {
     style.dpi = Number(values.dpi);
   }

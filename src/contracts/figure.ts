@@ -132,6 +132,7 @@ export interface ChartPanelPrefill {
   xLabel?: string;
   yLabel?: string;
   figureId?: string;
+  style?: Record<string, unknown>;
 }
 
 /** 流程图 panel 预填（来自 FIGURE flow / mechanism） */
@@ -213,7 +214,12 @@ export function figureChartConfigToPrefill(
     labels: labels.map((l) => String(l)),
     datasets: parsedDatasets,
   };
-  return chartConfigToPrefill(cfg, figureToolToRegistryId("chart", config));
+  const prefill = chartConfigToPrefill(cfg, figureToolToRegistryId("chart", config));
+  // 恢复保存时的样式配置
+  if (isRecord(config.style)) {
+    prefill.style = config.style;
+  }
+  return prefill;
 }
 
 /** FigureSpec → ChartPanelPrefill（仅 chart 类） */
@@ -349,6 +355,7 @@ export function buildChartReplayFigureSpec(params: {
   title: string;
   xLabel: string;
   yLabel: string;
+  style?: Record<string, unknown>;
   parsedData: {
     labels: string[];
     datasets: { label: string; data: number[] }[];
@@ -363,6 +370,7 @@ export function buildChartReplayFigureSpec(params: {
       title: params.title || params.caption,
       x_label: params.xLabel,
       y_label: params.yLabel,
+      ...(params.style ? { style: params.style } : {}),
       data: {
         labels: params.parsedData.labels,
         datasets: params.parsedData.datasets.map((d) => ({
