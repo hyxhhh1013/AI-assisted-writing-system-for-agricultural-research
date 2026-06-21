@@ -73,7 +73,11 @@ class ChartModule:
         if config.get("y_log_scale") in (True, "true", "1", 1):
             ax.set_yscale("log")
         if config.get("y_sci_notation") in (True, "true", "1", 1) or style.get("y_sci_notation") in (True, "true", "1", 1):
-            ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
+            try:
+                ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
+            except AttributeError:
+                # 当前轴使用了非 ScalarFormatter（如分类轴、自定义格式化器），跳过
+                pass
         rot = config.get("x_tick_rotation")
         if rot is not None and rot != "":
             try:
