@@ -1,4 +1,4 @@
-/** Socratic Mentor 预承诺 — 问答类型 */
+/** Socratic Mentor 预承诺 — 问答类型 v2（10 问） */
 
 export interface SocraticQuestion {
   id: string;
@@ -6,7 +6,7 @@ export interface SocraticQuestion {
   type: "single_choice" | "multi_choice" | "number" | "free_text";
   options?: string[];
   placeholder?: string;
-  /** 映射到的维度 ID（用于 AI 翻译时关联） */
+  /** 映射到的维度 ID */
   relatedDimensions: string[];
 }
 
@@ -16,8 +16,8 @@ export interface SocraticAnswer {
   answer: string;
 }
 
-/** 预定义的 6 个 Socratic 问题 */
 export const SOCRATIC_QUESTIONS: SocraticQuestion[] = [
+  // ── 发表目标 ──
   {
     id: "q1",
     question: "你实验室这个方向通常投什么层次的期刊？",
@@ -31,30 +31,54 @@ export const SOCRATIC_QUESTIONS: SocraticQuestion[] = [
     ],
     relatedDimensions: ["D7", "D5"],
   },
+  // ── 数据标准 ──
   {
     id: "q2",
-    question: "在你的领域，一个实验最少需要多少次独立重复才能被视为可发表的数据？",
+    question: "在你的领域，一个实验最少需要多少次独立重复才能被视为可发表？",
     type: "number",
     placeholder: "如 3",
     relatedDimensions: ["D4"],
   },
   {
     id: "q3",
+    question: "你通常用什么统计方法来验证实验结论？",
+    type: "multi_choice",
+    options: [
+      "t 检验 / ANOVA",
+      "回归分析（线性 / 非线性）",
+      "效应量 + 置信区间",
+      "非参数检验",
+      "多元统计分析（PCA / PLS）",
+      "机器学习模型验证",
+    ],
+    relatedDimensions: ["D4"],
+  },
+  // ── 产出目标 ──
+  {
+    id: "q4",
     question: "你计划未来 2 年这个方向发表几篇论文？",
     type: "number",
     placeholder: "如 5",
     relatedDimensions: ["D5", "D6"],
   },
+  // ── 核心优势 ──
   {
-    id: "q4",
-    question: "哪些子方向是你的核心优势（有大量数据和发表积累）？",
+    id: "q5",
+    question: "哪些子方向是你的核心优势（已有大量数据和发表积累）？",
     type: "free_text",
-    placeholder: "如 热解机理、催化剂开发…",
+    placeholder: "如 热解机理、催化剂开发 → 分析时会优先识别这些方向的论文机会",
     relatedDimensions: ["D1", "D2", "D7"],
   },
   {
-    id: "q5",
-    question: "你的实验室在这个方向上的独特优势是什么？",
+    id: "q6",
+    question: "你的实验室在这个方向上最擅长的实验方法或表征技术是什么？",
+    type: "free_text",
+    placeholder: "如 TG-FTIR 联用、GC-MS 产物分析、SEM/TEM 形貌表征、XRD 物相分析…",
+    relatedDimensions: ["D1", "D6", "D7"],
+  },
+  {
+    id: "q7",
+    question: "你的实验室优势主要来自哪些方面？",
     type: "multi_choice",
     options: [
       "数据积累深度（多年连续实验数据）",
@@ -65,11 +89,41 @@ export const SOCRATIC_QUESTIONS: SocraticQuestion[] = [
     ],
     relatedDimensions: ["D7", "D1"],
   },
+  // ── 风险与约束 ──
   {
-    id: "q6",
-    question: "过去这个方向的论文被退稿的主要原因是什么？（可选，不填可跳过）",
-    type: "free_text",
-    placeholder: "如 数据量不足、创新性不够、方法描述不充分…",
+    id: "q8",
+    question: "过去这个方向的论文被退稿的主要原因是什么？",
+    type: "multi_choice",
+    options: [
+      "数据量 / 样本量不足",
+      "创新性不够（与已有文献重叠过多）",
+      "方法描述不充分，审稿人质疑可重复性",
+      "统计分析方法不当",
+      "英文写作质量问题",
+      "投错期刊（不符合期刊 scope）",
+    ],
     relatedDimensions: ["D4", "D7", "D2"],
+  },
+  {
+    id: "q9",
+    question: "你的实验数据是否存在以下限制？（可多选）",
+    type: "multi_choice",
+    options: [
+      "部分实验只有单次数据（未重复）",
+      "某些条件下的数据缺失（如高温/高压段）",
+      "对照实验不完整",
+      "数据分散在不同设备/平台上",
+      "原始数据部分丢失",
+      "以上均无",
+    ],
+    relatedDimensions: ["D4", "D6"],
+  },
+  // ── 协同与资源 ──
+  {
+    id: "q10",
+    question: "这个方向与其他研究方向之间是否存在方法、数据或设备的共享/协同？",
+    type: "free_text",
+    placeholder: "如 热化学的热解设备可用于烟草的热解特性研究，数据可共享…（无则填 无）",
+    relatedDimensions: ["D8"],
   },
 ];

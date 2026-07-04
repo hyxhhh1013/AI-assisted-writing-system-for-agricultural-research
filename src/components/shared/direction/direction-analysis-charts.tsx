@@ -188,7 +188,7 @@ export function CandidateBarChart({
   );
 }
 
-// ==================== 证据追溯表 ====================
+// ==================== 证据追溯表（维度分组 Accordion） ====================
 
 export function EvidenceTraceTable({
   dimensions,
@@ -202,71 +202,98 @@ export function EvidenceTraceTable({
     (d.rubricResponses || []).map((r) => ({ ...r, dimensionId: d.id })),
   );
   const passedCount = allResponses.filter((r) => r.passed).length;
-  const passRate = allResponses.length > 0
-    ? `${Math.round((passedCount / allResponses.length) * 100)}%`
-    : "N/A";
+  const passRate = `${Math.round((passedCount / allResponses.length) * 100)}%`;
 
   return (
     <div className="rounded-lg border border-[#1a5632]/10 bg-white">
-      <div className="flex items-center justify-between border-b border-[#1a5632]/8 px-4 py-3">
-        <h4 className="text-sm font-semibold text-[#122820]">
-          📋 证据追溯表
-        </h4>
-        <div className="flex items-center gap-2 text-[10px] text-[#6b7c72]">
-          <Badge variant="outline" className="h-4 gap-1 px-1.5 text-[9px] border-[#059669]/20 text-[#059669]">
-            <CheckCircle2 className="h-2.5 w-2.5" /> {passedCount} 通过
-          </Badge>
-          <Badge variant="outline" className="h-4 gap-1 px-1.5 text-[9px] border-[#dc2626]/20 text-[#dc2626]">
-            <XCircle className="h-2.5 w-2.5" /> {allResponses.length - passedCount} 不通过
-          </Badge>
-          <span className="text-[#9aa8a0]">通过率 {passRate}</span>
+      {/* 总览头 */}
+      <div className="flex items-center justify-between border-b border-[#1a5632]/8 px-4 py-2.5">
+        <h4 className="text-sm font-semibold text-[#122820]">📋 证据追溯</h4>
+        <div className="flex items-center gap-3 text-[10px]">
+          <span className="text-[#059669] font-medium">{passedCount} ✓</span>
+          <span className="text-[#dc2626] font-medium">{allResponses.length - passedCount} ✗</span>
+          <div className="h-4 w-[60px] overflow-hidden rounded-full bg-[#f3f4f6]">
+            <div
+              className="h-full rounded-full bg-[#059669] transition-all"
+              style={{ width: passRate }}
+            />
+          </div>
+          <span className="text-[#9aa8a0] tabular-nums">{passRate}</span>
         </div>
       </div>
-      <ScrollArea className="h-[360px]">
-        <table className="w-full text-xs">
-          <thead className="sticky top-0 bg-[#f6f5f1]/95">
-            <tr className="border-b border-[#1a5632]/8 text-left text-[10px] font-medium text-[#6b7c72]">
-              <th className="px-4 py-2 w-12">状态</th>
-              <th className="px-4 py-2 w-14">Rubric</th>
-              <th className="px-4 py-2">解释</th>
-              <th className="px-4 py-2 w-36">证据</th>
-            </tr>
-          </thead>
-          <tbody>
-            {allResponses.map((r, i) => (
-              <tr
-                key={`${r.dimensionId}-${r.rubricId}-${i}`}
-                className={cn(
-                  "border-b border-[#1a5632]/4",
-                  r.passed ? "hover:bg-[#059669]/3" : "hover:bg-[#dc2626]/3",
-                )}
-              >
-                <td className="px-4 py-2.5">
-                  {r.passed ? (
-                    <CheckCircle2 className="h-4 w-4 text-[#059669]" />
-                  ) : (
-                    <XCircle className="h-4 w-4 text-[#dc2626]" />
-                  )}
-                </td>
-                <td className="px-4 py-2.5 font-medium text-[#1a5632]">{r.rubricId}</td>
-                <td className="px-4 py-2.5 leading-relaxed text-[#3d4f46]">{r.explanation}</td>
-                <td className="px-4 py-2.5">
-                  <div className="flex flex-wrap gap-1">
-                    {r.evidence.map((ev, j) => (
-                      <code
-                        key={j}
-                        className="inline-block rounded bg-[#f3f4f6] px-1.5 py-0.5 text-[10px] text-[#6b7c72]"
-                      >
-                        {ev}
-                      </code>
-                    ))}
+
+      {/* 维度分组 Accordion */}
+      <div className="max-h-[500px] overflow-y-auto">
+        {dimsWithRubrics.map((dim) => {
+          const responses = dim.rubricResponses || [];
+          const dPassed = responses.filter((r) => r.passed).length;
+          const dRate = `${Math.round((dPassed / responses.length) * 100)}%`;
+
+          return (
+            <details key={dim.id} className="group border-b border-[#1a5632]/4" open={dim.id === "D1"}>
+              {/* 维度头部 — 可点击折叠 */}
+              <summary className="flex cursor-pointer items-center gap-3 px-4 py-2 hover:bg-[#1a5632]/2 list-none">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#1a5632]/8 text-[10px] font-bold text-[#1a5632]">
+                  {dim.id}
+                </span>
+                <span className="text-xs font-medium text-[#122820]">{dim.name}</span>
+                <div className="ml-auto flex items-center gap-2 text-[10px]">
+                  {/* 小型进度条 */}
+                  <div className="h-1.5 w-10 overflow-hidden rounded-full bg-[#f3f4f6]">
+                    <div
+                      className={cn("h-full rounded-full", dPassed === responses.length ? "bg-[#059669]" : "bg-[#d97706]")}
+                      style={{ width: dRate }}
+                    />
                   </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </ScrollArea>
+                  <span className={cn("tabular-nums", dPassed === responses.length ? "text-[#059669]" : "text-[#d97706]")}>
+                    {dPassed}/{responses.length}
+                  </span>
+                </div>
+              </summary>
+
+              {/* 维度下各行 — 紧凑单行 */}
+              <div className="border-t border-[#1a5632]/4">
+                {responses.map((r, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      "flex items-start gap-2 border-b border-[#1a5632]/3 px-4 py-1.5 text-[11px] last:border-0",
+                      r.passed ? "bg-[#059669]/1" : "bg-[#dc2626]/2",
+                    )}
+                  >
+                    {/* 状态图标 */}
+                    <span className="mt-0.5 shrink-0">
+                      {r.passed
+                        ? <CheckCircle2 className="h-3.5 w-3.5 text-[#059669]" />
+                        : <XCircle className="h-3.5 w-3.5 text-[#dc2626]" />}
+                    </span>
+
+                    {/* 解释 + 证据（一行） */}
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[#3d4f46] leading-snug">{r.explanation}</span>
+                      {r.evidence.length > 0 && (
+                        <span className="ml-1.5 inline-flex flex-wrap gap-0.5 align-middle">
+                          {r.evidence.slice(0, 3).map((ev, j) => (
+                            <code key={j} className="inline-block rounded bg-black/[0.04] px-1 py-0 text-[9px] text-[#9aa8a0]">
+                              {ev}
+                            </code>
+                          ))}
+                          {r.evidence.length > 3 && (
+                            <span className="text-[9px] text-[#9aa8a0]">+{r.evidence.length - 3}</span>
+                          )}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Rubric ID */}
+                    <span className="shrink-0 text-[10px] text-[#9aa8a0]">{r.rubricId}</span>
+                  </div>
+                ))}
+              </div>
+            </details>
+          );
+        })}
+      </div>
     </div>
   );
 }
