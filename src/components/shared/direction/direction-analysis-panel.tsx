@@ -38,6 +38,8 @@ interface DirectionAnalysisPanelProps {
   slug: string;
   hasContract: boolean;
   assetCount: number;
+  /** 已持久化的历史分析结果（从 DB 加载） */
+  storedDimensions?: AnalysisDimension[];
   candidates?: PaperCandidate[];
   synthesis?: SynthesisResult | null;
   onAnalysisDone?: () => void;
@@ -69,6 +71,7 @@ export function DirectionAnalysisPanel({
   slug,
   hasContract,
   assetCount,
+  storedDimensions,
   candidates,
   synthesis,
   onAnalysisDone,
@@ -110,9 +113,15 @@ export function DirectionAnalysisPanel({
     setEditingDim(null);
   };
 
-  const orderedDimensions = DIMENSION_ORDER
+  // 优先使用 hook 状态（实时分析），回退到存储的维度（DB 持久化）
+  const hookDimensions = DIMENSION_ORDER
     .map((id) => state.dimensions.get(id))
     .filter(Boolean) as AnalysisDimension[];
+  const orderedDimensions = hookDimensions.length > 0
+    ? hookDimensions
+    : storedDimensions || [];
+
+  const hasReport = orderedDimensions.length > 0;
 
   return (
     <div className="space-y-4">
@@ -172,7 +181,7 @@ export function DirectionAnalysisPanel({
       )}
 
       {/* 报告视图（分析完成后展示） */}
-      {state.status === "done" && orderedDimensions.length > 0 && (
+      {hasReport && (
         <div className="space-y-4">
           <ExecutiveSummary
             dimensions={orderedDimensions}
