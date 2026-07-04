@@ -5,6 +5,7 @@ import { validateBody } from "@/lib/api-validate";
 import { evaluationContractSchema } from "@/lib/validations";
 import { callAINonStreaming } from "@/lib/ai";
 import { buildEvaluationContractPrompt } from "@/lib/prompts/direction";
+import { buildSocraticToRubricPrompt } from "@/lib/prompts/direction-socratic";
 import { logger } from "@/lib/logger";
 import { getErrorMessage } from "@/lib/error-utils";
 
@@ -31,7 +32,57 @@ export async function POST(
 
     const action = body.action as string | undefined;
 
-    // 模式 1：AI 生成评价标准草案（不看资产）
+    // 模式 0：Socratic Mentor — 基于 Q&A 生成 Rubrics（不看资产）
+    if (action === "socratic-draft") {
+      const qa = body.qa as Array<{ questionId: string; question: string; answer: string }> | undefined;
+      if (!qa || !Array.isArray(qa) || qa.length === 0) {
+        return NextResponse.json(
+          { error: "请提供至少 1 组问答" },
+          { status: 400 },
+        );
+      }
+
+      const prompt = buildSocraticToRubricPrompt({
+        directionName: direction.name,
+        directionDesc: direction.description,
+        qa: qa.map((item) => ({ question: item.question, answer: item.answer })),
+      });
+
+      const raw = await callAINonStreaming({
+        provider: "deepseek",
+        messages: [
+          { role: "system", content: prompt.system },
+          { role: "user", content: prompt.user },
+        ],
+        timeoutMs: 60_000,
+      });
+
+      let draft;
+      try {
+        draft = JSON.parse(raw);
+        const fenceMatch = raw.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+        if (fenceMatch) draft = JSON.parse(fenceMatch[1]);
+      } catch {
+        const firstBrace = raw.indexOf("{");
+        const lastBrace = raw.lastIndexOf("}");
+        if (firstBrace !== -1 && lastBrace > firstBrace) {
+          draft = JSON.parse(raw.slice(firstBrace, lastBrace + 1));
+        } else {
+          return NextResponse.json(
+            { error: "AI 返回格式异常，请重试", raw: raw.slice(0, 500) },
+            { status: 500 },
+          );
+        }
+      }
+
+      return NextResponse.json({
+        draft: draft.dimensions || draft,
+        rationale: (draft as { rationale?: string }).rationale || "",
+        generatedAt: Date.now(),
+      });
+    }
+
+    // 模式 1：AI 生成评价标准草案（不看资产，通用版）
     if (action === "draft") {
       const prompt = buildEvaluationContractPrompt(direction.name, direction.description);
 

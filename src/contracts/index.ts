@@ -19,3 +19,4 @@ export type {
   RunReviewRequest,
 } from "./review";
 export * from "./direction";
+export * from "./direction-socratic";

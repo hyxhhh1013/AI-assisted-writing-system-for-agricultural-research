@@ -3,8 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/page-header";
@@ -15,6 +13,7 @@ import { DirectionAssetList } from "@/components/shared/direction/direction-asse
 import { DirectionAnalysisPanel } from "@/components/shared/direction/direction-analysis-panel";
 import { DirectionRoadmapTimeline } from "@/components/shared/direction/direction-roadmap-timeline";
 import { DirectionDashboard } from "@/components/shared/direction/direction-dashboard";
+import { DirectionSocraticDialog } from "@/components/shared/direction/direction-socratic-dialog";
 import {
   Compass,
   PackageOpen,
@@ -24,10 +23,6 @@ import {
   ArrowRight,
   Plus,
   Search,
-  Sparkles,
-  Loader2,
-  Check,
-  RefreshCw,
 } from "lucide-react";
 import { siteTheme } from "@/lib/site-theme";
 import { cn } from "@/lib/utils";
@@ -35,8 +30,6 @@ import { toast } from "sonner";
 import {
   getDirection,
   patchAssets,
-  generateContractDraft,
-  confirmContract,
 } from "@/services/direction";
 import type { DirectionDTO, DirectionAsset } from "@/contracts/direction";
 
@@ -126,68 +119,13 @@ export default function DirectionPageClient() {
     }
   };
 
-  // ====== Phase 2: 预承诺 ======
+  // ====== Phase 2: 预承诺（Socratic Mentor）======
 
   const analysis = (direction?.analysis as Record<string, unknown> | null) || {};
   const existingContract = analysis.evaluationContract as
-    | { dimensions?: Array<{ id: string; name?: string; rubrics?: RubricDraft[] }>; confirmedAt?: number }
+    | { dimensions?: Array<{ id: string; rubrics?: Array<{ id: string; what_to_look_for: string }> }>; confirmedAt?: number }
     | undefined;
   const hasContract = !!existingContract?.confirmedAt;
-
-  type RubricDraft = {
-    id: string;
-    what_to_look_for: string;
-    what_triggers_block: string;
-    what_triggers_warn: string;
-    evidence_required: string;
-  };
-  type DimDraft = { id: string; name: string; weight: number; rubrics: RubricDraft[] };
-
-  const [contractDraft, setContractDraft] = useState<DimDraft[] | null>(null);
-  const [contractLoading, setContractLoading] = useState(false);
-  const [contractEdited, setContractEdited] = useState<Record<string, RubricDraft[]>>({});
-
-  const handleGenerateDraft = async () => {
-    setContractLoading(true);
-    try {
-      const result = await generateContractDraft(slug);
-      const dims: DimDraft[] = (result.draft || []).map((d: Record<string, unknown>) => ({
-        id: d.id as string,
-        name: d.name as string,
-        weight: d.weight as number,
-        rubrics: (d.rubrics as RubricDraft[]) || [],
-      }));
-      setContractDraft(dims);
-      const edits: Record<string, RubricDraft[]> = {};
-      for (const d of dims) {
-        edits[d.id] = d.rubrics.map((r) => ({ ...r }));
-      }
-      setContractEdited(edits);
-      toast.success("评价标准草案已生成");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "生成草案失败");
-    } finally {
-      setContractLoading(false);
-    }
-  };
-
-  const handleConfirmContract = async () => {
-    if (!contractDraft) return;
-    try {
-      const dimensions = contractDraft.map((d) => ({
-        id: d.id,
-        name: d.name,
-        weight: d.weight,
-        rubrics: contractEdited[d.id] || d.rubrics,
-      }));
-      await confirmContract(slug, { dimensions });
-      toast.success("评价标准已确认");
-      await fetchDirection();
-      setContractDraft(null);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "确认失败");
-    }
-  };
 
   const handleRefreshDirection = async () => {
     await fetchDirection();
@@ -296,140 +234,17 @@ export default function DirectionPageClient() {
           </div>
         </TabsContent>
 
-        {/* ====== Phase 2: 预承诺 ====== */}
+        {/* ====== Phase 2: Socratic 预承诺 ====== */}
         <TabsContent value="contract" className="space-y-4">
           <div className={cn("rounded-xl border border-[#1a5632]/8 p-6", siteTheme.card)}>
             <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-[#122820]">
-              <ClipboardCheck className="h-4 w-4 text-[#1a5632]" /> Phase 2 — 预承诺（Evaluation Contract）
+              <ClipboardCheck className="h-4 w-4 text-[#1a5632]" /> Phase 2 — 设定评价标准
             </h3>
 
-            {hasContract ? (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 rounded-md bg-[#1a5632]/6 px-3 py-2 text-sm text-[#1a5632]">
-                  <Check className="h-4 w-4" /> 评价标准已确认
-                </div>
-                {existingContract?.dimensions?.map((d: Record<string, unknown>) => {
-                  const rubrics = (d.rubrics as RubricDraft[]) || [];
-                  return (
-                    <div key={d.id as string} className="rounded-lg border border-[#1a5632]/8 bg-white px-4 py-3">
-                      <p className="text-sm font-medium text-[#122820]">
-                        {d.id as string} {(d.name as string) || ""}
-                      </p>
-                      {rubrics.length > 0 && (
-                        <div className="mt-2 space-y-1.5">
-                          {rubrics.map((r) => (
-                            <div key={r.id} className="rounded bg-[#f6f5f1] px-3 py-1.5 text-xs text-[#6b7c72]">
-                              <span className="font-medium text-[#122820]">{r.id}:</span> {r.what_to_look_for}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-                <Button variant="outline" size="sm" className="text-xs" onClick={handleGenerateDraft}>
-                  <RefreshCw className="h-3 w-3 mr-1" /> 重新生成草案
-                </Button>
-              </div>
-            ) : contractDraft ? (
-              <div className="space-y-4">
-                <p className="text-sm text-[#6b7c72]">
-                  AI 已为每个维度生成 3-5 条 Rubric（仅基于方向名称和描述，未接触资产数据）。请逐项审核修改后确认。
-                </p>
-                {contractDraft.map((d) => (
-                  <div key={d.id} className="rounded-lg border border-[#1a5632]/12 bg-white px-4 py-3 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-[#122820]">{d.id} {d.name}</span>
-                      <Badge variant="secondary" className="h-4 px-1 text-[9px]">权重 {(d.weight * 100).toFixed(0)}%</Badge>
-                      <span className="text-[10px] text-[#9aa8a0]">{d.rubrics.length} 条 rubric</span>
-                    </div>
-                    {(contractEdited[d.id] || d.rubrics).map((r, ri) => (
-                      <div key={r.id} className="grid grid-cols-1 gap-1.5 rounded bg-[#f6f5f1]/50 p-2.5 sm:grid-cols-2">
-                        <div className="sm:col-span-2">
-                          <Label className="text-[10px] text-[#9aa8a0]">
-                            {r.id} — 检查内容（what_to_look_for）
-                          </Label>
-                          <Input
-                            value={r.what_to_look_for}
-                            onChange={(e) => {
-                              const next = [...(contractEdited[d.id] || d.rubrics)];
-                              next[ri] = { ...next[ri], what_to_look_for: e.target.value };
-                              setContractEdited({ ...contractEdited, [d.id]: next });
-                            }}
-                            className="mt-0.5 h-7 text-xs"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-[10px] text-[#9aa8a0]">Block 条件</Label>
-                          <Input
-                            value={r.what_triggers_block}
-                            onChange={(e) => {
-                              const next = [...(contractEdited[d.id] || d.rubrics)];
-                              next[ri] = { ...next[ri], what_triggers_block: e.target.value };
-                              setContractEdited({ ...contractEdited, [d.id]: next });
-                            }}
-                            className="mt-0.5 h-7 text-xs"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-[10px] text-[#9aa8a0]">Warn 条件</Label>
-                          <Input
-                            value={r.what_triggers_warn}
-                            onChange={(e) => {
-                              const next = [...(contractEdited[d.id] || d.rubrics)];
-                              next[ri] = { ...next[ri], what_triggers_warn: e.target.value };
-                              setContractEdited({ ...contractEdited, [d.id]: next });
-                            }}
-                            className="mt-0.5 h-7 text-xs"
-                          />
-                        </div>
-                        <div className="sm:col-span-2">
-                          <Label className="text-[10px] text-[#9aa8a0]">需引用证据（evidence_required）</Label>
-                          <Input
-                            value={r.evidence_required}
-                            onChange={(e) => {
-                              const next = [...(contractEdited[d.id] || d.rubrics)];
-                              next[ri] = { ...next[ri], evidence_required: e.target.value };
-                              setContractEdited({ ...contractEdited, [d.id]: next });
-                            }}
-                            className="mt-0.5 h-7 text-xs"
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setContractDraft(null)}>取消</Button>
-                  <Button size="sm" className={siteTheme.btnPrimary} onClick={handleConfirmContract}>
-                    <Check className="h-3.5 w-3.5 mr-1" /> 确认评价标准
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-4 py-8 text-center">
-                <ClipboardCheck className="h-10 w-10 text-[#9aa8a0]" />
-                <div>
-                  <p className="text-sm text-[#6b7c72]">
-                    在 AI 分析资产之前，先确定评价标准——<strong>什么算好论文？</strong>
-                  </p>
-                  <p className="mt-1 text-xs text-[#9aa8a0]">
-                    AI 仅基于方向名称和描述生成草案，不会接触资产数据。
-                  </p>
-                </div>
-                <Button
-                  onClick={handleGenerateDraft}
-                  disabled={contractLoading}
-                  className={cn("gap-1.5", siteTheme.btnPrimary)}
-                >
-                  {contractLoading ? (
-                    <><Loader2 className="h-4 w-4 animate-spin" /> 生成中…</>
-                  ) : (
-                    <><Sparkles className="h-4 w-4" /> AI 生成评价标准草案</>
-                  )}
-                </Button>
-              </div>
-            )}
+            <DirectionSocraticDialog
+              direction={direction}
+              onComplete={handleRefreshDirection}
+            />
           </div>
           <div className="flex items-center justify-between">
             <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => setActiveTab("assets")}>
