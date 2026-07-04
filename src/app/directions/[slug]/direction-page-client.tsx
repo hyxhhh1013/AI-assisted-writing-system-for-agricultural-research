@@ -33,6 +33,7 @@ import {
   getDirection,
   patchAssets,
 } from "@/services/direction";
+import { useAuth } from "@/lib/auth-context";
 import type { DirectionDTO, DirectionAsset, PaperCandidate, SynthesisResult, AnalysisDimension } from "@/contracts/direction";
 
 const TABS = [
@@ -47,6 +48,8 @@ export default function DirectionPageClient() {
   const params = useParams();
   const router = useRouter();
   const slug = params.slug as string;
+  const { user } = useAuth();
+  const isPI = user?.role === "admin";
 
   const [direction, setDirection] = useState<DirectionDTO | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -156,6 +159,12 @@ export default function DirectionPageClient() {
         icon={Compass}
         backHref="/"
         backForceFallback
+        actions={
+          <div className="flex items-center gap-2">
+            {!isPI && <Badge variant="secondary" className="gap-1 border-[#2563eb]/20 bg-[#2563eb]/8 text-[#2563eb] text-[10px]">浏览</Badge>}
+            {isPI && <Badge variant="secondary" className="gap-1 border-[#1a5632]/30 bg-[#1a5632]/8 text-[#1a5632] text-[10px]">PI</Badge>}
+          </div>
+        }
       />
 
       {/* 统计卡片 */}
