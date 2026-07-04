@@ -261,6 +261,44 @@ export async function generateRoadmap(slug: string): Promise<RoadmapResult> {
   return data;
 }
 
+// ==================== 实验方案生成 ====================
+
+export interface ExperimentPlanResult {
+  title: string;
+  objective: string;
+  rationale: string;
+  methods: Array<{
+    step: number;
+    description: string;
+    conditions: string;
+    notes: string;
+  }>;
+  expectedResults: string;
+  equipmentNeeded: string[];
+  sampleRequirements: string;
+  estimatedDuration: string;
+  keyReferences: string[];
+  generatedAt: number;
+  gapDescription: string;
+}
+
+/** POST /api/directions/[slug]/experiment-plan — 生成实验方案 */
+export async function generateExperimentPlan(
+  slug: string,
+  gap: string,
+): Promise<{ plan: ExperimentPlanResult }> {
+  const res = await fetch(`/api/directions/${slug}/experiment-plan`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ gap }),
+  });
+  const data = await res.json().catch(() => ({})) as { plan?: ExperimentPlanResult; error?: string };
+  if (!res.ok || !data.plan) {
+    throw new Error(data.error || "生成实验方案失败");
+  }
+  return { plan: data.plan };
+}
+
 // ==================== Phase 5: 桥接到写作 ====================
 
 /** PATCH /api/directions/[slug]/roadmap — 更新单篇论文状态 */

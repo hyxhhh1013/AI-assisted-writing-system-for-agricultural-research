@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { siteTheme } from "@/lib/site-theme";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { useDirectionAnalysis } from "@/hooks/use-direction-analysis";
 import {
   DimensionRadarChart,
@@ -30,6 +31,7 @@ import {
   ContradictionPanel,
   ExecutiveSummary,
 } from "@/components/shared/direction/direction-analysis-charts";
+import { generateExperimentPlan, type ExperimentPlanResult } from "@/services/direction";
 import type { AnalysisDimension, PaperCandidate, SynthesisResult } from "@/contracts/direction";
 
 interface DirectionAnalysisPanelProps {
@@ -292,7 +294,13 @@ export function DirectionAnalysisPanel({
                             <span><strong>警告:</strong> {dim.whatTriggersWarn}</span>
                           </div>
                         )}
-                        <div className="flex justify-end">
+                        <div className="flex justify-end gap-2">
+                          {dim.id === "D6" && (dim.whatTriggersBlock || dim.whatTriggersWarn) && (
+                            <GeneratePlanButton
+                              slug={slug}
+                              gapDescription={dim.whatTriggersBlock || dim.whatTriggersWarn}
+                            />
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -394,5 +402,76 @@ export function DirectionAnalysisPanel({
         </div>
       </ScrollArea>
     </div>
+  );
+}
+
+// ==================== 实验方案生成按钮 ====================
+
+function GeneratePlanButton({
+  slug,
+  gapDescription,
+}: {
+  slug: string;
+  gapDescription: string;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [plan, setPlan] = useState<ExperimentPlanResult | null>(null);
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    try {
+      const result = await generateExperimentPlan(slug, gapDescription);
+      setPlan(result.plan);
+      toast.success("实验方案已生成");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "生成失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (plan) {
+    return (
+      <div className="mt-3 space-y-2 rounded-lg border border-[#2563eb]/20 bg-[#2563eb]/3 p-4 text-xs">
+        <div className="flex items-center justify-between">
+          <span className="font-semibold text-[#122820]">🧪 {plan.title as string}</span>
+          <button className="text-[9px] text-[#9aa8a0] hover:text-[#6b7c72]" onClick={() => setPlan(null)}>
+            收起
+          </button>
+        </div>
+        <p className="text-[#3d4f46]"><strong>目的：</strong>{plan.objective as string}</p>
+        <p className="text-[#6b7c72]"><strong>依据：</strong>{plan.rationale as string}</p>
+        {Array.isArray(plan.methods) && plan.methods.length > 0 && (
+          <div className="space-y-1.5">
+            <strong className="text-[#6b7c72]">方法步骤：</strong>
+            {(plan.methods as Array<Record<string, unknown>>).map((m, i) => (
+              <div key={i} className="ml-3 border-l-2 border-[#2563eb]/20 pl-3 text-[11px]">
+                <span className="font-medium text-[#2563eb]">步骤 {m.step as number}:</span> {m.description as string}
+                <br /><span className="text-[#9aa8a0]">条件: {m.conditions as string}</span>
+                {m.notes ? <><br /><span className="text-[#d97706]">⚠️ {(m as Record<string, string>).notes}</span></> : null}
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="text-[#3d4f46]"><strong>预期结果：</strong>{plan.expectedResults as string}</p>
+        <p className="text-[#6b7c72]"><strong>预估周期：</strong>{plan.estimatedDuration as string}</p>
+      </div>
+    );
+  }
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-7 text-[10px] gap-1 border-[#2563eb]/20 text-[#2563eb]"
+      disabled={loading}
+      onClick={handleGenerate}
+    >
+      {loading ? (
+        <><Loader2 className="h-3 w-3 animate-spin" /> 生成中…</>
+      ) : (
+        <>🧪 生成实验方案</>
+      )}
+    </Button>
   );
 }

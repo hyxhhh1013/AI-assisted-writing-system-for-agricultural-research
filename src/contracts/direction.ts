@@ -192,6 +192,29 @@ export interface DirectionRoadmap {
   experimentDependencies: ExperimentDependency[];
 }
 
+// ==================== 实验方案类型 ====================
+
+export interface ExperimentPlanMethod {
+  step: number;
+  description: string;
+  conditions: string;
+  notes: string;
+}
+
+export interface ExperimentPlan {
+  title: string;
+  objective: string;
+  rationale: string;
+  methods: ExperimentPlanMethod[];
+  expectedResults: string;
+  equipmentNeeded: string[];
+  sampleRequirements: string;
+  estimatedDuration: string;
+  keyReferences: string[];
+  generatedAt: number;
+  gapDescription: string;
+}
+
 // ==================== SSE 事件类型（Phase 3 分析流） ====================
 
 export type DirectionSSEEvent =
