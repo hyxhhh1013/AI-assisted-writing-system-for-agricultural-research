@@ -31,7 +31,7 @@ import {
   getDirection,
   patchAssets,
 } from "@/services/direction";
-import type { DirectionDTO, DirectionAsset } from "@/contracts/direction";
+import type { DirectionDTO, DirectionAsset, PaperCandidate, SynthesisResult } from "@/contracts/direction";
 
 const TABS = [
   { id: "assets", label: "资产盘点", icon: PackageOpen, phase: 0 },
@@ -263,6 +263,8 @@ export default function DirectionPageClient() {
               slug={slug}
               hasContract={hasContract}
               assetCount={assets.length}
+              candidates={(analysis.paperCandidates as PaperCandidate[] | undefined) || []}
+              synthesis={(analysis.synthesis || null) as SynthesisResult | null}
               onAnalysisDone={handleRefreshDirection}
             />
           </div>

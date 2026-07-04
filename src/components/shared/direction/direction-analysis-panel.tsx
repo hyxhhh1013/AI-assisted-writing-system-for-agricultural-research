@@ -23,12 +23,21 @@ import {
 import { siteTheme } from "@/lib/site-theme";
 import { cn } from "@/lib/utils";
 import { useDirectionAnalysis } from "@/hooks/use-direction-analysis";
-import type { AnalysisDimension } from "@/contracts/direction";
+import {
+  DimensionRadarChart,
+  CandidateBarChart,
+  EvidenceTraceTable,
+  ContradictionPanel,
+  ExecutiveSummary,
+} from "@/components/shared/direction/direction-analysis-charts";
+import type { AnalysisDimension, PaperCandidate, SynthesisResult } from "@/contracts/direction";
 
 interface DirectionAnalysisPanelProps {
   slug: string;
   hasContract: boolean;
   assetCount: number;
+  candidates?: PaperCandidate[];
+  synthesis?: SynthesisResult | null;
   onAnalysisDone?: () => void;
 }
 
@@ -58,6 +67,8 @@ export function DirectionAnalysisPanel({
   slug,
   hasContract,
   assetCount,
+  candidates,
+  synthesis,
   onAnalysisDone,
 }: DirectionAnalysisPanelProps) {
   const { state, run, cancel, updateDimension } = useDirectionAnalysis();
@@ -155,6 +166,23 @@ export function DirectionAnalysisPanel({
             </span>
             <span>{progressPct}%</span>
           </div>
+        </div>
+      )}
+
+      {/* 报告视图（分析完成后展示） */}
+      {state.status === "done" && orderedDimensions.length > 0 && (
+        <div className="space-y-4">
+          <ExecutiveSummary
+            dimensions={orderedDimensions}
+            synthesis={synthesis || state.result?.synthesis || null}
+            candidateCount={candidates?.length || state.candidates.length || 0}
+          />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <DimensionRadarChart dimensions={orderedDimensions} />
+            <CandidateBarChart candidates={candidates || state.candidates} />
+          </div>
+          <EvidenceTraceTable dimensions={orderedDimensions} />
+          <ContradictionPanel synthesis={synthesis || state.result?.synthesis || null} />
         </div>
       )}
 
