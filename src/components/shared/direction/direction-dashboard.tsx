@@ -1,6 +1,6 @@
 "use client";
 
-import { Compass, FileText, CheckCircle, Send, TrendingUp, ArrowRight } from "lucide-react";
+import { Compass, FileText, CheckCircle, Send, TrendingUp, ArrowRight, Clock, History } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DirectionRoadmap } from "@/contracts/direction";
 
@@ -79,6 +79,17 @@ export function DirectionDashboard({
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Material Passport 版本信息 */}
+      {analysisDone && (
+        <div className="flex items-center gap-2 text-[10px] text-[#9aa8a0] px-1">
+          <History className="h-3 w-3" />
+          <span>
+            分析于 {roadmap?.generatedAt ? new Date(roadmap.generatedAt).toLocaleDateString("zh-CN") : "—"} ·
+            资产 {assetCount} 项 · 路线图 {paperCounts.total} 篇
+          </span>
         </div>
       )}
 
