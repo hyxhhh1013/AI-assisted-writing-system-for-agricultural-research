@@ -14,12 +14,14 @@ import { DirectionAnalysisPanel } from "@/components/shared/direction/direction-
 import { DirectionRoadmapTimeline } from "@/components/shared/direction/direction-roadmap-timeline";
 import { DirectionDashboard } from "@/components/shared/direction/direction-dashboard";
 import { DirectionSocraticDialog } from "@/components/shared/direction/direction-socratic-dialog";
+import { DirectionGrantPanel } from "@/components/shared/direction/direction-grant-panel";
 import {
   Compass,
   PackageOpen,
   ClipboardCheck,
   BarChart3,
   Map,
+  FileText,
   ArrowRight,
   Plus,
   Search,
@@ -38,6 +40,7 @@ const TABS = [
   { id: "contract", label: "预承诺", icon: ClipboardCheck, phase: 1 },
   { id: "analysis", label: "8 维度分析", icon: BarChart3, phase: 2 },
   { id: "roadmap", label: "论文路线图", icon: Map, phase: 3 },
+  { id: "grant", label: "申报材料", icon: FileText, phase: 4 },
 ] as const;
 
 export default function DirectionPageClient() {
@@ -325,6 +328,21 @@ export default function DirectionPageClient() {
           <div className="flex items-center justify-between">
             <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => setActiveTab("analysis")}>
               <ArrowRight className="h-3 w-3 rotate-180" /> 上一步：8 维度分析
+            </Button>
+          </div>
+        </TabsContent>
+
+        {/* ====== Phase 5: 项目申报辅助 ====== */}
+        <TabsContent value="grant" className="space-y-4">
+          <div className={cn("rounded-xl border border-[#1a5632]/8 p-6", siteTheme.card)}>
+            <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-[#122820]">
+              <FileText className="h-4 w-4 text-[#1a5632]" /> Phase 5 — 项目申报材料
+            </h3>
+            <DirectionGrantPanel slug={slug} direction={direction} />
+          </div>
+          <div className="flex items-center justify-between">
+            <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => setActiveTab("roadmap")}>
+              <ArrowRight className="h-3 w-3 rotate-180" /> 上一步：论文路线图
             </Button>
           </div>
         </TabsContent>
