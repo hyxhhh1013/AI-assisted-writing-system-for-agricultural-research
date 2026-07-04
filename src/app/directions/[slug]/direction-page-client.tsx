@@ -207,6 +207,7 @@ export default function DirectionPageClient() {
             {showAssetForm && (
               <div className="mb-6 rounded-lg border border-[#1a5632]/12 bg-[#f6f5f1]/50 p-4">
                 <DirectionAssetForm
+                  slug={slug}
                   onSave={handleAssetSave}
                   onCancel={() => {
                     setShowAssetForm(false);

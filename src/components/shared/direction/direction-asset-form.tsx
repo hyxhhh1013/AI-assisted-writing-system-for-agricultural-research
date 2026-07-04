@@ -7,12 +7,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FlaskConical, FileText, Database, Save } from "lucide-react";
+import { FlaskConical, FileText, Database, Save, Wand2, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { siteTheme } from "@/lib/site-theme";
+import { toast } from "sonner";
 import type { DirectionAsset, ExperimentAsset, PaperAsset, DatasetAsset } from "@/contracts/direction";
 
 interface DirectionAssetFormProps {
+  slug?: string;
   onSave: (asset: DirectionAsset) => void;
   onCancel: () => void;
   editAsset?: DirectionAsset | null;
@@ -68,7 +70,7 @@ function newDataset(): DatasetAsset {
   };
 }
 
-export function DirectionAssetForm({ onSave, onCancel, editAsset }: DirectionAssetFormProps) {
+export function DirectionAssetForm({ slug, onSave, onCancel, editAsset }: DirectionAssetFormProps) {
   const [tab, setTab] = useState<string>(editAsset?.kind || "experiment");
   const [experiment, setExperiment] = useState<ExperimentAsset>(
     editAsset?.kind === "experiment" ? (editAsset as ExperimentAsset) : newExperiment(),
@@ -91,6 +93,11 @@ export function DirectionAssetForm({ onSave, onCancel, editAsset }: DirectionAss
     }
   };
 
+  const [quickMode, setQuickMode] = useState(false);
+  const [nlText, setNlText] = useState("");
+  const [nlParsing, setNlParsing] = useState(false);
+  const [nlConfidence, setNlConfidence] = useState<string | null>(null);
+
   const canSave = () => {
     if (tab === "experiment") {
       return experiment.title.trim() && experiment.researchQuestion.trim() && experiment.keyFindings.trim() && experiment.limitations.trim();
@@ -101,8 +108,109 @@ export function DirectionAssetForm({ onSave, onCancel, editAsset }: DirectionAss
     return dataset.title.trim() && dataset.variables.trim();
   };
 
+  /** NL 解析：调用 AI 将自然语言转为结构化 ExperimentAsset */
+  const handleNLParse = async () => {
+    if (!slug) return;
+    if (!nlText.trim() || nlText.trim().length < 10) {
+      toast.error("请至少输入 10 个字的实验描述");
+      return;
+    }
+    setNlParsing(true);
+    setNlConfidence(null);
+    try {
+      const res = await fetch(`/api/directions/${slug}/parse-asset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: nlText.trim() }),
+      });
+      const data = await res.json() as {
+        parsed?: ExperimentAsset & { confidence?: string };
+        confidence?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.parsed) throw new Error(data.error || "解析失败");
+
+      // 预填表单
+      const parsed = data.parsed;
+      setExperiment({
+        ...newExperiment(),
+        id: parsed.id,
+        title: parsed.title,
+        dateRange: parsed.dateRange,
+        researchQuestion: parsed.researchQuestion,
+        methods: parsed.methods,
+        keyFindings: parsed.keyFindings,
+        limitations: parsed.limitations,
+        isNegativeResult: parsed.isNegativeResult || false,
+      });
+      setNlConfidence(data.confidence || "medium");
+      setTab("experiment");
+      setQuickMode(false);
+      toast.success("已解析为结构化资产，请审核后保存");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "解析失败");
+    } finally {
+      setNlParsing(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
+      {/* 快速录入模式 */}
+      {tab === "experiment" && !editAsset && (
+        <div className="rounded-lg border border-dashed border-[#1a5632]/20 bg-[#1a5632]/2 px-4 py-3">
+          {!quickMode ? (
+            <button
+              className="flex w-full items-center justify-center gap-2 rounded-md py-1.5 text-xs text-[#1a5632] hover:bg-[#1a5632]/6 transition-colors"
+              onClick={() => setQuickMode(true)}
+            >
+              <Wand2 className="h-3.5 w-3.5" />
+              快速录入：用自然语言描述实验，AI 自动解析为结构化字段
+            </button>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-[#1a5632] flex items-center gap-1.5">
+                  <Wand2 className="h-3.5 w-3.5" /> 快速录入
+                </span>
+                <button onClick={() => setQuickMode(false)} className="text-[#9aa8a0] hover:text-[#6b7c72]">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <Textarea
+                placeholder="例：我们 2024 年 Q1 做了管式炉热解实验，在 N₂ 和 CO₂ 气氛下测试了 5 个温度梯度（400-800°C）。发现 CO₂ 气氛下焦产率比 N₂ 高 12-18%，但 800°C 以上差异减小。主要不足是只做了一次重复、没有做 SEM 表征确认形貌..."
+                value={nlText}
+                onChange={(e) => setNlText(e.target.value)}
+                className="h-28 resize-none text-sm"
+              />
+              {nlConfidence && (
+                <p className="text-[10px] text-[#6b7c72]">
+                  AI 解析置信度：
+                  <span className={cn(
+                    "ml-1 font-medium",
+                    nlConfidence === "high" ? "text-[#059669]" : nlConfidence === "low" ? "text-[#dc2626]" : "text-[#d97706]",
+                  )}>
+                    {nlConfidence === "high" ? "高" : nlConfidence === "low" ? "低（建议手动补充）" : "中"}
+                  </span>
+                </p>
+              )}
+              <Button
+                size="sm"
+                className={cn("gap-1.5 w-full", siteTheme.btnPrimary)}
+                disabled={nlParsing || nlText.trim().length < 10}
+                onClick={() => handleNLParse()}
+              >
+                {nlParsing ? (
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> 解析中…</>
+                ) : (
+                  <><Wand2 className="h-3.5 w-3.5" /> AI 解析</>
+                )}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="h-9 w-full">
           <TabsTrigger value="experiment" className="flex-1 gap-1.5 text-xs">
