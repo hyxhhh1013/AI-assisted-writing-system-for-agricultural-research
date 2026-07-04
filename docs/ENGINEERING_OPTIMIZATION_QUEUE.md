@@ -118,6 +118,19 @@
 | RAG-PR-009 | warmup 真预加载 + `RAG_WARMUP`/`RAG_PERF_LOG` 开关 | RAG-PR-008 | 0.5h | done | 2026-06-13；冷启动移出首检索 |
 | RAG-PR-010 | `.emb` 按需 pread（去常驻内存） | RAG-PR-006 | 0.5d | done | 2026-06-13；`EmbeddingStore` 文件句柄 + `readSync`；省 ~885MB |
 | RAG-PR-011 | 扩写范围检索（按已选文献分类 scope） | RAG-PR-010 | 0.5d | done | 2026-06-13；`search({categories})` + `deriveScopeCategories`；无引用回退全库 |
+| **Phase 9 — 研究方向战略规划（ENG-PR-100 系列）** |
+| ENG-PR-100 | 方向基础模块：Direction 表 + CRUD + 页面框架（33 files） | — | 3d | done | 2026-07-04；`d18a7e3` |
+| ENG-PR-110 | Socratic Mentor 预承诺（P0） | 100 | 2d | done | 2026-07-04；`314dd02` / `509a9a3` / `52823df` |
+| ENG-PR-111 | 分析报告可视化：雷达图+柱状图+证据表+矛盾面板（P0） | 100 | 3d | done | 2026-07-04；`66b3d75` |
+| ENG-PR-112 | Blueprint 扩展 + 写作桥接对齐（P1） | 100 | 1d | done | 2026-07-04；`be78112` |
+| ENG-PR-113 | NL 资产解析：自然语言→结构化 ExperimentAsset（P1） | 100 | 1d | done | 2026-07-04；`2ac88f5` |
+| ENG-PR-114 | 甘特图路线图可视化（P1） | 100 | 1d | done | 2026-07-04；`4ddc02e` |
+| ENG-PR-115 | 实验方案生成：D6 缺口→ExperimentPlan（P1） | 100 | 2d | done | 2026-07-04；`e23549c` |
+| ENG-PR-116 | 项目申报辅助：方向全景→基金申请书（P1） | 100 | 2d | done | 2026-07-04；`353791a` |
+| ENG-PR-117 | 双角色架构：PI + Researcher 权限分离（P2） | 100 | 1d | done | 2026-07-04；`42abad6` |
+| ENG-PR-118 | Material Passport 版本追踪（P2） | 100 | 1d | done | 2026-07-04；`064479b` |
+| ENG-PR-119 | Style Calibration 方向校准（P2） | 100 | 1d | done | 2026-07-04；`cc9ab9e` |
+| ENG-PR-120 | 反模式检测接入审查板块 | 100 | 1d | done | 2026-07-04；`a35bbc8` |
 
 ### 1.1 与既有队列的关系
 
@@ -880,6 +893,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-06-12 | ENG-PR-093 | AI | RIS/BibTeX 导入 + 091 脚本/Admin 增强 + reindex 后台续跑 |
 | 2026-06-13 | ENG-PR-096a, 096b, 096c | AI | 协作扩写 MVP：retrieve-preview + bullets[] + expand_bullet；`isWritingDraftReady` 条数门槛 |
 | 2026-06-13 | RAG-PR-006～011 | AI | 新增 Phase 8 RAG 运行时性能：两阶段检索 + embedding LRU + 协作式构建/合并/并发去重 + warmup 预加载 + `.emb` 按需 pread + 扩写按分类 scope；`npm run check` 绿（库变大后卡顿/内存优化） |
+| 2026-07-04 | ENG-PR-100, 110～120 | AI | 新增 Phase 9 研究方向战略规划：方向 CRUD + Socratic 预承诺 + 8 维度 Rubric 分析 + 报告可视化（recharts 雷达图/柱状图/证据表/矛盾面板）+ Blueprint 扩展 + NL 资产解析 + 甘特图路线图 + 实验方案生成 + 项目申报辅助 + 双角色 + Material Passport + Style Calibration；反模式检测接入审查板块；15 commits，全部 tsc + lint 通过 |
 
 ---
 

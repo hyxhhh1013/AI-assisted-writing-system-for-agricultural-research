@@ -91,6 +91,29 @@
 
 详见 [`ADMIN_ENHANCEMENT_PLAN.md`](./ADMIN_ENHANCEMENT_PLAN.md)。
 
+## 研究方向战略规划
+
+> 新增于 2026-07-04。设计文档：[`superpowers/specs/2026-07-04-direction-planning-design.md`](./superpowers/specs/2026-07-04-direction-planning-design.md)
+
+| 功能 | 页面 | API | 核心代码 |
+|------|------|-----|----------|
+| 方向列表/创建 | `src/app/directions/page.tsx` | `GET/POST /api/directions` | `direction-card.tsx` |
+| 方向工作台 | `src/app/directions/[slug]/` | `GET/PUT/DELETE /api/directions/[slug]` | `direction-page-client.tsx`（5 Phase Tab） |
+| 资产盘点 | 方向工作台 Phase 1 | `PATCH .../assets` · `GET .../scan` · `POST .../parse-asset` | `direction-asset-form.tsx`, `direction-asset-list.tsx`, `direction-asset-scan-dialog.tsx` |
+| Socratic 预承诺 | 方向工作台 Phase 2 | `POST .../evaluation-contract` | `direction-socratic-dialog.tsx`, `direction-socratic.ts` |
+| 8 维度分析（SSE） | 方向工作台 Phase 3 | `POST .../analyze` | `direction-analysis-panel.tsx`, `direction-analysis-charts.tsx`, `use-direction-analysis.ts` |
+| 论文路线图 | 方向工作台 Phase 4 | `POST .../roadmap` | `direction-roadmap-timeline.tsx`, `direction-dashboard.tsx` |
+| 实验方案生成 | 分析面板 D6 维度 | `POST .../experiment-plan` | 内联 `GeneratePlanButton` |
+| 项目申报辅助 | 方向工作台 Phase 5 | `POST .../grant-proposal` | `direction-grant-panel.tsx` |
+| 方向摘要（主页） | 主页卡片 | `GET /api/directions/summary` | `directions-overview.tsx` |
+| 反模式检测 | — | — | `direction-checks.ts`（审查板块复用） |
+
+**Prompt 族**：`src/lib/prompts/direction.ts`（Rubric 分析 + 路线图）、`direction-socratic.ts`（Socratic→Rubric）、`direction-nl-parse.ts`（NL→资产）、`direction-experiment-plan.ts`（实验方案）、`direction-grant.ts`（基金申请书）
+
+**校准工具**：`src/lib/direction-calibration.ts`（从已发表论文学习评分标准）
+
+**种子脚本**：`node scripts/seed-directions.mjs`（初始化 4 个方向）
+
 ## 认证与导出
 
 | 功能 | 页面 | API | 核心代码 |
