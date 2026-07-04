@@ -203,30 +203,17 @@ export function DirectionRoadmapTimeline({
         </div>
       </div>
 
-      {/* 时间线 */}
+      {/* 甘特图时间线 */}
       {roadmap.timeline.length > 0 && (
         <div>
           <h4 className="mb-3 flex items-center gap-1.5 text-sm font-medium text-[#122820]">
-            <Clock className="h-4 w-4 text-[#1a5632]" /> 时间线
+            <Clock className="h-4 w-4 text-[#1a5632]" /> 甘特图 · 时间线
           </h4>
-          <div className="relative ml-4 border-l-2 border-[#1a5632]/12 pl-6 space-y-4">
-            {roadmap.timeline.map((entry) => (
-              <div key={entry.quarter} className="relative">
-                <div className="absolute -left-[1.65rem] top-1 h-3 w-3 rounded-full border-2 border-[#1a5632] bg-white" />
-                <div className="space-y-1">
-                  <span className="text-xs font-semibold text-[#1a5632]">{entry.quarter}</span>
-                  {entry.papers.map((pid) => {
-                    const candidate = candidates?.find((c) => c.id === pid);
-                    return (
-                      <p key={pid} className="text-sm text-[#3d4f46]">
-                        {candidate?.title || pid}
-                      </p>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
+          <RoadmapGantt
+            timeline={roadmap.timeline}
+            papers={roadmap.papers}
+            candidates={candidates}
+          />
         </div>
       )}
 
@@ -260,6 +247,117 @@ export function DirectionRoadmapTimeline({
           {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
           重新生成路线图
         </Button>
+      </div>
+    </div>
+  );
+}
+
+// ==================== 甘特图组件 ====================
+
+function RoadmapGantt({
+  timeline,
+  papers,
+  candidates,
+}: {
+  timeline: Array<{ quarter: string; papers: string[] }>;
+  papers: Array<{ candidateId: string; priority: number; status: string }>;
+  candidates?: Array<{ id: string; title: string; tier: string; suggestedJournal?: string }>;
+}) {
+  // 解析 quarter 为索引
+  const quarters = timeline.map((t) => t.quarter);
+  const colorByStatus: Record<string, string> = {
+    planned: "bg-[#1a5632]/20",
+    writing: "bg-[#2563eb]",
+    submitted: "bg-[#7c3aed]",
+    published: "bg-[#6366f1]",
+  };
+
+  // 构建论文 → 所在时间块的映射
+  const paperQuarter: Record<string, string> = {};
+  for (const t of timeline) {
+    for (const pid of t.papers) {
+      paperQuarter[pid] = t.quarter;
+    }
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="min-w-[500px]">
+        {/* 表头：季度 */}
+        <div className="mb-2 flex">
+          <div className="w-40 shrink-0" />
+          {quarters.map((q) => (
+            <div key={q} className="flex-1 text-center text-[10px] font-semibold text-[#1a5632]">
+              {q}
+            </div>
+          ))}
+        </div>
+
+        {/* 行：每篇论文 */}
+        <div className="space-y-1.5">
+          {papers
+            .sort((a, b) => a.priority - b.priority)
+            .map((paper) => {
+              const candidate = candidates?.find((c) => c.id === paper.candidateId);
+              const q = paperQuarter[paper.candidateId];
+              const qIndex = q ? quarters.indexOf(q) : 0;
+              const tier = candidate?.tier || "long_term";
+
+              return (
+                <div key={paper.candidateId} className="flex items-center">
+                  {/* 论文名称 */}
+                  <div className="w-40 shrink-0 pr-3">
+                    <p className="truncate text-[11px] font-medium text-[#122820]" title={candidate?.title}>
+                      {candidate?.title || paper.candidateId}
+                    </p>
+                    <p className="text-[9px] text-[#9aa8a0]">
+                      P{paper.priority} · {TIER_LABELS[tier] || tier}
+                    </p>
+                  </div>
+
+                  {/* 甘特条区域 */}
+                  <div className="flex flex-1">
+                    {quarters.map((quarter, i) => (
+                      <div key={quarter} className="flex-1 px-0.5">
+                        {i === qIndex ? (
+                          <div
+                            className={cn(
+                              "h-6 rounded",
+                              colorByStatus[paper.status] || "bg-[#1a5632]/20",
+                              paper.status === "planned" && "border border-dashed border-[#1a5632]/30",
+                            )}
+                            title={`${candidate?.title}: ${quarter} · ${STATUS_LABELS[paper.status] || paper.status}`}
+                          />
+                        ) : i > qIndex && paper.status === "planned" ? (
+                          <div className="h-6 rounded bg-[#f3f4f6]" />
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+
+        {/* 图例 */}
+        <div className="mt-3 flex items-center gap-3 text-[10px] text-[#6b7c72]">
+          <div className="flex items-center gap-1">
+            <div className="h-3 w-3 rounded border border-dashed border-[#1a5632]/30 bg-[#1a5632]/20" />
+            规划中
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="h-3 w-3 rounded bg-[#2563eb]" />
+            写作中
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="h-3 w-3 rounded bg-[#7c3aed]" />
+            已投稿
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="h-3 w-3 rounded bg-[#6366f1]" />
+            已发表
+          </div>
+        </div>
       </div>
     </div>
   );
