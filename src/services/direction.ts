@@ -280,13 +280,23 @@ export async function syncRoadmapPaper(
   }
 }
 
-/** 从路线图论文创建写作项目，并同步路线图状态 */
+/** 方向上下文：从路线图论文创建项目时带入的扩展信息 */
+export interface RoadmapProjectContext {
+  motivationFromGap?: string;
+  dataBasis?: string[];
+  targetJournal?: string;
+  pendingExperiments?: string[];
+  roadmapCandidateId?: string;
+}
+
+/** 从路线图论文创建写作项目，带入方向上下文并生成蓝图 */
 export async function createProjectFromRoadmap(
   paperTitle: string,
   directionSlug: string,
   candidateId?: string,
+  context?: RoadmapProjectContext,
 ): Promise<{ projectId: string }> {
-  // 1. 创建项目
+  // 1. 创建项目（带入方向上下文）
   const createRes = await fetch("/api/projects", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -302,7 +312,7 @@ export async function createProjectFromRoadmap(
     throw new Error(createData.error || "创建项目失败");
   }
 
-  // 2. 生成写作蓝图
+  // 2. 生成写作蓝图（带入方向上下文）
   try {
     await fetch("/api/outline/blueprint", {
       method: "POST",
@@ -310,6 +320,14 @@ export async function createProjectFromRoadmap(
       body: JSON.stringify({
         projectId: createData.id,
         title: paperTitle,
+        ...(context ? {
+          researchDirection: directionSlug,
+          motivationFromGap: context.motivationFromGap || undefined,
+          dataBasis: context.dataBasis || undefined,
+          targetJournal: context.targetJournal || undefined,
+          pendingExperiments: context.pendingExperiments || undefined,
+          roadmapCandidateId: context.roadmapCandidateId || undefined,
+        } : {}),
       }),
     });
   } catch {

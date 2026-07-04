@@ -76,7 +76,13 @@ export function DirectionRoadmapTimeline({
     try {
       const candidate = candidates?.find((c) => c.id === candidateId);
       const paperTitle = candidate?.title || title || `路线图论文 - ${candidateId}`;
-      const result = await createProjectFromRoadmap(paperTitle, slug, candidateId);
+      const result = await createProjectFromRoadmap(paperTitle, slug, candidateId, {
+        motivationFromGap: `来自方向路线图规划，经 8 维度分析确认数据充分性。`,
+        dataBasis: [],
+        targetJournal: candidate?.suggestedJournal,
+        pendingExperiments: candidate?.tier === "needs_experiment" ? ["需补实验"] : [],
+        roadmapCandidateId: candidateId,
+      });
       toast.success("写作项目已创建");
 
       // 更新路线图中的状态

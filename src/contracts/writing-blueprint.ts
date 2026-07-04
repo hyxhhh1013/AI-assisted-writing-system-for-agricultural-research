@@ -55,6 +55,19 @@ export interface WritingBlueprint {
   /** 生成时对应的大纲指纹，用于检测大纲变更后蓝图过期 */
   outlineHash?: string;
   generatedAt: number;
+  // ====== v4 方向战略层上下文（可选，从路线图或方向分析带入） ======
+  /** 研究方向 slug（如 thermochemistry） */
+  researchDirection?: string;
+  /** 来自 D3 缺口分析——解释"为什么写这篇论文" */
+  motivationFromGap?: string;
+  /** 支撑这篇论文的已有哪些实验/数据资产 */
+  dataBasis?: string[];
+  /** 建议投稿的目标期刊 */
+  targetJournal?: string;
+  /** 写作时需标注"此处需补实验数据"的缺口 */
+  pendingExperiments?: string[];
+  /** 来源的路线图候选人 ID（用于追溯） */
+  roadmapCandidateId?: string;
 }
 
 export function serializeWritingBlueprint(blueprint: WritingBlueprint): string {
