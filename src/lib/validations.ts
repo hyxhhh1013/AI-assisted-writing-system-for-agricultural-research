@@ -682,3 +682,68 @@ export const importExternalReferenceSchema = z.object({
   index: z.number().int().min(0).optional(),
 });
 export type ImportExternalReferenceInput = z.infer<typeof importExternalReferenceSchema>;
+
+// === Direction ===
+
+export const directionCreateSchema = z.object({
+  slug: z
+    .string()
+    .min(1, "URL 标识不能为空")
+    .max(50)
+    .regex(/^[a-z0-9-]+$/, "仅允许小写字母、数字和连字符"),
+  name: z.string().min(1, "方向名称不能为空").max(100),
+  description: z.string().max(5000).optional(),
+  categories: z.array(z.string()).min(1, "至少关联一个知识库分类"),
+  status: z.enum(["active", "archived"]).optional(),
+});
+export type DirectionCreateInput = z.infer<typeof directionCreateSchema>;
+
+export const directionUpdateSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  description: z.string().max(5000).optional(),
+  categories: z.array(z.string()).min(1).optional(),
+  status: z.enum(["active", "archived"]).optional(),
+});
+export type DirectionUpdateInput = z.infer<typeof directionUpdateSchema>;
+
+export const directionAssetsPatchSchema = z.object({
+  ops: z.array(
+    z.object({
+      op: z.enum(["upsert", "delete"]),
+      assetId: z.string().min(1).optional(),
+      asset: z.object({}).passthrough().optional(),
+    }),
+  ),
+});
+export type DirectionAssetsPatchInput = z.infer<typeof directionAssetsPatchSchema>;
+
+export const evaluationContractSchema = z.object({
+  dimensions: z.array(
+    z.object({
+      id: z.string().regex(/^D[1-8]$/, "维度 ID 必须为 D1-D8"),
+      name: z.string().optional(),
+      weight: z.number().optional(),
+      rubrics: z.array(
+        z.object({
+          id: z.string(),
+          what_to_look_for: z.string(),
+          what_triggers_block: z.string(),
+          what_triggers_warn: z.string(),
+          evidence_required: z.string(),
+        }),
+      ).optional(),
+      // 兼容旧格式
+      whatTriggersBlock: z.string().optional(),
+      whatTriggersWarn: z.string().optional(),
+    }),
+  ),
+});
+export type EvaluationContractInput = z.infer<typeof evaluationContractSchema>;
+
+export const directionAnalyzeSchema = z.object({
+  mode: z.enum(["full", "quick", "gap-only"]).default("full"),
+});
+export type DirectionAnalyzeInput = z.infer<typeof directionAnalyzeSchema>;
+
+export const directionRoadmapSchema = z.object({});
+export type DirectionRoadmapInput = z.infer<typeof directionRoadmapSchema>;

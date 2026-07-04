@@ -19,3 +19,11 @@ export { buildAcademicReviewPrompt } from "./review-academic";
 export { buildArgumentReviewPrompt } from "./review-argument";
 export { buildStructureReviewPrompt } from "./review-structure";
 export { buildIntegrityReviewPrompt } from "./review-integrity";
+export {
+  buildEvaluationContractPrompt,
+  buildDimensionPromptV2,
+  buildPaperCandidatesPromptV2,
+  buildSynthesisPrompt,
+  buildAssetSummary,
+  buildRoadmapPrompt,
+} from "./direction";
