@@ -1,10 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
   getPhaseNavigationAction,
+  getPrimaryTabForPhase,
   isPhaseNavigable,
+  isTabAlignedWithPhase,
 } from "@/lib/paper-passport-navigation";
 
 describe("paper-passport-navigation", () => {
+  it("maps phases to primary workbench tabs", () => {
+    expect(getPrimaryTabForPhase(1)).toBe("reader");
+    expect(getPrimaryTabForPhase(2)).toBe("outline");
+    expect(isTabAlignedWithPhase("outline", 2)).toBe(true);
+    expect(isTabAlignedWithPhase("structure", 2)).toBe(false);
+  });
+
   it("maps phases to workbench targets", () => {
     expect(getPhaseNavigationAction(0)).toEqual({ type: "open-meta" });
     expect(getPhaseNavigationAction(1)).toEqual({ type: "workbench-tab", tab: "reader" });

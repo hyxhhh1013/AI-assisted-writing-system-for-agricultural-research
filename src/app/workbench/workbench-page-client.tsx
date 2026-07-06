@@ -48,7 +48,7 @@ import { useAiParagraph, type AiParagraphAction } from "@/hooks/use-ai-paragraph
 import type { ParagraphSelectionAction } from "@/components/shared/writing/paragraph-selection-toolbar";
 import { WorkbenchEditorArea } from "@/components/shared/workbench-editor-area";
 import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
-import { ProjectCockpitBar } from "@/components/shared/project/project-cockpit-bar";
+import { ProjectCockpitSidebar } from "@/components/shared/project/project-cockpit-bar";
 import type { CockpitNavigationAction } from "@/lib/paper-passport-navigation";
 import { getModeAccent, getDataPanelTitle, getStructurePanelTitle, getStructurePanelHint } from "@/lib/mode-theme";
 import { siteTheme } from "@/lib/site-theme";
@@ -680,6 +680,7 @@ function WorkbenchContent() {
         isWritingGenerating={isWritingGenerating}
         handleSave={handleSave} projectId={projectId}
         projectMode={project.mode ?? "review"}
+        paperPassportRaw={project.paperPassport}
         setRightPanelMode={setRightPanelMode}
         setIsPreviewOpen={setIsPreviewOpen}
       />
@@ -693,30 +694,37 @@ function WorkbenchContent() {
         )}
       >
         <div className={cn("flex flex-col h-full", activeTab === "writing" || activeTab === "agent" ? "w-96" : "w-80")}>
-          <header className={cn("h-14 border-b flex items-center justify-between px-4 shrink-0", modeAccent.headerTint, modeAccent.borderTint)}>
-            <div className="flex flex-col min-w-0 gap-0.5">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="font-semibold text-sm text-[#122820] truncate">
-                  {activeTab === "structure" && getStructurePanelTitle(writingMode)}
-                  {activeTab === "data" && "实验数据"}
-                  {activeTab === "outline" && "论证提纲"}
-                  {activeTab === "writing" && "章节协作向导"}
-                  {activeTab === "agent" && "AI Agent"}
-                  {activeTab === "reader" && "文献库"}
-                  {activeTab === "plagiarism" && "论文质量检测"}
-                  {activeTab === "xrd" && "XRD 分析"}
-                </span>
-                <ProjectModeBadge mode={writingMode} />
+          <header className={cn("border-b shrink-0 px-4 py-3", modeAccent.headerTint, modeAccent.borderTint)}>
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex flex-col min-w-0 gap-0.5 flex-1">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-semibold text-sm text-[#122820] truncate">
+                    {activeTab === "structure" && getStructurePanelTitle(writingMode)}
+                    {activeTab === "data" && "实验数据"}
+                    {activeTab === "outline" && "论证提纲"}
+                    {activeTab === "writing" && "章节协作向导"}
+                    {activeTab === "agent" && "AI Agent"}
+                    {activeTab === "reader" && "文献库"}
+                    {activeTab === "plagiarism" && "论文质量检测"}
+                    {activeTab === "xrd" && "XRD 分析"}
+                  </span>
+                  <ProjectModeBadge mode={writingMode} />
+                </div>
+                {activeTab === "structure" && (
+                  <span className="text-[10px] text-[#6b7c72] font-normal leading-tight line-clamp-2">
+                    {getStructurePanelHint(writingMode)}
+                  </span>
+                )}
+                <ProjectCockpitSidebar
+                  paperPassportRaw={project.paperPassport}
+                  activeTab={activeTab}
+                  onNavigate={handleCockpitNavigate}
+                />
               </div>
-              {activeTab === "structure" && (
-                <span className="text-[10px] text-[#6b7c72] font-normal leading-tight line-clamp-2">
-                  {getStructurePanelHint(writingMode)}
-                </span>
-              )}
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setIsSidebarOpen(false)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
             </div>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsSidebarOpen(false)}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
           </header>
           
           <div className={cn("flex-1 overflow-hidden", activeTab === "writing" || activeTab === "agent" ? "p-3" : "p-4")}>
@@ -928,11 +936,6 @@ function WorkbenchContent() {
 
       {/* Main Area: Editor + Preview */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <ProjectCockpitBar
-          paperPassportRaw={project.paperPassport}
-          className="mx-2 mt-1 shrink-0"
-          onNavigate={handleCockpitNavigate}
-        />
         <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
         <ResizablePanel defaultSize={60} minSize={30}>
           <WorkbenchEditorArea

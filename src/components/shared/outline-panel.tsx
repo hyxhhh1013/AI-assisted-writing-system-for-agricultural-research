@@ -227,9 +227,9 @@ export function OutlinePanel({
             }
           />
         </div>
-        <div className="rounded-md border border-primary/20 bg-primary/5 px-2 py-2 space-y-2">
-          <p className="text-[10px] font-medium text-primary">
-            步骤 1 · 章节骨架（每行一个一级标题，AI 只补子节）
+        <div className="rounded-md border border-dashed border-muted-foreground/25 bg-muted/30 px-2 py-2 space-y-2">
+          <p className="text-[10px] font-medium text-muted-foreground">
+            章节骨架 · 每行一个一级标题
           </p>
           <Textarea
             className="text-xs h-24 min-h-[4rem] font-mono bg-background"
