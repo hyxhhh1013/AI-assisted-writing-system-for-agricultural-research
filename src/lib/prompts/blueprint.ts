@@ -9,11 +9,26 @@ export function buildBlueprintPrompt(params: {
   language: string;
   projectMode?: ProjectWritingMode;
   chartCatalog?: BlueprintChartCatalogEntry[];
+  /** 从 Direction 分析带入：为什么写这篇论文 */
+  motivationFromGap?: string;
+  /** 建议投稿的目标期刊 */
+  targetJournal?: string;
+  /** 写作时需标注"此处需补实验数据"的缺口 */
+  pendingExperiments?: string[];
 }): string {
-  const { title, researchDirection, outline, language, projectMode, chartCatalog } = params;
+  const { title, researchDirection, outline, language, projectMode, chartCatalog, motivationFromGap, targetJournal, pendingExperiments } = params;
   const domainExpertise = buildDomainExpertise(researchDirection);
   const isResearch = projectMode === "research";
   const lang = language === "en" ? "English" : "Chinese";
+
+  // Direction 战略上下文（仅当有值时才注入）
+  const directionContext = [
+    motivationFromGap ? `- 写作动机：${motivationFromGap}` : "",
+    targetJournal ? `- 目标期刊：${targetJournal}（请据此调整蓝图的深度与配图标准）` : "",
+    pendingExperiments && pendingExperiments.length > 0
+      ? `- 待补实验：${pendingExperiments.join("、")}（在蓝图中标注这些缺口，提醒作者补充数据后再写对应章节）`
+      : "",
+  ].filter(Boolean).join("\n");
 
   const figureRules = isResearch
     ? `- 原创研究论文：流程图集中在「材料与方法」；数据图/XRD 集中在「结果与分析」；引言与结论通常 0–1 张示意即可。
@@ -24,7 +39,7 @@ export function buildBlueprintPrompt(params: {
   return `${domainExpertise}
 你是一名农业科研论文写作顾问。用户已确认论文大纲，请基于大纲生成「写作蓝图」，帮助作者在扩写前把握全文结构与配图规划。
 
-【论文类型】${isResearch ? "原创研究（IMRaD）" : "文献综述"}
+【论文类型】${isResearch ? "原创研究（IMRaD）" : "文献综述"}${directionContext ? `\n\n【方向战略上下文】\n${directionContext}` : ""}
 
 【任务】
 1. 用 2–3 句话概括全文叙事逻辑（narrativeSummary）和一句核心论点（thesis）。

@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     const { data, errorResponse: ve } = await validateBody(blueprintSchema, await req.json());
     if (ve) return ve;
 
-    const { title, outline, researchDirection, language, projectMode, chartCatalog } = data;
+    const { title, outline, researchDirection, language, projectMode, chartCatalog, motivationFromGap, targetJournal, pendingExperiments } = data;
     const direction = (researchDirection?.trim() || title.trim());
     if (!outline.trim()) {
       return NextResponse.json({ error: "请先生成或填写大纲" }, { status: 400 });
@@ -81,6 +81,9 @@ export async function POST(req: NextRequest) {
       language,
       projectMode: projectMode ?? "review",
       chartCatalog,
+      motivationFromGap,
+      targetJournal,
+      pendingExperiments,
     });
 
     const response = await callAI({

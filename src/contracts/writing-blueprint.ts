@@ -37,6 +37,8 @@ export interface SectionGuide {
   purpose: string;
   keyPoints: string[];
   estimatedParagraphs?: number;
+  /** 从 Direction 预确定文献中分配到此章节的 sourceKey 列表 */
+  assignedSources?: string[];
 }
 
 export interface WritingBlueprint {
