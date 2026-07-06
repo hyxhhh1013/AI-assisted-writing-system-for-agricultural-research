@@ -141,7 +141,7 @@
 | W0-SEC-03 | JSONB PATCH 竞态 + Reference.order 唯一 | SEC-02 | 1d | done | Wave 0 |
 | W0-WIP-A | quality/citation/chart 审计清理 PR | — | 1d | done | Wave 0；`0da9d3e`+`4b83ac0` |
 | W0-WIP-B | Agent Phase A + direction bridge commit | SEC-01 | 1d | done | Wave 0；`e5a02c4`+`00d08b8` |
-| W1-PASSPORT | PaperPassport 契约 + Cockpit UI | W0-* | 2w | doing | 任务卡+人控/Agent+Phase0 配置面板 |
+| W1-PASSPORT | PaperPassport 契约 + Cockpit UI | W0-* | 2w | done | MVP：配置+任务卡+快照+导航 |
 | W2-LANGGRAPH | LangGraph 替换 agent-loop + write tools | W1 | 2w | todo | Wave 2 |
 | W1-083 | userSkeleton → Phase 2 | W1-PASSPORT | 1d | done | outline API/UI + prompt 骨架约束 |
 | ~~ENG-PR-084~~ | ~~入口废弃~~ | — | — | cancelled | 由 Cockpit 取代 |
@@ -917,6 +917,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-07-06 | W0-SEC-03 | AI | Reference `(projectId,order)` 唯一 + dedup 脚本；Direction/Project charts `FOR UPDATE` 事务；projects POST 去全量 refs 覆盖 + `$transaction` |
 | 2026-07-06 | W1-PASSPORT (phase sync) | AI | `paper-passport-progress.ts` 8 阶段重算；`POST .../paper-passport/sync`；GET/POST project + refs PATCH 触发 sync；Cockpit「下一步」提示；路线图建项后 sync |
 | 2026-07-06 | W1-PASSPORT + W1-083 | AI | Cockpit 阶段点击导航+任务卡；Directions 入 module-registry；ENG-PR-083 userSkeleton（outline API/UI/prompt） |
+| 2026-07-06 | W1-PASSPORT MVP done | AI | 任务卡点击跳转；passport 进度快照；Phase0 PATCH；人控/Agent 切换；Cockpit 侧栏集成 |
 
 ---
 

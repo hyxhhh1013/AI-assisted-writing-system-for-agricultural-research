@@ -6,6 +6,8 @@ export type CockpitNavigationAction =
   | { type: "open-meta" }
   | { type: "focus-section"; sectionKey: string };
 
+export type CockpitControlMode = "human" | "agent";
+
 /** 各阶段主工作台 Tab（与左侧图标栏对齐） */
 export type WorkbenchPhaseTab =
   | "structure"

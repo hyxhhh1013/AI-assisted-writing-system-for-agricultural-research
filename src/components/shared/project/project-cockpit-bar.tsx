@@ -15,14 +15,15 @@ import {
   isTabAlignedWithPhase,
   PHASE_TAB_LABELS,
   type CockpitNavigationAction,
+  type CockpitControlMode,
 } from "@/lib/paper-passport-navigation";
 import { getPhaseTasks, countPendingTasks } from "@/lib/paper-passport-tasks";
 import type { PassportProgressSignals } from "@/lib/paper-passport-progress";
 import { CheckCircle2, Circle, Lock } from "lucide-react";
 
-export type CockpitControlMode = "human" | "agent";
-
 const AGENT_TAB_ENABLED = process.env.NEXT_PUBLIC_AGENT_ENABLED === "1";
+
+export type { CockpitControlMode } from "@/lib/paper-passport-navigation";
 
 interface ProjectCockpitSidebarProps {
   paperPassportRaw?: string | null;
@@ -83,7 +84,7 @@ export function ProjectCockpitSidebar({
     ? "Agent"
     : PHASE_TAB_LABELS[primaryTab];
 
-  const tasks = getPhaseTasks(currentPhase, passport, signals);
+  const tasks = getPhaseTasks(currentPhase, passport, signals, controlMode);
   const pendingCount = countPendingTasks(tasks);
 
   const handlePhaseClick = (index: PaperPhase) => {
@@ -156,18 +157,30 @@ export function ProjectCockpitSidebar({
       </div>
 
       <ul className="space-y-1 rounded-md bg-white/60 px-2 py-1.5">
-        {tasks.map((item) => (
-          <li key={item.id} className="flex items-start gap-1.5 text-[10px] text-[#3d4f45]">
-            {item.status === "done" ? (
-              <CheckCircle2 className="h-3 w-3 shrink-0 text-[#1a5632] mt-0.5" />
-            ) : item.status === "locked" ? (
-              <Lock className="h-3 w-3 shrink-0 text-[#9aa8a0] mt-0.5" />
-            ) : (
-              <Circle className="h-3 w-3 shrink-0 text-[#2563eb] mt-0.5" />
-            )}
-            <span className={cn(item.status === "done" && "text-[#6b7c72] line-through")}>{item.label}</span>
-          </li>
-        ))}
+        {tasks.map((item) => {
+          const clickable = item.status === "pending" && item.navigation && onNavigate;
+          const Tag = clickable ? "button" : "li";
+          return (
+            <Tag
+              key={item.id}
+              type={clickable ? "button" : undefined}
+              onClick={clickable ? () => onNavigate!(item.navigation!) : undefined}
+              className={cn(
+                "flex w-full items-start gap-1.5 text-left text-[10px] text-[#3d4f45]",
+                clickable && "rounded px-1 py-0.5 hover:bg-[#1a5632]/5 cursor-pointer",
+              )}
+            >
+              {item.status === "done" ? (
+                <CheckCircle2 className="h-3 w-3 shrink-0 text-[#1a5632] mt-0.5" />
+              ) : item.status === "locked" ? (
+                <Lock className="h-3 w-3 shrink-0 text-[#9aa8a0] mt-0.5" />
+              ) : (
+                <Circle className="h-3 w-3 shrink-0 text-[#2563eb] mt-0.5" />
+              )}
+              <span className={cn(item.status === "done" && "text-[#6b7c72] line-through")}>{item.label}</span>
+            </Tag>
+          );
+        })}
       </ul>
 
       <div className="flex items-center gap-1 overflow-x-auto pb-0.5">

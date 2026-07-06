@@ -63,26 +63,27 @@
 
 ## 3. Wave 路线图
 
-### Wave 0 — 止血与收拢（1–2 周）← **当前**
+### Wave 0 — 止血与收拢（1–2 周）✅
 
 | ID | 工作 | 状态 |
 |----|------|------|
-| W0-1 | WIP 拆 3 PR：quality/chart、agent Phase A、direction bridge | todo |
-| W0-2 | **SEC-01** Direction `userId` + 路由 owner 作用域 | in progress |
-| W0-3 | SEC-02/03 鉴权补齐 + JSONB 竞态 | todo |
+| W0-1 | WIP 拆 3 PR：quality/chart、agent Phase A、direction bridge | done |
+| W0-2 | **SEC-01** Direction `userId` + 路由 owner 作用域 | done |
+| W0-3 | SEC-02/03 鉴权补齐 + JSONB 竞态 | done |
 | W0-4 | 本文档 + 队列 §11 | done |
 | W0-5 | 仓库卫生（tmp、migration 误删） | todo |
 
 **完成标准**：`npm run check` 绿；Direction 仅 owner 可访问；210 桥接 merge。
 
-### Wave 1 — Paper Passport + Cockpit（3–4 周）
+### Wave 1 — Paper Passport + Cockpit（3–4 周）✅ MVP
 
-- `contracts/paper-passport.ts` + Prisma 字段
-- Phase 0 PaperConfig 持久化
-- Project Cockpit UI（阶段进度条）
-- Direction→Project 写入 passport.source
-- ENG-PR-083 userSkeleton → Phase 2
-- Direction 注册到 `module-registry`
+- `contracts/paper-passport.ts` + Prisma 字段 ✅
+- Phase 0 PaperConfig 持久化 ✅（工作台配置面板 + PATCH API）
+- Project Cockpit UI（阶段进度 + 任务卡 + 人控/Agent）✅
+- Direction→Project 写入 passport.source ✅
+- ENG-PR-083 userSkeleton → Phase 2 ✅
+- Direction 注册到 `module-registry` ✅
+- 进度快照：`literature` / `draftProgress` / `abstractSnapshot` / `reviewRound` ✅
 
 ### Wave 2 — LangGraph + Agent 写入（3–4 周）
 

@@ -32,12 +32,40 @@ export interface PaperPassportSource {
   linkedAt: number;
 }
 
+export interface PaperLiteratureSnapshot {
+  referenceCount: number;
+  updatedAt: number;
+}
+
+export interface PaperDraftProgressSnapshot {
+  filledCoreSections: number;
+  totalCoreSections: number;
+  expandedOutlineCount: number;
+  outlineChars: number;
+  hasBlueprint: boolean;
+  updatedAt: number;
+}
+
+export interface PaperAbstractSnapshot {
+  chars: number;
+  updatedAt: number;
+}
+
+export interface PaperReviewSnapshot {
+  doneCount: number;
+  updatedAt: number;
+}
+
 export interface PaperPassport {
   version: 1;
   currentPhase: PaperPhase;
   phaseStatus: Record<`${PaperPhase}`, PhaseStatus>;
   config?: PaperConfigRecord;
   source?: PaperPassportSource;
+  literature?: PaperLiteratureSnapshot;
+  draftProgress?: PaperDraftProgressSnapshot;
+  abstractSnapshot?: PaperAbstractSnapshot;
+  reviewRound?: PaperReviewSnapshot;
   updatedAt: number;
 }
 
@@ -76,6 +104,33 @@ function isPaperPassportSource(value: unknown): value is PaperPassportSource {
   );
 }
 
+function isLiteratureSnapshot(value: unknown): value is PaperLiteratureSnapshot {
+  if (!isRecord(value)) return false;
+  return typeof value.referenceCount === "number" && typeof value.updatedAt === "number";
+}
+
+function isDraftProgressSnapshot(value: unknown): value is PaperDraftProgressSnapshot {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.filledCoreSections === "number"
+    && typeof value.totalCoreSections === "number"
+    && typeof value.expandedOutlineCount === "number"
+    && typeof value.outlineChars === "number"
+    && typeof value.hasBlueprint === "boolean"
+    && typeof value.updatedAt === "number"
+  );
+}
+
+function isAbstractSnapshot(value: unknown): value is PaperAbstractSnapshot {
+  if (!isRecord(value)) return false;
+  return typeof value.chars === "number" && typeof value.updatedAt === "number";
+}
+
+function isReviewSnapshot(value: unknown): value is PaperReviewSnapshot {
+  if (!isRecord(value)) return false;
+  return typeof value.doneCount === "number" && typeof value.updatedAt === "number";
+}
+
 export function isPaperPassport(value: unknown): value is PaperPassport {
   if (!isRecord(value) || value.version !== 1) return false;
   if (typeof value.currentPhase !== "number" || value.currentPhase < 0 || value.currentPhase > 7) {
@@ -89,6 +144,10 @@ export function isPaperPassport(value: unknown): value is PaperPassport {
   }
   if (value.config !== undefined && !isPaperConfigRecord(value.config)) return false;
   if (value.source !== undefined && !isPaperPassportSource(value.source)) return false;
+  if (value.literature !== undefined && !isLiteratureSnapshot(value.literature)) return false;
+  if (value.draftProgress !== undefined && !isDraftProgressSnapshot(value.draftProgress)) return false;
+  if (value.abstractSnapshot !== undefined && !isAbstractSnapshot(value.abstractSnapshot)) return false;
+  if (value.reviewRound !== undefined && !isReviewSnapshot(value.reviewRound)) return false;
   return true;
 }
 

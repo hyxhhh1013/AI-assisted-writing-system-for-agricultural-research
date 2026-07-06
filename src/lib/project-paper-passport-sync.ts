@@ -13,6 +13,7 @@ import {
   recomputePassportProgress,
   type PassportProgressSignals,
 } from "@/lib/paper-passport-progress";
+import { enrichPassportSnapshots } from "@/lib/paper-passport-snapshots";
 
 const MIN_SECTION_CHARS = 50;
 
@@ -142,9 +143,11 @@ async function recomputeAndPersistPassport(
     }),
   ]);
 
-  const next = recomputePassportProgress(
-    passport,
-    buildSignals(project, Boolean(blueprintRaw?.trim()), reviewDoneCount),
+  const signals = buildSignals(project, Boolean(blueprintRaw?.trim()), reviewDoneCount);
+
+  const next = enrichPassportSnapshots(
+    recomputePassportProgress(passport, signals),
+    signals,
   );
 
   const serialized = serializePaperPassport(next);
