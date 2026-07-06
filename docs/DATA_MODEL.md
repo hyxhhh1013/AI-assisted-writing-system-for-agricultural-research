@@ -32,7 +32,7 @@ KnowledgeFile 1──* KnowledgeChunk
 **保存策略（当前）**
 
 - `Section`：按 key **增量 PATCH** `/api/projects/[id]/sections/[key]`
-- `Reference`：**增量 PATCH** `/api/projects/[id]/references`（含 `replace`）
+- `Reference`：**增量 PATCH** `/api/projects/[id]/references`（含 `replace`）；`(projectId, order)` **唯一约束**（SEC-03），并发 create 走 advisory lock + P2002 重试
 - `AnalysisResult`：**增量 PATCH** `/api/projects/[id]/analysis-results`
 - `expandedOutlineSections`：随项目 **POST** `/api/projects` 写入（JSON 列）；自动保存/手动保存均走此路径
 - `writingBlueprint`：`project-writing-blueprint-db.ts` 统一读写蓝图数据
@@ -89,6 +89,6 @@ KnowledgeFile 1──* KnowledgeChunk
 |------|------|------|
 | `userId` | String FK → User | SEC-01：每用户私有（2026-07-06 迁移） |
 | `slug` | String @unique | URL 标识 |
-| `assets` / `analysis` / `roadmap` | Json? | 战略规划 JSONB |
+| `assets` / `analysis` / `roadmap` | Json? | 战略规划 JSONB；`assets` PATCH 走 `FOR UPDATE` 行锁（SEC-03） |
 
 迁移：`prisma/migrations/20260706100000_direction_owner/` — 存量方向挂到最早创建的 User。

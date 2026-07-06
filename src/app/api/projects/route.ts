@@ -15,7 +15,7 @@ import type { Prisma } from "@prisma/client";
 import { getCoreSectionKeysForMode } from "@/lib/section-registry";
 import {
   readWritingBlueprint,
-  writeWritingBlueprint,
+  writeWritingBlueprintTx,
 } from "@/lib/project-writing-blueprint-db";
 
 type SectionRecord = Record<string, string>;
@@ -134,8 +134,8 @@ export async function POST(req: NextRequest) {
       language,
       citationStyle,
       sections,
-      references,
-      analysisResults,
+      references: _legacyReferences,
+      analysisResults: _legacyAnalysisResults,
       dataClaims,
       dataSources,
       expandedOutlineSections,
@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 校验所有权（仅更新时）
-    let projectId = id || undefined;
+    const projectId = id || undefined;
     if (projectId) {
       const existing = await prisma.project.findFirst({
         where: { id: projectId, userId },
@@ -158,81 +158,66 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 创建或更新主记录（mode 仅在新建时写入，更新时不允许切换类型）
-    const project = projectId
-      ? await prisma.project.update({
-          where: { id: projectId },
-          data: {
-            title, authors, affiliations, abstract, keywords,
-            classification, researchDirection, outline, template, citationStyle,
-            ...(language !== undefined
-              ? { language: language === "en" ? "en" : "zh" }
-              : {}),
-            dataClaims, dataSources,
-            ...(expandedOutlineSections !== undefined
-              ? {
-                  expandedOutlineSections: serializeExpandedOutlineSections(
-                    Array.isArray(expandedOutlineSections) ? expandedOutlineSections : [],
-                  ),
-                }
-              : {}),
-            lastUpdated: new Date(),
-          } as Prisma.ProjectUpdateInput,
-        })
-      : await prisma.project.create({
-          data: {
-            userId, title, authors, affiliations, abstract, keywords,
-            classification, researchDirection, outline, template,
-            mode: mode === "research" ? "research" : "review",
-            language: language === "en" ? "en" : "zh",
-            citationStyle,
-            dataClaims, dataSources,
-            expandedOutlineSections: serializeExpandedOutlineSections(
-              Array.isArray(expandedOutlineSections) ? expandedOutlineSections : [],
-            ),
-          } as Prisma.ProjectUncheckedCreateInput,
-        });
+    const project = await prisma.$transaction(async (tx) => {
+      const saved = projectId
+        ? await tx.project.update({
+            where: { id: projectId },
+            data: {
+              title, authors, affiliations, abstract, keywords,
+              classification, researchDirection, outline, template, citationStyle,
+              ...(language !== undefined
+                ? { language: language === "en" ? "en" : "zh" }
+                : {}),
+              dataClaims, dataSources,
+              ...(expandedOutlineSections !== undefined
+                ? {
+                    expandedOutlineSections: serializeExpandedOutlineSections(
+                      Array.isArray(expandedOutlineSections) ? expandedOutlineSections : [],
+                    ),
+                  }
+                : {}),
+              lastUpdated: new Date(),
+            } as Prisma.ProjectUpdateInput,
+          })
+        : await tx.project.create({
+            data: {
+              userId, title, authors, affiliations, abstract, keywords,
+              classification, researchDirection, outline, template,
+              mode: mode === "research" ? "research" : "review",
+              language: language === "en" ? "en" : "zh",
+              citationStyle,
+              dataClaims, dataSources,
+              expandedOutlineSections: serializeExpandedOutlineSections(
+                Array.isArray(expandedOutlineSections) ? expandedOutlineSections : [],
+              ),
+            } as Prisma.ProjectUncheckedCreateInput,
+          });
 
-    projectId = project.id;
+      const nextProjectId = saved.id;
 
-    // writingBlueprint 列可能尚未进入已 generate 的 Client，单独 raw 写入
-    if (writingBlueprint !== undefined) {
-      await writeWritingBlueprint(
-        projectId,
-        writingBlueprint === null || writingBlueprint === "" ? null : writingBlueprint,
-      );
-    }
-
-    // 增量保存 sections（逐条 upsert，不 deleteMany）
-    if (sections) {
-      for (const [key, content] of Object.entries(sections)) {
-        await prisma.section.upsert({
-          where: { projectId_key: { projectId, key } },
-          update: { content: content as string },
-          create: { projectId, key, content: content as string },
-        });
+      if (writingBlueprint !== undefined) {
+        await writeWritingBlueprintTx(
+          tx,
+          nextProjectId,
+          writingBlueprint === null || writingBlueprint === "" ? null : writingBlueprint,
+        );
       }
-    }
 
-    // 增量保存 references（删除旧+插入新，保持顺序）
-    if (references !== undefined) {
-      await prisma.reference.deleteMany({ where: { projectId } });
-      for (let i = 0; i < references.length; i++) {
-        await prisma.reference.create({
-          data: { projectId, content: references[i], order: i },
-        });
+      if (sections) {
+        for (const [key, content] of Object.entries(sections)) {
+          await tx.section.upsert({
+            where: { projectId_key: { projectId: nextProjectId, key } },
+            update: { content: content as string },
+            create: { projectId: nextProjectId, key, content: content as string },
+          });
+        }
       }
-    }
 
-    // 增量保存 analysisResults
-    if (analysisResults !== undefined) {
-      await prisma.analysisResult.deleteMany({ where: { projectId } });
-      for (const content of analysisResults) {
-        await prisma.analysisResult.create({
-          data: { projectId, content },
-        });
-      }
-    }
+      void _legacyReferences;
+      void _legacyAnalysisResults;
+
+      return saved;
+    });
 
     return NextResponse.json({ id: project.id, message: "保存成功" });
   } catch (error: unknown) {

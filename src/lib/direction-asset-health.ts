@@ -11,6 +11,7 @@ import type {
   PaperAsset,
   DatasetAsset,
 } from "@/contracts/direction";
+import { isAnalysisFingerprintStale } from "@/lib/direction-analysis-fingerprint";
 
 export type CheckSeverity = "high" | "medium" | "low";
 
@@ -252,7 +253,7 @@ export function computeAssetInventoryHealth(
   ];
 
   if (analysis) {
-    const stale = analysis.analysisFingerprint !== assets.length;
+    const stale = isAnalysisFingerprintStale(assets, analysis);
     checks.push({
       id: "analysis_fresh",
       label: "分析结果与当前资产同步",

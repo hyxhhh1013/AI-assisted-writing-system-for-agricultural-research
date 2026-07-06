@@ -138,7 +138,7 @@
 | **Phase 11 — Wave 0–4 整体规划（见 MASTER_PLAN.md）** |
 | W0-SEC-01 | Direction `userId` + owner 作用域 + 迁移 | — | 0.5d | done | Wave 0；`8c73ca1` |
 | W0-SEC-02 | 未鉴权 AI 路由补齐 + 限流覆盖 | SEC-01 | 0.5d | done | Wave 0；`d586a77` |
-| W0-SEC-03 | JSONB PATCH 竞态 + Reference.order 唯一 | SEC-02 | 1d | todo | Wave 0 |
+| W0-SEC-03 | JSONB PATCH 竞态 + Reference.order 唯一 | SEC-02 | 1d | done | Wave 0 |
 | W0-WIP-A | quality/citation/chart 审计清理 PR | — | 1d | done | Wave 0；`0da9d3e`+`4b83ac0` |
 | W0-WIP-B | Agent Phase A + direction bridge commit | SEC-01 | 1d | done | Wave 0；`e5a02c4`+`00d08b8` |
 | W1-PASSPORT | PaperPassport 契约 + Cockpit UI | W0-* | 2w | todo | Wave 1 |
@@ -914,6 +914,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-07-05 | ENG-PR-200a, 210a~c | AI | 综述 mapping fallback 修复 + Direction→Writing 文献桥接全链路（contract + bridge 函数 + paper-brief API + references 注入 + Blueprint 上下文不再被 zod strip + 综述模式强制文献确认）；~400 行新增，零破坏；`npm run check` 绿，相关 69 测试通过 |
 | 2026-07-06 | MASTER_PLAN v2 + W0-SEC-01 | AI | 新增 `docs/MASTER_PLAN.md` 整体规划；Direction 加 userId + `direction-auth.ts` + 全 routes owner 作用域 + 迁移 SQL |
 | 2026-07-06 | W0-WIP + SEC-02 | AI | 6 commits：W0-WIP-A citation/chart 清理；SEC-01 `8c73ca1`；ENG-PR-210 bridge；ENG-PR-200 Agent Phase A；SEC-02 proxy 鉴权/限流 + `proxy-sec02.test.ts` |
+| 2026-07-06 | W0-SEC-03 | AI | Reference `(projectId,order)` 唯一 + dedup 脚本；Direction/Project charts `FOR UPDATE` 事务；projects POST 去全量 refs 覆盖 + `$transaction` |
 
 ---
 

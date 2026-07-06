@@ -17,3 +17,14 @@ export async function writeWritingBlueprint(
     UPDATE "Project" SET "writingBlueprint" = ${value} WHERE "id" = ${projectId}
   `;
 }
+
+/** 事务内写入 writingBlueprint */
+export async function writeWritingBlueprintTx(
+  tx: { $executeRaw: typeof prisma.$executeRaw },
+  projectId: string,
+  value: string | null,
+): Promise<void> {
+  await tx.$executeRaw`
+    UPDATE "Project" SET "writingBlueprint" = ${value} WHERE "id" = ${projectId}
+  `;
+}
