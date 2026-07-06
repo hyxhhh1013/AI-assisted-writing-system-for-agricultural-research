@@ -87,15 +87,27 @@ function buildSignals(
   };
 }
 
+async function readPaperPassportRaw(projectId: string): Promise<string | null> {
+  const rows = await prisma.$queryRaw<{ paperPassport: string | null }[]>`
+    SELECT "paperPassport" FROM "Project" WHERE id = ${projectId} LIMIT 1
+  `;
+  return rows[0]?.paperPassport ?? null;
+}
+
+async function writePaperPassportRaw(projectId: string, serialized: string): Promise<void> {
+  await prisma.$executeRaw`
+    UPDATE "Project" SET "paperPassport" = ${serialized} WHERE id = ${projectId}
+  `;
+}
+
 async function loadProjectPassportSnapshot(
   projectId: string,
 ): Promise<ProjectPassportSnapshot | null> {
-  return prisma.project.findUnique({
+  const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: {
       id: true,
       title: true,
-      paperPassport: true,
       outline: true,
       abstract: true,
       mode: true,
@@ -106,6 +118,16 @@ async function loadProjectPassportSnapshot(
       sections: { select: { key: true, content: true } },
     },
   });
+  if (!project) return null;
+
+  let paperPassport: string | null = null;
+  try {
+    paperPassport = await readPaperPassportRaw(projectId);
+  } catch {
+    // 列未迁移或 Prisma client 未 generate 时跳过
+  }
+
+  return { ...project, paperPassport };
 }
 
 async function recomputeAndPersistPassport(
@@ -127,10 +149,12 @@ async function recomputeAndPersistPassport(
 
   const serialized = serializePaperPassport(next);
   if (serialized !== project.paperPassport) {
-    await prisma.project.update({
-      where: { id: projectId },
-      data: { paperPassport: serialized },
-    });
+    try {
+      await writePaperPassportRaw(projectId, serialized);
+    } catch {
+      // 列未就绪时不阻塞项目读写
+      return next;
+    }
   }
 
   return next;
@@ -140,15 +164,26 @@ async function recomputeAndPersistPassport(
 export async function ensureProjectPaperPassport(
   projectId: string,
 ): Promise<PaperPassport | null> {
-  const project = await loadProjectPassportSnapshot(projectId);
-  if (!project) return null;
+  try {
+    const project = await loadProjectPassportSnapshot(projectId);
+    if (!project) return null;
 
-  let passport = parsePaperPassport(project.paperPassport);
-  if (!passport) {
-    passport = bootstrapPassportFromProject(project);
+    let passport = parsePaperPassport(project.paperPassport);
+    if (!passport) {
+      passport = bootstrapPassportFromProject(project);
+    }
+
+    return recomputeAndPersistPassport(projectId, project, passport);
+  } catch {
+    return null;
   }
+}
 
-  return recomputeAndPersistPassport(projectId, project, passport);
+export async function savePaperPassportForProject(
+  projectId: string,
+  serialized: string,
+): Promise<void> {
+  await writePaperPassportRaw(projectId, serialized);
 }
 
 /** 读取项目状态并重算 PaperPassport（无项目时返回 null） */

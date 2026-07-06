@@ -21,7 +21,7 @@ import {
   parsePaperPassport,
   serializePaperPassport,
 } from "@/contracts/paper-passport";
-import { syncProjectPaperPassport } from "@/lib/project-paper-passport-sync";
+import { syncProjectPaperPassport, savePaperPassportForProject } from "@/lib/project-paper-passport-sync";
 
 type SectionRecord = Record<string, string>;
 
@@ -72,8 +72,12 @@ export async function GET(req: NextRequest) {
       }
 
       let paperPassportRaw: string | undefined;
-      const synced = await syncProjectPaperPassport(project.id);
-      if (synced) paperPassportRaw = serializePaperPassport(synced);
+      try {
+        const synced = await syncProjectPaperPassport(project.id);
+        if (synced) paperPassportRaw = serializePaperPassport(synced);
+      } catch (passportError: unknown) {
+        logger.warn("Paper-passport sync skipped on GET project", passportError);
+      }
 
       const langRaw = (project as { language?: string | null }).language;
       const formattedProject = {
@@ -205,9 +209,6 @@ export async function POST(req: NextRequest) {
                     ),
                   }
                 : {}),
-              ...(paperPassportJson !== undefined
-                ? { paperPassport: paperPassportJson }
-                : {}),
               lastUpdated: new Date(),
             } as Prisma.ProjectUpdateInput,
           })
@@ -222,13 +223,18 @@ export async function POST(req: NextRequest) {
               expandedOutlineSections: serializeExpandedOutlineSections(
                 Array.isArray(expandedOutlineSections) ? expandedOutlineSections : [],
               ),
-              ...(paperPassportJson !== undefined
-                ? { paperPassport: paperPassportJson }
-                : {}),
             } as Prisma.ProjectUncheckedCreateInput,
           });
 
       const nextProjectId = saved.id;
+
+      if (paperPassportJson !== undefined && paperPassportJson !== null) {
+        try {
+          await savePaperPassportForProject(nextProjectId, paperPassportJson);
+        } catch (passportError: unknown) {
+          logger.warn("Paper-passport persist skipped on POST project", passportError);
+        }
+      }
 
       if (writingBlueprint !== undefined) {
         await writeWritingBlueprintTx(
@@ -254,7 +260,11 @@ export async function POST(req: NextRequest) {
       return saved;
     });
 
-    await syncProjectPaperPassport(project.id);
+    try {
+      await syncProjectPaperPassport(project.id);
+    } catch (passportError: unknown) {
+      logger.warn("Paper-passport sync skipped on POST project", passportError);
+    }
 
     return NextResponse.json({ id: project.id, message: "保存成功" });
   } catch (error: unknown) {
