@@ -181,6 +181,21 @@ export const outlineSchema = z.object({
 });
 export type OutlineInput = z.infer<typeof outlineSchema>;
 
+// === PaperPassport ===
+export const paperPassportConfigSchema = z.object({
+  paperTitle: z.string().min(1, "论文标题不能为空"),
+  paperType: z.enum(["review", "research"]),
+  targetJournal: z.string(),
+  wordCount: z.string().min(1),
+  language: z.enum(["zh", "en"]),
+  citationStyle: z.enum(["gbt7714", "vancouver", "apa7", "ieee"]),
+});
+export type PaperPassportConfigInput = z.infer<typeof paperPassportConfigSchema>;
+
+export const paperPassportConfigPatchSchema = z.object({
+  config: paperPassportConfigSchema,
+});
+
 const figureDataBindingSchema = z.object({
   kind: z.literal("chartConfig"),
   chartConfigIndex: z.number().int().nonnegative(),

@@ -48,8 +48,13 @@ import { useAiParagraph, type AiParagraphAction } from "@/hooks/use-ai-paragraph
 import type { ParagraphSelectionAction } from "@/components/shared/writing/paragraph-selection-toolbar";
 import { WorkbenchEditorArea } from "@/components/shared/workbench-editor-area";
 import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
-import { ProjectCockpitSidebar } from "@/components/shared/project/project-cockpit-bar";
+import { ProjectCockpitSidebar, type CockpitControlMode } from "@/components/shared/project/project-cockpit-bar";
+import { PaperConfigPanel } from "@/components/shared/project/paper-config-panel";
 import type { CockpitNavigationAction } from "@/lib/paper-passport-navigation";
+import { parsePaperPassport } from "@/contracts/paper-passport";
+import { buildPassportSignalsFromProject } from "@/lib/paper-passport-signals";
+import { patchPaperPassportConfig } from "@/services/project";
+import type { PaperConfig } from "@/components/shared/direction/paper-config-dialog";
 import { getModeAccent, getDataPanelTitle, getStructurePanelTitle, getStructurePanelHint } from "@/lib/mode-theme";
 import { siteTheme } from "@/lib/site-theme";
 import { cn } from "@/lib/utils";
@@ -160,11 +165,19 @@ const isWorkbenchTab = (value: string | null): value is WorkbenchTab =>
   value !== null && WORKBENCH_TABS.includes(value as WorkbenchTab);
 
 const EDITOR_MODE_STORAGE_KEY = "grainscript_editor_mode";
+const COCKPIT_MODE_STORAGE_KEY = "grainscript_cockpit_mode";
 
 function readStoredEditorMode(): "classic" | "paragraph" {
   if (typeof window === "undefined") return "paragraph";
   const stored = localStorage.getItem(EDITOR_MODE_STORAGE_KEY);
   return stored === "classic" || stored === "paragraph" ? stored : "paragraph";
+}
+
+function readStoredCockpitMode(projectId: string | null): CockpitControlMode {
+  if (typeof window === "undefined" || !projectId) return "human";
+  return localStorage.getItem(`${COCKPIT_MODE_STORAGE_KEY}_${projectId}`) === "agent"
+    ? "agent"
+    : "human";
 }
 
 export default function WorkbenchPageClient() {
@@ -206,6 +219,8 @@ function WorkbenchContent() {
   const [expandedOutlineSections, setExpandedOutlineSections] = useState<string[]>([]);
   const [pendingExpandTask, setPendingExpandTask] = useState<string | null>(null);
   const [blueprintDialogOpen, setBlueprintDialogOpen] = useState(false);
+  const [cockpitMode, setCockpitMode] = useState<CockpitControlMode>("human");
+  const [savingPaperConfig, setSavingPaperConfig] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
   // 使用 ref 存储最新值，避免 setTimeout/stale closure 中读到旧状态
   const projectRef = useRef(project);
@@ -222,6 +237,17 @@ function WorkbenchContent() {
 
   const writingMode = getProjectWritingMode(project.mode);
   const modeAccent = useMemo(() => getModeAccent(writingMode), [writingMode]);
+  const passport = useMemo(
+    () => parsePaperPassport(project.paperPassport ?? null),
+    [project.paperPassport],
+  );
+  const passportSignals = useMemo(
+    () => buildPassportSignalsFromProject(project, passport),
+    [project, passport],
+  );
+  const showPaperConfigPanel = Boolean(
+    passport && (passport.currentPhase === 0 || !passport.config?.targetJournal?.trim()),
+  );
 
   const sectionContentsForRefs = useMemo(() => {
     const base: Record<string, string> = { abstract: project.abstract || "" };
@@ -301,6 +327,16 @@ function WorkbenchContent() {
   useEffect(() => {
     setEditorMode(readStoredEditorMode());
   }, []);
+
+  useEffect(() => {
+    if (projectId) setCockpitMode(readStoredCockpitMode(projectId));
+  }, [projectId]);
+
+  useEffect(() => {
+    if (projectId) {
+      localStorage.setItem(`${COCKPIT_MODE_STORAGE_KEY}_${projectId}`, cockpitMode);
+    }
+  }, [projectId, cockpitMode]);
 
   useEffect(() => {
     localStorage.setItem(EDITOR_MODE_STORAGE_KEY, editorMode);
@@ -385,7 +421,7 @@ function WorkbenchContent() {
   const handleCockpitNavigate = useCallback((action: CockpitNavigationAction) => {
     setIsSidebarOpen(true);
     if (action.type === "open-meta") {
-      setIsMetaDialogOpen(true);
+      setActiveTab("structure");
       return;
     }
     if (action.type === "workbench-tab") {
@@ -399,6 +435,27 @@ function WorkbenchContent() {
       setActiveSection(action.sectionKey);
     }
   }, []);
+
+  const handleSavePaperConfig = useCallback(async (config: PaperConfig) => {
+    if (!projectId) return;
+    setSavingPaperConfig(true);
+    try {
+      const result = await patchPaperPassportConfig(projectId, config);
+      setProject((prev) => ({
+        ...prev,
+        title: config.paperTitle,
+        mode: config.paperType,
+        language: config.language,
+        citationStyle: config.citationStyle,
+        paperPassport: result.paperPassport,
+      }));
+      toast.success("论文配置已保存");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "保存配置失败");
+    } finally {
+      setSavingPaperConfig(false);
+    }
+  }, [projectId]);
 
   const handleApplyAiContent = (content: string, sectionId: string, subsectionTitle?: string) => {
     const currentProject = projectRef.current;
@@ -718,6 +775,9 @@ function WorkbenchContent() {
                 <ProjectCockpitSidebar
                   paperPassportRaw={project.paperPassport}
                   activeTab={activeTab}
+                  controlMode={cockpitMode}
+                  onControlModeChange={setCockpitMode}
+                  signals={passportSignals}
                   onNavigate={handleCockpitNavigate}
                 />
               </div>
@@ -743,6 +803,16 @@ function WorkbenchContent() {
             )}
             {activeTab === "structure" && (
               <div className="h-full min-h-0 flex flex-col overflow-hidden">
+                {showPaperConfigPanel && (
+                  <div className="shrink-0 mb-3">
+                    <PaperConfigPanel
+                      project={project}
+                      config={passport?.config}
+                      saving={savingPaperConfig}
+                      onSave={handleSavePaperConfig}
+                    />
+                  </div>
+                )}
                 <p className="shrink-0 text-[10px] text-[#6b7c72] px-1 pb-2 border-b mb-2 leading-relaxed">
                   点选章节后，中间编辑器与预览对应该段；引用重排会扫描<strong>含当前编辑区</strong>的全文。
                 </p>

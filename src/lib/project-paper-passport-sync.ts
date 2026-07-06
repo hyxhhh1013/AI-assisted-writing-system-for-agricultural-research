@@ -179,6 +179,45 @@ export async function ensureProjectPaperPassport(
   }
 }
 
+/** 更新 passport.config 并重算阶段（同步 Project 标题/模式/语言/引用格式） */
+export async function updateProjectPaperPassportConfig(
+  projectId: string,
+  config: PaperConfigRecord,
+): Promise<PaperPassport | null> {
+  try {
+    const project = await loadProjectPassportSnapshot(projectId);
+    if (!project) return null;
+
+    let passport = parsePaperPassport(project.paperPassport);
+    if (!passport) {
+      passport = bootstrapPassportFromProject(project);
+    }
+
+    passport = {
+      ...passport,
+      config,
+      updatedAt: Date.now(),
+    };
+
+    await prisma.project.update({
+      where: { id: projectId },
+      data: {
+        title: config.paperTitle.trim() || project.title,
+        mode: config.paperType,
+        language: config.language,
+        citationStyle: config.citationStyle,
+      },
+    });
+
+    const refreshed = await loadProjectPassportSnapshot(projectId);
+    if (!refreshed) return null;
+
+    return recomputeAndPersistPassport(projectId, refreshed, passport);
+  } catch {
+    return null;
+  }
+}
+
 export async function savePaperPassportForProject(
   projectId: string,
   serialized: string,

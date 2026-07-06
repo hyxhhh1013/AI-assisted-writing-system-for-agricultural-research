@@ -211,3 +211,34 @@ export async function appendChartAsset(
 ): Promise<ProjectChartAsset[]> {
   return patchProjectCharts(projectId, [{ op: "append", asset }]);
 }
+
+/** PATCH /api/projects/:id/paper-passport — 更新 Phase 0 配置 */
+export async function patchPaperPassportConfig(
+  projectId: string,
+  config: import("@/contracts/paper-passport").PaperConfigRecord,
+): Promise<{ paperPassport: string; currentPhase: number }> {
+  const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/paper-passport`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ config }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "保存论文配置失败");
+  }
+  return res.json() as Promise<{ paperPassport: string; currentPhase: number }>;
+}
+
+/** POST /api/projects/:id/paper-passport/sync — 重算阶段进度 */
+export async function syncPaperPassport(
+  projectId: string,
+): Promise<{ paperPassport: string; currentPhase: number }> {
+  const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/paper-passport/sync`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "同步阶段进度失败");
+  }
+  return res.json() as Promise<{ paperPassport: string; currentPhase: number }>;
+}

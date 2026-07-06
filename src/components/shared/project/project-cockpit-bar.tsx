@@ -16,10 +16,20 @@ import {
   PHASE_TAB_LABELS,
   type CockpitNavigationAction,
 } from "@/lib/paper-passport-navigation";
+import { getPhaseTasks, countPendingTasks } from "@/lib/paper-passport-tasks";
+import type { PassportProgressSignals } from "@/lib/paper-passport-progress";
+import { CheckCircle2, Circle, Lock } from "lucide-react";
+
+export type CockpitControlMode = "human" | "agent";
+
+const AGENT_TAB_ENABLED = process.env.NEXT_PUBLIC_AGENT_ENABLED === "1";
 
 interface ProjectCockpitSidebarProps {
   paperPassportRaw?: string | null;
   activeTab: string;
+  controlMode: CockpitControlMode;
+  onControlModeChange: (mode: CockpitControlMode) => void;
+  signals: PassportProgressSignals;
   className?: string;
   onNavigate?: (action: CockpitNavigationAction) => void;
 }
@@ -35,10 +45,27 @@ function phaseKey(index: number): `${PaperPhase}` {
   return String(index) as `${PaperPhase}`;
 }
 
+function resolveNavigateTarget(
+  phase: PaperPhase,
+  controlMode: CockpitControlMode,
+): CockpitNavigationAction | null {
+  if (
+    controlMode === "agent"
+    && AGENT_TAB_ENABLED
+    && (phase === 3 || phase === 4 || phase === 7)
+  ) {
+    return { type: "workbench-tab", tab: "agent" };
+  }
+  return getPhaseNavigationAction(phase);
+}
+
 /** 嵌入工作台侧栏头部的阶段 Cockpit（与 Tab 栏联动） */
 export function ProjectCockpitSidebar({
   paperPassportRaw,
   activeTab,
+  controlMode,
+  onControlModeChange,
+  signals,
   className,
   onNavigate,
 }: ProjectCockpitSidebarProps) {
@@ -50,34 +77,71 @@ export function ProjectCockpitSidebar({
   const currentStatus = passport.phaseStatus[phaseKey(currentPhase)] ?? "locked";
   const currentLabel = PAPER_PHASE_LABELS[currentPhase] ?? "";
   const primaryTab = getPrimaryTabForPhase(currentPhase);
-  const tabAligned = isTabAlignedWithPhase(activeTab, currentPhase);
-  const primaryTabLabel = PHASE_TAB_LABELS[primaryTab];
+  const tabAligned = isTabAlignedWithPhase(activeTab, currentPhase)
+    || (controlMode === "agent" && activeTab === "agent" && (currentPhase === 3 || currentPhase === 4));
+  const primaryTabLabel = controlMode === "agent" && AGENT_TAB_ENABLED && (currentPhase === 3 || currentPhase === 4)
+    ? "Agent"
+    : PHASE_TAB_LABELS[primaryTab];
+
+  const tasks = getPhaseTasks(currentPhase, passport, signals);
+  const pendingCount = countPendingTasks(tasks);
 
   const handlePhaseClick = (index: PaperPhase) => {
     if (!onNavigate) return;
     const status = passport.phaseStatus[phaseKey(index)] ?? "locked";
     if (!isPhaseNavigable(index, status)) return;
-    const action = getPhaseNavigationAction(index);
+    const action = resolveNavigateTarget(index, controlMode);
     if (action) onNavigate(action);
   };
 
   const handleGoToPrimary = () => {
     if (!onNavigate || currentStatus === "done") return;
-    const action = getPhaseNavigationAction(currentPhase);
+    const action = resolveNavigateTarget(currentPhase, controlMode);
     if (action) onNavigate(action);
   };
 
   return (
     <div className={cn("space-y-2 border-t border-[#1a5632]/10 pt-2 mt-2", className)}>
+      <div className="flex items-center gap-1">
+        <span className="text-[9px] text-[#6b7c72] mr-1">模式</span>
+        <button
+          type="button"
+          onClick={() => onControlModeChange("human")}
+          className={cn(
+            "rounded px-2 py-0.5 text-[10px] font-medium",
+            controlMode === "human"
+              ? "bg-[#1a5632] text-white"
+              : "bg-muted text-muted-foreground hover:bg-muted/80",
+          )}
+        >
+          人控
+        </button>
+        {AGENT_TAB_ENABLED && (
+          <button
+            type="button"
+            onClick={() => onControlModeChange("agent")}
+            className={cn(
+              "rounded px-2 py-0.5 text-[10px] font-medium",
+              controlMode === "agent"
+                ? "bg-[#2563eb] text-white"
+                : "bg-muted text-muted-foreground hover:bg-muted/80",
+            )}
+          >
+            Agent
+          </button>
+        )}
+      </div>
+
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold text-[#1a5632]">
             P{currentPhase} {currentLabel}
+            {pendingCount > 0 && (
+              <span className="ml-1 font-normal text-[#6b7c72]">({pendingCount} 待办)</span>
+            )}
           </p>
           {hint && currentStatus !== "done" && (
-            <p className="text-[10px] text-[#6b7c72] leading-snug line-clamp-2">
-              {hint}
-            </p>
+            <p className="text-[10px] text-[#6b7c72] leading-snug line-clamp-2">{hint}</p>
           )}
         </div>
         {!tabAligned && hint && currentStatus !== "done" && onNavigate && (
@@ -90,6 +154,21 @@ export function ProjectCockpitSidebar({
           </button>
         )}
       </div>
+
+      <ul className="space-y-1 rounded-md bg-white/60 px-2 py-1.5">
+        {tasks.map((item) => (
+          <li key={item.id} className="flex items-start gap-1.5 text-[10px] text-[#3d4f45]">
+            {item.status === "done" ? (
+              <CheckCircle2 className="h-3 w-3 shrink-0 text-[#1a5632] mt-0.5" />
+            ) : item.status === "locked" ? (
+              <Lock className="h-3 w-3 shrink-0 text-[#9aa8a0] mt-0.5" />
+            ) : (
+              <Circle className="h-3 w-3 shrink-0 text-[#2563eb] mt-0.5" />
+            )}
+            <span className={cn(item.status === "done" && "text-[#6b7c72] line-through")}>{item.label}</span>
+          </li>
+        ))}
+      </ul>
 
       <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
         {PAPER_PHASE_LABELS.map((label, index) => {
@@ -126,5 +205,4 @@ export function ProjectCockpitSidebar({
   );
 }
 
-/** @deprecated 使用 ProjectCockpitSidebar（侧栏集成版） */
 export { ProjectCockpitSidebar as ProjectCockpitBar };
