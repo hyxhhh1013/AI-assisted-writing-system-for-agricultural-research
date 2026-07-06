@@ -1,5 +1,5 @@
 /**
- * 初始化 4 个固定研究方向
+ * 初始化 4 个固定研究方向（绑定到最早创建的用户）
  * 运行: node scripts/seed-directions.mjs
  */
 
@@ -35,7 +35,13 @@ const DIRECTIONS = [
 ];
 
 async function main() {
-  console.log("🌱 初始化 4 个固定研究方向...\n");
+  const owner = await prisma.user.findFirst({ orderBy: { createdAt: "asc" } });
+  if (!owner) {
+    console.error("❌ 数据库中无用户，请先运行 create-admin 或注册账号");
+    process.exit(1);
+  }
+
+  console.log(`🌱 初始化 4 个固定研究方向（归属: ${owner.email || owner.id}）...\n`);
 
   for (const dir of DIRECTIONS) {
     const existing = await prisma.direction.findUnique({
@@ -43,13 +49,13 @@ async function main() {
     });
 
     if (existing) {
-      // 更新（保留已有 assets/analysis/roadmap）
       await prisma.direction.update({
         where: { slug: dir.slug },
         data: {
           name: dir.name,
           description: dir.description,
           categories: dir.categories,
+          userId: existing.userId || owner.id,
         },
       });
       console.log(`  ✅ ${dir.name} (${dir.slug}) — 已更新（保留已有数据）`);
@@ -62,6 +68,7 @@ async function main() {
           categories: dir.categories,
           status: "active",
           assets: [],
+          userId: owner.id,
         },
       });
       console.log(`  ✨ ${dir.name} (${dir.slug}) — 已创建`);

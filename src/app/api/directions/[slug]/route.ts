@@ -6,19 +6,19 @@ import { prismaRowToDirectionDTO } from "@/contracts/direction";
 import type { DirectionDTO } from "@/contracts/direction";
 import { logger } from "@/lib/logger";
 import { getErrorMessage } from "@/lib/error-utils";
+import { requireOwnedDirection } from "@/lib/direction-auth";
 
 // ====== GET 单个方向 ======
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
 ) {
   try {
     const { slug } = await params;
-    const row = await prisma.direction.findUnique({ where: { slug } });
-    if (!row) {
-      return NextResponse.json({ error: "方向不存在" }, { status: 404 });
-    }
+    const owned = await requireOwnedDirection(req, slug);
+    if (!owned.ok) return owned.response;
+    const row = owned.direction;
 
     const dto: DirectionDTO = prismaRowToDirectionDTO({
       id: row.id,
@@ -34,7 +34,6 @@ export async function GET(
       updatedAt: row.updatedAt,
     });
 
-    // 附加知识库文献数量
     const categories = (row.categories as string[]) || [];
     if (categories.length > 0) {
       dto.literatureCount = await prisma.knowledgeFile.count({
@@ -60,17 +59,15 @@ export async function PUT(
 ) {
   try {
     const { slug } = await params;
+    const owned = await requireOwnedDirection(req, slug);
+    if (!owned.ok) return owned.response;
+
     const body = await req.json();
     const { data: parsed, errorResponse } = await validateBody(directionUpdateSchema, body);
     if (errorResponse) return errorResponse;
 
-    const existing = await prisma.direction.findUnique({ where: { slug } });
-    if (!existing) {
-      return NextResponse.json({ error: "方向不存在" }, { status: 404 });
-    }
-
     const row = await prisma.direction.update({
-      where: { slug },
+      where: { id: owned.direction.id },
       data: {
         ...(parsed.name !== undefined && { name: parsed.name }),
         ...(parsed.description !== undefined && { description: parsed.description }),
@@ -106,17 +103,15 @@ export async function PUT(
 // ====== DELETE ======
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
 ) {
   try {
     const { slug } = await params;
-    const existing = await prisma.direction.findUnique({ where: { slug } });
-    if (!existing) {
-      return NextResponse.json({ error: "方向不存在" }, { status: 404 });
-    }
+    const owned = await requireOwnedDirection(req, slug);
+    if (!owned.ok) return owned.response;
 
-    await prisma.direction.delete({ where: { slug } });
+    await prisma.direction.delete({ where: { id: owned.direction.id } });
 
     return NextResponse.json({ message: "方向已删除" });
   } catch (error: unknown) {

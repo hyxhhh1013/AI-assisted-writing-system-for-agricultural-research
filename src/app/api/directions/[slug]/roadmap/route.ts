@@ -7,6 +7,7 @@ import { callAINonStreaming } from "@/lib/ai";
 import { buildRoadmapPrompt, buildAssetSummary } from "@/lib/prompts/direction";
 import { logger } from "@/lib/logger";
 import { getErrorMessage } from "@/lib/error-utils";
+import { requireOwnedDirection } from "@/lib/direction-auth";
 import type { DirectionAsset, DirectionRoadmap } from "@/contracts/direction";
 
 export const dynamic = "force-dynamic";
@@ -43,10 +44,9 @@ export async function PATCH(
       return NextResponse.json({ error: "缺少 candidateId" }, { status: 400 });
     }
 
-    const direction = await prisma.direction.findUnique({ where: { slug } });
-    if (!direction) {
-      return NextResponse.json({ error: "方向不存在" }, { status: 404 });
-    }
+    const owned = await requireOwnedDirection(req, slug);
+    if (!owned.ok) return owned.response;
+    const direction = owned.direction;
 
     const currentRoadmap = (direction.roadmap as Record<string, unknown> | null) || {};
     const papers = (currentRoadmap.papers as Array<Record<string, unknown>>) || [];
@@ -68,7 +68,7 @@ export async function PATCH(
     }));
 
     await prisma.direction.update({
-      where: { slug },
+      where: { id: direction.id },
       data: { roadmap: cleanRoadmap as unknown as Prisma.InputJsonValue },
     });
 
@@ -95,10 +95,9 @@ export async function POST(
     const { errorResponse } = await validateBody(directionRoadmapSchema, body);
     if (errorResponse) return errorResponse;
 
-    const direction = await prisma.direction.findUnique({ where: { slug } });
-    if (!direction) {
-      return NextResponse.json({ error: "方向不存在" }, { status: 404 });
-    }
+    const owned = await requireOwnedDirection(req, slug);
+    if (!owned.ok) return owned.response;
+    const direction = owned.direction;
 
     const currentAnalysis = (direction.analysis as Record<string, unknown> | null) || {};
     const dimensions = currentAnalysis.dimensions as Array<Record<string, unknown>> | undefined;
@@ -200,7 +199,7 @@ export async function POST(
     // 保存到 direction（JSON 清洗确保可序列化）
     const cleanRoadmap = JSON.parse(JSON.stringify(roadmap));
     await prisma.direction.update({
-      where: { slug },
+      where: { id: direction.id },
       data: { roadmap: cleanRoadmap as unknown as Prisma.InputJsonValue },
     });
 

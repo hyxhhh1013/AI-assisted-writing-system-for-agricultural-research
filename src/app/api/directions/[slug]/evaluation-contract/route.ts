@@ -8,6 +8,7 @@ import { buildEvaluationContractPrompt } from "@/lib/prompts/direction";
 import { buildSocraticToRubricPrompt } from "@/lib/prompts/direction-socratic";
 import { logger } from "@/lib/logger";
 import { getErrorMessage } from "@/lib/error-utils";
+import { requireOwnedDirection } from "@/lib/direction-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -25,16 +26,16 @@ export async function POST(
     const { slug } = await params;
     const body = await req.json();
 
-    const direction = await prisma.direction.findUnique({ where: { slug } });
-    if (!direction) {
-      return NextResponse.json({ error: "方向不存在" }, { status: 404 });
-    }
+    const owned = await requireOwnedDirection(req, slug);
+    if (!owned.ok) return owned.response;
+    const direction = owned.direction;
 
     const action = body.action as string | undefined;
 
     // 模式 0：Socratic Mentor — 基于 Q&A 生成 Rubrics（不看资产）
     if (action === "socratic-draft") {
       const qa = body.qa as Array<{ questionId: string; question: string; answer: string }> | undefined;
+      const paraphrases = body.paraphrases as Record<string, string> | undefined;
       if (!qa || !Array.isArray(qa) || qa.length === 0) {
         return NextResponse.json(
           { error: "请提供至少 1 组问答" },
@@ -46,6 +47,7 @@ export async function POST(
         directionName: direction.name,
         directionDesc: direction.description,
         qa: qa.map((item) => ({ question: item.question, answer: item.answer })),
+        paraphrases: paraphrases || {},
       });
 
       const raw = await callAINonStreaming({
@@ -78,6 +80,7 @@ export async function POST(
       return NextResponse.json({
         draft: draft.dimensions || draft,
         rationale: (draft as { rationale?: string }).rationale || "",
+        sourceQuestions: (draft as { source_questions?: string[] }).source_questions || [],
         generatedAt: Date.now(),
       });
     }
@@ -132,18 +135,22 @@ export async function POST(
 
     // 将确认的评价标准合并到 direction.description 的扩展字段
     // 实际存储策略：追加到 direction 的 analysis JSON 中作为 evaluationContract
+    const userParaphrases = (body.userParaphrases as Record<string, string> | undefined) || {};
+
     const currentAnalysis = (direction.analysis as Record<string, unknown> | null) || {};
     const updatedAnalysis = {
       ...currentAnalysis,
       evaluationContract: {
         dimensions: parsed.dimensions,
+        userParaphrases,
         confirmedAt: Date.now(),
+        preCommitmentAcknowledged: true,
       },
     };
 
     const cleanAnalysis = JSON.parse(JSON.stringify(updatedAnalysis));
     await prisma.direction.update({
-      where: { slug },
+      where: { id: direction.id },
       data: { analysis: cleanAnalysis as unknown as Prisma.InputJsonValue },
     });
 

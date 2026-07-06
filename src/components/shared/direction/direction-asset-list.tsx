@@ -1,85 +1,190 @@
 "use client";
 
-import { FlaskConical, FileText, Database, Pencil, Trash2, AlertTriangle } from "lucide-react";
+import { useState } from "react";
+import {
+  FlaskConical, FileText, Database, Pencil, Trash2, Plus,
+  ChevronDown, ChevronRight, ExternalLink,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { DirectionAsset } from "@/contracts/direction";
+import {
+  computeAssetFieldCompleteness,
+  isAssetStructurallyComplete,
+} from "@/lib/direction-asset-health";
+import type { DirectionAsset, ExperimentAsset, PaperAsset, DatasetAsset } from "@/contracts/direction";
+
+// ==================== 类型 ====================
+
+type AssetKind = "experiment" | "paper" | "dataset";
+
+interface ColumnConfig {
+  kind: AssetKind;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  accentColor: string;
+  accentBg: string;
+  accentBorder: string;
+  emptyHint: string;
+}
 
 interface DirectionAssetListProps {
   assets: DirectionAsset[];
   onEdit: (asset: DirectionAsset) => void;
   onDelete: (assetId: string) => void;
+  onAdd: (kind: AssetKind) => void;
 }
 
-const kindCfg = {
-  experiment: { label: "实验", icon: FlaskConical, color: "text-[#2563eb]", bg: "bg-[#2563eb]/8", border: "border-l-[#2563eb]" },
-  paper: { label: "论文", icon: FileText, color: "text-[#1a5632]", bg: "bg-[#1a5632]/8", border: "border-l-[#1a5632]" },
-  dataset: { label: "数据集", icon: Database, color: "text-[#b8975a]", bg: "bg-[#b8975a]/8", border: "border-l-[#b8975a]" },
-} as const;
+// ==================== 列配置 ====================
 
-type Kind = keyof typeof kindCfg;
+const COLUMNS: ColumnConfig[] = [
+  {
+    kind: "experiment",
+    label: "实验/试验",
+    icon: FlaskConical,
+    accentColor: "text-[#2563eb]",
+    accentBg: "bg-[#2563eb]/8",
+    accentBorder: "border-[#2563eb]/20",
+    emptyHint: "录入实验资产：研究问题、方法、关键发现",
+  },
+  {
+    kind: "paper",
+    label: "已发表论文",
+    icon: FileText,
+    accentColor: "text-[#1a5632]",
+    accentBg: "bg-[#1a5632]/8",
+    accentBorder: "border-[#1a5632]/20",
+    emptyHint: "录入已发表论文：DOI、期刊、贡献",
+  },
+  {
+    kind: "dataset",
+    label: "数据集",
+    icon: Database,
+    accentColor: "text-[#b8975a]",
+    accentBg: "bg-[#b8975a]/8",
+    accentBorder: "border-[#b8975a]/20",
+    emptyHint: "录入数据集：变量、样本量、关联实验",
+  },
+];
 
-export function DirectionAssetList({ assets, onEdit, onDelete }: DirectionAssetListProps) {
+const SOURCE_LABELS: Record<string, string> = {
+  knowledge_base: "知识库",
+  existing_project: "已有项目",
+  manual: "手动",
+};
+
+function CompletenessDot({ asset }: { asset: DirectionAsset }) {
+  const score = computeAssetFieldCompleteness(asset);
+  const complete = isAssetStructurallyComplete(asset);
+  return (
+    <span
+      className={cn(
+        "inline-block h-1.5 w-1.5 shrink-0 rounded-full",
+        complete ? "bg-[#059669]" : score >= 50 ? "bg-[#d97706]" : "bg-[#dc2626]",
+      )}
+      title={complete ? "必填完整" : `完整度 ${score}%`}
+    />
+  );
+}
+
+// ==================== 主组件 ====================
+
+export function DirectionAssetList({ assets, onEdit, onDelete, onAdd }: DirectionAssetListProps) {
+  const grouped = (kind: AssetKind) => assets.filter((a) => a.kind === kind);
+
   if (assets.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-3 py-16 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1a5632]/6">
-          <Database className="h-6 w-6 text-[#1a5632]/50" />
-        </div>
-        <p className="text-sm text-[#9aa8a0]">暂无资产。录入或从现有数据扫描。</p>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {COLUMNS.map((col) => (
+          <div
+            key={col.kind}
+            className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-[#1a5632]/12 py-12 text-center"
+          >
+            <div className={cn("flex h-10 w-10 items-center justify-center rounded-full", col.accentBg)}>
+              <col.icon className={cn("h-5 w-5", col.accentColor)} />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-[#9aa8a0]">{col.label}</p>
+              <p className="mt-1 text-xs text-[#b8c4bc]">{col.emptyHint}</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1 text-xs"
+              onClick={() => onAdd(col.kind)}
+            >
+              <Plus className="h-3 w-3" />
+              添加{col.label}
+            </Button>
+          </div>
+        ))}
       </div>
     );
   }
 
-  // 按 kind 分组排序
-  const order: Kind[] = ["experiment", "paper", "dataset"];
-  const grouped = (kind: Kind) => assets.filter((a) => a.kind === kind);
-
   return (
-    <div className="space-y-6">
-      {order.map((kind) => {
-        const items = grouped(kind);
-        if (items.length === 0) return null;
-        const cfg = kindCfg[kind];
-        const Icon = cfg.icon;
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      {COLUMNS.map((col) => {
+        const items = grouped(col.kind);
+        const hasItems = items.length > 0;
+        const Icon = col.icon;
 
         return (
-          <div key={kind}>
-            {/* 分组头 */}
-            <div className={cn("mb-2 flex items-center gap-2 text-xs font-semibold", cfg.color)}>
-              <Icon className="h-4 w-4" />
-              {cfg.label}
-              <Badge variant="secondary" className="h-4 px-1.5 text-[9px] border-0 bg-black/[0.04] text-[#6b7c72]">
-                {items.length}
-              </Badge>
+          <div
+            key={col.kind}
+            className={cn(
+              "flex flex-col rounded-xl border min-h-[200px]",
+              hasItems ? "border-[#1a5632]/8 bg-white" : "border-dashed border-[#1a5632]/12 bg-white/50",
+            )}
+          >
+            {/* 列头 */}
+            <div className={cn(
+              "flex items-center justify-between px-4 py-2.5 border-b shrink-0",
+              hasItems ? "border-[#1a5632]/6 bg-[#f6f5f1]/60" : "border-transparent",
+            )}>
+              <div className="flex items-center gap-2">
+                <div className={cn("flex h-6 w-6 items-center justify-center rounded-md", col.accentBg)}>
+                  <Icon className={cn("h-3.5 w-3.5", col.accentColor)} />
+                </div>
+                <span className="text-xs font-semibold text-[#122820]">{col.label}</span>
+                {hasItems && (
+                  <Badge variant="secondary" className="h-4 px-1.5 text-[9px] border-0 bg-black/[0.04] text-[#6b7c72]">
+                    {items.length}
+                  </Badge>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => onAdd(col.kind)}
+                title={`添加${col.label}`}
+              >
+                <Plus className={cn("h-3.5 w-3.5", col.accentColor)} />
+              </Button>
             </div>
 
-            {/* 紧凑表格 */}
-            <div className="overflow-hidden rounded-lg border border-[#1a5632]/8">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-[#1a5632]/6 bg-[#f6f5f1]/70 text-left text-[10px] font-medium text-[#9aa8a0]">
-                    <th className="w-8 px-2 py-1.5" />
-                    <th className="px-3 py-1.5">名称</th>
-                    <th className="hidden px-3 py-1.5 sm:table-cell">关键信息</th>
-                    <th className="hidden w-24 px-3 py-1.5 text-right lg:table-cell">标签</th>
-                    <th className="w-16 px-2 py-1.5 text-right">操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((asset) => (
-                    <AssetTableRow
-                      key={asset.id}
-                      asset={asset}
-                      kind={kind}
-                      onEdit={() => onEdit(asset)}
-                      onDelete={() => onDelete(asset.id)}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {/* 卡片列表 */}
+            {hasItems ? (
+              <div className="flex-1 overflow-y-auto p-2 space-y-1.5 max-h-[480px]">
+                {items.map((asset) => (
+                  <AssetCard
+                    key={asset.id}
+                    asset={asset}
+                    kind={col.kind}
+                    accentColor={col.accentColor}
+                    accentBg={col.accentBg}
+                    accentBorder={col.accentBorder}
+                    onEdit={() => onEdit(asset)}
+                    onDelete={() => onDelete(asset.id)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center gap-2 p-4 text-center">
+                <p className="text-xs text-[#b8c4bc]">{col.emptyHint}</p>
+              </div>
+            )}
           </div>
         );
       })}
@@ -87,102 +192,330 @@ export function DirectionAssetList({ assets, onEdit, onDelete }: DirectionAssetL
   );
 }
 
-function AssetTableRow({
+// ==================== 资产卡片 ====================
+
+function AssetCard({
   asset,
   kind,
+  accentColor,
+  accentBg,
+  accentBorder,
   onEdit,
   onDelete,
 }: {
   asset: DirectionAsset;
-  kind: Kind;
+  kind: AssetKind;
+  accentColor: string;
+  accentBg: string;
+  accentBorder: string;
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const cfg = kindCfg[kind];
-  const Icon = cfg.icon;
+  const [expanded, setExpanded] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
-  const title =
-    asset.kind === "experiment" ? (asset as { title: string }).title
-      : asset.kind === "paper" ? ((asset as { title: string }).title || (asset as { doi: string }).doi)
-        : (asset as { title: string }).title;
+  if (kind === "experiment") return (
+    <ExperimentCard
+      asset={asset as ExperimentAsset}
+      {...{ accentColor, accentBg, accentBorder, expanded, setExpanded, confirming, setConfirming, onEdit, onDelete }}
+    />
+  );
+  if (kind === "paper") return (
+    <PaperCard
+      asset={asset as PaperAsset}
+      {...{ accentColor, accentBg, accentBorder, expanded, setExpanded, confirming, setConfirming, onEdit, onDelete }}
+    />
+  );
+  return (
+    <DatasetCard
+      asset={asset as DatasetAsset}
+      {...{ accentColor, accentBg, accentBorder, expanded, setExpanded, confirming, setConfirming, onEdit, onDelete }}
+    />
+  );
+}
 
-  const subtitle =
-    asset.kind === "experiment"
-      ? ((asset as { researchQuestion: string }).researchQuestion || "").slice(0, 50)
-      : asset.kind === "paper"
-        ? `${(asset as { journal: string }).journal || ""}${(asset as { year: number }).year ? ` (${(asset as { year: number }).year})` : ""}`
-        : ((asset as { variables: string }).variables || "").slice(0, 50);
+// ==================== 基础卡片壳 ====================
 
-  const badges: string[] = [];
-  if (asset.kind === "experiment" && (asset as { isNegativeResult: boolean }).isNegativeResult) {
-    badges.push("负结果");
-  }
-  if (asset.kind === "paper" && (asset as { source: string }).source) {
-    const s = (asset as { source: string }).source;
-    badges.push(s === "knowledge_base" ? "知识库" : s === "existing_project" ? "已有项目" : "手动");
-  }
+function CardShell({
+  accentBorder,
+  accentBg,
+  expanded,
+  setExpanded,
+  confirming,
+  setConfirming,
+  onEdit,
+  onDelete,
+  topLine,
+  detailLines,
+  badges,
+}: {
+  accentBorder: string;
+  accentBg: string;
+  expanded: boolean;
+  setExpanded: (v: boolean) => void;
+  confirming: boolean;
+  setConfirming: (v: boolean) => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  topLine: React.ReactNode;
+  detailLines: React.ReactNode;
+  badges: React.ReactNode;
+}) {
+  const hasDetail = detailLines !== null;
 
   return (
-    <tr className="group border-b border-[#1a5632]/4 transition-colors hover:bg-[#1a5632]/2">
-      {/* 类型图标 */}
-      <td className="px-2 py-2">
-        <div className={cn("flex h-6 w-6 items-center justify-center rounded-md", cfg.bg)}>
-          <Icon className={cn("h-3.5 w-3.5", cfg.color)} />
-        </div>
-      </td>
-
-      {/* 名称 + 副标题 */}
-      <td className="px-3 py-2">
-        <div className="min-w-0">
-          <p className="truncate text-xs font-medium text-[#122820]" title={title}>
-            {title || "未命名"}
-          </p>
-          {subtitle && (
-            <p className="mt-0.5 truncate text-[10px] text-[#9aa8a0]">
-              {subtitle}
-            </p>
+    <div className={cn(
+      "group rounded-lg border px-2.5 py-2 transition-colors hover:shadow-sm",
+      accentBorder, expanded && accentBg,
+    )}>
+      {/* 第一行：标题 + 操作 */}
+      <div className="flex items-start justify-between gap-1">
+        <button
+          className="flex-1 min-w-0 text-left"
+          onClick={() => hasDetail && setExpanded(!expanded)}
+        >
+          {topLine}
+        </button>
+        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onEdit}>
+            <Pencil className="h-3 w-3 text-[#6b7c72]" />
+          </Button>
+          {confirming ? (
+            <div className="flex items-center gap-0.5">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-[10px] text-red-600"
+                onClick={() => { onDelete(); setConfirming(false); }}
+              >
+                确认
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-[10px]"
+                onClick={() => setConfirming(false)}
+              >
+                取消
+              </Button>
+            </div>
+          ) : (
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setConfirming(true)}>
+              <Trash2 className="h-3 w-3 text-[#b91c1c]/60" />
+            </Button>
           )}
         </div>
-      </td>
+      </div>
 
-      {/* 关键信息 */}
-      <td className="hidden px-3 py-2 sm:table-cell">
-        <span className="line-clamp-1 text-[11px] text-[#6b7c72]">
-          {asset.kind === "experiment"
-            ? (asset as { keyFindings: string }).keyFindings?.slice(0, 60) || "—"
-            : asset.kind === "paper"
-              ? (asset as { contribution: string }).contribution?.slice(0, 60) || "—"
-              : (asset as { sampleSize: string }).sampleSize || "—"}
-        </span>
-      </td>
+      {/* 徽章行 */}
+      {badges && <div className="mt-1 flex flex-wrap gap-1">{badges}</div>}
 
-      {/* 标签 */}
-      <td className="hidden px-3 py-2 text-right lg:table-cell">
-        <div className="flex justify-end gap-1">
-          {badges.map((b) => (
-            <Badge key={b} variant="secondary" className="h-4 px-1 text-[9px] leading-none font-normal border-0 bg-[#f3f4f6] text-[#6b7c72]">
-              {b}
+      {/* 展开详情 */}
+      {expanded && hasDetail && (
+        <div className="mt-2 border-t border-[#1a5632]/8 pt-2 space-y-1">
+          {detailLines}
+        </div>
+      )}
+
+      {/* 展开指示器 */}
+      {hasDetail && (
+        <button
+          className="mt-1 flex w-full items-center justify-center text-[9px] text-[#b8c4bc] hover:text-[#6b7c72]"
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ==================== 实验卡片 ====================
+
+function ExperimentCard({
+  asset,
+  ...shell
+}: {
+  asset: ExperimentAsset;
+  accentColor: string; accentBg: string; accentBorder: string;
+  expanded: boolean; setExpanded: (v: boolean) => void;
+  confirming: boolean; setConfirming: (v: boolean) => void;
+  onEdit: () => void; onDelete: () => void;
+}) {
+  return (
+    <CardShell
+      {...shell}
+      topLine={
+        <div className="flex items-start gap-1.5">
+          <CompletenessDot asset={asset} />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-[#122820] line-clamp-2 leading-snug">
+              {asset.title || "未命名实验"}
+            </p>
+            {asset.dateRange && (
+              <p className="mt-0.5 text-[10px] text-[#9aa8a0]">{asset.dateRange}</p>
+            )}
+          </div>
+        </div>
+      }
+      detailLines={
+        <>
+          {asset.researchQuestion && (
+            <div>
+              <span className="text-[9px] font-medium text-[#9aa8a0]">研究问题</span>
+              <p className="text-[11px] text-[#3d4f46] leading-relaxed">{asset.researchQuestion}</p>
+            </div>
+          )}
+          {asset.keyFindings && (
+            <div>
+              <span className="text-[9px] font-medium text-[#9aa8a0]">关键发现</span>
+              <p className="text-[11px] text-[#3d4f46] leading-relaxed">{asset.keyFindings}</p>
+            </div>
+          )}
+        </>
+      }
+      badges={
+        <>
+          {asset.isNegativeResult && (
+            <Badge variant="secondary" className="h-4 px-1 text-[9px] border-amber-200 bg-amber-50 text-amber-700">负结果</Badge>
+          )}
+          {asset.linkedPapers?.length > 0 && (
+            <Badge variant="secondary" className="h-4 px-1 text-[9px] border-0 bg-black/[0.03] text-[#6b7c72]">
+              <ExternalLink className="mr-0.5 h-2.5 w-2.5" />
+              {asset.linkedPapers.length} 篇论文
             </Badge>
-          ))}
-        </div>
-      </td>
+          )}
+        </>
+      }
+    />
+  );
+}
 
-      {/* 操作 */}
-      <td className="px-2 py-2 text-right">
-        <div className="flex justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit}>
-            <Pencil className="h-3.5 w-3.5 text-[#6b7c72]" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={(e) => { e.stopPropagation(); if (confirm("确定删除？")) onDelete(); }}
-          >
-            <Trash2 className="h-3.5 w-3.5 text-[#b91c1c]/70" />
-          </Button>
+// ==================== 论文卡片 ====================
+
+function PaperCard({
+  asset,
+  ...shell
+}: {
+  asset: PaperAsset;
+  accentColor: string; accentBg: string; accentBorder: string;
+  expanded: boolean; setExpanded: (v: boolean) => void;
+  confirming: boolean; setConfirming: (v: boolean) => void;
+  onEdit: () => void; onDelete: () => void;
+}) {
+  return (
+    <CardShell
+      {...shell}
+      topLine={
+        <div className="flex items-start gap-1.5">
+          <CompletenessDot asset={asset} />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-[#122820] line-clamp-2 leading-snug">
+              {asset.title || asset.doi || "未命名论文"}
+            </p>
+            {(asset.journal || asset.year) && (
+              <p className="mt-0.5 text-[10px] text-[#9aa8a0]">
+                {[asset.journal, asset.year ? String(asset.year) : ""].filter(Boolean).join(" · ")}
+                {asset.impactFactor ? ` (IF ${asset.impactFactor})` : ""}
+              </p>
+            )}
+          </div>
         </div>
-      </td>
-    </tr>
+      }
+      detailLines={
+        <>
+          {asset.contribution && (
+            <div>
+              <span className="text-[9px] font-medium text-[#9aa8a0]">贡献</span>
+              <p className="text-[11px] text-[#3d4f46] leading-relaxed">{asset.contribution}</p>
+            </div>
+          )}
+          {asset.abstract && (
+            <div>
+              <span className="text-[9px] font-medium text-[#9aa8a0]">摘要</span>
+              <p className="text-[11px] text-[#3d4f46] leading-relaxed line-clamp-4">{asset.abstract}</p>
+            </div>
+          )}
+        </>
+      }
+      badges={
+        <>
+          {asset.source && (
+            <Badge variant="secondary" className="h-4 px-1 text-[9px] border-0 bg-black/[0.03] text-[#6b7c72]">
+              {SOURCE_LABELS[asset.source] || asset.source}
+            </Badge>
+          )}
+          {asset.linkedExperiments?.length > 0 && (
+            <Badge variant="secondary" className="h-4 px-1 text-[9px] border-0 bg-black/[0.03] text-[#6b7c72]">
+              <ExternalLink className="mr-0.5 h-2.5 w-2.5" />
+              {asset.linkedExperiments.length} 个实验
+            </Badge>
+          )}
+        </>
+      }
+    />
+  );
+}
+
+// ==================== 数据集卡片 ====================
+
+function DatasetCard({
+  asset,
+  ...shell
+}: {
+  asset: DatasetAsset;
+  accentColor: string; accentBg: string; accentBorder: string;
+  expanded: boolean; setExpanded: (v: boolean) => void;
+  confirming: boolean; setConfirming: (v: boolean) => void;
+  onEdit: () => void; onDelete: () => void;
+}) {
+  return (
+    <CardShell
+      {...shell}
+      topLine={
+        <div className="flex items-start gap-1.5">
+          <CompletenessDot asset={asset} />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-[#122820] line-clamp-2 leading-snug">
+              {asset.title || "未命名数据集"}
+            </p>
+            {asset.sampleSize && (
+              <p className="mt-0.5 text-[10px] text-[#9aa8a0]">样本量 {asset.sampleSize}</p>
+            )}
+          </div>
+        </div>
+      }
+      detailLines={
+        <>
+          {asset.variables && (
+            <div>
+              <span className="text-[9px] font-medium text-[#9aa8a0]">变量</span>
+              <p className="text-[11px] text-[#3d4f46] leading-relaxed">{asset.variables}</p>
+            </div>
+          )}
+          {asset.filePath && (
+            <div>
+              <span className="text-[9px] font-medium text-[#9aa8a0]">文件路径</span>
+              <p className="text-[11px] text-[#6b7c72] font-mono text-[10px]">{asset.filePath}</p>
+            </div>
+          )}
+        </>
+      }
+      badges={
+        <>
+          {asset.source && (
+            <Badge variant="secondary" className="h-4 px-1 text-[9px] border-0 bg-black/[0.03] text-[#6b7c72]">
+              {SOURCE_LABELS[asset.source] || asset.source}
+            </Badge>
+          )}
+          {asset.linkedExperiments?.length > 0 && (
+            <Badge variant="secondary" className="h-4 px-1 text-[9px] border-0 bg-black/[0.03] text-[#6b7c72]">
+              <ExternalLink className="mr-0.5 h-2.5 w-2.5" />
+              {asset.linkedExperiments.length} 个实验
+            </Badge>
+          )}
+        </>
+      }
+    />
   );
 }

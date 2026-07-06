@@ -11,6 +11,8 @@ import { FlaskConical, FileText, Database, Save, Wand2, Loader2, X } from "lucid
 import { cn } from "@/lib/utils";
 import { siteTheme } from "@/lib/site-theme";
 import { toast } from "sonner";
+import { parseAssetFromNL } from "@/services/direction";
+import { computeAssetFieldCompleteness } from "@/lib/direction-asset-health";
 import type { DirectionAsset, ExperimentAsset, PaperAsset, DatasetAsset } from "@/contracts/direction";
 
 interface DirectionAssetFormProps {
@@ -18,6 +20,10 @@ interface DirectionAssetFormProps {
   onSave: (asset: DirectionAsset) => void;
   onCancel: () => void;
   editAsset?: DirectionAsset | null;
+  /** 新建时预选资产类型（编辑模式下由 editAsset.kind 决定） */
+  initialKind?: "experiment" | "paper" | "dataset";
+  /** 已有资产，用于关联选择 */
+  existingAssets?: DirectionAsset[];
 }
 
 function newExperiment(): ExperimentAsset {
@@ -70,8 +76,54 @@ function newDataset(): DatasetAsset {
   };
 }
 
-export function DirectionAssetForm({ slug, onSave, onCancel, editAsset }: DirectionAssetFormProps) {
-  const [tab, setTab] = useState<string>(editAsset?.kind || "experiment");
+function LinkSelector({
+  label,
+  options,
+  selected,
+  onChange,
+}: {
+  label: string;
+  options: Array<{ id: string; title: string }>;
+  selected: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  if (options.length === 0) return null;
+  const toggle = (id: string) => {
+    onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
+  };
+  return (
+    <div>
+      <Label className="text-xs text-[#6b7c72]">{label}</Label>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {options.map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            onClick={() => toggle(o.id)}
+            className={cn(
+              "rounded-md border px-2 py-1 text-[10px] transition-colors line-clamp-1 max-w-[200px]",
+              selected.includes(o.id)
+                ? "border-[#1a5632]/30 bg-[#1a5632]/8 text-[#1a5632]"
+                : "border-[#1a5632]/10 text-[#6b7c72] hover:bg-black/[0.02]",
+            )}
+          >
+            {o.title || o.id}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function DirectionAssetForm({
+  slug,
+  onSave,
+  onCancel,
+  editAsset,
+  initialKind,
+  existingAssets = [],
+}: DirectionAssetFormProps) {
+  const [tab, setTab] = useState<string>(editAsset?.kind || initialKind || "experiment");
   const [experiment, setExperiment] = useState<ExperimentAsset>(
     editAsset?.kind === "experiment" ? (editAsset as ExperimentAsset) : newExperiment(),
   );
@@ -108,6 +160,20 @@ export function DirectionAssetForm({ slug, onSave, onCancel, editAsset }: Direct
     return dataset.title.trim() && dataset.variables.trim();
   };
 
+  const paperOptions = existingAssets
+    .filter((a) => a.kind === "paper")
+    .map((a) => ({ id: a.id, title: (a as PaperAsset).title || (a as PaperAsset).doi }));
+  const datasetOptions = existingAssets
+    .filter((a) => a.kind === "dataset")
+    .map((a) => ({ id: a.id, title: (a as DatasetAsset).title }));
+  const experimentOptions = existingAssets
+    .filter((a) => a.kind === "experiment" && a.id !== experiment.id)
+    .map((a) => ({ id: a.id, title: (a as ExperimentAsset).title }));
+
+  const currentDraft: DirectionAsset =
+    tab === "experiment" ? experiment : tab === "paper" ? paper : dataset;
+  const fieldCompleteness = computeAssetFieldCompleteness(currentDraft);
+
   /** NL 解析：调用 AI 将自然语言转为结构化 ExperimentAsset */
   const handleNLParse = async () => {
     if (!slug) return;
@@ -118,20 +184,7 @@ export function DirectionAssetForm({ slug, onSave, onCancel, editAsset }: Direct
     setNlParsing(true);
     setNlConfidence(null);
     try {
-      const res = await fetch(`/api/directions/${slug}/parse-asset`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: nlText.trim() }),
-      });
-      const data = await res.json() as {
-        parsed?: ExperimentAsset & { confidence?: string };
-        confidence?: string;
-        error?: string;
-      };
-      if (!res.ok || !data.parsed) throw new Error(data.error || "解析失败");
-
-      // 预填表单
-      const parsed = data.parsed;
+      const { parsed, confidence } = await parseAssetFromNL(slug, nlText.trim());
       setExperiment({
         ...newExperiment(),
         id: parsed.id,
@@ -143,7 +196,7 @@ export function DirectionAssetForm({ slug, onSave, onCancel, editAsset }: Direct
         limitations: parsed.limitations,
         isNegativeResult: parsed.isNegativeResult || false,
       });
-      setNlConfidence(data.confidence || "medium");
+      setNlConfidence(confidence);
       setTab("experiment");
       setQuickMode(false);
       toast.success("已解析为结构化资产，请审核后保存");
@@ -211,6 +264,25 @@ export function DirectionAssetForm({ slug, onSave, onCancel, editAsset }: Direct
         </div>
       )}
 
+      <div className="flex items-center justify-between text-[10px] text-[#9aa8a0]">
+        <span>字段完整度</span>
+        <span className={cn(
+          "font-medium tabular-nums",
+          fieldCompleteness >= 80 ? "text-[#059669]" : fieldCompleteness >= 50 ? "text-[#d97706]" : "text-[#dc2626]",
+        )}>
+          {fieldCompleteness}%
+        </span>
+      </div>
+      <div className="h-1 overflow-hidden rounded-full bg-[#1a5632]/8">
+        <div
+          className={cn(
+            "h-full transition-all",
+            fieldCompleteness >= 80 ? "bg-[#059669]" : fieldCompleteness >= 50 ? "bg-[#d97706]" : "bg-[#dc2626]",
+          )}
+          style={{ width: `${fieldCompleteness}%` }}
+        />
+      </div>
+
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="h-9 w-full">
           <TabsTrigger value="experiment" className="flex-1 gap-1.5 text-xs">
@@ -258,6 +330,22 @@ export function DirectionAssetForm({ slug, onSave, onCancel, editAsset }: Direct
             <Label>局限与不足 <span className="text-red-500">*</span></Label>
             <Textarea value={experiment.limitations} onChange={(e) => setExperiment({ ...experiment, limitations: e.target.value })} placeholder="实验不足和遗留问题…" className="mt-1 h-16 resize-none text-sm" />
           </div>
+          {(paperOptions.length > 0 || datasetOptions.length > 0) && (
+            <div className="space-y-3 rounded-lg border border-[#1a5632]/8 bg-[#f6f5f1]/30 p-3">
+              <LinkSelector
+                label="关联已发表论文"
+                options={paperOptions}
+                selected={experiment.linkedPapers}
+                onChange={(ids) => setExperiment({ ...experiment, linkedPapers: ids })}
+              />
+              <LinkSelector
+                label="关联数据集"
+                options={datasetOptions}
+                selected={experiment.linkedDatasets}
+                onChange={(ids) => setExperiment({ ...experiment, linkedDatasets: ids })}
+              />
+            </div>
+          )}
         </TabsContent>
 
         {/* 论文表单 */}
@@ -284,6 +372,16 @@ export function DirectionAssetForm({ slug, onSave, onCancel, editAsset }: Direct
             <Label>对本方向的学术贡献 <span className="text-red-500">*</span></Label>
             <Textarea value={paper.contribution} onChange={(e) => setPaper({ ...paper, contribution: e.target.value })} placeholder="人总结：这篇论文对本研究方向的学术贡献是什么？" className="mt-1 h-20 resize-none text-sm" />
           </div>
+          {experimentOptions.length > 0 && (
+            <div className="rounded-lg border border-[#1a5632]/8 bg-[#f6f5f1]/30 p-3">
+              <LinkSelector
+                label="关联支撑实验"
+                options={experimentOptions}
+                selected={paper.linkedExperiments}
+                onChange={(ids) => setPaper({ ...paper, linkedExperiments: ids })}
+              />
+            </div>
+          )}
         </TabsContent>
 
         {/* 数据集表单 */}
@@ -304,6 +402,16 @@ export function DirectionAssetForm({ slug, onSave, onCancel, editAsset }: Direct
             <Label>样本量</Label>
             <Input value={dataset.sampleSize || ""} onChange={(e) => setDataset({ ...dataset, sampleSize: e.target.value })} placeholder="如 n=30" className="mt-1 text-sm" />
           </div>
+          {experimentOptions.length > 0 && (
+            <div className="rounded-lg border border-[#1a5632]/8 bg-[#f6f5f1]/30 p-3">
+              <LinkSelector
+                label="关联来源实验"
+                options={experimentOptions}
+                selected={dataset.linkedExperiments}
+                onChange={(ids) => setDataset({ ...dataset, linkedExperiments: ids })}
+              />
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 

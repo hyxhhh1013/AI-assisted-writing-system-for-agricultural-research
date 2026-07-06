@@ -3,19 +3,19 @@ import prisma from "@/lib/prisma";
 import type { PaperAsset, DatasetAsset } from "@/contracts/direction";
 import { logger } from "@/lib/logger";
 import { getErrorMessage } from "@/lib/error-utils";
+import { requireOwnedDirection } from "@/lib/direction-auth";
 
 /** 扫描候选资产：从 KnowledgeFile / Project / DataClaims 中提取 */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
 ) {
   try {
     const { slug } = await params;
 
-    const direction = await prisma.direction.findUnique({ where: { slug } });
-    if (!direction) {
-      return NextResponse.json({ error: "方向不存在" }, { status: 404 });
-    }
+    const owned = await requireOwnedDirection(req, slug);
+    if (!owned.ok) return owned.response;
+    const direction = owned.direction;
 
     const categories = direction.categories as string[];
 
@@ -59,7 +59,7 @@ export async function GET(
 
     // 2. 从现有项目扫描论文资产
     const projects = await prisma.project.findMany({
-      where: { researchDirection: slug },
+      where: { researchDirection: slug, userId: owned.userId },
       orderBy: { lastUpdated: "desc" },
       take: 50,
     });

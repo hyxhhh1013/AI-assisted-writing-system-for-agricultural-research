@@ -13,6 +13,9 @@ import {
 import { localRAG } from "@/lib/rag";
 import { logger } from "@/lib/logger";
 import { getErrorMessage } from "@/lib/error-utils";
+import { getUserIdFromRequest } from "@/lib/auth";
+import { unauthorizedResponse } from "@/lib/api-response";
+import { getOwnedDirection } from "@/lib/direction-auth";
 import type {
   DirectionAsset,
   AnalysisDimension,
@@ -320,6 +323,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
 ) {
+  const userId = getUserIdFromRequest(req);
+  if (!userId) return unauthorizedResponse();
+
   const { slug } = await params;
   let aborted = false;
 
@@ -342,7 +348,7 @@ export async function POST(
         void parsed.data;
 
         // 1. 加载方向数据
-        const direction = await prisma.direction.findUnique({ where: { slug } });
+        const direction = await getOwnedDirection(slug, userId);
         if (!direction) { emitError("方向不存在"); return; }
 
         const assets: DirectionAsset[] = Array.isArray(direction.assets)
@@ -549,14 +555,14 @@ export async function POST(
           analysisFingerprint: computeFingerprint(assets, evaluationContract),
           dimensions: orderedDimensions,
           paperCandidates: capturedCandidates,
-          crossDirectionOpportunities: await extractCrossDirectionFromD8(dimD8, slug),
+          crossDirectionOpportunities: await extractCrossDirectionFromD8(dimD8, slug, userId),
           synthesis: synthesis || null,
           evaluationContract: evaluationContract || null,
         };
 
         const cleanPayload = JSON.parse(JSON.stringify(analysisPayload));
         await prisma.direction.update({
-          where: { slug },
+          where: { id: direction.id },
           data: { analysis: cleanPayload as unknown as Prisma.InputJsonValue },
         });
 
@@ -594,14 +600,14 @@ function fallbackDimension(id: string): AnalysisDimension {
 async function extractCrossDirectionFromD8(
   dimD8: AnalysisDimension | undefined,
   currentSlug: string,
+  userId: string,
 ): Promise<CrossDirectionOpportunity[]> {
   if (!dimD8 || dimD8.score < 3) return [];
 
-  // 获取所有活跃方向（用于匹配名称）
   let knownDirections: Array<{ slug: string; name: string }> = [];
   try {
     knownDirections = await prisma.direction.findMany({
-      where: { status: "active", slug: { not: currentSlug } },
+      where: { status: "active", userId, slug: { not: currentSlug } },
       select: { slug: true, name: true },
     });
   } catch { return []; }

@@ -17,14 +17,15 @@ import { Search, FileText, Database, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { siteTheme } from "@/lib/site-theme";
 import { toast } from "sonner";
-import { scanCandidates } from "@/services/direction";
-import type { ScanResult } from "@/services/direction";
+import { scanCandidates, type ScanResult } from "@/services/direction";
+import { isAssetAlreadyImported } from "@/lib/direction-asset-health";
 import type { DirectionAsset } from "@/contracts/direction";
 
 interface DirectionAssetScanDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   slug: string;
+  existingAssets?: DirectionAsset[];
   onImport: (assets: DirectionAsset[]) => void;
 }
 
@@ -32,6 +33,7 @@ export function DirectionAssetScanDialog({
   open,
   onOpenChange,
   slug,
+  existingAssets = [],
   onImport,
 }: DirectionAssetScanDialogProps) {
   const [loading, setLoading] = useState(false);
@@ -55,7 +57,13 @@ export function DirectionAssetScanDialog({
   const allPapers = [
     ...(result?.paperCandidates || []),
     ...(result?.projectCandidates || []),
-  ];
+  ].filter((p) => !isAssetAlreadyImported(p, existingAssets));
+
+  const filteredDatasets = (result?.datasetCandidates || []).filter(
+    (d) => !existingAssets.some(
+      (a) => a.kind === "dataset" && a.title.trim().toLowerCase() === d.title.trim().toLowerCase(),
+    ),
+  );
 
   const handleImport = () => {
     const assets: DirectionAsset[] = [];
@@ -80,7 +88,7 @@ export function DirectionAssetScanDialog({
       }
     }
 
-    for (const d of result?.datasetCandidates || []) {
+    for (const d of filteredDatasets) {
       if (selectedDatasetIds.has(d.id)) {
         assets.push({
           id: `imported-dataset-${d.id}`,
@@ -145,9 +153,12 @@ export function DirectionAssetScanDialog({
           <div className="space-y-4">
             {/* 摘要 */}
             <div className="flex gap-3 text-xs text-[#6b7c72]">
-              <span>知识库文献: {result.summary.knowledgeBasePapers} 篇</span>
-              <span>现有项目: {result.summary.existingProjects} 个</span>
-              <span>数据声明: {result.summary.dataClaims} 条</span>
+              <span>可导入论文: {allPapers.length} 篇</span>
+              <span>可导入数据集: {filteredDatasets.length} 条</span>
+              {(result.summary.knowledgeBasePapers > allPapers.length ||
+                (result?.datasetCandidates || []).length > filteredDatasets.length) && (
+                <span className="text-[#059669]">已过滤重复项</span>
+              )}
             </div>
 
             <ScrollArea className="h-[320px]">
@@ -199,13 +210,13 @@ export function DirectionAssetScanDialog({
               )}
 
               {/* 数据集候选 */}
-              {(result?.datasetCandidates || []).length > 0 && (
+              {(filteredDatasets).length > 0 && (
                 <div>
                   <h4 className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#122820]">
-                    <Database className="h-4 w-4 text-[#b8975a]" /> 数据集资产 ({result.datasetCandidates.length})
+                    <Database className="h-4 w-4 text-[#b8975a]" /> 数据集资产 ({filteredDatasets.length})
                   </h4>
                   <div className="space-y-1.5">
-                    {result.datasetCandidates.map((d) => (
+                    {filteredDatasets.map((d) => (
                       <label
                         key={d.id}
                         className={cn(
@@ -230,9 +241,11 @@ export function DirectionAssetScanDialog({
                 </div>
               )}
 
-              {allPapers.length === 0 && (result?.datasetCandidates || []).length === 0 && (
+              {allPapers.length === 0 && filteredDatasets.length === 0 && (
                 <div className="py-12 text-center text-sm text-[#9aa8a0]">
-                  未找到可导入的资产。请确保知识库中存在该方向分类的文献，或已有项目关联了此研究方向。
+                  {existingAssets.length > 0
+                    ? "未发现新的可导入资产（已有资产均已收录）。"
+                    : "未找到可导入的资产。请确保知识库中存在该方向分类的文献，或已有项目关联了此研究方向。"}
                 </div>
               )}
             </ScrollArea>

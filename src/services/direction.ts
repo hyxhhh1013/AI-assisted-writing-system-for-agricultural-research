@@ -4,6 +4,7 @@ import type {
   DirectionDTO,
   DirectionListItem,
   DirectionAsset,
+  ExperimentAsset,
 } from "@/contracts/direction";
 import type {
   DirectionCreateInput,
@@ -51,7 +52,9 @@ export async function getDirection(slug: string): Promise<DirectionDTO> {
   const res = await fetch(`/api/directions/${slug}`);
   const data = await res.json().catch(() => ({})) as DirectionDTO & { error?: string };
   if (!res.ok) {
-    throw new Error(data.error || "获取方向失败");
+    const err = new Error(data.error || "获取方向失败") as Error & { status?: number };
+    err.status = res.status;
+    throw err;
   }
   return data;
 }
@@ -134,6 +137,33 @@ export interface ScanResult {
   };
 }
 
+/** POST /api/directions/[slug]/parse-asset — 自然语言解析为结构化实验资产 */
+export async function parseAssetFromNL(
+  slug: string,
+  text: string,
+): Promise<{
+  parsed: ExperimentAsset;
+  confidence: "high" | "medium" | "low";
+}> {
+  const res = await fetch(`/api/directions/${slug}/parse-asset`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  const data = await res.json().catch(() => ({})) as {
+    parsed?: ExperimentAsset;
+    confidence?: "high" | "medium" | "low";
+    error?: string;
+  };
+  if (!res.ok || !data.parsed) {
+    throw new Error(data.error || "解析失败");
+  }
+  return {
+    parsed: data.parsed,
+    confidence: data.confidence || "medium",
+  };
+}
+
 /** GET /api/directions/[slug]/scan — 从现有数据扫描候选资产 */
 export async function scanCandidates(slug: string): Promise<ScanResult> {
   const res = await fetch(`/api/directions/${slug}/scan`);
@@ -193,8 +223,70 @@ export interface EvaluationContractInput {
   }>;
 }
 
+export interface EvaluationContractDimension {
+  id: string;
+  name?: string;
+  weight?: number;
+  scoring_plan?: {
+    dimension_id: string;
+    what_to_look_for: string;
+    what_triggers_block: string;
+    what_triggers_warn: string;
+  };
+  rubrics?: Array<{
+    id: string;
+    what_to_look_for: string;
+    what_triggers_block: string;
+    what_triggers_warn: string;
+    evidence_required: string;
+  }>;
+}
+
+/** POST /api/directions/[slug]/evaluation-contract (action=socratic-draft) */
+export async function generateSocraticContractDraft(
+  slug: string,
+  input: {
+    qa: Array<{ questionId: string; question: string; answer: string }>;
+    paraphrases: Record<string, string>;
+  },
+): Promise<{
+  draft: EvaluationContractDimension[];
+  rationale: string;
+  sourceQuestions: string[];
+  generatedAt: number;
+}> {
+  const res = await fetch(`/api/directions/${slug}/evaluation-contract`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "socratic-draft",
+      qa: input.qa,
+      paraphrases: input.paraphrases,
+    }),
+  });
+  const data = await res.json().catch(() => ({})) as {
+    draft?: EvaluationContractDimension[];
+    rationale?: string;
+    sourceQuestions?: string[];
+    generatedAt?: number;
+    error?: string;
+  };
+  if (!res.ok || !data.draft) {
+    throw new Error(data.error || "生成评价标准失败");
+  }
+  return {
+    draft: data.draft,
+    rationale: data.rationale || "",
+    sourceQuestions: data.sourceQuestions || [],
+    generatedAt: data.generatedAt || Date.now(),
+  };
+}
+
 /** POST /api/directions/[slug]/evaluation-contract — 用户确认评价标准 */
-export async function confirmContract(slug: string, input: EvaluationContractInput): Promise<void> {
+export async function confirmContract(
+  slug: string,
+  input: EvaluationContractInput & { userParaphrases?: Record<string, string> },
+): Promise<void> {
   const res = await fetch(`/api/directions/${slug}/evaluation-contract`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -318,6 +410,9 @@ export async function syncRoadmapPaper(
   }
 }
 
+import type { DirectionWritingContext } from "@/contracts/direction-writing-bridge";
+import { requiredRefsToCitationList } from "@/contracts/direction-writing-bridge";
+
 /** 方向上下文：从路线图论文创建项目时带入的扩展信息 */
 export interface RoadmapProjectContext {
   motivationFromGap?: string;
@@ -325,6 +420,29 @@ export interface RoadmapProjectContext {
   targetJournal?: string;
   pendingExperiments?: string[];
   roadmapCandidateId?: string;
+  /** 论文类型（覆盖 paperBrief 推断） */
+  paperType?: "review" | "research";
+  /** 目标字数范围，如 "8000-12000" */
+  wordCount?: string;
+  /** 写作语言（覆盖默认值） */
+  language?: "zh" | "en";
+  /** 引用格式（覆盖默认 gbt7714） */
+  citationStyle?: "gbt7714" | "vancouver" | "apa7" | "ieee";
+}
+
+/** GET /api/directions/[slug]/paper-brief — 获取论文简报（文献清单 + 上下文） */
+export async function fetchPaperBrief(
+  slug: string,
+  candidateId?: string,
+): Promise<DirectionWritingContext> {
+  const url = new URL(`/api/directions/${slug}/paper-brief`, window.location.origin);
+  if (candidateId) url.searchParams.set("candidateId", candidateId);
+  const res = await fetch(url.toString());
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(data.error || "获取论文简报失败");
+  }
+  return res.json();
 }
 
 /** 从路线图论文创建写作项目，带入方向上下文并生成蓝图 */
@@ -334,15 +452,30 @@ export async function createProjectFromRoadmap(
   candidateId?: string,
   context?: RoadmapProjectContext,
 ): Promise<{ projectId: string }> {
-  // 1. 创建项目（带入方向上下文）
+  // 0. 获取论文简报（文献清单 + 上下文）
+  let paperBrief: DirectionWritingContext | null = null;
+  try {
+    paperBrief = await fetchPaperBrief(directionSlug, candidateId);
+  } catch {
+    // 简报获取失败不阻塞项目创建，退回到无文献清单模式
+  }
+
+  const paperType = context?.paperType || paperBrief?.paperType || "review";
+  const language = context?.language || "zh";
+  const citationStyle = context?.citationStyle || "gbt7714";
+  const wordCount = context?.wordCount || "";
+  const suggestedJournal = paperBrief?.suggestedJournal || context?.targetJournal;
+
+  // 1. 创建项目（带入完整配置）
   const createRes = await fetch("/api/projects", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       title: paperTitle,
       researchDirection: directionSlug,
-      mode: "research",
-      language: "zh",
+      mode: paperType,
+      language,
+      citationStyle,
     }),
   });
   const createData = await createRes.json().catch(() => ({})) as { id?: string; error?: string };
@@ -350,29 +483,52 @@ export async function createProjectFromRoadmap(
     throw new Error(createData.error || "创建项目失败");
   }
 
-  // 2. 生成写作蓝图（带入方向上下文）
+  // 2. 导入文献清单到项目 references
+  if (paperBrief && paperBrief.requiredReferences.length > 0) {
+    try {
+      const citations = requiredRefsToCitationList(paperBrief.requiredReferences);
+      const ops = citations.map((citation, i) => ({
+        op: "create" as const,
+        content: citation,
+        index: i,
+      }));
+      await fetch(`/api/projects/${createData.id}/references`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ops }),
+      });
+    } catch {
+      // 文献导入失败不阻塞项目创建
+    }
+  }
+
+  // 3. 生成写作蓝图（带入完整 direction 上下文 + 写作配置）
   try {
+    const motivationText = [
+      context?.motivationFromGap || paperBrief?.motivationFromGap || "",
+      wordCount ? `目标字数：${wordCount}` : "",
+    ].filter(Boolean).join("；");
+
     await fetch("/api/outline/blueprint", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         projectId: createData.id,
         title: paperTitle,
-        ...(context ? {
-          researchDirection: directionSlug,
-          motivationFromGap: context.motivationFromGap || undefined,
-          dataBasis: context.dataBasis || undefined,
-          targetJournal: context.targetJournal || undefined,
-          pendingExperiments: context.pendingExperiments || undefined,
-          roadmapCandidateId: context.roadmapCandidateId || undefined,
-        } : {}),
+        researchDirection: directionSlug,
+        motivationFromGap: motivationText || undefined,
+        dataBasis: context?.dataBasis || undefined,
+        targetJournal: suggestedJournal || undefined,
+        pendingExperiments:
+          context?.pendingExperiments || paperBrief?.pendingExperiments || undefined,
+        roadmapCandidateId: context?.roadmapCandidateId || candidateId || undefined,
       }),
     });
   } catch {
     // 蓝图生成失败不阻塞项目创建
   }
 
-  // 3. 同步路线图状态
+  // 4. 同步路线图状态
   if (candidateId) {
     try {
       await syncRoadmapPaper(directionSlug, candidateId, {

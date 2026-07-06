@@ -1,18 +1,22 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { getErrorMessage } from "@/lib/error-utils";
+import { requireDirectionUser } from "@/lib/direction-auth";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/directions/summary
- * 返回方向概览摘要（仅主页需要的精简字段，不含完整 assets/analysis/roadmap）
+ * 返回当前用户方向概览摘要
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const auth = requireDirectionUser(req);
+    if (!auth.ok) return auth.response;
+
     const rows = await prisma.direction.findMany({
-      where: { status: "active" },
+      where: { status: "active", userId: auth.userId },
       orderBy: { updatedAt: "desc" },
       select: {
         slug: true,

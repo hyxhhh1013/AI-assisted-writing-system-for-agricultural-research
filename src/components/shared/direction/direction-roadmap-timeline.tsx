@@ -17,6 +17,7 @@ import { siteTheme } from "@/lib/site-theme";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { generateRoadmap, createProjectFromRoadmap } from "@/services/direction";
+import { PaperConfigDialog, type PaperConfig } from "@/components/shared/direction/paper-config-dialog";
 import type { DirectionRoadmap } from "@/contracts/direction";
 
 interface DirectionRoadmapTimelineProps {
@@ -55,6 +56,14 @@ export function DirectionRoadmapTimeline({
   const [summary, setSummary] = useState("");
   const [loading, setLoading] = useState(false);
   const [creatingId, setCreatingId] = useState<string | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
+  const [configDefaults, setConfigDefaults] = useState<{
+    paperTitle: string;
+    paperType?: "review" | "research";
+    targetJournal?: string;
+    referenceCount?: number;
+  }>({ paperTitle: "" });
+  const [pendingCandidateId, setPendingCandidateId] = useState("");
 
   const handleGenerate = async () => {
     setLoading(true);
@@ -71,15 +80,30 @@ export function DirectionRoadmapTimeline({
     }
   };
 
-  const handleCreateProject = async (candidateId: string, title: string) => {
+  const handleOpenConfig = (candidateId: string, title: string) => {
+    const candidate = candidates?.find((c) => c.id === candidateId);
+    setPendingCandidateId(candidateId);
+    setConfigDefaults({
+      paperTitle: candidate?.title || title || `路线图论文 - ${candidateId}`,
+      paperType: "review",
+      targetJournal: candidate?.suggestedJournal,
+      referenceCount: 0, // 将在 paper-brief API 中获取实际数量
+    });
+    setConfigOpen(true);
+  };
+
+  const handleConfigConfirm = async (config: PaperConfig) => {
+    setConfigOpen(false);
+    const candidateId = pendingCandidateId;
     setCreatingId(candidateId);
     try {
       const candidate = candidates?.find((c) => c.id === candidateId);
-      const paperTitle = candidate?.title || title || `路线图论文 - ${candidateId}`;
-      const result = await createProjectFromRoadmap(paperTitle, slug, candidateId, {
-        motivationFromGap: `来自方向路线图规划，经 8 维度分析确认数据充分性。`,
-        dataBasis: [],
-        targetJournal: candidate?.suggestedJournal,
+      const result = await createProjectFromRoadmap(config.paperTitle, slug, candidateId, {
+        paperType: config.paperType,
+        language: config.language,
+        citationStyle: config.citationStyle,
+        wordCount: config.wordCount,
+        targetJournal: config.targetJournal || candidate?.suggestedJournal,
         pendingExperiments: candidate?.tier === "needs_experiment" ? ["需补实验"] : [],
         roadmapCandidateId: candidateId,
       });
@@ -186,7 +210,7 @@ export function DirectionRoadmapTimeline({
                     <Button
                       size="sm"
                       className="h-7 gap-1 text-xs"
-                      onClick={() => handleCreateProject(paper.candidateId, candidate?.title || "")}
+                      onClick={() => handleOpenConfig(paper.candidateId, candidate?.title || "")}
                       disabled={isCreating}
                     >
                       {isCreating ? (
@@ -248,6 +272,13 @@ export function DirectionRoadmapTimeline({
           重新生成路线图
         </Button>
       </div>
+
+      <PaperConfigDialog
+        open={configOpen}
+        onCancel={() => setConfigOpen(false)}
+        onConfirm={handleConfigConfirm}
+        defaults={configDefaults}
+      />
     </div>
   );
 }

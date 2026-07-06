@@ -82,3 +82,13 @@ KnowledgeFile 1──* KnowledgeChunk
 ## 索引（待 ENG-PR-053）
 
 队列计划为高频查询补 `@@index`；改 schema 时同步本节。
+
+## 研究方向（Direction）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `userId` | String FK → User | SEC-01：每用户私有（2026-07-06 迁移） |
+| `slug` | String @unique | URL 标识 |
+| `assets` / `analysis` / `roadmap` | Json? | 战略规划 JSONB |
+
+迁移：`prisma/migrations/20260706100000_direction_owner/` — 存量方向挂到最早创建的 User。

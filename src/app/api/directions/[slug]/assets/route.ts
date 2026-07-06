@@ -7,6 +7,7 @@ import { prismaRowToDirectionDTO } from "@/contracts/direction";
 import type { DirectionAsset } from "@/contracts/direction";
 import { logger } from "@/lib/logger";
 import { getErrorMessage } from "@/lib/error-utils";
+import { requireOwnedDirection } from "@/lib/direction-auth";
 
 /** 将 Prisma Json 字段安全转换为资产数组 */
 function jsonToAssets(value: unknown): DirectionAsset[] {
@@ -29,10 +30,9 @@ export async function PATCH(
     );
     if (errorResponse) return errorResponse;
 
-    const direction = await prisma.direction.findUnique({ where: { slug } });
-    if (!direction) {
-      return NextResponse.json({ error: "方向不存在" }, { status: 404 });
-    }
+    const owned = await requireOwnedDirection(req, slug);
+    if (!owned.ok) return owned.response;
+    const direction = owned.direction;
 
     const currentAssets = jsonToAssets(direction.assets);
     let updatedAssets = [...currentAssets];
@@ -65,7 +65,7 @@ export async function PATCH(
 
     const cleanAssets = JSON.parse(JSON.stringify(updatedAssets));
     const row = await prisma.direction.update({
-      where: { slug },
+      where: { id: direction.id },
       data: { assets: cleanAssets as unknown as Prisma.InputJsonValue },
     });
 

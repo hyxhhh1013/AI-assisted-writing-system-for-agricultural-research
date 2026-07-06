@@ -5,6 +5,7 @@ import { buildExperimentPlanPrompt } from "@/lib/prompts/direction-experiment-pl
 import { localRAG } from "@/lib/rag";
 import { logger } from "@/lib/logger";
 import { getErrorMessage } from "@/lib/error-utils";
+import { requireOwnedDirection } from "@/lib/direction-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -40,10 +41,9 @@ export async function POST(
       );
     }
 
-    const direction = await prisma.direction.findUnique({ where: { slug } });
-    if (!direction) {
-      return NextResponse.json({ error: "方向不存在" }, { status: 404 });
-    }
+    const owned = await requireOwnedDirection(req, slug);
+    if (!owned.ok) return owned.response;
+    const direction = owned.direction;
 
     // 获取方向已有实验的方法模板
     const existingAssets = Array.isArray(direction.assets)

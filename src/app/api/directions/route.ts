@@ -6,16 +6,20 @@ import { prismaRowToDirectionDTO, directionDTOToListItems } from "@/contracts/di
 import type { DirectionDTO } from "@/contracts/direction";
 import { logger } from "@/lib/logger";
 import { getErrorMessage } from "@/lib/error-utils";
+import { requireDirectionUser } from "@/lib/direction-auth";
 
 // ====== GET 列表 ======
 
 export async function GET(req: NextRequest) {
   try {
+    const auth = requireDirectionUser(req);
+    if (!auth.ok) return auth.response;
+
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status") || "active";
     const query = searchParams.get("q")?.toLowerCase();
 
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = { userId: auth.userId };
     if (status !== "all") where.status = status;
     if (query) {
       where.OR = [
@@ -63,11 +67,13 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = requireDirectionUser(req);
+    if (!auth.ok) return auth.response;
+
     const body = await req.json();
     const { data: parsed, errorResponse } = await validateBody(directionCreateSchema, body);
     if (errorResponse) return errorResponse;
 
-    // 检查 slug 唯一性
     const existing = await prisma.direction.findUnique({
       where: { slug: parsed.slug },
     });
@@ -86,6 +92,7 @@ export async function POST(req: NextRequest) {
         categories: parsed.categories,
         status: parsed.status || "active",
         assets: [],
+        userId: auth.userId,
       },
     });
 

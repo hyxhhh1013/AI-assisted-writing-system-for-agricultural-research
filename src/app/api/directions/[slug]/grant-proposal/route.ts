@@ -5,6 +5,7 @@ import { buildGrantProposalPrompt } from "@/lib/prompts/direction-grant";
 import { buildAssetSummary } from "@/lib/prompts/direction";
 import { logger } from "@/lib/logger";
 import { getErrorMessage } from "@/lib/error-utils";
+import { requireOwnedDirection } from "@/lib/direction-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -33,10 +34,9 @@ export async function POST(
     const body = await req.json();
     const grantType = (body.grantType as string) || "国自然面上";
 
-    const direction = await prisma.direction.findUnique({ where: { slug } });
-    if (!direction) {
-      return NextResponse.json({ error: "方向不存在" }, { status: 404 });
-    }
+    const owned = await requireOwnedDirection(req, slug);
+    if (!owned.ok) return owned.response;
+    const direction = owned.direction;
 
     const assets = Array.isArray(direction.assets) ? direction.assets : [];
     const assetSummary = buildAssetSummary(assets);

@@ -10,6 +10,8 @@ import { DirectionStatCards } from "@/components/shared/direction/direction-stat
 import { DirectionAssetForm } from "@/components/shared/direction/direction-asset-form";
 import { DirectionAssetScanDialog } from "@/components/shared/direction/direction-asset-scan-dialog";
 import { DirectionAssetList } from "@/components/shared/direction/direction-asset-list";
+import { DirectionAssetIntakePanel } from "@/components/shared/direction/direction-asset-intake-panel";
+import { DirectionPreCommitmentPanel } from "@/components/shared/direction/direction-pre-commitment-panel";
 import { DirectionAnalysisPanel } from "@/components/shared/direction/direction-analysis-panel";
 import { DirectionRoadmapTimeline } from "@/components/shared/direction/direction-roadmap-timeline";
 import { DirectionDashboard } from "@/components/shared/direction/direction-dashboard";
@@ -32,9 +34,13 @@ import { toast } from "sonner";
 import {
   getDirection,
   patchAssets,
+  scanCandidates,
 } from "@/services/direction";
 import { useAuth } from "@/lib/auth-context";
-import type { DirectionDTO, DirectionAsset, PaperCandidate, SynthesisResult, AnalysisDimension } from "@/contracts/direction";
+import type { DirectionDTO, DirectionAsset, DirectionAnalysis } from "@/contracts/direction";
+import { isAssetAlreadyImported } from "@/lib/direction-asset-health";
+
+type AssetKind = "experiment" | "paper" | "dataset";
 
 const TABS = [
   { id: "assets", label: "资产盘点", icon: PackageOpen, phase: 0 },
@@ -57,9 +63,15 @@ export default function DirectionPageClient() {
 
   // Phase 0: 方向配置编辑状态
   // Phase 0: 资产编辑状态
-  const [showAssetForm, setShowAssetForm] = useState(false);
+  const [formKind, setFormKind] = useState<AssetKind | null>(null);
   const [editAsset, setEditAsset] = useState<DirectionAsset | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
+  const [pendingScanCount, setPendingScanCount] = useState<number | null>(null);
+
+  const handleAddAsset = (kind: AssetKind) => {
+    setEditAsset(null);
+    setFormKind(kind);
+  };
 
   const fetchDirection = useCallback(async () => {
     setIsLoading(true);
@@ -67,8 +79,19 @@ export default function DirectionPageClient() {
       const dto = await getDirection(slug);
       setDirection(dto);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "获取方向失败");
-      router.push("/directions");
+      const status = (err as Error & { status?: number }).status;
+      const message = err instanceof Error ? err.message : "获取方向失败";
+      if (status === 401) {
+        toast.error("请先登录后访问研究方向");
+        router.push(`/login?redirect=${encodeURIComponent(`/directions/${slug}`)}`);
+        return;
+      }
+      if (status === 404) {
+        toast.error("方向不存在或无权访问，请确认已登录正确账号");
+      } else {
+        toast.error(message);
+      }
+      router.push("/");
     } finally {
       setIsLoading(false);
     }
@@ -77,6 +100,26 @@ export default function DirectionPageClient() {
   useEffect(() => {
     void fetchDirection();
   }, [fetchDirection]);
+
+  // 预加载扫描覆盖率（待导入数量）
+  useEffect(() => {
+    if (!direction) return;
+    const currentAssets = Array.isArray(direction.assets)
+      ? (direction.assets as DirectionAsset[])
+      : [];
+    scanCandidates(slug)
+      .then((result) => {
+        const allPapers = [...result.paperCandidates, ...result.projectCandidates];
+        const newPapers = allPapers.filter((p) => !isAssetAlreadyImported(p, currentAssets));
+        const newDatasets = result.datasetCandidates.filter(
+          (d) => !currentAssets.some(
+            (a) => a.kind === "dataset" && a.title.trim().toLowerCase() === d.title.trim().toLowerCase(),
+          ),
+        );
+        setPendingScanCount(newPapers.length + newDatasets.length);
+      })
+      .catch(() => setPendingScanCount(null));
+  }, [slug, direction?.assets, direction?.updatedAt]);
 
   // ====== Phase 0: 资产管理 ======
 
@@ -91,7 +134,7 @@ export default function DirectionPageClient() {
         { op: "upsert", asset },
       ]);
       setDirection(updated);
-      setShowAssetForm(false);
+      setFormKind(null);
       setEditAsset(null);
       toast.success(editAsset ? "资产已更新" : "资产已添加");
     } catch (err) {
@@ -127,8 +170,9 @@ export default function DirectionPageClient() {
 
   // ====== Phase 2: 预承诺（Socratic Mentor）======
 
-  const analysis = (direction?.analysis as Record<string, unknown> | null) || {};
-  const existingContract = analysis.evaluationContract as
+  const analysis = (direction?.analysis as DirectionAnalysis | null) || null;
+  const analysisRecord = (direction?.analysis as Record<string, unknown> | null) || {};
+  const existingContract = analysisRecord.evaluationContract as
     | { dimensions?: Array<{ id: string; rubrics?: Array<{ id: string; what_to_look_for: string }> }>; confirmedAt?: number }
     | undefined;
   const hasContract = !!existingContract?.confirmedAt;
@@ -169,7 +213,11 @@ export default function DirectionPageClient() {
 
       {/* 统计卡片 */}
       <div className="mb-6">
-        <DirectionStatCards assets={assets} literatureCount={literatureCount} />
+        <DirectionStatCards
+          assets={assets}
+          literatureCount={literatureCount}
+          analysis={analysis}
+        />
       </div>
 
       {/* Phase Tabs */}
@@ -184,60 +232,65 @@ export default function DirectionPageClient() {
           ))}
         </TabsList>
 
-        {/* ====== Phase 1: 资产盘点 ====== */}
+        {/* ====== Phase 0: 资产盘点 ====== */}
         <TabsContent value="assets" className="space-y-4">
+          <DirectionAssetIntakePanel
+            assets={assets}
+            analysis={analysis}
+            literatureCount={literatureCount}
+            pendingScanCount={pendingScanCount}
+            onScan={() => setScanOpen(true)}
+            onAddExperiment={() => handleAddAsset("experiment")}
+            onProceed={() => setActiveTab("contract")}
+          />
+
           <div className={cn("rounded-xl border border-[#1a5632]/8 p-6", siteTheme.card)}>
             <div className="mb-4 flex items-center justify-between">
               <h3 className="flex items-center gap-2 text-base font-semibold text-[#122820]">
-                <PackageOpen className="h-4 w-4 text-[#1a5632]" /> Phase 1 — 资产盘点
+                <PackageOpen className="h-4 w-4 text-[#1a5632]" /> 资产清单
               </h3>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 text-xs"
-                  onClick={() => setScanOpen(true)}
-                >
-                  <Search className="h-3.5 w-3.5" />
-                  从现有数据扫描
-                </Button>
-                <Button
-                  size="sm"
-                  className={cn("gap-1.5 text-xs", siteTheme.btnPrimary)}
-                  onClick={() => {
-                    setEditAsset(null);
-                    setShowAssetForm(true);
-                  }}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  录入资产
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs"
+                onClick={() => setScanOpen(true)}
+              >
+                <Search className="h-3.5 w-3.5" />
+                从现有数据扫描
+                {pendingScanCount != null && pendingScanCount > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-4 px-1 text-[9px] border-[#6366f1]/20 bg-[#6366f1]/10 text-[#6366f1]">
+                    {pendingScanCount}
+                  </Badge>
+                )}
+              </Button>
             </div>
 
             {/* 资产录入/编辑表单 */}
-            {showAssetForm && (
+            {formKind !== null && (
               <div className="mb-6 rounded-lg border border-[#1a5632]/12 bg-[#f6f5f1]/50 p-4">
                 <DirectionAssetForm
                   slug={slug}
+                  existingAssets={assets.filter((a) => a.id !== editAsset?.id)}
                   onSave={handleAssetSave}
                   onCancel={() => {
-                    setShowAssetForm(false);
+                    setFormKind(null);
                     setEditAsset(null);
                   }}
                   editAsset={editAsset}
+                  initialKind={editAsset ? undefined : formKind}
                 />
               </div>
             )}
 
-            {/* 资产列表 */}
+            {/* 资产列表（三栏并排） */}
             <DirectionAssetList
               assets={assets}
               onEdit={(asset) => {
                 setEditAsset(asset);
-                setShowAssetForm(true);
+                setFormKind(asset.kind as AssetKind);
               }}
               onDelete={handleAssetDelete}
+              onAdd={handleAddAsset}
             />
           </div>
           <div className="flex justify-end">
@@ -247,13 +300,16 @@ export default function DirectionPageClient() {
           </div>
         </TabsContent>
 
-        {/* ====== Phase 2: Socratic 预承诺 ====== */}
+        {/* ====== Phase 1: Socratic 预承诺 ====== */}
         <TabsContent value="contract" className="space-y-4">
-          <div className={cn("rounded-xl border border-[#1a5632]/8 p-6", siteTheme.card)}>
-            <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-[#122820]">
-              <ClipboardCheck className="h-4 w-4 text-[#1a5632]" /> Phase 2 — 设定评价标准
-            </h3>
+          <DirectionPreCommitmentPanel
+            assets={assets}
+            analysis={analysis}
+            onJumpToAssets={() => setActiveTab("assets")}
+            onJumpToAnalysis={() => setActiveTab("analysis")}
+          />
 
+          <div className={cn("rounded-xl border border-[#1a5632]/8 p-6", siteTheme.card)}>
             <DirectionSocraticDialog
               direction={direction}
               onComplete={handleRefreshDirection}
@@ -276,9 +332,9 @@ export default function DirectionPageClient() {
               slug={slug}
               hasContract={hasContract}
               assetCount={assets.length}
-              storedDimensions={(analysis.dimensions as AnalysisDimension[] | undefined) || []}
-              candidates={(analysis.paperCandidates as PaperCandidate[] | undefined) || []}
-              synthesis={(analysis.synthesis || null) as SynthesisResult | null}
+              storedDimensions={analysis?.dimensions || []}
+              candidates={analysis?.paperCandidates || []}
+              synthesis={analysis?.synthesis || null}
               onAnalysisDone={handleRefreshDirection}
             />
           </div>
@@ -303,14 +359,14 @@ export default function DirectionPageClient() {
             <div className="mb-6">
               <DirectionDashboard
                 assetCount={assets.length}
-                analysisDone={!!analysis.dimensions}
+                analysisDone={!!analysis?.dimensions}
                 analysisScore={
-                  analysis.dimensions
+                  analysis?.dimensions
                     ? Math.round(
-                        ((analysis.dimensions as Array<Record<string, unknown>>).reduce(
-                          (s, d) => s + ((d.score as number) || 0), 0
+                        (analysis.dimensions.reduce(
+                          (s, d) => s + (d.score || 0), 0
                         ) /
-                          (analysis.dimensions as Array<Record<string, unknown>>).length) *
+                          analysis.dimensions.length) *
                           10
                       ) / 10
                     : null
@@ -324,13 +380,7 @@ export default function DirectionPageClient() {
             <DirectionRoadmapTimeline
               slug={slug}
               existingRoadmap={(direction.roadmap as DirectionDTO["roadmap"]) || null}
-              candidates={(analysis.paperCandidates as Array<{
-                id: string;
-                title: string;
-                tier: string;
-                overallScore: number;
-                suggestedJournal?: string;
-              }>) || []}
+              candidates={analysis?.paperCandidates || []}
               onRoadmapGenerated={handleRefreshDirection}
             />
           </div>
@@ -362,6 +412,7 @@ export default function DirectionPageClient() {
         open={scanOpen}
         onOpenChange={setScanOpen}
         slug={slug}
+        existingAssets={assets}
         onImport={handleScanImport}
       />
     </>
