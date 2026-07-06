@@ -100,12 +100,12 @@
 |------|------|-----|----------|
 | 方向列表/创建 | `src/app/directions/page.tsx` | `GET/POST /api/directions` | `direction-card.tsx` |
 | 方向工作台 | `src/app/directions/[slug]/` | `GET/PUT/DELETE /api/directions/[slug]` | `direction-page-client.tsx`（5 Phase Tab） |
-| 资产盘点 | 方向工作台 Phase 0 | `PATCH .../assets` · `GET .../scan` · `POST .../parse-asset` | `direction-asset-intake-panel.tsx`, `direction-asset-form.tsx`, `direction-asset-list.tsx`, `lib/direction-asset-health.ts` |
-| 预承诺 | 方向工作台 Phase 1 | `POST .../evaluation-contract` | `direction-pre-commitment-panel.tsx`, `direction-socratic-dialog.tsx`, `lib/direction-pre-commitment.ts`, `lib/prompts/direction-socratic.ts` |
-| 8 维度分析（SSE） | 方向工作台 Phase 3 | `POST .../analyze` | `direction-analysis-panel.tsx`, `direction-analysis-charts.tsx`, `use-direction-analysis.ts` |
-| 论文路线图 | 方向工作台 Phase 4 | `POST .../roadmap` | `direction-roadmap-timeline.tsx`, `direction-dashboard.tsx` |
+| 资产盘点 | 方向工作台 Phase 0 | `PATCH .../assets` · `GET .../scan` · `POST .../parse-asset` | `direction-asset-intake-panel.tsx`, `direction-asset-form.tsx`, `lib/direction-asset-health.ts` |
+| 预承诺 | 方向工作台 Phase 1 | `POST .../evaluation-contract` | `direction-pre-commitment-panel.tsx`, `direction-socratic-dialog.tsx`, `lib/direction-pre-commitment.ts` |
+| 8 维度分析 | 方向工作台 Phase 2 | `POST .../analyze` (SSE) | `direction-analysis-panel.tsx`, `direction-phase-readiness.ts`, `lib/direction-analysis-fingerprint.ts` |
+| 论文路线图 | 方向工作台 Phase 3 | `POST/PATCH .../roadmap` | `direction-roadmap-timeline.tsx`, `direction-dashboard.tsx` |
+| 申报材料 | 方向工作台 Phase 4 | `POST .../grant-proposal` | `direction-grant-panel.tsx`, `lib/prompts/direction-grant.ts` |
 | 实验方案生成 | 分析面板 D6 维度 | `POST .../experiment-plan` | 内联 `GeneratePlanButton` |
-| 项目申报辅助 | 方向工作台 Phase 5 | `POST .../grant-proposal` | `direction-grant-panel.tsx` |
 | 方向摘要（主页） | 主页卡片 | `GET /api/directions/summary` | `directions-overview.tsx` |
 | 反模式检测 | — | — | `direction-checks.ts`（审查板块复用） |
 | **→ 写作桥接** | 路线图「开始写作」按钮 | `GET .../paper-brief` → `POST /api/projects` | `direction-writing-bridge.ts`, `createProjectFromRoadmap` |

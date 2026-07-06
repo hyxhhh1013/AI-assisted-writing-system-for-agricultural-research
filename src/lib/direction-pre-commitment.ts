@@ -9,6 +9,7 @@ import type { DirectionAsset, DirectionAnalysis } from "@/contracts/direction";
 import type { SocraticAnswer, SocraticQuestion } from "@/contracts/direction-socratic";
 import { SOCRATIC_QUESTIONS } from "@/contracts/direction-socratic";
 import { computeAssetInventoryHealth } from "@/lib/direction-asset-health";
+import { isAnalysisFingerprintStale } from "@/lib/direction-analysis-fingerprint";
 
 export interface AnalysisDimensionDef {
   id: string;
@@ -54,8 +55,7 @@ export function computePreCommitmentReadiness(
   const hasConfirmedContract = !!contract?.confirmedAt;
   const contractStale =
     hasConfirmedContract &&
-    analysis?.analysisFingerprint != null &&
-    analysis.analysisFingerprint !== assets.length;
+    isAnalysisFingerprintStale(assets, analysis ?? null);
 
   const checks: PreCommitmentCheck[] = [
     {

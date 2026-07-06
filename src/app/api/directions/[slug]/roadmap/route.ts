@@ -34,21 +34,41 @@ export async function PATCH(
   try {
     const { slug } = await params;
     const body = await req.json();
-    const { candidateId, status, linkedProjectId } = body as {
+    const { candidateId, status, linkedProjectId, confirmedAt, summary } = body as {
       candidateId?: string;
       status?: string;
       linkedProjectId?: string;
+      confirmedAt?: number;
+      summary?: string;
     };
-
-    if (!candidateId) {
-      return NextResponse.json({ error: "缺少 candidateId" }, { status: 400 });
-    }
 
     const owned = await requireOwnedDirection(req, slug);
     if (!owned.ok) return owned.response;
     const direction = owned.direction;
 
     const currentRoadmap = (direction.roadmap as Record<string, unknown> | null) || {};
+
+    if (!candidateId && confirmedAt === undefined && summary === undefined) {
+      return NextResponse.json({ error: "缺少更新字段" }, { status: 400 });
+    }
+
+    if (confirmedAt !== undefined || summary !== undefined) {
+      const cleanRoadmap = JSON.parse(JSON.stringify({
+        ...currentRoadmap,
+        ...(confirmedAt !== undefined && { confirmedAt }),
+        ...(summary !== undefined && { summary }),
+      }));
+      await prisma.direction.update({
+        where: { id: direction.id },
+        data: { roadmap: cleanRoadmap as unknown as Prisma.InputJsonValue },
+      });
+      return NextResponse.json({ message: "路线图已确认", roadmap: cleanRoadmap });
+    }
+
+    if (!candidateId) {
+      return NextResponse.json({ error: "缺少 candidateId" }, { status: 400 });
+    }
+
     const papers = (currentRoadmap.papers as Array<Record<string, unknown>>) || [];
 
     const updatedPapers = papers.map((p) => {
@@ -104,7 +124,7 @@ export async function POST(
 
     if (!dimensions || dimensions.length === 0) {
       return NextResponse.json(
-        { error: "请先完成 8 维度分析（Phase 3）" },
+        { error: "请先完成 8 维度分析（Phase 2）" },
         { status: 400 },
       );
     }
@@ -175,6 +195,7 @@ export async function POST(
     const roadmap: DirectionRoadmap = {
       generatedAt: Date.now(),
       analysisSnapshotId: (currentAnalysis.generatedAt as number) || 0,
+      summary: result.summary || "",
       papers: (result.papers || []).map((p) => {
         const preserved = preservedMap.get(p.candidateId);
         const paperStatus = (preserved?.status || p.status || "planned") as "planned" | "writing" | "submitted" | "published";

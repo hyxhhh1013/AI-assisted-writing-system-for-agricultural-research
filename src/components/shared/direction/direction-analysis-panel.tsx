@@ -32,17 +32,21 @@ import {
   ExecutiveSummary,
 } from "@/components/shared/direction/direction-analysis-charts";
 import { generateExperimentPlan, type ExperimentPlanResult } from "@/services/direction";
-import type { AnalysisDimension, PaperCandidate, SynthesisResult } from "@/contracts/direction";
+import type { AnalysisDimension, PaperCandidate, SynthesisResult, CrossDirectionOpportunity } from "@/contracts/direction";
+import { DirectionCrossOpportunities } from "@/components/shared/direction/direction-cross-opportunities";
 
 interface DirectionAnalysisPanelProps {
   slug: string;
   hasContract: boolean;
   assetCount: number;
+  isStale?: boolean;
   /** 已持久化的历史分析结果（从 DB 加载） */
   storedDimensions?: AnalysisDimension[];
   candidates?: PaperCandidate[];
   synthesis?: SynthesisResult | null;
+  crossOpportunities?: CrossDirectionOpportunity[];
   onAnalysisDone?: () => void;
+  onJumpToContract?: () => void;
 }
 
 const DIMENSION_NAMES: Record<string, string> = {
@@ -71,10 +75,13 @@ export function DirectionAnalysisPanel({
   slug,
   hasContract,
   assetCount,
+  isStale = false,
   storedDimensions,
   candidates,
   synthesis,
+  crossOpportunities = [],
   onAnalysisDone,
+  onJumpToContract,
 }: DirectionAnalysisPanelProps) {
   const { state, run, cancel, updateDimension } = useDirectionAnalysis();
   const [editingDim, setEditingDim] = useState<string | null>(null);
@@ -82,15 +89,26 @@ export function DirectionAnalysisPanel({
   const [editSummary, setEditSummary] = useState("");
   const [expandedDims, setExpandedDims] = useState<Set<string>>(new Set());
 
-  const canRun = assetCount >= 3 && state.status !== "running";
+  const canRun = assetCount >= 3 && hasContract && state.status !== "running";
+  const hasStoredReport = (storedDimensions?.length ?? 0) > 0;
+
+  const handleStart = (mode: "full" | "gap-only" = "full") => {
+    if (!hasContract) {
+      toast.error("请先完成 Phase 1 预承诺");
+      onJumpToContract?.();
+      return;
+    }
+    run(slug, mode).then(() => onAnalysisDone?.());
+  };
+
   const totalDimensions = 8;
   const completedDimensions = state.dimensions.size + state.errors.size;
   const progressPct = state.status === "done" ? 100 : Math.round((completedDimensions / totalDimensions) * 100);
 
-  const handleStart = () => {
-    const mode = hasContract ? "full" : "quick";
-    run(slug, mode).then(() => onAnalysisDone?.());
-  };
+  const displayCrossOpps =
+    crossOpportunities.length > 0
+      ? crossOpportunities
+      : state.result?.crossDirectionOpportunities || [];
 
   const toggleExpand = (dimId: string) => {
     const next = new Set(expandedDims);
@@ -125,6 +143,35 @@ export function DirectionAnalysisPanel({
 
   return (
     <div className="space-y-4">
+      {/* 门禁提示 */}
+      {!hasContract && (
+        <div className="flex items-start gap-2 rounded-lg border border-[#b8975a]/30 bg-[#b8975a]/5 px-3 py-2.5 text-xs text-[#b8975a]">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            分析需基于已确认的 Scoring Plan（Phase 1 预承诺）。
+            {onJumpToContract && (
+              <button type="button" className="ml-1 underline" onClick={onJumpToContract}>
+                前往预承诺
+              </button>
+            )}
+          </span>
+        </div>
+      )}
+      {isStale && hasStoredReport && (
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-[#2563eb]/20 bg-[#2563eb]/5 px-3 py-2.5 text-xs text-[#2563eb]">
+          <span>资产或评价标准已变更，分析结果可能过期</span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 shrink-0 text-[10px] border-[#2563eb]/30"
+            disabled={!canRun}
+            onClick={() => handleStart("gap-only")}
+          >
+            增量重跑 D3/D5/D6
+          </Button>
+        </div>
+      )}
+
       {/* 控制栏 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -149,18 +196,20 @@ export function DirectionAnalysisPanel({
               <Square className="h-3 w-3" /> 停止
             </Button>
           ) : (
-            <Button
-              size="sm"
-              className={cn("gap-1 text-xs", siteTheme.btnPrimary)}
-              disabled={!canRun}
-              onClick={handleStart}
-            >
-              {state.dimensions.size > 0 ? (
-                <><RefreshCw className="h-3 w-3" /> 重新分析</>
-              ) : (
-                <><Play className="h-3 w-3" /> 开始分析</>
-              )}
-            </Button>
+            <>
+              <Button
+                size="sm"
+                className={cn("gap-1 text-xs", siteTheme.btnPrimary)}
+                disabled={!canRun}
+                onClick={() => handleStart(hasStoredReport && isStale ? "full" : "full")}
+              >
+                {hasReport ? (
+                  <><RefreshCw className="h-3 w-3" /> 重新分析</>
+                ) : (
+                  <><Play className="h-3 w-3" /> 开始分析</>
+                )}
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -194,6 +243,7 @@ export function DirectionAnalysisPanel({
           </div>
           <EvidenceTraceTable dimensions={orderedDimensions} />
           <ContradictionPanel synthesis={synthesis || state.result?.synthesis || null} />
+          <DirectionCrossOpportunities opportunities={displayCrossOpps} />
         </div>
       )}
 
@@ -404,7 +454,9 @@ export function DirectionAnalysisPanel({
               <p className="text-sm text-[#9aa8a0]">
                 {assetCount < 3
                   ? "需要至少 3 项资产（含 1 个实验）才能触发分析"
-                  : "点击「开始分析」启动 8 维度 AI 分析"}
+                  : !hasContract
+                    ? "请先完成预承诺并确认评价标准"
+                    : "点击「开始分析」启动 paper-visible 8 维度管道"}
               </p>
             </div>
           )}

@@ -393,7 +393,7 @@ export async function generateExperimentPlan(
 
 // ==================== Phase 5: 桥接到写作 ====================
 
-/** PATCH /api/directions/[slug]/roadmap — 更新单篇论文状态 */
+/** PATCH /api/directions/[slug]/roadmap — 更新单篇论文状态或确认路线图 */
 export async function syncRoadmapPaper(
   slug: string,
   candidateId: string,
@@ -408,6 +408,43 @@ export async function syncRoadmapPaper(
     const data = await res.json().catch(() => ({})) as { error?: string };
     throw new Error(data.error || "同步路线图状态失败");
   }
+}
+
+/** PATCH /api/directions/[slug]/roadmap — 确认路线图 */
+export async function confirmRoadmap(slug: string, summary?: string): Promise<void> {
+  const res = await fetch(`/api/directions/${slug}/roadmap`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ confirmedAt: Date.now(), ...(summary ? { summary } : {}) }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(data.error || "确认路线图失败");
+  }
+}
+
+export interface GrantProposalResult {
+  title: string;
+  sections: Array<{ heading: string; content: string }>;
+  grantType: string;
+  generatedAt: number;
+}
+
+/** POST /api/directions/[slug]/grant-proposal — 生成基金申请书 */
+export async function generateGrantProposal(
+  slug: string,
+  grantType: "国自然面上" | "国自然青年" | "省基金" | "开放课题",
+): Promise<GrantProposalResult> {
+  const res = await fetch(`/api/directions/${slug}/grant-proposal`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ grantType }),
+  });
+  const data = await res.json().catch(() => ({})) as { proposal?: GrantProposalResult; error?: string };
+  if (!res.ok || !data.proposal) {
+    throw new Error(data.error || "生成申请书失败");
+  }
+  return data.proposal;
 }
 
 import type { DirectionWritingContext } from "@/contracts/direction-writing-bridge";

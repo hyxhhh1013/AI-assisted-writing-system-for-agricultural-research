@@ -7,6 +7,7 @@
 
 import prisma from "@/lib/prisma";
 import type { DirectionAsset, DirectionAnalysis, PaperCandidate } from "@/contracts/direction";
+import { isAnalysisFingerprintStale } from "@/lib/direction-analysis-fingerprint";
 
 export interface DirectionCheckResult {
   checkId: string;
@@ -128,9 +129,7 @@ export function checkDirectionHealth(
   });
 
   // H3: 分析新鲜度
-  const isStale = analysis
-    ? analysis.analysisFingerprint !== assetCount
-    : false;
+  const isStale = analysis ? isAnalysisFingerprintStale(assets, analysis) : false;
   results.push({
     checkId: "H3",
     checkName: "分析时效",

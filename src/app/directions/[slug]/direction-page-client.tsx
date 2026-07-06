@@ -17,6 +17,7 @@ import { DirectionRoadmapTimeline } from "@/components/shared/direction/directio
 import { DirectionDashboard } from "@/components/shared/direction/direction-dashboard";
 import { DirectionSocraticDialog } from "@/components/shared/direction/direction-socratic-dialog";
 import { DirectionGrantPanel } from "@/components/shared/direction/direction-grant-panel";
+import { DirectionPhaseOverview } from "@/components/shared/direction/direction-phase-overview";
 import {
   Compass,
   PackageOpen,
@@ -37,8 +38,14 @@ import {
   scanCandidates,
 } from "@/services/direction";
 import { useAuth } from "@/lib/auth-context";
-import type { DirectionDTO, DirectionAsset, DirectionAnalysis } from "@/contracts/direction";
+import type { DirectionDTO, DirectionAsset, DirectionAnalysis, DirectionRoadmap } from "@/contracts/direction";
 import { isAssetAlreadyImported } from "@/lib/direction-asset-health";
+import { isAnalysisFingerprintStale } from "@/lib/direction-analysis-fingerprint";
+import {
+  computeAnalysisReadiness,
+  computeRoadmapReadiness,
+  computeGrantReadiness,
+} from "@/lib/direction-phase-readiness";
 
 type AssetKind = "experiment" | "paper" | "dataset";
 
@@ -176,6 +183,11 @@ export default function DirectionPageClient() {
     | { dimensions?: Array<{ id: string; rubrics?: Array<{ id: string; what_to_look_for: string }> }>; confirmedAt?: number }
     | undefined;
   const hasContract = !!existingContract?.confirmedAt;
+  const roadmap = (direction?.roadmap as DirectionRoadmap | null) || null;
+  const analysisStale = isAnalysisFingerprintStale(assets, analysis);
+  const analysisReadiness = computeAnalysisReadiness(assets, analysis);
+  const roadmapReadiness = computeRoadmapReadiness(assets, analysis, roadmap);
+  const grantReadiness = computeGrantReadiness(assets, analysis, roadmap);
 
   const handleRefreshDirection = async () => {
     await fetchDirection();
@@ -325,17 +337,31 @@ export default function DirectionPageClient() {
           </div>
         </TabsContent>
 
-        {/* ====== Phase 3: 8 维度分析 ====== */}
+        {/* ====== Phase 2: 8 维度分析 ====== */}
         <TabsContent value="analysis" className="space-y-4">
+          <DirectionPhaseOverview
+            phase={2}
+            title="8 维度分析（Paper-Visible）"
+            description="按 Phase 1 确认的 Scoring Plan 对资产评分：Writer 逐维 Rubric → Verifier 抽检 D3/D5 → 合成校验 → 写回 adjustedScores。"
+            badge="Rubric Scoring"
+            checks={analysisReadiness.checks}
+            ready={analysisReadiness.ready && !analysisStale}
+            onAction={!hasContract ? () => setActiveTab("contract") : undefined}
+            actionLabel={!hasContract ? "前往预承诺" : undefined}
+          />
+
           <div className={cn("rounded-xl border border-[#1a5632]/8 p-6", siteTheme.card)}>
             <DirectionAnalysisPanel
               slug={slug}
               hasContract={hasContract}
               assetCount={assets.length}
+              isStale={analysisStale}
               storedDimensions={analysis?.dimensions || []}
               candidates={analysis?.paperCandidates || []}
               synthesis={analysis?.synthesis || null}
+              crossOpportunities={analysis?.crossDirectionOpportunities || []}
               onAnalysisDone={handleRefreshDirection}
+              onJumpToContract={() => setActiveTab("contract")}
             />
           </div>
           <div className="flex items-center justify-between">
@@ -348,14 +374,23 @@ export default function DirectionPageClient() {
           </div>
         </TabsContent>
 
-        {/* ====== Phase 4: 论文路线图 ====== */}
+        {/* ====== Phase 3: 论文路线图 ====== */}
         <TabsContent value="roadmap" className="space-y-4">
+          <DirectionPhaseOverview
+            phase={3}
+            title="论文路线图"
+            description="基于 D5 候选与 8 维分析生成优先级与时间线；确认后可将 ready/需补实验论文桥接到写作工作台。"
+            checks={roadmapReadiness.checks}
+            ready={roadmapReadiness.ready}
+            onAction={!analysis?.dimensions?.length ? () => setActiveTab("analysis") : undefined}
+            actionLabel={!analysis?.dimensions?.length ? "前往分析" : undefined}
+          />
+
           <div className={cn("rounded-xl border border-[#1a5632]/8 p-6", siteTheme.card)}>
             <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-[#122820]">
-              <Map className="h-4 w-4 text-[#1a5632]" /> Phase 4 — 论文路线图
+              <Map className="h-4 w-4 text-[#1a5632]" /> Phase 3 — 论文路线图
             </h3>
 
-            {/* 仪表盘 */}
             <div className="mb-6">
               <DirectionDashboard
                 assetCount={assets.length}
@@ -371,15 +406,16 @@ export default function DirectionPageClient() {
                       ) / 10
                     : null
                 }
-                roadmap={(direction.roadmap as DirectionDTO["roadmap"]) || null}
+                analysisGeneratedAt={analysis?.generatedAt ?? null}
+                crossDirectionCount={analysis?.crossDirectionOpportunities?.length ?? 0}
+                roadmap={roadmap}
                 onJumpToTab={setActiveTab}
               />
             </div>
 
-            {/* 路线图时间线 */}
             <DirectionRoadmapTimeline
               slug={slug}
-              existingRoadmap={(direction.roadmap as DirectionDTO["roadmap"]) || null}
+              existingRoadmap={roadmap}
               candidates={analysis?.paperCandidates || []}
               onRoadmapGenerated={handleRefreshDirection}
             />
@@ -391,13 +427,25 @@ export default function DirectionPageClient() {
           </div>
         </TabsContent>
 
-        {/* ====== Phase 5: 项目申报辅助 ====== */}
+        {/* ====== Phase 4: 项目申报 ====== */}
         <TabsContent value="grant" className="space-y-4">
+          <DirectionPhaseOverview
+            phase={4}
+            title="申报材料"
+            description="将资产 + 8 维分析 + 路线图合成为基金申请书；研究现状章节接入知识库 RAG，生成结果持久化保存。"
+            checks={grantReadiness.checks}
+            ready={grantReadiness.ready}
+          />
+
           <div className={cn("rounded-xl border border-[#1a5632]/8 p-6", siteTheme.card)}>
             <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-[#122820]">
-              <FileText className="h-4 w-4 text-[#1a5632]" /> Phase 5 — 项目申报材料
+              <FileText className="h-4 w-4 text-[#1a5632]" /> Phase 4 — 项目申报材料
             </h3>
-            <DirectionGrantPanel slug={slug} direction={direction} />
+            <DirectionGrantPanel
+              slug={slug}
+              direction={direction}
+              onGenerated={handleRefreshDirection}
+            />
           </div>
           <div className="flex items-center justify-between">
             <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => setActiveTab("roadmap")}>

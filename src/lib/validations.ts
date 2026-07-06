@@ -755,6 +755,17 @@ export type DirectionAnalyzeInput = z.infer<typeof directionAnalyzeSchema>;
 export const directionRoadmapSchema = z.object({});
 export type DirectionRoadmapInput = z.infer<typeof directionRoadmapSchema>;
 
+export const directionGrantProposalSchema = z.object({
+  grantType: z.enum(["国自然面上", "国自然青年", "省基金", "开放课题"]).default("国自然面上"),
+});
+export type DirectionGrantProposalInput = z.infer<typeof directionGrantProposalSchema>;
+
+export const directionRoadmapConfirmSchema = z.object({
+  confirmedAt: z.number().optional(),
+  summary: z.string().optional(),
+});
+export type DirectionRoadmapConfirmInput = z.infer<typeof directionRoadmapConfirmSchema>;
+
 // === Agent (ENG-PR-200 Phase A) ===
 export const agentSchema = z.object({
   goal: z.string().min(1, "目标不能为空").max(4000),

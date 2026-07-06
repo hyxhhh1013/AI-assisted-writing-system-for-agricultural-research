@@ -1,5 +1,7 @@
 /** 研究方向战略规划 — 共享类型（前后端 + Prisma Direction 共享） */
 
+import { isAnalysisFingerprintStale } from "@/lib/direction-analysis-fingerprint";
+
 // ==================== 方向基础类型 ====================
 
 export type DirectionStatus = "active" | "archived";
@@ -162,6 +164,8 @@ export interface DirectionAnalysis {
     }>;
     confirmedAt: number;
   };
+  /** 最近一次生成的基金申请书（持久化） */
+  grantProposal?: GrantProposalSnapshot | null;
 }
 
 // ==================== 路线图类型 ====================
@@ -190,6 +194,17 @@ export interface DirectionRoadmap {
   papers: RoadmapPaper[];
   timeline: RoadmapTimelineEntry[];
   experimentDependencies: ExperimentDependency[];
+  /** 用户审阅确认时间 */
+  confirmedAt?: number;
+  /** AI 生成的路线图摘要 */
+  summary?: string;
+}
+
+export interface GrantProposalSnapshot {
+  grantType: string;
+  title: string;
+  sections: Array<{ heading: string; content: string }>;
+  generatedAt: number;
 }
 
 // ==================== 实验方案类型 ====================
@@ -278,9 +293,9 @@ export function directionDTOToListItems(dtos: DirectionDTO[]): DirectionListItem
   }));
 }
 
-/** 检测分析是否过期（基于资产数量指纹——资产增减即过期） */
+/** 检测分析是否过期（资产或评价标准变更） */
 export function isAnalysisStale(direction: DirectionDTO): boolean {
   if (!direction.analysis) return false;
-  const assetCount = Array.isArray(direction.assets) ? direction.assets.length : 0;
-  return direction.analysis.analysisFingerprint !== assetCount;
+  const assets = Array.isArray(direction.assets) ? direction.assets : [];
+  return isAnalysisFingerprintStale(assets, direction.analysis);
 }

@@ -8,6 +8,8 @@ interface DirectionDashboardProps {
   assetCount: number;
   analysisDone: boolean;
   analysisScore?: number | null;
+  analysisGeneratedAt?: number | null;
+  crossDirectionCount?: number;
   roadmap?: DirectionRoadmap | null;
   onJumpToTab?: (tabId: string) => void;
 }
@@ -16,6 +18,8 @@ export function DirectionDashboard({
   assetCount,
   analysisDone,
   analysisScore,
+  analysisGeneratedAt,
+  crossDirectionCount = 0,
   roadmap,
   onJumpToTab,
 }: DirectionDashboardProps) {
@@ -87,8 +91,9 @@ export function DirectionDashboard({
         <div className="flex items-center gap-2 text-[10px] text-[#9aa8a0] px-1">
           <History className="h-3 w-3" />
           <span>
-            分析于 {roadmap?.generatedAt ? new Date(roadmap.generatedAt).toLocaleDateString("zh-CN") : "—"} ·
+            分析于 {analysisGeneratedAt ? new Date(analysisGeneratedAt).toLocaleDateString("zh-CN") : "—"} ·
             资产 {assetCount} 项 · 路线图 {paperCounts.total} 篇
+            {crossDirectionCount > 0 ? ` · 跨方向 ${crossDirectionCount} 项` : ""}
           </span>
         </div>
       )}

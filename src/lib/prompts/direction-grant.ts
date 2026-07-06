@@ -13,6 +13,7 @@ export interface GrantGenerationInput {
   analysisSummary: string;
   roadmapSummary: string;
   grantType: string; // "国自然面上" | "国自然青年" | "省基金" | "开放课题"
+  literatureContext?: string;
 }
 
 const SECTION_TEMPLATES: Record<string, string[]> = {
@@ -100,6 +101,7 @@ ${input.analysisSummary}
 
 ## 论文路线图摘要
 ${input.roadmapSummary}
+${input.literatureContext ? `\n## 知识库文献片段（用于国内外研究现状）\n${input.literatureContext}` : ""}
 
 请撰写申请书。`;
 

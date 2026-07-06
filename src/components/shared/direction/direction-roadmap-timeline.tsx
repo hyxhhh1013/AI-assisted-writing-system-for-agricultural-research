@@ -16,14 +16,21 @@ import {
 import { siteTheme } from "@/lib/site-theme";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { generateRoadmap, createProjectFromRoadmap } from "@/services/direction";
+import { generateRoadmap, createProjectFromRoadmap, confirmRoadmap } from "@/services/direction";
 import { PaperConfigDialog, type PaperConfig } from "@/components/shared/direction/paper-config-dialog";
 import type { DirectionRoadmap } from "@/contracts/direction";
 
 interface DirectionRoadmapTimelineProps {
   slug: string;
   existingRoadmap?: DirectionRoadmap | null;
-  candidates?: Array<{ id: string; title: string; tier: string; overallScore: number; suggestedJournal?: string }>;
+  candidates?: Array<{
+    id: string;
+    title: string;
+    tier: string;
+    overallScore: number;
+    suggestedJournal?: string;
+    requiredExperiments?: string[];
+  }>;
   onRoadmapGenerated?: () => void;
 }
 
@@ -53,8 +60,9 @@ export function DirectionRoadmapTimeline({
   onRoadmapGenerated,
 }: DirectionRoadmapTimelineProps) {
   const [roadmap, setRoadmap] = useState<DirectionRoadmap | null>(existingRoadmap || null);
-  const [summary, setSummary] = useState("");
+  const [summary, setSummary] = useState(existingRoadmap?.summary || "");
   const [loading, setLoading] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [creatingId, setCreatingId] = useState<string | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
   const [configDefaults, setConfigDefaults] = useState<{
@@ -69,7 +77,7 @@ export function DirectionRoadmapTimeline({
     setLoading(true);
     try {
       const result = await generateRoadmap(slug);
-      setRoadmap(result.roadmap);
+      setRoadmap({ ...result.roadmap, confirmedAt: undefined, summary: result.summary });
       setSummary(result.summary);
       toast.success("路线图已生成");
       onRoadmapGenerated?.();
@@ -77,6 +85,20 @@ export function DirectionRoadmapTimeline({
       toast.error(err instanceof Error ? err.message : "生成路线图失败");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConfirmRoadmap = async () => {
+    setConfirming(true);
+    try {
+      await confirmRoadmap(slug, summary || undefined);
+      setRoadmap((prev) => (prev ? { ...prev, confirmedAt: Date.now(), summary } : prev));
+      toast.success("路线图已确认");
+      onRoadmapGenerated?.();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "确认失败");
+    } finally {
+      setConfirming(false);
     }
   };
 
@@ -104,7 +126,12 @@ export function DirectionRoadmapTimeline({
         citationStyle: config.citationStyle,
         wordCount: config.wordCount,
         targetJournal: config.targetJournal || candidate?.suggestedJournal,
-        pendingExperiments: candidate?.tier === "needs_experiment" ? ["需补实验"] : [],
+        pendingExperiments:
+          candidate?.requiredExperiments?.length
+            ? candidate.requiredExperiments
+            : candidate?.tier === "needs_experiment"
+              ? ["需补实验"]
+              : [],
         roadmapCandidateId: candidateId,
       });
       toast.success("写作项目已创建");
@@ -157,10 +184,26 @@ export function DirectionRoadmapTimeline({
   // 路线图时间线
   return (
     <div className="space-y-6">
-      {/* 总体说明 */}
-      {summary && (
+      {/* 总体说明 + 确认 */}
+      {(summary || roadmap.summary) && (
         <div className="rounded-lg border border-[#1a5632]/8 bg-[#f6f5f1]/50 px-4 py-3">
-          <p className="text-sm leading-relaxed text-[#3d4f46]">{summary}</p>
+          <p className="text-sm leading-relaxed text-[#3d4f46]">{summary || roadmap.summary}</p>
+        </div>
+      )}
+
+      {!roadmap.confirmedAt && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-[#b8975a]/30 bg-[#b8975a]/5 px-4 py-3">
+          <p className="text-xs text-[#b8975a]">
+            请审阅优先级与时间线，确认后进入写作与申报（对齐 skill Phase 2→3 检查点）
+          </p>
+          <Button
+            size="sm"
+            className="h-7 shrink-0 text-xs"
+            disabled={confirming}
+            onClick={handleConfirmRoadmap}
+          >
+            {confirming ? <Loader2 className="h-3 w-3 animate-spin" /> : "确认路线图"}
+          </Button>
         </div>
       )}
 
@@ -206,7 +249,7 @@ export function DirectionRoadmapTimeline({
                       )}
                     </div>
                   </div>
-                  {tier === "ready" && paper.status === "planned" && (
+                  {(tier === "ready" || tier === "needs_experiment") && paper.status === "planned" && (
                     <Button
                       size="sm"
                       className="h-7 gap-1 text-xs"
@@ -218,7 +261,7 @@ export function DirectionRoadmapTimeline({
                       ) : (
                         <ArrowRight className="h-3 w-3" />
                       )}
-                      开始写作
+                      {tier === "needs_experiment" ? "带缺口写作" : "开始写作"}
                     </Button>
                   )}
                 </div>

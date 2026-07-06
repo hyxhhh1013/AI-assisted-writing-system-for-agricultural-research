@@ -16,6 +16,8 @@ import { getErrorMessage } from "@/lib/error-utils";
 import { getUserIdFromRequest } from "@/lib/auth";
 import { unauthorizedResponse } from "@/lib/api-response";
 import { getOwnedDirection } from "@/lib/direction-auth";
+import { computeAnalysisFingerprint } from "@/lib/direction-analysis-fingerprint";
+import { applySynthesisAdjustments } from "@/lib/direction-analysis-synthesis";
 import type {
   DirectionAsset,
   AnalysisDimension,
@@ -265,20 +267,6 @@ async function validateD5Candidates(
   };
 }
 
-// ==================== 分析指纹 ====================
-
-function computeFingerprint(assets: DirectionAsset[], contract: unknown): number {
-  const assetIds = assets.map((a) => a.id).sort().join(",");
-  const contractStr = contract ? JSON.stringify(contract) : "";
-  // 简单 hash：字符串长度 + 字符码和
-  const str = `${assetIds}|${contractStr}`;
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
-  }
-  return hash;
-}
-
 // ==================== 文献检索 ====================
 
 async function getLiteratureContext(
@@ -345,7 +333,7 @@ export async function POST(
         const body = await req.json();
         const parsed = await validateBody(directionAnalyzeSchema, body);
         if (parsed.errorResponse) { emitError("请求参数校验失败"); return; }
-        void parsed.data;
+        const mode = parsed.data?.mode ?? "full";
 
         // 1. 加载方向数据
         const direction = await getOwnedDirection(slug, userId);
@@ -356,9 +344,19 @@ export async function POST(
           : [];
         const currentAnalysis = (direction.analysis as Record<string, unknown> | null) || {};
         const evaluationContract = currentAnalysis.evaluationContract as
-          { dimensions?: Array<{ id: string; name: string; weight: number; rubrics: RubricItem[] }> } | undefined;
+          { dimensions?: Array<{ id: string; name: string; weight: number; rubrics: RubricItem[] }>; confirmedAt?: number } | undefined;
 
         if (assets.length < 3) { emitError("资产数量不足（最少 3 项），无法触发分析"); return; }
+
+        const contractConfirmed = !!evaluationContract?.confirmedAt;
+        if (mode !== "quick" && !contractConfirmed) {
+          emitError("请先完成 Phase 1 预承诺并确认评价标准");
+          return;
+        }
+
+        const storedDimensions = (currentAnalysis.dimensions as AnalysisDimension[] | undefined) || [];
+        const storedDimMap = new Map(storedDimensions.map((d) => [d.id, d]));
+        const isGapOnly = mode === "gap-only" && storedDimensions.length >= 4;
 
         // 2. 构建资产摘要
         const assetSummary = buildAssetSummary(assets);
@@ -383,12 +381,19 @@ export async function POST(
         const categories = (direction.categories as string[]) || [];
         const literatureContext = await getLiteratureContext(assets, categories);
 
-        // 5. 批次 1：并行 D1-D4
-        emit({ type: "batch_start", batch: 1, dimensions: BATCH_1 });
+        // 5. 批次 1：并行 D1-D4（gap-only 仅重跑 D3）
+        const batch1Dims = isGapOnly ? ["D3"] : BATCH_1;
+        emit({ type: "batch_start", batch: 1, dimensions: batch1Dims });
 
         const resultsD1D4 = new Map<string, AnalysisDimension>();
+        if (isGapOnly) {
+          for (const id of ["D1", "D2", "D4"] as const) {
+            const stored = storedDimMap.get(id);
+            if (stored) resultsD1D4.set(id, stored);
+          }
+        }
 
-        const batch1Promises = BATCH_1.map(async (dimId) => {
+        const batch1Promises = batch1Dims.map(async (dimId) => {
           try {
             emit({ type: "dimension_start", dimensionId: dimId, provider: "deepseek" });
             const dim = await analyzeDimension(dimId, assetSummary, getRubrics(dimId), literatureContext);
@@ -419,8 +424,9 @@ export async function POST(
         emit({ type: "batch_done", batch: 1 });
         if (aborted) return;
 
-        // 6. 批次 2：D5-D7
-        emit({ type: "batch_start", batch: 2, dimensions: BATCH_2 });
+        // 6. 批次 2：D5-D7（gap-only 重跑 D5/D6，复用 D7）
+        const batch2Run = isGapOnly ? ["D5", "D6"] : BATCH_2;
+        emit({ type: "batch_start", batch: 2, dimensions: batch2Run });
         let capturedCandidates: PaperCandidate[] = [];
 
         // D5 专用（论文候选识别）
@@ -487,9 +493,10 @@ export async function POST(
           dimD5 = fallbackDimension("D5");
         }
 
-        // D6, D7 并行
-        const [dimD6, dimD7] = await Promise.all(
-          (["D6", "D7"] as const).map(async (dimId) => {
+        // D6, D7 并行（gap-only 复用 D7）
+        const dimD6DimD7Ids = isGapOnly ? (["D6"] as const) : (["D6", "D7"] as const);
+        const dimD6DimD7Results = await Promise.all(
+          dimD6DimD7Ids.map(async (dimId) => {
             try {
               emit({ type: "dimension_start", dimensionId: dimId, provider: "deepseek" });
               const dim = await analyzeDimension(dimId, assetSummary, getRubrics(dimId), "");
@@ -501,6 +508,10 @@ export async function POST(
             }
           }),
         );
+        const dimD6 = dimD6DimD7Results[0];
+        const dimD7 = isGapOnly
+          ? (storedDimMap.get("D7") || fallbackDimension("D7"))
+          : dimD6DimD7Results[1];
 
         emit({ type: "dimension_done", dimensionId: "D5", result: dimD5 });
         emit({ type: "dimension_done", dimensionId: "D6", result: dimD6 });
@@ -508,21 +519,26 @@ export async function POST(
         emit({ type: "batch_done", batch: 2 });
         if (aborted) return;
 
-        // 7. D8
+        // 7. D8（gap-only 复用）
         emit({ type: "batch_start", batch: 3, dimensions: ["D8"] });
         const allSoFar = [...resultsD1D4.values(), dimD5, dimD6, dimD7]
           .map((d) => `**${d.id} ${d.name}**: ${d.summary}`).join("\n\n");
 
         let dimD8: AnalysisDimension;
-        try {
-          emit({ type: "dimension_start", dimensionId: "D8", provider: "deepseek" });
-          dimD8 = await analyzeDimension("D8", `${assetSummary}\n\n## 其他维度摘要\n\n${allSoFar}`, getRubrics("D8"), "");
-        } catch (err) {
-          logger.error("D8 failed:", err);
-          emit({ type: "dimension_error", dimensionId: "D8", error: getErrorMessage(err) || "D8 分析失败" });
-          dimD8 = fallbackDimension("D8");
+        if (isGapOnly && storedDimMap.has("D8")) {
+          dimD8 = storedDimMap.get("D8")!;
+          emit({ type: "dimension_done", dimensionId: "D8", result: dimD8 });
+        } else {
+          try {
+            emit({ type: "dimension_start", dimensionId: "D8", provider: "deepseek" });
+            dimD8 = await analyzeDimension("D8", `${assetSummary}\n\n## 其他维度摘要\n\n${allSoFar}`, getRubrics("D8"), "");
+          } catch (err) {
+            logger.error("D8 failed:", err);
+            emit({ type: "dimension_error", dimensionId: "D8", error: getErrorMessage(err) || "D8 分析失败" });
+            dimD8 = fallbackDimension("D8");
+          }
+          emit({ type: "dimension_done", dimensionId: "D8", result: dimD8 });
         }
-        emit({ type: "dimension_done", dimensionId: "D8", result: dimD8 });
         emit({ type: "batch_done", batch: 3 });
 
         // 8. 合成阶段
@@ -549,15 +565,30 @@ export async function POST(
         }
         emit({ type: "batch_done", batch: 4 });
 
+        // 8b. 合成修正写回维度与候选
+        const reconciled = applySynthesisAdjustments(
+          orderedDimensions,
+          capturedCandidates,
+          synthesis,
+        );
+        const finalDimensions = reconciled.dimensions;
+        capturedCandidates = reconciled.candidates;
+
+        const crossDirectionOpportunities = await extractCrossDirectionFromD8(dimD8, slug, userId);
+        if (crossDirectionOpportunities.length > 0) {
+          emit({ type: "cross_direction", opportunities: crossDirectionOpportunities });
+        }
+
         // 9. 保存
         const analysisPayload = {
           generatedAt: Date.now(),
-          analysisFingerprint: computeFingerprint(assets, evaluationContract),
-          dimensions: orderedDimensions,
+          analysisFingerprint: computeAnalysisFingerprint(assets, evaluationContract),
+          dimensions: finalDimensions,
           paperCandidates: capturedCandidates,
-          crossDirectionOpportunities: await extractCrossDirectionFromD8(dimD8, slug, userId),
+          crossDirectionOpportunities,
           synthesis: synthesis || null,
           evaluationContract: evaluationContract || null,
+          grantProposal: (currentAnalysis.grantProposal as unknown) ?? null,
         };
 
         const cleanPayload = JSON.parse(JSON.stringify(analysisPayload));

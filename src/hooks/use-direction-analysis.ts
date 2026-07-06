@@ -114,6 +114,15 @@ export function useDirectionAnalysis() {
                   next.candidates = event.candidates;
                   break;
 
+                case "cross_direction":
+                  if (next.result) {
+                    next.result = {
+                      ...next.result,
+                      crossDirectionOpportunities: event.opportunities,
+                    };
+                  }
+                  break;
+
                 case "synthesis":
                   next.synthesis = event.synthesis;
                   break;

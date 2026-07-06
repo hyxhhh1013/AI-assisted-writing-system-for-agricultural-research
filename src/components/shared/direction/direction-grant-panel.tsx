@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -9,49 +9,48 @@ import {
   Loader2,
   Download,
   Sparkles,
-  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { siteTheme } from "@/lib/site-theme";
 import { toast } from "sonner";
-import type { DirectionDTO } from "@/contracts/direction";
+import { generateGrantProposal, type GrantProposalResult } from "@/services/direction";
+import type { DirectionDTO, GrantProposalSnapshot } from "@/contracts/direction";
 
 const GRANT_TYPES = ["国自然面上", "国自然青年", "省基金", "开放课题"] as const;
+type GrantType = (typeof GRANT_TYPES)[number];
 
 interface DirectionGrantPanelProps {
   slug: string;
   direction: DirectionDTO;
+  onGenerated?: () => void;
 }
 
-export function DirectionGrantPanel({ slug, direction }: DirectionGrantPanelProps) {
-  const [grantType, setGrantType] = useState<string>("国自然面上");
+export function DirectionGrantPanel({ slug, direction, onGenerated }: DirectionGrantPanelProps) {
+  const [grantType, setGrantType] = useState<GrantType>("国自然面上");
   const [loading, setLoading] = useState(false);
-  const [proposal, setProposal] = useState<{
-    title: string;
-    sections: Array<{ heading: string; content: string }>;
-    grantType: string;
-  } | null>(null);
+  const [proposal, setProposal] = useState<GrantProposalResult | null>(null);
 
-  const analysis = direction.analysis as Record<string, unknown> | null;
-  const hasAnalysis = !!(analysis?.dimensions);
-  const roadmap = direction.roadmap as Record<string, unknown> | null;
-  const hasRoadmap = !!(roadmap?.papers);
+  const analysis = direction.analysis;
+  const hasAnalysis = !!(analysis?.dimensions?.length);
+  const roadmapConfirmed = !!direction.roadmap?.confirmedAt;
+
+  useEffect(() => {
+    const saved = analysis?.grantProposal as GrantProposalSnapshot | undefined;
+    if (saved?.sections?.length) {
+      setProposal(saved);
+      if (GRANT_TYPES.includes(saved.grantType as GrantType)) {
+        setGrantType(saved.grantType as GrantType);
+      }
+    }
+  }, [analysis?.grantProposal]);
 
   const handleGenerate = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/directions/${slug}/grant-proposal`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ grantType }),
-      });
-      const data = await res.json() as {
-        proposal?: { title: string; sections: Array<{ heading: string; content: string }>; grantType: string };
-        error?: string;
-      };
-      if (!res.ok || !data.proposal) throw new Error(data.error || "生成失败");
-      setProposal(data.proposal);
+      const result = await generateGrantProposal(slug, grantType);
+      setProposal(result);
       toast.success("申请书已生成");
+      onGenerated?.();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "生成失败");
     } finally {
@@ -63,7 +62,7 @@ export function DirectionGrantPanel({ slug, direction }: DirectionGrantPanelProp
     if (!proposal) return;
     const markdown = [
       `# ${proposal.title}`,
-      `> ${proposal.grantType} · 生成于 ${new Date().toLocaleDateString("zh-CN")}`,
+      `> ${proposal.grantType} · 生成于 ${new Date(proposal.generatedAt).toLocaleDateString("zh-CN")}`,
       "",
       ...proposal.sections.map((s) => `## ${s.heading}\n\n${s.content}`),
     ].join("\n\n");
@@ -102,22 +101,27 @@ export function DirectionGrantPanel({ slug, direction }: DirectionGrantPanelProp
             <FileText className="h-10 w-10 text-[#9aa8a0]" />
             <div>
               <p className="text-sm text-[#6b7c72]">
-                基于方向资产、分析结果和路线图，生成 <strong>{grantType}</strong> 申请书
+                基于方向资产、8 维分析与路线图，生成 <strong>{grantType}</strong> 申请书
               </p>
               <p className="mt-1 text-xs text-[#9aa8a0]">
-                包含：立项依据 · 研究内容 · 技术路线 · 创新点 · 研究基础 · 预期成果
+                立项依据 ← D3 · 研究现状 ← 知识库 RAG · 预期成果 ← 路线图
               </p>
             </div>
 
             {!hasAnalysis && (
+              <div className="rounded-md bg-[#dc2626]/8 px-3 py-2 text-[11px] text-[#dc2626]">
+                请先完成 Phase 2 八维度分析
+              </div>
+            )}
+            {hasAnalysis && !roadmapConfirmed && (
               <div className="rounded-md bg-[#b8975a]/8 px-3 py-2 text-[11px] text-[#b8975a]">
-                ⚠️ 建议先完成 8 维度分析，再生成申请书（缺失分析将使用默认描述）
+                建议先确认论文路线图，预期成果章节将更准确
               </div>
             )}
 
             <Button
               onClick={handleGenerate}
-              disabled={loading}
+              disabled={loading || !hasAnalysis}
               className={cn("gap-1.5", siteTheme.btnPrimary)}
             >
               {loading ? (
@@ -138,7 +142,7 @@ export function DirectionGrantPanel({ slug, direction }: DirectionGrantPanelProp
                   {proposal.grantType}
                 </Badge>
                 <span className="text-[10px] text-[#9aa8a0]">
-                  {proposal.sections.length} 个章节
+                  {proposal.sections.length} 个章节 · 已保存
                 </span>
               </div>
             </div>
