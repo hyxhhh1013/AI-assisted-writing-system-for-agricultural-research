@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { validateBody } from "@/lib/api-validate";
 import { projectReferencesPatchSchema } from "@/lib/validations";
 import { applyReferencePatchOps } from "@/lib/project-references";
+import { syncProjectPaperPassport } from "@/lib/project-paper-passport-sync";
 import type { ReferencesPatchResponse } from "@/contracts/project";
 
 /** PATCH /api/projects/:id/references — 参考文献行级增量更新 */
@@ -36,6 +37,8 @@ export async function PATCH(
       where: { id: projectId },
       data: { lastUpdated: new Date() },
     });
+
+    await syncProjectPaperPassport(projectId);
 
     const rows = await prisma.reference.findMany({
       where: { projectId },

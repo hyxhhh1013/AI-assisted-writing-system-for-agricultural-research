@@ -21,6 +21,7 @@ import {
   parsePaperPassport,
   serializePaperPassport,
 } from "@/contracts/paper-passport";
+import { syncProjectPaperPassport } from "@/lib/project-paper-passport-sync";
 
 type SectionRecord = Record<string, string>;
 
@@ -70,6 +71,12 @@ export async function GET(req: NextRequest) {
         return notFoundResponse("项目未找到");
       }
 
+      let paperPassportRaw = (project as { paperPassport?: string | null }).paperPassport;
+      if (paperPassportRaw) {
+        const synced = await syncProjectPaperPassport(project.id);
+        if (synced) paperPassportRaw = serializePaperPassport(synced);
+      }
+
       const langRaw = (project as { language?: string | null }).language;
       const formattedProject = {
         ...project,
@@ -88,7 +95,7 @@ export async function GET(req: NextRequest) {
         dataClaims: project.dataClaims || undefined,
         dataSources: project.dataSources || undefined,
         writingBlueprint: (await readWritingBlueprint(project.id)) || undefined,
-        paperPassport: (project as { paperPassport?: string | null }).paperPassport || undefined,
+        paperPassport: paperPassportRaw || undefined,
         expandedOutlineSections: parseExpandedOutlineSections(project.expandedOutlineSections),
       };
 
@@ -248,6 +255,8 @@ export async function POST(req: NextRequest) {
 
       return saved;
     });
+
+    await syncProjectPaperPassport(project.id);
 
     return NextResponse.json({ id: project.id, message: "保存成功" });
   } catch (error: unknown) {

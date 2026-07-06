@@ -589,7 +589,14 @@ export async function createProjectFromRoadmap(
     // 蓝图生成失败不阻塞项目创建
   }
 
-  // 4. 同步路线图状态
+  // 4. 重算 PaperPassport 阶段进度
+  try {
+    await fetch(`/api/projects/${createData.id}/paper-passport/sync`, { method: "POST" });
+  } catch {
+    // 非阻塞
+  }
+
+  // 5. 同步路线图状态
   if (candidateId) {
     try {
       await syncRoadmapPaper(directionSlug, candidateId, {

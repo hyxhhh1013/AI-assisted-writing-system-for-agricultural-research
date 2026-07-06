@@ -915,6 +915,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-07-06 | MASTER_PLAN v2 + W0-SEC-01 | AI | 新增 `docs/MASTER_PLAN.md` 整体规划；Direction 加 userId + `direction-auth.ts` + 全 routes owner 作用域 + 迁移 SQL |
 | 2026-07-06 | W0-WIP + SEC-02 | AI | 6 commits：W0-WIP-A citation/chart 清理；SEC-01 `8c73ca1`；ENG-PR-210 bridge；ENG-PR-200 Agent Phase A；SEC-02 proxy 鉴权/限流 + `proxy-sec02.test.ts` |
 | 2026-07-06 | W0-SEC-03 | AI | Reference `(projectId,order)` 唯一 + dedup 脚本；Direction/Project charts `FOR UPDATE` 事务；projects POST 去全量 refs 覆盖 + `$transaction` |
+| 2026-07-06 | W1-PASSPORT (phase sync) | AI | `paper-passport-progress.ts` 8 阶段重算；`POST .../paper-passport/sync`；GET/POST project + refs PATCH 触发 sync；Cockpit「下一步」提示；路线图建项后 sync |
 
 ---
 

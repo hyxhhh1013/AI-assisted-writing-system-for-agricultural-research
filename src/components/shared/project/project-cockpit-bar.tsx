@@ -6,6 +6,7 @@ import {
   parsePaperPassport,
   type PhaseStatus,
 } from "@/contracts/paper-passport";
+import { getNextPhaseHint } from "@/lib/paper-passport-progress";
 
 interface ProjectCockpitBarProps {
   paperPassportRaw?: string | null;
@@ -22,6 +23,8 @@ const STATUS_STYLE: Record<PhaseStatus, string> = {
 export function ProjectCockpitBar({ paperPassportRaw, className }: ProjectCockpitBarProps) {
   const passport = parsePaperPassport(paperPassportRaw ?? null);
   if (!passport) return null;
+
+  const hint = getNextPhaseHint(passport);
 
   return (
     <div
@@ -52,6 +55,11 @@ export function ProjectCockpitBar({ paperPassportRaw, className }: ProjectCockpi
       {passport.source?.directionSlug && (
         <span className="ml-auto truncate text-[10px] text-[#9aa8a0]">
           来自方向 · {passport.source.directionSlug}
+        </span>
+      )}
+      {hint && (
+        <span className="w-full text-[10px] text-[#6b7c72] sm:w-auto sm:ml-2">
+          下一步：{hint}
         </span>
       )}
     </div>
