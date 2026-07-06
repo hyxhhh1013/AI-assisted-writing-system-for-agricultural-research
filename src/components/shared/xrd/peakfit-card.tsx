@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,8 +14,18 @@ import { getErrorMessage } from "@/lib/error-utils";
 import { PlotWorkspace } from "@/components/shared/plot/plot-workspace";
 import { PlotPreviewPane } from "@/components/shared/plot/plot-preview-pane";
 import type { PlotToolProps } from "@/components/shared/plot/plot-tool-props";
+import {
+  buildPlotInsertReplay,
+  configNumberString,
+  configString,
+  type PlotToolPrefill,
+} from "@/contracts/figure";
 
-export function PeakFitCard({ title: toolTitle, description, onInsertToPaper }: PlotToolProps) {
+interface PeakFitCardProps extends PlotToolProps {
+  prefill?: PlotToolPrefill | null;
+}
+
+export function PeakFitCard({ title: toolTitle, description, onInsertToPaper, prefill }: PeakFitCardProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ imageBase64: string; imageUrl: string; data: PeakFitData } | null>(null);
@@ -27,6 +37,18 @@ export function PeakFitCard({ title: toolTitle, description, onInsertToPaper }: 
   const [prominence, setProminence] = useState("0.02");
   const [maxPeaks, setMaxPeaks] = useState("20");
   const [bgModel, setBgModel] = useState("constant");
+
+  useEffect(() => {
+    if (!prefill || prefill.figureId !== "xrd_peakfit") return;
+    const c = prefill.config;
+    setPhaseLabel(configString(c, "phase_label", ""));
+    setLFctg(configNumberString(c, "LFctg", "0.5"));
+    setWindowLength(configNumberString(c, "window_length", "17"));
+    setProminence(configNumberString(c, "prominence", "0.02"));
+    setMaxPeaks(configNumberString(c, "max_peaks", "20"));
+    setBgModel(configString(c, "bg_model", "constant"));
+    setResult(null);
+  }, [prefill]);
 
   const parsePreview = async (f: File) => {
     try {
@@ -102,6 +124,15 @@ export function PeakFitCard({ title: toolTitle, description, onInsertToPaper }: 
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  const buildReplayConfig = () => ({
+    phase_label: phaseLabel,
+    LFctg,
+    window_length: windowLength,
+    prominence,
+    max_peaks: maxPeaks,
+    bg_model: bgModel,
+  });
 
   return (
     <PlotWorkspace
@@ -216,7 +247,14 @@ export function PeakFitCard({ title: toolTitle, description, onInsertToPaper }: 
                   <Button
                     size="sm"
                     className="h-8 gap-1 bg-[#1a5632] text-xs hover:bg-[#144228]"
-                    onClick={() => onInsertToPaper(result.imageUrl, `XRD 图谱 — ${phaseLabel || "unnamed"}（${result.data.n_peaks} 峰）`)}
+                    onClick={() => {
+                      const cap = `XRD 图谱 — ${phaseLabel || "unnamed"}（${result.data.n_peaks} 峰）`;
+                      onInsertToPaper(
+                        result.imageUrl,
+                        cap,
+                        buildPlotInsertReplay("xrd_peakfit", cap, buildReplayConfig()),
+                      );
+                    }}
                   >
                     <BarChart3 className="h-3 w-3" /> 插入论文
                   </Button>

@@ -32,7 +32,8 @@ export interface ChartRegistryField {
   type: "text" | "number" | "select" | "boolean";
   options?: string[];
   default?: string | number | boolean;
-  group?: "basic" | "style" | "advanced";
+  group?: "basic" | "style" | "advanced" | "chart_specific";
+  display?: "visible" | "advanced";
   min?: number;
   max?: number;
   step?: number;

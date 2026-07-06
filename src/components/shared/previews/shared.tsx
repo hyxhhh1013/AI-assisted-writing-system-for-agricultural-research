@@ -10,8 +10,7 @@ import rehypeRaw from "rehype-raw";
 import "katex/dist/katex.min.css";
 import { cn } from "@/lib/utils";
 import type { ProjectData } from "@/contracts/project";
-import { CITATION_GROUP_RE, expandCiteGroup, processCitations, handleCiteClick } from "@/lib/citation";
-import { normalizeAllCitationFormats } from "@/lib/citation-bounds";
+import { CITATION_GROUP_RE, expandCiteGroup, processCitations, handleCiteClick, normalizeAllCitationFormats } from "@/lib/citation";
 import { formatFilenames } from "@/services/references";
 
 export const CITATION_RE = CITATION_GROUP_RE;

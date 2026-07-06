@@ -54,7 +54,7 @@ class LineChart(ChartModule):
 
         if numeric_x is None:
             ax.set_xticks(range(len(labels)))
-            ax.set_xticklabels(labels_display, rotation=20, ha="right")
+            ax.set_xticklabels(labels_display)
         else:
             ax.set_xticklabels(labels_display)
 

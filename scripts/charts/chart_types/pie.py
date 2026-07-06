@@ -28,7 +28,9 @@ class PieChart(ChartModule):
         )
         for at in autotexts:
             at.set_fontsize(max(fs - 1, 6))
-        if title:
-            ax.set_title(_normalize_label(title), fontweight="bold", pad=12)
 
+        self.finalize_axes(
+            ax, style, config=config, title=title,
+            has_legend=False,
+        )
         self.save(fig, output_path, style)

@@ -72,21 +72,28 @@ class ChartModule:
         """Nature-figure 常用轴选项：对数刻度、科学计数法、刻度旋转。"""
         if config.get("y_log_scale") in (True, "true", "1", 1):
             ax.set_yscale("log")
-        if config.get("y_sci_notation") in (True, "true", "1", 1) or style.get("y_sci_notation") in (True, "true", "1", 1):
+        # y_sci_notation: style（来自全局样式面板）优先于 config（来自图表专属配置）
+        sci = style.get("y_sci_notation")
+        if sci in (True, "true", "1", 1):
             try:
                 ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
             except AttributeError:
-                # 当前轴使用了非 ScalarFormatter（如分类轴、自定义格式化器），跳过
                 pass
-        rot = config.get("x_tick_rotation")
-        if rot is not None and rot != "":
+        elif config.get("y_sci_notation") in (True, "true", "1", 1):
+            try:
+                ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
+            except AttributeError:
+                pass
+        # x_tick_rotation: style 优先，config 为后备（兼容旧调用）
+        rot = style.get("x_tick_rotation")
+        if rot is not None and rot != "" and rot != 0:
             try:
                 ax.tick_params(axis="x", labelrotation=float(rot))
             except (TypeError, ValueError):
                 pass
-        elif style.get("x_tick_rotation"):
+        elif config.get("x_tick_rotation") is not None and config.get("x_tick_rotation") != "":
             try:
-                ax.tick_params(axis="x", labelrotation=float(style["x_tick_rotation"]))
+                ax.tick_params(axis="x", labelrotation=float(config["x_tick_rotation"]))
             except (TypeError, ValueError):
                 pass
 

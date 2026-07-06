@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { generateTable, type TableGenerateRequest } from "@/services/table";
 import { getErrorMessage } from "@/lib/error-utils";
@@ -26,7 +26,7 @@ interface PosthocInput {
   p: string;
 }
 
-export function TablePanel({ title: toolTitle, description }: PlotToolProps) {
+export function TablePanel({ title: toolTitle, description, onInsertTable }: PlotToolProps) {
   const [title, setTitle] = useState("表1 ");
   const [columnHeader, setColumnHeader] = useState("指标");
   const [groups, setGroups] = useState<GroupInput[]>([
@@ -228,6 +228,16 @@ export function TablePanel({ title: toolTitle, description }: PlotToolProps) {
                   {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                   复制 LaTeX
                 </Button>
+                {onInsertTable && (
+                  <Button
+                    size="sm"
+                    className="h-8 gap-1 bg-[#1a5632] text-xs hover:bg-[#144228]"
+                    onClick={() => onInsertTable(title.trim() || "三线表", result.html, result.statsText)}
+                  >
+                    <FileText className="h-3 w-3" />
+                    插入论文
+                  </Button>
+                )}
               </div>
             ) : undefined
           }

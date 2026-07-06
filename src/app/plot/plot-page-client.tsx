@@ -1,22 +1,22 @@
 "use client";
 
 import { useState, useEffect, Suspense, useMemo, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { getFigureRegistry } from "@/services/figures";
 import type { FigureDef, FigureRegistry } from "@/services/figures";
 import { getProject } from "@/services/project";
 import {
+  applyFigureSpecToPlotPrefill,
   chartConfigToPrefill,
   chartTypeToFigureId,
   collectChartConfigsFromSources,
   decodeFigureSpecParam,
-  figureSpecToFlowPrefill,
-  figureSpecToPrefill,
   figureToolToRegistryId,
   parseProjectCharts,
   type ChartPanelPrefill,
   type FlowPanelPrefill,
   type PlotInsertReplay,
+  type PlotToolPrefill,
 } from "@/contracts/figure";
 import { parseDataSources } from "@/contracts/project";
 import { Button } from "@/components/ui/button";
@@ -64,7 +64,6 @@ const FIGURE_ICONS: Record<string, ElementType> = {
   flow: GitBranch,
   molecule: Atom,
   xrd_peakfit: Radar,
-  xrd_background: Radar,
   xrd_unitcell: Radar,
   xrd_amorphous: Radar,
   xrd_bragg: Radar,
@@ -74,6 +73,7 @@ const FIGURE_ICONS: Record<string, ElementType> = {
 
 function PlotContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const goBack = useGoBack();
   const routeProjectId = searchParams.get("id");
   const figureParam = searchParams.get("figure");
@@ -90,6 +90,7 @@ function PlotContent() {
   const [selectedFigure, setSelectedFigure] = useState<FigureDef | null>(null);
   const [chartPrefill, setChartPrefill] = useState<ChartPanelPrefill | null>(null);
   const [flowPrefill, setFlowPrefill] = useState<FlowPanelPrefill | null>(null);
+  const [toolPrefill, setToolPrefill] = useState<PlotToolPrefill | null>(null);
   const [prefillApplied, setPrefillApplied] = useState(false);
 
   const [insertDialog, setInsertDialog] = useState<{
@@ -99,6 +100,8 @@ function PlotContent() {
     svgUrl?: string;
     pdfUrl?: string;
     figureSpecEnc?: string;
+    customMarkdown?: string;
+    contentHtml?: string;
   }>({ open: false, imageUrl: "", caption: "" });
 
   useEffect(() => {
@@ -138,14 +141,18 @@ function PlotContent() {
       }
     };
 
+    const applySpecPrefill = (spec: NonNullable<ReturnType<typeof decodeFigureSpecParam>>) => {
+      const applied = applyFigureSpecToPlotPrefill(spec);
+      if (applied.chartPrefill) setChartPrefill(applied.chartPrefill);
+      if (applied.flowPrefill) setFlowPrefill(applied.flowPrefill);
+      if (applied.toolPrefill) setToolPrefill(applied.toolPrefill);
+    };
+
     if (figureSpecParam) {
       const spec = decodeFigureSpecParam(figureSpecParam);
       if (spec) {
         applyFigureSelection(figureToolToRegistryId(spec.tool, spec.config));
-        const prefill = figureSpecToPrefill(spec);
-        if (prefill) setChartPrefill(prefill);
-        const flow = figureSpecToFlowPrefill(spec);
-        if (flow) setFlowPrefill(flow);
+        applySpecPrefill(spec);
         setPrefillApplied(true);
         return;
       }
@@ -160,12 +167,7 @@ function PlotContent() {
         applyFigureSelection(asset.figureId);
         if (asset.figureSpecEnc) {
           const spec = decodeFigureSpecParam(asset.figureSpecEnc);
-          if (spec) {
-            const prefill = figureSpecToPrefill(spec);
-            if (prefill) setChartPrefill(prefill);
-            const flow = figureSpecToFlowPrefill(spec);
-            if (flow) setFlowPrefill(flow);
-          }
+          if (spec) applySpecPrefill(spec);
         }
         setPrefillApplied(true);
       });
@@ -215,11 +217,24 @@ function PlotContent() {
         open: true,
         imageUrl,
         caption,
+        svgUrl: replay?.svgUrl,
+        pdfUrl: replay?.pdfUrl,
         figureSpecEnc: replay?.figureSpecEnc,
       });
     },
     [],
   );
+
+  const handleInsertTable = useCallback((caption: string, html: string, statsText: string) => {
+    const markdown = `\n\n${html}\n\n${statsText ? `${statsText}\n\n` : ""}`;
+    setInsertDialog({
+      open: true,
+      imageUrl: "",
+      caption,
+      customMarkdown: markdown,
+      contentHtml: html,
+    });
+  }, []);
 
   const toolProps = useMemo(() => {
     if (!selectedFigure) return null;
@@ -227,8 +242,9 @@ function PlotContent() {
       title: selectedFigure.name,
       description: selectedFigure.description,
       onInsertToPaper: handleInsertToPaper,
+      onInsertTable: handleInsertTable,
     };
-  }, [selectedFigure, handleInsertToPaper]);
+  }, [selectedFigure, handleInsertToPaper, handleInsertTable]);
 
   if (loading) {
     return (
@@ -277,7 +293,12 @@ function PlotContent() {
                       ? "bg-[#1a5632] hover:bg-[#144228]"
                       : "text-[#3d4f46] hover:bg-[#1a5632]/8 hover:text-[#1a5632]"
                   }`}
-                  onClick={() => setActiveCategory(cat.id)}
+                  onClick={() => {
+                    setActiveCategory(cat.id);
+                    const params = new URLSearchParams(searchParams.toString());
+                    params.set("category", cat.id);
+                    router.replace(`/plot?${params.toString()}`, { scroll: false });
+                  }}
                 >
                   <Icon className="h-3.5 w-3.5" />
                   {cat.name}
@@ -302,7 +323,12 @@ function PlotContent() {
               return (
                 <button
                   key={fig.id}
-                  onClick={() => setSelectedFigure(fig)}
+                  onClick={() => {
+                    setSelectedFigure(fig);
+                    const params = new URLSearchParams(searchParams.toString());
+                    params.set("figure", fig.id);
+                    router.replace(`/plot?${params.toString()}`, { scroll: false });
+                  }}
                   title={fig.description}
                   className={`group w-full rounded-lg px-2.5 py-2 text-left transition-all ${
                     active
@@ -332,7 +358,9 @@ function PlotContent() {
             toolProps={toolProps}
             chartPrefill={chartPrefill}
             flowPrefill={flowPrefill}
+            toolPrefill={toolPrefill}
             onInsertToPaper={handleInsertToPaper}
+            onInsertTable={handleInsertTable}
           />
         </main>
       </div>
@@ -345,6 +373,8 @@ function PlotContent() {
         svgUrl={insertDialog.svgUrl}
         pdfUrl={insertDialog.pdfUrl}
         figureSpecEnc={insertDialog.figureSpecEnc}
+        customMarkdown={insertDialog.customMarkdown}
+        contentHtml={insertDialog.contentHtml}
         defaultProjectId={routeProjectId ?? undefined}
         figureId={selectedFigure.id}
       />

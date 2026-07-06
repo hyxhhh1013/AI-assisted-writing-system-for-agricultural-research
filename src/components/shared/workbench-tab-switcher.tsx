@@ -8,7 +8,7 @@ import { getModeAccent, getDataPanelTitle, getDataTabTooltip, getOutlineTabToolt
 import { siteTheme } from "@/lib/site-theme";
 import {
   ArrowLeft, Layout, Database, Radar, BookOpen,
-  FileText, FileSearch, Search, Save,
+  FileText, FileSearch, Search, Save, Bot,
 } from "lucide-react";
 import type { WorkbenchTab } from "@/app/workbench/page";
 import { getModuleHref, listModules, MODULE_ICON_MAP } from "@/lib/module-registry";
@@ -24,12 +24,15 @@ interface WorkbenchTabSwitcherProps {
   setIsPreviewOpen: (open: boolean) => void;
 }
 
+const AGENT_TAB_ENABLED = process.env.NEXT_PUBLIC_AGENT_ENABLED === "1";
+
 const TAB_DEFS: { id: WorkbenchTab; icon: typeof Layout }[] = [
   { id: "structure", icon: Layout },
   { id: "data", icon: Database },
   { id: "xrd", icon: Radar },
   { id: "outline", icon: BookOpen },
   { id: "writing", icon: FileText },
+  ...(AGENT_TAB_ENABLED ? [{ id: "agent" as const, icon: Bot }] : []),
   { id: "reader", icon: FileSearch },
   { id: "plagiarism", icon: Search },
 ];
@@ -46,6 +49,8 @@ function getTabTitle(tab: WorkbenchTab, mode: "review" | "research"): string {
       return getOutlineTabTooltip(mode);
     case "writing":
       return "侧栏整章扩写（RAG + 多阶段），应用后写入所选章";
+    case "agent":
+      return "AI Agent：自主检索、分析、验证（Phase A 只读）";
     case "reader":
       return "本地文献库 PDF";
     case "plagiarism":

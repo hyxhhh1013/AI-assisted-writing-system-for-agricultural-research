@@ -38,10 +38,10 @@ export interface FigureGenerateResult {
   error?: string;
 }
 
-async function figureFetchWithTimeout(
+async function   figureFetchWithTimeout(
   url: string,
   options: RequestInit = {},
-  timeoutMs = 12000,
+  timeoutMs = 120000,
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);

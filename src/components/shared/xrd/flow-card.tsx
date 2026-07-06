@@ -11,7 +11,7 @@ import { renderFlowChart } from "@/services/mol-diagram";
 import type { FlowNode, FlowEdge } from "@/services/mol-diagram";
 import { getErrorMessage } from "@/lib/error-utils";
 import type { FlowPanelPrefill } from "@/contracts/figure";
-import { encodeChartAssetReplay } from "@/contracts/figure";
+import { buildPlotInsertReplay } from "@/contracts/figure";
 import { PlotWorkspace } from "@/components/shared/plot/plot-workspace";
 import { PlotPreviewPane } from "@/components/shared/plot/plot-preview-pane";
 import type { PlotToolProps } from "@/components/shared/plot/plot-tool-props";
@@ -118,20 +118,14 @@ export function FlowCard({
   const handleInsert = () => {
     if (!result) return;
     const caption = `流程图 — ${title}`;
-    onInsertToPaper(result.imageUrl, caption, {
-      figureSpecEnc: encodeChartAssetReplay({
-        tool: "flow",
-        caption,
-        config: {
-          title,
-          direction,
-          nodes: nodes
-            .filter((n) => n.label.trim())
-            .map((n) => ({ id: n.id, label: n.label, shape: n.shape })),
-          edges: edges.filter((e) => e.from && e.to),
-        },
-      }),
-    });
+    onInsertToPaper(result.imageUrl, caption, buildPlotInsertReplay("flow", caption, {
+      title,
+      direction,
+      nodes: nodes
+        .filter((n) => n.label.trim())
+        .map((n) => ({ id: n.id, label: n.label, shape: n.shape })),
+      edges: edges.filter((e) => e.from && e.to),
+    }));
   };
 
   return (

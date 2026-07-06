@@ -65,5 +65,8 @@ class ForestChart(ChartModule):
         style_axes(ax, style, grid_axis="x")
         if config:
             self.apply_axis_extras(ax, config, style)
+        if len(datasets) > 0:
+            from plot_style import apply_legend
+            apply_legend(ax, style, False)  # 森林图通常不需要图例，但让样式选项生效
 
         self.save(fig, output_path, style)

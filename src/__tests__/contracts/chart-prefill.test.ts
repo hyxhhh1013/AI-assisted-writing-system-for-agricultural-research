@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ChartConfig, DataSourceAnalysis } from "@/contracts/data-source";
 import {
   buildChartReplayFigureSpec,
+  buildPlotInsertReplay,
   buildPlotPageHref,
   chartAssetToPlotHref,
   chartConfigToPasteText,
@@ -14,6 +15,7 @@ import {
   figureBlockJsonToPlotHref,
   figureChartConfigToPrefill,
   figureSpecToFlowPrefill,
+  figureSpecToPlotToolPrefill,
   figureSpecToPrefill,
   figureToolToRegistryId,
   parseProjectCharts,
@@ -175,6 +177,63 @@ describe("chart prefill contracts", () => {
     const replay = figureSpecToPrefill(decodeFigureSpecParam(enc)!);
     expect(replay?.pasteText).toContain("A,1");
     expect(replay?.figureId).toBe("bar_grouped");
+  });
+
+  it("builds forest replay spec and prefill round-trip", () => {
+    const spec = buildChartReplayFigureSpec({
+      caption: "图2 森林图",
+      chartType: "forest",
+      title: "效应量",
+      xLabel: "效应量",
+      yLabel: "",
+      parsedData: {
+        labels: ["Study A", "Study B"],
+        datasets: [],
+        forest: {
+          estimates: [0.5, 0.8],
+          ci_low: [0.2, 0.4],
+          ci_high: [0.8, 1.2],
+        },
+      },
+    });
+    expect(spec).not.toBeNull();
+    expect(spec?.config.forest).toBeDefined();
+
+    const prefill = figureSpecToPrefill(spec!);
+    expect(prefill?.figureId).toBe("forest");
+    expect(prefill?.pasteText).toContain("Study A,0.5");
+  });
+
+  it("builds molecule and xrd plot href with figureSpec", () => {
+    const molBlock = {
+      tool: "molecule",
+      config: { mode: "mol", smiles: "CC(=O)O", label: "Acetic" },
+      caption: "图4 分子结构",
+    };
+    const href = figureBlockJsonToPlotHref("proj-1", molBlock);
+    expect(href).toContain("figure=molecule");
+    expect(href).toContain("figureSpec=");
+    const enc = new URL(href!, "http://local").searchParams.get("figureSpec");
+    expect(enc).toBeTruthy();
+    const spec = decodeFigureSpecParam(enc!);
+    expect(spec?.tool).toBe("molecule");
+    const toolPrefill = figureSpecToPlotToolPrefill(spec!);
+    expect(toolPrefill?.figureId).toBe("molecule");
+    expect(toolPrefill?.config.smiles).toBe("CC(=O)O");
+
+    const braggConfig = {
+      crystal_system: "1",
+      a: "4.0",
+      hkl_input: "1 1 1\n2 0 0",
+      angle_input: "38.2\n44.4",
+      wavelength: "1.54056",
+      title: "Bragg test",
+    };
+    const replay = buildPlotInsertReplay("xrd_bragg", "图5 Bragg", braggConfig);
+    expect(replay.figureSpecEnc).toBeTruthy();
+    const decoded = decodeFigureSpecParam(replay.figureSpecEnc!);
+    expect(decoded?.tool).toBe("xrd_bragg");
+    expect(figureSpecToPlotToolPrefill(decoded!)?.config.title).toBe("Bragg test");
   });
 
   it("builds flow prefill and detected figure plot href", () => {

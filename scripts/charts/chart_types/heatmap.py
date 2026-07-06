@@ -47,7 +47,7 @@ class HeatmapChart(ChartModule):
             cbar.set_label(_normalize_label(y_label), fontsize=fs)
 
         ax.set_xticks(range(len(x_labels)))
-        ax.set_xticklabels(x_labels, rotation=30 if len(x_labels) > 4 else 0, ha="right", fontsize=fs)
+        ax.set_xticklabels(x_labels, fontsize=fs)
         ax.set_yticks(range(len(y_labels)))
         ax.set_yticklabels(y_labels, fontsize=fs)
 
@@ -60,22 +60,13 @@ class HeatmapChart(ChartModule):
                 color = "white" if lum < 0.5 else "black"
                 ax.text(j, i, f"{val:.2g}", ha="center", va="center", fontsize=fs, color=color)
 
-        if title:
-            ax.set_title(_normalize_label(title), fontweight="bold", pad=10, fontsize=float(style.get("font_size", 8)) + 1)
-        if x_label:
-            ax.set_xlabel(_normalize_label(x_label), labelpad=6, fontsize=fs)
-
-        panel = style.get("panel_label")
-        if panel:
-            ax.text(
-                -0.08, 1.02, str(panel),
-                transform=ax.transAxes,
-                fontsize=float(style.get("font_size", 8)) + 2,
-                fontweight="bold",
-            )
-
         ax.set_frame_on(True)
         for spine in ax.spines.values():
             spine.set_visible(False)
 
+        # 统一走 finalize_axes 处理标题/标签/panel_label/图例/轴选项
+        self.finalize_axes(
+            ax, style, config=config, title=title, x_label=x_label,
+            y_label=y_label, has_legend=False,
+        )
         self.save(fig, output_path, style)

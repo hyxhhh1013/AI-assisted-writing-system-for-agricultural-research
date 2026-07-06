@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,12 @@ import { getErrorMessage } from "@/lib/error-utils";
 import { PlotWorkspace } from "@/components/shared/plot/plot-workspace";
 import { PlotPreviewPane } from "@/components/shared/plot/plot-preview-pane";
 import type { PlotToolProps } from "@/components/shared/plot/plot-tool-props";
+import {
+  buildPlotInsertReplay,
+  configNumberString,
+  configString,
+  type PlotToolPrefill,
+} from "@/contracts/figure";
 
 interface AtomRow {
   id: number;
@@ -21,7 +27,15 @@ interface AtomRow {
   energy: string;
 }
 
-export function XpsCard({ title: toolTitle, description, onInsertToPaper }: PlotToolProps) {
+interface XpsCardProps extends PlotToolProps {
+  prefill?: PlotToolPrefill | null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function XpsCard({ title: toolTitle, description, onInsertToPaper, prefill }: XpsCardProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ imageBase64: string; imageUrl: string; data: XpsData } | null>(null);
@@ -34,6 +48,33 @@ export function XpsCard({ title: toolTitle, description, onInsertToPaper }: Plot
     { id: 2, element: "N", orbital: "1s1/2", energy: "400.0" },
   ]);
   const [nextId, setNextId] = useState(2);
+
+  useEffect(() => {
+    if (!prefill || prefill.figureId !== "xrd_xps") return;
+    const c = prefill.config;
+    setTitle(configString(c, "title", ""));
+    setEnergyMin(configString(c, "energy_min", ""));
+    setEnergyMax(configString(c, "energy_max", ""));
+    setIterMax(configNumberString(c, "iter_max", "300"));
+    const atomsRaw = c.atoms;
+    if (Array.isArray(atomsRaw)) {
+      const mapped: AtomRow[] = [];
+      for (const item of atomsRaw) {
+        if (!isRecord(item)) continue;
+        mapped.push({
+          id: mapped.length + 1,
+          element: configString(item, "element", ""),
+          orbital: configString(item, "orbital", ""),
+          energy: configString(item, "energy", ""),
+        });
+      }
+      if (mapped.length > 0) {
+        setAtoms(mapped);
+        setNextId(mapped.length + 1);
+      }
+    }
+    setResult(null);
+  }, [prefill]);
 
   const addAtom = () => {
     setAtoms([...atoms, { id: nextId, element: "", orbital: "", energy: "" }]);
@@ -89,6 +130,16 @@ export function XpsCard({ title: toolTitle, description, onInsertToPaper }: Plot
       setLoading(false);
     }
   };
+
+  const buildReplayConfig = () => ({
+    title,
+    energy_min: energyMin,
+    energy_max: energyMax,
+    iter_max: iterMax,
+    atoms: atoms
+      .filter((a) => a.element && a.orbital && a.energy)
+      .map((a) => ({ element: a.element, orbital: a.orbital, energy: a.energy })),
+  });
 
   return (
     <PlotWorkspace
@@ -251,7 +302,14 @@ export function XpsCard({ title: toolTitle, description, onInsertToPaper }: Plot
                   <Button
                     size="sm"
                     className="h-8 gap-1 bg-[#1a5632] text-xs hover:bg-[#144228]"
-                    onClick={() => onInsertToPaper(result.imageUrl, `XPS — ${title}`)}
+                    onClick={() => {
+                      const cap = `XPS — ${title}`;
+                      onInsertToPaper(
+                        result.imageUrl,
+                        cap,
+                        buildPlotInsertReplay("xrd_xps", cap, buildReplayConfig()),
+                      );
+                    }}
                   >
                     <BarChart3 className="h-3 w-3" /> 插入论文
                   </Button>

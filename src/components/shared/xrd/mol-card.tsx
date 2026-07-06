@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,8 +13,17 @@ import { PlotWorkspace } from "@/components/shared/plot/plot-workspace";
 import { PlotPreviewPane } from "@/components/shared/plot/plot-preview-pane";
 import type { PlotToolProps } from "@/components/shared/plot/plot-tool-props";
 import type { MolInfo } from "@/services/mol-diagram";
+import {
+  buildPlotInsertReplay,
+  configString,
+  type PlotToolPrefill,
+} from "@/contracts/figure";
 
-export function MolCard({ title: toolTitle, description, onInsertToPaper }: PlotToolProps) {
+interface MolCardProps extends PlotToolProps {
+  prefill?: PlotToolPrefill | null;
+}
+
+export function MolCard({ title: toolTitle, description, onInsertToPaper, prefill }: MolCardProps) {
   const [mode, setMode] = useState<"mol" | "rxn">("mol");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ imageBase64: string; imageUrl: string; data: { mols: MolInfo[] } } | null>(null);
@@ -22,6 +31,21 @@ export function MolCard({ title: toolTitle, description, onInsertToPaper }: Plot
   const [label, setLabel] = useState("");
   const [rxnSmiles, setRxnSmiles] = useState("CC(=O)O.CCO>>CC(=O)OCC");
   const [rxnLabel, setRxnLabel] = useState("");
+
+  useEffect(() => {
+    if (!prefill || prefill.figureId !== "molecule") return;
+    const c = prefill.config;
+    const nextMode = configString(c, "mode", "mol") === "rxn" ? "rxn" : "mol";
+    setMode(nextMode);
+    if (nextMode === "rxn") {
+      setRxnSmiles(configString(c, "rxn_smiles", "CC(=O)O.CCO>>CC(=O)OCC"));
+      setRxnLabel(configString(c, "rxn_label", ""));
+    } else {
+      setSmiles(configString(c, "smiles", "CC(=O)O"));
+      setLabel(configString(c, "label", ""));
+    }
+    setResult(null);
+  }, [prefill]);
 
   const canGenerate = mode === "mol" ? smiles.trim().length > 0 : rxnSmiles.trim().length > 0;
 
@@ -63,6 +87,11 @@ export function MolCard({ title: toolTitle, description, onInsertToPaper }: Plot
   };
 
   const caption = `分子结构 — ${label || rxnLabel || "structure"}`;
+
+  const buildReplayConfig = () =>
+    mode === "mol"
+      ? { mode: "mol" as const, smiles, label }
+      : { mode: "rxn" as const, rxn_smiles: rxnSmiles, rxn_label: rxnLabel };
 
   return (
     <PlotWorkspace
@@ -131,7 +160,13 @@ export function MolCard({ title: toolTitle, description, onInsertToPaper }: Plot
                   <Button
                     size="sm"
                     className="h-8 gap-1 bg-[#1a5632] text-xs hover:bg-[#144228]"
-                    onClick={() => onInsertToPaper(result.imageUrl, caption)}
+                    onClick={() =>
+                      onInsertToPaper(
+                        result.imageUrl,
+                        caption,
+                        buildPlotInsertReplay("molecule", caption, buildReplayConfig()),
+                      )
+                    }
                   >
                     <BarChart3 className="h-3 w-3" /> 插入论文
                   </Button>

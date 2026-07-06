@@ -67,4 +67,7 @@ class RadarChart(ChartModule):
             from plot_style import apply_legend
             apply_legend(ax, style, True)
 
+        # 应用 panel_label、y_sci_notation、x_tick_rotation 等高级选项
+        if config:
+            self.apply_axis_extras(ax, config, style)
         self.save(fig, output_path, style)

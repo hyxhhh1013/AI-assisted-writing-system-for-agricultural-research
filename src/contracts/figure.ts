@@ -3,14 +3,51 @@ import type { ChartConfig, ChartType, DataSourceAnalysis } from "@/contracts/dat
 /** 插入论文时可选携带，用于 plot 页回放编辑 */
 export interface PlotInsertReplay {
   figureSpecEnc?: string;
+  svgUrl?: string;
+  pdfUrl?: string;
 }
 
-export type FigureTool = "chart" | "flow" | "mechanism";
+/** 可 URL 回放 / 插入快照的 plot 工具 */
+export type PlotReplayTool =
+  | "chart"
+  | "flow"
+  | "mechanism"
+  | "molecule"
+  | "xrd_peakfit"
+  | "xrd_unitcell"
+  | "xrd_amorphous"
+  | "xrd_bragg"
+  | "xrd_xps";
+
+/** @deprecated 使用 PlotReplayTool */
+export type FigureTool = PlotReplayTool;
+
+const PLOT_REPLAY_TOOLS = new Set<string>([
+  "chart",
+  "flow",
+  "mechanism",
+  "molecule",
+  "xrd_peakfit",
+  "xrd_unitcell",
+  "xrd_amorphous",
+  "xrd_bragg",
+  "xrd_xps",
+]);
+
+export function isPlotReplayTool(tool: string): tool is PlotReplayTool {
+  return PLOT_REPLAY_TOOLS.has(tool);
+}
 
 export interface FigureSpec {
-  tool: FigureTool;
+  tool: PlotReplayTool;
   config: Record<string, unknown>;
   caption: string;
+}
+
+/** XRD / 分子等专用面板预填（config 为表单快照，不含二进制文件） */
+export interface PlotToolPrefill {
+  figureId: string;
+  config: Record<string, unknown>;
 }
 
 export interface FigureGenerationResult {
@@ -183,11 +220,70 @@ export function figureToolToRegistryId(
   return tool;
 }
 
+/** 森林图 config.forest → CSV 粘贴文本 */
+export function forestDataToPasteText(params: {
+  labels: string[];
+  estimates: number[];
+  ci_low: number[];
+  ci_high: number[];
+}): string {
+  const header = "研究,效应值,CI下限,CI上限";
+  const rows = params.labels.map((label, i) =>
+    [label, params.estimates[i], params.ci_low[i], params.ci_high[i]].join(","),
+  );
+  return [header, ...rows].join("\n");
+}
+
 /** FIGURE chart config（labels/datasets）→ plot 预填 */
 export function figureChartConfigToPrefill(
   config: Record<string, unknown>,
   caption: string,
 ): ChartPanelPrefill | null {
+  const forestRaw = config.forest;
+  if (isRecord(forestRaw)) {
+    const estimates = forestRaw.estimates;
+    const ciLow = forestRaw.ci_low;
+    const ciHigh = forestRaw.ci_high;
+    if (
+      Array.isArray(estimates)
+      && Array.isArray(ciLow)
+      && Array.isArray(ciHigh)
+      && estimates.length > 0
+      && ciLow.length === estimates.length
+      && ciHigh.length === estimates.length
+    ) {
+      let labels: string[] = [];
+      if (Array.isArray(forestRaw.labels)) {
+        labels = forestRaw.labels.map((l) => String(l));
+      } else {
+        const data = config.data;
+        if (isRecord(data) && Array.isArray(data.labels)) {
+          labels = data.labels.map((l) => String(l));
+        }
+      }
+      if (labels.length === estimates.length) {
+        const nums = (arr: unknown[]) =>
+          arr.map((v) => (typeof v === "number" ? v : Number(v)));
+        const prefill: ChartPanelPrefill = {
+          pasteText: forestDataToPasteText({
+            labels,
+            estimates: nums(estimates),
+            ci_low: nums(ciLow),
+            ci_high: nums(ciHigh),
+          }),
+          title: typeof config.title === "string" ? config.title : caption,
+          xLabel: typeof config.x_label === "string" ? config.x_label : undefined,
+          yLabel: typeof config.y_label === "string" ? config.y_label : undefined,
+          figureId: "forest",
+        };
+        if (isRecord(config.style)) {
+          prefill.style = config.style;
+        }
+        return prefill;
+      }
+    }
+  }
+
   const data = config.data;
   if (!isRecord(data)) return null;
   const labels = data.labels;
@@ -226,6 +322,51 @@ export function figureChartConfigToPrefill(
 export function figureSpecToPrefill(spec: FigureSpec): ChartPanelPrefill | null {
   if (spec.tool !== "chart" || !isRecord(spec.config)) return null;
   return figureChartConfigToPrefill(spec.config, spec.caption);
+}
+
+/** FigureSpec → PlotToolPrefill（molecule / xrd_*） */
+export function figureSpecToPlotToolPrefill(spec: FigureSpec): PlotToolPrefill | null {
+  if (spec.tool === "chart" || spec.tool === "flow" || spec.tool === "mechanism") {
+    return null;
+  }
+  if (!isRecord(spec.config)) return null;
+  return {
+    figureId: figureToolToRegistryId(spec.tool, spec.config),
+    config: spec.config,
+  };
+}
+
+export function configString(
+  config: Record<string, unknown>,
+  key: string,
+  fallback = "",
+): string {
+  const v = config[key];
+  if (typeof v === "string") return v;
+  if (typeof v === "number" && !Number.isNaN(v)) return String(v);
+  return fallback;
+}
+
+export function configNumberString(
+  config: Record<string, unknown>,
+  key: string,
+  fallback: string,
+): string {
+  const v = config[key];
+  if (typeof v === "number" && !Number.isNaN(v)) return String(v);
+  if (typeof v === "string" && v.trim()) return v;
+  return fallback;
+}
+
+/** 构建插入论文时的配置快照 */
+export function buildPlotInsertReplay(
+  tool: PlotReplayTool,
+  caption: string,
+  config: Record<string, unknown>,
+): PlotInsertReplay {
+  return {
+    figureSpecEnc: encodeFigureSpecParam({ tool, caption, config }),
+  };
 }
 
 /** FigureSpec → FlowPanelPrefill（flow / mechanism） */
@@ -321,7 +462,7 @@ export function decodeFigureSpecParam(encoded: string): FigureSpec | null {
     if (typeof tool !== "string" || !isRecord(config) || typeof caption !== "string") {
       return null;
     }
-    if (tool !== "chart" && tool !== "flow" && tool !== "mechanism") return null;
+    if (!isPlotReplayTool(tool)) return null;
     return { tool, config, caption };
   } catch {
     return null;
@@ -348,6 +489,16 @@ export function chartAssetToPlotHref(
   });
 }
 
+export interface ChartReplayParsedData {
+  labels: string[];
+  datasets: { label: string; data: number[] }[];
+  forest?: {
+    estimates: number[];
+    ci_low: number[];
+    ci_high: number[];
+  };
+}
+
 /** 从 chart 面板当前状态构建可回放的 FigureSpec */
 export function buildChartReplayFigureSpec(params: {
   caption: string;
@@ -356,29 +507,50 @@ export function buildChartReplayFigureSpec(params: {
   xLabel: string;
   yLabel: string;
   style?: Record<string, unknown>;
-  parsedData: {
-    labels: string[];
-    datasets: { label: string; data: number[] }[];
-  } | null;
+  parsedData: ChartReplayParsedData | null;
 }): FigureSpec | null {
-  if (!params.parsedData || params.parsedData.labels.length === 0) return null;
+  const parsed = params.parsedData;
+  if (!parsed || parsed.labels.length === 0) return null;
+
+  const forest = parsed.forest;
+  const hasForest =
+    forest !== undefined
+    && forest.estimates.length > 0
+    && forest.ci_low.length === forest.estimates.length
+    && forest.ci_high.length === forest.estimates.length;
+  const hasDatasets = parsed.datasets.length > 0;
+  if (!hasForest && !hasDatasets) return null;
+
+  const chartType = hasForest ? "forest" : params.chartType;
+  const config: Record<string, unknown> = {
+    type: chartType,
+    chart_type: chartType,
+    title: params.title || params.caption,
+    x_label: params.xLabel,
+    y_label: params.yLabel,
+    ...(params.style ? { style: params.style } : {}),
+    data: {
+      labels: parsed.labels,
+      datasets: parsed.datasets.map((d) => ({
+        label: d.label,
+        data: d.data,
+      })),
+    },
+  };
+
+  if (hasForest && forest) {
+    config.forest = {
+      labels: parsed.labels,
+      estimates: forest.estimates,
+      ci_low: forest.ci_low,
+      ci_high: forest.ci_high,
+    };
+  }
+
   return {
     tool: "chart",
     caption: params.caption,
-    config: {
-      type: params.chartType,
-      title: params.title || params.caption,
-      x_label: params.xLabel,
-      y_label: params.yLabel,
-      ...(params.style ? { style: params.style } : {}),
-      data: {
-        labels: params.parsedData.labels,
-        datasets: params.parsedData.datasets.map((d) => ({
-          label: d.label,
-          data: d.data,
-        })),
-      },
-    },
+    config,
   };
 }
 
@@ -391,10 +563,12 @@ export function encodeChartAssetReplay(spec: FigureSpec): string {
 export function applyFigureSpecToPlotPrefill(spec: FigureSpec): {
   chartPrefill: ChartPanelPrefill | null;
   flowPrefill: FlowPanelPrefill | null;
+  toolPrefill: PlotToolPrefill | null;
 } {
   return {
     chartPrefill: figureSpecToPrefill(spec),
     flowPrefill: figureSpecToFlowPrefill(spec),
+    toolPrefill: figureSpecToPlotToolPrefill(spec),
   };
 }
 
@@ -438,6 +612,13 @@ export function figureBlockJsonToPlotHref(
       projectId,
       figureId,
       figureSpec: { tool: "flow", config, caption },
+    });
+  }
+  if (isPlotReplayTool(tool) && tool !== "chart") {
+    return buildPlotPageHref({
+      projectId,
+      figureId,
+      figureSpec: { tool, config, caption },
     });
   }
   return buildPlotPageHref({ projectId, figureId });

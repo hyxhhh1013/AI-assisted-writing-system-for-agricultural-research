@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Copy, FileCheck, Loader2 } from "lucide-react";
+import { ArrowLeft, Copy, FileCheck, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { getErrorMessage } from "@/lib/error-utils";
 import {
@@ -46,6 +47,10 @@ interface PlotInsertDialogProps {
   svgUrl?: string;
   pdfUrl?: string;
   figureSpecEnc?: string;
+  /** 非图片内容（如三线表 HTML）插入时使用，优先于 imageUrl 生成的 Markdown */
+  customMarkdown?: string;
+  /** 表格等内容预览 HTML */
+  contentHtml?: string;
   /** 为 false 时只追加章节 Markdown，不新增 charts 资产（用于已登记图再次插入） */
   registerAsset?: boolean;
   onSuccess?: (payload: { projectId: string; sectionKey: string }) => void;
@@ -61,6 +66,8 @@ export function PlotInsertDialog({
   svgUrl,
   pdfUrl,
   figureSpecEnc,
+  customMarkdown,
+  contentHtml,
   registerAsset = true,
   onSuccess,
 }: PlotInsertDialogProps) {
@@ -71,6 +78,8 @@ export function PlotInsertDialog({
   const [insertCaption, setInsertCaption] = useState(caption);
   const [inserting, setInserting] = useState(false);
   const [done, setDone] = useState(false);
+  const [insertedProjectId, setInsertedProjectId] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     if (!open) return;
@@ -80,6 +89,7 @@ export function PlotInsertDialog({
   useEffect(() => {
     if (!open) return;
     setDone(false);
+    setInsertedProjectId(null);
     void listProjects().then((list) => {
       setProjects(list);
       const initialId =
@@ -108,14 +118,16 @@ export function PlotInsertDialog({
         setSelectedSection(keys[0]);
       }
       const chartCount = parseProjectCharts(project.charts).length;
-      const numbered = caption.match(/^图\s*\d+/);
+      const numbered = caption.match(/^图\s*\d+|^表\s*\d+/);
       if (!numbered && registerAsset) {
-        setInsertCaption(`图${chartCount + 1} ${caption}`.trim());
+        const prefix = figureId === "table_three_line" ? "表" : "图";
+        setInsertCaption(`${prefix}${chartCount + 1} ${caption}`.trim());
       }
     });
-  }, [open, selectedProject, caption, registerAsset]);
+  }, [open, selectedProject, caption, registerAsset, figureId]);
 
-  const markdown = `\n\n![${insertCaption}](${imageUrl})\n\n`;
+  const markdown =
+    customMarkdown ?? `\n\n![${insertCaption}](${imageUrl})\n\n`;
 
   const handleCopy = () => {
     void navigator.clipboard.writeText(markdown).then(() => {
@@ -129,7 +141,8 @@ export function PlotInsertDialog({
     setInserting(true);
     try {
       await appendProjectSectionMarkdown(selectedProject, selectedSection, markdown);
-      if (registerAsset) {
+      const shouldRegisterAsset = registerAsset && Boolean(imageUrl);
+      if (shouldRegisterAsset) {
         await appendChartAsset(selectedProject, {
           figureId,
           caption: insertCaption,
@@ -141,8 +154,15 @@ export function PlotInsertDialog({
         });
       }
       setDone(true);
+      setInsertedProjectId(selectedProject);
       onSuccess?.({ projectId: selectedProject, sectionKey: selectedSection });
-      toast.success(registerAsset ? "已插入章节并登记图表资产" : "已再次插入到章节");
+      toast.success(
+        shouldRegisterAsset
+          ? "已插入章节并登记图表资产"
+          : customMarkdown
+            ? "已插入章节"
+            : "已再次插入到章节",
+      );
     } catch (err: unknown) {
       toast.error(getErrorMessage(err));
     } finally {
@@ -161,21 +181,42 @@ export function PlotInsertDialog({
           <div className="flex flex-col items-center gap-3 py-6">
             <FileCheck className="h-10 w-10 text-[#1a5632]" />
             <p className="text-sm text-muted-foreground">已成功插入</p>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              关闭
-            </Button>
+            <div className="flex gap-2">
+              {insertedProjectId && (
+                <Button
+                  className="bg-[#1a5632] hover:bg-[#144a2a]"
+                  onClick={() => {
+                    onOpenChange(false);
+                    router.push(`/workbench?id=${encodeURIComponent(insertedProjectId)}`);
+                  }}
+                >
+                  <ArrowLeft className="h-4 w-4 mr-1.5" />
+                  返回工作台
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                继续作图
+              </Button>
+            </div>
           </div>
         ) : (
           <>
             <div className="rounded-lg border bg-muted/30 p-3">
               <p className="text-xs font-medium text-muted-foreground mb-2">
-                图片预览
+                {contentHtml && !imageUrl ? "内容预览" : "图片预览"}
               </p>
-              <img
-                src={imageUrl}
-                alt={insertCaption}
-                className="max-h-40 w-full rounded object-contain"
-              />
+              {contentHtml && !imageUrl ? (
+                <div
+                  className="max-h-40 overflow-auto rounded bg-white p-2 text-xs"
+                  dangerouslySetInnerHTML={{ __html: contentHtml }}
+                />
+              ) : (
+                <img
+                  src={imageUrl}
+                  alt={insertCaption}
+                  className="max-h-40 w-full rounded object-contain"
+                />
+              )}
               <p className="mt-2 text-xs text-muted-foreground">{insertCaption}</p>
             </div>
 

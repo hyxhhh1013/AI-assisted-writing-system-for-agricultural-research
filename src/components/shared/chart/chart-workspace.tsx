@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +11,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  ClipboardPaste, Upload, Table2, Type, Palette, Sparkles, BookmarkPlus,
+  ClipboardPaste, Upload, Table2, Palette, Sparkles, BookmarkPlus,
+  ChevronDown, ChevronRight,
 } from "lucide-react";
 import type { ChartPanelPrefill } from "@/contracts/figure";
 import {
@@ -31,6 +33,38 @@ interface ChartWorkspaceProps {
   onInsertToPaper: (imageUrl: string, caption: string, replay?: PlotInsertReplay) => void;
 }
 
+/** DPI 选项的人话标签 */
+const DPI_LABELS: Record<string, string> = {
+  "300": "300 dpi（标准）",
+  "600": "600 dpi（高清 · Nature 推荐）",
+  "1200": "1200 dpi（超高清）",
+};
+
+/** 预设的人话标签 */
+const PRESET_LABELS: Record<string, string> = {
+  nature: "Nature 风格（紧凑 · 600dpi）",
+  agr_journal: "农业期刊风格（宽图 · 网格）",
+  slide: "汇报 PPT 风格（大字号）",
+};
+
+function presetOptionLabel(value: string): string {
+  return PRESET_LABELS[value] ?? value;
+}
+
+function dpiOptionLabel(value: string): string {
+  return DPI_LABELS[value] ?? `${value} dpi`;
+}
+
+function paletteOptionLabel(value: string): string {
+  if (value === "") return "跟随预设";
+  const labels: Record<string, string> = {
+    nature: "Nature 学术色",
+    agr: "农学经典色",
+    pastel: "柔和色",
+  };
+  return labels[value] ?? value;
+}
+
 export function ChartWorkspace({
   registryEntry,
   globalStyleFields,
@@ -38,6 +72,8 @@ export function ChartWorkspace({
   projectId,
   onInsertToPaper,
 }: ChartWorkspaceProps) {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+
   const panel = useChartPanel(registryEntry, globalStyleFields, prefill, projectId);
   const {
     inputMode,
@@ -64,13 +100,14 @@ export function ChartWorkspace({
     fileIsSpreadsheet,
     basicLabelFields,
     extraBasicFields,
-    styleGroups,
+    visibleStyleFields,
+    advancedStyleFields,
+    chartSpecificStyleFields,
     title,
     idToType,
   } = panel;
 
   const handleInsertToPaper = (imageUrl: string, caption: string) => {
-    // 收集当前样式字段值，保存到回放快照中
     const stylePayload: Record<string, unknown> = {};
     for (const f of (globalStyleFields ?? [])) {
       const v = fieldValues[f.key];
@@ -78,6 +115,16 @@ export function ChartWorkspace({
         stylePayload[f.key] = v;
       }
     }
+    const replayParsedData = parsedData
+      ? {
+          labels: parsedData.labels,
+          datasets: parsedData.datasets.map((d) => ({
+            label: d.label,
+            data: d.data,
+          })),
+          ...(parsedData.forest ? { forest: parsedData.forest } : {}),
+        }
+      : null;
     const spec = buildChartReplayFigureSpec({
       caption,
       chartType,
@@ -85,20 +132,16 @@ export function ChartWorkspace({
       xLabel: String(fieldValues.x_label ?? ""),
       yLabel: String(fieldValues.y_label ?? ""),
       style: Object.keys(stylePayload).length > 0 ? stylePayload : undefined,
-      parsedData:
-        inputMode === "paste" && parsedData
-          ? {
-              labels: parsedData.labels,
-              datasets: parsedData.datasets.map((d) => ({
-                label: d.label,
-                data: d.data,
-              })),
-            }
-          : null,
+      parsedData: replayParsedData,
     });
-    const replay: PlotInsertReplay | undefined = spec
-      ? { figureSpecEnc: encodeChartAssetReplay(spec) }
-      : undefined;
+    const replay: PlotInsertReplay | undefined =
+      spec || result?.svgUrl || result?.pdfUrl
+        ? {
+            ...(spec ? { figureSpecEnc: encodeChartAssetReplay(spec) } : {}),
+            svgUrl: result?.svgUrl,
+            pdfUrl: result?.pdfUrl,
+          }
+        : undefined;
     onInsertToPaper(imageUrl, caption, replay);
   };
 
@@ -115,12 +158,9 @@ export function ChartWorkspace({
         </div>
 
         <Tabs defaultValue="data" className="flex min-h-0 flex-1 flex-col">
-              <TabsList className="mx-4 mt-3 grid w-[calc(100%-2rem)] grid-cols-3">
+              <TabsList className="mx-4 mt-3 grid w-[calc(100%-2rem)] grid-cols-2">
                 <TabsTrigger value="data" className="text-xs gap-1">
                   <Table2 className="h-3 w-3" /> 数据
-                </TabsTrigger>
-                <TabsTrigger value="labels" className="text-xs gap-1">
-                  <Type className="h-3 w-3" /> 标注
                 </TabsTrigger>
                 <TabsTrigger value="style" className="text-xs gap-1">
                   <Palette className="h-3 w-3" /> 样式
@@ -271,34 +311,7 @@ export function ChartWorkspace({
                   )}
                 </TabsContent>
 
-                <TabsContent value="labels" className="space-y-4 px-4 pb-5 pt-2">
-                  <ChartFieldForm
-                    fields={basicLabelFields}
-                    values={fieldValues}
-                    onChange={onFieldChange}
-                    compact
-                  />
-                  {extraBasicFields.length > 0 && (
-                    <ChartFieldForm
-                      fields={extraBasicFields}
-                      values={fieldValues}
-                      onChange={onFieldChange}
-                      compact
-                    />
-                  )}
-                  {parsedData && !fieldValues.x_label && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full text-xs"
-                      onClick={() => onFieldChange("x_label", parsedData.columns[0] || "")}
-                    >
-                      用首列「{parsedData.columns[0]}」作为 X 轴标签
-                    </Button>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="style" className="space-y-5 px-4 pb-5 pt-2">
+                <TabsContent value="style" className="space-y-4 px-4 pb-5 pt-2">
                   {projectId && projectId !== "default" && (
                     <Button
                       type="button"
@@ -311,69 +324,184 @@ export function ChartWorkspace({
                       保存为本项目默认样式
                     </Button>
                   )}
-                  {styleGroups.preset.length > 0 && (
+
+                  {/* ====== 标题与轴标签 ====== */}
+                  <section>
+                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#6b7c72]">
+                      标题与轴标签
+                    </p>
+                    <ChartFieldForm
+                      fields={basicLabelFields}
+                      values={fieldValues}
+                      onChange={onFieldChange}
+                      compact
+                    />
+                    {extraBasicFields.length > 0 && (
+                      <div className="mt-2">
+                        <ChartFieldForm
+                          fields={extraBasicFields}
+                          values={fieldValues}
+                          onChange={onFieldChange}
+                          compact
+                        />
+                      </div>
+                    )}
+                    {parsedData && !fieldValues.x_label && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2 w-full text-xs"
+                        onClick={() => onFieldChange("x_label", parsedData.columns[0] || "")}
+                      >
+                        用首列「{parsedData.columns[0]}」作为 X 轴标签
+                      </Button>
+                    )}
+                  </section>
+
+                  {/* ====== 期刊风格（常用） ====== */}
+                  {visibleStyleFields.length > 0 && (
                     <section>
                       <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#6b7c72]">
-                        期刊预设
+                        期刊风格
+                      </p>
+                      <div className="space-y-2">
+                        {visibleStyleFields.map((field) => {
+                          const val = fieldValues[field.key];
+                          if (field.type === "select" && field.options) {
+                            return (
+                              <div key={field.key}>
+                                <Label className="text-[10px]">{field.label}</Label>
+                                <Select
+                                  value={String(val ?? field.default ?? "")}
+                                  onValueChange={(v) => { if (v) onFieldChange(field.key, v); }}
+                                >
+                                  <SelectTrigger className="mt-0.5 h-7 text-xs">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {field.options.map((opt) => (
+                                      <SelectItem key={opt} value={opt} className="text-xs">
+                                        {field.key === "preset"
+                                          ? presetOptionLabel(opt)
+                                          : field.key === "dpi"
+                                            ? dpiOptionLabel(opt)
+                                            : field.key === "export_formats"
+                                              ? opt
+                                              : opt}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })}
+                      </div>
+                    </section>
+                  )}
+
+                  {/* ====== 本图专属选项 ====== */}
+                  {chartSpecificStyleFields.length > 0 && (
+                    <section>
+                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#6b7c72]">
+                        本图专属
                       </p>
                       <ChartFieldForm
-                        fields={styleGroups.preset}
+                        fields={chartSpecificStyleFields}
                         values={fieldValues}
                         onChange={onFieldChange}
                         compact
                       />
                     </section>
                   )}
-                  {styleGroups.size.length > 0 && (
+
+                  {/* ====== 更多设置（可折叠） ====== */}
+                  {advancedStyleFields.length > 0 && (
                     <section>
-                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#6b7c72]">
-                        尺寸与字号
-                      </p>
-                      <ChartFieldForm
-                        fields={styleGroups.size}
-                        values={fieldValues}
-                        onChange={onFieldChange}
-                        compact
-                      />
-                    </section>
-                  )}
-                  {styleGroups.legend.length > 0 && (
-                    <section>
-                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#6b7c72]">
-                        图例与子图
-                      </p>
-                      <ChartFieldForm
-                        fields={styleGroups.legend}
-                        values={fieldValues}
-                        onChange={onFieldChange}
-                        compact
-                      />
-                    </section>
-                  )}
-                  {styleGroups.toggles.length > 0 && (
-                    <section>
-                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#6b7c72]">
-                        显示选项
-                      </p>
-                      <ChartFieldForm
-                        fields={styleGroups.toggles}
-                        values={fieldValues}
-                        onChange={onFieldChange}
-                        compact
-                      />
-                    </section>
-                  )}
-                  {styleGroups.advanced.length > 0 && (
-                    <section>
-                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#6b7c72]">
-                        轴与刻度
-                      </p>
-                      <ChartFieldForm
-                        fields={styleGroups.advanced}
-                        values={fieldValues}
-                        onChange={onFieldChange}
-                        compact
-                      />
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[#6b7c72] hover:text-[#1a5632] transition-colors"
+                        onClick={() => setAdvancedOpen((v) => !v)}
+                      >
+                        {advancedOpen ? (
+                          <ChevronDown className="h-3 w-3" />
+                        ) : (
+                          <ChevronRight className="h-3 w-3" />
+                        )}
+                        更多设置
+                      </button>
+                      {advancedOpen && (
+                        <div className="mt-2 space-y-2">
+                          {advancedStyleFields.map((field) => {
+                            const val = fieldValues[field.key];
+                            if (field.type === "select" && field.options) {
+                              return (
+                                <div key={field.key}>
+                                  <Label className="text-[10px]">{field.label}</Label>
+                                  <Select
+                                    value={String(val ?? field.default ?? "")}
+                                    onValueChange={(v) => { if (v) onFieldChange(field.key, v); }}
+                                  >
+                                    <SelectTrigger className="mt-0.5 h-7 text-xs">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {field.options.map((opt) => (
+                                        <SelectItem key={opt} value={opt} className="text-xs">
+                                          {field.key === "palette" ? paletteOptionLabel(opt) : opt}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              );
+                            }
+                            if (field.type === "boolean") {
+                              const checked = val === true || val === "true";
+                              return (
+                                <div key={field.key} className="flex items-center justify-between rounded border px-2 py-1.5">
+                                  <Label className="text-[10px]">{field.label}</Label>
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(e) => onFieldChange(field.key, e.target.checked)}
+                                    className="h-3.5 w-3.5"
+                                  />
+                                </div>
+                              );
+                            }
+                            if (field.type === "number") {
+                              return (
+                                <div key={field.key}>
+                                  <Label className="text-[10px]">{field.label}</Label>
+                                  <Input
+                                    type="number"
+                                    className="mt-0.5 h-7 text-xs"
+                                    min={field.min}
+                                    max={field.max}
+                                    step={field.step ?? 1}
+                                    value={String(val ?? field.default ?? "")}
+                                    onChange={(e) =>
+                                      onFieldChange(field.key, e.target.value === "" ? "" : Number(e.target.value))
+                                    }
+                                  />
+                                </div>
+                              );
+                            }
+                            return (
+                              <div key={field.key}>
+                                <Label className="text-[10px]">{field.label}</Label>
+                                <Input
+                                  className="mt-0.5 h-7 text-xs"
+                                  value={String(val ?? field.default ?? "")}
+                                  onChange={(e) => onFieldChange(field.key, e.target.value)}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </section>
                   )}
                 </TabsContent>

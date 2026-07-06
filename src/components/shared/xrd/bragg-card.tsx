@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,8 +14,18 @@ import { getErrorMessage } from "@/lib/error-utils";
 import { PlotWorkspace } from "@/components/shared/plot/plot-workspace";
 import { PlotPreviewPane } from "@/components/shared/plot/plot-preview-pane";
 import type { PlotToolProps } from "@/components/shared/plot/plot-tool-props";
+import {
+  buildPlotInsertReplay,
+  configNumberString,
+  configString,
+  type PlotToolPrefill,
+} from "@/contracts/figure";
 
-export function BraggCard({ title: toolTitle, description, onInsertToPaper }: PlotToolProps) {
+interface BraggCardProps extends PlotToolProps {
+  prefill?: PlotToolPrefill | null;
+}
+
+export function BraggCard({ title: toolTitle, description, onInsertToPaper, prefill }: BraggCardProps) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ imageBase64: string; imageUrl: string; data: BraggData } | null>(null);
   const [crystalSys, setCrystalSys] = useState("1");
@@ -29,6 +39,23 @@ export function BraggCard({ title: toolTitle, description, onInsertToPaper }: Pl
   const [angleInput, setAngleInput] = useState("38.2\n44.4\n64.6\n77.6\n81.8");
   const [wavelength, setWavelength] = useState("1.54056");
   const [title, setTitle] = useState("");
+
+  useEffect(() => {
+    if (!prefill || prefill.figureId !== "xrd_bragg") return;
+    const c = prefill.config;
+    setCrystalSys(configString(c, "crystal_system", "1"));
+    setA(configNumberString(c, "a", "4.0"));
+    setB(configNumberString(c, "b", "4.0"));
+    setC(configNumberString(c, "c", "4.0"));
+    setAlpha(configNumberString(c, "alpha", "90"));
+    setBeta(configNumberString(c, "beta", "90"));
+    setGamma(configNumberString(c, "gamma", "90"));
+    setHklInput(configString(c, "hkl_input", "1 1 1\n2 0 0\n2 2 0\n3 1 1\n2 2 2"));
+    setAngleInput(configString(c, "angle_input", "38.2\n44.4\n64.6\n77.6\n81.8"));
+    setWavelength(configNumberString(c, "wavelength", "1.54056"));
+    setTitle(configString(c, "title", ""));
+    setResult(null);
+  }, [prefill]);
 
   const canGenerate = hklInput.trim().length > 0 && angleInput.trim().length > 0;
 
@@ -61,6 +88,20 @@ export function BraggCard({ title: toolTitle, description, onInsertToPaper }: Pl
       setLoading(false);
     }
   };
+
+  const buildReplayConfig = () => ({
+    crystal_system: crystalSys,
+    a,
+    b,
+    c,
+    alpha,
+    beta,
+    gamma,
+    hkl_input: hklInput,
+    angle_input: angleInput,
+    wavelength,
+    title,
+  });
 
   return (
     <PlotWorkspace
@@ -144,7 +185,14 @@ export function BraggCard({ title: toolTitle, description, onInsertToPaper }: Pl
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="mr-auto text-xs font-medium text-[#6b7c72]">导出与插入</span>
-                  <Button size="sm" className="h-8 gap-1 bg-[#1a5632] text-xs hover:bg-[#144228]" onClick={() => onInsertToPaper(result.imageUrl, `布拉格优化 — ${result.data.crystal_system}`)}>
+                  <Button size="sm" className="h-8 gap-1 bg-[#1a5632] text-xs hover:bg-[#144228]" onClick={() => {
+                    const cap = `布拉格优化 — ${result.data.crystal_system}`;
+                    onInsertToPaper(
+                      result.imageUrl,
+                      cap,
+                      buildPlotInsertReplay("xrd_bragg", cap, buildReplayConfig()),
+                    );
+                  }}>
                     <BarChart3 className="h-3 w-3" /> 插入论文
                   </Button>
                 </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,12 +13,23 @@ import { getErrorMessage } from "@/lib/error-utils";
 import { PlotWorkspace } from "@/components/shared/plot/plot-workspace";
 import { PlotPreviewPane } from "@/components/shared/plot/plot-preview-pane";
 import type { PlotToolProps } from "@/components/shared/plot/plot-tool-props";
+import { buildPlotInsertReplay, configString, type PlotToolPrefill } from "@/contracts/figure";
 
-export function UnitCellCard({ title: toolTitle, description, onInsertToPaper }: PlotToolProps) {
+interface UnitCellCardProps extends PlotToolProps {
+  prefill?: PlotToolPrefill | null;
+}
+
+export function UnitCellCard({ title: toolTitle, description, onInsertToPaper, prefill }: UnitCellCardProps) {
   const [cifFile, setCifFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ imageBase64: string; imageUrl: string; data: UnitCellData } | null>(null);
   const [title, setTitle] = useState("");
+
+  useEffect(() => {
+    if (!prefill || prefill.figureId !== "xrd_unitcell") return;
+    setTitle(configString(prefill.config, "title", ""));
+    setResult(null);
+  }, [prefill]);
 
   const handleRun = async () => {
     if (!cifFile) {
@@ -87,7 +98,14 @@ export function UnitCellCard({ title: toolTitle, description, onInsertToPaper }:
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="mr-auto text-xs font-medium text-[#6b7c72]">导出与插入</span>
-                  <Button size="sm" className="h-8 gap-1 bg-[#1a5632] text-xs hover:bg-[#144228]" onClick={() => onInsertToPaper(result.imageUrl, `晶胞 — ${title}`)}>
+                  <Button size="sm" className="h-8 gap-1 bg-[#1a5632] text-xs hover:bg-[#144228]" onClick={() => {
+                    const cap = `晶胞 — ${title}`;
+                    onInsertToPaper(
+                      result.imageUrl,
+                      cap,
+                      buildPlotInsertReplay("xrd_unitcell", cap, { title }),
+                    );
+                  }}>
                     <BarChart3 className="h-3 w-3" /> 插入论文
                   </Button>
                 </div>

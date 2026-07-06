@@ -298,11 +298,12 @@ export function useChartPanel(
   }, [prefill, registryExample, basicFields, styleFields, resolvedType]);
 
   useEffect(() => {
+    if (prefill) return;
     if (!projectId || projectId === "default" || styleFields.length === 0) return;
     const saved = readStylePreset(projectId, styleFields);
     if (!saved) return;
     setFieldValues((prev) => ({ ...prev, ...saved }));
-  }, [projectId, styleFields]);
+  }, [projectId, styleFields, prefill]);
 
   useEffect(() => {
     if (inputMode !== "file" || !file) {
@@ -356,12 +357,16 @@ export function useChartPanel(
 
   const stylePayload = useMemo(() => {
     const styleKeys = new Set(styleFields.map((f) => f.key));
+    // 图表专属样式字段 (如 show_values, bar_edge) 也需要打进 style payload
+    const chartStyleKeys = new Set(
+      (basicFields ?? []).filter(f => f.group === "chart_specific").map(f => f.key),
+    );
     const styleValues: Record<string, string | number | boolean> = {};
     for (const [k, v] of Object.entries(fieldValues)) {
-      if (styleKeys.has(k)) styleValues[k] = v;
+      if (styleKeys.has(k) || chartStyleKeys.has(k)) styleValues[k] = v;
     }
     return buildChartStylePayload(styleValues);
-  }, [fieldValues, styleFields]);
+  }, [fieldValues, styleFields, basicFields]);
 
   const canGenerate =
     (inputMode === "file" && !!file) ||
@@ -413,9 +418,14 @@ export function useChartPanel(
 
   const buildConfig = useCallback((): ChartGenericFileConfig | ChartPasteInlineConfig => {
     const styleKeys = new Set(styleFields.map((f) => f.key));
+    const chartStyleKeys = new Set(
+      (basicFields ?? []).filter(f => f.group === "chart_specific").map(f => f.key),
+    );
     const basicKeys = new Set((basicFields ?? []).map((f) => f.key));
     const chartExtras: Record<string, string | number | boolean> = {};
     for (const [k, v] of Object.entries(fieldValues)) {
+      // chart_specific 字段已合并进 style payload，不再作为顶层 config 发送
+      if (chartStyleKeys.has(k)) continue;
       if (basicKeys.has(k) && !["title", "x_label", "y_label"].includes(k)) {
         chartExtras[k] = v;
       }
@@ -534,7 +544,7 @@ export function useChartPanel(
     ["title", "x_label", "y_label"].includes(f.key),
   );
   const extraBasicFields = (basicFields ?? []).filter((f) =>
-    !["title", "x_label", "y_label"].includes(f.key),
+    !["title", "x_label", "y_label"].includes(f.key) && f.group !== "chart_specific",
   );
   const defaultLabelFields: ChartRegistryField[] = [
     { key: "title", label: "图表标题", type: "text" },
@@ -542,16 +552,11 @@ export function useChartPanel(
     { key: "y_label", label: "Y 轴标签", type: "text" },
   ];
 
-  const pickStyleFields = (keys: string[]) =>
-    styleFields.filter((f) => keys.includes(f.key));
-
-  const styleGroups = {
-    preset: pickStyleFields(["preset", "palette", "export_formats"]),
-    size: pickStyleFields(["fig_width", "fig_height", "font_size", "dpi", "axes_linewidth"]),
-    legend: pickStyleFields(["panel_label", "legend_loc"]),
-    toggles: pickStyleFields(["show_grid", "legend_frame", "show_values", "bar_edge", "y_sci_notation"]),
-    advanced: pickStyleFields(["x_tick_rotation"]),
-  };
+  // 按 display 字段分层：visible（日常使用）vs advanced（折叠隐藏）
+  const visibleStyleFields = styleFields.filter((f) => f.display === "visible" || !f.display);
+  const advancedStyleFields = styleFields.filter((f) => f.display === "advanced");
+  // 图表专属样式字段（如柱状图的 show_values, bar_edge）
+  const chartSpecificStyleFields = (basicFields ?? []).filter((f) => f.group === "chart_specific");
 
   return {
     registryEntry,
@@ -581,7 +586,9 @@ export function useChartPanel(
       (file?.name.toLowerCase().endsWith(".xlsx") || file?.name.toLowerCase().endsWith(".xls")),
     basicLabelFields: basicLabelFields.length ? basicLabelFields : defaultLabelFields,
     extraBasicFields,
-    styleGroups,
+    visibleStyleFields,
+    advancedStyleFields,
+    chartSpecificStyleFields,
     title,
     idToType: ID_TO_TYPE,
   };
