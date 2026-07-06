@@ -131,8 +131,25 @@
 | ENG-PR-118 | Material Passport 版本追踪（P2） | 100 | 1d | done | 2026-07-04；`064479b` |
 | ENG-PR-119 | Style Calibration 方向校准（P2） | 100 | 1d | done | 2026-07-04；`cc9ab9e` |
 | ENG-PR-120 | 反模式检测接入审查板块 | 100 | 1d | done | 2026-07-04；`a35bbc8` |
+| **Phase 10 — Direction→Writing 文献桥接（ENG-PR-200 Bug 1 + ENG-PR-210）** |
+| ENG-PR-200a | 综述 mapping fallback 修复（mapToSectionForMode + majorNumberFromSectionId） | — | 0.5d | done | 2026-07-05 |
+| ENG-PR-210a | Direction→Writing 桥接：contract + bridge 函数 + paper-brief API + references 注入 | 100 | 1d | done | 2026-07-05 |
+| ENG-PR-210b | Blueprint 上下文注入：direction 字段不再被 zod strip，到达 AI prompt | 210a | 0.5d | done | 2026-07-05 |
+| **Phase 11 — Wave 0–4 整体规划（见 MASTER_PLAN.md）** |
+| W0-SEC-01 | Direction `userId` + owner 作用域 + 迁移 | — | 0.5d | done | Wave 0；`8c73ca1` |
+| W0-SEC-02 | 未鉴权 AI 路由补齐 + 限流覆盖 | SEC-01 | 0.5d | done | Wave 0；`d586a77` |
+| W0-SEC-03 | JSONB PATCH 竞态 + Reference.order 唯一 | SEC-02 | 1d | todo | Wave 0 |
+| W0-WIP-A | quality/citation/chart 审计清理 PR | — | 1d | done | Wave 0；`0da9d3e`+`4b83ac0` |
+| W0-WIP-B | Agent Phase A + direction bridge commit | SEC-01 | 1d | done | Wave 0；`e5a02c4`+`00d08b8` |
+| W1-PASSPORT | PaperPassport 契约 + Cockpit UI | W0-* | 2w | todo | Wave 1 |
+| W2-LANGGRAPH | LangGraph 替换 agent-loop + write tools | W1 | 2w | todo | Wave 2 |
+| W1-083 | userSkeleton → Phase 2 | W1-PASSPORT | 1d | todo | 原 ENG-PR-083 |
+| ~~ENG-PR-084~~ | ~~入口废弃~~ | — | — | cancelled | 由 Cockpit 取代 |
+| ~~ENG-PR-086~~ | ~~编辑器对话面板~~ | — | — | cancelled | 由 Agent Tab 取代 |
+| ENG-PR-082 | Verifier 结构化 | W2 | 2d | todo | Wave 2 |
+| ENG-PR-085 | 分析页免责 | — | 2h | todo | Wave 3 |
+| ENG-PR-094 | OA 全文入库 | — | 1-2w | todo | Wave 4 backlog |
 
-### 1.1 与既有队列的关系
 
 | 来源 | 本队列处理方式 |
 |------|----------------|
@@ -894,6 +911,9 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-06-13 | ENG-PR-096a, 096b, 096c | AI | 协作扩写 MVP：retrieve-preview + bullets[] + expand_bullet；`isWritingDraftReady` 条数门槛 |
 | 2026-06-13 | RAG-PR-006～011 | AI | 新增 Phase 8 RAG 运行时性能：两阶段检索 + embedding LRU + 协作式构建/合并/并发去重 + warmup 预加载 + `.emb` 按需 pread + 扩写按分类 scope；`npm run check` 绿（库变大后卡顿/内存优化） |
 | 2026-07-04 | ENG-PR-100, 110～120 | AI | 新增 Phase 9 研究方向战略规划：方向 CRUD + Socratic 预承诺 + 8 维度 Rubric 分析 + 报告可视化（recharts 雷达图/柱状图/证据表/矛盾面板）+ Blueprint 扩展 + NL 资产解析 + 甘特图路线图 + 实验方案生成 + 项目申报辅助 + 双角色 + Material Passport + Style Calibration；反模式检测接入审查板块；15 commits，全部 tsc + lint 通过 |
+| 2026-07-05 | ENG-PR-200a, 210a~c | AI | 综述 mapping fallback 修复 + Direction→Writing 文献桥接全链路（contract + bridge 函数 + paper-brief API + references 注入 + Blueprint 上下文不再被 zod strip + 综述模式强制文献确认）；~400 行新增，零破坏；`npm run check` 绿，相关 69 测试通过 |
+| 2026-07-06 | MASTER_PLAN v2 + W0-SEC-01 | AI | 新增 `docs/MASTER_PLAN.md` 整体规划；Direction 加 userId + `direction-auth.ts` + 全 routes owner 作用域 + 迁移 SQL |
+| 2026-07-06 | W0-WIP + SEC-02 | AI | 6 commits：W0-WIP-A citation/chart 清理；SEC-01 `8c73ca1`；ENG-PR-210 bridge；ENG-PR-200 Agent Phase A；SEC-02 proxy 鉴权/限流 + `proxy-sec02.test.ts` |
 
 ---
 

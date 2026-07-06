@@ -17,6 +17,7 @@
 | 功能 | 页面 | API | 核心代码 |
 |------|------|-----|----------|
 | 扩写流水线 | 工作台 `writing-panel` | `POST /api/writing` SSE；**096a** `POST /api/writing/retrieve-preview` | `api/writing/pipeline/*`, `services/writing-context.ts` |
+| **AI Agent（Phase A 只读）** | 工作台 `agent` Tab（需 `NEXT_PUBLIC_AGENT_ENABLED=1`） | `POST /api/agent` SSE（需 `AGENT_ENABLED=1`） | `lib/agent/*`, `services/agent.ts`, `hooks/use-agent.ts` |
 | 证据中心 | 工作台侧栏 | — | `evidence-hub-sections.tsx`、`data-panel.tsx` |
 | 配图编辑 | 写作面板内联 | — | `writing-figure-edit-links.tsx` |
 | 大纲生成 | `src/app/outline/page.tsx` | `POST /api/outline` SSE | `lib/prompts/outline.ts` |
@@ -99,14 +100,15 @@
 |------|------|-----|----------|
 | 方向列表/创建 | `src/app/directions/page.tsx` | `GET/POST /api/directions` | `direction-card.tsx` |
 | 方向工作台 | `src/app/directions/[slug]/` | `GET/PUT/DELETE /api/directions/[slug]` | `direction-page-client.tsx`（5 Phase Tab） |
-| 资产盘点 | 方向工作台 Phase 1 | `PATCH .../assets` · `GET .../scan` · `POST .../parse-asset` | `direction-asset-form.tsx`, `direction-asset-list.tsx`, `direction-asset-scan-dialog.tsx` |
-| Socratic 预承诺 | 方向工作台 Phase 2 | `POST .../evaluation-contract` | `direction-socratic-dialog.tsx`, `direction-socratic.ts` |
+| 资产盘点 | 方向工作台 Phase 0 | `PATCH .../assets` · `GET .../scan` · `POST .../parse-asset` | `direction-asset-intake-panel.tsx`, `direction-asset-form.tsx`, `direction-asset-list.tsx`, `lib/direction-asset-health.ts` |
+| 预承诺 | 方向工作台 Phase 1 | `POST .../evaluation-contract` | `direction-pre-commitment-panel.tsx`, `direction-socratic-dialog.tsx`, `lib/direction-pre-commitment.ts`, `lib/prompts/direction-socratic.ts` |
 | 8 维度分析（SSE） | 方向工作台 Phase 3 | `POST .../analyze` | `direction-analysis-panel.tsx`, `direction-analysis-charts.tsx`, `use-direction-analysis.ts` |
 | 论文路线图 | 方向工作台 Phase 4 | `POST .../roadmap` | `direction-roadmap-timeline.tsx`, `direction-dashboard.tsx` |
 | 实验方案生成 | 分析面板 D6 维度 | `POST .../experiment-plan` | 内联 `GeneratePlanButton` |
 | 项目申报辅助 | 方向工作台 Phase 5 | `POST .../grant-proposal` | `direction-grant-panel.tsx` |
 | 方向摘要（主页） | 主页卡片 | `GET /api/directions/summary` | `directions-overview.tsx` |
 | 反模式检测 | — | — | `direction-checks.ts`（审查板块复用） |
+| **→ 写作桥接** | 路线图「开始写作」按钮 | `GET .../paper-brief` → `POST /api/projects` | `direction-writing-bridge.ts`, `createProjectFromRoadmap` |
 
 **Prompt 族**：`src/lib/prompts/direction.ts`（Rubric 分析 + 路线图）、`direction-socratic.ts`（Socratic→Rubric）、`direction-nl-parse.ts`（NL→资产）、`direction-experiment-plan.ts`（实验方案）、`direction-grant.ts`（基金申请书）
 
