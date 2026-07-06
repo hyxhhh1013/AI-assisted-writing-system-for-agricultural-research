@@ -202,6 +202,7 @@ const sectionGuideSchema = z.object({
   purpose: z.string().min(1),
   keyPoints: z.array(z.string()).min(1),
   estimatedParagraphs: z.number().int().positive().optional(),
+  assignedSources: z.array(z.string()).optional(),
 });
 
 export const writingBlueprintPayloadSchema = z.object({
@@ -239,6 +240,12 @@ export const blueprintSchema = z.object({
   projectMode: z.enum(["review", "research"]).optional(),
   /** 项目已分析图表目录，供 AI 绑定 dataBinding.chartConfigIndex */
   chartCatalog: z.array(blueprintChartCatalogEntrySchema).optional(),
+  /** 从 Direction 分析带入：为什么写这篇论文 */
+  motivationFromGap: z.string().optional(),
+  /** 建议投稿的目标期刊 */
+  targetJournal: z.string().optional(),
+  /** 写作时需标注"此处需补实验数据"的缺口 */
+  pendingExperiments: z.array(z.string()).optional(),
 });
 export type BlueprintInput = z.infer<typeof blueprintSchema>;
 
@@ -747,3 +754,12 @@ export type DirectionAnalyzeInput = z.infer<typeof directionAnalyzeSchema>;
 
 export const directionRoadmapSchema = z.object({});
 export type DirectionRoadmapInput = z.infer<typeof directionRoadmapSchema>;
+
+// === Agent (ENG-PR-200 Phase A) ===
+export const agentSchema = z.object({
+  goal: z.string().min(1, "目标不能为空").max(4000),
+  projectId: z.string().optional(),
+  directionSlug: z.string().optional(),
+  mode: z.enum(["auto", "guided"]).optional().default("auto"),
+});
+export type AgentInput = z.infer<typeof agentSchema>;

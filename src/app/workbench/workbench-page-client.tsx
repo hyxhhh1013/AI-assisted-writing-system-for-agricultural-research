@@ -13,7 +13,7 @@ import { ensureSubsectionNumbering, majorNumberFromSectionId, maxSecondLevelInTe
 import { useDocxExport } from "@/hooks/use-docx-export";
 import { useReferenceReorder } from "@/hooks/use-reference-reorder";
 import { pruneUncitedReferences, collectAllCitedIndices, stripOutOfRangeCitations, remapPrunedCitations, buildPreviewReferencesFromContent } from "@/lib/reference-reorder";
-import { normalizeAllCitationFormats } from "@/lib/citation-bounds";
+import { normalizeAllCitationFormats } from "@/lib/citation";
 import { useEditorSync } from "@/hooks/use-editor-sync";
 import { useAutoSave } from "@/hooks/use-auto-save";
 import { useMarkdownExport } from "@/hooks/use-markdown-export";
@@ -105,6 +105,11 @@ const LazyWritingPanel = dynamic(
   { ssr: false, loading: () => <TabPanelLoading /> }
 );
 
+const LazyAgentPanel = dynamic(
+  () => import("@/components/shared/agent/agent-panel").then(m => m.AgentPanel),
+  { ssr: false, loading: () => <TabPanelLoading /> }
+);
+
 const LazyReaderPanel = dynamic(
   () => import("@/components/shared/reader-panel").then(m => m.ReaderPanel),
   { ssr: false, loading: () => <TabPanelLoading /> }
@@ -136,13 +141,14 @@ const PDFViewer = dynamic(() => import("@/components/pdf-viewer"), {
   ),
 });
 
-export type WorkbenchTab = "structure" | "data" | "outline" | "writing" | "reader" | "plagiarism" | "xrd";
+export type WorkbenchTab = "structure" | "data" | "outline" | "writing" | "agent" | "reader" | "plagiarism" | "xrd";
 
 const WORKBENCH_TABS: WorkbenchTab[] = [
   "structure",
   "data",
   "outline",
   "writing",
+  ...(process.env.NEXT_PUBLIC_AGENT_ENABLED === "1" ? (["agent"] as const) : []),
   "reader",
   "plagiarism",
   "xrd",
@@ -663,10 +669,10 @@ function WorkbenchContent() {
         className={cn(
           "border-r flex flex-col transition-all duration-300 ease-in-out overflow-hidden bg-white/90",
           modeAccent.borderTint,
-          isSidebarOpen ? (activeTab === "writing" ? "w-96" : "w-80") : "w-0",
+          isSidebarOpen ? (activeTab === "writing" || activeTab === "agent" ? "w-96" : "w-80") : "w-0",
         )}
       >
-        <div className={cn("flex flex-col h-full", activeTab === "writing" ? "w-96" : "w-80")}>
+        <div className={cn("flex flex-col h-full", activeTab === "writing" || activeTab === "agent" ? "w-96" : "w-80")}>
           <header className={cn("h-14 border-b flex items-center justify-between px-4 shrink-0", modeAccent.headerTint, modeAccent.borderTint)}>
             <div className="flex flex-col min-w-0 gap-0.5">
               <div className="flex items-center gap-2 min-w-0">
@@ -675,6 +681,7 @@ function WorkbenchContent() {
                   {activeTab === "data" && "实验数据"}
                   {activeTab === "outline" && "论证提纲"}
                   {activeTab === "writing" && "章节协作向导"}
+                  {activeTab === "agent" && "AI Agent"}
                   {activeTab === "reader" && "文献库"}
                   {activeTab === "plagiarism" && "论文质量检测"}
                   {activeTab === "xrd" && "XRD 分析"}
@@ -692,7 +699,7 @@ function WorkbenchContent() {
             </Button>
           </header>
           
-          <div className={cn("flex-1 overflow-hidden", activeTab === "writing" ? "p-3" : "p-4")}>
+          <div className={cn("flex-1 overflow-hidden", activeTab === "writing" || activeTab === "agent" ? "p-3" : "p-4")}>
             {activeTab === "plagiarism" && (
               <div className="h-full min-h-0 flex flex-col overflow-hidden">
                 <ErrorBoundary>
@@ -851,6 +858,16 @@ function WorkbenchContent() {
                   />
                 </ErrorBoundary>
               )}
+            </div>
+            <div
+              className={cn(
+                "h-full min-h-0 flex flex-col overflow-hidden",
+                activeTab !== "agent" && "hidden",
+              )}
+            >
+              <ErrorBoundary>
+                <LazyAgentPanel projectId={projectId ?? undefined} />
+              </ErrorBoundary>
             </div>
             {activeTab === "reader" && (
               <div className="h-full min-h-0 flex flex-col overflow-hidden">

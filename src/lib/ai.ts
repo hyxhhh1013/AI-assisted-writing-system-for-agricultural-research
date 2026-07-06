@@ -3,14 +3,27 @@ import { getModelConfig, ModelProviderKey, validateProviderKey } from "./models"
 import { usageLog } from "./usage-log";
 export { getAgentModelConfig } from "./models";
 
+export interface AIToolSchema {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+}
+
 export interface AICallOptions {
   provider: ModelProviderKey;
-  messages: { role: string; content: string }[];
+  messages: { role: string; content: string; tool_call_id?: string; name?: string }[];
   stream?: boolean;
   timeoutMs?: number;
   signal?: AbortSignal;
   /** 可选：调用者 userId，用于用量统计 */
   userId?: string;
+  /** Agent function calling（可选，不传则与改前行为一致） */
+  tools?: AIToolSchema[];
+  tool_choice?: "auto" | "none" | "required";
+  temperature?: number;
 }
 
 export class AIError extends Error {
@@ -123,6 +136,10 @@ export async function callAI(options: AICallOptions): Promise<Response> {
         model: config.model,
         messages: options.messages,
         stream: options.stream ?? true,
+        ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+        ...(options.tools?.length
+          ? { tools: options.tools, tool_choice: options.tool_choice ?? "auto" }
+          : {}),
       }),
       signal: options.signal,
     },
