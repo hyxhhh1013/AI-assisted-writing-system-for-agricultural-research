@@ -71,11 +71,9 @@ export async function GET(req: NextRequest) {
         return notFoundResponse("项目未找到");
       }
 
-      let paperPassportRaw = (project as { paperPassport?: string | null }).paperPassport;
-      if (paperPassportRaw) {
-        const synced = await syncProjectPaperPassport(project.id);
-        if (synced) paperPassportRaw = serializePaperPassport(synced);
-      }
+      let paperPassportRaw: string | undefined;
+      const synced = await syncProjectPaperPassport(project.id);
+      if (synced) paperPassportRaw = serializePaperPassport(synced);
 
       const langRaw = (project as { language?: string | null }).language;
       const formattedProject = {

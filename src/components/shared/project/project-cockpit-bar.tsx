@@ -23,8 +23,8 @@ interface ProjectCockpitBarProps {
 const STATUS_STYLE: Record<PhaseStatus, string> = {
   done: "bg-[#1a5632] text-white border-[#1a5632]",
   in_progress: "bg-[#2563eb] text-white border-[#2563eb]",
-  ready: "bg-white text-[#1a5632] border-[#1a5632]/40",
-  locked: "bg-[#f3f4f6] text-[#9aa8a0] border-transparent",
+  ready: "bg-white text-[#1a5632] border-[#1a5632]/50",
+  locked: "bg-[#eceff1] text-[#9aa8a0] border-[#dfe5e1]",
 };
 
 function phaseKey(index: number): `${PaperPhase}` {
@@ -61,12 +61,23 @@ export function ProjectCockpitBar({
   return (
     <div
       className={cn(
-        "rounded-lg border border-[#1a5632]/10 bg-[#f6f5f1]/50 px-2 py-1.5",
+        "rounded-lg border border-[#1a5632]/25 bg-[#eef5f0] px-3 py-2 shadow-sm",
         className,
       )}
     >
-      <div className="flex flex-wrap items-center gap-1">
-        <span className="mr-1 text-[10px] font-medium text-[#6b7c72]">论文阶段</span>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="text-[11px] font-semibold text-[#1a5632]">论文阶段 Cockpit</span>
+        <span className="text-[10px] text-[#6b7c72]">
+          当前：P{currentPhase} {currentLabel}
+        </span>
+        {passport.source?.directionSlug && (
+          <span className="ml-auto truncate text-[10px] text-[#9aa8a0]">
+            来自方向 · {passport.source.directionSlug}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-end gap-1">
         {PAPER_PHASE_LABELS.map((label, index) => {
           const key = phaseKey(index);
           const status = passport.phaseStatus[key] ?? "locked";
@@ -78,40 +89,34 @@ export function ProjectCockpitBar({
             <Tag
               key={key}
               type={navigable ? "button" : undefined}
-              title={`Phase ${index} ${label} — ${status}`}
+              title={`P${index} ${label} — ${status}${navigable ? "（点击跳转）" : ""}`}
               onClick={navigable ? () => handlePhaseClick(index as PaperPhase) : undefined}
               className={cn(
-                "inline-flex h-5 min-w-[1.75rem] items-center justify-center rounded border px-1 text-[9px] font-medium",
+                "inline-flex min-w-[2.5rem] flex-col items-center rounded-md border px-1 py-0.5",
                 STATUS_STYLE[status],
-                isCurrent && "ring-1 ring-[#1a5632]/30",
-                navigable && "cursor-pointer hover:opacity-90",
+                isCurrent && "ring-2 ring-[#1a5632]/35 ring-offset-1",
+                navigable && "cursor-pointer hover:brightness-95",
               )}
             >
-              {index}
+              <span className="text-[10px] font-bold leading-none">{index}</span>
+              <span className="mt-0.5 max-w-[3rem] truncate text-[8px] leading-none">{label}</span>
             </Tag>
           );
         })}
-        {passport.source?.directionSlug && (
-          <span className="ml-auto truncate text-[10px] text-[#9aa8a0]">
-            来自方向 · {passport.source.directionSlug}
-          </span>
-        )}
       </div>
 
       {hint && currentStatus !== "done" && (
-        <div className="mt-1 flex flex-wrap items-center gap-2 border-t border-[#1a5632]/10 pt-1.5">
-          <span className="text-[10px] text-[#6b7c72]">
-            <span className="font-medium text-[#1a5632]">{currentLabel}</span>
-            {" · "}
-            {hint}
+        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-[#1a5632]/15 pt-2">
+          <span className="text-[11px] text-[#3d4f45]">
+            下一步 · <span className="font-medium text-[#1a5632]">{hint}</span>
           </span>
           {onNavigate && (
             <button
               type="button"
               onClick={handleGoToCurrent}
-              className="rounded border border-[#1a5632]/20 bg-white px-2 py-0.5 text-[10px] font-medium text-[#1a5632] hover:bg-[#1a5632]/5"
+              className="rounded-md border border-[#1a5632]/30 bg-white px-2.5 py-1 text-[11px] font-medium text-[#1a5632] shadow-sm hover:bg-[#1a5632]/5"
             >
-              前往
+              前往此阶段
             </button>
           )}
         </div>

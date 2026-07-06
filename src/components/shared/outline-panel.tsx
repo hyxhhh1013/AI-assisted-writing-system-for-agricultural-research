@@ -227,15 +227,15 @@ export function OutlinePanel({
             }
           />
         </div>
-        <div>
-          <Label className="text-[10px] text-muted-foreground">
-            章节骨架（每行一个一级标题，AI 仅补子节）
-          </Label>
+        <div className="rounded-md border border-primary/20 bg-primary/5 px-2 py-2 space-y-2">
+          <p className="text-[10px] font-medium text-primary">
+            步骤 1 · 章节骨架（每行一个一级标题，AI 只补子节）
+          </p>
           <Textarea
-            className="text-xs h-20 min-h-[3rem] mt-0.5 font-mono"
+            className="text-xs h-24 min-h-[4rem] font-mono bg-background"
             value={skeletonText}
             onChange={(e) => setSkeletonText(e.target.value)}
-            placeholder="摘要&#10;引言&#10;..."
+            placeholder={"摘要\n引言\n研究进展综述\n结论与展望"}
           />
         </div>
         <div className="flex justify-between items-center gap-1">
