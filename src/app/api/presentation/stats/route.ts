@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
-import { successResponse, errorResponse } from "@/lib/api-response";
+import { successResponse, errorResponse, unauthorizedResponse } from "@/lib/api-response";
 import prisma from "@/lib/prisma";
 import { createLogger } from "@/lib/logger";
+import { getUserIdFromRequest } from "@/lib/auth";
 import fs from "fs";
 import path from "path";
 
@@ -14,7 +15,9 @@ interface ChunkSumResult {
   _sum: { chunkCount: number | null };
 }
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
+  if (!getUserIdFromRequest(req)) return unauthorizedResponse();
+
   try {
     const [total, categoryResult, chunkResult] = await Promise.all([
       prisma.knowledgeFile.count(),
