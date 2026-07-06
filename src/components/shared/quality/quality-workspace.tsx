@@ -12,12 +12,12 @@ import { cn } from "@/lib/utils";
 import { projectStore } from "@/lib/store";
 import type { ProjectData } from "@/contracts/project";
 import type { PlagiarismCheckResult } from "@/contracts/plagiarism";
-import type { FixableReviewReport } from "@/types/review";
+import type { FixableReviewReport } from "@/contracts/review";
 import { usePlagiarismCheck } from "@/hooks/use-plagiarism-check";
 import { getProject, listProjects } from "@/services/project";
 import { getHistory as getReviewHistory, getDetail as getReviewDetail } from "@/services/review";
 import { listHistory, getCheckDetail } from "@/services/plagiarism";
-import { buildFixableReportFromDetail, buildRestoredPlagiarismSession } from "@/lib/quality-restore";
+import { buildFixableReportFromDetail, buildRestoredPlagiarismSession } from "@/lib/quality-state";
 import type { ReviewHistoryItem } from "@/contracts/review";
 import { useGoBack } from "@/contexts/navigation-history";
 import { workbenchFallback } from "@/lib/navigation";
@@ -34,7 +34,7 @@ import { PlagiarismRewriteView } from "@/components/shared/plagiarism/rewrite-vi
 import { ReviewTab } from "@/components/shared/review-tab";
 import { SectionSidebar } from "@/components/shared/quality/section-sidebar";
 import { UnifiedHistoryPanel } from "@/components/shared/quality/unified-history-panel";
-import { persistQualitySections } from "@/lib/quality-persist";
+import { persistQualitySections } from "@/lib/quality-state";
 import { parseQualityTab, shouldOpenCheckResult, type QualityTab } from "@/components/shared/quality/types";
 
 const TAB_DEFS: { id: QualityTab; label: string; icon: typeof Search; requiresResult?: boolean }[] = [

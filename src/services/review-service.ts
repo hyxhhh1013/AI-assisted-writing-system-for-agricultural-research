@@ -21,7 +21,7 @@ import type {
   ReviewDimension,
   ReviewIssue,
   DimensionResult,
-} from "@/types/review";
+} from "@/contracts/review";
 
 // ==================== 配置 ====================
 

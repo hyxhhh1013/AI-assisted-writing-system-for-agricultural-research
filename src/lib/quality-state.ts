@@ -1,3 +1,12 @@
+/**
+ * 审查质量状态持久化与恢复
+ *
+ * 合并自 quality-persist.ts + quality-restore.ts（共 104 行）
+ */
+
+import { patchSection } from "@/services/review";
+import { projectStore } from "@/lib/store";
+import type { QualitySection } from "@/lib/quality-sections";
 import type { ReviewDetailResponse } from "@/contracts/review";
 import type { PlagiarismCheckDetailRecord, PlagiarismCheckResult } from "@/contracts/plagiarism";
 import { toCheckResult } from "@/services/plagiarism";
@@ -7,7 +16,32 @@ import type {
   ReviewDimension,
   ReviewIssue,
   ReviewIssueType,
-} from "@/types/review";
+} from "@/contracts/review";
+
+// ==================== 持久化 ====================
+
+/** 将变更章节写回项目（摘要走 project.abstract，其余走 section PATCH） */
+export async function persistQualitySections(
+  projectId: string,
+  before: QualitySection[],
+  after: QualitySection[],
+  changedKeys: string[],
+): Promise<void> {
+  const uniqueKeys = [...new Set(changedKeys)];
+  for (const key of uniqueKeys) {
+    const prev = before.find((s) => s.key === key);
+    const next = after.find((s) => s.key === key);
+    if (!prev || !next || prev.content === next.content) continue;
+
+    if (key === "abstract") {
+      await projectStore.update(projectId, { abstract: next.content });
+    } else {
+      await patchSection(projectId, key, next.content);
+    }
+  }
+}
+
+// ==================== 恢复 ====================
 
 const DIMENSIONS: ReviewDimension[] = ["academic", "argument", "structure", "integrity"];
 

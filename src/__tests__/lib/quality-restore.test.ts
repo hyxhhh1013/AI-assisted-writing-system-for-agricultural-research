@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildFixableReportFromDetail, buildRestoredPlagiarismSession } from "@/lib/quality-restore";
+import { buildFixableReportFromDetail, buildRestoredPlagiarismSession } from "@/lib/quality-state";
 import type { ReviewDetailResponse } from "@/contracts/review";
 import type { PlagiarismCheckDetailRecord } from "@/contracts/plagiarism";
 

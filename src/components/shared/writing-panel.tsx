@@ -244,6 +244,8 @@ export function WritingPanel({
     [onGenerate],
   );
 
+  const hasPreloadedReferences = projectMode === "review" && (project.references?.length ?? 0) > 0;
+
   const sourceSelection = useWritingSourceSelection({
     title,
     section: targetSectionKey,
@@ -255,6 +257,7 @@ export function WritingPanel({
     researchDirection: project.researchDirection,
     projectMode,
     draftReady: isWritingDraftReady(context, bullets, targetSectionKey),
+    hasPreloadedReferences,
   });
 
   const { resultRef, figureAbortRef, writingAbortRef, handleCancel, handleGenerate, handleSubmitAudit, handleApplyFix, syncDraft, bulletExpand } = useWritingPanelGenerate({
@@ -344,11 +347,15 @@ export function WritingPanel({
         ? `请确保每条要点至少 8 字，合计达到 ${minDraftChars} 字（当前 ${bulletCharCount + supplementCharCount} 字）`
         : `请填写至少 ${MIN_WRITING_BULLETS} 条扩写要点，或写出 ${minDraftChars} 字补充说明`
       : !sourceSelection.fetchedOnce
-        ? "请先检索并确认文献"
+        ? hasPreloadedReferences
+          ? "综述写作需先检索并确认文献来源"
+          : "请先检索并确认文献"
         : sourceSelection.previewStale
           ? "要点已变更，请重新检索文献"
           : !sourceSelection.confirmed
-            ? "请先确认文献选择"
+            ? hasPreloadedReferences
+              ? "综述写作需先确认文献来源才能开始扩写"
+              : "请先确认文献选择"
             : undefined;
 
   const handleFetchLiterature = useCallback(async () => {
@@ -407,6 +414,11 @@ export function WritingPanel({
         <div className="rounded-lg border bg-muted/10 p-3 space-y-2">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="text-xs font-medium">③ 文献来源</span>
+            {hasPreloadedReferences && !sourceSelection.fetchedOnce && (
+              <span className="text-[10px] text-[#1a5632] bg-[#1a5632]/8 px-1.5 py-0.5 rounded">
+                已预加载 {(project.references || []).length} 篇文献
+              </span>
+            )}
             {sourceSelection.confirmed && !sourceSelection.previewStale && (
               <span className="text-[10px] text-green-700">
                 已确认 {sourceSelection.selectedSourceIds.length} 篇

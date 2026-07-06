@@ -2,7 +2,7 @@ import { logger } from "@/lib/logger";
 import { NextRequest } from "next/server";
 import { callAI, getAIError } from "@/lib/ai";
 import { buildConsistencyPrompt } from "@/lib/prompts";
-import type { ConsistencyIssue, ConsistencyReport } from "@/types/consistency";
+import type { ConsistencyIssue, ConsistencyReport } from "@/contracts/consistency";
 import { validateBody } from "@/lib/api-validate";
 import { consistencySchema } from "@/lib/validations";
 import { getErrorMessage } from "@/lib/error-utils";

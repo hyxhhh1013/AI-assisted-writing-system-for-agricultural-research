@@ -3,8 +3,7 @@
  * 使用占位符避免「旧编号互换成新编号」时单次替换产生串扰。
  */
 
-import { CITATION_GROUP_RE, FULLWIDTH_CITATION_RE, expandCitationGroup } from "@/lib/citation";
-import { normalizeAllCitationFormats } from "@/lib/citation-bounds";
+import { CITATION_GROUP_RE, FULLWIDTH_CITATION_RE, expandCitationGroup, normalizeAllCitationFormats } from "@/lib/citation";
 
 const PH = (old: number) => `§§CITEOLD${old}§§`;
 

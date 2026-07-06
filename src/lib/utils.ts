@@ -56,20 +56,50 @@ const IMRAD_KEYWORDS: { key: string; patterns: RegExp[] }[] = [
 
 const REVIEW_KEYWORDS: { key: string; patterns: RegExp[] }[] = [
   { key: "abstract", patterns: [/摘要/i, /abstract/i] },
-  { key: "introduction", patterns: [/引言/i, /introduction/i, /前言/i] },
+  {
+    key: "introduction",
+    patterns: [
+      /引言/i, /introduction/i, /前言/i, /背景与意义/i, /研究意义/i,
+      /综述目的/i, /文章结构/i, /综述范围/i, /综述必要性/i,
+    ],
+  },
   {
     key: "background",
-    patterns: [/研究现状/i, /现状与问题/i, /概念/i, /问题框架/i, /background/i, /领域背景/i],
+    patterns: [
+      /研究现状/i, /现状与问题/i, /概念/i, /问题框架/i, /background/i,
+      /领域背景/i, /发展概况/i, /分布特征/i, /概念界定/i,
+      /研究对象/i, /分类体系/i, /主要问题/i, /瓶颈/i, /约束/i,
+      /国内外研究/i, /研究脉络/i, /发展阶段/i, /研究历程/i,
+    ],
   },
   {
     key: "literature_body",
-    patterns: [/进展综述/i, /研究进展/i, /文献综述/i, /literature review/i, /主题/i, /争议/i, /综合/i],
+    patterns: [
+      /进展综述/i, /研究进展/i, /文献综述/i, /literature review/i,
+      /主题/i, /争议/i, /综合/i, /对比/i, /比较/i,
+      /机制/i, /机理/i, /影响因素/i, /调控/i, /优化/i,
+      /制备/i, /合成/i, /表征/i, /性能/i, /评价/i,
+      /方法.*综述/i, /应用.*进展/i, /技术.*进展/i,
+      /土壤/i, /作物/i, /生物/i, /化学/i, /物理/i,
+      /效应/i, /作用/i, /影响.*研究/i, /改良/i, /修复/i,
+    ],
   },
   {
     key: "conclusion",
-    patterns: [/结论/i, /展望/i, /conclusion/i, /未来方向/i, /研究空白/i],
+    patterns: [
+      /结论/i, /展望/i, /conclusion/i, /未来方向/i, /研究空白/i,
+      /启示/i, /建议/i, /对策/i, /思路/i, /前沿/i, /趋势/i,
+    ],
   },
 ];
+
+/** 从大纲路径提取主编号（如 "2.1" → 2，"1. 研究现状" → 1） */
+function extractMajorNumber(titleOrPath: string): number | null {
+  // 路径格式 "> " 分隔 → 取第一段的编号
+  const firstSegment = titleOrPath.split(">")[0]?.trim() || titleOrPath;
+  const m = firstSegment.match(/^(\d+)[.\s]/);
+  return m ? Number(m[1]) : null;
+}
 
 /** 将大纲标题映射到 IMRaD 节 key（研究论文） */
 export function mapToIMRADSection(titleOrPath: string): string {
@@ -82,19 +112,31 @@ export function mapToIMRADSection(titleOrPath: string): string {
   return "introduction";
 }
 
-/** 按项目写作模式映射大纲标题到 section key */
+/**
+ * 按项目写作模式映射大纲标题到 section key。
+ *
+ * 综述模式映射规则（优先级递减）：
+ * 1. 关键字匹配（REVIEW_KEYWORDS）
+ * 2. IMRaD 弱匹配（仅 introduction/conclusion）
+ * 3. 路径编号推断（1→introduction, 2→background, 3→literature_body, 4→conclusion）
+ * 4. 兜底：literature_body（综述核心章节），而非 introduction
+ */
 export function mapToSectionForMode(
   titleOrPath: string,
   mode?: ProjectWritingMode,
 ): string {
   if (mode === "research") return mapToIMRADSection(titleOrPath);
+
   const lower = titleOrPath.toLowerCase();
+
+  // 1. 综述关键字匹配
   for (const group of REVIEW_KEYWORDS) {
     for (const pat of group.patterns) {
       if (pat.test(lower)) return group.key;
     }
   }
-  // 综述无 methods/results；仅用引言/结论的 IMRaD 弱匹配，避免落到无效章节
+
+  // 2. IMRaD 弱匹配（仅 introduction/conclusion）
   for (const key of ["introduction", "conclusion"] as const) {
     const group = IMRAD_KEYWORDS.find((g) => g.key === key);
     if (!group) continue;
@@ -102,7 +144,18 @@ export function mapToSectionForMode(
       if (pat.test(lower)) return group.key;
     }
   }
-  return "introduction";
+
+  // 3. 路径编号推断（综述 5 段式：abstract=0, intro=1, background=2, body=3, conclusion=4）
+  const major = extractMajorNumber(titleOrPath);
+  if (major != null) {
+    if (major === 0 || major === 1) return "introduction";
+    if (major === 2) return "background";
+    if (major === 3) return "literature_body";
+    if (major >= 4) return "conclusion";
+  }
+
+  // 4. 兜底：综述主体章节
+  return "literature_body";
 }
 
 // ==================== Expansion Context Builder ====================

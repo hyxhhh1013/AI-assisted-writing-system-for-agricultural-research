@@ -9,7 +9,7 @@ import type {
   ReviewDimension,
   DimensionResult,
   ReviewReport,
-} from "@/types/review";
+} from "@/contracts/review";
 
 // ==================== 评分权重 ====================
 

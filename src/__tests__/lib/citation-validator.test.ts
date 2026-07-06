@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateCitations, validateDataClaims } from "@/lib/citation-validator";
+import { validateCitations, validateDataClaims } from "@/lib/citation";
 
 // ==================== validateCitations ====================
 

@@ -34,7 +34,7 @@ import type {
   FixableReviewReport,
   ReviewIssue,
   IssueStatus,
-} from "@/types/review";
+} from "@/contracts/review";
 
 import type { ProjectWritingMode } from "@/contracts/writing-mode";
 

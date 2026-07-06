@@ -9,7 +9,7 @@ import type {
   FixableReviewReport,
   FixableReviewIssue,
   IssueStatus,
-} from "@/types/review";
+} from "@/contracts/review";
 import { fixIssue as fixIssueService, runReview } from "@/services/review";
 
 export type {
@@ -18,7 +18,7 @@ export type {
   ReviewDimension,
   ReviewInput,
   ReviewReport,
-} from "@/types/review";
+} from "@/contracts/review";
 
 export interface UseReviewReturn {
   /** 审查报告 */

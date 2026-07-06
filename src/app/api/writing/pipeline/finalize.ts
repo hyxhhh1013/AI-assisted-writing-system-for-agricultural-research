@@ -1,6 +1,6 @@
 import type { EvidenceClaim } from "@/contracts/data-source";
 import { collectCitationFirstAppearance } from "@/lib/reference-reorder";
-import { validateCitations, validateDataClaims } from "@/lib/citation-validator";
+import { validateCitations, validateDataClaims } from "@/lib/citation";
 import type { PreparedWritingContext, WritingPipelineEmit } from "../types";
 
 /** 从草稿中提取引用编号并发送 references SSE 事件（快速模式共用） */
