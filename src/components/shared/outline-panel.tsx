@@ -21,6 +21,11 @@ import { parseOutline, OutlineSection } from "@/lib/utils";
 import { countFiguresForSection, isBlueprintStale, buildBlueprintChartCatalog } from "@/lib/blueprint-utils";
 import { parseDataSources } from "@/contracts/project";
 import { OutlineBlueprintSummary } from "@/components/shared/outline-blueprint-summary";
+import {
+  formatSkeletonLines,
+  getDefaultUserSkeleton,
+  parseSkeletonLines,
+} from "@/lib/outline-skeleton";
 
 interface OutlinePanelProps {
   projectId: string;
@@ -50,6 +55,10 @@ export function OutlinePanel({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isBlueprintGenerating, setIsBlueprintGenerating] = useState(false);
   const [result, setResult] = useState(project.outline || "");
+  const writingMode = project.mode ?? "review";
+  const [skeletonText, setSkeletonText] = useState(() =>
+    formatSkeletonLines(getDefaultUserSkeleton(writingMode)),
+  );
 
   const blueprint = useMemo(
     () => parseWritingBlueprint(project.writingBlueprint),
@@ -66,6 +75,10 @@ export function OutlinePanel({
     setResearchDirection(project.researchDirection || "");
     setResult(project.outline || "");
   }, [project.id, project.title, project.researchDirection, project.outline]);
+
+  useEffect(() => {
+    setSkeletonText(formatSkeletonLines(getDefaultUserSkeleton(writingMode)));
+  }, [project.id, writingMode]);
 
   useEffect(() => {
     listKnowledgeFiles()
@@ -150,6 +163,12 @@ export function OutlinePanel({
       return;
     }
 
+    const userSkeleton = parseSkeletonLines(skeletonText);
+    if (userSkeleton.length < 3) {
+      toast.error("章节骨架至少 3 条（每行一个一级标题）");
+      return;
+    }
+
     setIsGenerating(true);
     setResult("");
     try {
@@ -160,6 +179,7 @@ export function OutlinePanel({
           language,
           category,
           projectMode: project.mode ?? "review",
+          userSkeleton,
         },
         setResult,
       );
@@ -205,6 +225,17 @@ export function OutlinePanel({
                 ? "综述范围、主题维度、争议点；留空时将使用论文题目检索文献"
                 : "研究方向、实验对象、核心指标，越详细大纲越精准"
             }
+          />
+        </div>
+        <div>
+          <Label className="text-[10px] text-muted-foreground">
+            章节骨架（每行一个一级标题，AI 仅补子节）
+          </Label>
+          <Textarea
+            className="text-xs h-20 min-h-[3rem] mt-0.5 font-mono"
+            value={skeletonText}
+            onChange={(e) => setSkeletonText(e.target.value)}
+            placeholder="摘要&#10;引言&#10;..."
           />
         </div>
         <div className="flex justify-between items-center gap-1">

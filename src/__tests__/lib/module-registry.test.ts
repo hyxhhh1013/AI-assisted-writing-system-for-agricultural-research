@@ -41,6 +41,7 @@ describe("module-registry", () => {
     const guide = getModuleById("guide");
     expect(guide?.flag).toBeNull();
     expect(listModules({ placement: "home" }).some((m) => m.id === "guide")).toBe(true);
+    expect(getModuleById("directions")?.href).toBe("/directions");
   });
 
   it("registers every module with unique id", async () => {

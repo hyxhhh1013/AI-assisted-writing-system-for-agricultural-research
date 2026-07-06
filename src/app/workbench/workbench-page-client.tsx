@@ -49,6 +49,7 @@ import type { ParagraphSelectionAction } from "@/components/shared/writing/parag
 import { WorkbenchEditorArea } from "@/components/shared/workbench-editor-area";
 import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
 import { ProjectCockpitBar } from "@/components/shared/project/project-cockpit-bar";
+import type { CockpitNavigationAction } from "@/lib/paper-passport-navigation";
 import { getModeAccent, getDataPanelTitle, getStructurePanelTitle, getStructurePanelHint } from "@/lib/mode-theme";
 import { siteTheme } from "@/lib/site-theme";
 import { cn } from "@/lib/utils";
@@ -379,6 +380,24 @@ function WorkbenchContent() {
     setActiveSection(sectionId);
     setActiveTab("structure");
     setAiPreview(null);
+  }, []);
+
+  const handleCockpitNavigate = useCallback((action: CockpitNavigationAction) => {
+    setIsSidebarOpen(true);
+    if (action.type === "open-meta") {
+      setIsMetaDialogOpen(true);
+      return;
+    }
+    if (action.type === "workbench-tab") {
+      if (isWorkbenchTab(action.tab)) {
+        setActiveTab(action.tab);
+      }
+      return;
+    }
+    if (action.type === "focus-section") {
+      setActiveTab("structure");
+      setActiveSection(action.sectionKey);
+    }
   }, []);
 
   const handleApplyAiContent = (content: string, sectionId: string, subsectionTitle?: string) => {
@@ -912,6 +931,7 @@ function WorkbenchContent() {
         <ProjectCockpitBar
           paperPassportRaw={project.paperPassport}
           className="mx-2 mt-1 shrink-0"
+          onNavigate={handleCockpitNavigate}
         />
         <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
         <ResizablePanel defaultSize={60} minSize={30}>

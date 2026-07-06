@@ -92,7 +92,10 @@ describe("consistencySchema", () => {
 
 describe("async validator helper", () => {
   it("works with async patterns", async () => {
-    const result = outlineSchema.safeParse({ title: "test" });
+    const result = outlineSchema.safeParse({
+      title: "test",
+      userSkeleton: ["摘要", "引言", "结论"],
+    });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.language).toBe("zh");

@@ -37,6 +37,17 @@ export const APP_MODULES: AppModule[] = [
     order: 20,
   },
   {
+    id: "directions",
+    title: "研究方向规划",
+    description: "Socratic 预承诺、8 维度 Rubric 分析、论文路线图与 Direction→Writing 桥接",
+    href: "/directions",
+    flag: null,
+    placement: ["home"],
+    homeCategory: "core",
+    iconKey: "flask",
+    order: 25,
+  },
+  {
     id: "knowledge",
     title: "文献库管理",
     description: "管理实验室私有文献，支持 PDF 查看、语义检索与 AI 划词翻译",

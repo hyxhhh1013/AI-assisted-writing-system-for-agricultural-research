@@ -103,13 +103,14 @@
 | 资产盘点 | 方向工作台 Phase 0 | `PATCH .../assets` · `GET .../scan` · `POST .../parse-asset` | `direction-asset-intake-panel.tsx`, `direction-asset-form.tsx`, `lib/direction-asset-health.ts` |
 | 预承诺 | 方向工作台 Phase 1 | `POST .../evaluation-contract` | `direction-pre-commitment-panel.tsx`, `direction-socratic-dialog.tsx`, `lib/direction-pre-commitment.ts` |
 | 8 维度分析 | 方向工作台 Phase 2 | `POST .../analyze` (SSE) | `direction-analysis-panel.tsx`, `direction-phase-readiness.ts`, `lib/direction-analysis-fingerprint.ts` |
-| 论文路线图 | 方向工作台 Phase 3 | `POST/PATCH .../roadmap` | `direction-roadmap-timeline.tsx`, `direction-dashboard.tsx` |
+| 论文路线图 | 方向工作台 Phase 3 | `POST/PATCH .../roadmap` · `GET .../paper-brief` | `direction-roadmap-timeline.tsx`, `direction-roadmap-paper-detail-dialog.tsx`, `direction-dashboard.tsx` |
 | 申报材料 | 方向工作台 Phase 4 | `POST .../grant-proposal` | `direction-grant-panel.tsx`, `lib/prompts/direction-grant.ts` |
 | 实验方案生成 | 分析面板 D6 维度 | `POST .../experiment-plan` | 内联 `GeneratePlanButton` |
 | 方向摘要（主页） | 主页卡片 | `GET /api/directions/summary` | `directions-overview.tsx` |
 | 反模式检测 | — | — | `direction-checks.ts`（审查板块复用） |
 | **→ 写作桥接** | 路线图「开始写作」按钮 | `GET .../paper-brief` → `POST /api/projects` | `direction-writing-bridge.ts`, `createProjectFromRoadmap`, `contracts/paper-passport.ts` |
-| **PaperPassport** | 工作台阶段条 + 自动推进 | `POST .../paper-passport/sync`；`GET/POST /api/projects` | `project-cockpit-bar.tsx`, `paper-passport-progress.ts`, `project-paper-passport-sync.ts`, `contracts/paper-passport.ts` |
+| **PaperPassport** | 工作台阶段条 + 自动推进 + 点击导航 | `POST .../paper-passport/sync`；`GET/POST /api/projects` | `project-cockpit-bar.tsx`, `paper-passport-navigation.ts`, `paper-passport-progress.ts`, `project-paper-passport-sync.ts` |
+| **大纲骨架 userSkeleton** | 论证提纲侧栏 | `POST /api/outline` | `outline-panel.tsx`, `outline-skeleton.ts`, `prompts/outline.ts` |
 
 **Prompt 族**：`src/lib/prompts/direction.ts`（Rubric 分析 + 路线图）、`direction-socratic.ts`（Socratic→Rubric）、`direction-nl-parse.ts`（NL→资产）、`direction-experiment-plan.ts`（实验方案）、`direction-grant.ts`（基金申请书）
 

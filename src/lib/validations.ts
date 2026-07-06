@@ -175,6 +175,9 @@ export const outlineSchema = z.object({
   language: z.enum(["zh", "en"]).optional().default("zh"),
   category: z.string().optional(),
   projectMode: z.enum(["review", "research"]).optional(),
+  userSkeleton: z
+    .array(z.string().min(1, "骨架条目不能为空"))
+    .min(3, "章节骨架至少 3 条"),
 });
 export type OutlineInput = z.infer<typeof outlineSchema>;
 
