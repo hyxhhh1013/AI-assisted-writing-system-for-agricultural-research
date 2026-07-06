@@ -449,6 +449,11 @@ export async function generateGrantProposal(
 
 import type { DirectionWritingContext } from "@/contracts/direction-writing-bridge";
 import { requiredRefsToCitationList } from "@/contracts/direction-writing-bridge";
+import {
+  createInitialPaperPassport,
+  paperConfigToRecord,
+  serializePaperPassport,
+} from "@/contracts/paper-passport";
 
 /** 方向上下文：从路线图论文创建项目时带入的扩展信息 */
 export interface RoadmapProjectContext {
@@ -503,7 +508,25 @@ export async function createProjectFromRoadmap(
   const wordCount = context?.wordCount || "";
   const suggestedJournal = paperBrief?.suggestedJournal || context?.targetJournal;
 
-  // 1. 创建项目（带入完整配置）
+  // 1. 创建项目（带入完整配置 + PaperPassport）
+  const paperPassport = serializePaperPassport(
+    createInitialPaperPassport(
+      paperConfigToRecord({
+        paperTitle,
+        paperType,
+        targetJournal: context?.targetJournal || suggestedJournal || "",
+        wordCount,
+        language,
+        citationStyle,
+      }),
+      {
+        directionSlug,
+        candidateId,
+        linkedAt: Date.now(),
+      },
+    ),
+  );
+
   const createRes = await fetch("/api/projects", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -513,6 +536,7 @@ export async function createProjectFromRoadmap(
       mode: paperType,
       language,
       citationStyle,
+      paperPassport,
     }),
   });
   const createData = await createRes.json().catch(() => ({})) as { id?: string; error?: string };

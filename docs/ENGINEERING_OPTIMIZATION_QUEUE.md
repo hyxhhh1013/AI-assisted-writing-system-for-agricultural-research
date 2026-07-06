@@ -141,7 +141,7 @@
 | W0-SEC-03 | JSONB PATCH 竞态 + Reference.order 唯一 | SEC-02 | 1d | done | Wave 0 |
 | W0-WIP-A | quality/citation/chart 审计清理 PR | — | 1d | done | Wave 0；`0da9d3e`+`4b83ac0` |
 | W0-WIP-B | Agent Phase A + direction bridge commit | SEC-01 | 1d | done | Wave 0；`e5a02c4`+`00d08b8` |
-| W1-PASSPORT | PaperPassport 契约 + Cockpit UI | W0-* | 2w | todo | Wave 1 |
+| W1-PASSPORT | PaperPassport 契约 + Cockpit UI | W0-* | 2w | doing | Wave 1；契约+DB+Cockpit 条 |
 | W2-LANGGRAPH | LangGraph 替换 agent-loop + write tools | W1 | 2w | todo | Wave 2 |
 | W1-083 | userSkeleton → Phase 2 | W1-PASSPORT | 1d | todo | 原 ENG-PR-083 |
 | ~~ENG-PR-084~~ | ~~入口废弃~~ | — | — | cancelled | 由 Cockpit 取代 |

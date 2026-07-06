@@ -48,6 +48,7 @@ import { useAiParagraph, type AiParagraphAction } from "@/hooks/use-ai-paragraph
 import type { ParagraphSelectionAction } from "@/components/shared/writing/paragraph-selection-toolbar";
 import { WorkbenchEditorArea } from "@/components/shared/workbench-editor-area";
 import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
+import { ProjectCockpitBar } from "@/components/shared/project/project-cockpit-bar";
 import { getModeAccent, getDataPanelTitle, getStructurePanelTitle, getStructurePanelHint } from "@/lib/mode-theme";
 import { siteTheme } from "@/lib/site-theme";
 import { cn } from "@/lib/utils";
@@ -907,7 +908,12 @@ function WorkbenchContent() {
       )}
 
       {/* Main Area: Editor + Preview */}
-      <ResizablePanelGroup orientation="horizontal" className="flex-1">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <ProjectCockpitBar
+          paperPassportRaw={project.paperPassport}
+          className="mx-2 mt-1 shrink-0"
+        />
+        <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
         <ResizablePanel defaultSize={60} minSize={30}>
           <WorkbenchEditorArea
             project={previewProject}
@@ -995,6 +1001,7 @@ function WorkbenchContent() {
           </>
         )}
       </ResizablePanelGroup>
+      </div>
 
       {projectId && (
         <LazyBlueprintWorkspaceDialog

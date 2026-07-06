@@ -108,7 +108,8 @@
 | 实验方案生成 | 分析面板 D6 维度 | `POST .../experiment-plan` | 内联 `GeneratePlanButton` |
 | 方向摘要（主页） | 主页卡片 | `GET /api/directions/summary` | `directions-overview.tsx` |
 | 反模式检测 | — | — | `direction-checks.ts`（审查板块复用） |
-| **→ 写作桥接** | 路线图「开始写作」按钮 | `GET .../paper-brief` → `POST /api/projects` | `direction-writing-bridge.ts`, `createProjectFromRoadmap` |
+| **→ 写作桥接** | 路线图「开始写作」按钮 | `GET .../paper-brief` → `POST /api/projects` | `direction-writing-bridge.ts`, `createProjectFromRoadmap`, `contracts/paper-passport.ts` |
+| **PaperPassport** | 工作台阶段条 | `POST /api/projects`（`paperPassport` 字段） | `project-cockpit-bar.tsx`, `contracts/paper-passport.ts` |
 
 **Prompt 族**：`src/lib/prompts/direction.ts`（Rubric 分析 + 路线图）、`direction-socratic.ts`（Socratic→Rubric）、`direction-nl-parse.ts`（NL→资产）、`direction-experiment-plan.ts`（实验方案）、`direction-grant.ts`（基金申请书）
 

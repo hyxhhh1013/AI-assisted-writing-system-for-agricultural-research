@@ -17,8 +17,28 @@ import {
   readWritingBlueprint,
   writeWritingBlueprintTx,
 } from "@/lib/project-writing-blueprint-db";
+import {
+  parsePaperPassport,
+  serializePaperPassport,
+} from "@/contracts/paper-passport";
 
 type SectionRecord = Record<string, string>;
+
+function normalizePaperPassportInput(raw: unknown): string | null | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === null || raw === "") return null;
+  if (typeof raw === "string") {
+    const parsed = parsePaperPassport(raw);
+    if (!parsed) throw new Error("paperPassport 格式无效");
+    return serializePaperPassport(parsed);
+  }
+  if (typeof raw === "object" && raw !== null) {
+    const parsed = parsePaperPassport(JSON.stringify(raw));
+    if (!parsed) throw new Error("paperPassport 格式无效");
+    return serializePaperPassport(parsed);
+  }
+  throw new Error("paperPassport 格式无效");
+}
 
 // 获取当前用户的 userId（由 middleware.ts 设置 header）
 function getUserId(req: NextRequest): string | null {
@@ -68,6 +88,7 @@ export async function GET(req: NextRequest) {
         dataClaims: project.dataClaims || undefined,
         dataSources: project.dataSources || undefined,
         writingBlueprint: (await readWritingBlueprint(project.id)) || undefined,
+        paperPassport: (project as { paperPassport?: string | null }).paperPassport || undefined,
         expandedOutlineSections: parseExpandedOutlineSections(project.expandedOutlineSections),
       };
 
@@ -140,6 +161,7 @@ export async function POST(req: NextRequest) {
       dataSources,
       expandedOutlineSections,
       writingBlueprint,
+      paperPassport: paperPassportRaw,
     } = data;
 
     if (!title) {
@@ -157,6 +179,8 @@ export async function POST(req: NextRequest) {
         return notFoundResponse("项目未找到");
       }
     }
+
+    const paperPassportJson = normalizePaperPassportInput(paperPassportRaw);
 
     const project = await prisma.$transaction(async (tx) => {
       const saved = projectId
@@ -176,6 +200,9 @@ export async function POST(req: NextRequest) {
                     ),
                   }
                 : {}),
+              ...(paperPassportJson !== undefined
+                ? { paperPassport: paperPassportJson }
+                : {}),
               lastUpdated: new Date(),
             } as Prisma.ProjectUpdateInput,
           })
@@ -190,6 +217,9 @@ export async function POST(req: NextRequest) {
               expandedOutlineSections: serializeExpandedOutlineSections(
                 Array.isArray(expandedOutlineSections) ? expandedOutlineSections : [],
               ),
+              ...(paperPassportJson !== undefined
+                ? { paperPassport: paperPassportJson }
+                : {}),
             } as Prisma.ProjectUncheckedCreateInput,
           });
 
@@ -222,7 +252,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ id: project.id, message: "保存成功" });
   } catch (error: unknown) {
     logger.error("Projects POST error:", error);
-    return errorResponse(error instanceof Error ? getErrorMessage(error) : "Projects POST failed");
+    const message = error instanceof Error ? getErrorMessage(error) : "Projects POST failed";
+    if (message.includes("paperPassport")) {
+      return errorResponse(message, 400);
+    }
+    return errorResponse(message);
   }
 }
 
