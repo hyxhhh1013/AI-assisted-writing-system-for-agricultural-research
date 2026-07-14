@@ -1,6 +1,8 @@
 /** 研究方向战略规划 — 共享类型（前后端 + Prisma Direction 共享） */
 
 import { isAnalysisFingerprintStale } from "@/lib/direction-analysis-fingerprint";
+import type { DirectionLiteratureState } from "@/contracts/direction-literature";
+import { parseDirectionLiteratureState } from "@/contracts/direction-literature";
 
 // ==================== 方向基础类型 ====================
 
@@ -15,6 +17,8 @@ export interface DirectionDTO {
   categories: string[];
   status: DirectionStatus;
   assets?: DirectionAsset[] | null;
+  /** P1 文献 corpus（备料层，Handoff 到写作 references） */
+  literatureCorpus?: DirectionLiteratureState | null;
   analysis?: DirectionAnalysis | null;
   roadmap?: DirectionRoadmap | null;
   /** 知识库中该方向分类下的 PDF 总数（API 端实时计算） */
@@ -258,6 +262,7 @@ export function prismaRowToDirectionDTO(row: {
   categories: string[];
   status: string;
   assets: unknown;
+  literatureCorpus?: unknown;
   analysis: unknown;
   roadmap: unknown;
   createdAt: Date;
@@ -271,6 +276,7 @@ export function prismaRowToDirectionDTO(row: {
     categories: row.categories,
     status: row.status as DirectionStatus,
     assets: row.assets as DirectionAsset[] | null,
+    literatureCorpus: parseDirectionLiteratureState(row.literatureCorpus),
     analysis: row.analysis as DirectionAnalysis | null,
     roadmap: row.roadmap as DirectionRoadmap | null,
     createdAt: row.createdAt.getTime(),

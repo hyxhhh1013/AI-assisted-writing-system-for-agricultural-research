@@ -18,19 +18,21 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { generateRoadmap, createProjectFromRoadmap, confirmRoadmap } from "@/services/direction";
 import { PaperConfigDialog, type PaperConfig } from "@/components/shared/direction/paper-config-dialog";
-import type { DirectionRoadmap } from "@/contracts/direction";
+import { LiteratureHandoffDialog } from "@/components/shared/direction/literature-handoff-dialog";
+import { DirectionRoadmapPaperDetailDialog } from "@/components/shared/direction/direction-roadmap-paper-detail-dialog";
+import type { DirectionRoadmap, PaperCandidate } from "@/contracts/direction";
+import type { DirectionLiteratureState } from "@/contracts/direction-literature";
+import {
+  resolveCandidateForRoadmapPaper,
+  canStartWritingFromRoadmap,
+  writingActionLabel,
+} from "@/lib/direction-roadmap-match";
 
 interface DirectionRoadmapTimelineProps {
   slug: string;
   existingRoadmap?: DirectionRoadmap | null;
-  candidates?: Array<{
-    id: string;
-    title: string;
-    tier: string;
-    overallScore: number;
-    suggestedJournal?: string;
-    requiredExperiments?: string[];
-  }>;
+  candidates?: PaperCandidate[];
+  literatureCorpus?: DirectionLiteratureState | null;
   onRoadmapGenerated?: () => void;
 }
 
@@ -57,6 +59,7 @@ export function DirectionRoadmapTimeline({
   slug,
   existingRoadmap,
   candidates,
+  literatureCorpus,
   onRoadmapGenerated,
 }: DirectionRoadmapTimelineProps) {
   const [roadmap, setRoadmap] = useState<DirectionRoadmap | null>(existingRoadmap || null);
@@ -72,6 +75,31 @@ export function DirectionRoadmapTimeline({
     referenceCount?: number;
   }>({ paperTitle: "" });
   const [pendingCandidateId, setPendingCandidateId] = useState("");
+  const [literatureOpen, setLiteratureOpen] = useState(false);
+  const [pendingConfig, setPendingConfig] = useState<PaperConfig | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailCandidate, setDetailCandidate] = useState<PaperCandidate | null>(null);
+  const [detailPaper, setDetailPaper] = useState<DirectionRoadmap["papers"][number] | null>(null);
+
+  const paperQuarterMap = (): Record<string, string> => {
+    const map: Record<string, string> = {};
+    for (const t of roadmap?.timeline || []) {
+      for (const pid of t.papers) map[pid] = t.quarter;
+    }
+    return map;
+  };
+
+  const openPaperDetail = (paper: DirectionRoadmap["papers"][number]) => {
+    const candidate = resolveCandidateForRoadmapPaper(
+      paper.candidateId,
+      candidates || [],
+      paper.priority,
+    );
+    if (!candidate) return;
+    setDetailCandidate(candidate);
+    setDetailPaper(paper);
+    setDetailOpen(true);
+  };
 
   const handleGenerate = async () => {
     setLoading(true);
@@ -103,23 +131,39 @@ export function DirectionRoadmapTimeline({
   };
 
   const handleOpenConfig = (candidateId: string, title: string) => {
-    const candidate = candidates?.find((c) => c.id === candidateId);
-    setPendingCandidateId(candidateId);
+    const candidate = resolveCandidateForRoadmapPaper(
+      candidateId,
+      candidates || [],
+    );
+    setPendingCandidateId(candidate?.id ?? candidateId);
     setConfigDefaults({
       paperTitle: candidate?.title || title || `路线图论文 - ${candidateId}`,
       paperType: "review",
       targetJournal: candidate?.suggestedJournal,
-      referenceCount: 0, // 将在 paper-brief API 中获取实际数量
+      referenceCount: literatureCorpus?.entries?.length ?? 0,
     });
     setConfigOpen(true);
   };
 
-  const handleConfigConfirm = async (config: PaperConfig) => {
+  const handleConfigConfirm = (config: PaperConfig) => {
     setConfigOpen(false);
+    setPendingConfig(config);
+    setLiteratureOpen(true);
+  };
+
+  const handleLiteratureCancel = () => {
+    setLiteratureOpen(false);
+    setPendingConfig(null);
+  };
+
+  const handleLiteratureConfirm = async (selectedIds: string[]) => {
+    if (!pendingConfig) return;
     const candidateId = pendingCandidateId;
+    setLiteratureOpen(false);
     setCreatingId(candidateId);
     try {
       const candidate = candidates?.find((c) => c.id === candidateId);
+      const config = pendingConfig;
       const result = await createProjectFromRoadmap(config.paperTitle, slug, candidateId, {
         paperType: config.paperType,
         language: config.language,
@@ -133,10 +177,10 @@ export function DirectionRoadmapTimeline({
               ? ["需补实验"]
               : [],
         roadmapCandidateId: candidateId,
+        selectedLiteratureIds: selectedIds,
       });
       toast.success("写作项目已创建");
 
-      // 更新路线图中的状态
       if (roadmap) {
         const updatedPapers = roadmap.papers.map((p) =>
           p.candidateId === candidateId
@@ -146,14 +190,16 @@ export function DirectionRoadmapTimeline({
         setRoadmap({ ...roadmap, papers: updatedPapers });
       }
 
-      // 打开工作台
       window.open(`/workbench?id=${result.projectId}`, "_blank");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "创建项目失败");
     } finally {
       setCreatingId(null);
+      setPendingConfig(null);
     }
   };
+
+  const corpusEntries = literatureCorpus?.entries ?? [];
 
   // 无路线图状态
   if (!roadmap) {
@@ -211,59 +257,102 @@ export function DirectionRoadmapTimeline({
       <div>
         <h4 className="mb-3 flex items-center gap-1.5 text-sm font-medium text-[#122820]">
           <FileText className="h-4 w-4 text-[#1a5632]" /> 论文优先级
+          <span className="text-[10px] font-normal text-[#9aa8a0]">· 点击条目查看详情与写作桥接</span>
         </h4>
         <div className="space-y-2">
           {roadmap.papers
             .sort((a, b) => a.priority - b.priority)
             .map((paper) => {
-              const candidate = candidates?.find((c) => c.id === paper.candidateId);
+              const candidate = resolveCandidateForRoadmapPaper(
+                paper.candidateId,
+                candidates || [],
+                paper.priority,
+              );
               const tier = candidate?.tier || "long_term";
               const isCreating = creatingId === paper.candidateId;
+              const quarter = paperQuarterMap()[paper.candidateId];
+              const showWriting = canStartWritingFromRoadmap(paper) && !!candidate;
+              const writingLabel = writingActionLabel(tier);
 
               return (
                 <div
                   key={paper.candidateId}
-                  className="flex items-center gap-3 rounded-lg border border-[#1a5632]/8 bg-white px-4 py-3"
+                  className="flex items-center gap-3 rounded-lg border border-[#1a5632]/8 bg-white px-4 py-3 transition-colors hover:border-[#1a5632]/20"
                 >
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#1a5632]/8 text-xs font-bold text-[#1a5632]">
-                    {paper.priority}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-[#122820] line-clamp-1">
-                      {candidate?.title || paper.candidateId}
-                    </p>
-                    <div className="mt-0.5 flex items-center gap-1.5">
-                      <Badge variant="outline" className={cn("h-4 px-1 text-[9px]", TIER_COLORS[tier])}>
-                        {TIER_LABELS[tier] || tier}
-                      </Badge>
-                      {candidate?.suggestedJournal && (
-                        <span className="text-[10px] text-[#9aa8a0]">{candidate.suggestedJournal}</span>
-                      )}
-                      <span className="text-[10px] text-[#9aa8a0]">
-                        {STATUS_LABELS[paper.status] || paper.status}
-                      </span>
-                      {paper.linkedProjectId && (
-                        <Badge variant="secondary" className="h-4 gap-0.5 px-1 text-[9px] border-[#2563eb]/20 bg-[#2563eb]/8 text-[#2563eb]">
-                          <ExternalLink className="h-2.5 w-2.5" /> 已创建项目
-                        </Badge>
-                      )}
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    onClick={() => candidate && openPaperDetail(paper)}
+                    disabled={!candidate}
+                  >
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#1a5632]/8 text-xs font-bold text-[#1a5632]">
+                      {paper.priority}
                     </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-[#122820] line-clamp-1">
+                        {candidate?.title || paper.candidateId}
+                      </p>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                        <Badge variant="outline" className={cn("h-4 px-1 text-[9px]", TIER_COLORS[tier])}>
+                          {TIER_LABELS[tier] || tier}
+                        </Badge>
+                        {quarter && (
+                          <span className="text-[10px] text-[#9aa8a0]">{quarter}</span>
+                        )}
+                        {candidate?.suggestedJournal && (
+                          <span className="text-[10px] text-[#9aa8a0]">{candidate.suggestedJournal}</span>
+                        )}
+                        <span className="text-[10px] text-[#9aa8a0]">
+                          {STATUS_LABELS[paper.status] || paper.status}
+                        </span>
+                        {paper.linkedProjectId && (
+                          <Badge variant="secondary" className="h-4 gap-0.5 px-1 text-[9px] border-[#2563eb]/20 bg-[#2563eb]/8 text-[#2563eb]">
+                            <ExternalLink className="h-2.5 w-2.5" /> 已创建项目
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {candidate && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-[10px] text-[#6b7c72]"
+                        onClick={() => openPaperDetail(paper)}
+                      >
+                        详情
+                      </Button>
+                    )}
+                    {!candidate && (
+                      <span className="text-[10px] text-[#dc2626]">未匹配候选</span>
+                    )}
+                    {showWriting && (
+                      <Button
+                        size="sm"
+                        className="h-7 gap-1 text-xs"
+                        onClick={() => handleOpenConfig(paper.candidateId, candidate!.title)}
+                        disabled={isCreating}
+                      >
+                        {isCreating ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <ArrowRight className="h-3 w-3" />
+                        )}
+                        {writingLabel}
+                      </Button>
+                    )}
+                    {paper.linkedProjectId && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 gap-1 text-xs"
+                        onClick={() => window.open(`/workbench?id=${paper.linkedProjectId}`, "_blank")}
+                      >
+                        <ExternalLink className="h-3 w-3" /> 工作台
+                      </Button>
+                    )}
                   </div>
-                  {(tier === "ready" || tier === "needs_experiment") && paper.status === "planned" && (
-                    <Button
-                      size="sm"
-                      className="h-7 gap-1 text-xs"
-                      onClick={() => handleOpenConfig(paper.candidateId, candidate?.title || "")}
-                      disabled={isCreating}
-                    >
-                      {isCreating ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <ArrowRight className="h-3 w-3" />
-                      )}
-                      {tier === "needs_experiment" ? "带缺口写作" : "开始写作"}
-                    </Button>
-                  )}
                 </div>
               );
             })}
@@ -322,6 +411,33 @@ export function DirectionRoadmapTimeline({
         onConfirm={handleConfigConfirm}
         defaults={configDefaults}
       />
+
+      {pendingConfig && (
+        <LiteratureHandoffDialog
+          open={literatureOpen}
+          paperTitle={pendingConfig.paperTitle}
+          paperType={pendingConfig.paperType}
+          entries={corpusEntries}
+          loading={creatingId !== null}
+          onCancel={handleLiteratureCancel}
+          onConfirm={(ids) => void handleLiteratureConfirm(ids)}
+        />
+      )}
+
+      {detailCandidate && detailPaper && (
+        <DirectionRoadmapPaperDetailDialog
+          open={detailOpen}
+          onOpenChange={setDetailOpen}
+          slug={slug}
+          candidate={detailCandidate}
+          paper={detailPaper}
+          timelineQuarter={paperQuarterMap()[detailPaper.candidateId]}
+          relatedDependencies={roadmap.experimentDependencies.filter((d) =>
+            d.requiredBy.includes(detailPaper.candidateId),
+          )}
+          onStartWriting={() => handleOpenConfig(detailPaper.candidateId, detailCandidate.title)}
+        />
+      )}
     </div>
   );
 }

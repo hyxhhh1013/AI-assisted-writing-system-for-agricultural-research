@@ -7,6 +7,13 @@
 import prisma from "@/lib/prisma";
 import type { DirectionAnalysis, PaperCandidate } from "@/contracts/direction";
 import type {
+  DirectionLiteratureEntry,
+} from "@/contracts/direction-literature";
+import {
+  parseDirectionLiteratureState,
+  corpusEntryToRequiredReference,
+} from "@/contracts/direction-literature";
+import type {
   DirectionWritingContext,
   RequiredReference,
   SourceRole,
@@ -91,6 +98,30 @@ function extractRequiredRefs(
   return refs.slice(0, MAX_REQUIRED_REFS);
 }
 
+function mergeRequiredReferences(
+  primary: RequiredReference[],
+  fallback: RequiredReference[],
+): RequiredReference[] {
+  const seen = new Set<string>();
+  const merged: RequiredReference[] = [];
+  for (const ref of [...primary, ...fallback]) {
+    const key = (ref.doi || ref.sourceKey || ref.title).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(ref);
+  }
+  return merged.slice(0, MAX_REQUIRED_REFS);
+}
+
+export function corpusEntriesFromRefs(
+  entries: DirectionLiteratureEntry[],
+  selectedIds?: string[],
+): DirectionLiteratureEntry[] {
+  if (!selectedIds?.length) return entries;
+  const set = new Set(selectedIds);
+  return entries.filter((e) => set.has(e.id));
+}
+
 // ==================== 主题提取 ====================
 
 function extractThemes(
@@ -144,9 +175,12 @@ export async function buildPaperBrief(
     throw new Error(`方向不存在: ${directionSlug}`);
   }
 
+  const literatureState = parseDirectionLiteratureState(direction.literatureCorpus);
+  const corpusEntries = literatureState.entries;
+
   const categories = direction.categories as string[];
 
-  // 2. 扫描知识库文献（与 scan API 同等逻辑）
+  // 知识库补全（corpus 为空或需 fallback 时）
   const kbFiles = await prisma.knowledgeFile.findMany({
     where: { category: { in: categories } },
     select: { name: true, bib: true, category: true },
@@ -168,11 +202,19 @@ export async function buildPaperBrief(
   // 后续可在路线图 UI 中让用户选择。
   const paperType: "review" | "research" = "review";
 
+  const corpusRefs = corpusEntries.map(corpusEntryToRequiredReference);
+  const kbRefs = extractRequiredRefs(kbFiles, candidateTitle);
+  const requiredReferences =
+    corpusRefs.length > 0
+      ? mergeRequiredReferences(corpusRefs, kbRefs)
+      : kbRefs;
+
   // 5. 组装
   return {
     paperType,
     suggestedJournal: candidate?.suggestedJournal,
-    requiredReferences: extractRequiredRefs(kbFiles, candidateTitle),
+    requiredReferences,
+    literatureCorpusConfirmedAt: literatureState.confirmedAt,
     motivationFromGap: candidate
       ? `来自方向"${direction.name}"的 8 维度分析。该论文整体评分 ${candidate.overallScore}/10，等级 ${candidate.tier}。`
       : undefined,

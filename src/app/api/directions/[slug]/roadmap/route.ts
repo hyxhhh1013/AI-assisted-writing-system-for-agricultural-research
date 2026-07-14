@@ -8,7 +8,8 @@ import { buildRoadmapPrompt, buildAssetSummary } from "@/lib/prompts/direction";
 import { logger } from "@/lib/logger";
 import { getErrorMessage } from "@/lib/error-utils";
 import { requireOwnedDirection } from "@/lib/direction-auth";
-import type { DirectionAsset, DirectionRoadmap } from "@/contracts/direction";
+import type { DirectionAsset, DirectionRoadmap, PaperCandidate } from "@/contracts/direction";
+import { resolveCandidateForRoadmapPaper } from "@/lib/direction-roadmap-match";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -144,7 +145,7 @@ export async function POST(
     const candidates = (currentAnalysis.paperCandidates as Array<Record<string, unknown>>) || [];
     const candidatesSummary = candidates.length > 0
       ? candidates.map((c) =>
-          `- **${c.title}** (tier: ${c.tier}, 总分: ${c.overallScore})${c.suggestedJournal ? ` → ${c.suggestedJournal}` : ""}`
+          `- **id=${c.id}** · ${c.title} (tier: ${c.tier}, 总分: ${c.overallScore})${c.suggestedJournal ? ` → ${c.suggestedJournal}` : ""}`,
         ).join("\n")
       : "（无候选论文）";
 
@@ -180,12 +181,35 @@ export async function POST(
       summary?: string;
     }>(raw);
 
-    // 保留已有论文的 linkedProjectId 和进行中的状态
+    const typedCandidates = candidates as unknown as PaperCandidate[];
+
+    const normalizeId = (rawId: string, priority?: number): string => {
+      const resolved = resolveCandidateForRoadmapPaper(rawId, typedCandidates, priority);
+      return resolved?.id ?? rawId;
+    };
+
+    const normalizedPapers = (result.papers || []).map((p) => ({
+      ...p,
+      candidateId: normalizeId(p.candidateId, p.priority),
+    }));
+
+    const normalizedTimeline = (result.timeline || []).map((t) => ({
+      ...t,
+      papers: (t.papers || []).map((pid) => normalizeId(pid)),
+    }));
+
+    const normalizedDeps = (result.experimentDependencies || []).map((d) => ({
+      ...d,
+      requiredBy: (d.requiredBy || []).map((pid) => normalizeId(pid)),
+    }));
+
+    // 保留已有论文的 linkedProjectId 和进行中的状态（按归一化后的 candidateId）
     const existingPapers = ((direction.roadmap as Record<string, unknown> | null)?.papers as Array<Record<string, unknown>>) || [];
     const preservedMap = new Map<string, { status: string; linkedProjectId: string }>();
     for (const ep of existingPapers) {
+      const realId = normalizeId(ep.candidateId as string);
       if (ep.linkedProjectId || (ep.status && ep.status !== "planned")) {
-        preservedMap.set(ep.candidateId as string, {
+        preservedMap.set(realId, {
           status: ep.status as string,
           linkedProjectId: ep.linkedProjectId as string,
         });
@@ -196,7 +220,7 @@ export async function POST(
       generatedAt: Date.now(),
       analysisSnapshotId: (currentAnalysis.generatedAt as number) || 0,
       summary: result.summary || "",
-      papers: (result.papers || []).map((p) => {
+      papers: normalizedPapers.map((p) => {
         const preserved = preservedMap.get(p.candidateId);
         const paperStatus = (preserved?.status || p.status || "planned") as "planned" | "writing" | "submitted" | "published";
         return {
@@ -206,11 +230,11 @@ export async function POST(
           linkedProjectId: (preserved?.linkedProjectId as string) || undefined,
         };
       }),
-      timeline: (result.timeline || []).map((t) => ({
+      timeline: normalizedTimeline.map((t) => ({
         quarter: t.quarter,
         papers: t.papers || [],
       })),
-      experimentDependencies: (result.experimentDependencies || []).map((d) => ({
+      experimentDependencies: normalizedDeps.map((d) => ({
         description: d.description,
         requiredBy: d.requiredBy || [],
         estimatedDuration: d.estimatedDuration || "",

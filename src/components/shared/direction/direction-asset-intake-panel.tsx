@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { siteTheme } from "@/lib/site-theme";
 import type { DirectionAsset, DirectionAnalysis } from "@/contracts/direction";
+import type { DirectionLiteratureState } from "@/contracts/direction-literature";
 import {
   computeAssetInventoryHealth,
   type AssetInventoryCheck,
@@ -23,6 +24,7 @@ import {
 interface DirectionAssetIntakePanelProps {
   assets: DirectionAsset[];
   analysis?: DirectionAnalysis | null;
+  literatureCorpus?: DirectionLiteratureState | null;
   literatureCount?: number;
   pendingScanCount?: number | null;
   onScan?: () => void;
@@ -94,13 +96,14 @@ function CompletenessRing({ score }: { score: number }) {
 export function DirectionAssetIntakePanel({
   assets,
   analysis,
+  literatureCorpus,
   literatureCount = 0,
   pendingScanCount,
   onScan,
   onAddExperiment,
   onProceed,
 }: DirectionAssetIntakePanelProps) {
-  const health = computeAssetInventoryHealth(assets, analysis);
+  const health = computeAssetInventoryHealth(assets, analysis, literatureCorpus);
   const { stats, checks, readyForNextPhase, completenessScore } = health;
 
   const blockingChecks = checks.filter((c) => !c.passed && c.severity === "high");

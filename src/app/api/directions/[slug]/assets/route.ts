@@ -41,6 +41,7 @@ export async function PATCH(
       categories: row.categories,
       status: row.status,
       assets: row.assets,
+      literatureCorpus: row.literatureCorpus,
       analysis: row.analysis,
       roadmap: row.roadmap,
       createdAt: row.createdAt,

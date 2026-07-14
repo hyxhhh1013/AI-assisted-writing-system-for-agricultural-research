@@ -303,6 +303,8 @@ export function buildRoadmapPrompt(
 2. 规划时间线（按季度，从当前季度开始，覆盖未来 2 年）
 3. 识别实验依赖关系
 
+**重要**：papers[].candidateId 必须与「论文候选列表」中的 id= 字段完全一致，禁止自造 ID。
+
 ## 输出格式
 
 严格按 JSON 输出（无 code fence）：

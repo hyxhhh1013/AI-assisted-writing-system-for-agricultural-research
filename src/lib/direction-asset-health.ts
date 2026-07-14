@@ -11,6 +11,11 @@ import type {
   PaperAsset,
   DatasetAsset,
 } from "@/contracts/direction";
+import type { DirectionLiteratureState } from "@/contracts/direction-literature";
+import {
+  MIN_REVIEW_CORPUS_ENTRIES,
+  countCoreLiterature,
+} from "@/contracts/direction-literature";
 import { isAnalysisFingerprintStale } from "@/lib/direction-analysis-fingerprint";
 
 export type CheckSeverity = "high" | "medium" | "low";
@@ -152,6 +157,7 @@ function countOrphanAssets(assets: DirectionAsset[]): number {
 export function computeAssetInventoryHealth(
   assets: DirectionAsset[],
   analysis?: DirectionAnalysis | null,
+  literature?: DirectionLiteratureState | null,
 ): AssetInventoryHealth {
   const experiments = assets.filter((a) => a.kind === "experiment");
   const papers = assets.filter((a) => a.kind === "paper");
@@ -170,25 +176,47 @@ export function computeAssetInventoryHealth(
     isFilled((a as PaperAsset).contribution),
   ).length;
 
+  const litState = literature ?? { entries: [] };
+  const litCount = litState.entries.length;
+  const litConfirmed = Boolean(litState.confirmedAt);
+  const coreLit = countCoreLiterature(litState);
+  const reviewReady =
+    litConfirmed && litCount >= MIN_REVIEW_CORPUS_ENTRIES;
+  const researchReady = experiments.length >= 1;
+
   const checks: AssetInventoryCheck[] = [
     {
       id: "min_assets",
-      label: "至少 3 项资产",
-      passed: assets.length >= 3,
+      label: "至少 3 项资产或文献",
+      passed: assets.length + litCount >= 3,
       severity: "high",
-      hint: assets.length >= 3
-        ? `已录入 ${assets.length} 项，满足分析最低门槛`
-        : `当前 ${assets.length} 项，还需 ${3 - assets.length} 项`,
+      hint:
+        assets.length + litCount >= 3
+          ? `已录入 ${assets.length} 项资产 + ${litCount} 篇文献`
+          : `当前 ${assets.length} 项资产、${litCount} 篇文献，合计需 ≥3`,
+    },
+    {
+      id: "research_or_review_path",
+      label: "完成研究链或综述文献 corpus",
+      passed: researchReady || reviewReady,
+      severity: "high",
+      hint: researchReady
+        ? `${experiments.length} 个实验已录入（研究型路径）`
+        : reviewReady
+          ? `文献 corpus 已确认（${litCount} 篇，核心 ${coreLit} 篇）`
+          : "研究型：录入 ≥1 实验；综述型：在下方确认 ≥3 篇文献 corpus",
     },
     {
       id: "min_experiment",
-      label: "至少 1 个实验资产",
-      passed: experiments.length >= 1,
-      severity: "high",
+      label: "实验资产（研究型建议）",
+      passed: experiments.length >= 1 || reviewReady,
+      severity: "medium",
       hint:
         experiments.length >= 1
           ? `${experiments.length} 个实验已录入`
-          : "方向分析以实验数据为基础，请先录入至少 1 个实验",
+          : reviewReady
+            ? "综述路径已满足，实验可选"
+            : "原创研究请先录入实验；纯综述可跳过",
     },
     {
       id: "experiment_rq",

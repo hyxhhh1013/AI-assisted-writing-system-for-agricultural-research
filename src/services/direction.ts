@@ -448,7 +448,13 @@ export async function generateGrantProposal(
 }
 
 import type { DirectionWritingContext } from "@/contracts/direction-writing-bridge";
-import { requiredRefsToCitationList } from "@/contracts/direction-writing-bridge";
+import {
+  requiredRefsToCitationList,
+} from "@/contracts/direction-writing-bridge";
+import {
+  corpusToCitationList,
+  MIN_REVIEW_HANDOFF_ENTRIES,
+} from "@/contracts/direction-literature";
 import {
   createInitialPaperPassport,
   paperConfigToRecord,
@@ -470,6 +476,8 @@ export interface RoadmapProjectContext {
   language?: "zh" | "en";
   /** 引用格式（覆盖默认 gbt7714） */
   citationStyle?: "gbt7714" | "vancouver" | "apa7" | "ieee";
+  /** 从 corpus 勾选的文献 id（空 = 全部） */
+  selectedLiteratureIds?: string[];
 }
 
 /** GET /api/directions/[slug]/paper-brief — 获取论文简报（文献清单 + 上下文） */
@@ -508,6 +516,16 @@ export async function createProjectFromRoadmap(
   const wordCount = context?.wordCount || "";
   const suggestedJournal = paperBrief?.suggestedJournal || context?.targetJournal;
 
+  if (paperType === "review") {
+    if (!paperBrief?.literatureCorpusConfirmedAt) {
+      throw new Error("请先在「资产盘点」确认文献 corpus（P1 调研）后再创建写作项目");
+    }
+    const refCount = paperBrief.requiredReferences.length;
+    if (refCount < MIN_REVIEW_HANDOFF_ENTRIES) {
+      throw new Error(`综述至少需要 ${MIN_REVIEW_HANDOFF_ENTRIES} 篇文献，当前 ${refCount} 篇`);
+    }
+  }
+
   // 1. 创建项目（带入完整配置 + PaperPassport）
   const paperPassport = serializePaperPassport(
     createInitialPaperPassport(
@@ -544,10 +562,19 @@ export async function createProjectFromRoadmap(
     throw new Error(createData.error || "创建项目失败");
   }
 
-  // 2. 导入文献清单到项目 references
-  if (paperBrief && paperBrief.requiredReferences.length > 0) {
-    try {
-      const citations = requiredRefsToCitationList(paperBrief.requiredReferences);
+  // 2. 导入文献清单到项目 references（来自 Direction corpus / paper-brief）
+  try {
+    const directionDto = await getDirection(directionSlug);
+    let entries = directionDto.literatureCorpus?.entries ?? [];
+    if (context?.selectedLiteratureIds?.length) {
+      const sel = new Set(context.selectedLiteratureIds);
+      entries = entries.filter((e) => sel.has(e.id));
+    }
+    let citations = corpusToCitationList(entries);
+    if (citations.length === 0 && paperBrief?.requiredReferences.length) {
+      citations = requiredRefsToCitationList(paperBrief.requiredReferences);
+    }
+    if (citations.length > 0) {
       const ops = citations.map((citation, i) => ({
         op: "create" as const,
         content: citation,
@@ -558,9 +585,9 @@ export async function createProjectFromRoadmap(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ops }),
       });
-    } catch {
-      // 文献导入失败不阻塞项目创建
     }
+  } catch {
+    // 文献导入失败不阻塞项目创建
   }
 
   // 3. 生成写作蓝图（带入完整 direction 上下文 + 写作配置）

@@ -136,8 +136,8 @@ export function DirectionAssetScanDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="w-full max-w-2xl overflow-hidden sm:max-w-2xl">
+        <DialogHeader className="min-w-0 pr-8">
           <DialogTitle>从现有数据扫描资产</DialogTitle>
           <DialogDescription>
             自动从知识库文献和现有项目中识别可导入的论文和数据集资产。
@@ -150,9 +150,9 @@ export function DirectionAssetScanDialog({
             <span className="ml-2 text-sm text-[#6b7c72]">正在扫描...</span>
           </div>
         ) : result ? (
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4 overflow-hidden">
             {/* 摘要 */}
-            <div className="flex gap-3 text-xs text-[#6b7c72]">
+            <div className="flex flex-wrap gap-3 text-xs text-[#6b7c72]">
               <span>可导入论文: {allPapers.length} 篇</span>
               <span>可导入数据集: {filteredDatasets.length} 条</span>
               {(result.summary.knowledgeBasePapers > allPapers.length ||
@@ -161,24 +161,26 @@ export function DirectionAssetScanDialog({
               )}
             </div>
 
-            <ScrollArea className="h-[320px]">
+            <ScrollArea className="h-[320px] min-w-0 w-full">
+              <div className="min-w-0 space-y-4 pr-3">
               {/* 论文候选 */}
               {allPapers.length > 0 && (
-                <div className="mb-4">
-                  <div className="mb-2 flex items-center justify-between">
-                    <h4 className="flex items-center gap-1.5 text-sm font-medium text-[#122820]">
-                      <FileText className="h-4 w-4 text-[#1a5632]" /> 论文资产 ({allPapers.length})
+                <div className="mb-4 min-w-0">
+                  <div className="mb-2 flex min-w-0 items-center justify-between gap-2">
+                    <h4 className="flex min-w-0 items-center gap-1.5 text-sm font-medium text-[#122820]">
+                      <FileText className="h-4 w-4 shrink-0 text-[#1a5632]" />
+                      <span className="truncate">论文资产 ({allPapers.length})</span>
                     </h4>
-                    <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={selectAllPapers}>
+                    <Button variant="ghost" size="sm" className="h-6 shrink-0 text-xs" onClick={selectAllPapers}>
                       {selectedPaperIds.size === allPapers.length ? "取消全选" : "全选"}
                     </Button>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="min-w-0 space-y-1.5">
                     {allPapers.map((p) => (
                       <label
                         key={p.id}
                         className={cn(
-                          "flex items-start gap-2.5 rounded-lg border px-3 py-2.5 cursor-pointer transition-colors",
+                          "flex min-w-0 items-start gap-2.5 rounded-lg border px-3 py-2.5 cursor-pointer transition-colors",
                           selectedPaperIds.has(p.id)
                             ? "border-[#1a5632]/30 bg-[#1a5632]/4"
                             : "border-transparent hover:bg-black/[0.02]",
@@ -187,18 +189,22 @@ export function DirectionAssetScanDialog({
                         <Checkbox
                           checked={selectedPaperIds.has(p.id)}
                           onCheckedChange={() => togglePaper(p.id)}
-                          className="mt-0.5"
+                          className="mt-0.5 shrink-0"
                         />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm leading-snug text-[#122820] line-clamp-2">{p.title}</p>
-                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        <div className="min-w-0 flex-1 overflow-hidden">
+                          <p className="break-words text-sm leading-snug text-[#122820] line-clamp-2 [overflow-wrap:anywhere]">
+                            {p.title}
+                          </p>
+                          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
                             {p.journal && (
-                              <span className="text-[11px] text-[#6b7c72]">{p.journal}</span>
+                              <span className="min-w-0 break-words text-[11px] text-[#6b7c72] [overflow-wrap:anywhere]">
+                                {p.journal}
+                              </span>
                             )}
                             {p.year > 0 && (
-                              <span className="text-[11px] text-[#9aa8a0]">{p.year}</span>
+                              <span className="shrink-0 text-[11px] text-[#9aa8a0]">{p.year}</span>
                             )}
-                            <Badge variant="secondary" className="h-4 px-1 text-[9px] font-normal">
+                            <Badge variant="secondary" className="h-4 shrink-0 px-1 text-[9px] font-normal">
                               {p.source === "knowledge_base" ? "知识库" : "已有项目"}
                             </Badge>
                           </div>
@@ -211,16 +217,16 @@ export function DirectionAssetScanDialog({
 
               {/* 数据集候选 */}
               {(filteredDatasets).length > 0 && (
-                <div>
+                <div className="min-w-0">
                   <h4 className="mb-2 flex items-center gap-1.5 text-sm font-medium text-[#122820]">
-                    <Database className="h-4 w-4 text-[#b8975a]" /> 数据集资产 ({filteredDatasets.length})
+                    <Database className="h-4 w-4 shrink-0 text-[#b8975a]" /> 数据集资产 ({filteredDatasets.length})
                   </h4>
-                  <div className="space-y-1.5">
+                  <div className="min-w-0 space-y-1.5">
                     {filteredDatasets.map((d) => (
                       <label
                         key={d.id}
                         className={cn(
-                          "flex items-start gap-2.5 rounded-lg border px-3 py-2.5 cursor-pointer transition-colors",
+                          "flex min-w-0 items-start gap-2.5 rounded-lg border px-3 py-2.5 cursor-pointer transition-colors",
                           selectedDatasetIds.has(d.id)
                             ? "border-[#b8975a]/30 bg-[#b8975a]/4"
                             : "border-transparent hover:bg-black/[0.02]",
@@ -229,11 +235,15 @@ export function DirectionAssetScanDialog({
                         <Checkbox
                           checked={selectedDatasetIds.has(d.id)}
                           onCheckedChange={() => toggleDataset(d.id)}
-                          className="mt-0.5"
+                          className="mt-0.5 shrink-0"
                         />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm leading-snug text-[#122820] line-clamp-2">{d.title}</p>
-                          <p className="mt-0.5 text-[11px] text-[#6b7c72] line-clamp-1">{d.variables}</p>
+                        <div className="min-w-0 flex-1 overflow-hidden">
+                          <p className="break-words text-sm leading-snug text-[#122820] line-clamp-2 [overflow-wrap:anywhere]">
+                            {d.title}
+                          </p>
+                          <p className="mt-0.5 break-words text-[11px] text-[#6b7c72] line-clamp-1 [overflow-wrap:anywhere]">
+                            {d.variables}
+                          </p>
                         </div>
                       </label>
                     ))}
@@ -248,6 +258,7 @@ export function DirectionAssetScanDialog({
                     : "未找到可导入的资产。请确保知识库中存在该方向分类的文献，或已有项目关联了此研究方向。"}
                 </div>
               )}
+              </div>
             </ScrollArea>
           </div>
         ) : null}

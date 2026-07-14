@@ -742,6 +742,68 @@ export const directionAssetsPatchSchema = z.object({
 });
 export type DirectionAssetsPatchInput = z.infer<typeof directionAssetsPatchSchema>;
 
+const directionLiteratureEntrySchema = z.object({
+  id: z.string().min(1),
+  source: z.enum(["knowledge_pdf", "external", "manual"]),
+  sourceKey: z.string().optional(),
+  externalId: z.string().optional(),
+  title: z.string().min(1),
+  citation: z.string().min(1),
+  role: z.enum(["core", "supporting", "background"]),
+  doi: z.string().optional(),
+  addedAt: z.number(),
+});
+
+export const directionLiteratureCorpusPatchSchema = z.object({
+  ops: z.array(
+    z.discriminatedUnion("op", [
+      z.object({ op: z.literal("upsert"), entry: directionLiteratureEntrySchema }),
+      z.object({ op: z.literal("delete"), entryId: z.string().min(1) }),
+      z.object({
+        op: z.literal("set_role"),
+        entryId: z.string().min(1),
+        role: z.enum(["core", "supporting", "background"]),
+      }),
+      z.object({ op: z.literal("confirm") }),
+      z.object({
+        op: z.literal("import_kb_scan"),
+        entries: z.array(directionLiteratureEntrySchema),
+      }),
+    ]),
+  ),
+});
+export type DirectionLiteratureCorpusPatchInput = z.infer<
+  typeof directionLiteratureCorpusPatchSchema
+>;
+
+export const directionLiteratureImportExternalSchema = z.object({
+  hit: z.object({
+    id: z.string(),
+    source: z.enum(["openalex", "semantic-scholar", "crossref", "pubmed"]),
+    title: z.string(),
+    authors: z.array(z.string()).optional(),
+    year: z.number().optional(),
+    journal: z.string().optional(),
+    doi: z.string().optional(),
+    url: z.string().optional(),
+    abstract: z.string().optional(),
+    citationCount: z.number().optional(),
+  }).passthrough(),
+  role: z.enum(["core", "supporting", "background"]).optional(),
+});
+export type DirectionLiteratureImportExternalInput = z.infer<
+  typeof directionLiteratureImportExternalSchema
+>;
+
+export const directionLiteratureImportKnowledgeSchema = z.object({
+  fileName: z.string().min(1),
+  citation: z.string().min(1),
+  role: z.enum(["core", "supporting", "background"]).optional(),
+});
+export type DirectionLiteratureImportKnowledgeInput = z.infer<
+  typeof directionLiteratureImportKnowledgeSchema
+>;
+
 export const evaluationContractSchema = z.object({
   dimensions: z.array(
     z.object({

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { DirectionAssetForm } from "@/components/shared/direction/direction-asse
 import { DirectionAssetScanDialog } from "@/components/shared/direction/direction-asset-scan-dialog";
 import { DirectionAssetList } from "@/components/shared/direction/direction-asset-list";
 import { DirectionAssetIntakePanel } from "@/components/shared/direction/direction-asset-intake-panel";
+import { DirectionLiteratureCorpusPanel } from "@/components/shared/direction/direction-literature-corpus-panel";
 import { DirectionPreCommitmentPanel } from "@/components/shared/direction/direction-pre-commitment-panel";
 import { DirectionAnalysisPanel } from "@/components/shared/direction/direction-analysis-panel";
 import { DirectionRoadmapTimeline } from "@/components/shared/direction/direction-roadmap-timeline";
@@ -26,7 +27,6 @@ import {
   Map,
   FileText,
   ArrowRight,
-  Plus,
   Search,
 } from "lucide-react";
 import { siteTheme } from "@/lib/site-theme";
@@ -39,6 +39,8 @@ import {
 } from "@/services/direction";
 import { useAuth } from "@/lib/auth-context";
 import type { DirectionDTO, DirectionAsset, DirectionAnalysis, DirectionRoadmap } from "@/contracts/direction";
+import type { DirectionLiteratureState } from "@/contracts/direction-literature";
+import { emptyLiteratureState } from "@/contracts/direction-literature";
 import { isAssetAlreadyImported } from "@/lib/direction-asset-health";
 import { isAnalysisFingerprintStale } from "@/lib/direction-analysis-fingerprint";
 import {
@@ -60,6 +62,7 @@ const TABS = [
 export default function DirectionPageClient() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const slug = params.slug as string;
   const { user } = useAuth();
   const isPI = user?.role === "admin";
@@ -105,6 +108,13 @@ export default function DirectionPageClient() {
   }, [slug, router]);
 
   useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && TABS.some((t) => t.id === tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     void fetchDirection();
   }, [fetchDirection]);
 
@@ -126,13 +136,20 @@ export default function DirectionPageClient() {
         setPendingScanCount(newPapers.length + newDatasets.length);
       })
       .catch(() => setPendingScanCount(null));
-  }, [slug, direction?.assets, direction?.updatedAt]);
+  }, [slug, direction]);
 
   // ====== Phase 0: 资产管理 ======
 
   const assets: DirectionAsset[] = Array.isArray(direction?.assets)
     ? (direction.assets as DirectionAsset[])
     : [];
+
+  const literatureCorpus: DirectionLiteratureState =
+    direction?.literatureCorpus ?? emptyLiteratureState();
+
+  const handleLiteratureCorpusUpdated = (state: DirectionLiteratureState) => {
+    setDirection((prev) => (prev ? { ...prev, literatureCorpus: state } : prev));
+  };
 
   const handleAssetSave = async (asset: DirectionAsset) => {
     if (!direction) return;
@@ -249,11 +266,18 @@ export default function DirectionPageClient() {
           <DirectionAssetIntakePanel
             assets={assets}
             analysis={analysis}
+            literatureCorpus={literatureCorpus}
             literatureCount={literatureCount}
             pendingScanCount={pendingScanCount}
             onScan={() => setScanOpen(true)}
             onAddExperiment={() => handleAddAsset("experiment")}
             onProceed={() => setActiveTab("contract")}
+          />
+
+          <DirectionLiteratureCorpusPanel
+            slug={slug}
+            literatureCorpus={literatureCorpus}
+            onUpdated={handleLiteratureCorpusUpdated}
           />
 
           <div className={cn("rounded-xl border border-[#1a5632]/8 p-6", siteTheme.card)}>
@@ -417,6 +441,7 @@ export default function DirectionPageClient() {
               slug={slug}
               existingRoadmap={roadmap}
               candidates={analysis?.paperCandidates || []}
+              literatureCorpus={literatureCorpus}
               onRoadmapGenerated={handleRefreshDirection}
             />
           </div>

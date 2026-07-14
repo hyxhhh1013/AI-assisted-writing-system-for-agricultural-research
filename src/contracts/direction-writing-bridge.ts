@@ -44,6 +44,8 @@ export interface DirectionWritingContext {
   themeSuggestions?: string[];
   /** 来源的路线图候选人 ID（用于追溯） */
   roadmapCandidateId?: string;
+  /** 方向文献 corpus 已确认（P1 备料完成） */
+  literatureCorpusConfirmedAt?: number;
 }
 
 // ==================== 工具函数 ====================
