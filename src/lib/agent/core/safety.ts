@@ -28,7 +28,12 @@ export function isAgentPublicEnabled(): boolean {
   return process.env.NEXT_PUBLIC_AGENT_ENABLED === "1";
 }
 
-interface RepeatTracker {
+/** Wave 2：允许 Agent 调用 write_section 等写工具 */
+export function isAgentWriteEnabled(): boolean {
+  return isAgentEnabled() && process.env.AGENT_WRITE_ENABLED === "1";
+}
+
+export interface RepeatTracker {
   lastTool: string | null;
   lastArgsKey: string | null;
   repeatCount: number;

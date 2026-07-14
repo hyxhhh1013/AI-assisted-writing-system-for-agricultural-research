@@ -5,7 +5,7 @@ import { validateBody } from "@/lib/api-validate";
 import { agentSchema } from "@/lib/validations";
 import {
   createAgentContext,
-  createReadOnlyTools,
+  createAgentTools,
   isAgentEnabled,
   runAgentLoop,
 } from "@/lib/agent";
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     const { data, errorResponse } = await validateBody(agentSchema, await req.json());
     if (errorResponse) return errorResponse;
 
-    const tools = createReadOnlyTools();
+    const tools = createAgentTools();
     const encoder = new TextEncoder();
 
     const stream = new ReadableStream({
