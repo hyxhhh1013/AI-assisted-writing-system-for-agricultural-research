@@ -19,6 +19,7 @@ export interface AdminListParams {
   projectId?: string;
   dateFrom?: string;
   dateTo?: string;
+  indexStatus?: string;
 }
 
 // ==================== 鍒嗛〉鍝嶅簲 ====================
@@ -74,7 +75,7 @@ export interface AdminStats {
     todayCount: number;
     weekCount: number;
     byFeature: Record<string, number>;
-    topUsers: { userId: string; count: number }[];
+    topUsers: { userId: string; userName?: string; count: number }[];
   };
 }
 
@@ -90,10 +91,21 @@ export interface AdminUsageStats {
   recent: Array<{
     feature: string;
     userId?: string;
+    userLabel?: string;
     timestamp: number;
     metadata?: Record<string, unknown>;
   }>;
   totalEntries: number;
+}
+
+export interface AdminUsageTrendPoint {
+  date: string;
+  count: number;
+}
+
+export interface AdminUsageTrends {
+  range: "30d" | "12w";
+  points: AdminUsageTrendPoint[];
 }
 
 // ==================== 鐢ㄦ埛 / 椤圭洰 / 鏂囩尞 ====================
@@ -152,11 +164,58 @@ export interface AdminKnowledgeFile {
   size: number;
   chunkCount: number;
   mtime: string | null;
+  parseWarning?: "no_text" | "low_text" | null;
+  bibEdited?: boolean;
+  doi?: string | null;
+  indexStatus: "unindexed" | "partial" | "ready";
+  indexLabel: string;
 }
 
-export interface AdminKnowledgeListResponse {
-  files: AdminKnowledgeFile[];
+export interface AdminListMeta {
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface AdminListResult<T> {
+  data: T[];
+  meta: AdminListMeta;
+}
+
+export interface AdminKnowledgeListResponse extends AdminListResult<AdminKnowledgeFile> {
   categoryStats: { category: string; count: number }[];
+}
+
+export interface AdminSearchUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  label: string;
+  type: "user";
+}
+
+export interface AdminSearchProject {
+  id: string;
+  title: string;
+  userName?: string | null;
+  label: string;
+  type: "project";
+}
+
+export interface AdminSearchKnowledge {
+  id: string;
+  name: string;
+  category: string;
+  label: string;
+  type: "knowledge";
+}
+
+export interface AdminSearchResponse {
+  users: AdminSearchUser[];
+  projects: AdminSearchProject[];
+  knowledge: AdminSearchKnowledge[];
 }
 
 export interface AdminSettingRecord {

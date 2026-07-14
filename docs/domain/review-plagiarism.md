@@ -8,7 +8,7 @@
 
 | 层 | 路径 |
 |----|------|
-| 页面 | `src/app/review/page.tsx` |
+| 页面 | `src/app/review/page.tsx`（重定向至质量中心审查 Tab） |
 | 组件 | `src/components/shared/review/`（`review-workspace`、`review-history-list`） |
 | API | `POST /api/review` |
 | 历史 | `GET /api/review/history`、`GET /api/review/[id]` |
@@ -34,13 +34,14 @@
 
 | 层 | 路径 |
 |----|------|
-| 页面 | `src/app/plagiarism/page.tsx` |
+| 页面 | `src/app/plagiarism/page.tsx` → `QualityWorkspace` |
+| 审查（兼容） | `/review` 重定向至 `/plagiarism?tab=review` |
 | API（主） | `POST /api/plagiarism/v2` — 统一 service 薄壳 |
 | 兼容 | `POST /api/plagiarism/check` |
 | 改写 | `POST /api/plagiarism/rewrite`、`PATCH` 接受/拒绝建议 |
 | 历史 | `GET /api/plagiarism/history` |
 | Service | `plagiarism-service.ts`（**唯一业务实现**） |
-| 前端 hook | `use-plagiarism-check` → `services/plagiarism.ts` |
+| 前端 hook | `use-plagiarism-check` → `services/plagiarism.ts`（SSE 调 **v2**） |
 | Admin | `GET /api/admin/plagiarism`、`GET /api/admin/plagiarism/[id]` |
 
 ### 检测层（`PlagiarismConfig`）

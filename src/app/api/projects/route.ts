@@ -10,10 +10,36 @@ import {
   serializeExpandedOutlineSections,
 } from "@/contracts/project";
 import { getErrorMessage } from "@/lib/error-utils";
+import type { Prisma } from "@prisma/client";
 
 import { getCoreSectionKeysForMode } from "@/lib/section-registry";
+import {
+  readWritingBlueprint,
+  writeWritingBlueprint,
+} from "@/lib/project-writing-blueprint-db";
+import {
+  parsePaperPassport,
+  serializePaperPassport,
+} from "@/contracts/paper-passport";
+import { syncProjectPaperPassport, savePaperPassportForProject } from "@/lib/project-paper-passport-sync";
 
 type SectionRecord = Record<string, string>;
+
+function normalizePaperPassportInput(raw: unknown): string | null | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === null || raw === "") return null;
+  if (typeof raw === "string") {
+    const parsed = parsePaperPassport(raw);
+    if (!parsed) throw new Error("paperPassport 格式无效");
+    return serializePaperPassport(parsed);
+  }
+  if (typeof raw === "object" && raw !== null) {
+    const parsed = parsePaperPassport(JSON.stringify(raw));
+    if (!parsed) throw new Error("paperPassport 格式无效");
+    return serializePaperPassport(parsed);
+  }
+  throw new Error("paperPassport 格式无效");
+}
 
 // 获取当前用户的 userId（由 middleware.ts 设置 header）
 function getUserId(req: NextRequest): string | null {
@@ -45,6 +71,15 @@ export async function GET(req: NextRequest) {
         return notFoundResponse("项目未找到");
       }
 
+      let paperPassportRaw: string | undefined;
+      try {
+        const synced = await syncProjectPaperPassport(project.id);
+        if (synced) paperPassportRaw = serializePaperPassport(synced);
+      } catch (passportError: unknown) {
+        logger.warn("Paper-passport sync skipped on GET project", passportError);
+      }
+
+      const langRaw = (project as { language?: string | null }).language;
       const formattedProject = {
         ...project,
         lastUpdated: project.lastUpdated.getTime(),
@@ -57,9 +92,12 @@ export async function GET(req: NextRequest) {
           .map(r => r.content),
         analysisResults: project.analysisResults.map(r => r.content),
         mode: project.mode || "review",
+        language: langRaw === "en" ? "en" : "zh",
         citationStyle: (project.citationStyle as ProjectDTO["citationStyle"]) || "gbt7714",
         dataClaims: project.dataClaims || undefined,
         dataSources: project.dataSources || undefined,
+        writingBlueprint: (await readWritingBlueprint(project.id)) || undefined,
+        paperPassport: paperPassportRaw || undefined,
         expandedOutlineSections: parseExpandedOutlineSections(project.expandedOutlineSections),
       };
 
@@ -123,13 +161,16 @@ export async function POST(req: NextRequest) {
       outline,
       template,
       mode,
+      language,
       citationStyle,
       sections,
-      references,
-      analysisResults,
+      references: _legacyReferences,
+      analysisResults: _legacyAnalysisResults,
       dataClaims,
       dataSources,
       expandedOutlineSections,
+      writingBlueprint,
+      paperPassport: paperPassportRaw,
     } = data;
 
     if (!title) {
@@ -137,7 +178,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 校验所有权（仅更新时）
-    let projectId = id || undefined;
+    const projectId = id || undefined;
     if (projectId) {
       const existing = await prisma.project.findFirst({
         where: { id: projectId, userId },
@@ -148,74 +189,93 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 创建或更新主记录（mode 仅在新建时写入，更新时不允许切换类型）
-    const project = projectId
-      ? await prisma.project.update({
-          where: { id: projectId },
-          data: {
-            title, authors, affiliations, abstract, keywords,
-            classification, researchDirection, outline, template, citationStyle,
-            dataClaims, dataSources,
-            ...(expandedOutlineSections !== undefined
-              ? {
-                  expandedOutlineSections: serializeExpandedOutlineSections(
-                    Array.isArray(expandedOutlineSections) ? expandedOutlineSections : [],
-                  ),
-                }
-              : {}),
-            lastUpdated: new Date(),
-          },
-        })
-      : await prisma.project.create({
-          data: {
-            userId, title, authors, affiliations, abstract, keywords,
-            classification, researchDirection, outline, template,
-            mode: mode === "research" ? "research" : "review",
-            citationStyle,
-            dataClaims, dataSources,
-            expandedOutlineSections: serializeExpandedOutlineSections(
-              Array.isArray(expandedOutlineSections) ? expandedOutlineSections : [],
-            ),
-          },
-        });
+    const paperPassportJson = normalizePaperPassportInput(paperPassportRaw);
 
-    projectId = project.id;
+    const project = await prisma.$transaction(
+      async (tx) => {
+      const saved = projectId
+        ? await tx.project.update({
+            where: { id: projectId },
+            data: {
+              title, authors, affiliations, abstract, keywords,
+              classification, researchDirection, outline, template, citationStyle,
+              ...(language !== undefined
+                ? { language: language === "en" ? "en" : "zh" }
+                : {}),
+              dataClaims, dataSources,
+              ...(expandedOutlineSections !== undefined
+                ? {
+                    expandedOutlineSections: serializeExpandedOutlineSections(
+                      Array.isArray(expandedOutlineSections) ? expandedOutlineSections : [],
+                    ),
+                  }
+                : {}),
+              lastUpdated: new Date(),
+            } as Prisma.ProjectUpdateInput,
+          })
+        : await tx.project.create({
+            data: {
+              userId, title, authors, affiliations, abstract, keywords,
+              classification, researchDirection, outline, template,
+              mode: mode === "research" ? "research" : "review",
+              language: language === "en" ? "en" : "zh",
+              citationStyle,
+              dataClaims, dataSources,
+              expandedOutlineSections: serializeExpandedOutlineSections(
+                Array.isArray(expandedOutlineSections) ? expandedOutlineSections : [],
+              ),
+            } as Prisma.ProjectUncheckedCreateInput,
+          });
 
-    // 增量保存 sections（逐条 upsert，不 deleteMany）
-    if (sections) {
-      for (const [key, content] of Object.entries(sections)) {
-        await prisma.section.upsert({
-          where: { projectId_key: { projectId, key } },
-          update: { content: content as string },
-          create: { projectId, key, content: content as string },
-        });
+      const nextProjectId = saved.id;
+
+      if (sections) {
+        for (const [key, content] of Object.entries(sections)) {
+          await tx.section.upsert({
+            where: { projectId_key: { projectId: nextProjectId, key } },
+            update: { content: content as string },
+            create: { projectId: nextProjectId, key, content: content as string },
+          });
+        }
+      }
+
+      void _legacyReferences;
+      void _legacyAnalysisResults;
+
+      return saved;
+    },
+      { timeout: 15_000 },
+    );
+
+    if (writingBlueprint !== undefined) {
+      await writeWritingBlueprint(
+        project.id,
+        writingBlueprint === null || writingBlueprint === "" ? null : writingBlueprint,
+      );
+    }
+
+    if (paperPassportJson !== undefined && paperPassportJson !== null) {
+      try {
+        await savePaperPassportForProject(project.id, paperPassportJson);
+      } catch (passportError: unknown) {
+        logger.warn("Paper-passport persist skipped on POST project", passportError);
       }
     }
 
-    // 增量保存 references（删除旧+插入新，保持顺序）
-    if (references !== undefined) {
-      await prisma.reference.deleteMany({ where: { projectId } });
-      for (let i = 0; i < references.length; i++) {
-        await prisma.reference.create({
-          data: { projectId, content: references[i], order: i },
-        });
-      }
-    }
-
-    // 增量保存 analysisResults
-    if (analysisResults !== undefined) {
-      await prisma.analysisResult.deleteMany({ where: { projectId } });
-      for (const content of analysisResults) {
-        await prisma.analysisResult.create({
-          data: { projectId, content },
-        });
-      }
+    try {
+      await syncProjectPaperPassport(project.id);
+    } catch (passportError: unknown) {
+      logger.warn("Paper-passport sync skipped on POST project", passportError);
     }
 
     return NextResponse.json({ id: project.id, message: "保存成功" });
   } catch (error: unknown) {
     logger.error("Projects POST error:", error);
-    return errorResponse(error instanceof Error ? getErrorMessage(error) : "Projects POST failed");
+    const message = error instanceof Error ? getErrorMessage(error) : "Projects POST failed";
+    if (message.includes("paperPassport")) {
+      return errorResponse(message, 400);
+    }
+    return errorResponse(message);
   }
 }
 

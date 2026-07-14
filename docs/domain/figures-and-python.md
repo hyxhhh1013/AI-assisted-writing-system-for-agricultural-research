@@ -2,7 +2,7 @@
 
 ## 注册表（唯一真相源）
 
-- `scripts/charts/registry.json` — 15 种图，4 类
+- `scripts/charts/registry.json` — 19 种图，4 类
 - 新增图表：`chart_types/*.py` + registry 一条 → 前端 `/plot` 自动出现
 - API：`GET /api/figures/registry`
 
@@ -10,7 +10,7 @@
 
 | 类 | 示例 |
 |----|------|
-| 数据图 | 柱状/堆积/折线/散点/饼 |
+| 数据图 | 柱状/堆积/折线/散点/饼/热力/面积/森林/雷达 |
 | 示意图 | 流程图、分子结构 |
 | XRD | bragg、peakfit、amorphous 等 |
 | 表格 | 三线表 GB/T 7714 |
@@ -19,6 +19,8 @@
 
 - 环境变量 **`PYTHON_CMD`**（所有 Python 路由已统一）
 - 基类：`scripts/charts/chart_base.py`（`ChartModule` 自动扫描）
+- 期刊样式：`scripts/charts/plot_style.py`（Nature 配色、SVG 可编辑文字、多格式导出）
+- 样式字段：`registry.json` → `global_style_fields`（前端 `/plot` 动态渲染）
 - 工作台：`useFigurePipeline` — `findFigureBlocks` / `generateSingleFigure` / `replacePlaceholders`
 
 ## 主要 API

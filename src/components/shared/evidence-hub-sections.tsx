@@ -7,6 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { ChartConfig, DataSourceSummary, EvidenceClaim } from "@/contracts/data-source";
+import { buildPlotPageHref, chartTypeToFigureId } from "@/contracts/figure";
+import type { ProjectChartAsset } from "@/contracts/figure";
+import { RegisteredChartsCard } from "@/components/shared/plot/registered-charts-card";
 import {
   BarChart3,
   Check,
@@ -34,11 +37,13 @@ interface EvidenceHubSectionsProps {
   summaries: DataSourceSummary[];
   injectionPreview: string;
   chartConfigs: ChartConfig[];
+  projectCharts?: ProjectChartAsset[];
   projectId: string;
   isSaving: boolean;
   onUpdateClaim: (id: string, patch: Partial<EvidenceClaim>) => Promise<void>;
   onRemoveClaim: (id: string) => Promise<void>;
   onInsertClaim?: (claimText: string, claimId: string) => void;
+  onChartInserted?: (payload: { projectId: string; sectionKey: string }) => void;
 }
 
 export function EvidenceHubSections({
@@ -46,11 +51,13 @@ export function EvidenceHubSections({
   summaries,
   injectionPreview,
   chartConfigs,
+  projectCharts = [],
   projectId,
   isSaving,
   onUpdateClaim,
   onRemoveClaim,
   onInsertClaim,
+  onChartInserted,
 }: EvidenceHubSectionsProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftText, setDraftText] = useState("");
@@ -239,17 +246,30 @@ export function EvidenceHubSections({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {chartConfigs.map((cfg, i) => (
+            {chartConfigs.map((cfg, i) => {
+              const figureId = chartTypeToFigureId(cfg.type);
+              const plotHref = buildPlotPageHref({
+                projectId,
+                figureId,
+                chartIdx: i,
+              });
+              return (
               <div key={i} className="flex items-center gap-2 p-2 bg-muted/20 rounded-md text-[10px]">
                 <span className="flex-1 truncate font-medium">{cfg.title}</span>
-                <a href={`/plot?id=${projectId}`} target="_blank" rel="noreferrer" className="text-primary shrink-0">
+                <a href={plotHref} target="_blank" rel="noreferrer" className="text-primary shrink-0">
                   绘图 →
                 </a>
               </div>
-            ))}
+            );})}
           </CardContent>
         </Card>
       )}
+
+      <RegisteredChartsCard
+        projectId={projectId}
+        charts={projectCharts}
+        onInserted={onChartInserted}
+      />
 
       <Card>
         <CardHeader className="pb-2">

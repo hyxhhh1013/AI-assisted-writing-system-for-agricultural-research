@@ -79,6 +79,20 @@ describe("parseOutline", () => {
     const sections = parseOutline(md);
     expect(sections.length).toBeGreaterThan(0);
   });
+
+  it("assigns unique IDs when fullPath collides (duplicate subsection titles)", () => {
+    const md = [
+      "## 研究进展综述",
+      "### 不同温度下关键营养元素变化",
+      "要点A",
+      "### 不同温度下关键营养元素变化",
+      "要点B",
+    ].join("\n");
+    const sections = parseOutline(md);
+    const ids = sections.map((s) => s.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(sections.filter((s) => s.title === "不同温度下关键营养元素变化")).toHaveLength(2);
+  });
 });
 
 // ==================== mapToIMRADSection ====================
@@ -183,6 +197,15 @@ describe("buildOutlineTasks", () => {
     expect(tasks).toHaveLength(2);
     expect(tasks[0].sectionKey).toBeDefined();
     expect(tasks[0].fullPath).toBeDefined();
+    expect(tasks[0].title).toBe("引言");
+  });
+
+  it("uses leaf title for display, not fullPath", () => {
+    const tasks = buildOutlineTasks("## 研究进展综述\n### 主题维度一\n要点\n### 主题维度二\n要点", "review");
+    const bodyTasks = tasks.filter((t) => t.title.startsWith("主题维度"));
+    expect(bodyTasks).toHaveLength(2);
+    expect(bodyTasks[0].title).toBe("主题维度一");
+    expect(bodyTasks[0].fullPath).toContain("研究进展综述");
   });
 });
 

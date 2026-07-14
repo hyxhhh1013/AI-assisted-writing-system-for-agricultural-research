@@ -3,8 +3,7 @@
  * 使用占位符避免「旧编号互换成新编号」时单次替换产生串扰。
  */
 
-import { CITATION_GROUP_RE, FULLWIDTH_CITATION_RE, expandCitationGroup } from "@/lib/citation";
-import { normalizeAllCitationFormats } from "@/lib/citation-bounds";
+import { CITATION_GROUP_RE, FULLWIDTH_CITATION_RE, expandCitationGroup, normalizeAllCitationFormats } from "@/lib/citation";
 
 const PH = (old: number) => `§§CITEOLD${old}§§`;
 
@@ -120,6 +119,34 @@ export function remapBracketCitations(text: string, indexMap: Record<number, num
 export function collectUsedReferences(text: string, references: string[]): string[] {
   const order = collectCitationFirstAppearance(text, references.length);
   return order.map((idx) => references[idx - 1]).filter((ref): ref is string => Boolean(ref));
+}
+
+export function referencesFromRefMapping(refMapping: Record<string, number> | null | undefined): string[] {
+  if (!refMapping || Object.keys(refMapping).length === 0) return [];
+  const max = Math.max(...Object.values(refMapping));
+  if (!Number.isFinite(max) || max < 1) return [];
+  const pool: string[] = new Array(max).fill("");
+  for (const [source, idx] of Object.entries(refMapping)) {
+    if (idx >= 1 && idx <= max) pool[idx - 1] = source;
+  }
+  return pool;
+}
+
+/**
+ * 扩写/预览区参考文献：优先用 SSE 下发的完整引用列表（与正文 [n] 顺序一致），
+ * 否则用 refMapping 还原检索池，再从正文解析。
+ */
+export function buildPreviewReferencesFromContent(
+  content: string,
+  projectReferences: string[],
+  streamReferences?: string[],
+  refMapping?: Record<string, number> | null,
+): string[] {
+  if (streamReferences && streamReferences.length > 0) return streamReferences;
+  if (!content.trim()) return [];
+  const mappingPool = referencesFromRefMapping(refMapping);
+  const pool = mappingPool.length > 0 ? mappingPool : projectReferences;
+  return collectUsedReferences(content, pool);
 }
 
 /**

@@ -1,12 +1,8 @@
 name: Deploy to VPS (PM2)
 
-# push main → CI 云端 build → 上传 deploy.tar.gz → apply.sh → pm2 reload
-# 本地日常可继续: powershell -File scripts/deploy/package.ps1
-# 手动重发: Actions → Deploy to VPS (PM2) → Run workflow
-
+# 日常部署请用 scripts/deploy/package.ps1 + apply.sh（standalone 上传）。
+# 本 workflow 仅手动触发，避免 push 时在错误目录跑旧 Docker 脚本或误覆盖线上。
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -19,47 +15,21 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Build deploy bundle
-        run: bash scripts/deploy/package.sh
-
-      - name: Upload bundle to VPS
-        uses: appleboy/scp-action@v1.0.0
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: ${{ secrets.DEPLOY_PORT != '' && secrets.DEPLOY_PORT || 22 }}
-          source: deploy.tar.gz
-          target: /home/ubuntu/
-
-      - name: Apply on server
+      - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.1
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_PORT != '' && secrets.DEPLOY_PORT || 22 }}
-          command_timeout: 30m
+          command_timeout: 45m
+          envs: DEPLOY_DIR,DEPLOY_BRANCH
           script: |
             set -euo pipefail
-            APP_DIR="${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/home/ubuntu/grainscript' }}"
-            export APP_DIR
-            export TAR_FILE="/home/ubuntu/deploy.tar.gz"
-            bash "$APP_DIR/scripts/deploy/apply.sh"
+            cd "${DEPLOY_DIR:-/home/ubuntu/grainscript}"
+            export DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
+            bash scripts/deploy/pm2-up.sh
+        env:
+          DEPLOY_DIR: ${{ secrets.DEPLOY_PATH != '' && secrets.DEPLOY_PATH || '/home/ubuntu/grainscript' }}
+          DEPLOY_BRANCH: ${{ github.ref_name }}

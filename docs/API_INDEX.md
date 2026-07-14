@@ -13,7 +13,7 @@
 <!-- API_INDEX:AUTO:START -->
 ## 路由表（自动生成）
 
-> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-06-06 08:35:24**（共 **61** 个 route 文件，validateBody **26**，SSE **9**，requireAdmin **14**）。
+> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-07-06 13:49:09**（共 **84** 个 route 文件，validateBody **41**，SSE **11**，requireAdmin **15**）。
 
 图例：zod = 使用 validateBody；SSE = 含 text/event-stream / ReadableStream；admin = 含 requireAdmin。
 
@@ -32,7 +32,10 @@
 |------|------|-----|-----|-------|
 | GET, POST, PATCH, DELETE | `/api/projects` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/analysis-results` | ✓ | — | — |
+| PATCH | `/api/projects/[id]/charts` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/meta` | ✓ | — | — |
+| PATCH | `/api/projects/[id]/paper-passport` | ✓ | — | — |
+| POST | `/api/projects/[id]/paper-passport/sync` | — | — | — |
 | PATCH | `/api/projects/[id]/references` | ✓ | — | — |
 | POST | `/api/projects/[id]/references/import-external` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/sections/[key]` | ✓ | — | — |
@@ -49,6 +52,7 @@
 | 方法 | 路径 | zod | SSE | admin |
 |------|------|-----|-----|-------|
 | POST | `/api/outline` | ✓ | ✓ | — |
+| POST | `/api/outline/blueprint` | ✓ | — | — |
 
 ### 文献对话
 
@@ -195,6 +199,7 @@
 | GET, PUT, DELETE | `/api/admin/settings` | ✓ | — | ✓ |
 | GET | `/api/admin/stats` | — | — | ✓ |
 | GET | `/api/admin/usage` | — | — | ✓ |
+| GET | `/api/admin/usage/trends` | — | — | ✓ |
 | GET, PATCH, DELETE | `/api/admin/users` | ✓ | — | ✓ |
 | GET | `/api/admin/users/[id]` | — | — | ✓ |
 
@@ -202,7 +207,24 @@
 
 | 方法 | 路径 | zod | SSE | admin |
 |------|------|-----|-----|-------|
+| POST | `/api/agent` | ✓ | ✓ | — |
+| GET, POST | `/api/directions` | ✓ | — | — |
+| GET, PUT, DELETE | `/api/directions/[slug]` | ✓ | — | — |
+| POST | `/api/directions/[slug]/analyze` | ✓ | ✓ | — |
+| PATCH | `/api/directions/[slug]/assets` | ✓ | — | — |
+| POST | `/api/directions/[slug]/evaluation-contract` | ✓ | — | — |
+| POST | `/api/directions/[slug]/experiment-plan` | — | — | — |
+| POST | `/api/directions/[slug]/grant-proposal` | ✓ | — | — |
+| PATCH | `/api/directions/[slug]/literature-corpus` | ✓ | — | — |
+| POST | `/api/directions/[slug]/literature-corpus/import-external` | ✓ | — | — |
+| POST | `/api/directions/[slug]/literature-corpus/import-knowledge` | ✓ | — | — |
+| GET | `/api/directions/[slug]/paper-brief` | — | — | — |
+| POST | `/api/directions/[slug]/parse-asset` | — | — | — |
+| PATCH, POST | `/api/directions/[slug]/roadmap` | ✓ | — | — |
+| GET | `/api/directions/[slug]/scan` | — | — | — |
+| GET | `/api/directions/summary` | — | — | — |
 | POST | `/api/literature/search` | ✓ | — | — |
+| GET | `/api/presentation/stats` | — | — | — |
 <!-- API_INDEX:AUTO:END -->
 
 ## 人工备注（不随脚本覆盖）

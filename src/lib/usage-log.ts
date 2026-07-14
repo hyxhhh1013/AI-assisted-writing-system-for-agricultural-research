@@ -7,6 +7,7 @@ import prisma from "@/lib/prisma";
 export type UsageLogEntry = {
   feature: string;
   userId?: string;
+  userLabel?: string;
   timestamp: number;
   metadata?: Record<string, unknown>;
 };

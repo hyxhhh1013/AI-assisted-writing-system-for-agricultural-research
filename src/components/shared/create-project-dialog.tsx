@@ -19,11 +19,12 @@ import {
   WRITING_MODES,
   type ProjectWritingMode,
 } from "@/contracts/writing-mode";
+import type { ProjectLanguage } from "@/contracts/project";
 
 interface CreateProjectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreate: (mode: ProjectWritingMode, title: string) => void | Promise<void>;
+  onCreate: (mode: ProjectWritingMode, title: string, language: ProjectLanguage) => void | Promise<void>;
   isCreating?: boolean;
 }
 
@@ -56,11 +57,13 @@ export function CreateProjectDialog({
   isCreating = false,
 }: CreateProjectDialogProps) {
   const [mode, setMode] = useState<ProjectWritingMode>("review");
+  const [language, setLanguage] = useState<ProjectLanguage>("zh");
   const [title, setTitle] = useState("");
 
   const handleOpenChange = (next: boolean) => {
     if (!next) {
       setMode("review");
+      setLanguage("zh");
       setTitle("");
     }
     onOpenChange(next);
@@ -69,8 +72,9 @@ export function CreateProjectDialog({
   const handleSubmit = async () => {
     const trimmed = title.trim();
     const finalTitle = trimmed || getDefaultProjectTitle(mode);
-    await onCreate(mode, finalTitle);
+    await onCreate(mode, finalTitle, language);
     setMode("review");
+    setLanguage("zh");
     setTitle("");
   };
 
@@ -80,7 +84,7 @@ export function CreateProjectDialog({
         <DialogHeader>
           <DialogTitle>新建论文项目</DialogTitle>
           <DialogDescription>
-            请先选择写作类型。类型在创建后固定，可在项目中心通过卡片样式区分。
+            请先选择写作类型与输出语言。类型在创建后固定，语言可在项目设置中修改。
           </DialogDescription>
         </DialogHeader>
 
@@ -126,6 +130,32 @@ export function CreateProjectDialog({
               </button>
             );
           })}
+        </div>
+
+        <div className="grid gap-2">
+          <Label>写作语言</Label>
+          <div className="flex h-9 border rounded-md overflow-hidden">
+            <button
+              type="button"
+              className={cn(
+                "flex-1 text-sm transition-colors",
+                language === "zh" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted/60",
+              )}
+              onClick={() => setLanguage("zh")}
+            >
+              中文
+            </button>
+            <button
+              type="button"
+              className={cn(
+                "flex-1 text-sm transition-colors",
+                language === "en" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted/60",
+              )}
+              onClick={() => setLanguage("en")}
+            >
+              English
+            </button>
+          </div>
         </div>
 
         <div className="grid gap-2">

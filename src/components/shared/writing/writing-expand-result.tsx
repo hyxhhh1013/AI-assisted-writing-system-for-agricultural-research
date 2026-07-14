@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Copy, Database, ScrollText, Link2, ChevronRight, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { MarkdownContent } from "@/components/shared/previews/shared";
+import { WritingFigureEditLinks } from "@/components/shared/writing/writing-figure-edit-links";
 import { WritingSseStatus } from "@/components/shared/writing/writing-sse-status";
 import type { PipelineStep } from "@/hooks/use-writing-stream";
 import type {
@@ -15,6 +16,7 @@ import type {
 } from "@/components/shared/writing/writing-types";
 
 export interface WritingExpandResultProps {
+  projectId: string;
   result: string;
   generationStatus: GenerationStatus;
   citationWarnings: CitationWarning[];
@@ -23,11 +25,13 @@ export interface WritingExpandResultProps {
   detectedRefs: string[];
   verificationFeedback: string;
   pipelineSteps: PipelineStep[];
+  detectedFigures?: { tool: string; config: string; caption: string }[];
   onApplyToEditor: () => void;
 }
 
 /** 无 onPreviewUpdate 时侧边栏内展示扩写结果与核查信息 */
 export function WritingExpandResult({
+  projectId,
   result,
   generationStatus,
   citationWarnings,
@@ -36,6 +40,7 @@ export function WritingExpandResult({
   detectedRefs,
   verificationFeedback,
   pipelineSteps,
+  detectedFigures,
   onApplyToEditor,
 }: WritingExpandResultProps) {
   const [refMappingExpanded, setRefMappingExpanded] = useState(false);
@@ -158,6 +163,12 @@ export function WritingExpandResult({
         )}
 
         <WritingSseStatus steps={pipelineSteps} />
+
+        <WritingFigureEditLinks
+          projectId={projectId}
+          text={result}
+          detectedFigures={detectedFigures}
+        />
 
         {verificationFeedback && (
           <div className="p-3 bg-amber-50 text-amber-800 rounded-md border border-amber-200">

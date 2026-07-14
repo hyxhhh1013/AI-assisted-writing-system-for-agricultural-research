@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   buildReorderedReferences,
+  buildPreviewReferencesFromContent,
   collectCitationFirstAppearance,
+  referencesFromRefMapping,
   remapBracketCitations,
 } from "@/lib/reference-reorder";
 
@@ -30,5 +32,28 @@ describe("reference-reorder", () => {
       "结论 [2]",
     ].join("\n\n");
     expect(collectCitationFirstAppearance(text, 3)).toEqual([2, 1, 3]);
+  });
+
+  it("buildPreviewReferencesFromContent prefers stream list over project pool", () => {
+    const fromStream = buildPreviewReferencesFromContent(
+      "正文 [2]",
+      ["a.pdf", "b.pdf"],
+      ["b.pdf", "a.pdf"],
+    );
+    expect(fromStream).toEqual(["b.pdf", "a.pdf"]);
+  });
+
+  it("buildPreviewReferencesFromContent uses refMapping pool when project refs are empty", () => {
+    const cited = buildPreviewReferencesFromContent(
+      "Introduction [2] and [1]",
+      [],
+      undefined,
+      { "a.pdf": 1, "b.pdf": 2 },
+    );
+    expect(cited).toEqual(["b.pdf", "a.pdf"]);
+  });
+
+  it("referencesFromRefMapping rebuilds dense index pool", () => {
+    expect(referencesFromRefMapping({ "x.pdf": 1, "y.pdf": 3 })).toEqual(["x.pdf", "", "y.pdf"]);
   });
 });

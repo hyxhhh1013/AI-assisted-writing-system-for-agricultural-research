@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useCallback, useEffect, useRef } from "react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import {
   Popover,
@@ -51,17 +52,21 @@ interface LiteratureChunk {
 interface ReferenceBrowserProps {
   references: string[];
   projectId?: string;
+  directionSlug?: string;
   activeSectionContent?: string;
   allContents?: Record<string, string>;
   className?: string;
+  onGoImport?: () => void;
 }
 
 export function ReferenceBrowser({
   references,
   projectId,
+  directionSlug,
   activeSectionContent,
   allContents,
   className,
+  onGoImport,
 }: ReferenceBrowserProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [loadingSource, setLoadingSource] = useState<number | null>(null);
@@ -137,7 +142,27 @@ export function ReferenceBrowser({
             参考文献
           </span>
         </div>
-        <p className="text-[10px] text-muted-foreground italic px-1">暂无参考文献</p>
+        <p className="text-[10px] text-muted-foreground px-1 leading-relaxed">
+          {directionSlug
+            ? "暂无参考文献。本篇文献已在方向备料层导入，可回方向 corpus 调整，或使用侧栏「补录文献」追加。"
+            : "暂无参考文献。可在侧栏「补录文献」检索 OpenAlex / PubMed 或从知识库 PDF 加入。"}
+        </p>
+        {directionSlug ? (
+          <Link
+            href={`/directions/${directionSlug}?tab=assets`}
+            className="block w-full rounded-md border border-dashed border-[#6366f1]/30 bg-[#6366f1]/5 px-2 py-2 text-center text-[10px] font-medium text-[#6366f1] hover:bg-[#6366f1]/10"
+          >
+            回方向修改文献 corpus →
+          </Link>
+        ) : onGoImport ? (
+          <button
+            type="button"
+            onClick={onGoImport}
+            className="w-full rounded-md border border-dashed border-[#1a5632]/30 bg-[#1a5632]/5 px-2 py-2 text-[10px] font-medium text-[#1a5632] hover:bg-[#1a5632]/10"
+          >
+            去补录文献 →
+          </button>
+        ) : null}
       </div>
     );
   }

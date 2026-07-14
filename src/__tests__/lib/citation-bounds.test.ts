@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeAllCitationFormats } from "@/lib/citation-bounds";
+import { normalizeAllCitationFormats } from "@/lib/citation";
 import { normalizeCitationBrackets } from "@/lib/citation";
 
 describe("citation bracket normalization", () => {

@@ -15,9 +15,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { DIALOG_FULL } from "@/components/ui/dialog-sizes";
-import type { ProjectData } from "@/contracts/project";
+import type { ProjectData, ProjectLanguage } from "@/contracts/project";
+import { resolveProjectLanguage } from "@/contracts/project";
 import { getWritingModeMeta } from "@/contracts/writing-mode";
 import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
+import { cn } from "@/lib/utils";
 
 interface ProjectMetaDraft {
   title: string;
@@ -31,6 +33,7 @@ interface ProjectMetaDraft {
   template: string;
   referencesText: string;
   citationStyle?: "gbt7714" | "vancouver" | "apa7" | "ieee";
+  language: ProjectLanguage;
 }
 
 interface WorkbenchMetaDialogProps {
@@ -62,6 +65,7 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
     template: project.template || "sci",
     referencesText: (project.references || []).join("\n"),
     citationStyle: project.citationStyle || "gbt7714",
+    language: resolveProjectLanguage(project),
   });
 
   useEffect(() => {
@@ -78,6 +82,7 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
         template: project.template || "sci",
         referencesText: (project.references || []).join("\n"),
         citationStyle: project.citationStyle || "gbt7714",
+        language: resolveProjectLanguage(project),
       });
     }
   }, [open, project.id]);
@@ -137,6 +142,37 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
                 <span className="text-[11px] text-[#9aa8a0]">
                   {getWritingModeMeta(project.mode).description} · 创建后不可更改
                 </span>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>写作语言</Label>
+                <div className="flex h-9 max-w-xs border rounded-md overflow-hidden">
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex-1 text-sm transition-colors",
+                      tempMeta.language === "zh"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-background hover:bg-muted/60",
+                    )}
+                    onClick={() => setTempMeta({ ...tempMeta, language: "zh" })}
+                  >
+                    中文
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex-1 text-sm transition-colors",
+                      tempMeta.language === "en"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-background hover:bg-muted/60",
+                    )}
+                    onClick={() => setTempMeta({ ...tempMeta, language: "en" })}
+                  >
+                    English
+                  </button>
+                </div>
+                <p className="text-[10px] text-muted-foreground">影响大纲、写作蓝图与章节扩写的输出语言</p>
               </div>
 
               <div className="grid gap-2">

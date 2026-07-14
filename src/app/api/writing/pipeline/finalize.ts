@@ -1,7 +1,31 @@
 import type { EvidenceClaim } from "@/contracts/data-source";
 import { collectCitationFirstAppearance } from "@/lib/reference-reorder";
-import { validateCitations, validateDataClaims } from "@/lib/citation-validator";
+import { validateCitations, validateDataClaims } from "@/lib/citation";
 import type { PreparedWritingContext, WritingPipelineEmit } from "../types";
+
+/** 从草稿中提取引用编号并发送 references SSE 事件（快速模式共用） */
+export function emitDraftReferences(
+  draft: string,
+  prepared: PreparedWritingContext,
+  emit: WritingPipelineEmit,
+): string[] {
+  const { referencesByIndex, newSources, refMapping } = prepared;
+  const maxRefIndex = referencesByIndex.length;
+
+  const usedCitationIndexes = collectCitationFirstAppearance(draft, maxRefIndex);
+  const citedReferences = usedCitationIndexes
+    .map((idx) => referencesByIndex[idx - 1])
+    .filter((ref): ref is string => Boolean(ref));
+  const usedNewSources = citedReferences.filter((ref) => newSources.includes(ref));
+
+  if (citedReferences.length > 0) {
+    emit({ type: "references", references: citedReferences, refMapping });
+  } else if (Object.keys(refMapping).length > 0) {
+    emit({ type: "info", info: "", refMapping });
+  }
+
+  return usedNewSources;
+}
 
 export async function runFinalizePhase(
   refinedDraft: string,
@@ -10,8 +34,7 @@ export async function runFinalizePhase(
   dataClaims: EvidenceClaim[],
   emit: WritingPipelineEmit,
 ): Promise<void> {
-  const { contextText, referencesByIndex, newSources, refMapping } = prepared;
-  const maxRefIndex = referencesByIndex.length;
+  const { contextText } = prepared;
 
   emit({
     type: "pipeline_step",
@@ -21,16 +44,7 @@ export async function runFinalizePhase(
   });
 
   const checkTarget = refinedDraft || correctedDraft;
-  const usedCitationIndexes = collectCitationFirstAppearance(checkTarget, maxRefIndex);
-  const usedNewSources = usedCitationIndexes
-    .map((idx) => referencesByIndex[idx - 1])
-    .filter((ref): ref is string => Boolean(ref) && newSources.includes(ref));
-
-  if (usedNewSources.length > 0) {
-    emit({ type: "references", references: Array.from(new Set(usedNewSources)), refMapping });
-  } else if (Object.keys(refMapping).length > 0) {
-    emit({ type: "info", info: "", refMapping });
-  }
+  const usedNewSources = emitDraftReferences(checkTarget, prepared, emit);
 
   const citationChecks = validateCitations(checkTarget, contextText);
   const failedChecks = citationChecks.filter((c) => !c.passed);

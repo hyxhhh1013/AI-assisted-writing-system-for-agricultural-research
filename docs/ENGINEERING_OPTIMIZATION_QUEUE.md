@@ -8,7 +8,8 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-06-13（096a～c done；081 done；093 done）
+> **最后更新**：2026-07-14（文档收拢：Phase 6 与 Phase 11 对齐；Wave 2 部分完成；入口重定向）  
+> **实时 status 只看 §1 Phase 11**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
 
@@ -100,11 +101,11 @@
 | **ENG-PR-096b** | **要点列表 + `bullets[]` 契约** | 096a | 1d | done | 2026-06-13；`WritingBulletList` + schema |
 | **ENG-PR-096c** | **`expand_bullet` 逐条扩写 + 合并** | 096b | 2d | done | 2026-06-13；`bullet_done` SSE + `use-writing-bullet-expand` |
 | **ENG-PR-096d** | **工作台默认段落模式 + 选区助手** | 096c | 1～2d | **done** | **P1**；`paragraph-editor` / `use-ai-paragraph` 为主路径 |
-| ENG-PR-082 | Verifier 结构化 + 选择性 Refiner | **096c** | 2d | todo | **P2 辅助**；整节写完后可选核查，非主轴 |
-| ENG-PR-083 | 大纲骨架化 `userSkeleton` | — | 1d | todo | 与 096b 同源；可并行 |
-| ENG-PR-084 | 入口重构：`/writing` 废弃 + 选区 AI | **096d** | 2d | todo | §八；与 096d 合并规划 |
-| ENG-PR-085 | 分析页 AI 免责标注 | — | 2h | todo | §九 |
-| ENG-PR-086 | 编辑器对话面板（Phase C） | ENG-PR-084 | 2～4w | todo | backlog；§十 |
+| ENG-PR-082 | Verifier 结构化 + 选择性 Refiner | **096c** | 2d | todo | 见 Phase 11；Wave 2 收尾 |
+| ENG-PR-083 | 大纲骨架化 `userSkeleton` | — | 1d | **done** | 归档→W1-083；outline API/UI + prompt |
+| ~~ENG-PR-084~~ | ~~入口重构~~ | — | — | **cancelled** | 归档→Phase 11；由 Cockpit 取代；`/writing` 已重定向 |
+| ENG-PR-085 | 分析页 AI 免责标注 | — | 2h | todo | 见 Phase 11；目标改为工作台 data 面板 |
+| ~~ENG-PR-086~~ | ~~编辑器对话面板~~ | — | — | **cancelled** | 归档→Phase 11；由 Agent Tab 取代 |
 | **Phase 7 — 文献库书目增强 + 外部文献发现** |
 | ENG-PR-090 | 文献库列表：期刊/DOI 列 + 筛选 + 契约扩展 | ENG-PR-027 | 1～2d | done | 列表列/筛选/ISSN 弹窗/响应式卡片 |
 | ENG-PR-091 | 期刊指标 enrichment（CSV/Excel IF/分区 + OpenAlex） | ENG-PR-090 | 2～3d | done | §三；`metrics` + 中英文列别名；IF 年份角标；导入批次 UI 待二期 |
@@ -118,8 +119,41 @@
 | RAG-PR-009 | warmup 真预加载 + `RAG_WARMUP`/`RAG_PERF_LOG` 开关 | RAG-PR-008 | 0.5h | done | 2026-06-13；冷启动移出首检索 |
 | RAG-PR-010 | `.emb` 按需 pread（去常驻内存） | RAG-PR-006 | 0.5d | done | 2026-06-13；`EmbeddingStore` 文件句柄 + `readSync`；省 ~885MB |
 | RAG-PR-011 | 扩写范围检索（按已选文献分类 scope） | RAG-PR-010 | 0.5d | done | 2026-06-13；`search({categories})` + `deriveScopeCategories`；无引用回退全库 |
+| **Phase 9 — 研究方向战略规划（ENG-PR-100 系列）** |
+| ENG-PR-100 | 方向基础模块：Direction 表 + CRUD + 页面框架（33 files） | — | 3d | done | 2026-07-04；`d18a7e3` |
+| ENG-PR-110 | Socratic Mentor 预承诺（P0） | 100 | 2d | done | 2026-07-04；`314dd02` / `509a9a3` / `52823df` |
+| ENG-PR-111 | 分析报告可视化：雷达图+柱状图+证据表+矛盾面板（P0） | 100 | 3d | done | 2026-07-04；`66b3d75` |
+| ENG-PR-112 | Blueprint 扩展 + 写作桥接对齐（P1） | 100 | 1d | done | 2026-07-04；`be78112` |
+| ENG-PR-113 | NL 资产解析：自然语言→结构化 ExperimentAsset（P1） | 100 | 1d | done | 2026-07-04；`2ac88f5` |
+| ENG-PR-114 | 甘特图路线图可视化（P1） | 100 | 1d | done | 2026-07-04；`4ddc02e` |
+| ENG-PR-115 | 实验方案生成：D6 缺口→ExperimentPlan（P1） | 100 | 2d | done | 2026-07-04；`e23549c` |
+| ENG-PR-116 | 项目申报辅助：方向全景→基金申请书（P1） | 100 | 2d | done | 2026-07-04；`353791a` |
+| ENG-PR-117 | 双角色架构：PI + Researcher 权限分离（P2） | 100 | 1d | done | 2026-07-04；`42abad6` |
+| ENG-PR-118 | Material Passport 版本追踪（P2） | 100 | 1d | done | 2026-07-04；`064479b` |
+| ENG-PR-119 | Style Calibration 方向校准（P2） | 100 | 1d | done | 2026-07-04；`cc9ab9e` |
+| ENG-PR-120 | 反模式检测接入审查板块 | 100 | 1d | done | 2026-07-04；`a35bbc8` |
+| **Phase 10 — Direction→Writing 文献桥接（ENG-PR-200 Bug 1 + ENG-PR-210）** |
+| ENG-PR-200a | 综述 mapping fallback 修复（mapToSectionForMode + majorNumberFromSectionId） | — | 0.5d | done | 2026-07-05 |
+| ENG-PR-210a | Direction→Writing 桥接：contract + bridge 函数 + paper-brief API + references 注入 | 100 | 1d | done | 2026-07-05 |
+| ENG-PR-210b | Blueprint 上下文注入：direction 字段不再被 zod strip，到达 AI prompt | 210a | 0.5d | done | 2026-07-05 |
+| **Phase 11 — Wave 0–4 整体规划（见 MASTER_PLAN.md）** |
+| W0-SEC-01 | Direction `userId` + owner 作用域 + 迁移 | — | 0.5d | done | Wave 0；`8c73ca1` |
+| W0-SEC-02 | 未鉴权 AI 路由补齐 + 限流覆盖 | SEC-01 | 0.5d | done | Wave 0；`d586a77` |
+| W0-SEC-03 | JSONB PATCH 竞态 + Reference.order 唯一 | SEC-02 | 1d | done | Wave 0 |
+| W0-WIP-A | quality/citation/chart 审计清理 PR | — | 1d | done | Wave 0；`0da9d3e`+`4b83ac0` |
+| W0-WIP-B | Agent Phase A + direction bridge commit | SEC-01 | 1d | done | Wave 0；`e5a02c4`+`00d08b8` |
+| W1-PASSPORT | PaperPassport 契约 + Cockpit UI | W0-* | 2w | done | MVP：配置+任务卡+快照+导航 |
+| W2-LANGGRAPH | LangGraph + write tools | W1 | 2w | **done*** | *编排与工具已接；缺 AgentSession checkpoint（另项） |
+| W2-CHECKPOINT | AgentSession DB checkpoint / 中断恢复 | W2-LANGGRAPH | 2d | todo | Wave 2 缺口 |
+| W1-083 | userSkeleton → Phase 2 | W1-PASSPORT | 1d | done | outline API/UI + prompt 骨架约束 |
+| W0-5 | 仓库卫生（分支收拢、tmp、误删 migration） | — | 0.5d | todo | MASTER_PLAN Wave 0 |
+| W3-ARGUMENT | Phase 3 Argument Blueprint | W1-PASSPORT | 1w | todo | Wave 3 主轴第一步 |
+| ~~ENG-PR-084~~ | ~~入口废弃~~ | — | — | cancelled | Cockpit；`/writing`→workbench |
+| ~~ENG-PR-086~~ | ~~编辑器对话面板~~ | — | — | cancelled | Agent Tab |
+| ENG-PR-082 | Verifier 结构化 | W2 | 2d | todo | Wave 2 收尾（可与 W3 并行） |
+| ENG-PR-085 | 工作台 data 免责标注 | — | 2h | todo | Wave 3；`/analysis` 已重定向 |
+| ENG-PR-094 | OA 全文入库 | — | 1-2w | todo | Wave 4 backlog |
 
-### 1.1 与既有队列的关系
 
 | 来源 | 本队列处理方式 |
 |------|----------------|
@@ -880,28 +914,32 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-06-12 | ENG-PR-093 | AI | RIS/BibTeX 导入 + 091 脚本/Admin 增强 + reindex 后台续跑 |
 | 2026-06-13 | ENG-PR-096a, 096b, 096c | AI | 协作扩写 MVP：retrieve-preview + bullets[] + expand_bullet；`isWritingDraftReady` 条数门槛 |
 | 2026-06-13 | RAG-PR-006～011 | AI | 新增 Phase 8 RAG 运行时性能：两阶段检索 + embedding LRU + 协作式构建/合并/并发去重 + warmup 预加载 + `.emb` 按需 pread + 扩写按分类 scope；`npm run check` 绿（库变大后卡顿/内存优化） |
+| 2026-07-04 | ENG-PR-100, 110～120 | AI | 新增 Phase 9 研究方向战略规划：方向 CRUD + Socratic 预承诺 + 8 维度 Rubric 分析 + 报告可视化（recharts 雷达图/柱状图/证据表/矛盾面板）+ Blueprint 扩展 + NL 资产解析 + 甘特图路线图 + 实验方案生成 + 项目申报辅助 + 双角色 + Material Passport + Style Calibration；反模式检测接入审查板块；15 commits，全部 tsc + lint 通过 |
+| 2026-07-05 | ENG-PR-200a, 210a~c | AI | 综述 mapping fallback 修复 + Direction→Writing 文献桥接全链路（contract + bridge 函数 + paper-brief API + references 注入 + Blueprint 上下文不再被 zod strip + 综述模式强制文献确认）；~400 行新增，零破坏；`npm run check` 绿，相关 69 测试通过 |
+| 2026-07-06 | MASTER_PLAN v2 + W0-SEC-01 | AI | 新增 `docs/MASTER_PLAN.md` 整体规划；Direction 加 userId + `direction-auth.ts` + 全 routes owner 作用域 + 迁移 SQL |
+| 2026-07-06 | W0-WIP + SEC-02 | AI | 6 commits：W0-WIP-A citation/chart 清理；SEC-01 `8c73ca1`；ENG-PR-210 bridge；ENG-PR-200 Agent Phase A；SEC-02 proxy 鉴权/限流 + `proxy-sec02.test.ts` |
+| 2026-07-06 | W0-SEC-03 | AI | Reference `(projectId,order)` 唯一 + dedup 脚本；Direction/Project charts `FOR UPDATE` 事务；projects POST 去全量 refs 覆盖 + `$transaction` |
+| 2026-07-06 | W1-PASSPORT (phase sync) | AI | `paper-passport-progress.ts` 8 阶段重算；`POST .../paper-passport/sync`；GET/POST project + refs PATCH 触发 sync；Cockpit「下一步」提示；路线图建项后 sync |
+| 2026-07-06 | W1-PASSPORT + W1-083 | AI | Cockpit 阶段点击导航+任务卡；Directions 入 module-registry；ENG-PR-083 userSkeleton（outline API/UI/prompt） |
+| 2026-07-06 | W1-PASSPORT MVP done | AI | 任务卡点击跳转；passport 进度快照；Phase0 PATCH；人控/Agent 切换；Cockpit 侧栏集成 |
+| 2026-07-14 | docs-cleanup | AI | MASTER_PLAN §0 真相表；Phase 6↔11 状态同步；`/writing` `/analysis`→workbench；标 W2-CHECKPOINT / W3-ARGUMENT |
 
 ---
 
 ## 5. 推荐执行顺序（给「下一次 AI」）
 
-**若仓库状态未知，永远从 Phase 0 开始。**
+**当前主轴（2026-07-14）**：先收拢工作区 WIP → 再 Wave 3（`W3-ARGUMENT`）或 Wave 2 缺口（`W2-CHECKPOINT` / `ENG-PR-082`）。  
+历史 Phase 0～10 均已 done，勿重开。详见 [`MASTER_PLAN.md`](./MASTER_PLAN.md) §0。
 
-| 会话 | PR 序列 | 说明 |
-|------|---------|------|
-| Session 0 | 001 + 003 + 004 并行；002 独立 | 认证与构建可发布 |
-| Session 1 | RAG-PR-001 → 002 → 003；004 并行 | 文献对话不卡死 |
-| Session 2 | ENG-PR-020 → 023 → 024 | 服务层 + 校验 |
-| Session 3 | ENG-PR-025 → 026 → **025b** → 027 → 028 | 增量 API + 前端接线 + 去双写 |
-| Session 4 | ENG-PR-030 → 031 | 写作管道可维护 |
-| Session 5 | ENG-PR-021 → 022 → 032 → 033 | fetch 清零 + 页面拆 |
-| Session 6 | ENG-PR-040 → 041 → 042 → 043 | 运维可观测 |
-| Session 7 | ENG-PR-050 → 051 → 052 → 053 → 054 | 质量与测试 |
-| Session 8 | ENG-PR-060、061、062 | 可选增强 |
-| Session 9+ | 087/080/081 done → **096a → 096b → 096c**（MVP）→ 096d；083 与 096b 并行；082/084/085/086 辅助 | 详见 [`plans/ENG-PR-080-human-in-the-loop.md`](./plans/ENG-PR-080-human-in-the-loop.md) |
-| Session 10+ | **090** → 091 ∥ 092 → 093 → 094（评估） | 详见 [`plans/ENG-PR-090-knowledge-enrichment.md`](./plans/ENG-PR-090-knowledge-enrichment.md) |
+| 优先级 | ID | 说明 |
+|--------|-----|------|
+| P0 | W0-5 + 分支收拢 | 未提交改动多在 `eng/pr-092-*`；按主题拆 commit 后合 main |
+| P1 | **W3-ARGUMENT** | Wave 3：Argument Blueprint → passport |
+| P1′ | W2-CHECKPOINT 或 ENG-PR-082 | Agent checkpoint / Verifier（与 W3 二选一，勿齐开） |
+| P2 | ENG-PR-085 | 工作台 data 免责 |
+| P3 | ENG-PR-094 | OA 入库 backlog |
 
-**若只能做一个 PR**：**ENG-PR-096a**（检索预览 + 文献勾选；协作扩写 MVP 第一步）。081 管道已就绪；082 整节审查非当前主轴。
+**若只能做一个产品 PR**：做 **W3-ARGUMENT**。
 
 ---
 

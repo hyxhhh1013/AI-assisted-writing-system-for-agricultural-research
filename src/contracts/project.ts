@@ -1,6 +1,17 @@
 /** 项目领域类型唯一出口：UI/hooks/API 请 `import type { ProjectData } from "@/contracts/project"` */
 import type { DataSourceAnalysis, EvidenceClaim } from "./data-source";
 
+/** 项目写作语言：创建时选定，大纲/扩写/蓝图 API 统一使用 */
+export type ProjectLanguage = "zh" | "en";
+
+export const PROJECT_LANGUAGES: readonly ProjectLanguage[] = ["zh", "en"] as const;
+
+export function resolveProjectLanguage(
+  project: Pick<ProjectDTO, "language"> | null | undefined,
+): ProjectLanguage {
+  return project?.language === "en" ? "en" : "zh";
+}
+
 export interface ProjectDTO {
   id: string;
   title: string;
@@ -21,12 +32,18 @@ export interface ProjectDTO {
   charts?: string;
   expandedOutlineSections?: string[];
   mode?: "review" | "research";
+  /** 写作语言：zh | en */
+  language?: ProjectLanguage;
   /** 引用格式标准：gbt7714 | vancouver | apa7 | ieee */
   citationStyle?: "gbt7714" | "vancouver" | "apa7" | "ieee";
   /** JSON string: EvidenceClaim[] */
   dataClaims?: string;
   /** JSON string: DataSourceAnalysis[] */
   dataSources?: string;
+  /** JSON string: WritingBlueprint — 扩写前写作蓝图；null 表示清空 */
+  writingBlueprint?: string | null;
+  /** JSON string: PaperPassport — 8 阶段论文生命周期快照 */
+  paperPassport?: string | null;
 }
 
 /** Alias kept for backward compat — prefer ProjectDTO in new code */
@@ -118,6 +135,7 @@ export interface ProjectMetaPatch {
   template?: string;
   citationStyle?: "gbt7714" | "vancouver" | "apa7" | "ieee";
   expandedOutlineSections?: string[];
+  writingBlueprint?: string;
 }
 
 export interface SectionPatch {

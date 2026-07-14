@@ -1,6 +1,7 @@
 import type { WritingSSEEvent } from "@/contracts/sse";
 import type { EvidenceClaim } from "@/contracts/data-source";
 import type { WritingInput } from "@/lib/validations";
+import type { WritingBlueprint } from "@/contracts/writing-blueprint";
 
 export type WritingPipelineEmit = (event: WritingSSEEvent) => void;
 
@@ -9,6 +10,7 @@ export interface WritingGlobalContext {
   outline?: string;
   sectionPreviews?: Record<string, string>;
   analysisResults?: string[];
+  blueprint?: WritingBlueprint | null;
 }
 
 export interface PreparedWritingContext {

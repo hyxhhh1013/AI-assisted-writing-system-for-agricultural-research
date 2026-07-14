@@ -1,8 +1,8 @@
-# ENG-PR-080 系列：从「自动出论文」到「辅助写作」— 人机协作
+# ENG-PR-080 系列：协作扩写 — 从「自动出论文」到「高参与、可控生成」
 
-> **状态**：计划中（已拆子 PR）  
+> **状态**：081/087/080 已落地；**产品主轴**调整为 **ENG-PR-096 协作扩写**（选文献 → 定要点 → 逐条扩写 → 段落微调）  
 > **母文档**：本文件；**队列登记**：[`ENGINEERING_OPTIMIZATION_QUEUE.md`](../ENGINEERING_OPTIMIZATION_QUEUE.md) §1 Phase 6  
-> **分支**：每个子 PR 独立分支，例 `eng/pr-080-draft-gate`  
+> **分支**：每个子 PR 独立分支，例 `eng/pr-096a-retrieve-preview`  
 > **关联**：`/roadmap` Phase 1 体验打磨；ENG-PR-070 双轨写作（内容层，可并行）
 
 ---
@@ -11,40 +11,48 @@
 
 | 层级 | ID | 标题 | 依赖 | 估时 | 状态 | 说明 |
 |------|-----|------|------|------|------|------|
-| **P0** | **ENG-PR-087** | 扩写稳定性：全局限流 + 默认减负 + 韧性 | ENG-PR-031 | 1～2d | todo | **线上卡顿/多人并发优先**；081 前置 |
-| P1 | **ENG-PR-080** | 扩写入口：草稿门槛 + 章节引导文案 | ENG-PR-031 | 4h | todo | 与 087、083 可并行 |
-| P1 | **ENG-PR-081** | 写作分步 UI（生成 → 审查 → 修复） | 080, **087** | 1d | todo | 分步会增多请求，**必须在 087 之后** |
-| P1 | **ENG-PR-082** | Verifier 结构化报告 + 选择性 Refiner | 081 | 2d | todo | 不新建 `/verify`、`/fix` 路由 |
-| P1 | **ENG-PR-083** | 大纲骨架化（`userSkeleton`） | — | 1d | todo | 与 080/087 可并行 |
-| P2 | **ENG-PR-084** | 入口重构：`/writing` 废弃 + 选区 AI 统一 | 082 | 2d | todo | Phase B 主体 |
+| **P0** | **ENG-PR-087** | 扩写稳定性：全局限流 + 默认减负 + 韧性 | ENG-PR-031 | 1～2d | done | 2026-06-06 `c506020` |
+| P1 | **ENG-PR-080** | 扩写入口：草稿门槛 + 章节引导文案 | ENG-PR-031 | 4h | done | 2026-06-06 同批合并 |
+| P1 | **ENG-PR-081** | 写作分步 UI（生成 → 审查 → 修复） | 080, **087** | 1d | done | 2026-06-12；**底层管道**，≠ 协作扩写完成 |
+| **P1 主轴** | **ENG-PR-096a** | 检索预览 + 用户勾选文献 | 081 | 1d | todo | `retrieve-preview` + `[1]…[N]` 勾选；§五B |
+| **P1 主轴** | **ENG-PR-096b** | 要点列表 + `bullets[]` 契约 | 096a | 1d | todo | 替代单一 context；§五B |
+| **P1 主轴** | **ENG-PR-096c** | `expand_bullet` 逐条扩写 + 合并 | 096b | 2d | todo | MVP 闭环；§五B |
+| **P1 主轴** | **ENG-PR-096d** | 工作台默认段落模式 + 选区助手 | 096c | 1～2d | done | `paragraph-editor` / `use-ai-paragraph`；§五B |
+| P2 | **ENG-PR-082** | Verifier 结构化报告 + 选择性 Refiner | **096c** | 2d | todo | **可选核查**；整节写完后；§六 |
+| P1 | **ENG-PR-083** | 大纲骨架化（`userSkeleton`） | — | 1d | todo | 与 096b 同源；可并行 |
+| P2 | **ENG-PR-084** | 入口重构：`/writing` 废弃 + 选区 AI 统一 | **096d** | 2d | todo | Phase B 主体；§八 |
 | P2 | **ENG-PR-085** | 分析页 AI 结果免责标注 | — | 2h | todo | 可独立小 PR |
 | P3 | **ENG-PR-086** | 编辑器对话面板（Phase C） | 084 | 2～4w | todo | backlog；可再拆 086a/b |
 | — | **ENG-PR-088** | 批量扩写 + 人控审查队列（规划） | 082 | TBD | — | 见 §十一；非本系列首发 |
 
-**推荐接力顺序（4 核 / 8GB VPS）**：
+**推荐接力顺序（协作扩写 MVP 优先）**：
 
 ```text
-第 1 周：087（P0）+ 080（并行）+ 083（并行）
-第 2～3 周：081 → 082（087 已上线后再开 081）
-第 4 周+：084 → 085 → 086
+已完成：087 + 080 + 081
+MVP（约 1 周试用）：096a → 096b → 096c
+体验闭环：096d；083 与 096b 并行
+辅助：082（可选核查）→ 084 → 085 → 086
 ```
 
 ```mermaid
 flowchart TB
   E087[087 P0 稳定性]
   E080[080 草稿门槛]
+  E081[081 分步管道]
+  E096a[096a 选文献]
+  E096b[096b 定要点]
+  E096c[096c 逐条扩写]
+  E096d[096d 段落微调]
   E083[083 大纲骨架]
-  E081[081 分步 UI]
-  E082[082 结构化审查]
+  E082[082 可选核查]
   E084[084 入口重构]
-  E085[085 分析标注]
-  E086[086 对话面板]
   E087 --> E081
   E080 --> E081
-  E081 --> E082 --> E084 --> E086
-  E083 -.-> E084
-  E080 -.并行.-> E087
-  E083 -.并行.-> E087
+  E081 --> E096a --> E096b --> E096c --> E096d
+  E096b -.-> E083
+  E096c -.-> E082
+  E096d --> E084
+  E082 -.P2.-> E084
 ```
 
 ---
@@ -71,12 +79,30 @@ PRD 定位是**辅助写作**，实际链路接近：
 | 路线图语言 | 「批量扩写」「全流程跑通」 | 批量 = 多节 Writer + 审查摘要队列 |
 | 无异议入口 | 单向输出 | 分步 + 可选对话（086） |
 
-### 1.3 交互模型
+### 1.3 交互模型（2026-06-12 修正）
+
+**旧模型（审批型，081 仅部分缓解）**：
 
 ```text
-错误：人设参数 → AI 全自动 → 人接收
-正确：人表达意图 → AI 草稿/建议 → 人审阅 → AI 按反馈迭代 → 人定稿
+错误：50 字意图 → AI 整节正文 → 人事后审查 / 门禁
 ```
+
+**新主轴（协作扩写，096 系列）**：
+
+```text
+正确：人选文献 → 人定要点（3～8 条）→ 按条 expand_bullet → 段落微调 →（可选）整节核查
+```
+
+四层可控：
+
+| 层 | 用户动作 | 技术落点 |
+|----|----------|----------|
+| 1 文献 | 扩写前勾选 RAG 命中 | 096a `retrieve-preview`；仅选中项进 `[1]…[N]` |
+| 2 结构 | 编辑要点列表，非长 context | 096b `bullets[]` in `WritingRequest` |
+| 3 生成 | 逐条扩写、采纳后再下一条 | 096c `mode: expand_bullet` + 合并 |
+| 4 编辑 | 段落/选区 AI 为主路径 | 096d `paragraph-editor` + `use-ai-paragraph` |
+
+**081 定位**：Writer / Verifier / Refiner 可分步调用，是 **096c 的底层能力**；不等于产品已达成「高参与、可控生成」。**082** 降为整节写完后可选核查，非主轴。
 
 ### 1.4 生产环境症状（与产品改造正交）
 
@@ -88,7 +114,7 @@ PRD 定位是**辅助写作**，实际链路接近：
 | PM2 重启 | `max_memory_restart: 3000M`（8GB 机子上 Node 尖峰） | 087 文档 + 降级；运维调参 |
 | 文档写 2 实例 cluster | `ecosystem.config.cjs` 实际 **`instances: 1` fork** | 087 对齐 DEPLOY 说明 |
 
-**结论**：080～086 改善「一键出论文」体感；**不替代 087**。081 会增加每人请求次数，**禁止在 087 前默认推广分步流程**。
+**结论**：087 保障稳定性；080/081 改善入口与管道；**096 系列才是产品主轴**（私有文献库 + 用户选文献 + 小步生成）。082 整节审查为辅助，勿再以「人控检查点已对齐」对外表述。
 
 ---
 
@@ -265,7 +291,70 @@ PRD 定位是**辅助写作**，实际链路接近：
 
 ---
 
-## 六、ENG-PR-082 — Verifier 结构化 + 选择性 Refiner
+## 五B、协作扩写主轴（ENG-PR-096 系列）
+
+> **MVP**：096a + 096b UI + 096c 单条扩写（约 1 周可试用）。与 [academic-research-skills](https://github.com/Imbad0202/academic-research-skills) 的「语料可控」思想对齐；差异化在 **私有 RAG 知识库 + Web 勾选 UI**。
+
+### ENG-PR-096a — 检索预览 + 文献勾选
+
+**目标**：扩写前展示 RAG 检索结果，用户勾选后才进入 `[1]…[N]` 引用池。
+
+| 层 | 改动 |
+|----|------|
+| API | `POST /api/writing/retrieve-preview`（或 `mode: retrieve_only`）：返回 chunk 摘要 + source 元数据，**不**写正文 |
+| contracts | `RetrievePreviewRequest` / `RetrievePreviewHit`；选中 id 列表 |
+| UI | WritingPanel 第一步：文献列表 + checkbox；「确认文献并继续」 |
+| 管道 | `prepare-context.ts`：接受 `selectedSourceIds`，过滤 evidence pack |
+
+**验收**：未勾选时 Writer prompt 不含未选文献；勾选变更后引用编号连续 `[1]…[N]`。
+
+### ENG-PR-096b — 要点列表 + `bullets[]`
+
+**目标**：用 3～8 条要点替代单一 `context` 长文本框。
+
+| 层 | 改动 |
+|----|------|
+| contracts | `WritingRequest.bullets: string[]`；校验 min/max |
+| UI | 可增删排序的要点列表；与 083 `userSkeleton` 章节级骨架可合并输入 |
+| 校验 | 与 080 `MIN_DRAFT_CHARS` 联动：要点总字数或条数门槛 |
+
+### ENG-PR-096c — `expand_bullet` 逐条扩写
+
+**目标**：每次只扩写一条要点；用户「采纳」后再扩下一条；最后合并为章节草稿。
+
+| 层 | 改动 |
+|----|------|
+| mode | `expand_bullet`（或 `write_bullet`）：入参 `bulletIndex`、`bullets[]`、已合并 `draftSoFar` |
+| 管道 | 单条 Writer；SSE `delta` 仅本条；`bullet_done` 事件（新 SSE 类型需落 `contracts/sse.ts`） |
+| UI | 进度：第 i/N 条；按钮「采纳并写下一条」「重写本条」「合并预览」 |
+| 081 | 复用 `fast` Writer；整节完成后可选走 082 核查 |
+
+**验收**：标准协作流程下无「一次 SSE 出整节」默认路径。
+
+### ENG-PR-096d — 段落模式 + 选区助手
+
+**目标**：工作台默认段落编辑；选区扩写/润色为主路径，WritingPanel 降为「章节协作向导」。
+
+| 层 | 改动 |
+|----|------|
+| UI | 默认展示 `paragraph-editor`；`use-ai-paragraph` 工具栏常驻 |
+| 084 | 与 B-2 合并规划；`/writing` 重定向 |
+| 096c | 合并后的草稿进入 TipTap，继续段落级微调 |
+
+**影响文件（全系列）**：
+
+- `src/contracts/writing.ts`、`src/contracts/sse.ts`  
+- `src/app/api/writing/`（`retrieve-preview` route、`prepare-context.ts`、`run-pipeline.ts`）  
+- `src/components/shared/writing-panel.tsx`、`src/hooks/use-writing-panel-generate.ts`  
+- `src/services/writing-context.ts`  
+- `src/components/shared/writing/paragraph-editor.tsx`、`src/hooks/use-ai-paragraph.ts`  
+- `docs/domain/writing-pipeline.md`、`npm run docs:api-index`
+
+---
+
+## 六、ENG-PR-082 — Verifier 结构化 + 选择性 Refiner（P2 辅助）
+
+> **依赖 096c**；在协作扩写 MVP 之后。整节合并草稿完成后**可选**核查，非产品主轴。
 
 ### 目标
 
@@ -309,6 +398,8 @@ PRD 定位是**辅助写作**，实际链路接近：
 
 ## 七、ENG-PR-083 — 大纲骨架化
 
+> 与 **096b** 共用「人定结构」输入；`userSkeleton` 可填充要点列表初始值。
+
 ### 目标
 
 人先写一级章节骨架，AI 只补子节与要点，不擅自增加一级章节。
@@ -344,6 +435,8 @@ PRD 定位是**辅助写作**，实际链路接近：
 ---
 
 ## 八、ENG-PR-084 — 入口重构（Phase B 主体）
+
+> **依赖 096d**；与段落模式、选区 AI 统一交付。
 
 ### 目标
 
@@ -457,13 +550,17 @@ Phase 1「批量扩写」在人控模型下定义为：
 | **087** | 第 N+1 并发扩写 503；默认 fast；高峰 PM2 无连续 restart |
 | 080 | 无草稿时生成点击率 = 0 |
 | 081 | 标准流程下 ≥1 次手动「提交审查」才进入 Refiner |
-| 082 | 结构化报告解析成功率；采纳率可埋点（可选） |
+| **096a** | 扩写前 100% 展示检索预览；引用仅来自勾选文献 |
+| **096b** | 新扩写请求带 `bullets[]`（≥3 条） |
+| **096c** | 协作流程下默认逐条扩写；整节一次生成非默认 |
+| **096d** | 工作台段落/选区 AI 为主路径使用率 |
+| 082 | 结构化报告解析成功率（可选路径） |
 | 083 | 100% 新大纲请求带 `userSkeleton` |
 | 084 | `/writing` 访问量降至 0（重定向） |
 | 085 | 分析结果页有免责 UI |
 | 086 | 5+ 对话场景可用 + 采纳动作可用 |
 
-**行为埋点（可选）**：`writing_submit_review`、`issue_accept`、`issue_ignore`、`mode_fast_used`。
+**行为埋点（可选）**：`retrieve_preview_open`、`source_selected`、`bullet_expand_adopt`、`writing_submit_review`、`issue_accept`。
 
 ---
 
@@ -471,10 +568,12 @@ Phase 1「批量扩写」在人控模型下定义为：
 
 | PR | 关系 |
 |----|------|
-| ENG-PR-070 | 并行；083 校验需区分 `review` / `research` 骨架 |
+| **ENG-PR-096a～d** | **产品主轴**；081 为底层；082 依赖 096c |
+| ENG-PR-070 | 并行；083/096b 校验需区分 `review` / `research` 骨架 |
 | ENG-PR-031 | 080～087 的前置（panel 已拆） |
-| ENG-PR-030 | 管道已拆；082 改 verifier/refiner 子模块 |
+| ENG-PR-030 | 管道已拆；096c/082 改 writer/verifier/refiner 子模块 |
 | **ENG-PR-087** | **P0**；081 前置；与 080/083 可并行 |
+| ENG-PR-090～093 | 文献库 enriched；096a 勾选 UI 展示 DOI/期刊元数据 |
 | 审查/查重 | 082 与 `review-service` 解析与 UI 对齐 |
 | UI 批量扩写 | 见 §十一，规划 **088** |
 
@@ -545,4 +644,5 @@ export type AssistIntent =
 *修订说明*
 
 - **2026-06-04**：拆分为 080～086；取消新建 verify/fix 路由；083 并行；086 独立。  
-- **2026-06-04（二）**：新增 **ENG-PR-087（P0 稳定性）**；081 依赖 087；补充 §1.4 生产症状与 §2.3 8GB 部署基线；批量扩写改编号 **088**。
+- **2026-06-04（二）**：新增 **ENG-PR-087（P0 稳定性）**；081 依赖 087；补充 §1.4 生产症状与 §2.3 8GB 部署基线；批量扩写改编号 **088**。  
+- **2026-06-12**：产品主轴改为 **ENG-PR-096 协作扩写**（096a～d）；081 标 done；082 降为 P2 可选核查；新增 §五B。

@@ -1,165 +1,226 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, FileText, Database, Search, Clock, Loader2, Sparkles, TrendingUp } from "lucide-react";
-import { getAdminStats, type AdminStats } from "@/services/admin";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import {
+  Users, FileText, Database, Search, Clock, Loader2, Heart, ArrowRight,
+} from "lucide-react";
+import { toast } from "sonner";
+import { getAdminStats, getAdminHealth, type AdminStats } from "@/services/admin";
+import type { AdminHealthData } from "@/contracts/admin";
+import { adminModeLabel, adminTplLabel } from "@/lib/admin-labels";
+import { AdminHeroBand } from "@/components/admin/admin-hero-band";
+import { AdminPanel, AdminCompactList } from "@/components/admin/admin-panel";
+import { AdminBarChart, AdminHBarChart } from "@/components/admin/admin-bar-chart";
+import { AdminAlertStrip } from "@/components/admin/admin-alert-strip";
+import { AdminSparkline, isSparseTrend } from "@/components/admin/admin-sparkline";
 
 function formatTime(iso: string) {
-  const d = new Date(iso); const now = Date.now(); const diff = now - d.getTime();
+  const d = new Date(iso);
+  const now = Date.now();
+  const diff = now - d.getTime();
   if (diff < 3600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
   if (diff < 86400_000) return `${Math.floor(diff / 3600_000)} 小时前`;
   return `${Math.floor(diff / 86400_000)} 天前`;
 }
 
-const TPL_LABEL: Record<string, string> = { sci: "SCI", ieee: "IEEE", gbt7713: "GB/T 7713", nature: "Nature" };
-const MODE_LABEL: Record<string, string> = { review: "综述", research: "研究" };
-
 export default function AdminDashboard() {
   const [stats, setStats] = useState<AdminStats | null>(null);
+  const [health, setHealth] = useState<AdminHealthData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getAdminStats()
-      .then(d => { setStats(d); setLoading(false); })
-      .catch(() => setLoading(false));
+    Promise.all([getAdminStats(), getAdminHealth()])
+      .then(([s, h]) => {
+        setStats(s);
+        setHealth(h);
+      })
+      .catch(() => toast.error("仪表盘加载失败"))
+      .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-[#6b7c72]" /></div>;
-  if (!stats) return <div className="text-center text-sm text-[#6b7c72] py-20">加载失败</div>;
+  if (loading) {
+    return (
+      <div className="flex h-56 flex-col items-center justify-center gap-2">
+        <Loader2 className="h-7 w-7 animate-spin text-[#1a5632]/40" />
+        <p className="text-xs text-[#9aa8a0]">加载中…</p>
+      </div>
+    );
+  }
+  if (!stats) return <div className="py-20 text-center text-sm text-[#6b7c72]">加载失败</div>;
 
-  const statCards = [
-    { label: "用户总数", value: stats.userCount, icon: Users, color: "text-blue-500" },
-    { label: "论文项目", value: stats.projectCount, icon: FileText, color: "text-[#1a5632]" },
-    { label: "知识库文献", value: stats.knowledgeFileCount, icon: Database, color: "text-amber-600" },
-    { label: "审查记录", value: stats.reviewCount, icon: Search, color: "text-purple-500" },
-  ];
+  const alerts: { message: string; href: string; label: string }[] = [];
+  if (health && !health.db.connected) {
+    alerts.push({ message: "数据库连接异常", href: "/admin/settings", label: "检查配置" });
+  }
+  if (health && health.knowledge.uncategorizedCount > 0) {
+    alerts.push({
+      message: `${health.knowledge.uncategorizedCount} 篇文献未分类`,
+      href: "/admin/knowledge?category=未分类",
+      label: "去整理",
+    });
+  }
+  if (health && health.index.indexFiles.length === 0) {
+    alerts.push({ message: "RAG 索引文件缺失", href: "/admin/knowledge", label: "重建索引" });
+  }
 
-  const aiCards = stats.aiUsage ? [
-    { label: "AI 总调用", value: stats.aiUsage.totalCalls, icon: Sparkles },
-    { label: "今日调用", value: stats.aiUsage.todayCount, icon: TrendingUp },
-    { label: "本周调用", value: stats.aiUsage.weekCount, icon: Clock },
-  ] : [];
+  const projectTrend = stats.projectTrend.map((d) => ({
+    label: d.date.slice(5),
+    value: d.count,
+  }));
+  const weekNewProjects = projectTrend.reduce((s, p) => s + p.value, 0);
+  const sparseTrend = isSparseTrend(projectTrend);
+
+  const categoryItems = stats.filesByCategory.slice(0, 6).map((c) => ({
+    label: c.category || "未分类",
+    value: c.count,
+  }));
+
+  const aiLine = stats.aiUsage
+    ? `AI 调用：总计 ${stats.aiUsage.totalCalls} · 今日 ${stats.aiUsage.todayCount} · 本周 ${stats.aiUsage.weekCount}`
+    : undefined;
+
+  const featureItems = stats.aiUsage
+    ? Object.entries(stats.aiUsage.byFeature)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 5)
+        .map(([label, value]) => ({ label, value }))
+    : [];
+
+  const userItems = stats.aiUsage
+    ? stats.aiUsage.topUsers.slice(0, 5).map((u) => ({
+        label: u.userName ?? u.userId,
+        value: `${u.count} 次`,
+      }))
+    : [];
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-lg font-semibold text-[#122820]">仪表盘</h1>
-
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {statCards.map(card => (
-          <div key={card.label} className="rounded-xl border border-[#1a5632]/10 bg-white p-4">
-            <div className="flex items-center gap-2 text-xs text-[#6b7c72]"><card.icon className={`h-4 w-4 ${card.color}`} />{card.label}</div>
-            <p className="mt-2 text-2xl font-bold text-[#122820]">{(card.value ?? 0).toLocaleString()}</p>
-          </div>
-        ))}
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-lg font-semibold text-[#122820]">运维概览</h1>
+          <p className="text-sm text-[#6b7c72]">实验室运行状态一览</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/knowledge"><Button variant="outline" size="sm" className="h-8 text-xs">上传文献</Button></Link>
+          <Link href="/admin/health"><Button variant="outline" size="sm" className="h-8 text-xs gap-1"><Heart className="h-3.5 w-3.5" />健康</Button></Link>
+          <Link href="/admin/usage"><Button size="sm" className="h-8 text-xs bg-[#1a5632]">用量详情</Button></Link>
+        </div>
       </div>
 
-      {stats.aiUsage && (
-        <>
-          <div className="grid grid-cols-3 gap-4">
-            {aiCards.map(card => (
-              <div key={card.label} className="rounded-xl border border-[#1a5632]/10 bg-white p-4">
-                <div className="flex items-center gap-2 text-xs text-[#6b7c72]"><card.icon className="h-4 w-4 text-[#1a5632]" />{card.label}</div>
-                <p className="mt-2 text-xl font-bold text-[#122820]">{card.value.toLocaleString()}</p>
-              </div>
-            ))}
-          </div>
+      <AdminAlertStrip alerts={alerts} />
 
-          {/* AI 功能分布 + Top 用户 */}
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-xl border border-[#1a5632]/10 bg-white p-4">
-              <h2 className="mb-3 text-xs font-medium text-[#6b7c72]">AI 功能调用分布</h2>
-              {Object.keys(stats.aiUsage.byFeature).length === 0 ? <p className="text-xs text-[#9aa8a0]">暂无数据</p> : (
-                <div className="space-y-2">
-                  {Object.entries(stats.aiUsage.byFeature).sort(([,a],[,b]) => b - a).slice(0, 8).map(([feature, count]) => {
-                    const max = Math.max(...Object.values(stats.aiUsage!.byFeature), 1);
-                    return (
-                      <div key={feature} className="flex items-center gap-2">
-                        <span className="w-24 truncate text-xs text-[#3d4f46]">{feature}</span>
-                        <div className="flex-1 h-4 rounded bg-[#1a5632]/8 overflow-hidden"><div className="h-full rounded bg-[#1a5632]/60" style={{ width: `${(count / max) * 100}%` }} /></div>
-                        <span className="text-[10px] text-[#9aa8a0] w-10 text-right tabular-nums">{count}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-            <div className="rounded-xl border border-[#1a5632]/10 bg-white p-4">
-              <h2 className="mb-3 text-xs font-medium text-[#6b7c72]">用户 AI 用量 Top 10</h2>
-              {stats.aiUsage.topUsers.length === 0 ? <p className="text-xs text-[#9aa8a0]">暂无数据</p> : (
-                <div className="space-y-2">
-                  {stats.aiUsage.topUsers.map((u, i) => (
-                    <div key={u.userId} className="flex items-center gap-2">
-                      <span className="text-[10px] text-[#9aa8a0] w-5 text-right tabular-nums">{i + 1}</span>
-                      <span className="flex-1 truncate text-xs text-[#3d4f46]">{u.userId}</span>
-                      <span className="text-xs text-[#1a5632] font-medium tabular-nums">{u.count} 次</span>
+      <AdminHeroBand
+        metrics={[
+          { label: "文献", value: stats.knowledgeFileCount, icon: Database, href: "/admin/knowledge" },
+          { label: "项目", value: stats.projectCount, icon: FileText, href: "/admin/projects" },
+          { label: "用户", value: stats.userCount, icon: Users, href: "/admin/users" },
+          { label: "审查", value: stats.reviewCount, icon: Search, href: "/admin/reviews" },
+        ]}
+        aiLine={aiLine}
+      />
+
+      <div className="grid gap-5 lg:grid-cols-5">
+        {/* 主栏：动态 + 趋势 */}
+        <div className="space-y-5 lg:col-span-3">
+          <AdminPanel title="最近活动" subtitle="项目更新记录">
+            {stats.recentActivity.length === 0 ? (
+              <p className="py-8 text-center text-xs text-[#9aa8a0]">暂无活动</p>
+            ) : (
+              <ul className="space-y-3">
+                {stats.recentActivity.map((a, i) => (
+                  <li
+                    key={i}
+                    className="flex gap-3 rounded-lg border border-[#1a5632]/8 bg-[#fafbfa] px-3 py-2.5"
+                  >
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#1a5632]/10">
+                      <Clock className="h-3.5 w-3.5 text-[#1a5632]" />
                     </div>
-                  ))}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-[#3d4f46]">
+                        <span className="font-medium text-[#122820]">{a.user}</span>
+                        {" "}更新了 {a.title || "未命名项目"}
+                      </p>
+                      <p className="text-[11px] text-[#9aa8a0]">{formatTime(a.time)}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </AdminPanel>
+
+          {weekNewProjects > 0 && (
+            <div className="flex items-center justify-between rounded-xl border border-[#1a5632]/10 bg-white px-4 py-3">
+              <div>
+                <p className="text-xs text-[#9aa8a0]">近 7 天新建项目</p>
+                <p className="text-xl font-semibold tabular-nums text-[#122820]">
+                  {weekNewProjects}
+                  <span className="ml-1 text-sm font-normal text-[#6b7c72]">个</span>
+                </p>
+              </div>
+              {sparseTrend ? (
+                <AdminSparkline
+                  points={projectTrend.map((p) => p.value)}
+                  width={140}
+                  height={36}
+                />
+              ) : (
+                <div className="w-48">
+                  <AdminBarChart variant="bar" points={projectTrend} height={80} />
                 </div>
               )}
+              <Link href="/admin/projects" className="text-[#1a5632] hover:text-[#143d28]">
+                <ArrowRight className="h-4 w-4" />
+              </Link>
             </div>
-          </div>
-        </>
-      )}
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-[#1a5632]/10 bg-white p-4">
-          <h2 className="mb-3 text-xs font-medium text-[#6b7c72]">近 7 天新建项目</h2>
-          <div className="flex items-end gap-1 h-32">
-            {stats.projectTrend.map(day => {
-              const max = Math.max(...stats.projectTrend.map(d => d.count), 1);
-              const h = (day.count / max) * 100;
-              return <div key={day.date} className="flex flex-1 flex-col items-center gap-1"><span className="text-[10px] text-[#9aa8a0]">{day.count}</span><div className="w-full rounded-t bg-[#1a5632]/70 transition-all" style={{ height: `${Math.max(h, 4)}%` }} /><span className="text-[9px] text-[#9aa8a0]">{day.date.slice(5)}</span></div>;
-            })}
-          </div>
+          )}
         </div>
 
-        <div className="rounded-xl border border-[#1a5632]/10 bg-white p-4">
-          <h2 className="mb-3 text-xs font-medium text-[#6b7c72]">文献分类分布</h2>
-          <div className="space-y-2">
-            {stats.filesByCategory.slice(0, 6).map(cat => {
-              const max = Math.max(...stats.filesByCategory.map(c => c.count), 1);
-              return <div key={cat.category} className="flex items-center gap-2"><span className="w-20 truncate text-xs text-[#3d4f46]">{cat.category || "未分类"}</span><div className="flex-1 h-4 rounded bg-[#1a5632]/8 overflow-hidden"><div className="h-full rounded bg-[#1a5632]/60" style={{ width: `${(cat.count / max) * 100}%` }} /></div><span className="text-[10px] text-[#9aa8a0] w-8 text-right">{cat.count}</span></div>;
-            })}
-          </div>
-        </div>
+        {/* 侧栏：静态分布 */}
+        <div className="space-y-5 lg:col-span-2">
+          <AdminPanel title="文献分类" subtitle="Top 6">
+            <AdminHBarChart items={categoryItems} maxItems={6} />
+          </AdminPanel>
 
-        <div className="rounded-xl border border-[#1a5632]/10 bg-white p-4">
-          <h2 className="mb-3 text-xs font-medium text-[#6b7c72]">项目模板分布</h2>
-          <div className="space-y-2">
-            {stats.projectsByTemplate.map(t => {
-              const max = Math.max(...stats.projectsByTemplate.map(x => x.count), 1);
-              return <div key={t.template} className="flex items-center gap-2"><span className="w-20 text-xs text-[#3d4f46]">{TPL_LABEL[t.template] ?? t.template}</span><div className="flex-1 h-4 rounded bg-[#1a5632]/8 overflow-hidden"><div className="h-full rounded bg-blue-400/60" style={{ width: `${(t.count / max) * 100}%` }} /></div><span className="text-[10px] text-[#9aa8a0] w-8 text-right">{t.count}</span></div>;
-            })}
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-[#1a5632]/10 bg-white p-4">
-          <h2 className="mb-3 text-xs font-medium text-[#6b7c72]">写作模式分布</h2>
-          <div className="space-y-2">
-            {(stats.projectsByMode ?? []).map(m => {
-              const max = Math.max(...(stats.projectsByMode ?? []).map(x => x.count), 1);
-              return (
-                <div key={m.mode} className="flex items-center gap-2">
-                  <span className="w-20 text-xs text-[#3d4f46]">{MODE_LABEL[m.mode] ?? m.mode}</span>
-                  <div className="flex-1 h-4 rounded bg-[#1a5632]/8 overflow-hidden">
-                    <div className="h-full rounded bg-emerald-500/60" style={{ width: `${(m.count / max) * 100}%` }} />
-                  </div>
-                  <span className="text-[10px] text-[#9aa8a0] w-8 text-right">{m.count}</span>
+          {stats.aiUsage && (featureItems.length > 0 || userItems.length > 0) && (
+            <AdminPanel title="AI 用量快照">
+              {featureItems.length > 0 && (
+                <div className="mb-4">
+                  <p className="mb-2 text-[10px] font-medium text-[#9aa8a0]">功能</p>
+                  <AdminCompactList items={featureItems.map((f) => ({ label: f.label, value: f.value }))} />
                 </div>
-              );
-            })}
-            {(stats.projectsByMode ?? []).length === 0 && <p className="text-xs text-[#9aa8a0]">暂无数据</p>}
-          </div>
-        </div>
+              )}
+              {userItems.length > 0 && (
+                <div>
+                  <p className="mb-2 text-[10px] font-medium text-[#9aa8a0]">用户</p>
+                  <AdminCompactList items={userItems} />
+                </div>
+              )}
+              <Link href="/admin/usage" className="mt-3 inline-flex items-center gap-1 text-xs text-[#1a5632] hover:underline">
+                查看完整统计 <ArrowRight className="h-3 w-3" />
+              </Link>
+            </AdminPanel>
+          )}
 
-        <div className="rounded-xl border border-[#1a5632]/10 bg-white p-4">
-          <h2 className="mb-3 text-xs font-medium text-[#6b7c72]">最近活动</h2>
-          <div className="space-y-3">
-            {stats.recentActivity.map((a, i) => (
-              <div key={i} className="flex items-start gap-2"><Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#9aa8a0]" /><div className="min-w-0 flex-1"><p className="truncate text-xs text-[#3d4f46]"><span className="font-medium">{a.user}</span> 更新了 <span className="font-medium">{a.title || "未命名"}</span></p><p className="text-[10px] text-[#9aa8a0]">{formatTime(a.time)}</p></div></div>
-            ))}
-            {stats.recentActivity.length === 0 && <p className="text-xs text-[#9aa8a0]">暂无活动</p>}
-          </div>
+          {(stats.projectsByTemplate.length > 0 || (stats.projectsByMode ?? []).length > 0) && (
+            <AdminPanel title="项目构成">
+              <AdminCompactList
+                items={[
+                  ...stats.projectsByTemplate.map((t) => ({
+                    label: adminTplLabel(t.template),
+                    value: t.count,
+                    hint: "模板",
+                  })),
+                  ...(stats.projectsByMode ?? []).map((m) => ({
+                    label: adminModeLabel(m.mode),
+                    value: m.count,
+                    hint: "模式",
+                  })),
+                ]}
+              />
+            </AdminPanel>
+          )}
         </div>
       </div>
     </div>

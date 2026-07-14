@@ -1,5 +1,7 @@
 /** GET /api/figures/registry — 图表注册表 */
 
+import type { ChartRegistryField } from "@/contracts/chart-style";
+
 export interface FigureDef {
   id: string;
   name: string;
@@ -8,7 +10,7 @@ export interface FigureDef {
   endpoint: string;
   input_type: "tabular" | "json" | "form";
   example?: string;
-  config_fields?: { key: string; label: string; type: string; options?: string[] }[];
+  config_fields?: ChartRegistryField[];
 }
 
 export interface FigureCategoryDef {
@@ -19,8 +21,10 @@ export interface FigureCategoryDef {
 }
 
 export interface FigureRegistry {
+  version?: string;
   categories: FigureCategoryDef[];
   figures: FigureDef[];
+  global_style_fields?: ChartRegistryField[];
 }
 
 export async function getFigureRegistry(): Promise<FigureRegistry> {
@@ -34,10 +38,10 @@ export interface FigureGenerateResult {
   error?: string;
 }
 
-async function figureFetchWithTimeout(
+async function   figureFetchWithTimeout(
   url: string,
   options: RequestInit = {},
-  timeoutMs = 12000,
+  timeoutMs = 120000,
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);

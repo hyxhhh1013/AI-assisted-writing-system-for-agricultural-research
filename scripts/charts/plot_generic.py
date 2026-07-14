@@ -27,12 +27,10 @@ import pandas as pd
 
 # 确保能导入同目录下的共享模块
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from font_setup import apply_cjk_font_rcparams  # noqa: E402
 from plot_utils import load_dataframe, _normalize_label  # noqa: E402
 
-# 中文字体支持
-# 中文字体
-plt.rcParams["font.sans-serif"] = ["Noto Sans CJK JP", "Noto Serif CJK JP", "SimHei", "Microsoft YaHei", "PingFang SC", "Heiti SC", "DejaVu Sans"]
-plt.rcParams["axes.unicode_minus"] = False
+apply_cjk_font_rcparams()
 
 
 def _rgba_to_mpl(rgba_str):
@@ -57,6 +55,10 @@ _CHART_TYPE_MAP = {
     "line": "line",
     "scatter": "scatter",
     "pie": "pie",
+    "heatmap": "heatmap",
+    "area": "area",
+    "forest": "forest",
+    "radar": "radar",
 }
 
 # 惰性加载模块映射

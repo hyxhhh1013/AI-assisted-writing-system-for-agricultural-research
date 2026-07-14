@@ -2,11 +2,15 @@ import { logger } from "@/lib/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeFile } from "@/services/data-analysis";
 import { getErrorMessage } from "@/lib/error-utils";
+import { getUserIdFromRequest } from "@/lib/auth";
+import { unauthorizedResponse } from "@/lib/api-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  if (!getUserIdFromRequest(req)) return unauthorizedResponse();
+
   try {
     const contentType = req.headers.get("content-type") || "";
 

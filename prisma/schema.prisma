@@ -22,6 +22,7 @@ model User {
   updatedAt DateTime  @updatedAt
 
   projects  Project[]
+  directions Direction[]
 }
 
 // 论文项目模型
@@ -54,6 +55,8 @@ model Project {
   referenceSources  ReferenceSource[]
   // 写作模式
   mode              String?   @default("review") // "review" | "research"
+  // 写作语言（zh | en）
+  language          String?   @default("zh")
   // 图表元数据（JSON 字符串）
   charts            String?
   // 数据证据声明（JSON 数组 EvidenceClaim[]）
@@ -64,6 +67,10 @@ model Project {
   dataSources       String?
   // 大纲扩写已完成任务 id 列表（JSON string[]，stableHash(fullPath)）
   expandedOutlineSections String?
+  // 写作蓝图（JSON WritingBlueprint）
+  writingBlueprint      String?
+  // 论文 8 阶段生命周期快照（JSON PaperPassport）
+  paperPassport         String?
 
   @@index([userId])
 }
@@ -87,6 +94,7 @@ model Reference {
   projectId String
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
+  @@unique([projectId, order])
   @@index([projectId, order])
 }
 
@@ -275,4 +283,25 @@ model AiUsageLog {
   @@index([feature])
   @@index([userId])
   @@index([createdAt])
+}
+
+// 研究方向战略规划
+model Direction {
+  id          String   @id @default(cuid())
+  slug        String   @unique        // URL 标识，如 "thermochemistry"
+  name        String                  // 方向名称，如 "热化学"
+  description String?                 // 方向总述（Markdown）
+  categories  String[]                // 映射知识库分类，如 ["热化学"]
+  status      String   @default("active") // active | archived
+  assets           Json?                   // 资产数组 DirectionAsset[]
+  literatureCorpus Json?                   // DirectionLiteratureState（P1 文献 corpus）
+  analysis         Json?                   // 分析快照 DirectionAnalysis
+  roadmap          Json?                   // 论文路线图 DirectionRoadmap
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([userId])
 }

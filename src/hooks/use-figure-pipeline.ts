@@ -27,29 +27,57 @@ interface UseFigurePipelineReturn {
   setPendingFigures: (figures: PendingFigure[]) => void;
 }
 
+function figureMarkerCloseChar(openChar: string): string {
+  return openChar === "【" ? "】" : "]";
+}
+
 /** 找到 FIGURE 标记块 */
 export function findFigureBlocks(text: string): { json: Record<string, unknown>; raw: string }[] {
   const results: { json: Record<string, unknown>; raw: string }[] = [];
-  const blockRegex = /[【\[]FIG(?:URE)?:(\{)/gi;
+  const blockRegex = /[【\[]FIG(?:URE)?:\s*(\{)/gi;
   let match: RegExpExecArray | null;
   while ((match = blockRegex.exec(text)) !== null) {
+    const openChar = text[match.index] ?? "【";
+    const closeChar = figureMarkerCloseChar(openChar);
     const jsonStart = match.index + match[0].length - 1;
     let depth = 0;
+    let inStr = false;
+    let esc = false;
     let jsonEnd = -1;
     for (let i = jsonStart; i < text.length; i++) {
-      if (text[i] === "{") depth++;
-      else if (text[i] === "}") { depth--; if (depth === 0) { jsonEnd = i; break; } }
+      const c = text[i];
+      if (esc) {
+        esc = false;
+        continue;
+      }
+      if (c === "\\") {
+        esc = true;
+        continue;
+      }
+      if (c === '"') {
+        inStr = !inStr;
+        continue;
+      }
+      if (inStr) continue;
+      if (c === "{") depth++;
+      else if (c === "}") {
+        depth--;
+        if (depth === 0) {
+          jsonEnd = i;
+          break;
+        }
+      }
     }
-    // 如果正常匹配不到——通常是 AI 漏了最外层的 }，而后面是 】
-    // 尝试用 】作为结束标记，提取后再补全缺失的 }
+    // 如果正常匹配不到——通常是 AI 漏了最外层的 }，而后面是 】/]
     if (jsonEnd === -1) {
-      const closeIdx = text.indexOf("】", jsonStart);
+      const closeIdx = text.indexOf(closeChar, jsonStart);
       jsonEnd = closeIdx !== -1 ? closeIdx - 1 : text.length - 1;
-      // 跳过 】 前面的非 } 字符
-      while (jsonEnd > jsonStart && text[jsonEnd] !== "}" && text[jsonEnd] !== "】") jsonEnd--;
+      while (jsonEnd > jsonStart && text[jsonEnd] !== "}" && text[jsonEnd] !== closeChar) jsonEnd--;
       if (jsonEnd <= jsonStart) continue;
     }
-    const raw = text.slice(match.index, jsonEnd + 2);
+    let rawEnd = jsonEnd + 1;
+    if (text[rawEnd] === closeChar) rawEnd++;
+    const raw = text.slice(match.index, rawEnd);
     const jsonStr = text.slice(jsonStart, jsonEnd + 1);
     try {
       const json = JSON.parse(jsonStr) as Record<string, unknown>;

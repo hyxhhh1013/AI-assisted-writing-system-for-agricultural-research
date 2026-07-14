@@ -22,6 +22,11 @@ export async function GET(req: NextRequest) {
     ];
   }
 
+  const sortField = params.sortBy === "name" || params.sortBy === "email" || params.sortBy === "role"
+    ? params.sortBy
+    : "createdAt";
+  const sortDir = params.sortOrder === "asc" ? "asc" : "desc";
+
   const [users, total] = await Promise.all([
     prisma.user.findMany({
       where,
@@ -29,7 +34,7 @@ export async function GET(req: NextRequest) {
         id: true, email: true, name: true, role: true, createdAt: true,
         _count: { select: { projects: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { [sortField]: sortDir },
       skip: ((params.page ?? 1) - 1) * (params.pageSize ?? 20),
       take: params.pageSize ?? 20,
     }),

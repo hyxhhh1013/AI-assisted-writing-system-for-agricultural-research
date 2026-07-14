@@ -25,6 +25,7 @@ interface RewriteOptions {
 }
 
 export interface RewriteResult {
+  id?: string;
   strategy: RewriteStrategy;
   suggestedText: string;
   similarityBefore: number;
@@ -130,22 +131,37 @@ export async function generateRewriteSuggestions(
     (r) => r.suggestedText !== options.originalText || r.strategy === "synonym"
   );
 
-  // 持久化到数据库
+  // 持久化到数据库并返回带 id 的结果
   try {
     const checkExists = await prisma.plagiarismCheck.count({
       where: { id: options.checkId },
     });
     if (checkExists > 0) {
-      await prisma.rewriteSuggestion.createMany({
-        data: validResults.map((r) => ({
-          checkId: options.checkId,
-          matchId: options.matchId ?? null,
-          originalText: options.originalText,
-          suggestedText: r.suggestedText,
-          strategy: r.strategy,
-          rewrittenSimilarity: Math.round(r.similarityAfter * 100) / 100,
-        })),
-      });
+      const saved = await Promise.all(
+        validResults.map((r) =>
+          prisma.rewriteSuggestion.create({
+            data: {
+              checkId: options.checkId,
+              matchId: options.matchId ?? null,
+              originalText: options.originalText,
+              suggestedText: r.suggestedText,
+              strategy: r.strategy,
+              rewrittenSimilarity: Math.round(r.similarityAfter * 100) / 100,
+            },
+          }),
+        ),
+      );
+      return saved.map((row) => ({
+        id: row.id,
+        strategy: row.strategy as RewriteStrategy,
+        suggestedText: row.suggestedText,
+        similarityBefore: 1,
+        similarityAfter: row.rewrittenSimilarity ?? 1,
+        lengthRatio:
+          options.originalText.length > 0
+            ? row.suggestedText.length / options.originalText.length
+            : 1,
+      }));
     }
   } catch (err) {
     console.error("[rewrite] persist failed:", err);

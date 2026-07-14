@@ -29,16 +29,22 @@ function nextWithOptionalUserId(request: NextRequest, userId: string | null): Ne
 }
 
 // 需要登录的路由
-const protectedPages = ["/workbench", "/projects"];
+const protectedPages = ["/workbench", "/projects", "/directions"];
 const protectedApis = [
   "/api/projects", "/api/writing", "/api/analysis", "/api/outline", "/api/export",
   "/api/plagiarism", "/api/chat", "/api/translate",
   "/api/consistency", "/api/chart", "/api/flow-diagram", "/api/mol-diagram",
   "/api/save-chart", "/api/references", "/api/literature", "/api/xrd", "/api/admin",
+  "/api/review", "/api/directions", "/api/data", "/api/figures", "/api/presentation",
+  "/api/agent",
 ];
 
-// AI 端点限流
-const aiEndpoints = ["/api/writing", "/api/analysis", "/api/outline", "/api/chat", "/api/translate"];
+/** 调用 AI 的路由前缀（限流）；勿用宽泛的 /api/knowledge，避免误伤 GET 列表 */
+const aiEndpoints = [
+  "/api/writing", "/api/analysis", "/api/outline", "/api/chat", "/api/translate",
+  "/api/plagiarism", "/api/review", "/api/knowledge/analyze", "/api/consistency",
+  "/api/directions", "/api/agent",
+];
 const RL_WINDOW = 60_000;
 const RL_MAX = 10;
 const rlStore = new Map<string, { count: number; resetAt: number }>();
@@ -111,6 +117,7 @@ export const config = {
   matcher: [
     "/workbench/:path*",
     "/projects/:path*",
+    "/directions/:path*",
     "/api/projects/:path*",
     "/api/writing/:path*",
     "/api/analysis/:path*",
@@ -130,5 +137,11 @@ export const config = {
     "/api/xrd/:path*",
     "/api/pdf/:path*",
     "/api/admin/:path*",
+    "/api/review/:path*",
+    "/api/directions/:path*",
+    "/api/data/:path*",
+    "/api/figures/:path*",
+    "/api/presentation/:path*",
+    "/api/agent/:path*",
   ],
 };

@@ -175,8 +175,97 @@ export const outlineSchema = z.object({
   language: z.enum(["zh", "en"]).optional().default("zh"),
   category: z.string().optional(),
   projectMode: z.enum(["review", "research"]).optional(),
+  userSkeleton: z
+    .array(z.string().min(1, "骨架条目不能为空"))
+    .min(3, "章节骨架至少 3 条"),
 });
 export type OutlineInput = z.infer<typeof outlineSchema>;
+
+// === PaperPassport ===
+export const paperPassportConfigSchema = z.object({
+  paperTitle: z.string().min(1, "论文标题不能为空"),
+  paperType: z.enum(["review", "research"]),
+  targetJournal: z.string(),
+  wordCount: z.string().min(1),
+  language: z.enum(["zh", "en"]),
+  citationStyle: z.enum(["gbt7714", "vancouver", "apa7", "ieee"]),
+});
+export type PaperPassportConfigInput = z.infer<typeof paperPassportConfigSchema>;
+
+export const paperPassportConfigPatchSchema = z.object({
+  config: paperPassportConfigSchema,
+});
+
+const figureDataBindingSchema = z.object({
+  kind: z.literal("chartConfig"),
+  chartConfigIndex: z.number().int().nonnegative(),
+  sourceFileName: z.string().optional(),
+  variable: z.string().optional(),
+  chartTitle: z.string().optional(),
+});
+
+const figurePlanItemSchema = z.object({
+  id: z.string(),
+  sectionPath: z.string().min(1),
+  type: z.enum(["flow", "chart", "xrd", "table", "schematic", "other"]),
+  purpose: z.string().min(1),
+  suggestedCaption: z.string().min(1),
+  priority: z.enum(["required", "optional"]),
+  dataSource: z.enum(["experiment", "literature", "synthesis"]).optional(),
+  dataBinding: figureDataBindingSchema.optional(),
+});
+
+const sectionGuideSchema = z.object({
+  sectionPath: z.string().min(1),
+  purpose: z.string().min(1),
+  keyPoints: z.array(z.string()).min(1),
+  estimatedParagraphs: z.number().int().positive().optional(),
+  assignedSources: z.array(z.string()).optional(),
+});
+
+export const writingBlueprintPayloadSchema = z.object({
+  version: z.literal(1),
+  narrativeSummary: z.string().min(1),
+  thesis: z.string().min(1),
+  estimatedWordCount: z.object({
+    min: z.number().int().nonnegative(),
+    max: z.number().int().nonnegative(),
+  }),
+  figurePlan: z.object({
+    totalMin: z.number().int().nonnegative(),
+    totalMax: z.number().int().nonnegative(),
+    items: z.array(figurePlanItemSchema).min(1),
+  }),
+  sectionGuides: z.array(sectionGuideSchema).min(1),
+  writingOrder: z.array(z.string()),
+  prerequisites: z.array(z.string()),
+  outlineHash: z.string().optional(),
+  generatedAt: z.number().optional(),
+});
+
+const blueprintChartCatalogEntrySchema = z.object({
+  index: z.number().int().nonnegative(),
+  title: z.string(),
+  sourceFileName: z.string(),
+  variable: z.string().optional(),
+});
+
+export const blueprintSchema = z.object({
+  title: z.string().min(1, "标题不能为空"),
+  outline: z.string().min(20, "大纲内容过短"),
+  researchDirection: z.string().optional(),
+  language: z.enum(["zh", "en"]).optional().default("zh"),
+  projectMode: z.enum(["review", "research"]).optional(),
+  /** 项目已分析图表目录，供 AI 绑定 dataBinding.chartConfigIndex */
+  chartCatalog: z.array(blueprintChartCatalogEntrySchema).optional(),
+  /** 从 Direction 分析带入：为什么写这篇论文 */
+  motivationFromGap: z.string().optional(),
+  /** 建议投稿的目标期刊 */
+  targetJournal: z.string().optional(),
+  /** 写作时需标注"此处需补实验数据"的缺口 */
+  pendingExperiments: z.array(z.string()).optional(),
+});
+export type BlueprintInput = z.infer<typeof blueprintSchema>;
 
 // === Translation ===
 export const translateSchema = z.object({
@@ -370,6 +459,31 @@ export const projectEvidencePatchSchema = z
   );
 export type ProjectEvidencePatchInput = z.infer<typeof projectEvidencePatchSchema>;
 
+const chartPatchOpSchema = z.discriminatedUnion("op", [
+  z.object({
+    op: z.literal("append"),
+    asset: z.object({
+      id: z.string().optional(),
+      figureId: z.string().min(1),
+      caption: z.string(),
+      imageUrl: z.string().min(1),
+      svgUrl: z.string().optional(),
+      pdfUrl: z.string().optional(),
+      sectionKey: z.string().optional(),
+      figureSpecEnc: z.string().optional(),
+    }),
+  }),
+  z.object({
+    op: z.literal("delete"),
+    id: z.string().min(1),
+  }),
+]);
+
+export const projectChartsPatchSchema = z.object({
+  ops: z.array(chartPatchOpSchema).min(1),
+});
+export type ProjectChartsPatchInput = z.infer<typeof projectChartsPatchSchema>;
+
 export const projectMetaPatchSchema = z
   .object({
     title: z.string().optional(),
@@ -382,6 +496,8 @@ export const projectMetaPatchSchema = z
     outline: z.string().optional(),
     template: z.string().optional(),
     mode: z.string().optional(),
+    language: z.enum(["zh", "en"]).optional(),
+    writingBlueprint: z.string().nullable().optional(),
   })
   .refine(
     (data) => Object.values(data).some((v) => v !== undefined),
@@ -591,3 +707,150 @@ export const importExternalReferenceSchema = z.object({
   index: z.number().int().min(0).optional(),
 });
 export type ImportExternalReferenceInput = z.infer<typeof importExternalReferenceSchema>;
+
+// === Direction ===
+
+export const directionCreateSchema = z.object({
+  slug: z
+    .string()
+    .min(1, "URL 标识不能为空")
+    .max(50)
+    .regex(/^[a-z0-9-]+$/, "仅允许小写字母、数字和连字符"),
+  name: z.string().min(1, "方向名称不能为空").max(100),
+  description: z.string().max(5000).optional(),
+  categories: z.array(z.string()).min(1, "至少关联一个知识库分类"),
+  status: z.enum(["active", "archived"]).optional(),
+});
+export type DirectionCreateInput = z.infer<typeof directionCreateSchema>;
+
+export const directionUpdateSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  description: z.string().max(5000).optional(),
+  categories: z.array(z.string()).min(1).optional(),
+  status: z.enum(["active", "archived"]).optional(),
+});
+export type DirectionUpdateInput = z.infer<typeof directionUpdateSchema>;
+
+export const directionAssetsPatchSchema = z.object({
+  ops: z.array(
+    z.object({
+      op: z.enum(["upsert", "delete"]),
+      assetId: z.string().min(1).optional(),
+      asset: z.object({}).passthrough().optional(),
+    }),
+  ),
+});
+export type DirectionAssetsPatchInput = z.infer<typeof directionAssetsPatchSchema>;
+
+const directionLiteratureEntrySchema = z.object({
+  id: z.string().min(1),
+  source: z.enum(["knowledge_pdf", "external", "manual"]),
+  sourceKey: z.string().optional(),
+  externalId: z.string().optional(),
+  title: z.string().min(1),
+  citation: z.string().min(1),
+  role: z.enum(["core", "supporting", "background"]),
+  doi: z.string().optional(),
+  addedAt: z.number(),
+});
+
+export const directionLiteratureCorpusPatchSchema = z.object({
+  ops: z.array(
+    z.discriminatedUnion("op", [
+      z.object({ op: z.literal("upsert"), entry: directionLiteratureEntrySchema }),
+      z.object({ op: z.literal("delete"), entryId: z.string().min(1) }),
+      z.object({
+        op: z.literal("set_role"),
+        entryId: z.string().min(1),
+        role: z.enum(["core", "supporting", "background"]),
+      }),
+      z.object({ op: z.literal("confirm") }),
+      z.object({
+        op: z.literal("import_kb_scan"),
+        entries: z.array(directionLiteratureEntrySchema),
+      }),
+    ]),
+  ),
+});
+export type DirectionLiteratureCorpusPatchInput = z.infer<
+  typeof directionLiteratureCorpusPatchSchema
+>;
+
+export const directionLiteratureImportExternalSchema = z.object({
+  hit: z.object({
+    id: z.string(),
+    source: z.enum(["openalex", "semantic-scholar", "crossref", "pubmed"]),
+    title: z.string(),
+    authors: z.array(z.string()).optional(),
+    year: z.number().optional(),
+    journal: z.string().optional(),
+    doi: z.string().optional(),
+    url: z.string().optional(),
+    abstract: z.string().optional(),
+    citationCount: z.number().optional(),
+  }).passthrough(),
+  role: z.enum(["core", "supporting", "background"]).optional(),
+});
+export type DirectionLiteratureImportExternalInput = z.infer<
+  typeof directionLiteratureImportExternalSchema
+>;
+
+export const directionLiteratureImportKnowledgeSchema = z.object({
+  fileName: z.string().min(1),
+  citation: z.string().min(1),
+  role: z.enum(["core", "supporting", "background"]).optional(),
+});
+export type DirectionLiteratureImportKnowledgeInput = z.infer<
+  typeof directionLiteratureImportKnowledgeSchema
+>;
+
+export const evaluationContractSchema = z.object({
+  dimensions: z.array(
+    z.object({
+      id: z.string().regex(/^D[1-8]$/, "维度 ID 必须为 D1-D8"),
+      name: z.string().optional(),
+      weight: z.number().optional(),
+      rubrics: z.array(
+        z.object({
+          id: z.string(),
+          what_to_look_for: z.string(),
+          what_triggers_block: z.string(),
+          what_triggers_warn: z.string(),
+          evidence_required: z.string(),
+        }),
+      ).optional(),
+      // 兼容旧格式
+      whatTriggersBlock: z.string().optional(),
+      whatTriggersWarn: z.string().optional(),
+    }),
+  ),
+});
+export type EvaluationContractInput = z.infer<typeof evaluationContractSchema>;
+
+export const directionAnalyzeSchema = z.object({
+  mode: z.enum(["full", "quick", "gap-only"]).default("full"),
+});
+export type DirectionAnalyzeInput = z.infer<typeof directionAnalyzeSchema>;
+
+export const directionRoadmapSchema = z.object({});
+export type DirectionRoadmapInput = z.infer<typeof directionRoadmapSchema>;
+
+export const directionGrantProposalSchema = z.object({
+  grantType: z.enum(["国自然面上", "国自然青年", "省基金", "开放课题"]).default("国自然面上"),
+});
+export type DirectionGrantProposalInput = z.infer<typeof directionGrantProposalSchema>;
+
+export const directionRoadmapConfirmSchema = z.object({
+  confirmedAt: z.number().optional(),
+  summary: z.string().optional(),
+});
+export type DirectionRoadmapConfirmInput = z.infer<typeof directionRoadmapConfirmSchema>;
+
+// === Agent (ENG-PR-200 Phase A) ===
+export const agentSchema = z.object({
+  goal: z.string().min(1, "目标不能为空").max(4000),
+  projectId: z.string().optional(),
+  directionSlug: z.string().optional(),
+  mode: z.enum(["auto", "guided"]).optional().default("auto"),
+});
+export type AgentInput = z.infer<typeof agentSchema>;

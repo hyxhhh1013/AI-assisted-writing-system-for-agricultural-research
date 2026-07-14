@@ -107,6 +107,7 @@ describe("review dual-track", () => {
     const r = outlineSchema.safeParse({
       title: "x",
       projectMode: "review",
+      userSkeleton: ["摘要", "引言", "结论与展望"],
     });
     expect(r.success).toBe(true);
   });

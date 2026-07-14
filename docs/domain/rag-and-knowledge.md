@@ -73,6 +73,23 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 - `getBibMap` / `getCategories` / `search` 走 Prisma 缓存
 - 写作上下文：`services/writing-context.ts` 组装 `contextText` + `refMapping`
 
+### 检索性能（库变大后）
+
+- **两阶段检索**：先 BM25 召回候选（`limit×20`，下限 200），向量只在候选集上算余弦；向量按需取，不再把全库向量灌入 JS 内存。BM25 完全无命中时回退全库向量扫描。
+- **`.emb` 按需 pread**：`EmbeddingStore` 不再把整个 `.emb` 读进内存，只保留文件句柄 + 维度；`get()` 用 `fs.readSync` 按偏移读单条向量（配合两阶段，每次仅读候选那几千条）。内存不再随库大小线性膨胀。
+- **倒排索引协作式构建**：`buildInvertedIndexAsync` 分批 `setImmediate` 让出事件循环，避免大库构建时冻结整个服务；全库索引由各分类索引按 offset **合并**得到（`mergeInvertedIndexInto`），不重复分词。
+- **范围检索**：`search({ categories })` 只加载相关分类（子集缓存 `subsetCache`）。扩写经 `writing-context.ts` 从已选参考文献反推分类，解析不到则回退全库。
+- **并发去重**：`categoryLoadInFlight` / `allLoadInFlight` 避免 warmup 与检索并发触发重复构建。
+- **Query Embedding LRU**：`getEmbedding` 缓存 `(model,query)→向量`（上限 256），省重复 query 的网络往返。
+- **启动预热**：`instrumentation.ts` 后台调 `localRAG.warmup()` 预加载全库 chunks + 倒排索引，把冷启动开销移出用户首次检索。
+
+| 环境变量 | 作用 |
+|----------|------|
+| `RAG_WARMUP=0` | 关闭启动预热（内存极紧张时回退按需加载） |
+| `RAG_PERF_LOG=1` | 每次 `search()` 打一行分段计时（load/bm25/embed/vec/rank/total），生产可见 |
+
+> 排查检索慢：开 `RAG_PERF_LOG=1` 看哪段大——`load` 大=冷启动（确认预热生效/进程是否反复重启）、`embed` 大=embedding API、`vec` 大=候选集过大或回退了全库扫描。
+
 ## 索引运维
 
 | 操作 | 入口 |

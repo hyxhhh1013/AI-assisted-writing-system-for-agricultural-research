@@ -185,8 +185,8 @@ export function useWritingStream(): UseWritingStreamReturn {
               setResult("");
             } else if (isReferencesEvent(event)) {
               if (event.references.length > 0) {
-                refsRef.current = Array.from(new Set([...refsRef.current, ...event.references]));
-                setDetectedRefs(refsRef.current);
+                refsRef.current = event.references;
+                setDetectedRefs(event.references);
               }
               if (event.refMapping) {
                 refMappingRef.current = { ...refMappingRef.current, ...event.refMapping };

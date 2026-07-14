@@ -7,8 +7,16 @@ export const runtime = "nodejs";
 const DATA_CHARTS_DIR = path.join(process.cwd(), "data", "charts");
 const PUBLIC_CHARTS_DIR = path.join(process.cwd(), "public", "charts");
 
-// 安全校验：只允许 UUID.png 格式的文件名
-const SAFE_FILENAME = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.png$/i;
+const SAFE_FILENAME =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|svg|pdf|tiff?)$/i;
+
+const MIME: Record<string, string> = {
+  png: "image/png",
+  svg: "image/svg+xml",
+  pdf: "application/pdf",
+  tif: "image/tiff",
+  tiff: "image/tiff",
+};
 
 export async function GET(
   _req: NextRequest,
@@ -20,7 +28,6 @@ export async function GET(
     return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
   }
 
-  // 优先从 data/charts/ 读取，兼容旧路径 public/charts/
   const dataPath = path.join(DATA_CHARTS_DIR, filename);
   const publicPath = path.join(PUBLIC_CHARTS_DIR, filename);
 
@@ -32,14 +39,18 @@ export async function GET(
   }
 
   if (!filePath) {
-    return NextResponse.json({ error: "Image not found" }, { status: 404 });
+    return NextResponse.json({ error: "File not found" }, { status: 404 });
   }
 
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "png";
   const buffer = fs.readFileSync(filePath);
   return new NextResponse(buffer, {
     headers: {
-      "Content-Type": "image/png",
+      "Content-Type": MIME[ext] ?? "application/octet-stream",
       "Cache-Control": "public, max-age=31536000, immutable",
+      ...(ext === "pdf" || ext === "svg"
+        ? { "Content-Disposition": `inline; filename="${filename}"` }
+        : {}),
     },
   });
 }

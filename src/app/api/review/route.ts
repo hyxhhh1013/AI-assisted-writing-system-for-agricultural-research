@@ -8,11 +8,16 @@ import { NextRequest } from "next/server";
 import { validateBody } from "@/lib/api-validate";
 import { reviewSchema, type ReviewInput as ReviewBody } from "@/lib/validations";
 import { runReview } from "@/services/review-service";
+import { getUserIdFromRequest } from "@/lib/auth";
+import { unauthorizedResponse } from "@/lib/api-response";
 import { getErrorMessage } from "@/lib/error-utils";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
+  const userId = getUserIdFromRequest(request);
+  if (!userId) return unauthorizedResponse();
+
   try {
     const { data, errorResponse: ve } = await validateBody(reviewSchema, await request.json());
     if (ve) return ve;

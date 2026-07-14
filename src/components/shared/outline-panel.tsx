@@ -1,17 +1,31 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Send, FileText, ChevronRight, PenTool, CheckCircle2 } from "lucide-react";
+import { Loader2, Send, FileText, ChevronRight, PenTool, CheckCircle2, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
-import type { ProjectData } from "@/contracts/project";
+import { resolveProjectLanguage, type ProjectData } from "@/contracts/project";
+import {
+  parseWritingBlueprint,
+  serializeWritingBlueprint,
+  type WritingBlueprint,
+} from "@/contracts/writing-blueprint";
 import { listKnowledgeFiles } from "@/services/knowledge";
 import { resolveOutlineResearchDirection, streamOutline } from "@/services/outline";
+import { generateWritingBlueprint } from "@/services/blueprint";
 import { parseOutline, OutlineSection } from "@/lib/utils";
+import { countFiguresForSection, isBlueprintStale, buildBlueprintChartCatalog } from "@/lib/blueprint-utils";
+import { parseDataSources } from "@/contracts/project";
+import { OutlineBlueprintSummary } from "@/components/shared/outline-blueprint-summary";
+import {
+  formatSkeletonLines,
+  getDefaultUserSkeleton,
+  parseSkeletonLines,
+} from "@/lib/outline-skeleton";
 
 interface OutlinePanelProps {
   projectId: string;
@@ -20,23 +34,51 @@ interface OutlinePanelProps {
   onTabChange?: (tab: "structure" | "data" | "outline" | "writing" | "reader" | "plagiarism" | "xrd") => void;
   expandedSections?: string[];
   onExpandTask?: (taskId: string) => void;
+  onOpenBlueprint?: () => void;
 }
 
-export function OutlinePanel({ projectId, project, onSave, onTabChange, expandedSections, onExpandTask }: OutlinePanelProps) {
+export function OutlinePanel({
+  projectId,
+  project,
+  onSave,
+  onTabChange,
+  expandedSections,
+  onExpandTask,
+  onOpenBlueprint,
+}: OutlinePanelProps) {
   const isReview = (project.mode ?? "review") === "review";
+  const language = resolveProjectLanguage(project);
   const [title, setTitle] = useState(project.title || "");
   const [researchDirection, setResearchDirection] = useState(project.researchDirection || "");
-  const [language, setLanguage] = useState("zh");
   const [category, setCategory] = useState("全部");
   const [categories, setCategories] = useState<string[]>(["全部"]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isBlueprintGenerating, setIsBlueprintGenerating] = useState(false);
   const [result, setResult] = useState(project.outline || "");
+  const writingMode = project.mode ?? "review";
+  const [skeletonText, setSkeletonText] = useState(() =>
+    formatSkeletonLines(getDefaultUserSkeleton(writingMode)),
+  );
+
+  const blueprint = useMemo(
+    () => parseWritingBlueprint(project.writingBlueprint),
+    [project.writingBlueprint],
+  );
+
+  const blueprintStale = useMemo(
+    () => Boolean(blueprint && result.trim() && isBlueprintStale(blueprint, result)),
+    [blueprint, result],
+  );
 
   useEffect(() => {
     setTitle(project.title || "");
     setResearchDirection(project.researchDirection || "");
     setResult(project.outline || "");
   }, [project.id, project.title, project.researchDirection, project.outline]);
+
+  useEffect(() => {
+    setSkeletonText(formatSkeletonLines(getDefaultUserSkeleton(writingMode)));
+  }, [project.id, writingMode]);
 
   useEffect(() => {
     listKnowledgeFiles()
@@ -50,17 +92,64 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
 
   const outlineTasks = useMemo(() => parseOutline(result), [result]);
 
-  const handleSave = (customOutline?: string) => {
+  const figureCountByTask = useMemo(() => {
+    if (!blueprint) return new Map<string, number>();
+    const map = new Map<string, number>();
+    for (const task of outlineTasks) {
+      const count = countFiguresForSection(task.fullPath, blueprint.figurePlan.items);
+      if (count > 0) map.set(task.id, count);
+    }
+    return map;
+  }, [blueprint, outlineTasks]);
+
+  const handleSave = useCallback((customOutline?: string, customBlueprint?: WritingBlueprint | null) => {
     if (!projectId) return;
     const effectiveDirection = resolveOutlineResearchDirection(title, researchDirection);
-    if (onSave) {
-      onSave({
-        title,
-        researchDirection: effectiveDirection,
-        outline: customOutline ?? result,
-      });
+    const updates: Partial<ProjectData> = {
+      title,
+      researchDirection: effectiveDirection,
+      outline: customOutline ?? result,
+    };
+    if (customBlueprint !== undefined) {
+      updates.writingBlueprint = customBlueprint === null
+        ? null
+        : serializeWritingBlueprint(customBlueprint);
     }
-  };
+    onSave?.(updates);
+  }, [projectId, title, researchDirection, result, onSave]);
+
+  const handleGenerateBlueprint = useCallback(async () => {
+    const effectiveTitle = title.trim();
+    const effectiveDirection = resolveOutlineResearchDirection(title, researchDirection);
+    const outlineText = result.trim();
+
+    if (!effectiveTitle) {
+      toast.error("请填写论文题目");
+      return;
+    }
+    if (!outlineText) {
+      toast.error("请先生成或填写大纲");
+      return;
+    }
+
+    setIsBlueprintGenerating(true);
+    try {
+      const next = await generateWritingBlueprint({
+        title: effectiveTitle,
+        outline: outlineText,
+        researchDirection: effectiveDirection,
+        language,
+        projectMode: project.mode ?? "review",
+        chartCatalog: buildBlueprintChartCatalog(parseDataSources(project)),
+      });
+      handleSave(undefined, next);
+      toast.success(`写作蓝图已生成：预计 ${next.figurePlan.totalMin}–${next.figurePlan.totalMax} 张图`);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "蓝图生成失败");
+    } finally {
+      setIsBlueprintGenerating(false);
+    }
+  }, [title, researchDirection, result, language, project.mode, project, handleSave]);
 
   const handleGenerate = async () => {
     const effectiveTitle = title.trim();
@@ -74,6 +163,12 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
       return;
     }
 
+    const userSkeleton = parseSkeletonLines(skeletonText);
+    if (userSkeleton.length < 3) {
+      toast.error("章节骨架至少 3 条（每行一个一级标题）");
+      return;
+    }
+
     setIsGenerating(true);
     setResult("");
     try {
@@ -81,14 +176,15 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
         {
           title: effectiveTitle,
           researchDirection: effectiveDirection,
-          language: language as "zh" | "en",
+          language,
           category,
           projectMode: project.mode ?? "review",
+          userSkeleton,
         },
         setResult,
       );
-      handleSave(full);
-      toast.success("大纲生成完毕，点击章节可跳转到扩写");
+      handleSave(full, null);
+      toast.success("大纲生成完毕，可生成写作蓝图后再扩写");
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "生成失败");
     } finally {
@@ -97,6 +193,9 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
   };
 
   const handleExpandTask = (task: OutlineSection) => {
+    if (blueprintStale) {
+      toast.warning("写作蓝图与当前大纲不一致，建议先刷新蓝图");
+    }
     onExpandTask?.(task.id);
     onTabChange?.("writing");
   };
@@ -128,6 +227,17 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
             }
           />
         </div>
+        <div className="rounded-md border border-dashed border-muted-foreground/25 bg-muted/30 px-2 py-2 space-y-2">
+          <p className="text-[10px] font-medium text-muted-foreground">
+            章节骨架 · 每行一个一级标题
+          </p>
+          <Textarea
+            className="text-xs h-24 min-h-[4rem] font-mono bg-background"
+            value={skeletonText}
+            onChange={(e) => setSkeletonText(e.target.value)}
+            placeholder={"摘要\n引言\n研究进展综述\n结论与展望"}
+          />
+        </div>
         <div className="flex justify-between items-center gap-1">
           <Select value={category} onValueChange={v => v && setCategory(v)}>
             <SelectTrigger className="text-xs h-7 w-28"><SelectValue /></SelectTrigger>
@@ -136,13 +246,6 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
             </SelectContent>
           </Select>
           <div className="flex gap-1">
-            <Select value={language} onValueChange={v => v && setLanguage(v)}>
-              <SelectTrigger className="text-xs h-7 w-16"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="zh">中文</SelectItem>
-                <SelectItem value="en">EN</SelectItem>
-              </SelectContent>
-            </Select>
             <Button size="sm" className="h-7 text-xs" disabled={isGenerating} onClick={handleGenerate}>
               {isGenerating ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Send className="h-3 w-3 mr-1" />}
               生成
@@ -151,12 +254,27 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
         </div>
       </div>
 
+      <OutlineBlueprintSummary
+        blueprint={blueprint}
+        isGenerating={isBlueprintGenerating}
+        isStale={blueprintStale}
+        hasOutline={Boolean(result.trim())}
+        onGenerate={handleGenerateBlueprint}
+        onOpenDetail={() => {
+          if (!blueprint) {
+            toast.error("请先生成写作蓝图");
+            return;
+          }
+          onOpenBlueprint?.();
+        }}
+      />
+
       <div className="flex-1 min-h-0 overflow-y-auto">
         {!result && !isGenerating && (
           <div className="text-center py-16 text-muted-foreground">
             <FileText className="h-10 w-10 mx-auto mb-3 opacity-20" />
             <p className="text-sm">{isReview ? "填写综述题目后生成主题式大纲" : "填写论文信息后生成大纲"}</p>
-            <p className="text-[10px] mt-1">生成后可点击章节直接跳转到扩写面板</p>
+            <p className="text-[10px] mt-1">生成大纲后可生成写作蓝图，再点击章节扩写</p>
           </div>
         )}
 
@@ -170,23 +288,35 @@ export function OutlinePanel({ projectId, project, onSave, onTabChange, expanded
         {outlineTasks.length > 0 && (
           <div className="p-2 space-y-1">
             <p className="text-[10px] text-muted-foreground px-2 py-1 uppercase tracking-wider">点击章节开始扩写</p>
-            {outlineTasks.map((task, i) => (
-              <button
-                key={task.id || i}
-                onClick={() => handleExpandTask(task)}
-                className="w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center justify-between group hover:bg-primary/10 hover:text-primary border border-transparent hover:border-primary/20"
-                style={{ paddingLeft: `${8 + task.level * 12}px` }}
-              >
-                <span className="truncate flex-1 min-w-0">{task.title}</span>
-                <div className="flex items-center gap-1 shrink-0">
-                  {expandedSections?.includes(task.id) && (
-                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-                  )}
-                  <PenTool className="h-3 w-3 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
-              </button>
-            ))}
+            {outlineTasks.map((task, i) => {
+              const figCount = figureCountByTask.get(task.id);
+              return (
+                <button
+                  key={task.id || i}
+                  onClick={() => handleExpandTask(task)}
+                  className="w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center justify-between group hover:bg-primary/10 hover:text-primary border border-transparent hover:border-primary/20"
+                  style={{ paddingLeft: `${8 + task.level * 12}px` }}
+                >
+                  <span className="truncate flex-1 min-w-0">{task.title}</span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {figCount != null && figCount > 0 && (
+                      <span
+                        className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded"
+                        title={`规划 ${figCount} 张配图`}
+                      >
+                        <ImageIcon className="h-3 w-3" />
+                        {figCount}
+                      </span>
+                    )}
+                    {expandedSections?.includes(task.id) && (
+                      <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                    )}
+                    <PenTool className="h-3 w-3 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

@@ -14,7 +14,7 @@ import type {
   ReviewDimension,
   ReviewInput,
   ReviewReport,
-} from "@/types/review";
+} from "@/contracts/review";
 
 export type {
   ReviewFixIssueRequest,
@@ -33,7 +33,7 @@ export type {
   ReviewInput,
   ReviewIssue,
   ReviewReport,
-} from "@/types/review";
+} from "@/contracts/review";
 
 function parseReviewError(data: { error?: string; success?: boolean }, fallback: string): string {
   if (data.error) return data.error;

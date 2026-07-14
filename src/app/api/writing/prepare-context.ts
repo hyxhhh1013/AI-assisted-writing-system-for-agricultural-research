@@ -9,6 +9,7 @@ import { getTemplateSectionNumber } from "@/lib/template-sections";
 import { getSectionNumberForMode } from "@/lib/section-registry";
 import { retrieveWritingContext } from "@/services/writing-context";
 import { buildEvidencePack } from "@/services/evidence-pack";
+import { formatBlueprintGlobalSummary } from "@/lib/blueprint-utils";
 import type { WritingPipelineEmit, PreparedWritingContext, WritingGlobalContext } from "./types";
 
 const tick = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -88,6 +89,9 @@ export async function prepareWritingContext(
     status: "done",
     detail: `找到 ${refCount} 条可引用文献`,
   });
+  if (Object.keys(refMapping).length > 0) {
+    emit({ type: "info", info: "", refMapping });
+  }
   await tick(40);
 
   emit({ type: "pipeline_step", step: "building_context", status: "running", detail: "正在整理证据包..." });
@@ -127,7 +131,7 @@ export async function prepareWritingContext(
     - 实验数据分析：${Array.isArray(globalContext?.analysisResults)
         ? globalContext.analysisResults.slice(0, 3).map((r: string) => r.slice(0, 300)).join("\n")
         : "暂无"}
-`
+${globalContext.blueprint ? `\n【写作蓝图摘要】\n${formatBlueprintGlobalSummary(globalContext.blueprint)}\n` : ""}`
     : "";
 
   const domainExpertise = buildDomainExpertise(researchDirection);

@@ -44,7 +44,7 @@ export function NavigationHistoryProvider({ children }: { children: ReactNode })
       stackRef.current = stack;
 
       if (target) {
-        router.push(target);
+        router.back();
         return;
       }
 

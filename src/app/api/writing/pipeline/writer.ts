@@ -6,6 +6,7 @@ import {
   normalizeWritingBullets,
 } from "@/contracts/writing";
 import type { PreparedWritingContext, WritingPipelineEmit } from "../types";
+import { emitDraftReferences } from "./finalize";
 
 const tick = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -92,6 +93,7 @@ ${otherBullets || "（无）"}${context?.trim() ? `\n\n【补充说明】\n${con
     content: trimmed,
     bulletCount: normalizedBullets.length,
   });
+  emitDraftReferences(trimmed, prepared, emit);
   await tick(60);
 
   return { initialDraft: trimmed, finalDraft: trimmed };

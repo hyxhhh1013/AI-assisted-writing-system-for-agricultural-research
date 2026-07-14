@@ -7,10 +7,21 @@ const withBundleAnalyzer = bundleAnalyzer({
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  outputFileTracingExcludes: {
+    "/*": ["./data/charts/**/*", "./papers/**/*"],
+  },
   experimental: {
     optimizePackageImports: [
       "lucide-react",
       "react-resizable-panels",
+      "@tiptap/react",
+      "@tiptap/starter-kit",
+      "@tiptap/core",
+      "@tiptap/extension-bubble-menu",
+      "@tiptap/extension-character-count",
+      "@tiptap/extension-placeholder",
+      "framer-motion",
+      "mermaid",
     ],
   },
   webpack: (config, { isServer }) => {
@@ -22,7 +33,6 @@ const nextConfig: NextConfig = {
     }
     return config;
   },
-  // @ts-ignore
   turbopack: {
     resolveAlias: {
       canvas: './empty.js',

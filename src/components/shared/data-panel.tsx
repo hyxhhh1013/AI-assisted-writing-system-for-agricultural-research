@@ -8,10 +8,16 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import type { ChartConfig } from "@/contracts/data-source";
+import { buildPlotPageHref, parseProjectCharts } from "@/contracts/figure";
 import type { ProjectData } from "@/contracts/project";
+import { getProjectWritingMode } from "@/lib/section-registry";
+import { getDataPanelTitle } from "@/lib/mode-theme";
+import { getModuleHref, listModules } from "@/lib/module-registry";
+import { RegisteredChartsCard } from "@/components/shared/plot/registered-charts-card";
 import { useEvidence } from "@/hooks/use-evidence";
 import { parseDataFileToSummary } from "@/lib/parse-data-file";
 import { streamDataAnalysis } from "@/services/analysis";
+import { getProject } from "@/services/project";
 import { projectStore } from "@/lib/store";
 import { EvidenceHubSections } from "@/components/shared/evidence-hub-sections";
 import { TabPanelShell } from "@/components/shared/tab-panel-shell";
@@ -62,23 +68,65 @@ export function DataPanel({
     setResearchDirection(project.researchDirection || "");
   }, [project.id, project.researchDirection]);
 
+  const writingMode = getProjectWritingMode(project.mode);
+  const projectCharts = parseProjectCharts(project.charts);
+  const plotModule = listModules({ placement: "workbench-sidebar" }).find((m) => m.id === "plot");
+  const plotHref = plotModule
+    ? getModuleHref(plotModule, projectId)
+    : buildPlotPageHref({ projectId });
+
+  const handleChartInserted = async (payload: { projectId: string; sectionKey: string }) => {
+    if (payload.projectId !== projectId) return;
+    const fresh = await getProject(projectId);
+    if (fresh) onSave?.({ sections: fresh.sections });
+  };
+
   if (project.mode !== "research") {
     return (
-      <div className="flex flex-col items-center justify-center h-full px-4 text-center gap-3">
-        <Database className="h-10 w-10 text-muted-foreground/30" />
-        <div className="space-y-1">
-          <p className="text-sm font-medium">综述模式无需实验数据</p>
-          <p className="text-xs text-muted-foreground leading-relaxed max-w-[240px]">
-            当前项目为文献驱动的综述写作。若需上传 CSV/Excel、提取数据证据，请在项目设置中切换为「研究论文」模式。
-          </p>
-        </div>
-        {onOpenProjectSettings && (
-          <Button size="sm" variant="outline" className="text-xs gap-1.5" onClick={onOpenProjectSettings}>
-            <Settings2 className="h-3.5 w-3.5" />
-            打开项目设置
-          </Button>
-        )}
-      </div>
+      <TabPanelShell title={getDataPanelTitle(writingMode)} icon={BarChart3}>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-bold flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-primary" />
+              科学绘图
+            </CardTitle>
+            <CardDescription className="text-xs">
+              综述写作常用流程图、示意图等，无需上传实验数据；作图后插入章节即可在此查看资产。
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button
+              size="sm"
+              className="w-full text-xs"
+              onClick={() => window.open(plotHref, "_blank", "noopener,noreferrer")}
+            >
+              <BarChart3 className="mr-2 h-3 w-3" />
+              打开科学绘图页
+            </Button>
+            <p className="text-[10px] text-muted-foreground leading-relaxed">
+              若需 CSV 分析、数据证据与推荐图表，请在项目设置中切换为「研究论文」模式。
+            </p>
+            {onOpenProjectSettings && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full text-xs gap-1.5"
+                onClick={onOpenProjectSettings}
+              >
+                <Settings2 className="h-3.5 w-3.5" />
+                打开项目设置
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+
+        <RegisteredChartsCard
+          projectId={projectId}
+          charts={projectCharts}
+          showWhenEmpty
+          onInserted={handleChartInserted}
+        />
+      </TabPanelShell>
     );
   }
 
@@ -144,7 +192,7 @@ export function DataPanel({
   };
 
   return (
-    <TabPanelShell title="实验数据" icon={Database}>
+    <TabPanelShell title={getDataPanelTitle(writingMode)} icon={Database}>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-bold flex items-center gap-2">
@@ -284,11 +332,13 @@ export function DataPanel({
           summaries={evidence.summaries}
           injectionPreview={evidence.injectionPreview}
           chartConfigs={evidence.chartConfigs}
+          projectCharts={parseProjectCharts(project.charts)}
           projectId={projectId}
           isSaving={evidence.isSaving}
           onUpdateClaim={evidence.updateClaim}
           onRemoveClaim={evidence.removeClaim}
           onInsertClaim={onInsertClaim}
+          onChartInserted={handleChartInserted}
         />
 
         {fileName && (
@@ -302,7 +352,7 @@ export function DataPanel({
             </CardHeader>
             <CardFooter className="pt-0">
               <a
-                href={`/plot?id=${projectId}`}
+                href={buildPlotPageHref({ projectId })}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 text-xs text-primary hover:underline"

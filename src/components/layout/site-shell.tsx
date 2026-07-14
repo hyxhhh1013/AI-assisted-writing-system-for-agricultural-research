@@ -6,7 +6,7 @@ import { LabBackground } from "@/components/layout/lab-background";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { siteShellClass } from "@/lib/site-theme";
 
-const PASS_THROUGH_PREFIXES = ["/presentation"];
+const PASS_THROUGH_PREFIXES = ["/presentation", "/admin"];
 const FULL_BLEED_PREFIXES = ["/workbench", "/plot", "/reader", "/plagiarism", "/xrd-lab"];
 
 function shouldSkipShell(pathname: string): boolean {

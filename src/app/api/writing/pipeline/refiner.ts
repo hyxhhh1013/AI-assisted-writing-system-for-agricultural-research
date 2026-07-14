@@ -4,7 +4,7 @@ import {
   collectInvalidCitationNumbers,
   stripOutOfRangeCitations,
 } from "@/lib/reference-reorder";
-import { normalizeAllCitationFormats } from "@/lib/citation-bounds";
+import { normalizeAllCitationFormats } from "@/lib/citation";
 import type { PreparedWritingContext, WritingPipelineEmit } from "../types";
 
 const tick = (ms: number) => new Promise((r) => setTimeout(r, ms));

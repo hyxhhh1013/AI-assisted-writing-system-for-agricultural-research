@@ -32,7 +32,8 @@ import {
 } from "@/contracts/knowledge";
 
 const PAGE_SIZE = 10;
-const FILTER_FETCH_CAP = 5000;
+/** 书目筛选需客户端过滤时一次拉取上限（过大时会明显变慢） */
+const FILTER_FETCH_CAP = 500;
 
 export function useKnowledgeList() {
   const [files, setFiles] = useState<KnowledgeFile[]>([]);
@@ -49,6 +50,7 @@ export function useKnowledgeList() {
   const [journalFilter, setJournalFilter] = useState("");
   const [indexStatusFilter, setIndexStatusFilter] = useState<KnowledgeIndexStatusFilter>("all");
   const [doiFilter, setDoiFilter] = useState<KnowledgeDoiFilter>("all");
+  const [bibFiltersOpen, setBibFiltersOpen] = useState(false);
   const [allFilesForFilter, setAllFilesForFilter] = useState<KnowledgeFile[]>([]);
 
   const [selectedFiles, setSelectedFiles] = useState<KnowledgeFile[]>([]);
@@ -82,7 +84,19 @@ export function useKnowledgeList() {
     indexStatus: indexStatusFilter,
     doi: doiFilter,
   };
-  const bibFiltersActive = hasActiveKnowledgeListFilters(listFilters);
+  const bibFiltersActive =
+    bibFiltersOpen && hasActiveKnowledgeListFilters(listFilters);
+
+  const toggleBibFilters = useCallback(() => {
+    setBibFiltersOpen((open) => {
+      if (open) {
+        setJournalFilter("");
+        setIndexStatusFilter("all");
+        setDoiFilter("all");
+      }
+      return !open;
+    });
+  }, []);
 
   const fetchFiles = useCallback(async () => {
     setIsLoading(true);
@@ -116,8 +130,9 @@ export function useKnowledgeList() {
       }
       setSelectedFiles([]);
       setSelectAllPages(false);
-    } catch {
-      toast.error("获取文献列表失败");
+    } catch (e) {
+      const message = e instanceof Error ? getErrorMessage(e) : "获取文献列表失败";
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
@@ -135,7 +150,7 @@ export function useKnowledgeList() {
   useEffect(() => {
     const timer = setTimeout(() => {
       void fetchFiles();
-    }, 300);
+    }, 500);
     return () => clearTimeout(timer);
   }, [fetchFiles]);
 
@@ -166,10 +181,16 @@ export function useKnowledgeList() {
         toast.success("本地知识库索引已更新！");
         void fetchFiles();
       } catch (error: unknown) {
-        if (controller.signal.aborted) {
-          toast.info("索引任务已取消");
+        if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) {
+          // 用户手动取消，不显示错误
         } else {
-          toast.error(error instanceof Error ? getErrorMessage(error) : "操作失败");
+          const msg = error instanceof Error ? getErrorMessage(error) : "操作失败";
+          // 网络错误通常已经重试过了，这里显示最终失败信息
+          if (msg.includes("索引流意外结束") || msg.includes("重试")) {
+            toast.warning("索引连接中断，但后台仍继续处理中。刷新页面可查看最新进度。");
+          } else {
+            toast.error(msg);
+          }
         }
       } finally {
         setIsIndexing(false);
@@ -435,6 +456,8 @@ export function useKnowledgeList() {
     setIndexStatusFilter,
     doiFilter,
     setDoiFilter,
+    bibFiltersOpen,
+    toggleBibFilters,
     bibFiltersActive,
   };
 }

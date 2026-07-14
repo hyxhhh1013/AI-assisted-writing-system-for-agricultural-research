@@ -37,6 +37,17 @@ export const APP_MODULES: AppModule[] = [
     order: 20,
   },
   {
+    id: "directions",
+    title: "研究方向规划",
+    description: "Socratic 预承诺、8 维度 Rubric 分析、论文路线图与 Direction→Writing 桥接",
+    href: "/directions",
+    flag: null,
+    placement: ["home"],
+    homeCategory: "core",
+    iconKey: "flask",
+    order: 25,
+  },
+  {
     id: "knowledge",
     title: "文献库管理",
     description: "管理实验室私有文献，支持 PDF 查看、语义检索与 AI 划词翻译",
@@ -49,8 +60,8 @@ export const APP_MODULES: AppModule[] = [
   },
   {
     id: "plagiarism",
-    title: "论文查重与降重",
-    description: "检测论文重复率，AI 辅助降重改写，支持本地库 + 联网比对",
+    title: "论文质量中心",
+    description: "提交前一站式质量检查：多源查重、AI 降重、四维度论文审查",
     href: "/plagiarism",
     flag: "PLAGIARISM",
     placement: ["home"],

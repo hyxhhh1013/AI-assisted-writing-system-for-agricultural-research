@@ -1,25 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getErrorMessage } from "@/lib/error-utils";
-import {
-  Card, CardContent, CardHeader, CardTitle, CardDescription,
-} from "@/components/ui/card";
-import { Loader2, Layers, FileText, Expand } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 import { runAmorphousAnalysis } from "@/services/xrd";
 import type { AmorphousData } from "@/services/xrd";
-import type { PreviewImage } from "@/components/shared/xrd/image-preview-dialog";
+import { getErrorMessage } from "@/lib/error-utils";
+import { PlotWorkspace } from "@/components/shared/plot/plot-workspace";
+import { PlotPreviewPane } from "@/components/shared/plot/plot-preview-pane";
+import type { PlotToolProps } from "@/components/shared/plot/plot-tool-props";
+import {
+  buildPlotInsertReplay,
+  configNumberString,
+  configString,
+  type PlotToolPrefill,
+} from "@/contracts/figure";
 
-interface AmorphousCardProps {
-  onInsertToPaper: (imageUrl: string, caption: string) => void;
-  onPreview: (img: PreviewImage | null) => void;
+interface AmorphousCardProps extends PlotToolProps {
+  prefill?: PlotToolPrefill | null;
 }
 
-export function AmorphousCard({ onInsertToPaper, onPreview }: AmorphousCardProps) {
+export function AmorphousCard({ title: toolTitle, description, onInsertToPaper, prefill }: AmorphousCardProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ imageBase64: string; imageUrl: string; data: AmorphousData } | null>(null);
@@ -28,8 +33,21 @@ export function AmorphousCard({ onInsertToPaper, onPreview }: AmorphousCardProps
   const [sigmaCoef, setSigmaCoef] = useState("5");
   const [sampleName, setSampleName] = useState("");
 
+  useEffect(() => {
+    if (!prefill || prefill.figureId !== "xrd_amorphous") return;
+    const c = prefill.config;
+    setSampleName(configString(c, "sample_name", ""));
+    setNumComponents(configNumberString(c, "num_components", "2"));
+    setMaxIter(configNumberString(c, "max_iter", "500"));
+    setSigmaCoef(configNumberString(c, "sigma_coef", "5"));
+    setResult(null);
+  }, [prefill]);
+
   const handleRun = async () => {
-    if (!file) { toast.error("请上传 XRD 数据文件"); return; }
+    if (!file) {
+      toast.error("请上传 XRD 数据文件");
+      return;
+    }
     setLoading(true);
     try {
       const json = await runAmorphousAnalysis(file, {
@@ -40,57 +58,104 @@ export function AmorphousCard({ onInsertToPaper, onPreview }: AmorphousCardProps
       });
       setResult({ imageBase64: json.imageBase64, imageUrl: json.imageUrl, data: json.data });
       toast.success(`非晶态分析完成，Rp = ${json.data.rp_factor?.toFixed(2) || "N/A"}`);
-    } catch (err: unknown) { toast.error(getErrorMessage(err)); }
-    finally { setLoading(false); }
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
   };
 
+  const buildReplayConfig = () => ({
+    sample_name: sampleName,
+    num_components: numComponents,
+    max_iter: maxIter,
+    sigma_coef: sigmaCoef,
+  });
+
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm flex items-center gap-2"><Layers className="h-4 w-4" />非晶态分析</CardTitle>
-        <CardDescription className="text-xs">高斯混合模型拟合非晶态组分</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <details className="text-[10px] text-muted-foreground bg-muted/20 rounded p-2 leading-relaxed">
-          <summary className="cursor-pointer font-medium text-[10px]">用法说明</summary>
-          <p className="mt-1">上传 XRD 数据，设置高斯混合组分数量（通常 2-4 个），调整 σ² 系数和迭代次数后运行。输出各组分峰位、权重和 R 因子。</p>
-        </details>
-        <div><Label className="text-xs">XRD 数据文件</Label><Input type="file" accept=".csv,.xyd,.txt" className="text-xs h-8 mt-1" onChange={e => { const f = e.target.files?.[0]; if (f) { setFile(f); setResult(null); setSampleName(f.name.replace(/\.[^.]+$/, "")); } }} /></div>
-        <div className="grid grid-cols-2 gap-2">
-          <div><Label className="text-xs">样品名</Label><Input value={sampleName} onChange={e => setSampleName(e.target.value)} className="text-xs h-7 mt-0.5" /></div>
-          <div><Label className="text-xs">组分数量</Label><Input value={numComponents} onChange={e => setNumComponents(e.target.value)} className="text-xs h-7 mt-0.5" type="number" min="1" max="8" /></div>
-          <div><Label className="text-xs">σ² 系数</Label><Input value={sigmaCoef} onChange={e => setSigmaCoef(e.target.value)} className="text-xs h-7 mt-0.5" type="number" step="1" min="1" /></div>
-          <div><Label className="text-xs">最大迭代</Label><Input value={maxIter} onChange={e => setMaxIter(e.target.value)} className="text-xs h-7 mt-0.5" type="number" step="500" min="100" /></div>
-        </div>
-        <Button className="w-full h-8 text-xs" onClick={handleRun} disabled={loading || !file}>
-          {loading ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> 分析中...</> : <><Layers className="h-3.5 w-3.5 mr-1" /> 运行非晶态分析</>}
-        </Button>
-        {result && (
-          <div className="space-y-2 pt-1 border-t">
-            <div className="relative rounded-md overflow-hidden border bg-muted/30 group cursor-pointer"
-              onClick={() => onPreview({ src: result.imageBase64, caption: `非晶态分析 — ${sampleName}` })}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={result.imageBase64} alt="Amorphous" className="w-full h-auto" />
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 flex items-center justify-center">
-                <Expand className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+    <PlotWorkspace
+      title={toolTitle ?? "XRD 非晶分析"}
+      description={description ?? "高斯混合模型拟合非晶态组分"}
+      config={
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="space-y-3 px-4 pb-5 pt-3">
+            <div>
+              <Label className="text-xs">XRD 数据文件</Label>
+              <Input
+                type="file"
+                accept=".csv,.xyd,.txt"
+                className="mt-1 h-8 text-xs"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) {
+                    setFile(f);
+                    setResult(null);
+                    setSampleName(f.name.replace(/\.[^.]+$/, ""));
+                  }
+                }}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs">样品名</Label>
+                <Input value={sampleName} onChange={(e) => setSampleName(e.target.value)} className="mt-0.5 h-8 text-xs" />
+              </div>
+              <div>
+                <Label className="text-xs">组分数量</Label>
+                <Input value={numComponents} onChange={(e) => setNumComponents(e.target.value)} className="mt-0.5 h-8 text-xs" type="number" min="1" max="8" />
+              </div>
+              <div>
+                <Label className="text-xs">σ² 系数</Label>
+                <Input value={sigmaCoef} onChange={(e) => setSigmaCoef(e.target.value)} className="mt-0.5 h-8 text-xs" type="number" step="1" min="1" />
+              </div>
+              <div>
+                <Label className="text-xs">最大迭代</Label>
+                <Input value={maxIter} onChange={(e) => setMaxIter(e.target.value)} className="mt-0.5 h-8 text-xs" type="number" step="500" min="100" />
               </div>
             </div>
-            {result.data.components?.length > 0 && (
-              <div className="text-[10px] text-muted-foreground max-h-20 overflow-y-auto">
-                <p className="font-medium mb-0.5">拟合组分:</p>
-                {result.data.components.map((c, i) => (
-                  <p key={i}>#{i + 1}: μ={c.mu_2theta.toFixed(2)}° w={c.weight.toFixed(1)} σ²={c.sigma2.toFixed(2)}</p>
-                ))}
-                {result.data.rp_factor != null && <p>Rp = {result.data.rp_factor.toFixed(2)}%</p>}
-                {result.data.interatomic_distance && <p>d ≈ {result.data.interatomic_distance} Å</p>}
-              </div>
-            )}
-            <Button variant="default" size="sm" className="w-full h-7 text-xs" onClick={() => onInsertToPaper(result.imageUrl, `非晶态分析 — ${sampleName}`)}>
-              <FileText className="h-3.5 w-3.5 mr-1" /> 插入到论文
-            </Button>
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </ScrollArea>
+      }
+      preview={
+        <PlotPreviewPane
+          paneTitle="XRD 预览"
+          loading={loading}
+          canGenerate={Boolean(file)}
+          onGenerate={handleRun}
+          generateLabel="运行非晶态分析"
+          imageSrc={result?.imageBase64}
+          imageAlt={`非晶态分析 — ${sampleName}`}
+          emptyHint="在左侧上传 XRD 数据文件。"
+          footer={
+            result ? (
+              <div className="space-y-2">
+                {result.data.components?.length > 0 && (
+                  <div className="max-h-20 overflow-y-auto text-[10px] text-[#6b7c72]">
+                    <p className="mb-0.5 font-medium">拟合组分:</p>
+                    {result.data.components.map((c, i) => (
+                      <p key={i}>#{i + 1}: μ={c.mu_2theta.toFixed(2)}° w={c.weight.toFixed(1)} σ²={c.sigma2.toFixed(2)}</p>
+                    ))}
+                    {result.data.rp_factor != null && <p>Rp = {result.data.rp_factor.toFixed(2)}%</p>}
+                  </div>
+                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="mr-auto text-xs font-medium text-[#6b7c72]">导出与插入</span>
+                  <Button size="sm" className="h-8 gap-1 bg-[#1a5632] text-xs hover:bg-[#144228]" onClick={() => {
+                    const cap = `非晶态分析 — ${sampleName}`;
+                    onInsertToPaper(
+                      result.imageUrl,
+                      cap,
+                      buildPlotInsertReplay("xrd_amorphous", cap, buildReplayConfig()),
+                    );
+                  }}>
+                    <BarChart3 className="h-3 w-3" /> 插入论文
+                  </Button>
+                </div>
+              </div>
+            ) : undefined
+          }
+        />
+      }
+    />
   );
 }

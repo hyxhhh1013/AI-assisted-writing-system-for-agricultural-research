@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node -e \"require('fs').cpSync('.next/static','.next/standalone/.next/static',{recursive:true})\"",
     "analyze": "ANALYZE=true next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
@@ -31,6 +31,7 @@
     "@hookform/resolvers": "^5.2.2",
     "@langchain/community": "^1.1.27",
     "@langchain/core": "^1.1.44",
+    "@langchain/langgraph": "^1.2.9",
     "@langchain/openai": "^1.4.5",
     "@langchain/textsplitters": "^1.0.1",
     "@prisma/client": "^5.22.0",
@@ -70,6 +71,7 @@
     "react-hook-form": "^7.74.0",
     "react-markdown": "^10.1.0",
     "react-resizable-panels": "^4.11.0",
+    "recharts": "^3.9.2",
     "rehype-katex": "^7.0.1",
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
@@ -87,8 +89,8 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
-    "@playwright/test": "^1.59.1",
     "@next/bundle-analyzer": "^16.2.6",
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4",
     "@types/file-saver": "^2.0.7",
     "@types/html2pdf.js": "^0.10.0",

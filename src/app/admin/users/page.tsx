@@ -1,128 +1,189 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Shield, ShieldOff, Search, Trash2, User, ChevronRight } from "lucide-react";
-import { toast } from "sonner";
+import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Shield, ShieldOff, Trash2, ChevronRight } from "lucide-react";
+import { toast } from "sonner";
 import { exportUsersCSV } from "@/lib/admin-export";
-import {
-  deleteAdminUser,
-  listAdminUsers,
-  updateAdminUserRole,
-  type AdminUserRecord,
-} from "@/services/admin";
+import { deleteAdminUser, listAdminUsers, updateAdminUserRole, type AdminUserRecord } from "@/services/admin";
+import { useAdminList } from "@/hooks/use-admin-list";
+import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import { AdminSearchInput } from "@/components/admin/admin-search-input";
+import { AdminPagination } from "@/components/admin/admin-pagination";
+import { AdminConfirmDialog } from "@/components/admin/admin-confirm-dialog";
+import { AdminDataTable } from "@/components/admin/admin-data-table";
 
 export default function AdminUsersPage() {
-  const [users, setUsers] = useState<AdminUserRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [q, setQ] = useState("");
+  const {
+    q,
+    setQ,
+    page,
+    setPage,
+    sortBy,
+    sortOrder,
+    toggleSort,
+    data: users,
+    meta,
+    loading,
+    reload,
+  } = useAdminList({
+    fetcher: listAdminUsers,
+    defaultSortBy: "createdAt",
+    defaultSortOrder: "desc",
+    urlSync: true,
+  });
+
   const [deleteTarget, setDeleteTarget] = useState<AdminUserRecord | null>(null);
+  const [roleTarget, setRoleTarget] = useState<AdminUserRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  const load = useCallback(() => {
-    setLoading(true);
-    listAdminUsers(q ? { q } : undefined)
-      .then(setUsers)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [q]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const toggleRole = async (userId: string, currentRole: string) => {
-    const newRole = currentRole === "admin" ? "user" : "admin";
-    await updateAdminUserRole(userId, newRole);
-    load();
-    toast.success(`角色已切换为 ${newRole}`);
-  };
+  const [roleChanging, setRoleChanging] = useState(false);
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
       const d = await deleteAdminUser(deleteTarget.id);
-      if (d.ok) { toast.success(d.message || "已删除"); load(); }
+      if (d.ok) { toast.success(d.message || "已删除"); reload(); }
       else toast.error(d.error || "删除失败");
-    } catch { toast.error("删除失败"); }
-    finally { setDeleting(false); setDeleteTarget(null); }
+    } catch {
+      toast.error("删除失败");
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
+  };
+
+  const handleRoleChange = async () => {
+    if (!roleTarget) return;
+    const newRole = roleTarget.role === "admin" ? "user" : "admin";
+    setRoleChanging(true);
+    try {
+      await updateAdminUserRole(roleTarget.id, newRole);
+      toast.success(`角色已切换为 ${newRole}`);
+      reload();
+    } catch {
+      toast.error("角色切换失败");
+    } finally {
+      setRoleChanging(false);
+      setRoleTarget(null);
+    }
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-[#122820]">用户管理</h2>
-        <Button variant="outline" size="sm" onClick={() => exportUsersCSV(users)} className="text-xs">导出 CSV</Button>
-      </div>
+      <AdminPageHeader
+        title="用户管理"
+        actions={
+          <Button variant="outline" size="sm" onClick={() => exportUsersCSV(users)} className="text-xs">
+            导出 CSV
+          </Button>
+        }
+      />
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9aa8a0]" />
-        <Input className="pl-9 h-9 text-sm" placeholder="搜索姓名或邮箱..." value={q} onChange={e => setQ(e.target.value)} />
-      </div>
+      <AdminSearchInput value={q} onChange={setQ} placeholder="搜索姓名或邮箱..." />
 
-      {loading ? (
-        <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-[#6b7c72]" /></div>
-      ) : (
-        <div className="border border-[#1a5632]/10 rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[#1a5632]/10 bg-[#faf9f6] text-left text-[#6b7c72]">
-                <th className="py-2.5 px-4 font-medium">用户</th>
-                <th className="py-2.5 px-4 font-medium">角色</th>
-                <th className="py-2.5 px-4 font-medium hidden sm:table-cell">项目数</th>
-                <th className="py-2.5 px-4 font-medium hidden sm:table-cell">注册时间</th>
-                <th className="py-2.5 px-4 font-medium">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map(u => (
-                <tr key={u.id} className="border-b border-[#1a5632]/5 hover:bg-[#1a5632]/[0.02]">
-                  <td className="py-2.5 px-4">
-                    <Link href={`/admin/users/${u.id}`} className="hover:underline">
-                      <p className="font-medium text-[#122820]">{u.name}</p>
-                      <p className="text-xs text-[#9aa8a0]">{u.email}</p>
-                    </Link>
-                  </td>
-                  <td className="py-2.5 px-4">
-                    <Badge variant={u.role === "admin" ? "default" : "secondary"} className="text-[10px]">{u.role}</Badge>
-                  </td>
-                  <td className="py-2.5 px-4 hidden sm:table-cell text-[#6b7c72]">{u.projectCount}</td>
-                  <td className="py-2.5 px-4 hidden sm:table-cell text-[#9aa8a0] text-xs">{new Date(u.createdAt).toLocaleDateString("zh-CN")}</td>
-                  <td className="py-2.5 px-4">
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toggleRole(u.id, u.role)} title={u.role === "admin" ? "降级" : "升级"}>
-                        {u.role === "admin" ? <ShieldOff className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700" onClick={() => setDeleteTarget(u)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                      <Link href={`/admin/users/${u.id}`}><Button variant="ghost" size="icon" className="h-7 w-7"><ChevronRight className="h-3.5 w-3.5" /></Button></Link>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {users.length === 0 && <tr><td colSpan={5} className="py-12 text-center text-[#9aa8a0] text-sm">暂无用户</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <AdminDataTable
+        columns={[
+          {
+            key: "name",
+            header: "用户",
+            sortable: true,
+            cell: (u) => (
+              <Link href={`/admin/users/${u.id}`} className="hover:underline">
+                <p className="font-medium text-[#122820]">{u.name}</p>
+                <p className="text-xs text-[#9aa8a0]">{u.email}</p>
+              </Link>
+            ),
+          },
+          {
+            key: "role",
+            header: "角色",
+            sortable: true,
+            cell: (u) => (
+              <Badge variant={u.role === "admin" ? "default" : "secondary"} className="text-[10px]">{u.role}</Badge>
+            ),
+          },
+          {
+            key: "projectCount",
+            header: "项目数",
+            hideOnMobile: true,
+            cell: (u) => <span className="text-[#6b7c72]">{u.projectCount}</span>,
+          },
+          {
+            key: "createdAt",
+            header: "注册时间",
+            sortable: true,
+            hideOnMobile: true,
+            cell: (u) => (
+              <span className="text-[#9aa8a0] text-xs">{new Date(u.createdAt).toLocaleDateString("zh-CN")}</span>
+            ),
+          },
+          {
+            key: "actions",
+            header: "操作",
+            cell: (u) => (
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setRoleTarget(u)} title={u.role === "admin" ? "降级" : "升级"}>
+                  {u.role === "admin" ? <ShieldOff className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}
+                </Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700" onClick={() => setDeleteTarget(u)}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+                <Link href={`/admin/users/${u.id}`}>
+                  <Button variant="ghost" size="icon" className="h-7 w-7"><ChevronRight className="h-3.5 w-3.5" /></Button>
+                </Link>
+              </div>
+            ),
+          },
+        ]}
+        data={users}
+        rowKey={(u) => u.id}
+        loading={loading}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
+        onSort={toggleSort}
+        emptyTitle="暂无用户"
+        emptyDescription="用户注册后将显示在此列表。"
+      />
 
-      <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader><DialogTitle>确认删除用户</DialogTitle></DialogHeader>
-          <div className="text-sm text-[#6b7c72] space-y-2">
+      <AdminPagination meta={meta} onPageChange={setPage} />
+
+      <AdminConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="确认删除用户"
+        destructive
+        loading={deleting}
+        confirmLabel="确认删除"
+        description={
+          <>
             <p>即将删除 <strong className="text-[#122820]">{deleteTarget?.name}</strong>（{deleteTarget?.email}）</p>
-            <p className="text-red-600 text-xs">此操作将删除该用户的所有项目、审查记录、查重记录，不可恢复。</p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)}>取消</Button>
-            <Button variant="destructive" size="sm" onClick={handleDelete} disabled={deleting}>{deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "确认删除"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <p className="text-red-600 text-xs mt-2">此操作将删除该用户的所有项目、审查记录、查重记录，不可恢复。</p>
+          </>
+        }
+        onConfirm={handleDelete}
+      />
+
+      <AdminConfirmDialog
+        open={!!roleTarget}
+        onOpenChange={(open) => !open && setRoleTarget(null)}
+        title="确认切换角色"
+        loading={roleChanging}
+        confirmLabel="确认切换"
+        description={
+          <p>
+            将 <strong>{roleTarget?.name}</strong> 的角色从
+            <Badge className="mx-1 text-[10px]">{roleTarget?.role}</Badge>
+            切换为
+            <Badge className="mx-1 text-[10px]">{roleTarget?.role === "admin" ? "user" : "admin"}</Badge>
+            ？
+          </p>
+        }
+        onConfirm={handleRoleChange}
+      />
     </div>
   );
 }
