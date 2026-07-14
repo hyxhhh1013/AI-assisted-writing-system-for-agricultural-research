@@ -50,6 +50,7 @@ import { WorkbenchEditorArea } from "@/components/shared/workbench-editor-area";
 import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
 import { ProjectCockpitSidebar, type CockpitControlMode } from "@/components/shared/project/project-cockpit-bar";
 import { PaperConfigPanel } from "@/components/shared/project/paper-config-panel";
+import { ProjectHandoffBanner } from "@/components/shared/project/project-handoff-banner";
 import type { CockpitNavigationAction } from "@/lib/paper-passport-navigation";
 import { parsePaperPassport } from "@/contracts/paper-passport";
 import { buildPassportSignalsFromProject } from "@/lib/paper-passport-signals";
@@ -245,8 +246,14 @@ function WorkbenchContent() {
     () => buildPassportSignalsFromProject(project, passport),
     [project, passport],
   );
+  const directionHandoff = Boolean(passport?.source?.directionSlug);
   const showPaperConfigPanel = Boolean(
-    passport && (passport.currentPhase === 0 || !passport.config?.targetJournal?.trim()),
+    passport
+    && (
+      directionHandoff
+      || passport.currentPhase === 0
+      || !passport.config?.targetJournal?.trim()
+    ),
   );
 
   const sectionContentsForRefs = useMemo(() => {
@@ -435,6 +442,12 @@ function WorkbenchContent() {
       setActiveSection(action.sectionKey);
     }
   }, []);
+
+  const handleReferencesImported = useCallback(async () => {
+    if (!projectId) return;
+    const data = await projectStore.get(projectId);
+    if (data) setProject(data);
+  }, [projectId]);
 
   const handleSavePaperConfig = useCallback(async (config: PaperConfig) => {
     if (!projectId) return;
@@ -761,7 +774,7 @@ function WorkbenchContent() {
                     {activeTab === "outline" && "论证提纲"}
                     {activeTab === "writing" && "章节协作向导"}
                     {activeTab === "agent" && "AI Agent"}
-                    {activeTab === "reader" && "文献库"}
+                    {activeTab === "reader" && "补录文献"}
                     {activeTab === "plagiarism" && "论文质量检测"}
                     {activeTab === "xrd" && "XRD 分析"}
                   </span>
@@ -772,14 +785,6 @@ function WorkbenchContent() {
                     {getStructurePanelHint(writingMode)}
                   </span>
                 )}
-                <ProjectCockpitSidebar
-                  paperPassportRaw={project.paperPassport}
-                  activeTab={activeTab}
-                  controlMode={cockpitMode}
-                  onControlModeChange={setCockpitMode}
-                  signals={passportSignals}
-                  onNavigate={handleCockpitNavigate}
-                />
               </div>
               <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setIsSidebarOpen(false)}>
                 <ChevronLeft className="h-4 w-4" />
@@ -803,11 +808,31 @@ function WorkbenchContent() {
             )}
             {activeTab === "structure" && (
               <div className="h-full min-h-0 flex flex-col overflow-hidden">
+                {directionHandoff && (
+                  <ProjectHandoffBanner
+                    passport={passport}
+                    referenceCount={project.references?.length ?? 0}
+                  />
+                )}
+                {passport && (
+                  <div className="shrink-0 mb-3 px-1">
+                    <ProjectCockpitSidebar
+                      paperPassportRaw={project.paperPassport}
+                      activeTab={activeTab}
+                      controlMode={cockpitMode}
+                      onControlModeChange={setCockpitMode}
+                      signals={passportSignals}
+                      onNavigate={handleCockpitNavigate}
+                      className="border-t-0 pt-0 mt-0"
+                    />
+                  </div>
+                )}
                 {showPaperConfigPanel && (
                   <div className="shrink-0 mb-3">
                     <PaperConfigPanel
                       project={project}
                       config={passport?.config}
+                      readOnly={directionHandoff}
                       saving={savingPaperConfig}
                       onSave={handleSavePaperConfig}
                     />
@@ -845,6 +870,7 @@ function WorkbenchContent() {
                   <div className="pt-4 mt-4 border-t">
                     <ReferenceBrowser
                       projectId={projectId ?? undefined}
+                      directionSlug={passport?.source?.directionSlug}
                       references={project.references || []}
                       activeSectionContent={
                         activeSection === "abstract"
@@ -852,6 +878,7 @@ function WorkbenchContent() {
                           : project.sections[activeSection]
                       }
                       allContents={sectionContentsForRefs}
+                      onGoImport={() => setActiveTab("reader")}
                     />
                   </div>
 
@@ -970,7 +997,11 @@ function WorkbenchContent() {
             {activeTab === "reader" && (
               <div className="h-full min-h-0 flex flex-col overflow-hidden">
                 <ErrorBoundary>
-                  <LazyReaderPanel onOpenFile={handleOpenFile} />
+                  <LazyReaderPanel
+                    projectId={projectId ?? undefined}
+                    onOpenFile={handleOpenFile}
+                    onReferencesUpdated={() => void handleReferencesImported()}
+                  />
                 </ErrorBoundary>
               </div>
             )}
@@ -1083,7 +1114,7 @@ function WorkbenchContent() {
                       ) : (
                         <div className="h-full flex flex-col items-center justify-center text-muted-foreground italic p-8 text-center">
                           <Search className="h-12 w-12 mb-4 opacity-10" />
-                          <p>在左侧文献库中选择一篇文献进行阅读</p>
+                          <p>在左侧补录文献中选择一篇 PDF 进行阅读</p>
                         </div>
                       )}
                     </div>

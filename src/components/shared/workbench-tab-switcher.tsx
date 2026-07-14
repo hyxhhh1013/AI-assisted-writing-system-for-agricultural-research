@@ -58,7 +58,7 @@ function getTabTitle(tab: WorkbenchTab, mode: "review" | "research"): string {
     case "agent":
       return "AI Agent：自主检索、分析、验证（Phase A 只读）";
     case "reader":
-      return "本地文献库 PDF";
+      return "补录参考文献或阅读 PDF";
     case "plagiarism":
       return "论文质量检测：查重 / 降重 / 审查";
     default:

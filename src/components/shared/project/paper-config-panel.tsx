@@ -47,14 +47,17 @@ interface PaperConfigPanelProps {
   project: ProjectData;
   config?: PaperConfigRecord;
   saving?: boolean;
+  /** Direction Handoff 项目：只读，回方向页修改 */
+  readOnly?: boolean;
   onSave: (config: PaperConfig) => Promise<void>;
 }
 
-/** 工作台内嵌 Phase 0 论文配置（写入 passport.config） */
+/** 工作台内嵌论文配置（Handoff 后为只读摘要） */
 export function PaperConfigPanel({
   project,
   config: existing,
   saving = false,
+  readOnly = false,
   onSave,
 }: PaperConfigPanelProps) {
   const [draft, setDraft] = useState(() => configFromProject(project, existing));
@@ -74,8 +77,14 @@ export function PaperConfigPanel({
   return (
     <div className="space-y-3 rounded-lg border border-[#1a5632]/15 bg-[#f6f5f1]/40 p-3">
       <div>
-        <p className="text-xs font-semibold text-[#1a5632]">P0 · 论文配置</p>
-        <p className="text-[10px] text-[#6b7c72]">影响 AI 写作深度、引用密度与章节结构</p>
+        <p className="text-xs font-semibold text-[#1a5632]">
+          {readOnly ? "P0 · 论文配置（只读）" : "P0 · 论文配置"}
+        </p>
+        <p className="text-[10px] text-[#6b7c72]">
+          {readOnly
+            ? "已在方向备料层完成，请回 Direction 修改"
+            : "影响 AI 写作深度、引用密度与章节结构"}
+        </p>
       </div>
 
       <div className="space-y-1.5">
@@ -83,6 +92,7 @@ export function PaperConfigPanel({
         <Input
           className="h-8 text-xs"
           value={draft.paperTitle}
+          disabled={readOnly}
           onChange={(e) => setDraft((d) => ({ ...d, paperTitle: e.target.value }))}
         />
       </div>
@@ -97,6 +107,7 @@ export function PaperConfigPanel({
               variant={draft.paperType === type ? "default" : "outline"}
               size="sm"
               className="h-7 text-[10px] flex-1"
+              disabled={readOnly}
               onClick={() => setDraft((d) => ({ ...d, paperType: type }))}
             >
               {type === "review" ? "综述" : "原创研究"}
@@ -110,6 +121,7 @@ export function PaperConfigPanel({
         <Input
           className="h-8 text-xs"
           value={draft.targetJournal}
+          disabled={readOnly}
           onChange={(e) => setDraft((d) => ({ ...d, targetJournal: e.target.value }))}
           placeholder="如：Applied Soil Ecology"
         />
@@ -117,7 +129,11 @@ export function PaperConfigPanel({
 
       <div className="space-y-1.5">
         <Label className="text-[10px] text-muted-foreground">目标字数</Label>
-        <Select value={draft.wordCount} onValueChange={(v) => v && setDraft((d) => ({ ...d, wordCount: v }))}>
+        <Select
+          value={draft.wordCount}
+          disabled={readOnly}
+          onValueChange={(v) => v && setDraft((d) => ({ ...d, wordCount: v }))}
+        >
           <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
             {WORD_COUNT_PRESETS.map((p) => (
@@ -138,6 +154,7 @@ export function PaperConfigPanel({
                 variant={draft.language === lang ? "default" : "outline"}
                 size="sm"
                 className="h-7 text-[10px] flex-1"
+                disabled={readOnly}
                 onClick={() => setDraft((d) => ({ ...d, language: lang }))}
               >
                 {lang === "zh" ? "中文" : "英文"}
@@ -149,6 +166,7 @@ export function PaperConfigPanel({
           <Label className="text-[10px] text-muted-foreground">引用格式</Label>
           <Select
             value={draft.citationStyle}
+            disabled={readOnly}
             onValueChange={(v) => v && setDraft((d) => ({ ...d, citationStyle: v as PaperConfig["citationStyle"] }))}
           >
             <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
@@ -161,16 +179,18 @@ export function PaperConfigPanel({
         </div>
       </div>
 
-      <Button
-        type="button"
-        size="sm"
-        className="h-8 w-full text-xs"
-        disabled={saving}
-        onClick={() => void handleSave()}
-      >
-        {saving ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-        保存配置
-      </Button>
+      {!readOnly && (
+        <Button
+          type="button"
+          size="sm"
+          className="h-8 w-full text-xs"
+          disabled={saving}
+          onClick={() => void handleSave()}
+        >
+          {saving ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+          保存配置
+        </Button>
+      )}
     </div>
   );
 }

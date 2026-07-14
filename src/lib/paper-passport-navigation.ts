@@ -32,7 +32,7 @@ export const PHASE_TAB_LABELS: Record<WorkbenchPhaseTab | "meta", string> = {
   structure: "章节结构",
   outline: "论证提纲",
   writing: "章节协作",
-  reader: "文献库",
+  reader: "补录文献",
   plagiarism: "质量检测",
 };
 

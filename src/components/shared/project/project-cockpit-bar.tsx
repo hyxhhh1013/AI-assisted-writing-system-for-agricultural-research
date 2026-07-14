@@ -103,21 +103,21 @@ export function ProjectCockpitSidebar({
 
   return (
     <div className={cn("space-y-2 border-t border-[#1a5632]/10 pt-2 mt-2", className)}>
-      <div className="flex items-center gap-1">
-        <span className="text-[9px] text-[#6b7c72] mr-1">模式</span>
-        <button
-          type="button"
-          onClick={() => onControlModeChange("human")}
-          className={cn(
-            "rounded px-2 py-0.5 text-[10px] font-medium",
-            controlMode === "human"
-              ? "bg-[#1a5632] text-white"
-              : "bg-muted text-muted-foreground hover:bg-muted/80",
-          )}
-        >
-          人控
-        </button>
-        {AGENT_TAB_ENABLED && (
+      {AGENT_TAB_ENABLED ? (
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] text-[#6b7c72] mr-1">协作</span>
+          <button
+            type="button"
+            onClick={() => onControlModeChange("human")}
+            className={cn(
+              "rounded px-2 py-0.5 text-[10px] font-medium",
+              controlMode === "human"
+                ? "bg-[#1a5632] text-white"
+                : "bg-muted text-muted-foreground hover:bg-muted/80",
+            )}
+          >
+            手动
+          </button>
           <button
             type="button"
             onClick={() => onControlModeChange("agent")}
@@ -130,8 +130,8 @@ export function ProjectCockpitSidebar({
           >
             Agent
           </button>
-        )}
-      </div>
+        </div>
+      ) : null}
 
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">

@@ -47,9 +47,13 @@ export async function listProjects(): Promise<ProjectListItem[]> {
 
 export async function getProject(id: string): Promise<ProjectData | null> {
   if (!id) return null;
-  const res = await fetch(`/api/projects?id=${id}`);
-  if (!res.ok) return null;
-  return res.json();
+  try {
+    const res = await fetch(`/api/projects?id=${id}`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
 }
 
 export async function saveProject(data: ProjectData): Promise<string | null> {

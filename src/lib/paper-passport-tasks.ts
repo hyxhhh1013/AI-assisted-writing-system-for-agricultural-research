@@ -83,8 +83,8 @@ export function getPhaseTasks(
       ];
     case 1:
       return [
-        task("ref-import", "导入至少 1 篇参考文献", signals.referenceCount >= 1, nav("ref-import")),
-        task("ref-browse", "在文献库浏览/检索", signals.referenceCount >= 1, nav("ref-browse")),
+        task("ref-import", "补录参考文献", signals.referenceCount >= 1, nav("ref-import")),
+        task("ref-browse", "确认引用列表", signals.referenceCount >= 1, nav("ref-browse")),
       ];
     case 2:
       return [

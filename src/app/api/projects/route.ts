@@ -15,7 +15,7 @@ import type { Prisma } from "@prisma/client";
 import { getCoreSectionKeysForMode } from "@/lib/section-registry";
 import {
   readWritingBlueprint,
-  writeWritingBlueprintTx,
+  writeWritingBlueprint,
 } from "@/lib/project-writing-blueprint-db";
 import {
   parsePaperPassport,
@@ -191,7 +191,8 @@ export async function POST(req: NextRequest) {
 
     const paperPassportJson = normalizePaperPassportInput(paperPassportRaw);
 
-    const project = await prisma.$transaction(async (tx) => {
+    const project = await prisma.$transaction(
+      async (tx) => {
       const saved = projectId
         ? await tx.project.update({
             where: { id: projectId },
@@ -228,22 +229,6 @@ export async function POST(req: NextRequest) {
 
       const nextProjectId = saved.id;
 
-      if (paperPassportJson !== undefined && paperPassportJson !== null) {
-        try {
-          await savePaperPassportForProject(nextProjectId, paperPassportJson);
-        } catch (passportError: unknown) {
-          logger.warn("Paper-passport persist skipped on POST project", passportError);
-        }
-      }
-
-      if (writingBlueprint !== undefined) {
-        await writeWritingBlueprintTx(
-          tx,
-          nextProjectId,
-          writingBlueprint === null || writingBlueprint === "" ? null : writingBlueprint,
-        );
-      }
-
       if (sections) {
         for (const [key, content] of Object.entries(sections)) {
           await tx.section.upsert({
@@ -258,7 +243,24 @@ export async function POST(req: NextRequest) {
       void _legacyAnalysisResults;
 
       return saved;
-    });
+    },
+      { timeout: 15_000 },
+    );
+
+    if (writingBlueprint !== undefined) {
+      await writeWritingBlueprint(
+        project.id,
+        writingBlueprint === null || writingBlueprint === "" ? null : writingBlueprint,
+      );
+    }
+
+    if (paperPassportJson !== undefined && paperPassportJson !== null) {
+      try {
+        await savePaperPassportForProject(project.id, paperPassportJson);
+      } catch (passportError: unknown) {
+        logger.warn("Paper-passport persist skipped on POST project", passportError);
+      }
+    }
 
     try {
       await syncProjectPaperPassport(project.id);

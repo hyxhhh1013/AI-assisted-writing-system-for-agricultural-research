@@ -6,13 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Plus, Trash2, Clock, MoreVertical, Layout, BookOpen, FlaskConical } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
-import { CreateProjectDialog } from "@/components/shared/create-project-dialog";
+import { CreateProjectWizard } from "@/components/shared/create-project-wizard";
 import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
 import { projectStore } from "@/lib/store";
 import { siteTheme } from "@/lib/site-theme";
 import { toast } from "sonner";
 import type { ProjectWritingMode } from "@/contracts/writing-mode";
-import type { ProjectLanguage } from "@/contracts/project";
 import type { ProjectListItem } from "@/services/project";
 import { cn } from "@/lib/utils";
 import { getModeAccent } from "@/lib/mode-theme";
@@ -30,7 +29,6 @@ export default function ProjectsPageClient() {
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
   const [modeFilter, setModeFilter] = useState<ModeFilter>("all");
 
   const fetchProjects = async () => {
@@ -58,19 +56,9 @@ export default function ProjectsPageClient() {
     [projects],
   );
 
-  const handleCreate = async (mode: ProjectWritingMode, title: string, language: ProjectLanguage) => {
-    setIsCreating(true);
-    try {
-      const newProject = await projectStore.create(mode, title, language);
-      if (newProject) {
-        setCreateOpen(false);
-        router.push(`/workbench?id=${newProject.id}`);
-      } else {
-        toast.error("创建失败，请重试");
-      }
-    } finally {
-      setIsCreating(false);
-    }
+  const handleCreated = (projectId: string) => {
+    void fetchProjects();
+    router.push(`/workbench?id=${projectId}`);
   };
 
   const handleOpen = (id: string) => {
@@ -242,11 +230,10 @@ export default function ProjectsPageClient() {
         </div>
       )}
 
-      <CreateProjectDialog
+      <CreateProjectWizard
         open={createOpen}
         onOpenChange={setCreateOpen}
-        onCreate={handleCreate}
-        isCreating={isCreating}
+        onCreated={handleCreated}
       />
     </>
   );

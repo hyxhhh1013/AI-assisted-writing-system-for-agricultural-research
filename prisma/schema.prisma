@@ -293,9 +293,10 @@ model Direction {
   description String?                 // 方向总述（Markdown）
   categories  String[]                // 映射知识库分类，如 ["热化学"]
   status      String   @default("active") // active | archived
-  assets      Json?                   // 资产数组 DirectionAsset[]
-  analysis    Json?                   // 分析快照 DirectionAnalysis
-  roadmap     Json?                   // 论文路线图 DirectionRoadmap
+  assets           Json?                   // 资产数组 DirectionAsset[]
+  literatureCorpus Json?                   // DirectionLiteratureState（P1 文献 corpus）
+  analysis         Json?                   // 分析快照 DirectionAnalysis
+  roadmap          Json?                   // 论文路线图 DirectionRoadmap
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
