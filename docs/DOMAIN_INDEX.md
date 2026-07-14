@@ -31,7 +31,7 @@
 
 | 功能 | 页面 | API | 核心代码 |
 |------|------|-----|----------|
-| 扩写流水线 | 工作台 `writing` Tab | `POST /api/writing` SSE；`POST /api/writing/retrieve-preview` | `api/writing/pipeline/*`, `services/writing-context.ts` |
+| 扩写流水线 | 工作台 `writing` Tab | `POST /api/writing` SSE；`POST /api/writing/retrieve-preview` | `api/writing/pipeline/*`, `services/writing-context.ts`；注入 `writingBlueprint` + **已确认** `argumentBlueprint` |
 | AI Agent | 工作台 `agent` Tab | `POST /api/agent` SSE | `lib/agent/langgraph/*`（编排），`lib/agent/core/agent-loop.ts`（入口），`services/agent.ts` |
 | 证据中心 | 工作台 `data` | — | `evidence-hub-sections.tsx`、`data-panel.tsx` |
 | 配图编辑 | 写作面板内联 | — | `writing-figure-edit-links.tsx` |

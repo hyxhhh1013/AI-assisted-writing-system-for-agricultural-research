@@ -82,10 +82,8 @@ export function recomputePassportProgress(
     phaseStatus["4"] = "done";
   } else if (fillRatio >= 0.2) {
     phaseStatus["4"] = "in_progress";
-  } else if (
-    (phaseStatus["3"] === "done" || phaseStatus["2"] === "done")
-    && phaseStatus["4"] === "locked"
-  ) {
+  } else if (phaseStatus["3"] === "done" && phaseStatus["4"] === "locked") {
+    // Phase 4 起草须论证蓝图过关后再解锁
     phaseStatus["4"] = "ready";
   }
 

@@ -10,6 +10,7 @@ import { getSectionNumberForMode } from "@/lib/section-registry";
 import { retrieveWritingContext } from "@/services/writing-context";
 import { buildEvidencePack } from "@/services/evidence-pack";
 import { formatBlueprintGlobalSummary } from "@/lib/blueprint-utils";
+import { formatArgumentGlobalSummary } from "@/lib/argument-blueprint-utils";
 import type { WritingPipelineEmit, PreparedWritingContext, WritingGlobalContext } from "./types";
 
 const tick = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -131,7 +132,11 @@ export async function prepareWritingContext(
     - 实验数据分析：${Array.isArray(globalContext?.analysisResults)
         ? globalContext.analysisResults.slice(0, 3).map((r: string) => r.slice(0, 300)).join("\n")
         : "暂无"}
-${globalContext.blueprint ? `\n【写作蓝图摘要】\n${formatBlueprintGlobalSummary(globalContext.blueprint)}\n` : ""}`
+${globalContext.blueprint ? `\n【写作蓝图摘要】\n${formatBlueprintGlobalSummary(globalContext.blueprint)}\n` : ""}${
+        globalContext.argumentBlueprint
+          ? `\n${formatArgumentGlobalSummary(globalContext.argumentBlueprint)}\n`
+          : ""
+      }`
     : "";
 
   const domainExpertise = buildDomainExpertise(researchDirection);

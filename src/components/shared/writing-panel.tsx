@@ -22,6 +22,7 @@ import { projectStore } from "@/lib/store";
 import { getMinDraftChars, getWritingContextPlaceholder, isWritingDraftReady, contextLinesToBullets, MIN_WRITING_BULLETS, normalizeWritingBullets, shouldUseCollaborativeBulletExpand, type ManualWritingPhase, type WritingFlowMode } from "@/contracts/writing";
 import { resolveProjectLanguage, type ProjectData } from "@/contracts/project";
 import { parseWritingBlueprint } from "@/contracts/writing-blueprint";
+import { parseArgumentBlueprint } from "@/contracts/argument-blueprint";
 import { useWritingStream } from "@/hooks/use-writing-stream";
 import {
   parseOutline,
@@ -105,6 +106,10 @@ export function WritingPanel({
     () => parseWritingBlueprint(project.writingBlueprint),
     [project.writingBlueprint],
   );
+  const argumentBlueprint = useMemo(
+    () => parseArgumentBlueprint(project.argumentBlueprint),
+    [project.argumentBlueprint],
+  );
 
   useEffect(() => {
     onGeneratingChange?.(isGenerating);
@@ -182,7 +187,16 @@ export function WritingPanel({
       const allSections = parseOutline(project.outline || "");
       const currentSection = allSections.find((s) => s.id === task.id);
       if (currentSection) {
-        setContext(buildExpansionContext(currentSection, allSections, project.outline || "", projectMode, writingBlueprint));
+        setContext(
+          buildExpansionContext(
+            currentSection,
+            allSections,
+            project.outline || "",
+            projectMode,
+            writingBlueprint,
+            argumentBlueprint,
+          ),
+        );
         const seed = currentSection.content.trim() || currentSection.title;
         setBullets(contextLinesToBullets(seed));
       } else {
@@ -191,8 +205,13 @@ export function WritingPanel({
         );
         setBullets(contextLinesToBullets(task.title));
       }
+      if (!argumentBlueprint?.confirmedAt) {
+        toast.message("建议先在提纲侧栏确认论证蓝图", {
+          description: "确认后扩写会带上 claim–evidence 约束",
+        });
+      }
     },
-    [project.outline, projectMode, writingBlueprint],
+    [project.outline, projectMode, writingBlueprint, argumentBlueprint],
   );
 
   useEffect(() => {

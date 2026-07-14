@@ -2,6 +2,7 @@ import type { WritingSSEEvent } from "@/contracts/sse";
 import type { EvidenceClaim } from "@/contracts/data-source";
 import type { WritingInput } from "@/lib/validations";
 import type { WritingBlueprint } from "@/contracts/writing-blueprint";
+import type { ArgumentBlueprint } from "@/contracts/argument-blueprint";
 
 export type WritingPipelineEmit = (event: WritingSSEEvent) => void;
 
@@ -11,6 +12,8 @@ export interface WritingGlobalContext {
   sectionPreviews?: Record<string, string>;
   analysisResults?: string[];
   blueprint?: WritingBlueprint | null;
+  /** Phase 3 论证蓝图（已确认时优先注入全局背景） */
+  argumentBlueprint?: ArgumentBlueprint | null;
 }
 
 export interface PreparedWritingContext {

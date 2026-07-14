@@ -11,6 +11,8 @@ import {
   parseOutline,
 } from "@/lib/utils";
 import { applyBlueprintSectionHintToContext } from "@/lib/blueprint-utils";
+import { applyArgumentSectionHintToContext } from "@/lib/argument-blueprint-utils";
+import { parseArgumentBlueprint } from "@/contracts/argument-blueprint";
 import { detectedFigureToPlotHref } from "@/contracts/figure";
 import { generateFigure } from "@/services/figures";
 import { findFigureBlocks, replacePlaceholders } from "@/hooks/use-figure-pipeline";
@@ -132,14 +134,21 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
       })();
 
       const blueprint = parseWritingBlueprint(project.writingBlueprint);
+      const argumentBlueprint = parseArgumentBlueprint(project.argumentBlueprint);
       const selectedTask = outlineTasks.find((t) => t.id === selectedSectionId);
-      const resolvedContext = selectedTask
-        ? applyBlueprintSectionHintToContext(
-            draftContext,
-            blueprint,
-            selectedTask.fullPath,
-          )
-        : draftContext;
+      let resolvedContext = draftContext;
+      if (selectedTask) {
+        resolvedContext = applyBlueprintSectionHintToContext(
+          resolvedContext,
+          blueprint,
+          selectedTask.fullPath,
+        );
+        resolvedContext = applyArgumentSectionHintToContext(
+          resolvedContext,
+          argumentBlueprint,
+          selectedTask.fullPath,
+        );
+      }
 
       return {
         title,
@@ -163,6 +172,7 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
           sectionPreviews,
           analysisResults: project.analysisResults || [],
           blueprint,
+          argumentBlueprint,
         },
         ...(selectedSourceIds !== undefined ? { selectedSourceIds } : {}),
       };
@@ -239,8 +249,14 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
           setManualPhase("done");
         }
         pushPreview(content);
+        // 写入编辑器，但不强制跳转 structure（避免打断侧栏操作）
         applyToEditor(content, targetSectionKey, subTitle);
-        onDraftApplied?.(targetSectionKey, subTitle);
+        toast.success("扩写已写入编辑器，可在中间栏继续修改", {
+          action: {
+            label: "查看正文",
+            onClick: () => onDraftApplied?.(targetSectionKey, subTitle),
+          },
+        });
       };
 
       if (detectedFigures.length > 0) {

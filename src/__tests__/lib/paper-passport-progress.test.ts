@@ -60,11 +60,12 @@ describe("recomputePassportProgress", () => {
     expect(passport.currentPhase).toBe(3);
   });
 
-  it("marks phase 3 done when argument confirmed", () => {
+  it("marks phase 3 done when argument confirmed and unlocks phase 4", () => {
     let passport = recomputePassportProgress(
       basePassport(),
       baseSignals({ referenceCount: 3, hasBlueprint: true, outlineChars: 200 }),
     );
+    expect(passport.phaseStatus["4"]).toBe("locked");
     passport = recomputePassportProgress(
       passport,
       baseSignals({
@@ -75,6 +76,7 @@ describe("recomputePassportProgress", () => {
       }),
     );
     expect(passport.phaseStatus["3"]).toBe("done");
+    expect(passport.phaseStatus["4"]).toBe("ready");
   });
 
   it("maps review to phase 6 and export to phase 7", () => {
