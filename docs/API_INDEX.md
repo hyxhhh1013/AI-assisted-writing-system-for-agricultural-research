@@ -13,7 +13,7 @@
 <!-- API_INDEX:AUTO:START -->
 ## 路由表（自动生成）
 
-> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-07-06 09:27:16**（共 **80** 个 route 文件，validateBody **37**，SSE **11**，requireAdmin **15**）。
+> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-07-06 13:49:09**（共 **84** 个 route 文件，validateBody **41**，SSE **11**，requireAdmin **15**）。
 
 图例：zod = 使用 validateBody；SSE = 含 text/event-stream / ReadableStream；admin = 含 requireAdmin。
 
@@ -34,6 +34,7 @@
 | PATCH | `/api/projects/[id]/analysis-results` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/charts` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/meta` | ✓ | — | — |
+| PATCH | `/api/projects/[id]/paper-passport` | ✓ | — | — |
 | POST | `/api/projects/[id]/paper-passport/sync` | — | — | — |
 | PATCH | `/api/projects/[id]/references` | ✓ | — | — |
 | POST | `/api/projects/[id]/references/import-external` | ✓ | — | — |
@@ -214,6 +215,9 @@
 | POST | `/api/directions/[slug]/evaluation-contract` | ✓ | — | — |
 | POST | `/api/directions/[slug]/experiment-plan` | — | — | — |
 | POST | `/api/directions/[slug]/grant-proposal` | ✓ | — | — |
+| PATCH | `/api/directions/[slug]/literature-corpus` | ✓ | — | — |
+| POST | `/api/directions/[slug]/literature-corpus/import-external` | ✓ | — | — |
+| POST | `/api/directions/[slug]/literature-corpus/import-knowledge` | ✓ | — | — |
 | GET | `/api/directions/[slug]/paper-brief` | — | — | — |
 | POST | `/api/directions/[slug]/parse-asset` | — | — | — |
 | PATCH, POST | `/api/directions/[slug]/roadmap` | ✓ | — | — |
