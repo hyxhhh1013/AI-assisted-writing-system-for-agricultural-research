@@ -24,6 +24,8 @@ describe("paper-passport-snapshots", () => {
       expandedOutlineCount: 1,
       abstractChars: 100,
       reviewDoneCount: 1,
+      hasConfirmedArgument: false,
+      hasExported: false,
     });
     expect(enriched.literature?.referenceCount).toBe(5);
     expect(enriched.draftProgress?.hasBlueprint).toBe(true);

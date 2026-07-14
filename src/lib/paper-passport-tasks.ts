@@ -38,8 +38,9 @@ const TASK_NAV: Record<string, CockpitNavigationAction> = {
   "outline-skeleton": { type: "workbench-tab", tab: "outline" },
   "outline-gen": { type: "workbench-tab", tab: "outline" },
   "blueprint-gen": { type: "workbench-tab", tab: "outline" },
+  "arg-draft": { type: "workbench-tab", tab: "outline" },
+  "arg-confirm": { type: "workbench-tab", tab: "outline" },
   "expand-first": { type: "workbench-tab", tab: "writing" },
-  "expand-blueprint": { type: "workbench-tab", tab: "outline" },
   "draft-start": { type: "workbench-tab", tab: "structure" },
   "draft-all": { type: "workbench-tab", tab: "structure" },
   "cite-count": { type: "workbench-tab", tab: "reader" },
@@ -47,6 +48,7 @@ const TASK_NAV: Record<string, CockpitNavigationAction> = {
   "abstract-write": { type: "focus-section", sectionKey: "abstract" },
   "review-run": { type: "workbench-tab", tab: "plagiarism" },
   "review-round2": { type: "workbench-tab", tab: "plagiarism" },
+  "export-run": { type: "open-export" },
 };
 
 export function resolveTaskNavigation(
@@ -94,13 +96,8 @@ export function getPhaseTasks(
       ];
     case 3:
       return [
-        task("expand-first", "扩写至少 1 个子节", signals.expandedOutlineCount >= 1, nav("expand-first")),
-        task(
-          "expand-blueprint",
-          "蓝图与大纲保持一致",
-          signals.hasBlueprint && signals.outlineChars >= 80,
-          nav("expand-blueprint"),
-        ),
+        task("arg-draft", "填写论证蓝图（论点与证据链）", signals.hasConfirmedArgument || Boolean(passport.argument?.claimCount), nav("arg-draft")),
+        task("arg-confirm", "确认论证蓝图以进入起草", signals.hasConfirmedArgument, nav("arg-confirm")),
       ];
     case 4: {
       const ratio = signals.totalCoreSections > 0
@@ -109,6 +106,12 @@ export function getPhaseTasks(
       return [
         task("draft-start", "开始撰写核心章节", ratio >= 0.2, nav("draft-start")),
         task("draft-all", "完成全部核心章节", ratio >= 1, nav("draft-all")),
+        task(
+          "expand-first",
+          "协作扩写至少一个提纲子节",
+          signals.expandedOutlineCount >= 1,
+          nav("expand-first"),
+        ),
       ];
     }
     case 5:
@@ -120,15 +123,16 @@ export function getPhaseTasks(
           signals.filledCoreSections >= Math.ceil(signals.totalCoreSections * 0.5),
           nav("cite-body"),
         ),
+        task("abstract-write", "撰写摘要（≥80 字，可双语生成）", signals.abstractChars >= 80, nav("abstract-write")),
       ];
     case 6:
       return [
-        task("abstract-write", "撰写摘要（≥80 字）", signals.abstractChars >= 80, nav("abstract-write")),
+        task("review-run", "运行至少 1 次论文审查", signals.reviewDoneCount >= 1, nav("review-run")),
+        task("review-round2", "完成第 2 轮审查（可选封顶）", signals.reviewDoneCount >= 2, nav("review-round2")),
       ];
     case 7:
       return [
-        task("review-run", "运行至少 1 次论文审查", signals.reviewDoneCount >= 1, nav("review-run")),
-        task("review-round2", "完成第 2 轮审查（可选）", signals.reviewDoneCount >= 2, nav("review-round2")),
+        task("export-run", "导出 DOCX / PDF / Markdown", signals.hasExported, nav("export-run")),
       ];
     default:
       return [];

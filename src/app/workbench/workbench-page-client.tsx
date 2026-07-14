@@ -54,7 +54,7 @@ import { ProjectHandoffBanner } from "@/components/shared/project/project-handof
 import type { CockpitNavigationAction } from "@/lib/paper-passport-navigation";
 import { parsePaperPassport } from "@/contracts/paper-passport";
 import { buildPassportSignalsFromProject } from "@/lib/paper-passport-signals";
-import { patchPaperPassportConfig } from "@/services/project";
+import { markPaperPassportExport, patchPaperPassportConfig } from "@/services/project";
 import type { PaperConfig } from "@/components/shared/direction/paper-config-dialog";
 import { getModeAccent, getDataPanelTitle, getStructurePanelTitle, getStructurePanelHint } from "@/lib/mode-theme";
 import { siteTheme } from "@/lib/site-theme";
@@ -429,6 +429,14 @@ function WorkbenchContent() {
     setIsSidebarOpen(true);
     if (action.type === "open-meta") {
       setActiveTab("structure");
+      setIsMetaDialogOpen(true);
+      return;
+    }
+    if (action.type === "open-export") {
+      setActiveTab("structure");
+      toast.message("请使用编辑器工具栏导出 DOCX / PDF / Markdown", {
+        description: "导出成功后将自动推进 Cockpit「导出」阶段",
+      });
       return;
     }
     if (action.type === "workbench-tab") {
@@ -440,8 +448,26 @@ function WorkbenchContent() {
     if (action.type === "focus-section") {
       setActiveTab("structure");
       setActiveSection(action.sectionKey);
+      if (action.sectionKey === "abstract") {
+        setIsMetaDialogOpen(true);
+      }
     }
   }, []);
+
+  const recordExport = useCallback(
+    async (format: "docx" | "pdf" | "md") => {
+      if (!projectId) return;
+      try {
+        const result = await markPaperPassportExport(projectId, format);
+        setProject((prev) =>
+          prev ? { ...prev, paperPassport: result.paperPassport } : prev,
+        );
+      } catch {
+        /* 导出本身已成功，标记失败不打断用户 */
+      }
+    },
+    [projectId],
+  );
 
   const handleReferencesImported = useCallback(async () => {
     if (!projectId) return;
@@ -695,12 +721,26 @@ function WorkbenchContent() {
     [aiParagraph],
   );
 
-  const handleExportDoc = useDocxExport({
+  const exportDocBase = useDocxExport({
     project, activeSection, editingContent, saveProject: handleSave,
   });
+  const exportMdBase = useMarkdownExport(project, activeSection, editingContent);
+  const exportPdfBase = usePdfExport(project, activeSection, editingContent);
 
-  const handleExportMarkdown = useMarkdownExport(project, activeSection, editingContent);
-  const handleExportPDF = usePdfExport(project, activeSection, editingContent);
+  const handleExportDoc = useCallback(async () => {
+    await exportDocBase();
+    await recordExport("docx");
+  }, [exportDocBase, recordExport]);
+
+  const handleExportMarkdown = useCallback(async () => {
+    await exportMdBase();
+    await recordExport("md");
+  }, [exportMdBase, recordExport]);
+
+  const handleExportPDF = useCallback(async () => {
+    await exportPdfBase();
+    await recordExport("pdf");
+  }, [exportPdfBase, recordExport]);
 
   // 稳定的回调引用，防止 WritingPanel 的 useEffect 无限重渲染
   const handleGeneratingChange = useCallback((generating: boolean) => {

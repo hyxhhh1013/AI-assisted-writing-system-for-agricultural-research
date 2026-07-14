@@ -6,6 +6,7 @@ export type PaperPhase = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export type PhaseStatus = "locked" | "ready" | "in_progress" | "done";
 
+/** 对齐 academic-paper：5=引用(+摘要门禁) → 6=审查 → 7=导出 */
 export const PAPER_PHASE_LABELS: readonly string[] = [
   "配置",
   "调研",
@@ -13,8 +14,8 @@ export const PAPER_PHASE_LABELS: readonly string[] = [
   "论证",
   "起草",
   "引用",
-  "摘要",
   "审查",
+  "导出",
 ] as const;
 
 export interface PaperConfigRecord {
@@ -56,6 +57,18 @@ export interface PaperReviewSnapshot {
   updatedAt: number;
 }
 
+export interface PaperExportSnapshot {
+  /** 已导出格式，如 docx / pdf / md */
+  formats: string[];
+  updatedAt: number;
+}
+
+export interface PaperArgumentSnapshot {
+  claimCount: number;
+  confirmed: boolean;
+  updatedAt: number;
+}
+
 export interface PaperPassport {
   version: 1;
   currentPhase: PaperPhase;
@@ -63,9 +76,12 @@ export interface PaperPassport {
   config?: PaperConfigRecord;
   source?: PaperPassportSource;
   literature?: PaperLiteratureSnapshot;
+  /** Phase 3 论证蓝图快照 */
+  argument?: PaperArgumentSnapshot;
   draftProgress?: PaperDraftProgressSnapshot;
   abstractSnapshot?: PaperAbstractSnapshot;
   reviewRound?: PaperReviewSnapshot;
+  exportFormats?: PaperExportSnapshot;
   updatedAt: number;
 }
 

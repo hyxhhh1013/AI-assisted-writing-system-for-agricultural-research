@@ -13,7 +13,7 @@
 <!-- API_INDEX:AUTO:START -->
 ## 路由表（自动生成）
 
-> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-07-06 13:49:09**（共 **84** 个 route 文件，validateBody **41**，SSE **11**，requireAdmin **15**）。
+> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-07-14 07:01:35**（共 **88** 个 route 文件，validateBody **45**，SSE **11**，requireAdmin **15**）。
 
 图例：zod = 使用 validateBody；SSE = 含 text/event-stream / ReadableStream；admin = 含 requireAdmin。
 
@@ -32,9 +32,11 @@
 |------|------|-----|-----|-------|
 | GET, POST, PATCH, DELETE | `/api/projects` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/analysis-results` | ✓ | — | — |
+| GET, PUT | `/api/projects/[id]/argument-blueprint` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/charts` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/meta` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/paper-passport` | ✓ | — | — |
+| POST | `/api/projects/[id]/paper-passport/export` | ✓ | — | — |
 | POST | `/api/projects/[id]/paper-passport/sync` | — | — | — |
 | PATCH | `/api/projects/[id]/references` | ✓ | — | — |
 | POST | `/api/projects/[id]/references/import-external` | ✓ | — | — |
@@ -52,6 +54,7 @@
 | 方法 | 路径 | zod | SSE | admin |
 |------|------|-----|-----|-------|
 | POST | `/api/outline` | ✓ | ✓ | — |
+| POST | `/api/outline/argument-blueprint` | ✓ | — | — |
 | POST | `/api/outline/blueprint` | ✓ | — | — |
 
 ### 文献对话
@@ -207,6 +210,7 @@
 
 | 方法 | 路径 | zod | SSE | admin |
 |------|------|-----|-----|-------|
+| POST | `/api/abstract/bilingual` | ✓ | — | — |
 | POST | `/api/agent` | ✓ | ✓ | — |
 | GET, POST | `/api/directions` | ✓ | — | — |
 | GET, PUT, DELETE | `/api/directions/[slug]` | ✓ | — | — |

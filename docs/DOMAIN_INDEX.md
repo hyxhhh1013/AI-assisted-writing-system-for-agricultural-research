@@ -21,7 +21,7 @@
 | `structure` | 章节 + 参考文献 + Cockpit |
 | `data` | 实验数据 / AI 分析（主入口；旧 `/analysis` 重定向至此） |
 | `xrd` | 工作台内嵌 XRD |
-| `outline` | 论证提纲 / 写作蓝图（旧 `/outline` 重定向至此） |
+| `outline` | 论证提纲 / 写作蓝图 / **Phase 3 论证蓝图**（旧 `/outline` 重定向至此） |
 | `writing` | 协作扩写流水线（旧 `/writing` 重定向至此） |
 | `agent` | AI Agent（需 `NEXT_PUBLIC_AGENT_ENABLED=1`；写工具需 `AGENT_WRITE_ENABLED=1`） |
 | `reader` | 补录参考文献 |
@@ -90,7 +90,9 @@
 | 写作蓝图（Phase 2） | 提纲侧栏 → 蓝图弹窗 | `POST /api/outline/blueprint` | `blueprint-workspace.tsx`、`contracts/writing-blueprint.ts` |
 | 蓝图恢复 | 工作台 | — | `blueprint-utils.ts`、`project-writing-blueprint-db.ts` |
 | 蓝图编辑器 | 工作台提纲 | — | `use-blueprint-editor.ts`、`blueprint-workspace-dialog.tsx` |
-| Argument Blueprint（Phase 3） | — | — | **Wave 3 待建**（≠ writing-blueprint） |
+| Argument Blueprint（Phase 3） | 工作台 `outline` Tab 顶部 | `PUT .../argument-blueprint`；`POST /api/outline/argument-blueprint` | `argument-blueprint-panel.tsx`、`contracts/argument-blueprint.ts` |
+| 双语摘要 | 元数据对话框 | `POST /api/abstract/bilingual` | `abstract-bilingual-button.tsx`、`services/abstract.ts` |
+| 导出过关（Phase 7） | 编辑器工具栏导出 | `POST .../paper-passport/export` | `markPaperPassportExport` |
 
 ## Admin
 

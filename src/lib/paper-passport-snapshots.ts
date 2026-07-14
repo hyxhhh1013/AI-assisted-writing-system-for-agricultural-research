@@ -13,6 +13,13 @@ export function enrichPassportSnapshots(
       referenceCount: signals.referenceCount,
       updatedAt: now,
     },
+    argument: {
+      claimCount: signals.hasConfirmedArgument
+        ? Math.max(passport.argument?.claimCount ?? 1, 1)
+        : (passport.argument?.claimCount ?? 0),
+      confirmed: signals.hasConfirmedArgument,
+      updatedAt: now,
+    },
     draftProgress: {
       filledCoreSections: signals.filledCoreSections,
       totalCoreSections: signals.totalCoreSections,
@@ -27,6 +34,10 @@ export function enrichPassportSnapshots(
     },
     reviewRound: {
       doneCount: signals.reviewDoneCount,
+      updatedAt: now,
+    },
+    exportFormats: passport.exportFormats ?? {
+      formats: [],
       updatedAt: now,
     },
     updatedAt: now,

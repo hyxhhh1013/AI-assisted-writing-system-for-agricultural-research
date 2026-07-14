@@ -147,7 +147,10 @@
 | W2-CHECKPOINT | AgentSession DB checkpoint / 中断恢复 | W2-LANGGRAPH | 2d | todo | Wave 2 缺口 |
 | W1-083 | userSkeleton → Phase 2 | W1-PASSPORT | 1d | done | outline API/UI + prompt 骨架约束 |
 | W0-5 | 仓库卫生（分支收拢、tmp、误删 migration） | — | 0.5d | todo | MASTER_PLAN Wave 0 |
-| W3-ARGUMENT | Phase 3 Argument Blueprint | W1-PASSPORT | 1w | todo | Wave 3 主轴第一步 |
+| W3-ARGUMENT | Phase 3 Argument Blueprint | W1-PASSPORT | 1w | **done** | 2026-07-14；契约+API+UI+passport 门禁 |
+| W3-PHASE-SEM | Phase 5/6/7 语义校正（引用/审查/导出） | W1-PASSPORT | 0.5d | **done** | 2026-07-14 |
+| W3-ABSTRACT | 双语摘要 API | W3-PHASE-SEM | 1d | **done** | 2026-07-14；`/api/abstract/bilingual` |
+| W3-EXPORT-GATE | 导出标记进 passport Phase 7 | W3-PHASE-SEM | 0.5d | **done** | 2026-07-14 |
 | ~~ENG-PR-084~~ | ~~入口废弃~~ | — | — | cancelled | Cockpit；`/writing`→workbench |
 | ~~ENG-PR-086~~ | ~~编辑器对话面板~~ | — | — | cancelled | Agent Tab |
 | ENG-PR-082 | Verifier 结构化 | W2 | 2d | todo | Wave 2 收尾（可与 W3 并行） |
@@ -923,23 +926,23 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-07-06 | W1-PASSPORT + W1-083 | AI | Cockpit 阶段点击导航+任务卡；Directions 入 module-registry；ENG-PR-083 userSkeleton（outline API/UI/prompt） |
 | 2026-07-06 | W1-PASSPORT MVP done | AI | 任务卡点击跳转；passport 进度快照；Phase0 PATCH；人控/Agent 切换；Cockpit 侧栏集成 |
 | 2026-07-14 | docs-cleanup | AI | MASTER_PLAN §0 真相表；Phase 6↔11 状态同步；`/writing` `/analysis`→workbench；标 W2-CHECKPOINT / W3-ARGUMENT |
+| 2026-07-14 | W3-ARGUMENT + phase semantics | AI | Argument Blueprint 全链路；Phase 5/6/7=引用/审查/导出；双语摘要 API；导出 mark；WIP 合入本地 main |
 
 ---
 
 ## 5. 推荐执行顺序（给「下一次 AI」）
 
-**当前主轴（2026-07-14）**：先收拢工作区 WIP → 再 Wave 3（`W3-ARGUMENT`）或 Wave 2 缺口（`W2-CHECKPOINT` / `ENG-PR-082`）。  
-历史 Phase 0～10 均已 done，勿重开。详见 [`MASTER_PLAN.md`](./MASTER_PLAN.md) §0。
+**当前主轴（2026-07-14）**：W3 Argument/摘要/导出 MVP 已落地；下一刀 `W2-CHECKPOINT` 或 ENG-PR-082 / 审查编排加固。  
+详见 [`MASTER_PLAN.md`](./MASTER_PLAN.md) §0。
 
 | 优先级 | ID | 说明 |
 |--------|-----|------|
-| P0 | W0-5 + 分支收拢 | 未提交改动多在 `eng/pr-092-*`；按主题拆 commit 后合 main |
-| P1 | **W3-ARGUMENT** | Wave 3：Argument Blueprint → passport |
-| P1′ | W2-CHECKPOINT 或 ENG-PR-082 | Agent checkpoint / Verifier（与 W3 二选一，勿齐开） |
+| P0 | 推送本地 main / 开 PR | 本地 main ahead origin；`eng/wave3-academic-align` 含 Wave 3 |
+| P1 | W2-CHECKPOINT 或 ENG-PR-082 | Agent 中断恢复 / Verifier 结构化 |
 | P2 | ENG-PR-085 | 工作台 data 免责 |
 | P3 | ENG-PR-094 | OA 入库 backlog |
 
-**若只能做一个产品 PR**：做 **W3-ARGUMENT**。
+**若只能做一个产品 PR**：做 **W2-CHECKPOINT**（Agent 可中断恢复）。
 
 ---
 

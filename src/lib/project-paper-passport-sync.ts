@@ -9,6 +9,11 @@ import {
 } from "@/contracts/paper-passport";
 import { getCoreSectionKeysForMode } from "@/lib/section-registry";
 import { readWritingBlueprint } from "@/lib/project-writing-blueprint-db";
+import { readArgumentBlueprint } from "@/lib/project-argument-blueprint-db";
+import {
+  isArgumentBlueprintConfirmed,
+  parseArgumentBlueprint,
+} from "@/contracts/argument-blueprint";
 import {
   recomputePassportProgress,
   type PassportProgressSignals,
@@ -68,6 +73,8 @@ function buildSignals(
   >,
   hasBlueprint: boolean,
   reviewDoneCount: number,
+  hasConfirmedArgument: boolean,
+  hasExported: boolean,
 ): PassportProgressSignals {
   const mode = project.mode === "research" ? "research" : "review";
   const coreKeys = getCoreSectionKeysForMode(mode);
@@ -85,6 +92,8 @@ function buildSignals(
     expandedOutlineCount: parseExpandedOutlineSections(project.expandedOutlineSections).length,
     abstractChars: project.abstract?.trim().length ?? 0,
     reviewDoneCount,
+    hasConfirmedArgument,
+    hasExported,
   };
 }
 
@@ -136,19 +145,38 @@ async function recomputeAndPersistPassport(
   project: ProjectPassportSnapshot,
   passport: PaperPassport,
 ): Promise<PaperPassport> {
-  const [blueprintRaw, reviewDoneCount] = await Promise.all([
+  const [blueprintRaw, argumentRaw, reviewDoneCount] = await Promise.all([
     readWritingBlueprint(projectId),
+    readArgumentBlueprint(projectId),
     prisma.reviewCheck.count({
       where: { projectId, status: "done" },
     }),
   ]);
 
-  const signals = buildSignals(project, Boolean(blueprintRaw?.trim()), reviewDoneCount);
+  const argument = parseArgumentBlueprint(argumentRaw);
+  const hasExported = (passport.exportFormats?.formats.length ?? 0) > 0;
+  const signals = buildSignals(
+    project,
+    Boolean(blueprintRaw?.trim()),
+    reviewDoneCount,
+    isArgumentBlueprintConfirmed(argument),
+    hasExported,
+  );
 
-  const next = enrichPassportSnapshots(
+  let next = enrichPassportSnapshots(
     recomputePassportProgress(passport, signals),
     signals,
   );
+  if (argument) {
+    next = {
+      ...next,
+      argument: {
+        claimCount: argument.claims.length,
+        confirmed: Boolean(argument.confirmedAt),
+        updatedAt: Date.now(),
+      },
+    };
+  }
 
   const serialized = serializePaperPassport(next);
   if (serialized !== project.paperPassport) {
@@ -233,4 +261,33 @@ export async function syncProjectPaperPassport(
   projectId: string,
 ): Promise<PaperPassport | null> {
   return ensureProjectPaperPassport(projectId);
+}
+
+/** 记录一次导出，推进 Phase 7 */
+export async function markProjectExportFormat(
+  projectId: string,
+  format: "docx" | "pdf" | "md",
+): Promise<PaperPassport | null> {
+  try {
+    const project = await loadProjectPassportSnapshot(projectId);
+    if (!project) return null;
+
+    let passport = parsePaperPassport(project.paperPassport);
+    if (!passport) {
+      passport = bootstrapPassportFromProject(project);
+    }
+
+    const prev = passport.exportFormats?.formats ?? [];
+    const formats = prev.includes(format) ? prev : [...prev, format];
+    passport = {
+      ...passport,
+      exportFormats: { formats, updatedAt: Date.now() },
+      updatedAt: Date.now(),
+    };
+
+    await writePaperPassportRaw(projectId, serializePaperPassport(passport));
+    return recomputeAndPersistPassport(projectId, project, passport);
+  } catch {
+    return null;
+  }
 }

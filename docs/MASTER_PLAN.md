@@ -12,8 +12,8 @@
 |----|------|------|
 | Wave 0 安全/鉴权 | ✅ | W0-5 仓库卫生仍 todo |
 | Wave 1 Passport + Cockpit | ✅ MVP | 契约 / sync / 任务卡 / 阶段导航已落地 |
-| Wave 2 LangGraph + write tools | ⚠️ 部分 | 图与 write tools 已接；**无** AgentSession checkpoint；ENG-PR-082 未做 |
-| Wave 3 学术完整性 | ❌ 未开 | Argument Blueprint / 双语摘要 / 审查多轮 |
+| Wave 2 LangGraph + write tools | ⚠️ 部分 | 图与 write tools 已合入本地 main；**无** AgentSession checkpoint；ENG-PR-082 未做 |
+| Wave 3 学术完整性 | ⚠️ MVP | Argument / 双语摘要 / Phase 语义 / 导出门禁已落地；审查编排与集成测试仍薄 |
 | 产品主入口 | 工作台 | `/writing`、`/analysis`、`/outline`、`/review`、`/directions` 均为重定向或并入 |
 
 **唯一叙事**：`Direction → Project（PaperPassport + Cockpit）→ 工作台 Tab`；质量中心 `/plagiarism`、知识库 `/knowledge` 为独立深链。
@@ -62,9 +62,9 @@
 - `currentPhase`：0–7
 - `phaseStatus`：locked / ready / in_progress / done
 - `config`：PaperConfigRecord（Phase 0）
-- 快照：`literature` / `outline` / `draftProgress` / `abstractSnapshot` / `reviewRound` 等
+- 快照：`literature` / `argument` / `draftProgress` / `abstractSnapshot` / `reviewRound` / `exportFormats`
 - `source`：`directionSlug` + `candidateId`（Direction 桥接）
-- **待 Wave 3**：`argument`、双语摘要、审查轮次编排字段补全
+- 列：`Project.argumentBlueprint`（Phase 3 正文）
 
 ### 2.2 开源策略
 
@@ -95,18 +95,29 @@
 
 | 项 | 状态 |
 |----|------|
-| LangGraph 四节点 + `runAgentLoop` 委托 | ✅（代码在工作区 / 待合入 main） |
+| LangGraph 四节点 + `runAgentLoop` 委托 | ✅（已合入本地 main） |
 | `write_section` / `refine_content` 等写工具 | ✅（需 `AGENT_WRITE_ENABLED=1`） |
 | AgentSession DB checkpoint | ❌ |
 | ENG-PR-082 Verifier 结构化 | ❌ todo |
 
-### Wave 3 — 学术完整性（下一主轴）
+### Wave 3 — 学术完整性（进行中 / 2026-07-14）
 
-- Phase 3 Argument Blueprint
-- Phase 5a/5b 引用合规 + 双语摘要 API
-- Phase 6 max-2 审查轮编排
-- ENG-PR-085 分析页免责（若独立 analysis 已重定向，改为工作台 data 面板标注）
-- 集成测试补全
+- Phase 语义对齐：5=引用(+摘要门禁)、6=审查、7=导出 ✅
+- Phase 3 Argument Blueprint（契约 / API / 提纲侧栏 UI / passport 门禁）✅ MVP
+- 双语摘要 API `POST /api/abstract/bilingual` + 元数据对话框入口 ✅
+- 审查 max-2 轮进 passport Phase 6；导出标记进 Phase 7 ✅ MVP
+- ENG-PR-085 工作台 data 免责、集成测试补全 — 后续
+
+### Wave 3 产品阶段语义（权威）
+
+| Phase | 标签 | 过关条件 |
+|-------|------|----------|
+| 0–2 | 配置 / 调研 / 架构 | 同前 |
+| 3 | 论证 | Argument Blueprint 已确认 |
+| 4 | 起草 | 核心章节填满 |
+| 5 | 引用 | 文献≥3 + 摘要≥80 字 |
+| 6 | 审查 | ReviewCheck done ≥1（≥2 为封顶 done） |
+| 7 | 导出 | 至少导出过一种格式 |
 
 ### Wave 4 — 导出与抛光（backlog）
 

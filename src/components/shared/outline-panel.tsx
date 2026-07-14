@@ -26,6 +26,7 @@ import {
   getDefaultUserSkeleton,
   parseSkeletonLines,
 } from "@/lib/outline-skeleton";
+import { ArgumentBlueprintPanel } from "@/components/shared/argument-blueprint-panel";
 
 interface OutlinePanelProps {
   projectId: string;
@@ -202,6 +203,11 @@ export function OutlinePanel({
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      <ArgumentBlueprintPanel
+        projectId={projectId}
+        project={project}
+        onSaved={(updates) => onSave?.(updates)}
+      />
       <div className="shrink-0 p-3 border-b bg-card space-y-2">
         <div>
           <Label className="text-[10px] text-muted-foreground">论文题目</Label>
