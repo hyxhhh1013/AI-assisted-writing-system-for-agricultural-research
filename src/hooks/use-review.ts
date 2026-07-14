@@ -10,7 +10,11 @@ import type {
   FixableReviewIssue,
   IssueStatus,
 } from "@/contracts/review";
-import { fixIssue as fixIssueService, runReview } from "@/services/review";
+import {
+  fixIssue as fixIssueService,
+  patchIssueStatus,
+  runReview,
+} from "@/services/review";
 
 export type {
   FixableReviewIssue,
@@ -208,6 +212,7 @@ export function useReview(): UseReviewReturn {
    * 接受修复
    */
   const applyFix = useCallback((dimension: ReviewDimension, issueIndex: number) => {
+    const issue = report?.dimensions[dimension]?.issues[issueIndex];
     setReport((prev) => {
       if (!prev) return null;
       return {
@@ -223,12 +228,18 @@ export function useReview(): UseReviewReturn {
         },
       };
     });
-  }, []);
+    if (issue?.id) {
+      void patchIssueStatus(issue.id, "fixed", issue.fixedContent ?? null).catch(() => {
+        /* 本地已更新；持久化失败不回滚 UI */
+      });
+    }
+  }, [report]);
 
   /**
    * 忽略问题
    */
   const dismissIssue = useCallback((dimension: ReviewDimension, issueIndex: number) => {
+    const issue = report?.dimensions[dimension]?.issues[issueIndex];
     setReport((prev) => {
       if (!prev) return null;
       return {
@@ -244,7 +255,10 @@ export function useReview(): UseReviewReturn {
         },
       };
     });
-  }, []);
+    if (issue?.id) {
+      void patchIssueStatus(issue.id, "dismissed").catch(() => {});
+    }
+  }, [report]);
 
   /**
    * 重置状态

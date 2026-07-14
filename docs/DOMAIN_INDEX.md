@@ -92,7 +92,8 @@
 | 蓝图编辑器 | 工作台提纲 | — | `use-blueprint-editor.ts`、`blueprint-workspace-dialog.tsx` |
 | Argument Blueprint（Phase 3） | 工作台 `outline` Tab 顶部 | `PUT .../argument-blueprint`；`POST /api/outline/argument-blueprint` | `argument-blueprint-panel.tsx`、`contracts/argument-blueprint.ts` |
 | 双语摘要 | 元数据对话框 | `POST /api/abstract/bilingual` | `abstract-bilingual-button.tsx`、`services/abstract.ts` |
-| 导出过关（Phase 7） | 编辑器工具栏导出 | `POST .../paper-passport/export` | `markPaperPassportExport` |
+| 审查编排（Phase 6） | 质量中心审查 Tab | `POST /api/review`（max-2）；`PATCH /api/review/issues/[id]` | `contracts/review-gate.ts`、`review-tab.tsx` |
+| 导出过关（Phase 7） | 编辑器工具栏导出 | `GET .../export-gate`；`POST .../paper-passport/export` | `getExportGate`、`markPaperPassportExport` |
 
 ## Admin
 

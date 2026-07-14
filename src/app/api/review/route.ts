@@ -1,7 +1,7 @@
 /**
  * POST /api/review — 执行论文审查
  *
- * 4 维度并行审查，生成结构化报告
+ * 4 维度并行审查，生成结构化报告；同一项目最多 2 轮（Phase 6）。
  */
 
 import { NextRequest } from "next/server";
@@ -11,6 +11,8 @@ import { runReview } from "@/services/review-service";
 import { getUserIdFromRequest } from "@/lib/auth";
 import { unauthorizedResponse } from "@/lib/api-response";
 import { getErrorMessage } from "@/lib/error-utils";
+import { evaluateReviewRoundGate } from "@/contracts/review-gate";
+import { getProjectReviewGateState } from "@/lib/review-gate-db";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +25,23 @@ export async function POST(request: NextRequest) {
     if (ve) return ve;
 
     const body: ReviewBody = data;
+
+    if (body.projectId) {
+      const gateState = await getProjectReviewGateState(body.projectId);
+      const roundGate = evaluateReviewRoundGate(gateState.doneCount);
+      if (!roundGate.ok) {
+        return Response.json(
+          {
+            success: false,
+            error: roundGate.reason,
+            code: roundGate.code,
+            doneCount: roundGate.doneCount,
+          },
+          { status: 409 },
+        );
+      }
+    }
+
     const report = await runReview({
       projectId: body.projectId,
       title: body.title,

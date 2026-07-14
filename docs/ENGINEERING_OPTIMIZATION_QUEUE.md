@@ -104,7 +104,7 @@
 | ENG-PR-082 | Verifier 结构化 + 选择性 Refiner | **096c** | 2d | todo | 见 Phase 11；Wave 2 收尾 |
 | ENG-PR-083 | 大纲骨架化 `userSkeleton` | — | 1d | **done** | 归档→W1-083；outline API/UI + prompt |
 | ~~ENG-PR-084~~ | ~~入口重构~~ | — | — | **cancelled** | 归档→Phase 11；由 Cockpit 取代；`/writing` 已重定向 |
-| ENG-PR-085 | 分析页 AI 免责标注 | — | 2h | todo | 见 Phase 11；目标改为工作台 data 面板 |
+| ENG-PR-085 | 分析页 AI 免责标注 | — | 2h | **done** | 2026-07-14；工作台 `data-panel` |
 | ~~ENG-PR-086~~ | ~~编辑器对话面板~~ | — | — | **cancelled** | 归档→Phase 11；由 Agent Tab 取代 |
 | **Phase 7 — 文献库书目增强 + 外部文献发现** |
 | ENG-PR-090 | 文献库列表：期刊/DOI 列 + 筛选 + 契约扩展 | ENG-PR-027 | 1～2d | done | 列表列/筛选/ISSN 弹窗/响应式卡片 |
@@ -151,10 +151,11 @@
 | W3-PHASE-SEM | Phase 5/6/7 语义校正（引用/审查/导出） | W1-PASSPORT | 0.5d | **done** | 2026-07-14 |
 | W3-ABSTRACT | 双语摘要 API | W3-PHASE-SEM | 1d | **done** | 2026-07-14；`/api/abstract/bilingual` |
 | W3-EXPORT-GATE | 导出标记进 passport Phase 7 | W3-PHASE-SEM | 0.5d | **done** | 2026-07-14 |
+| W3-REVIEW-ORCH | 审查 max-2 + Critical 挡导出 | W3-PHASE-SEM | 1d | **done** | 2026-07-14；`review-gate` + export-gate API |
 | ~~ENG-PR-084~~ | ~~入口废弃~~ | — | — | cancelled | Cockpit；`/writing`→workbench |
 | ~~ENG-PR-086~~ | ~~编辑器对话面板~~ | — | — | cancelled | Agent Tab |
 | ENG-PR-082 | Verifier 结构化 | W2 | 2d | todo | Wave 2 收尾（可与 W3 并行） |
-| ENG-PR-085 | 工作台 data 免责标注 | — | 2h | todo | Wave 3；`/analysis` 已重定向 |
+| ENG-PR-085 | 工作台 data 免责标注 | — | 2h | **done** | 2026-07-14；`data-panel` |
 | ENG-PR-094 | OA 全文入库 | — | 1-2w | todo | Wave 4 backlog |
 
 
@@ -927,6 +928,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-07-06 | W1-PASSPORT MVP done | AI | 任务卡点击跳转；passport 进度快照；Phase0 PATCH；人控/Agent 切换；Cockpit 侧栏集成 |
 | 2026-07-14 | docs-cleanup | AI | MASTER_PLAN §0 真相表；Phase 6↔11 状态同步；`/writing` `/analysis`→workbench；标 W2-CHECKPOINT / W3-ARGUMENT |
 | 2026-07-14 | W3-ARGUMENT + phase semantics | AI | Argument Blueprint 全链路；Phase 5/6/7=引用/审查/导出；双语摘要 API；导出 mark；WIP 合入本地 main |
+| 2026-07-14 | W3-REVIEW-ORCH + ENG-PR-085 | AI | 审查 max-2 / Critical 挡导出；export-gate API；data-panel AI 免责 |
 
 ---
 
@@ -939,8 +941,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 |--------|-----|------|
 | P0 | 推送本地 main / 开 PR | 本地 main ahead origin；`eng/wave3-academic-align` 含 Wave 3 |
 | P1 | W2-CHECKPOINT 或 ENG-PR-082 | Agent 中断恢复 / Verifier 结构化 |
-| P2 | ENG-PR-085 | 工作台 data 免责 |
-| P3 | ENG-PR-094 | OA 入库 backlog |
+| P2 | ENG-PR-094 | OA 入库 backlog |
 
 **若只能做一个产品 PR**：做 **W2-CHECKPOINT**（Agent 可中断恢复）。
 

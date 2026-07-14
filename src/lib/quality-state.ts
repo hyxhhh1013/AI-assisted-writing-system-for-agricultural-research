@@ -13,6 +13,7 @@ import { toCheckResult } from "@/services/plagiarism";
 import { calculateDimensionScore } from "@/lib/review-scoring";
 import type {
   FixableReviewReport,
+  IssueStatus,
   ReviewDimension,
   ReviewIssue,
   ReviewIssueType,
@@ -73,11 +74,18 @@ export function buildFixableReportFromDetail(detail: ReviewDetailResponse): Fixa
     if (grouped[dim]) grouped[dim].push(toReviewIssue(row));
   }
 
+  const statusById = new Map(
+    detail.issues.map((row) => [row.id, (row.status ?? "open") as IssueStatus]),
+  );
+
   const dimensions = {} as FixableReviewReport["dimensions"];
   for (const dim of DIMENSIONS) {
     dimensions[dim] = {
       ...calculateDimensionScore(dim, grouped[dim]),
-      issues: grouped[dim].map((issue) => ({ ...issue, status: "open" as const })),
+      issues: grouped[dim].map((issue) => ({
+        ...issue,
+        status: statusById.get(issue.id) ?? ("open" as IssueStatus),
+      })),
     };
   }
 

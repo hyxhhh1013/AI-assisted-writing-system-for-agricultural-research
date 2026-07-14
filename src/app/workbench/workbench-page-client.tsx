@@ -54,7 +54,11 @@ import { ProjectHandoffBanner } from "@/components/shared/project/project-handof
 import type { CockpitNavigationAction } from "@/lib/paper-passport-navigation";
 import { parsePaperPassport } from "@/contracts/paper-passport";
 import { buildPassportSignalsFromProject } from "@/lib/paper-passport-signals";
-import { markPaperPassportExport, patchPaperPassportConfig } from "@/services/project";
+import {
+  getExportGate,
+  markPaperPassportExport,
+  patchPaperPassportConfig,
+} from "@/services/project";
 import type { PaperConfig } from "@/components/shared/direction/paper-config-dialog";
 import { getModeAccent, getDataPanelTitle, getStructurePanelTitle, getStructurePanelHint } from "@/lib/mode-theme";
 import { siteTheme } from "@/lib/site-theme";
@@ -454,6 +458,21 @@ function WorkbenchContent() {
     }
   }, []);
 
+  const assertExportAllowed = useCallback(async (): Promise<boolean> => {
+    if (!projectId) return true;
+    try {
+      const { gate } = await getExportGate(projectId);
+      if (!gate.ok) {
+        toast.error(gate.reason || "当前不满足导出门禁");
+        return false;
+      }
+      return true;
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "无法校验导出门禁");
+      return false;
+    }
+  }, [projectId]);
+
   const recordExport = useCallback(
     async (format: "docx" | "pdf" | "md") => {
       if (!projectId) return;
@@ -462,8 +481,8 @@ function WorkbenchContent() {
         setProject((prev) =>
           prev ? { ...prev, paperPassport: result.paperPassport } : prev,
         );
-      } catch {
-        /* 导出本身已成功，标记失败不打断用户 */
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "标记导出进度失败");
       }
     },
     [projectId],
@@ -728,19 +747,22 @@ function WorkbenchContent() {
   const exportPdfBase = usePdfExport(project, activeSection, editingContent);
 
   const handleExportDoc = useCallback(async () => {
+    if (!(await assertExportAllowed())) return;
     await exportDocBase();
     await recordExport("docx");
-  }, [exportDocBase, recordExport]);
+  }, [assertExportAllowed, exportDocBase, recordExport]);
 
   const handleExportMarkdown = useCallback(async () => {
+    if (!(await assertExportAllowed())) return;
     await exportMdBase();
     await recordExport("md");
-  }, [exportMdBase, recordExport]);
+  }, [assertExportAllowed, exportMdBase, recordExport]);
 
   const handleExportPDF = useCallback(async () => {
+    if (!(await assertExportAllowed())) return;
     await exportPdfBase();
     await recordExport("pdf");
-  }, [exportPdfBase, recordExport]);
+  }, [assertExportAllowed, exportPdfBase, recordExport]);
 
   // 稳定的回调引用，防止 WritingPanel 的 useEffect 无限重渲染
   const handleGeneratingChange = useCallback((generating: boolean) => {

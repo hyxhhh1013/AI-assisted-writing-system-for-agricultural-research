@@ -290,30 +290,41 @@ async function persistReview(
     },
   });
 
-  // 批量创建 ReviewIssue
-  const allIssues: ReviewIssue[] = [];
+  // 逐条创建以便回写 DB id（供忽略/修复持久化）
   for (const dim of ["academic", "argument", "structure", "integrity"] as ReviewDimension[]) {
-    allIssues.push(...report.dimensions[dim].issues);
+    const issues = report.dimensions[dim].issues;
+    for (let i = 0; i < issues.length; i++) {
+      const issue = issues[i];
+      const created = await prisma.reviewIssue.create({
+        data: {
+          checkId: check.id,
+          dimension: issue.dimension,
+          type: issue.type,
+          severity: issue.severity,
+          location: issue.location,
+          evidence: issue.evidence,
+          description: issue.description,
+          suggestion: issue.suggestion,
+          originalText: issue.originalText || null,
+          status: "open",
+        },
+      });
+      issues[i] = { ...issue, id: created.id };
+    }
   }
 
-  if (allIssues.length > 0) {
-    await prisma.reviewIssue.createMany({
-      data: allIssues.map((issue) => ({
-        checkId: check.id,
-        dimension: issue.dimension,
-        type: issue.type,
-        severity: issue.severity,
-        location: issue.location,
-        evidence: issue.evidence,
-        description: issue.description,
-        suggestion: issue.suggestion,
-        originalText: issue.originalText || null,
-      })),
-    });
-  }
-
-  // 更新 reportId
   report.reviewId = check.id;
+
+  if (input.projectId) {
+    try {
+      const { syncProjectPaperPassport } = await import(
+        "@/lib/project-paper-passport-sync"
+      );
+      await syncProjectPaperPassport(input.projectId);
+    } catch {
+      // passport 列未迁移时不阻断审查
+    }
+  }
 }
 
 // ==================== 历史记录 ====================

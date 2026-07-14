@@ -4,6 +4,8 @@ import { validateBody } from "@/lib/api-validate";
 import { paperPassportExportMarkSchema } from "@/lib/validations";
 import { markProjectExportFormat } from "@/lib/project-paper-passport-sync";
 import { serializePaperPassport } from "@/contracts/paper-passport";
+import { evaluateExportGate } from "@/contracts/review-gate";
+import { getProjectReviewGateState } from "@/lib/review-gate-db";
 import { getErrorMessage } from "@/lib/error-utils";
 import { logger } from "@/lib/logger";
 
@@ -34,6 +36,18 @@ export async function POST(
       await req.json(),
     );
     if (errorResponse) return errorResponse;
+
+    const gateState = await getProjectReviewGateState(projectId);
+    const gate = evaluateExportGate({
+      reviewDoneCount: gateState.doneCount,
+      openHighIssueCount: gateState.openHighIssueCount,
+    });
+    if (!gate.ok) {
+      return NextResponse.json(
+        { error: gate.reason, code: gate.code, ...gateState },
+        { status: 409 },
+      );
+    }
 
     const passport = await markProjectExportFormat(projectId, data.markExport);
     if (!passport) {
