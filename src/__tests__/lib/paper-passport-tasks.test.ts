@@ -12,8 +12,6 @@ const emptySignals: PassportProgressSignals = {
   expandedOutlineCount: 0,
   abstractChars: 0,
   reviewDoneCount: 0,
-  hasConfirmedArgument: false,
-  hasExported: false,
 };
 
 describe("paper-passport-tasks", () => {

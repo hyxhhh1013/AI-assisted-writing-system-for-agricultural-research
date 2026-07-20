@@ -42,8 +42,6 @@ export interface ProjectDTO {
   dataSources?: string;
   /** JSON string: WritingBlueprint — 扩写前写作蓝图；null 表示清空 */
   writingBlueprint?: string | null;
-  /** JSON string: ArgumentBlueprint — Phase 3 论证蓝图；null 表示清空 */
-  argumentBlueprint?: string | null;
   /** JSON string: PaperPassport — 8 阶段论文生命周期快照 */
   paperPassport?: string | null;
 }

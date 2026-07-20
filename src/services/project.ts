@@ -246,23 +246,3 @@ export async function syncPaperPassport(
   }
   return res.json() as Promise<{ paperPassport: string; currentPhase: number }>;
 }
-
-/** POST /api/projects/:id/paper-passport/export — 标记导出格式（Phase 7） */
-export async function markPaperPassportExport(
-  projectId: string,
-  format: "docx" | "pdf" | "md",
-): Promise<{ paperPassport: string; currentPhase: number }> {
-  const res = await fetch(
-    `/api/projects/${encodeURIComponent(projectId)}/paper-passport/export`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ markExport: format }),
-    },
-  );
-  if (!res.ok) {
-    const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error || "标记导出失败");
-  }
-  return res.json() as Promise<{ paperPassport: string; currentPhase: number }>;
-}

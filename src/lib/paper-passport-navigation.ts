@@ -4,8 +4,7 @@ import type { PaperPhase } from "@/contracts/paper-passport";
 export type CockpitNavigationAction =
   | { type: "workbench-tab"; tab: string }
   | { type: "open-meta" }
-  | { type: "focus-section"; sectionKey: string }
-  | { type: "open-export" };
+  | { type: "focus-section"; sectionKey: string };
 
 export type CockpitControlMode = "human" | "agent";
 
@@ -17,28 +16,27 @@ export type WorkbenchPhaseTab =
   | "reader"
   | "plagiarism";
 
-export const PHASE_PRIMARY_TAB: Record<PaperPhase, WorkbenchPhaseTab | "meta" | "export"> = {
+export const PHASE_PRIMARY_TAB: Record<PaperPhase, WorkbenchPhaseTab | "meta"> = {
   0: "meta",
   1: "reader",
   2: "outline",
-  3: "outline", // 论证蓝图挂在提纲侧栏
+  3: "writing",
   4: "writing",
   5: "structure",
-  6: "plagiarism",
-  7: "export",
+  6: "structure",
+  7: "plagiarism",
 };
 
-export const PHASE_TAB_LABELS: Record<WorkbenchPhaseTab | "meta" | "export", string> = {
+export const PHASE_TAB_LABELS: Record<WorkbenchPhaseTab | "meta", string> = {
   meta: "项目配置",
   structure: "章节结构",
   outline: "论证提纲",
   writing: "章节协作",
   reader: "补录文献",
   plagiarism: "质量检测",
-  export: "导出成稿",
 };
 
-export function getPrimaryTabForPhase(phase: PaperPhase): WorkbenchPhaseTab | "meta" | "export" {
+export function getPrimaryTabForPhase(phase: PaperPhase): WorkbenchPhaseTab | "meta" {
   return PHASE_PRIMARY_TAB[phase];
 }
 
@@ -48,7 +46,6 @@ export function isTabAlignedWithPhase(
 ): boolean {
   const primary = getPrimaryTabForPhase(phase);
   if (primary === "meta") return tab === "structure";
-  if (primary === "export") return tab === "structure";
   return tab === primary;
 }
 
@@ -61,15 +58,14 @@ export function getPhaseNavigationAction(phase: PaperPhase): CockpitNavigationAc
     case 2:
       return { type: "workbench-tab", tab: "outline" };
     case 3:
-      return { type: "workbench-tab", tab: "outline" };
     case 4:
       return { type: "workbench-tab", tab: "writing" };
     case 5:
-      return { type: "focus-section", sectionKey: "abstract" };
+      return { type: "workbench-tab", tab: "structure" };
     case 6:
-      return { type: "workbench-tab", tab: "plagiarism" };
+      return { type: "focus-section", sectionKey: "abstract" };
     case 7:
-      return { type: "open-export" };
+      return { type: "workbench-tab", tab: "plagiarism" };
     default:
       return null;
   }

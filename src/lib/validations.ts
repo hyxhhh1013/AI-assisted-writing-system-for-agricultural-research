@@ -196,44 +196,6 @@ export const paperPassportConfigPatchSchema = z.object({
   config: paperPassportConfigSchema,
 });
 
-export const paperPassportExportMarkSchema = z.object({
-  markExport: z.enum(["docx", "pdf", "md"]),
-});
-
-export const argumentClaimSchema = z.object({
-  id: z.string().min(1),
-  claim: z.string().min(1),
-  evidence: z.array(z.string()),
-  sectionPath: z.string().optional(),
-  counterArgument: z.string().optional(),
-  response: z.string().optional(),
-});
-
-export const argumentBlueprintPayloadSchema = z.object({
-  version: z.literal(1),
-  thesis: z.string(),
-  claims: z.array(argumentClaimSchema),
-  logicalFlow: z.string(),
-  confirmedAt: z.number().optional(),
-  generatedAt: z.number(),
-  outlineHash: z.string().optional(),
-});
-
-export const argumentBlueprintGenerateSchema = z.object({
-  title: z.string().min(1),
-  outline: z.string().min(20),
-  thesisHint: z.string().optional(),
-  language: z.enum(["zh", "en"]).optional().default("zh"),
-  writingBlueprintThesis: z.string().optional(),
-});
-
-export const bilingualAbstractSchema = z.object({
-  title: z.string().min(1),
-  draftOrOutline: z.string().min(40, "正文或大纲过短"),
-  language: z.enum(["zh", "en"]).optional().default("zh"),
-  paperType: z.enum(["review", "research"]).optional(),
-});
-
 const figureDataBindingSchema = z.object({
   kind: z.literal("chartConfig"),
   chartConfigIndex: z.number().int().nonnegative(),

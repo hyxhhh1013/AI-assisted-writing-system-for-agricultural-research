@@ -19,7 +19,6 @@ import type { ProjectData, ProjectLanguage } from "@/contracts/project";
 import { resolveProjectLanguage } from "@/contracts/project";
 import { getWritingModeMeta } from "@/contracts/writing-mode";
 import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
-import { AbstractBilingualButton } from "@/components/shared/abstract-bilingual-button";
 import { cn } from "@/lib/utils";
 
 interface ProjectMetaDraft {
@@ -249,21 +248,7 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
               </div>
 
               <div className="grid gap-2">
-                <div className="flex items-center justify-between gap-2">
-                  <Label htmlFor="meta-abstract">摘要 (Abstract)</Label>
-                  <AbstractBilingualButton
-                    project={{
-                      ...project,
-                      title: tempMeta.title || project.title,
-                      abstract: tempMeta.abstract,
-                      outline: tempMeta.outline,
-                      keywords: tempMeta.keywords,
-                    }}
-                    onApply={({ abstract, keywords }) =>
-                      setTempMeta((prev) => ({ ...prev, abstract, keywords }))
-                    }
-                  />
-                </div>
+                <Label htmlFor="meta-abstract">摘要 (Abstract)</Label>
                 <Textarea
                   id="meta-abstract"
                   className="min-h-[190px] resize-y"

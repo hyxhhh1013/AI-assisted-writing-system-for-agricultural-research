@@ -69,8 +69,6 @@ model Project {
   expandedOutlineSections String?
   // 写作蓝图（JSON WritingBlueprint）
   writingBlueprint      String?
-  // 论证蓝图（JSON ArgumentBlueprint，Phase 3）
-  argumentBlueprint     String?
   // 论文 8 阶段生命周期快照（JSON PaperPassport）
   paperPassport         String?
 

@@ -18,10 +18,6 @@ import {
   writeWritingBlueprint,
 } from "@/lib/project-writing-blueprint-db";
 import {
-  readArgumentBlueprint,
-  writeArgumentBlueprint,
-} from "@/lib/project-argument-blueprint-db";
-import {
   parsePaperPassport,
   serializePaperPassport,
 } from "@/contracts/paper-passport";
@@ -101,7 +97,6 @@ export async function GET(req: NextRequest) {
         dataClaims: project.dataClaims || undefined,
         dataSources: project.dataSources || undefined,
         writingBlueprint: (await readWritingBlueprint(project.id)) || undefined,
-        argumentBlueprint: (await readArgumentBlueprint(project.id)) || undefined,
         paperPassport: paperPassportRaw || undefined,
         expandedOutlineSections: parseExpandedOutlineSections(project.expandedOutlineSections),
       };
@@ -175,7 +170,6 @@ export async function POST(req: NextRequest) {
       dataSources,
       expandedOutlineSections,
       writingBlueprint,
-      argumentBlueprint,
       paperPassport: paperPassportRaw,
     } = data;
 
@@ -257,13 +251,6 @@ export async function POST(req: NextRequest) {
       await writeWritingBlueprint(
         project.id,
         writingBlueprint === null || writingBlueprint === "" ? null : writingBlueprint,
-      );
-    }
-
-    if (argumentBlueprint !== undefined) {
-      await writeArgumentBlueprint(
-        project.id,
-        argumentBlueprint === null || argumentBlueprint === "" ? null : argumentBlueprint,
       );
     }
 

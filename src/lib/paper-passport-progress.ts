@@ -9,10 +9,6 @@ export interface PassportProgressSignals {
   expandedOutlineCount: number;
   abstractChars: number;
   reviewDoneCount: number;
-  /** Phase 3：论证蓝图已确认 */
-  hasConfirmedArgument: boolean;
-  /** Phase 7：至少导出过一种格式 */
-  hasExported: boolean;
 }
 
 function phaseKey(n: number): `${PaperPhase}` {
@@ -68,11 +64,10 @@ export function recomputePassportProgress(
     }
   }
 
-  // Phase 3：论证蓝图已确认（不再用 expandedOutlineCount 冒充）
-  if (signals.hasConfirmedArgument) {
+  if (signals.expandedOutlineCount >= 1) {
     phaseStatus["3"] = "done";
-  } else if (phaseStatus["2"] === "done") {
-    phaseStatus["3"] = phaseStatus["3"] === "locked" ? "ready" : "in_progress";
+  } else if (phaseStatus["2"] === "done" && phaseStatus["3"] === "locked") {
+    phaseStatus["3"] = "ready";
   }
 
   const fillRatio = signals.totalCoreSections > 0
@@ -89,33 +84,22 @@ export function recomputePassportProgress(
     phaseStatus["4"] = "ready";
   }
 
-  // Phase 5：引用 + 摘要门禁（skill 5a/5b 合并为顺序过关）
-  const citationsOk = signals.referenceCount >= 3 && fillRatio >= 0.5;
-  const abstractOk = signals.abstractChars >= 80;
-  if (citationsOk && abstractOk) {
+  if (phaseStatus["4"] === "done" && phaseStatus["5"] === "locked") {
+    phaseStatus["5"] = "ready";
+  }
+  if (signals.referenceCount >= 3 && fillRatio >= 0.5) {
     phaseStatus["5"] = "done";
-  } else if (phaseStatus["4"] === "done") {
-    if (citationsOk || abstractOk || signals.abstractChars > 0) {
-      phaseStatus["5"] = "in_progress";
-    } else if (phaseStatus["5"] === "locked") {
-      phaseStatus["5"] = "ready";
-    }
   }
 
-  // Phase 6：审查（最多 2 轮 done）
-  if (signals.reviewDoneCount >= 1) {
-    phaseStatus["6"] = signals.reviewDoneCount >= 2 ? "done" : "in_progress";
+  if (signals.abstractChars >= 80) {
+    phaseStatus["6"] = "done";
   } else if (phaseStatus["5"] === "done" && phaseStatus["6"] === "locked") {
     phaseStatus["6"] = "ready";
   }
 
-  // Phase 7：导出
-  if (signals.hasExported) {
-    phaseStatus["7"] = "done";
+  if (signals.reviewDoneCount >= 1) {
+    phaseStatus["7"] = signals.reviewDoneCount >= 2 ? "done" : "in_progress";
   } else if (phaseStatus["6"] === "done" && phaseStatus["7"] === "locked") {
-    phaseStatus["7"] = "ready";
-  } else if (phaseStatus["6"] === "in_progress" && phaseStatus["7"] === "locked") {
-    // 至少跑过一轮审查即可准备导出（Critical 阻断由导出钩子软提示）
     phaseStatus["7"] = "ready";
   }
 
@@ -137,11 +121,11 @@ export function getNextPhaseHint(passport: PaperPassport): string | null {
     0: "完善论文配置",
     1: "导入或检索参考文献",
     2: "生成大纲与写作蓝图",
-    3: "确认论证蓝图（claim–evidence）",
+    3: "扩写论证提纲子节",
     4: "协作扩写各章节",
-    5: "核对引用并撰写摘要",
-    6: "运行论文审查（最多 2 轮）",
-    7: "导出 DOCX / PDF / Markdown",
+    5: "核对正文引用编号",
+    6: "撰写摘要与关键词",
+    7: "运行论文审查",
   };
   return hints[phase] ?? null;
 }

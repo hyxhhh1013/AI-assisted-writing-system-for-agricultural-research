@@ -30,8 +30,6 @@ describe("ensureProjectPaperPassport bootstrap", () => {
       expandedOutlineCount: 0,
       abstractChars: 0,
       reviewDoneCount: 0,
-      hasConfirmedArgument: false,
-      hasExported: false,
     });
     expect(next.phaseStatus["0"]).toBe("done");
     expect(next.phaseStatus["1"]).toBe("done");
