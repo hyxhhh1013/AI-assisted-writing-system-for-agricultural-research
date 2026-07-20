@@ -34,7 +34,7 @@ export function DirectionDashboard({
   const activeCount = paperCounts.writing + paperCounts.submitted + paperCounts.published;
 
   const stats = [
-    { label: "资产", value: assetCount, icon: Compass, color: "text-[#1a5632]", bg: "bg-[#1a5632]/8" },
+    { label: "历史快照", value: assetCount, icon: Compass, color: "text-[#1a5632]", bg: "bg-[#1a5632]/8" },
     { label: "规划中", value: paperCounts.total, icon: FileText, color: "text-[#2563eb]", bg: "bg-[#2563eb]/8" },
     { label: "进行中", value: activeCount, icon: TrendingUp, color: "text-[#b8975a]", bg: "bg-[#b8975a]/8" },
     {
@@ -92,14 +92,14 @@ export function DirectionDashboard({
           <History className="h-3 w-3" />
           <span>
             分析于 {analysisGeneratedAt ? new Date(analysisGeneratedAt).toLocaleDateString("zh-CN") : "—"} ·
-            资产 {assetCount} 项 · 路线图 {paperCounts.total} 篇
+            历史快照 {assetCount} 项 · 路线图 {paperCounts.total} 篇
             {crossDirectionCount > 0 ? ` · 跨方向 ${crossDirectionCount} 项` : ""}
           </span>
         </div>
       )}
 
       {/* 下一步行动（可点击跳转） */}
-      {!analysisDone && assetCount >= 3 && (
+      {!analysisDone && (
         <button
           className="flex w-full items-center gap-2 rounded-lg border border-[#b8975a]/30 bg-[#b8975a]/5 px-3 py-2 text-left text-xs text-[#b8975a] transition-colors hover:bg-[#b8975a]/10"
           onClick={() => onJumpToTab?.("contract")}
@@ -108,12 +108,6 @@ export function DirectionDashboard({
           <span className="flex-1">下一步：设置评价标准（预承诺）→ 启动分析</span>
           <ArrowRight className="h-3 w-3 shrink-0" />
         </button>
-      )}
-      {!analysisDone && assetCount < 3 && (
-        <div className="flex items-center gap-2 rounded-lg border border-[#b8975a]/30 bg-[#b8975a]/5 px-3 py-2 text-xs text-[#b8975a]">
-          <Send className="h-3.5 w-3.5 shrink-0" />
-          <span>下一步：需要至少 3 项资产（含 1 个实验）才能启动分析</span>
-        </div>
       )}
       {analysisDone && paperCounts.total === 0 && (
         <button

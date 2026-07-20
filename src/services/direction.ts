@@ -3,8 +3,6 @@
 import type {
   DirectionDTO,
   DirectionListItem,
-  DirectionAsset,
-  ExperimentAsset,
 } from "@/contracts/direction";
 import type {
   DirectionCreateInput,
@@ -83,95 +81,6 @@ export async function deleteDirection(slug: string): Promise<void> {
   if (!res.ok) {
     throw new Error(data.error || "删除方向失败");
   }
-}
-
-// ==================== 资产管理 ====================
-
-/** PATCH /api/directions/[slug]/assets — 增量更新资产 */
-export async function patchAssets(
-  slug: string,
-  ops: Array<{ op: "upsert" | "delete"; assetId?: string; asset?: DirectionAsset }>,
-): Promise<DirectionDTO> {
-  const res = await fetch(`/api/directions/${slug}/assets`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ops }),
-  });
-  const data = await res.json().catch(() => ({})) as DirectionDTO & { error?: string };
-  if (!res.ok) {
-    throw new Error(data.error || "更新资产失败");
-  }
-  return data;
-}
-
-// ==================== 扫描候选资产 ====================
-
-export interface ScanPaperCandidate {
-  id: string;
-  kind: "paper";
-  doi: string;
-  title: string;
-  journal: string;
-  year: number;
-  impactFactor?: number;
-  abstract: string;
-  contribution: string;
-  source: "knowledge_base" | "existing_project";
-}
-
-export interface ScanResult {
-  paperCandidates: ScanPaperCandidate[];
-  projectCandidates: ScanPaperCandidate[];
-  datasetCandidates: Array<{
-    id: string;
-    kind: "dataset";
-    title: string;
-    variables: string;
-    sampleSize?: string;
-    source: "existing_data_claims";
-  }>;
-  summary: {
-    knowledgeBasePapers: number;
-    existingProjects: number;
-    dataClaims: number;
-  };
-}
-
-/** POST /api/directions/[slug]/parse-asset — 自然语言解析为结构化实验资产 */
-export async function parseAssetFromNL(
-  slug: string,
-  text: string,
-): Promise<{
-  parsed: ExperimentAsset;
-  confidence: "high" | "medium" | "low";
-}> {
-  const res = await fetch(`/api/directions/${slug}/parse-asset`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
-  });
-  const data = await res.json().catch(() => ({})) as {
-    parsed?: ExperimentAsset;
-    confidence?: "high" | "medium" | "low";
-    error?: string;
-  };
-  if (!res.ok || !data.parsed) {
-    throw new Error(data.error || "解析失败");
-  }
-  return {
-    parsed: data.parsed,
-    confidence: data.confidence || "medium",
-  };
-}
-
-/** GET /api/directions/[slug]/scan — 从现有数据扫描候选资产 */
-export async function scanCandidates(slug: string): Promise<ScanResult> {
-  const res = await fetch(`/api/directions/${slug}/scan`);
-  const data = await res.json().catch(() => ({})) as ScanResult & { error?: string };
-  if (!res.ok) {
-    throw new Error(data.error || "扫描候选资产失败");
-  }
-  return data;
 }
 
 // ==================== 预承诺 ====================
@@ -518,7 +427,7 @@ export async function createProjectFromRoadmap(
 
   if (paperType === "review") {
     if (!paperBrief?.literatureCorpusConfirmedAt) {
-      throw new Error("请先在「资产盘点」确认文献 corpus（P1 调研）后再创建写作项目");
+      throw new Error("请先在「文献备料」确认文献 corpus 后再创建写作项目");
     }
     const refCount = paperBrief.requiredReferences.length;
     if (refCount < MIN_REVIEW_HANDOFF_ENTRIES) {

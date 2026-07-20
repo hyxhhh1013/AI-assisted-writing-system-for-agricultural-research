@@ -149,7 +149,7 @@ export function ReferenceBrowser({
         </p>
         {directionSlug ? (
           <Link
-            href={`/directions/${directionSlug}?tab=assets`}
+            href={`/directions/${directionSlug}?tab=literature`}
             className="block w-full rounded-md border border-dashed border-[#6366f1]/30 bg-[#6366f1]/5 px-2 py-2 text-center text-[10px] font-medium text-[#6366f1] hover:bg-[#6366f1]/10"
           >
             回方向修改文献 corpus →

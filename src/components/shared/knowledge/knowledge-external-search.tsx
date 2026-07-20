@@ -141,7 +141,7 @@ export function KnowledgeExternalSearch({
 }: {
   /** 工作台内嵌：锁定当前项目，隐藏项目下拉 */
   fixedProjectId?: string;
-  /** Direction 资产盘点：加入文献 corpus */
+  /** Direction 文献备料：加入文献 corpus */
   directionSlug?: string;
   compact?: boolean;
   onReferenceImported?: () => void;
