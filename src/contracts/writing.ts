@@ -136,7 +136,6 @@ export interface WritingRequest {
     sectionPreviews?: Record<string, string>;
     analysisResults?: string[];
     blueprint?: import("./writing-blueprint").WritingBlueprint | null;
-    argumentBlueprint?: import("./argument-blueprint").ArgumentBlueprint | null;
   };
   verificationFeedback?: string;
   /** 写作模式：review=综述 research=研究论文 */

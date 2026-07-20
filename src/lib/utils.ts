@@ -4,9 +4,7 @@ import { IMRAD_LABELS_ZH, IMRAD_ORDER } from "@/lib/imrad"
 import { REVIEW_ORDER } from "@/lib/review-structure"
 import type { ProjectWritingMode } from "@/contracts/writing-mode"
 import type { WritingBlueprint } from "@/contracts/writing-blueprint"
-import type { ArgumentBlueprint } from "@/contracts/argument-blueprint"
 import { formatBlueprintSectionHint } from "@/lib/blueprint-utils"
-import { formatArgumentSectionHint } from "@/lib/argument-blueprint-utils"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -236,7 +234,6 @@ export function buildExpansionContext(
   outlineText?: string,
   mode?: ProjectWritingMode,
   blueprint?: WritingBlueprint | null,
-  argumentBlueprint?: ArgumentBlueprint | null,
 ): string {
   const parentKey = mapToSectionForMode(section.fullPath, mode);
   const parentLabel = IMRAD_LABELS[parentKey] || REVIEW_LABELS[parentKey] || parentKey;
@@ -275,11 +272,6 @@ export function buildExpansionContext(
   if (blueprint) {
     const hint = formatBlueprintSectionHint(blueprint, section.fullPath);
     if (hint) ctx += `\n${hint}`;
-  }
-
-  if (argumentBlueprint) {
-    const argHint = formatArgumentSectionHint(argumentBlueprint, section.fullPath);
-    if (argHint) ctx += `\n${argHint}`;
   }
 
   return ctx;
