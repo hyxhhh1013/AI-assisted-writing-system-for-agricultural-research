@@ -13,7 +13,7 @@
 | Wave 0 安全/鉴权 | ✅ | W0-5 仓库卫生仍 todo |
 | Wave 1 Passport + Cockpit | ✅ MVP | 契约 / sync / 任务卡 / 阶段导航已落地 |
 | Wave 2 LangGraph + write tools | ⚠️ 部分 | 图与 write tools 已合入本地 main；**无** AgentSession checkpoint；ENG-PR-082 未做 |
-| Wave 3 学术完整性 | ⚠️ MVP | Argument / 双语摘要 / Phase 语义 / 审查 max-2 + Critical 挡导出 / data 免责已落地；集成测试仍薄 |
+| Wave 3 学术完整性 | ⚠️ MVP | Argument / 双语摘要 / Phase 语义 / 导出门禁已落地；审查编排与集成测试仍薄 |
 | 产品主入口 | 工作台 | `/writing`、`/analysis`、`/outline`、`/review`、`/directions` 均为重定向或并入 |
 
 **唯一叙事**：`Direction → Project（PaperPassport + Cockpit）→ 工作台 Tab`；质量中心 `/plagiarism`、知识库 `/knowledge` 为独立深链。
@@ -105,10 +105,8 @@
 - Phase 语义对齐：5=引用(+摘要门禁)、6=审查、7=导出 ✅
 - Phase 3 Argument Blueprint（契约 / API / 提纲侧栏 UI / passport 门禁）✅ MVP
 - 双语摘要 API `POST /api/abstract/bilingual` + 元数据对话框入口 ✅
-- 审查 max-2 轮 + Critical 挡导出（`review-gate`）进 Phase 6/7 ✅ MVP
-- 导出标记进 passport Phase 7 ✅
-- ENG-PR-085 工作台 data 免责 ✅
-- 集成测试补全 — 后续
+- 审查 max-2 轮进 passport Phase 6；导出标记进 Phase 7 ✅ MVP
+- ENG-PR-085 工作台 data 免责、集成测试补全 — 后续
 
 ### Wave 3 产品阶段语义（权威）
 
@@ -134,12 +132,12 @@
 | 0 CONFIG | paper-config → passport.config | 1 | ✅ |
 | 1 RESEARCH | RAG + 外部检索 + 210 文献注入 | 0–1 | ✅ |
 | 2 ARCHITECTURE | outline + writing blueprint + userSkeleton | 1 | ✅ |
-| 3 ARGUMENTATION | Argument Blueprint | 3 | ✅ MVP |
-| 4 DRAFTING | writing pipeline + Agent write tools（含 Argument 注入） | 2–3 | ⚠️ |
+| 3 ARGUMENTATION | Argument Blueprint | 3 | ❌ |
+| 4 DRAFTING | writing pipeline + Agent write tools | 2 | ⚠️ |
 | 5a CITATIONS | validateCitations + 扩展 | 3 | 部分 |
-| 5b ABSTRACT | 双语摘要 API | 3 | ✅ MVP |
-| 6 PEER REVIEW | review-service + max-2 + Critical 挡导出 | 3 | ✅ MVP |
-| 7 FORMAT | DOCX/PDF + 导出门禁；LaTeX 后期 | 3–4 | 部分 |
+| 5b ABSTRACT | 双语摘要 API | 3 | ❌ |
+| 6 PEER REVIEW | review-service + 2 轮编排 | 3 | 单次有、编排无 |
+| 7 FORMAT | DOCX/PDF；LaTeX 后期 | 4 | 部分 |
 
 ---
 

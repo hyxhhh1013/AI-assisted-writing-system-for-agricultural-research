@@ -266,31 +266,3 @@ export async function markPaperPassportExport(
   }
   return res.json() as Promise<{ paperPassport: string; currentPhase: number }>;
 }
-
-/** GET /api/projects/:id/export-gate — 导出门禁（审查 + Critical） */
-export async function getExportGate(projectId: string): Promise<{
-  doneCount: number;
-  openHighIssueCount: number;
-  latestCheckId: string | null;
-  gate: { ok: boolean; reason?: string; code?: string };
-}> {
-  const res = await fetch(
-    `/api/projects/${encodeURIComponent(projectId)}/export-gate`,
-  );
-  const data = (await res.json().catch(() => ({}))) as {
-    error?: string;
-    doneCount?: number;
-    openHighIssueCount?: number;
-    latestCheckId?: string | null;
-    gate?: { ok: boolean; reason?: string; code?: string };
-  };
-  if (!res.ok) {
-    throw new Error(data.error || "查询导出门禁失败");
-  }
-  return {
-    doneCount: data.doneCount ?? 0,
-    openHighIssueCount: data.openHighIssueCount ?? 0,
-    latestCheckId: data.latestCheckId ?? null,
-    gate: data.gate ?? { ok: false, reason: "门禁状态未知" },
-  };
-}

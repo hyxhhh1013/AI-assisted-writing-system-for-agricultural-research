@@ -145,7 +145,7 @@ export function ReviewTab({
     return map;
   }, [sections]);
 
-  // 执行审查（绑定 projectId 以计入 Phase 6 轮次 / 导出门禁）
+  // 执行审查
   const handleReview = async () => {
     if (sections.length === 0) {
       toast.error("请先输入论文内容");
@@ -154,7 +154,6 @@ export function ReviewTab({
 
     const result = await review(
       {
-        projectId,
         title,
         sections,
         outline,
@@ -405,13 +404,10 @@ export function ReviewTab({
             {report && (
               <Button size="lg" variant="outline" onClick={reset}>
                 <RotateCcw className="mr-2 h-4 w-4" />
-                清除结果
+                重新审查
               </Button>
             )}
           </div>
-          <p className="mt-2 text-[11px] text-[#6b7c72]">
-            同一项目最多 2 轮审查；高严重度问题未处理前不可导出。
-          </p>
         </div>
         {progress && <p className="mt-3 text-xs text-[#6b7c72]">{progress}</p>}
         {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
@@ -498,12 +494,9 @@ export function ReviewTab({
             )}
           </Button>
           {report && (
-            <Button variant="outline" onClick={reset}>清除结果</Button>
+            <Button variant="outline" onClick={reset}>重新审查</Button>
           )}
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          同一项目最多 2 轮审查；高严重度（Critical）未关闭前不可导出。
-        </p>
         {progress && <p className="mt-3 text-sm text-muted-foreground">{progress}</p>}
         {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
       </CardContent>

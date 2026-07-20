@@ -78,17 +78,13 @@ export function recomputePassportProgress(
   const fillRatio = signals.totalCoreSections > 0
     ? signals.filledCoreSections / signals.totalCoreSections
     : 0;
-  // Phase 4：须 Phase 3 论证蓝图确认后才能解锁/推进（禁止正文填满冒充）
-  if (phaseStatus["3"] === "done") {
-    if (fillRatio >= 1) {
-      phaseStatus["4"] = "done";
-    } else if (fillRatio >= 0.2) {
-      phaseStatus["4"] = "in_progress";
-    } else if (phaseStatus["4"] === "locked") {
-      phaseStatus["4"] = "ready";
-    }
-  } else {
-    phaseStatus["4"] = "locked";
+  if (fillRatio >= 1) {
+    phaseStatus["4"] = "done";
+  } else if (fillRatio >= 0.2) {
+    phaseStatus["4"] = "in_progress";
+  } else if (phaseStatus["3"] === "done" && phaseStatus["4"] === "locked") {
+    // Phase 4 起草须论证蓝图过关后再解锁
+    phaseStatus["4"] = "ready";
   }
 
   // Phase 5：引用 + 摘要门禁（skill 5a/5b 合并为顺序过关）
@@ -117,7 +113,7 @@ export function recomputePassportProgress(
   } else if (phaseStatus["6"] === "done" && phaseStatus["7"] === "locked") {
     phaseStatus["7"] = "ready";
   } else if (phaseStatus["6"] === "in_progress" && phaseStatus["7"] === "locked") {
-    // 至少跑过一轮审查即可准备导出（Critical 由 export-gate 硬拦截）
+    // 至少跑过一轮审查即可准备导出（Critical 阻断由导出钩子软提示）
     phaseStatus["7"] = "ready";
   }
 

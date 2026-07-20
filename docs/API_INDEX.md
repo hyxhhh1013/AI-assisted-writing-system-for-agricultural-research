@@ -13,7 +13,7 @@
 <!-- API_INDEX:AUTO:START -->
 ## 路由表（自动生成）
 
-> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-07-14 07:37:05**（共 **90** 个 route 文件，validateBody **46**，SSE **11**，requireAdmin **15**）。
+> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-07-14 07:01:35**（共 **88** 个 route 文件，validateBody **45**，SSE **11**，requireAdmin **15**）。
 
 图例：zod = 使用 validateBody；SSE = 含 text/event-stream / ReadableStream；admin = 含 requireAdmin。
 
@@ -34,7 +34,6 @@
 | PATCH | `/api/projects/[id]/analysis-results` | ✓ | — | — |
 | GET, PUT | `/api/projects/[id]/argument-blueprint` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/charts` | ✓ | — | — |
-| GET | `/api/projects/[id]/export-gate` | — | — | — |
 | PATCH | `/api/projects/[id]/meta` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/paper-passport` | ✓ | — | — |
 | POST | `/api/projects/[id]/paper-passport/export` | ✓ | — | — |
@@ -100,7 +99,6 @@
 | POST | `/api/review` | ✓ | — | — |
 | GET | `/api/review/[id]` | — | — | — |
 | GET | `/api/review/history` | — | — | — |
-| PATCH | `/api/review/issues/[id]` | ✓ | — | — |
 
 ### 查重
 

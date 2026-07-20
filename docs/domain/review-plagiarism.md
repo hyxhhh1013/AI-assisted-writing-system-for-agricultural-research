@@ -10,27 +10,21 @@
 |----|------|
 | 页面 | `src/app/review/page.tsx`（重定向至质量中心审查 Tab） |
 | 组件 | `src/components/shared/review/`（`review-workspace`、`review-history-list`） |
-| API | `POST /api/review`（同项目最多 2 轮，`409` 封顶） |
-| 问题状态 | `PATCH /api/review/issues/[id]`（fixed / dismissed，解除 Critical 挡导出） |
-| 导出门禁 | `GET /api/projects/[id]/export-gate`；导出标记亦校验 |
+| API | `POST /api/review` |
 | 历史 | `GET /api/review/history`、`GET /api/review/[id]` |
 | Service | `src/services/review.ts`（前端）、`review-service.ts`（后端逻辑） |
-| 门禁契约 | `contracts/review-gate.ts`（`MAX_REVIEW_ROUNDS=2`、Critical=high+open） |
 | Admin | `GET /api/admin/reviews`、`GET /api/admin/reviews/[id]` |
 
 ### 行为
 
 - **四维度并行**：学术规范、论证逻辑、结构、诚信（`review-academic` 等 prompt 文件）。
 - 请求经 **`validateBody(reviewSchema)`**；返回 JSON 结构化 `ReviewReport`（非 SSE）。
-- 结果持久化 **`ReviewCheck`**（`prisma/schema.prisma`），含 `overallScore` / `overallGrade`；写入后 sync PaperPassport Phase 6。
-- **Phase 6**：同一 `projectId` 最多 2 轮 `done` 审查；第 3 轮返回 409。
-- **Phase 7**：至少 1 轮审查，且最新一轮无 `severity=high` 且 `status=open` 的问题，方可导出/标记导出。
+- 结果持久化 **`ReviewCheck`**（`prisma/schema.prisma`），含 `overallScore` / `overallGrade`。
 
 ### 不变量
 
 - 审查输入为项目章节快照（`sections` + `outline`），不直接改工作台正文；应用修复走其他流程。
 - 改维度或评分规则 → `lib/review-scoring.ts` + prompt 文件 + 本节。
-- 改轮次/导出门禁 → `contracts/review-gate.ts` + 本节。
 
 ---
 

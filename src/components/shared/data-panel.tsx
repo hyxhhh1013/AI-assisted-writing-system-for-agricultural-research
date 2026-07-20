@@ -202,9 +202,6 @@ export function DataPanel({
             <CardDescription className="text-xs">
               上传一次，分别提取可引用证据（扩写用）与 AI 趋势描述（Results 草稿）。
             </CardDescription>
-            <p className="text-[10px] text-muted-foreground leading-relaxed pt-1">
-              AI 生成内容仅供参考，须由作者核对原始数据与统计结论后再写入正文。
-            </p>
           </CardHeader>
           <CardContent className="space-y-3">
             <input
@@ -278,12 +275,7 @@ export function DataPanel({
         {(narrativeResult || isGeneratingNarrative) && (
           <Card>
             <CardHeader className="border-b py-2 flex flex-row items-center justify-between space-y-0">
-              <div className="min-w-0">
-                <CardTitle className="text-sm font-bold">AI 趋势描述</CardTitle>
-                <p className="text-[10px] text-muted-foreground font-normal mt-0.5">
-                  AI 生成、仅供参考，请对照原始数据核对后再采用
-                </p>
-              </div>
+              <CardTitle className="text-sm font-bold">AI 趋势描述</CardTitle>
               {narrativeResult && (
                 <div className="flex gap-1">
                   <Button

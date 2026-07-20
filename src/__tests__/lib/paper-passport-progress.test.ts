@@ -79,22 +79,6 @@ describe("recomputePassportProgress", () => {
     expect(passport.phaseStatus["4"]).toBe("ready");
   });
 
-  it("keeps phase 4 locked when sections filled but argument not confirmed", () => {
-    const passport = recomputePassportProgress(
-      basePassport(),
-      baseSignals({
-        referenceCount: 3,
-        hasBlueprint: true,
-        outlineChars: 200,
-        filledCoreSections: 4,
-        totalCoreSections: 4,
-        hasConfirmedArgument: false,
-      }),
-    );
-    expect(passport.phaseStatus["3"]).not.toBe("done");
-    expect(passport.phaseStatus["4"]).toBe("locked");
-  });
-
   it("maps review to phase 6 and export to phase 7", () => {
     let passport = recomputePassportProgress(
       basePassport(),

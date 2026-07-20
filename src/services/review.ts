@@ -124,26 +124,6 @@ export async function fixIssue(request: ReviewFixIssueRequest): Promise<string |
   return request.suggestion || request.originalText || null;
 }
 
-/** PATCH /api/review/issues/:id — 持久化问题状态 */
-export async function patchIssueStatus(
-  issueId: string,
-  status: "open" | "fixed" | "dismissed",
-  fixedContent?: string | null,
-): Promise<void> {
-  const res = await fetch(`/api/review/issues/${encodeURIComponent(issueId)}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status, fixedContent }),
-  });
-  const data = (await res.json().catch(() => ({}))) as {
-    success?: boolean;
-    error?: string;
-  };
-  if (!res.ok || data.success === false) {
-    throw new Error(parseReviewError(data, "更新问题状态失败"));
-  }
-}
-
 /** PATCH /api/projects/[id]/sections/[key] — 增量写入单个章节 */
 export async function patchSection(
   projectId: string,
