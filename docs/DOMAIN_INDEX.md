@@ -114,16 +114,15 @@
 
 | 功能 | 页面 | API | 核心代码 |
 |------|------|-----|----------|
-| 方向工作台 | `src/app/directions/[slug]/`（深链；首页入口已下线） | `GET/PUT/DELETE /api/directions/[slug]` | `direction-page-client.tsx` |
-| 文献备料 | Phase 0 | `.../literature-corpus` 等 | `direction-literature-corpus-panel.tsx` |
+| 方向列表/概览 | **主页** `/`（`DirectionsOverview`）；`/directions` → 重定向 `/` | `GET/POST /api/directions`；`GET .../summary` | `directions-overview.tsx` |
+| 方向工作台 | `src/app/directions/[slug]/` | `GET/PUT/DELETE /api/directions/[slug]` | `direction-page-client.tsx` |
+| 资产盘点 | Phase 0 | `PATCH .../assets` · `GET .../scan` · `POST .../parse-asset` | `direction-asset-intake-panel.tsx`, `lib/direction-asset-health.ts` |
 | 预承诺 | Phase 1 | `POST .../evaluation-contract` | `direction-pre-commitment-panel.tsx`, `lib/direction-pre-commitment.ts` |
 | 8 维度分析 | Phase 2 | `POST .../analyze` (SSE) | `direction-analysis-panel.tsx`, `direction-phase-readiness.ts` |
 | 论文路线图 | Phase 3 | `POST/PATCH .../roadmap` · `GET .../paper-brief` | `direction-roadmap-timeline.tsx` |
-| 文献语料 / handoff | 文献备料 + 路线图 | `.../literature-corpus` 等 | `direction-literature-corpus.ts`, `literature-handoff-dialog.tsx` |
+| 文献语料 / handoff | 路线图 | `.../literature-corpus` 等 | `direction-literature-corpus.ts`, `literature-handoff-dialog.tsx` |
 | 申报材料 | Phase 4 | `POST .../grant-proposal` | `direction-grant-panel.tsx` |
 | **→ 写作桥接** | 路线图「开始写作」 | `GET .../paper-brief` → `POST /api/projects` | `direction-writing-bridge.ts`, `contracts/paper-passport.ts` |
-
-> **已下线**：Phase 0「资产盘点」（实验/论文/数据集结构化录入、`PATCH .../assets`、`GET .../scan`、`POST .../parse-asset`）。`Direction.assets` 字段仍保留只读兼容。
 
 **Prompt 族**：`src/lib/prompts/direction.ts` 等（见该目录 `direction-*.ts`）  
 **种子脚本**：`node scripts/seed-directions.mjs`

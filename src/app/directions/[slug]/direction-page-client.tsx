@@ -6,6 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/page-header";
+import { DirectionStatCards } from "@/components/shared/direction/direction-stat-cards";
+import { DirectionAssetForm } from "@/components/shared/direction/direction-asset-form";
+import { DirectionAssetScanDialog } from "@/components/shared/direction/direction-asset-scan-dialog";
+import { DirectionAssetList } from "@/components/shared/direction/direction-asset-list";
+import { DirectionAssetIntakePanel } from "@/components/shared/direction/direction-asset-intake-panel";
 import { DirectionLiteratureCorpusPanel } from "@/components/shared/direction/direction-literature-corpus-panel";
 import { DirectionPreCommitmentPanel } from "@/components/shared/direction/direction-pre-commitment-panel";
 import { DirectionAnalysisPanel } from "@/components/shared/direction/direction-analysis-panel";
@@ -16,21 +21,27 @@ import { DirectionGrantPanel } from "@/components/shared/direction/direction-gra
 import { DirectionPhaseOverview } from "@/components/shared/direction/direction-phase-overview";
 import {
   Compass,
-  BookOpen,
+  PackageOpen,
   ClipboardCheck,
   BarChart3,
   Map,
   FileText,
   ArrowRight,
+  Search,
 } from "lucide-react";
 import { siteTheme } from "@/lib/site-theme";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { getDirection } from "@/services/direction";
+import {
+  getDirection,
+  patchAssets,
+  scanCandidates,
+} from "@/services/direction";
 import { useAuth } from "@/lib/auth-context";
 import type { DirectionDTO, DirectionAsset, DirectionAnalysis, DirectionRoadmap } from "@/contracts/direction";
 import type { DirectionLiteratureState } from "@/contracts/direction-literature";
 import { emptyLiteratureState } from "@/contracts/direction-literature";
+import { isAssetAlreadyImported } from "@/lib/direction-asset-health";
 import { isAnalysisFingerprintStale } from "@/lib/direction-analysis-fingerprint";
 import {
   computeAnalysisReadiness,
@@ -38,21 +49,15 @@ import {
   computeGrantReadiness,
 } from "@/lib/direction-phase-readiness";
 
+type AssetKind = "experiment" | "paper" | "dataset";
+
 const TABS = [
-  { id: "literature", label: "文献备料", icon: BookOpen, phase: 0 },
+  { id: "assets", label: "资产盘点", icon: PackageOpen, phase: 0 },
   { id: "contract", label: "预承诺", icon: ClipboardCheck, phase: 1 },
   { id: "analysis", label: "8 维度分析", icon: BarChart3, phase: 2 },
   { id: "roadmap", label: "论文路线图", icon: Map, phase: 3 },
   { id: "grant", label: "申报材料", icon: FileText, phase: 4 },
 ] as const;
-
-function resolveTab(raw: string | null): string {
-  if (!raw) return "literature";
-  // 旧书签 ?tab=assets → 文献备料
-  if (raw === "assets") return "literature";
-  if (TABS.some((t) => t.id === raw)) return raw;
-  return "literature";
-}
 
 export default function DirectionPageClient() {
   const params = useParams();
@@ -64,7 +69,19 @@ export default function DirectionPageClient() {
 
   const [direction, setDirection] = useState<DirectionDTO | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("literature");
+  const [activeTab, setActiveTab] = useState("assets");
+
+  // Phase 0: 方向配置编辑状态
+  // Phase 0: 资产编辑状态
+  const [formKind, setFormKind] = useState<AssetKind | null>(null);
+  const [editAsset, setEditAsset] = useState<DirectionAsset | null>(null);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [pendingScanCount, setPendingScanCount] = useState<number | null>(null);
+
+  const handleAddAsset = (kind: AssetKind) => {
+    setEditAsset(null);
+    setFormKind(kind);
+  };
 
   const fetchDirection = useCallback(async () => {
     setIsLoading(true);
@@ -91,14 +108,38 @@ export default function DirectionPageClient() {
   }, [slug, router]);
 
   useEffect(() => {
-    setActiveTab(resolveTab(searchParams.get("tab")));
+    const tab = searchParams.get("tab");
+    if (tab && TABS.some((t) => t.id === tab)) {
+      setActiveTab(tab);
+    }
   }, [searchParams]);
 
   useEffect(() => {
     void fetchDirection();
   }, [fetchDirection]);
 
-  // 历史资产数据仍可读（分析/指纹兼容），但不再提供盘点录入 UI
+  // 预加载扫描覆盖率（待导入数量）
+  useEffect(() => {
+    if (!direction) return;
+    const currentAssets = Array.isArray(direction.assets)
+      ? (direction.assets as DirectionAsset[])
+      : [];
+    scanCandidates(slug)
+      .then((result) => {
+        const allPapers = [...result.paperCandidates, ...result.projectCandidates];
+        const newPapers = allPapers.filter((p) => !isAssetAlreadyImported(p, currentAssets));
+        const newDatasets = result.datasetCandidates.filter(
+          (d) => !currentAssets.some(
+            (a) => a.kind === "dataset" && a.title.trim().toLowerCase() === d.title.trim().toLowerCase(),
+          ),
+        );
+        setPendingScanCount(newPapers.length + newDatasets.length);
+      })
+      .catch(() => setPendingScanCount(null));
+  }, [slug, direction]);
+
+  // ====== Phase 0: 资产管理 ======
+
   const assets: DirectionAsset[] = Array.isArray(direction?.assets)
     ? (direction.assets as DirectionAsset[])
     : [];
@@ -109,6 +150,49 @@ export default function DirectionPageClient() {
   const handleLiteratureCorpusUpdated = (state: DirectionLiteratureState) => {
     setDirection((prev) => (prev ? { ...prev, literatureCorpus: state } : prev));
   };
+
+  const handleAssetSave = async (asset: DirectionAsset) => {
+    if (!direction) return;
+    try {
+      const updated = await patchAssets(slug, [
+        { op: "upsert", asset },
+      ]);
+      setDirection(updated);
+      setFormKind(null);
+      setEditAsset(null);
+      toast.success(editAsset ? "资产已更新" : "资产已添加");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "保存资产失败");
+    }
+  };
+
+  const handleAssetDelete = async (assetId: string) => {
+    if (!direction) return;
+    try {
+      const updated = await patchAssets(slug, [
+        { op: "delete", assetId },
+      ]);
+      setDirection(updated);
+      toast.success("资产已删除");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "删除资产失败");
+    }
+  };
+
+  const handleScanImport = async (imported: DirectionAsset[]) => {
+    if (!direction) return;
+    try {
+      const updated = await patchAssets(
+        slug,
+        imported.map((asset) => ({ op: "upsert", asset })),
+      );
+      setDirection(updated);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "导入资产失败");
+    }
+  };
+
+  // ====== Phase 2: 预承诺（Socratic Mentor）======
 
   const analysis = (direction?.analysis as DirectionAnalysis | null) || null;
   const analysisRecord = (direction?.analysis as Record<string, unknown> | null) || {};
@@ -125,6 +209,10 @@ export default function DirectionPageClient() {
   const handleRefreshDirection = async () => {
     await fetchDirection();
   };
+
+  // ====== Knowledge base literature count (来自 API) ======
+
+  const literatureCount = direction?.literatureCount ?? 0;
 
   if (isLoading) {
     return (
@@ -152,6 +240,16 @@ export default function DirectionPageClient() {
         }
       />
 
+      {/* 统计卡片 */}
+      <div className="mb-6">
+        <DirectionStatCards
+          assets={assets}
+          literatureCount={literatureCount}
+          analysis={analysis}
+        />
+      </div>
+
+      {/* Phase Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-6 h-10 w-full">
           {TABS.map((tab) => (
@@ -163,18 +261,72 @@ export default function DirectionPageClient() {
           ))}
         </TabsList>
 
-        <TabsContent value="literature" className="space-y-4">
+        {/* ====== Phase 0: 资产盘点 ====== */}
+        <TabsContent value="assets" className="space-y-4">
+          <DirectionAssetIntakePanel
+            assets={assets}
+            analysis={analysis}
+            literatureCorpus={literatureCorpus}
+            literatureCount={literatureCount}
+            pendingScanCount={pendingScanCount}
+            onScan={() => setScanOpen(true)}
+            onAddExperiment={() => handleAddAsset("experiment")}
+            onProceed={() => setActiveTab("contract")}
+          />
+
+          <DirectionLiteratureCorpusPanel
+            slug={slug}
+            literatureCorpus={literatureCorpus}
+            onUpdated={handleLiteratureCorpusUpdated}
+          />
+
           <div className={cn("rounded-xl border border-[#1a5632]/8 p-6", siteTheme.card)}>
-            <h3 className="mb-2 flex items-center gap-2 text-base font-semibold text-[#122820]">
-              <BookOpen className="h-4 w-4 text-[#1a5632]" /> 文献备料
-            </h3>
-            <p className="mb-4 text-xs text-[#6b7c72]">
-              确认方向相关文献 corpus 后，可桥接到写作项目。实验/论文/数据集结构化盘点已下线。
-            </p>
-            <DirectionLiteratureCorpusPanel
-              slug={slug}
-              literatureCorpus={literatureCorpus}
-              onUpdated={handleLiteratureCorpusUpdated}
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="flex items-center gap-2 text-base font-semibold text-[#122820]">
+                <PackageOpen className="h-4 w-4 text-[#1a5632]" /> 资产清单
+              </h3>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs"
+                onClick={() => setScanOpen(true)}
+              >
+                <Search className="h-3.5 w-3.5" />
+                从现有数据扫描
+                {pendingScanCount != null && pendingScanCount > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-4 px-1 text-[9px] border-[#6366f1]/20 bg-[#6366f1]/10 text-[#6366f1]">
+                    {pendingScanCount}
+                  </Badge>
+                )}
+              </Button>
+            </div>
+
+            {/* 资产录入/编辑表单 */}
+            {formKind !== null && (
+              <div className="mb-6 rounded-lg border border-[#1a5632]/12 bg-[#f6f5f1]/50 p-4">
+                <DirectionAssetForm
+                  slug={slug}
+                  existingAssets={assets.filter((a) => a.id !== editAsset?.id)}
+                  onSave={handleAssetSave}
+                  onCancel={() => {
+                    setFormKind(null);
+                    setEditAsset(null);
+                  }}
+                  editAsset={editAsset}
+                  initialKind={editAsset ? undefined : formKind}
+                />
+              </div>
+            )}
+
+            {/* 资产列表（三栏并排） */}
+            <DirectionAssetList
+              assets={assets}
+              onEdit={(asset) => {
+                setEditAsset(asset);
+                setFormKind(asset.kind as AssetKind);
+              }}
+              onDelete={handleAssetDelete}
+              onAdd={handleAddAsset}
             />
           </div>
           <div className="flex justify-end">
@@ -184,11 +336,12 @@ export default function DirectionPageClient() {
           </div>
         </TabsContent>
 
+        {/* ====== Phase 1: Socratic 预承诺 ====== */}
         <TabsContent value="contract" className="space-y-4">
           <DirectionPreCommitmentPanel
             assets={assets}
             analysis={analysis}
-            onJumpToAssets={() => setActiveTab("literature")}
+            onJumpToAssets={() => setActiveTab("assets")}
             onJumpToAnalysis={() => setActiveTab("analysis")}
           />
 
@@ -199,8 +352,8 @@ export default function DirectionPageClient() {
             />
           </div>
           <div className="flex items-center justify-between">
-            <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => setActiveTab("literature")}>
-              <ArrowRight className="h-3 w-3 rotate-180" /> 上一步：文献备料
+            <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => setActiveTab("assets")}>
+              <ArrowRight className="h-3 w-3 rotate-180" /> 上一步：资产盘点
             </Button>
             <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => setActiveTab("analysis")}>
               下一步：8 维度分析 <ArrowRight className="h-3 w-3" />
@@ -208,11 +361,12 @@ export default function DirectionPageClient() {
           </div>
         </TabsContent>
 
+        {/* ====== Phase 2: 8 维度分析 ====== */}
         <TabsContent value="analysis" className="space-y-4">
           <DirectionPhaseOverview
             phase={2}
             title="8 维度分析（Paper-Visible）"
-            description="按 Phase 1 确认的 Scoring Plan 评分：Writer 逐维 Rubric → Verifier 抽检 D3/D5 → 合成校验 → 写回 adjustedScores。"
+            description="按 Phase 1 确认的 Scoring Plan 对资产评分：Writer 逐维 Rubric → Verifier 抽检 D3/D5 → 合成校验 → 写回 adjustedScores。"
             badge="Rubric Scoring"
             checks={analysisReadiness.checks}
             ready={analysisReadiness.ready && !analysisStale}
@@ -244,6 +398,7 @@ export default function DirectionPageClient() {
           </div>
         </TabsContent>
 
+        {/* ====== Phase 3: 论文路线图 ====== */}
         <TabsContent value="roadmap" className="space-y-4">
           <DirectionPhaseOverview
             phase={3}
@@ -278,7 +433,7 @@ export default function DirectionPageClient() {
                 analysisGeneratedAt={analysis?.generatedAt ?? null}
                 crossDirectionCount={analysis?.crossDirectionOpportunities?.length ?? 0}
                 roadmap={roadmap}
-                onJumpToTab={(tab) => setActiveTab(tab === "assets" ? "literature" : tab)}
+                onJumpToTab={setActiveTab}
               />
             </div>
 
@@ -297,11 +452,12 @@ export default function DirectionPageClient() {
           </div>
         </TabsContent>
 
+        {/* ====== Phase 4: 项目申报 ====== */}
         <TabsContent value="grant" className="space-y-4">
           <DirectionPhaseOverview
             phase={4}
             title="申报材料"
-            description="将既有分析与路线图合成为基金申请书；研究现状章节接入知识库 RAG，生成结果持久化保存。"
+            description="将资产 + 8 维分析 + 路线图合成为基金申请书；研究现状章节接入知识库 RAG，生成结果持久化保存。"
             checks={grantReadiness.checks}
             ready={grantReadiness.ready}
           />
@@ -323,6 +479,15 @@ export default function DirectionPageClient() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* 扫描对话框 */}
+      <DirectionAssetScanDialog
+        open={scanOpen}
+        onOpenChange={setScanOpen}
+        slug={slug}
+        existingAssets={assets}
+        onImport={handleScanImport}
+      />
     </>
   );
 }

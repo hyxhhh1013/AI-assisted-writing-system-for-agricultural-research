@@ -93,7 +93,7 @@ export function LiteratureHandoffDialog({
 
         {entries.length === 0 ? (
           <p className="text-sm text-muted-foreground py-6 text-center">
-            方向尚未建立文献 corpus，请先在文献备料确认后再创建写作项目。
+            方向尚未建立文献 corpus，请先在资产盘点确认后再创建写作项目。
           </p>
         ) : (
           <>

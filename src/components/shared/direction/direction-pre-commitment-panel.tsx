@@ -85,9 +85,9 @@ export function DirectionPreCommitmentPanel({
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        {!readiness.ready && !readiness.hasConfirmedContract && onJumpToAssets && (
+        {!readiness.checks[0]?.passed && onJumpToAssets && (
           <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={onJumpToAssets}>
-            返回文献备料
+            返回资产盘点
           </Button>
         )}
         {readiness.ready && onJumpToAnalysis && (

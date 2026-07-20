@@ -346,6 +346,8 @@ export async function POST(
         const evaluationContract = currentAnalysis.evaluationContract as
           { dimensions?: Array<{ id: string; name: string; weight: number; rubrics: RubricItem[] }>; confirmedAt?: number } | undefined;
 
+        if (assets.length < 3) { emitError("资产数量不足（最少 3 项），无法触发分析"); return; }
+
         const contractConfirmed = !!evaluationContract?.confirmedAt;
         if (mode !== "quick" && !contractConfirmed) {
           emitError("请先完成 Phase 1 预承诺并确认评价标准");

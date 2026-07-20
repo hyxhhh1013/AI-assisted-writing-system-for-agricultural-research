@@ -48,11 +48,9 @@ describe("suggestParaphrasesFromAnswers", () => {
 });
 
 describe("computePreCommitmentReadiness", () => {
-  it("is not ready until evaluation contract is confirmed", () => {
+  it("blocks when assets not ready", () => {
     const r = computePreCommitmentReadiness([baseExp()]);
     expect(r.ready).toBe(false);
-    expect(r.hasConfirmedContract).toBe(false);
-    expect(r.checks.find((c) => c.id === "contract_confirmed")?.passed).toBe(false);
-    expect(r.checks.find((c) => c.id === "assets_ready")).toBeUndefined();
+    expect(r.checks.find((c) => c.id === "assets_ready")?.passed).toBe(false);
   });
 });

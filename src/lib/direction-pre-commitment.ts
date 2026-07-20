@@ -8,6 +8,7 @@
 import type { DirectionAsset, DirectionAnalysis } from "@/contracts/direction";
 import type { SocraticAnswer, SocraticQuestion } from "@/contracts/direction-socratic";
 import { SOCRATIC_QUESTIONS } from "@/contracts/direction-socratic";
+import { computeAssetInventoryHealth } from "@/lib/direction-asset-health";
 import { isAnalysisFingerprintStale } from "@/lib/direction-analysis-fingerprint";
 
 export interface AnalysisDimensionDef {
@@ -44,11 +45,12 @@ export interface PreCommitmentReadiness {
   contractStale: boolean;
 }
 
-/** 预承诺门禁：评价标准已确认（资产盘点已下线，不再作为前置） */
+/** 预承诺门禁：资产盘点完成 + 未确认或需刷新 */
 export function computePreCommitmentReadiness(
   assets: DirectionAsset[],
   analysis?: DirectionAnalysis | null,
 ): PreCommitmentReadiness {
+  const assetHealth = computeAssetInventoryHealth(assets, analysis);
   const contract = analysis?.evaluationContract;
   const hasConfirmedContract = !!contract?.confirmedAt;
   const contractStale =
@@ -57,11 +59,20 @@ export function computePreCommitmentReadiness(
 
   const checks: PreCommitmentCheck[] = [
     {
+      id: "assets_ready",
+      label: "资产盘点必达项已完成",
+      passed: assetHealth.readyForNextPhase,
+      severity: "high",
+      hint: assetHealth.readyForNextPhase
+        ? "可进入预承诺"
+        : assetHealth.checks.filter((c) => !c.passed && c.severity === "high").map((c) => c.label).join("、") || "请先完成资产盘点",
+    },
+    {
       id: "paper_blind",
       label: "制定标准时不读取资产内容（paper-blind）",
       passed: true,
       severity: "medium",
-      hint: "Rubrics 仅基于你的问答与复述生成；分析阶段才会读取既有方向快照",
+      hint: "Rubrics 仅基于你的问答与复述生成；分析阶段才会读取资产",
     },
     {
       id: "contract_confirmed",
@@ -70,14 +81,14 @@ export function computePreCommitmentReadiness(
       severity: "high",
       hint: hasConfirmedContract
         ? contractStale
-          ? "方向快照已变更，建议重新确认评价标准"
+          ? "资产已变更，建议重新确认评价标准"
           : "已确认，可启动 8 维度分析"
         : "完成 Socratic 问答 + 预承诺复述后确认",
     },
   ];
 
   return {
-    ready: hasConfirmedContract && !contractStale,
+    ready: assetHealth.readyForNextPhase && hasConfirmedContract && !contractStale,
     checks,
     assetCount: assets.length,
     hasConfirmedContract,

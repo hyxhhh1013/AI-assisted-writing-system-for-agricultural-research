@@ -731,6 +731,17 @@ export const directionUpdateSchema = z.object({
 });
 export type DirectionUpdateInput = z.infer<typeof directionUpdateSchema>;
 
+export const directionAssetsPatchSchema = z.object({
+  ops: z.array(
+    z.object({
+      op: z.enum(["upsert", "delete"]),
+      assetId: z.string().min(1).optional(),
+      asset: z.object({}).passthrough().optional(),
+    }),
+  ),
+});
+export type DirectionAssetsPatchInput = z.infer<typeof directionAssetsPatchSchema>;
+
 const directionLiteratureEntrySchema = z.object({
   id: z.string().min(1),
   source: z.enum(["knowledge_pdf", "external", "manual"]),

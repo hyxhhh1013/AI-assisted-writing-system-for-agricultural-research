@@ -38,10 +38,17 @@ export function computeAnalysisReadiness(
       passed: pre.hasConfirmedContract && !pre.contractStale,
       severity: "high",
       hint: pre.contractStale
-        ? "方向快照或标准已变更，请重新确认预承诺"
+        ? "资产或标准已变更，请重新确认预承诺"
         : pre.hasConfirmedContract
           ? "可按 Rubrics 启动 paper-visible 分析"
           : "请先完成 Phase 1 预承诺",
+    },
+    {
+      id: "assets",
+      label: "资产数量 ≥ 3（含实验）",
+      passed: assets.length >= 3 && assets.some((a) => a.kind === "experiment"),
+      severity: "high",
+      hint: "分析需要足够资产支撑 8 维度评分",
     },
     {
       id: "analysis_done",
@@ -52,15 +59,15 @@ export function computeAnalysisReadiness(
     },
     {
       id: "analysis_fresh",
-      label: "分析结果与当前快照同步",
+      label: "分析结果与当前资产同步",
       passed: !hasDimensions || !stale,
       severity: "medium",
-      hint: stale ? "方向快照或评价标准已变更，建议重新分析" : "分析基于当前快照",
+      hint: stale ? "资产或评价标准已变更，建议重新分析" : "分析基于当前快照",
     },
   ];
 
   return {
-    ready: pre.hasConfirmedContract && !pre.contractStale,
+    ready: pre.hasConfirmedContract && !pre.contractStale && assets.length >= 3,
     checks,
   };
 }
@@ -70,6 +77,7 @@ export function computeRoadmapReadiness(
   analysis?: DirectionAnalysis | null,
   roadmap?: DirectionRoadmap | null,
 ): PhaseReadiness {
+  const analysisReady = computeAnalysisReadiness(assets, analysis);
   const hasAnalysis = (analysis?.dimensions?.length ?? 0) >= 8;
   const hasCandidates = (analysis?.paperCandidates?.length ?? 0) > 0;
   const roadmapStale =
@@ -149,10 +157,17 @@ export function computeGrantReadiness(
       severity: "medium",
       hint: "预期成果章节将引用路线图排期",
     },
+    {
+      id: "assets",
+      label: "研究基础（资产）已录入",
+      passed: assets.length >= 3,
+      severity: "medium",
+      hint: "研究基础章节将汇总实验与论文资产",
+    },
   ];
 
   return {
-    ready: hasAnalysis,
+    ready: hasAnalysis && assets.length >= 3,
     checks,
   };
 }

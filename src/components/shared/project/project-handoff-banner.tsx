@@ -34,10 +34,10 @@ export function ProjectHandoffBanner({
         · 当前阶段 P{writingPhase} {phaseLabel}
       </p>
       <Link
-        href={`/directions/${source.directionSlug}?tab=literature`}
+        href={`/directions/${source.directionSlug}?tab=assets`}
         className="mt-1 inline-flex items-center gap-0.5 text-[#1a5632] hover:underline font-medium"
       >
-        回方向修改文献 corpus
+        回方向修改配置或文献 corpus
         <ArrowRight className="h-3 w-3" />
       </Link>
     </div>
