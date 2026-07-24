@@ -5,7 +5,13 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
-const QUICK_PROMPTS = [
+const FALLBACK_WRITE = [
+  "写引言并保存到当前项目",
+  "写方法部分并保存到当前项目",
+  "检索相关文献并总结研究缺口",
+] as const;
+
+const FALLBACK_READ = [
   "分析这个方向有什么可写的",
   "检索生物炭土壤改良相关文献",
   "检查当前项目引用的准确性",
@@ -14,6 +20,9 @@ const QUICK_PROMPTS = [
 interface AgentInputBarProps {
   disabled?: boolean;
   isRunning?: boolean;
+  writeEnabled?: boolean;
+  /** 按项目阶段动态生成的快捷语；缺省用内置兜底 */
+  prompts?: string[];
   onSend: (goal: string) => void;
   onCancel: () => void;
 }
@@ -21,10 +30,18 @@ interface AgentInputBarProps {
 export function AgentInputBar({
   disabled,
   isRunning,
+  writeEnabled,
+  prompts,
   onSend,
   onCancel,
 }: AgentInputBarProps) {
   const [value, setValue] = useState("");
+  const chips =
+    prompts && prompts.length > 0
+      ? prompts
+      : writeEnabled
+        ? [...FALLBACK_WRITE]
+        : [...FALLBACK_READ];
 
   const submit = () => {
     const trimmed = value.trim();
@@ -35,8 +52,8 @@ export function AgentInputBar({
 
   return (
     <div className="space-y-2 border-t border-border/60 bg-background p-3">
-      <div className="flex flex-wrap gap-1.5">
-        {QUICK_PROMPTS.map((prompt) => (
+      <div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto">
+        {chips.map((prompt) => (
           <Button
             key={prompt}
             type="button"
@@ -54,7 +71,11 @@ export function AgentInputBar({
         <Textarea
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder="描述你的目标，例如：检索 XX 主题文献并总结研究缺口"
+          placeholder={
+            writeEnabled
+              ? "例如：写引言并保存到当前项目；或先检索 XX 再写讨论"
+              : "描述目标，例如：检索 XX 主题文献并总结研究缺口"
+          }
           className="min-h-[72px] resize-none text-sm"
           disabled={disabled || isRunning}
           onKeyDown={(e) => {

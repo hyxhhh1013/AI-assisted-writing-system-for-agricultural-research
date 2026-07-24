@@ -121,6 +121,80 @@ export function collectUsedReferences(text: string, references: string[]): strin
   return order.map((idx) => references[idx - 1]).filter((ref): ref is string => Boolean(ref));
 }
 
+export interface CompactCitationsResult {
+  text: string;
+  references: string[];
+  /** 旧检索池序号 → 紧凑序号 */
+  indexMap: Record<number, number>;
+}
+
+/**
+ * 按正文首次出现顺序，仅保留被引用文献，并将 [n] 重排为连续 [1]…[K]。
+ * 解决「正文仍写 [11] 但参考文献表只剩 4 条」的错位。
+ */
+export function compactCitationsToUsedReferences(
+  text: string,
+  referencesByIndex: string[],
+): CompactCitationsResult | null {
+  // 按原下标对齐（允许稀疏空洞）
+  const pool = referencesByIndex.map((r) => r || "");
+  const refCount = pool.length;
+  if (refCount === 0 || !text.trim()) return null;
+
+  const appearance = collectCitationFirstAppearance(text, refCount);
+  if (appearance.length === 0) return null;
+
+  const built = buildReorderedReferences(appearance, pool, { includeUncited: false });
+  if (!built || built.references.length === 0) return null;
+
+  const remapped = remapBracketCitations(normalizeAllCitationFormats(text), built.indexMap);
+  return {
+    text: remapped,
+    references: built.references.filter(Boolean),
+    indexMap: built.indexMap,
+  };
+}
+
+/**
+ * 将本节紧凑参考文献合并进项目全局表，并重写本节 [n] 为全局编号。
+ */
+export function mergeSectionReferencesIntoProject(params: {
+  sectionText: string;
+  sectionReferences: string[];
+  projectReferences: string[];
+}): { text: string; references: string[] } {
+  const { sectionText, sectionReferences } = params;
+  if (!sectionReferences.length) {
+    return { text: sectionText, references: [...params.projectReferences] };
+  }
+
+  const projectRefs = [...params.projectReferences];
+  const indexMap: Record<number, number> = {};
+
+  const findProjectIndex = (source: string): number => {
+    const exact = projectRefs.indexOf(source);
+    if (exact >= 0) return exact;
+    const cleaned = source.replace(/\.pdf$/i, "").trim();
+    return projectRefs.findIndex(
+      (r) => r === cleaned || r.replace(/\.pdf$/i, "").trim() === cleaned,
+    );
+  };
+
+  for (let i = 0; i < sectionReferences.length; i++) {
+    const src = sectionReferences[i];
+    if (!src) continue;
+    let projIdx = findProjectIndex(src);
+    if (projIdx < 0) {
+      projectRefs.push(src);
+      projIdx = projectRefs.length - 1;
+    }
+    indexMap[i + 1] = projIdx + 1;
+  }
+
+  const text = remapBracketCitations(normalizeAllCitationFormats(sectionText), indexMap);
+  return { text, references: projectRefs };
+}
+
 export function referencesFromRefMapping(refMapping: Record<string, number> | null | undefined): string[] {
   if (!refMapping || Object.keys(refMapping).length === 0) return [];
   const max = Math.max(...Object.values(refMapping));
@@ -254,8 +328,21 @@ export function remapPrunedCitations(text: string, indexMap: Record<number, numb
  */
 export function stripOutOfRangeCitations(text: string, refCount: number): string {
   if (!text || refCount <= 0) return text;
+  const allowed = new Set<number>();
+  for (let i = 1; i <= refCount; i++) allowed.add(i);
+  return stripDisallowedCitations(text, allowed);
+}
 
-  // 归一化非标准引用格式 + 全角方括号标准化
+/**
+ * 仅保留 allowed 集合中的引用号（用于：只允许有 RAG 全文的 grounded 编号）。
+ * allowed 为空 → 去掉全部 [n]（摘要/无文献场景）。
+ */
+export function stripDisallowedCitations(
+  text: string,
+  allowedIndices: ReadonlySet<number>,
+): string {
+  if (!text) return text;
+
   let t = normalizeCitationFormat(text);
   t = t.replace(/［([0-9,\s\-–—，、]+)］/g, (_m: string, inner: string) => `[${inner}]`);
 
@@ -268,11 +355,11 @@ export function stripOutOfRangeCitations(text: string, refCount: number): string
       if (range) {
         const a = parseInt(range[1], 10);
         const b = parseInt(range[2], 10);
-        if (a >= 1 && a <= refCount && b >= 1 && b <= refCount) validParts.push(part);
+        if (allowedIndices.has(a) && allowedIndices.has(b)) validParts.push(part);
         continue;
       }
       const n = parseInt(part, 10);
-      if (!isNaN(n) && n >= 1 && n <= refCount) validParts.push(part);
+      if (!isNaN(n) && allowedIndices.has(n)) validParts.push(part);
     }
 
     if (validParts.length === 0) return "";
@@ -280,4 +367,23 @@ export function stripOutOfRangeCitations(text: string, refCount: number): string
   });
 
   return t;
+}
+
+/**
+ * 解析允许深度引用的编号集合。
+ * - `undefined`：未启用 grounded 白名单 → 回退 1..refCount（兼容旧调用）
+ * - `[]`：明确无全文片段 → 不允许任何 [n]
+ * - 非空：仅允许列表中的编号（新检索来源编号以 grounded 为准，可不钳制到 refCount）
+ */
+export function resolveAllowedCitationIndices(
+  refCount: number,
+  groundedRefIndices?: number[],
+): Set<number> {
+  if (groundedRefIndices !== undefined) {
+    if (groundedRefIndices.length === 0) return new Set();
+    return new Set(groundedRefIndices.filter((n) => Number.isInteger(n) && n >= 1));
+  }
+  const allowed = new Set<number>();
+  for (let i = 1; i <= refCount; i++) allowed.add(i);
+  return allowed;
 }

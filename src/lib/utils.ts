@@ -128,6 +128,15 @@ export function mapToSectionForMode(
   if (mode === "research") return mapToIMRADSection(titleOrPath);
 
   const lower = titleOrPath.toLowerCase();
+  const firstSeg = (titleOrPath.split(">")[0] || titleOrPath).trim();
+
+  // 0. 误生成的 IMRaD 试验章名 → 按综述结构纠偏（勿落到 introduction）
+  if (/材料与方法|materials\s*and\s*methods|试验设计|实验部分/i.test(firstSeg)) {
+    return "background";
+  }
+  if (/结果与分析|结果与讨论|results?\s*(and|&)?\s*discussion/i.test(firstSeg)) {
+    return "literature_body";
+  }
 
   // 1. 综述关键字匹配
   for (const group of REVIEW_KEYWORDS) {
@@ -136,7 +145,7 @@ export function mapToSectionForMode(
     }
   }
 
-  // 2. IMRaD 弱匹配（仅 introduction/conclusion）
+  // 2. IMRaD 弱匹配（仅 introduction/conclusion；勿用 /背景/ 误伤「研究现状」）
   for (const key of ["introduction", "conclusion"] as const) {
     const group = IMRAD_KEYWORDS.find((g) => g.key === key);
     if (!group) continue;
@@ -145,10 +154,11 @@ export function mapToSectionForMode(
     }
   }
 
-  // 3. 路径编号推断（综述 5 段式：abstract=0, intro=1, background=2, body=3, conclusion=4）
+  // 3. 路径编号推断（综述：摘要可无号；1 引言，2 现状，3 进展，4+ 结论）
   const major = extractMajorNumber(titleOrPath);
   if (major != null) {
-    if (major === 0 || major === 1) return "introduction";
+    if (major === 0) return "abstract";
+    if (major === 1) return "introduction";
     if (major === 2) return "background";
     if (major === 3) return "literature_body";
     if (major >= 4) return "conclusion";

@@ -13,7 +13,7 @@
 | 框架 | Next.js 16 App Router | 同构架构——页面渲染和 API 共享一套代码，单人开发不用拆前后端 |
 | 语言 | TypeScript 5 | 类型安全，尤其在 AI 输出不确定性的场景下 |
 | 样式 | Tailwind CSS v4 + Shadcn UI | 开箱即用，不需要自己维护设计系统 |
-| 数据库 | Prisma + PostgreSQL | Docker Compose 提供本地 `db` 服务，部署环境与开发环境保持一致 |
+| 数据库 | Prisma + PostgreSQL | 本地开发连本机 PostgreSQL（默认 `localhost:5433`） |
 | 认证 | JWT (jose + bcryptjs) | 轻量，HTTP-only cookie 防 XSS |
 | AI 调用 | 自研 fetch 封装 | 绕过 LangChain 抽象层，直接调 API，可控性更高 |
 | RAG | 自研 BM25 + 向量混合检索 + RRF 融合 | 专为中文+英文学术文献检索引擎调优 |

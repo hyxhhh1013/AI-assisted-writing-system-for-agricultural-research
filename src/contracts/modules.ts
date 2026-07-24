@@ -28,7 +28,8 @@ export type ModuleIconKey =
   | "radar"
   | "book-open"
   | "play"
-  | "flask";
+  | "flask"
+  | "graduation-cap";
 
 export type HomeModuleCategory = "core" | "tools" | "help";
 

@@ -49,10 +49,33 @@ export interface PaperDraftProgressSnapshot {
 export interface PaperAbstractSnapshot {
   chars: number;
   updatedAt: number;
+  /** Phase 5b 双语摘要（可选） */
+  zh?: string;
+  en?: string;
 }
 
 export interface PaperReviewSnapshot {
   doneCount: number;
+  updatedAt: number;
+  lastScore?: number;
+  lastGrade?: string;
+  lastCheckId?: string;
+  maxRounds?: number;
+}
+
+export interface PaperArgumentSnapshot {
+  chainCount: number;
+  rebuttalCount: number;
+  updatedAt: number;
+}
+
+/** Phase 5 引用硬检快照（W3-CITE-GATE） */
+export interface PaperCitationSnapshot {
+  passed: boolean;
+  exportReady: boolean;
+  refCount: number;
+  citationCount: number;
+  outOfBounds: number[];
   updatedAt: number;
 }
 
@@ -64,8 +87,12 @@ export interface PaperPassport {
   source?: PaperPassportSource;
   literature?: PaperLiteratureSnapshot;
   draftProgress?: PaperDraftProgressSnapshot;
+  /** Phase 3 论证蓝图快照 */
+  argument?: PaperArgumentSnapshot;
   abstractSnapshot?: PaperAbstractSnapshot;
   reviewRound?: PaperReviewSnapshot;
+  /** Phase 5 引用硬检 */
+  citationGate?: PaperCitationSnapshot;
   updatedAt: number;
 }
 
@@ -123,12 +150,38 @@ function isDraftProgressSnapshot(value: unknown): value is PaperDraftProgressSna
 
 function isAbstractSnapshot(value: unknown): value is PaperAbstractSnapshot {
   if (!isRecord(value)) return false;
-  return typeof value.chars === "number" && typeof value.updatedAt === "number";
+  if (typeof value.chars !== "number" || typeof value.updatedAt !== "number") return false;
+  if (value.zh !== undefined && typeof value.zh !== "string") return false;
+  if (value.en !== undefined && typeof value.en !== "string") return false;
+  return true;
 }
 
 function isReviewSnapshot(value: unknown): value is PaperReviewSnapshot {
   if (!isRecord(value)) return false;
-  return typeof value.doneCount === "number" && typeof value.updatedAt === "number";
+  if (typeof value.doneCount !== "number" || typeof value.updatedAt !== "number") return false;
+  if (value.lastScore !== undefined && typeof value.lastScore !== "number") return false;
+  if (value.lastGrade !== undefined && typeof value.lastGrade !== "string") return false;
+  if (value.lastCheckId !== undefined && typeof value.lastCheckId !== "string") return false;
+  if (value.maxRounds !== undefined && typeof value.maxRounds !== "number") return false;
+  return true;
+}
+
+function isArgumentSnapshot(value: unknown): value is PaperArgumentSnapshot {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.chainCount === "number"
+    && typeof value.rebuttalCount === "number"
+    && typeof value.updatedAt === "number"
+  );
+}
+
+function isCitationSnapshot(value: unknown): value is PaperCitationSnapshot {
+  if (!isRecord(value)) return false;
+  if (typeof value.passed !== "boolean" || typeof value.exportReady !== "boolean") return false;
+  if (typeof value.refCount !== "number" || typeof value.citationCount !== "number") return false;
+  if (typeof value.updatedAt !== "number") return false;
+  if (!Array.isArray(value.outOfBounds)) return false;
+  return value.outOfBounds.every((n) => typeof n === "number");
 }
 
 export function isPaperPassport(value: unknown): value is PaperPassport {
@@ -146,8 +199,10 @@ export function isPaperPassport(value: unknown): value is PaperPassport {
   if (value.source !== undefined && !isPaperPassportSource(value.source)) return false;
   if (value.literature !== undefined && !isLiteratureSnapshot(value.literature)) return false;
   if (value.draftProgress !== undefined && !isDraftProgressSnapshot(value.draftProgress)) return false;
+  if (value.argument !== undefined && !isArgumentSnapshot(value.argument)) return false;
   if (value.abstractSnapshot !== undefined && !isAbstractSnapshot(value.abstractSnapshot)) return false;
   if (value.reviewRound !== undefined && !isReviewSnapshot(value.reviewRound)) return false;
+  if (value.citationGate !== undefined && !isCitationSnapshot(value.citationGate)) return false;
   return true;
 }
 

@@ -78,14 +78,19 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 - **两阶段检索**：先 BM25 召回候选（`limit×20`，下限 200），向量只在候选集上算余弦；向量按需取，不再把全库向量灌入 JS 内存。BM25 完全无命中时回退全库向量扫描。
 - **`.emb` 按需 pread**：`EmbeddingStore` 不再把整个 `.emb` 读进内存，只保留文件句柄 + 维度；`get()` 用 `fs.readSync` 按偏移读单条向量（配合两阶段，每次仅读候选那几千条）。内存不再随库大小线性膨胀。
 - **倒排索引协作式构建**：`buildInvertedIndexAsync` 分批 `setImmediate` 让出事件循环，避免大库构建时冻结整个服务；全库索引由各分类索引按 offset **合并**得到（`mergeInvertedIndexInto`），不重复分词。
-- **范围检索**：`search({ categories })` 只加载相关分类（子集缓存 `subsetCache`）。扩写经 `writing-context.ts` 从已选参考文献反推分类，解析不到则回退全库。
+- **范围检索**：`search({ categories })` 只加载相关分类（子集缓存 `subsetCache`）。扩写经 `writing-context.ts` 用**已有参考文献 ∪ 用户勾选**反推分类；若仍为空则按题名/方向关键词提示分类（如「绿茶香气」→ 茶学）；范围内 0 命中则自动扩到全库。
+- **主题过滤**：检索后按题名/方向主题词过滤跑题片段（`filterChunksByTopicRelevance`）；已有参考文献 pin 保留；过严时 soft top-K 兜底。
 - **并发去重**：`categoryLoadInFlight` / `allLoadInFlight` 避免 warmup 与检索并发触发重复构建。
 - **Query Embedding LRU**：`getEmbedding` 缓存 `(model,query)→向量`（上限 256），省重复 query 的网络往返。
-- **启动预热**：`instrumentation.ts` 后台调 `localRAG.warmup()` 预加载全库 chunks + 倒排索引，把冷启动开销移出用户首次检索。
+- **启动预热**：`instrumentation.ts` 后台调 `localRAG.warmup()`。默认 **light**（只加载书目元数据 + 分类列表）；`full` 才预加载全库。
+- **全库流式检索**：无分类范围时，逐分类打分再 RRF 融合；默认检索完卸载分类（`RAG_STREAM_CATEGORIES=1`），峰值约等于最大单分类而非全库之和。
+- **分类 LRU**：`RAG_CATEGORY_CACHE_MAX`（默认 2）限制常驻分类数；检索中 pin 的分类不会被淘汰。
 
 | 环境变量 | 作用 |
 |----------|------|
-| `RAG_WARMUP=0` | 关闭启动预热（内存极紧张时回退按需加载） |
+| `RAG_WARMUP` | `light`（默认）/ `full` / `0`（关闭预热） |
+| `RAG_STREAM_CATEGORIES` | `1`（默认）全库逐分类加载并释放；`0` 关闭 |
+| `RAG_CATEGORY_CACHE_MAX` | 常驻分类上限，默认 `2`；`0`=不限制 |
 | `RAG_PERF_LOG=1` | 每次 `search()` 打一行分段计时（load/bm25/embed/vec/rank/total），生产可见 |
 
 > 排查检索慢：开 `RAG_PERF_LOG=1` 看哪段大——`load` 大=冷启动（确认预热生效/进程是否反复重启）、`embed` 大=embedding API、`vec` 大=候选集过大或回退了全库扫描。

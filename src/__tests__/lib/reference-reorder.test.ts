@@ -3,6 +3,8 @@ import {
   buildReorderedReferences,
   buildPreviewReferencesFromContent,
   collectCitationFirstAppearance,
+  compactCitationsToUsedReferences,
+  mergeSectionReferencesIntoProject,
   referencesFromRefMapping,
   remapBracketCitations,
 } from "@/lib/reference-reorder";
@@ -55,5 +57,25 @@ describe("reference-reorder", () => {
 
   it("referencesFromRefMapping rebuilds dense index pool", () => {
     expect(referencesFromRefMapping({ "x.pdf": 1, "y.pdf": 3 })).toEqual(["x.pdf", "", "y.pdf"]);
+  });
+
+  it("compactCitationsToUsedReferences remaps body to 1..K", () => {
+    const pool = ["a.pdf", "b.pdf", "c.pdf", "d.pdf", "e.pdf"];
+    const out = compactCitationsToUsedReferences("见[4]与\\[2\\]及[4]。", pool);
+    expect(out?.references).toEqual(["d.pdf", "b.pdf"]);
+    expect(out?.text).toContain("[1]");
+    expect(out?.text).toContain("[2]");
+    expect(out?.text).not.toMatch(/\[4\]/);
+  });
+
+  it("mergeSectionReferencesIntoProject appends and remaps globally", () => {
+    const merged = mergeSectionReferencesIntoProject({
+      sectionText: "据[1]与[2]报道。",
+      sectionReferences: ["new.pdf", "old.pdf"],
+      projectReferences: ["old.pdf"],
+    });
+    expect(merged.references).toEqual(["old.pdf", "new.pdf"]);
+    // section [1]=new → project [2]; section [2]=old → project [1]
+    expect(merged.text).toBe("据[2]与[1]报道。");
   });
 });

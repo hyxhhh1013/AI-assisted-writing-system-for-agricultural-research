@@ -30,6 +30,8 @@ export interface RetrievePreviewRequest {
   bullets?: string[];
   language?: "zh" | "en";
   existingReferences?: string[];
+  /** 用户勾选的来源；参与分类 scope（与已有参考文献取并集） */
+  selectedSourceIds?: string[];
   researchDirection?: string;
   retrievalMode?: "precise" | "balanced" | "extensive";
   projectMode?: "review" | "research";

@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { CheckCircle2, ChevronRight, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { OutlineTask } from "@/lib/utils";
-import { getSectionKeysForMode, getSectionLabelForMode } from "@/lib/section-registry";
+import { getWritingSectionKeysForMode, getSectionLabelForMode } from "@/lib/section-registry";
 import type { ProjectWritingMode } from "@/contracts/writing-mode";
 
 interface WritingOutlineTaskListProps {
@@ -26,7 +26,7 @@ export function WritingOutlineTaskList({
   onSelectTask,
   onRefreshOutline,
 }: WritingOutlineTaskListProps) {
-  const sectionOrder = getSectionKeysForMode(projectMode);
+  const sectionOrder = getWritingSectionKeysForMode(projectMode);
 
   let listBody: ReactNode;
   if (outlineTasks.length > 0) {

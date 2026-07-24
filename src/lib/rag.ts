@@ -186,6 +186,45 @@ const DEFAULT_MAX_PER_SOURCE = 4;
 const EMB_QUERY_CACHE_MAX = 256;
 const SUBSET_CACHE_MAX = 16;
 
+/** 预热模式：light=仅元数据（默认）；full=全库灌入；0/off=关闭 */
+function ragWarmupMode(): "light" | "full" | "off" {
+  const raw = (process.env.RAG_WARMUP ?? "light").trim().toLowerCase();
+  if (raw === "0" || raw === "off" || raw === "false" || raw === "no") return "off";
+  if (raw === "full" || raw === "1" || raw === "true" || raw === "yes") return "full";
+  return "light";
+}
+
+/** 全库检索时是否逐分类加载并释放（省内存；默认开） */
+function ragStreamCategories(): boolean {
+  return process.env.RAG_STREAM_CATEGORIES !== "0";
+}
+
+/** 常驻分类缓存上限；0=不限制。流式全库检索时建议 1～3 */
+function ragCategoryCacheMax(): number {
+  const n = Number(process.env.RAG_CATEGORY_CACHE_MAX ?? "2");
+  if (!Number.isFinite(n) || n < 0) return 2;
+  return Math.floor(n);
+}
+
+/** 多路检索结果 RRF 融合（按 chunk id 去重） */
+function rrfMergeChunkLists(lists: RagChunk[][], k = 60): RagChunk[] {
+  const scores = new Map<string, { chunk: RagChunk; score: number }>();
+  for (const list of lists) {
+    list.forEach((chunk, rank) => {
+      const id =
+        chunk.metadata.id ||
+        `${chunk.metadata.source}:${chunk.metadata.chunkIndex ?? 0}:${chunk.metadata.pageStart ?? 0}`;
+      const add = 1 / (k + rank + 1);
+      const prev = scores.get(id);
+      if (prev) prev.score += add;
+      else scores.set(id, { chunk, score: add });
+    });
+  }
+  return Array.from(scores.values())
+    .sort((a, b) => b.score - a.score)
+    .map((x) => x.chunk);
+}
+
 function getEmbeddingsUrl(): string {
   const full = process.env.RAG_EMBEDDINGS_URL?.trim();
   if (full) return full;
@@ -391,6 +430,10 @@ export class LocalRAG {
     string,
     { chunks: RagChunk[]; index: InvertedIndex; embRef: { category: string; localIndex: number }[] }
   >();
+  /** 分类访问序（末尾=最近使用），配合 RAG_CATEGORY_CACHE_MAX 做 LRU 淘汰 */
+  private categoryAccessOrder: string[] = [];
+  /** 当前检索正在使用的分类，淘汰时跳过 */
+  private categoryPin = new Set<string>();
   private indexPath = path.join(process.cwd(), "data/index.json");
   private embStore = new EmbeddingStore();
 
@@ -404,26 +447,80 @@ export class LocalRAG {
   }
 
   /**
-   * 预热：后台预加载全库 chunks + 倒排索引 + .emb，
-   * 把冷启动开销从「用户第一次检索」移到「服务启动后」。
-   * 幂等——ensureAllLoaded 命中缓存后直接返回。
+   * 预热（RAG_WARMUP）：
+   * - light（默认）：只加载书目元数据 + 分类列表，不灌全库 chunks
+   * - full：预加载全库（内存峰值高，适合大内存机）
+   * - off / 0：跳过
    */
-  async warmup(): Promise<{ chunks: number; ms: number }> {
+  async warmup(): Promise<{ chunks: number; ms: number; mode: string }> {
     const t0 = Date.now();
+    const mode = ragWarmupMode();
+    if (mode === "off") return { chunks: 0, ms: Date.now() - t0, mode };
     await ensureBibMapLoaded();
+    if (mode === "light") {
+      const cats = await this.getCategories();
+      return { chunks: 0, ms: Date.now() - t0, mode: `${mode}:${cats.length}cats` };
+    }
     const { chunks } = await this.ensureAllLoaded();
-    return { chunks: chunks.length, ms: Date.now() - t0 };
+    return { chunks: chunks.length, ms: Date.now() - t0, mode };
+  }
+
+  private touchCategory(category: string): void {
+    const i = this.categoryAccessOrder.indexOf(category);
+    if (i >= 0) this.categoryAccessOrder.splice(i, 1);
+    this.categoryAccessOrder.push(category);
+  }
+
+  /** 卸载单个分类的文本/倒排/.emb 句柄，并失效依赖它的全库/子集缓存 */
+  private unloadCategory(category: string): void {
+    this.categoryChunks.delete(category);
+    this.categoryIndexes.delete(category);
+    this.embCategoryMap.delete(category);
+    this.embStore.unload(category);
+    const i = this.categoryAccessOrder.indexOf(category);
+    if (i >= 0) this.categoryAccessOrder.splice(i, 1);
+    this.allChunksCache = null;
+    this.allIndexCache = null;
+    this.allEmbRefCache = null;
+    for (const key of Array.from(this.subsetCache.keys())) {
+      if (key.split("\u0000").includes(category)) this.subsetCache.delete(key);
+    }
+  }
+
+  private evictCategoriesIfNeeded(): void {
+    const max = ragCategoryCacheMax();
+    if (max === 0) return;
+    while (this.categoryChunks.size > max) {
+      let victim: string | null = null;
+      for (const cat of this.categoryAccessOrder) {
+        if (this.categoryPin.has(cat)) continue;
+        if (!this.categoryChunks.has(cat)) continue;
+        victim = cat;
+        break;
+      }
+      if (!victim) break; // 均在 pin 中，允许暂时超限
+      this.unloadCategory(victim);
+    }
   }
 
   /** 异步加载单个分类的索引（仅文本 + 倒排索引，不含 embedding），并发去重 */
   private async ensureCategoryLoaded(category: string): Promise<void> {
-    if (this.categoryChunks.has(category)) return;
+    if (this.categoryChunks.has(category)) {
+      this.touchCategory(category);
+      return;
+    }
     const existing = this.categoryLoadInFlight.get(category);
-    if (existing) return existing;
+    if (existing) {
+      await existing;
+      this.touchCategory(category);
+      return;
+    }
     const p = this.loadCategory(category);
     this.categoryLoadInFlight.set(category, p);
     try {
       await p;
+      this.touchCategory(category);
+      this.evictCategoriesIfNeeded();
     } finally {
       this.categoryLoadInFlight.delete(category);
     }
@@ -542,15 +639,21 @@ export class LocalRAG {
     const chunks: RagChunk[] = [];
     const embRef: { category: string; localIndex: number }[] = [];
     const index: InvertedIndex = new Map();
-    for (const cat of uniqueSorted) {
-      await this.ensureCategoryLoaded(cat);
-      const c = this.categoryChunks.get(cat);
-      if (!c || c.length === 0) continue;
-      await this.ensureEmbeddingsLoaded(cat);
-      const catIdx = this.categoryIndexes.get(cat);
-      if (catIdx) await mergeInvertedIndexInto(index, catIdx, chunks.length);
-      for (let j = 0; j < c.length; j++) embRef.push({ category: cat, localIndex: j });
-      chunks.push(...c);
+    for (const cat of uniqueSorted) this.categoryPin.add(cat);
+    try {
+      for (const cat of uniqueSorted) {
+        await this.ensureCategoryLoaded(cat);
+        const c = this.categoryChunks.get(cat);
+        if (!c || c.length === 0) continue;
+        await this.ensureEmbeddingsLoaded(cat);
+        const catIdx = this.categoryIndexes.get(cat);
+        if (catIdx) await mergeInvertedIndexInto(index, catIdx, chunks.length);
+        for (let j = 0; j < c.length; j++) embRef.push({ category: cat, localIndex: j });
+        chunks.push(...c);
+      }
+    } finally {
+      for (const cat of uniqueSorted) this.categoryPin.delete(cat);
+      this.evictCategoriesIfNeeded();
     }
 
     const result = { chunks, index, embRef };
@@ -678,21 +781,21 @@ export class LocalRAG {
       idx = sub.index;
       poolEmbRef = sub.embRef;
     } else if (category && category !== "全部") {
-      await this.ensureCategoryLoaded(category);
-      pool = this.categoryChunks.get(category) || [];
-      idx = this.categoryIndexes.get(category);
-      // 延迟加载 embedding 以备向量检索（仅首次触发 I/O，按需切片不灌入内存）
-      await this.ensureEmbeddingsLoaded(category);
+      this.categoryPin.add(category);
+      try {
+        await this.ensureCategoryLoaded(category);
+        pool = this.categoryChunks.get(category) || [];
+        idx = this.categoryIndexes.get(category);
+        // 延迟加载 embedding 以备向量检索（仅首次触发 I/O，按需切片不灌入内存）
+        await this.ensureEmbeddingsLoaded(category);
+      } finally {
+        this.categoryPin.delete(category);
+        this.evictCategoriesIfNeeded();
+      }
       singleCat = category;
     } else {
-      const { chunks, index } = await this.ensureAllLoaded();
-      pool = chunks;
-      idx = index;
-      poolEmbRef = this.allEmbRefCache;
-      if (pool.length === 0) {
-        await this.ensureLoaded();
-        pool = this.chunks || [];
-      }
+      // 全库：逐分类打分再 RRF，避免 ensureAllLoaded 常驻双倍倒排索引
+      return this.searchAllCategories(q, { limit, maxPerSource, perf, tStart });
     }
     if (perf) tAfterLoad = Date.now();
 
@@ -770,6 +873,115 @@ export class LocalRAG {
     return catDiversified.slice(0, limit);
   }
 
+  /**
+   * 全库检索：逐分类加载 → 打分 →（可选）卸载，再跨分类 RRF。
+   * 峰值内存约等于「最大单分类」，而非「全部分类之和」。
+   */
+  private async searchAllCategories(
+    q: string,
+    opts: { limit: number; maxPerSource: number; perf: boolean; tStart: number },
+  ): Promise<RagChunk[]> {
+    const { limit, maxPerSource, perf, tStart } = opts;
+    const cats = await this.getCategories();
+    if (cats.length === 0) {
+      await this.ensureLoaded();
+      const pool = this.chunks || [];
+      if (pool.length === 0) return [];
+      const terms = extractQueryTerms(q);
+      const bm25 = new Array(pool.length).fill(0);
+      // 无分类索引时退回朴素：仅 embedding 全扫意义不大，用内容子串近似
+      for (let i = 0; i < pool.length; i++) {
+        const text = pool[i].content.toLowerCase();
+        bm25[i] = terms.reduce((s, t) => s + (text.includes(t) ? 1 : 0), 0);
+      }
+      const order = argsortDescending(bm25).filter((i) => bm25[i] > 0);
+      if (order.length === 0) return [];
+      return diversifyBySource(order, pool, limit, maxPerSource).slice(0, limit);
+    }
+
+    const terms = extractQueryTerms(q);
+    const queryVector = await this.getEmbedding(q);
+    const hasVec = queryVector.length > 0;
+    const perCatTop: RagChunk[][] = [];
+    const stream = ragStreamCategories();
+    let totalPool = 0;
+    let totalVecScan = 0;
+
+    for (const cat of cats) {
+      this.categoryPin.add(cat);
+      try {
+        await this.ensureCategoryLoaded(cat);
+        const pool = this.categoryChunks.get(cat) || [];
+        const idx = this.categoryIndexes.get(cat);
+        if (pool.length === 0) continue;
+        totalPool += pool.length;
+        await this.ensureEmbeddingsLoaded(cat);
+
+        const bm25 = idx ? bm25FromIndex(idx, pool, terms) : new Array(pool.length).fill(0);
+        const vecScores = new Array(pool.length).fill(0);
+        let hasUsefulVec = false;
+        if (hasVec) {
+          const candidateCount = Math.max(limit * 20, 200);
+          const candidates: number[] = [];
+          for (const i of argsortDescending(bm25)) {
+            if (bm25[i] <= 0) break;
+            candidates.push(i);
+            if (candidates.length >= candidateCount) break;
+          }
+          const targets = candidates.length > 0 ? candidates : pool.map((_, i) => i);
+          totalVecScan += targets.length;
+          for (const i of targets) {
+            const emb = this.getPoolEmbedding(i, cat, null);
+            if (emb && emb.length === queryVector.length) {
+              const s = cosineSimilarity(queryVector, emb);
+              vecScores[i] = s;
+              if (s > 0.01) hasUsefulVec = true;
+            }
+          }
+        }
+
+        let fused: number[];
+        if (hasUsefulVec && terms.length > 0) {
+          fused = rrfFromRanks([ranksFromScores(bm25, true), ranksFromScores(vecScores, true)]);
+        } else if (hasUsefulVec) {
+          fused = rrfFromRanks([ranksFromScores(vecScores, true)]);
+        } else {
+          fused = bm25.map((s) => s);
+        }
+        const order = argsortDescending(fused).filter((i) => fused[i] > 0);
+        if (order.length === 0) continue;
+        const topN = Math.max(limit * 3, 30);
+        const diversified = diversifyBySource(order, pool, topN, maxPerSource);
+        perCatTop.push(diversified);
+      } finally {
+        this.categoryPin.delete(cat);
+        if (stream) this.unloadCategory(cat);
+        else this.evictCategoriesIfNeeded();
+      }
+    }
+
+    if (perf) {
+      log.warn("rag.search timing", {
+        category: "全部/stream",
+        poolSize: totalPool,
+        terms: terms.length,
+        vecScan: totalVecScan,
+        hasVec,
+        cats: cats.length,
+        ms: { total: Date.now() - tStart },
+      });
+    }
+
+    if (perCatTop.length === 0) return [];
+    const merged = rrfMergeChunkLists(perCatTop);
+    // 跨分类再按来源/分类多样性截断
+    const asPool = merged;
+    const order = asPool.map((_, i) => i);
+    const diversified = diversifyBySource(order, asPool, limit * 2, maxPerSource);
+    const catDiversified = diversifyByCategory(diversified, asPool);
+    return catDiversified.slice(0, limit);
+  }
+
   /** 按页码/chunkIndex 拼接全文（异步） */
   async getFullText(fileName: string): Promise<string> {
     const baseName = path.basename(fileName.replace(/\\/g, "/"));
@@ -794,6 +1006,8 @@ export class LocalRAG {
           });
           return sorted.map((c) => c.content).join("\n\n");
         }
+        // 未命中则释放，避免 getFullText 扫库时堆满全部分类
+        if (ragStreamCategories() && !this.categoryPin.has(cat)) this.unloadCategory(cat);
       }
       return "";
     }
@@ -815,6 +1029,8 @@ export class LocalRAG {
     this.chunks = null;
     this.categoryChunks.clear();
     this.categoryIndexes.clear();
+    this.categoryAccessOrder = [];
+    this.categoryPin.clear();
     this.allChunksCache = null;
     this.allIndexCache = null;
     this.allEmbRefCache = null;

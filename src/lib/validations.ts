@@ -37,6 +37,8 @@ export const writingSchema = z
     globalContext: z.unknown().optional(),
     mode: z.enum(["full", "fast", "audit_only", "fix_only", "expand_bullet"]).optional().default("full"),
     verificationFeedback: z.string().optional(),
+    /** ENG-PR-082：fix_only 时仅修正勾选的 issue id */
+    selectedIssueIds: z.array(z.string()).optional(),
     retrievalMode: z.enum(["balanced", "precise", "extensive"]).optional().default("balanced"),
     researchDirection: z.string().optional(),
     subsectionTitle: z.string().optional(),
@@ -267,6 +269,65 @@ export const blueprintSchema = z.object({
 });
 export type BlueprintInput = z.infer<typeof blueprintSchema>;
 
+/** Phase 3 论证蓝图生成 */
+export const argumentBlueprintSchema = z.object({
+  title: z.string().min(1, "标题不能为空"),
+  outline: z.string().min(20, "大纲内容过短"),
+  researchDirection: z.string().optional(),
+  language: z.enum(["zh", "en"]).optional().default("zh"),
+  projectMode: z.enum(["review", "research"]).optional(),
+  thesisHint: z.string().optional(),
+  projectId: z.string().optional(),
+});
+export type ArgumentBlueprintInput = z.infer<typeof argumentBlueprintSchema>;
+
+export const argumentBlueprintPayloadSchema = z.object({
+  version: z.literal(1),
+  centralThesis: z.string().min(1),
+  researchQuestion: z.string().optional(),
+  chains: z
+    .array(
+      z.object({
+        id: z.string(),
+        claim: z.string().min(1),
+        evidence: z.string().min(1),
+        warrant: z.string().min(1),
+        sectionPath: z.string().optional(),
+        confidence: z.enum(["high", "medium", "low"]).optional(),
+      }),
+    )
+    .min(2),
+  rebuttals: z.array(
+    z.object({
+      id: z.string(),
+      objection: z.string().min(1),
+      response: z.string().min(1),
+      relatedClaimId: z.string().optional(),
+    }),
+  ),
+  gaps: z.array(z.string()),
+  outlineHash: z.string().optional(),
+  generatedAt: z.number().optional(),
+});
+
+/** Phase 5b 双语摘要 */
+export const bilingualAbstractSchema = z.object({
+  title: z.string().min(1, "标题不能为空"),
+  projectId: z.string().optional(),
+  sections: z.record(z.string(), z.string()).optional(),
+  bodyText: z.string().optional(),
+  projectMode: z.enum(["review", "research"]).optional().default("review"),
+  /** 省略则回退项目 language；显式传入时优先生效 */
+  primaryLanguage: z.enum(["zh", "en"]).optional(),
+  persistToProject: z.boolean().optional().default(true),
+});
+export type BilingualAbstractInput = z.infer<typeof bilingualAbstractSchema>;
+
+export const bilingualAbstractPayloadSchema = z.object({
+  zh: z.string().min(20),
+  en: z.string().min(20),
+});
+
 // === Translation ===
 export const translateSchema = z.object({
   text: z.string().min(1, "文本不能为空"),
@@ -446,6 +507,37 @@ export const reviewSchema = z.object({
   projectMode: z.enum(["review", "research"]).optional(),
 });
 export type ReviewInput = z.infer<typeof reviewSchema>;
+
+/** W3-REVIEW-2：跑下一轮审查（最多 2 轮） */
+export const reviewRoundsSchema = z.object({
+  projectId: z.string().min(1),
+  title: z.string().min(1, "标题不能为空"),
+  sections: z
+    .array(z.object({ key: z.string(), content: z.string() }))
+    .min(1, "至少需要一个章节"),
+  outline: z.string().optional(),
+  dimensions: z
+    .array(z.enum(["academic", "argument", "structure", "integrity"]))
+    .optional(),
+  target: z.string().optional(),
+  projectMode: z.enum(["review", "research"]).optional(),
+  /** 已满 2 轮时仍强制再跑（一般不用于产品路径） */
+  force: z.boolean().optional().default(false),
+});
+export type ReviewRoundsInput = z.infer<typeof reviewRoundsSchema>;
+
+/** W3-CITE-GATE：全稿引用硬检（可传 projectId 或裸 texts） */
+export const citationGateSchema = z
+  .object({
+    projectId: z.string().min(1).optional(),
+    texts: z.array(z.string()).optional(),
+    refCount: z.number().int().min(0).optional(),
+  })
+  .refine(
+    (d) => Boolean(d.projectId) || (d.texts !== undefined && d.refCount !== undefined),
+    { message: "需提供 projectId，或同时提供 texts 与 refCount" },
+  );
+export type CitationGateInputBody = z.infer<typeof citationGateSchema>;
 
 // === Project evidence PATCH ===
 export const projectEvidencePatchSchema = z
@@ -846,11 +938,33 @@ export const directionRoadmapConfirmSchema = z.object({
 });
 export type DirectionRoadmapConfirmInput = z.infer<typeof directionRoadmapConfirmSchema>;
 
-// === Agent (ENG-PR-200 Phase A) ===
-export const agentSchema = z.object({
-  goal: z.string().min(1, "目标不能为空").max(4000),
-  projectId: z.string().optional(),
-  directionSlug: z.string().optional(),
-  mode: z.enum(["auto", "guided"]).optional().default("auto"),
-});
+// === Agent (ENG-PR-200 / Wave 2) ===
+export const agentSchema = z
+  .object({
+    goal: z.string().max(4000).optional(),
+    projectId: z.string().optional(),
+    directionSlug: z.string().optional(),
+    mode: z.enum(["auto", "guided"]).optional().default("auto"),
+    sessionId: z.string().optional(),
+    resume: z.boolean().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.resume) {
+      if (!data.sessionId?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "续跑需要 sessionId",
+          path: ["sessionId"],
+        });
+      }
+      return;
+    }
+    if (!data.goal?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "目标不能为空",
+        path: ["goal"],
+      });
+    }
+  });
 export type AgentInput = z.infer<typeof agentSchema>;

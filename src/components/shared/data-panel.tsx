@@ -21,6 +21,7 @@ import { getProject } from "@/services/project";
 import { projectStore } from "@/lib/store";
 import { EvidenceHubSections } from "@/components/shared/evidence-hub-sections";
 import { TabPanelShell } from "@/components/shared/tab-panel-shell";
+import { AiResultDisclaimer } from "@/components/shared/ai-result-disclaimer";
 import {
   BarChart3,
   Copy,
@@ -303,7 +304,8 @@ export function DataPanel({
                 </div>
               )}
             </CardHeader>
-            <CardContent className="p-3">
+            <CardContent className="p-3 space-y-2">
+              <AiResultDisclaimer compact />
               {narrativeResult ? (
                 <div className="prose prose-sm max-w-none whitespace-pre-wrap leading-relaxed text-xs">
                   {narrativeResult}

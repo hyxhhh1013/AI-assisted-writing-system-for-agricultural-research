@@ -160,7 +160,7 @@ export function CreateProjectWizard({
     }
   };
 
-  const stepLabels = mode === "review" ? ["类型", "P0 配置", "P1 文献"] : ["类型", "P0 配置"];
+  const stepLabels = mode === "review" ? ["类型", "论文配置", "导入文献"] : ["类型", "论文配置"];
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -168,7 +168,7 @@ export function CreateProjectWizard({
         <DialogHeader>
           <DialogTitle>新建论文项目</DialogTitle>
           <DialogDescription>
-            备料与写作分离：在此完成 P0 配置{mode === "review" ? "与 P1 文献导入" : ""}，工作台从 P2 架构开始。
+            先完成论文配置{mode === "review" ? "与参考文献导入" : ""}，然后进入写作工作台。
           </DialogDescription>
           <div className="flex gap-1 pt-1">
             {stepLabels.map((label, i) => (
@@ -246,7 +246,7 @@ export function CreateProjectWizard({
 
           {step === 2 && (
             <div className="space-y-3">
-              <p className="text-[10px] text-muted-foreground">P0 · 论文配置</p>
+              <p className="text-[10px] text-muted-foreground">论文配置</p>
               <div className="space-y-1.5">
                 <Label className="text-xs">目标期刊</Label>
                 <Input
@@ -287,7 +287,7 @@ export function CreateProjectWizard({
           {step === 3 && projectId && (
             <div className="space-y-2 min-h-[280px]">
               <p className="text-[10px] text-[#6366f1] font-medium">
-                P1 · 导入参考文献（已 {refCount} 篇，综述至少 {MIN_REVIEW_HANDOFF_ENTRIES} 篇）
+                导入参考文献（已 {refCount} 篇，综述至少 {MIN_REVIEW_HANDOFF_ENTRIES} 篇）
               </p>
               <ProjectReferenceImportPanel
                 projectId={projectId}

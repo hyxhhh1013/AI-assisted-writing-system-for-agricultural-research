@@ -34,6 +34,15 @@ export function getSectionKeysForMode(mode: ProjectWritingMode | undefined): rea
   return getProjectWritingMode(mode) === "research" ? IMRAD_SECTION_KEYS : REVIEW_SECTION_KEYS;
 }
 
+/**
+ * 扩写面板推荐顺序：正文先写，摘要最后写（摘要需注入全文）。
+ */
+export function getWritingSectionKeysForMode(mode: ProjectWritingMode | undefined): readonly string[] {
+  const keys = getSectionKeysForMode(mode);
+  const body = keys.filter((k) => k !== "abstract");
+  return keys.includes("abstract") ? [...body, "abstract"] : keys;
+}
+
 export function getCoreSectionKeysForMode(mode: ProjectWritingMode | undefined): readonly string[] {
   return getSectionKeysForMode(mode);
 }
@@ -94,8 +103,11 @@ export function buildWorkbenchSectionsForMode(mode: ProjectWritingMode | undefin
 }
 
 export function buildSectionOptionsForMode(mode: ProjectWritingMode | undefined, lang: "zh" | "en" = "zh") {
-  return getSectionKeysForMode(mode).map((key) => ({
+  return getWritingSectionKeysForMode(mode).map((key) => ({
     value: key,
-    label: getSectionLabelForMode(key, mode, lang),
+    label:
+      key === "abstract"
+        ? `${getSectionLabelForMode(key, mode, lang)}（建议最后写）`
+        : getSectionLabelForMode(key, mode, lang),
   }));
 }

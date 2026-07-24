@@ -1,6 +1,7 @@
 "use client";
 
 import type { AgentRequest, AgentSSEEvent } from "@/contracts/agent";
+import type { AgentSessionListItem } from "@/contracts/agent-session";
 import { isAgentSSEEvent } from "@/contracts/agent";
 
 export async function postAgentStream(
@@ -57,4 +58,20 @@ export async function postAgentStream(
       }
     }
   }
+}
+
+export async function listAgentSessions(params: {
+  projectId?: string;
+  status?: string;
+}): Promise<AgentSessionListItem[]> {
+  const qs = new URLSearchParams();
+  if (params.projectId) qs.set("projectId", params.projectId);
+  if (params.status) qs.set("status", params.status);
+  const res = await fetch(`/api/agent/sessions?${qs.toString()}`);
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error || "无法加载 Agent 会话");
+  }
+  const data = (await res.json()) as { sessions: AgentSessionListItem[] };
+  return data.sessions ?? [];
 }

@@ -5,18 +5,18 @@ import { recomputePassportProgress } from "@/lib/paper-passport-progress";
 describe("ensureProjectPaperPassport bootstrap", () => {
   it("bootstraps legacy projects without paperPassport", () => {
     const passport = bootstrapPassportFromProject({
-      title: "生物炭综述",
+      title: "?????",
       mode: "review",
       language: "zh",
       citationStyle: "gbt7714",
     });
-    expect(passport.config?.paperTitle).toBe("生物炭综述");
+    expect(passport.config?.paperTitle).toBe("?????");
     expect(passport.currentPhase).toBe(1);
   });
 
   it("recomputes phase progress for bootstrapped passport with refs", () => {
     const passport = bootstrapPassportFromProject({
-      title: "试验论文",
+      title: "????",
       mode: "research",
       language: "zh",
       citationStyle: "ieee",
@@ -24,6 +24,7 @@ describe("ensureProjectPaperPassport bootstrap", () => {
     const next = recomputePassportProgress(passport, {
       referenceCount: 2,
       hasBlueprint: false,
+      hasArgumentBlueprint: false,
       outlineChars: 0,
       filledCoreSections: 0,
       totalCoreSections: 5,

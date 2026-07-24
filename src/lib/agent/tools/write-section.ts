@@ -15,7 +15,7 @@ import type { WritingInput } from "@/lib/validations";
 export const writeSectionTool: ToolDefinition = {
   name: "write_section",
   description:
-    "调用 Writer 扩写管道为指定章节生成正文（含 RAG 检索；默认 fast 模式，可选 full 含 Verifier+Refiner）",
+    "调用 Writer 扩写管道为指定章节生成正文（含 RAG；默认写后自动核查修正一轮，可关）",
   parameters: {
     type: "object",
     properties: {
@@ -31,8 +31,12 @@ export const writeSectionTool: ToolDefinition = {
       },
       pipelineMode: {
         type: "string",
-        description: "fast（仅 Writer）或 full（Writer+Verifier+Refiner）",
+        description: "fast（仅 Writer）或 full（Writer+Verifier+Refiner）；与 autoFix 叠加时 full 优先",
         enum: ["fast", "full"],
+      },
+      autoFix: {
+        type: "string",
+        description: "写后自动核查并修正（默认 true；false 关闭）。对应 AGENT_WRITE_AUTO_FIX",
       },
       subsectionTitle: { type: "string", description: "可选：子节标题" },
       persistToProject: {
@@ -91,6 +95,14 @@ export const writeSectionTool: ToolDefinition = {
     }
 
     const pipelineMode = params.pipelineMode === "full" ? "full" : "fast";
+    const autoFixRaw = params.autoFix;
+    const autoFix =
+      autoFixRaw === false || autoFixRaw === "false" || autoFixRaw === "0"
+        ? false
+        : autoFixRaw === true || autoFixRaw === "true" || autoFixRaw === "1"
+          ? true
+          : undefined;
+
     const data: WritingInput = {
       title: project.title,
       section: sectionRaw,
@@ -119,6 +131,7 @@ export const writeSectionTool: ToolDefinition = {
         globalContext: project.globalContext,
         userId: ctx.userId,
         signal: ctx.signal,
+        autoFix,
       });
 
       if (!result.draft) {
@@ -136,6 +149,13 @@ export const writeSectionTool: ToolDefinition = {
         );
       }
 
+      const fixNote =
+        result.pipelineMode === "full"
+          ? result.issueCount > 0
+            ? `，自动核查后已按 ${result.issueCount} 条意见修正`
+            : "，自动核查通过"
+          : "";
+
       return {
         success: true,
         data: {
@@ -145,12 +165,13 @@ export const writeSectionTool: ToolDefinition = {
           newReferences: result.references,
           pipelineMode: result.pipelineMode,
           verification: result.verification,
+          issueCount: result.issueCount,
           citationWarnings: result.citationWarnings,
           persisted: persisted ?? null,
         },
         summary: persisted
-          ? `已生成并写回 ${sectionRaw}（${result.draft.length} 字，${result.pipelineMode}）`
-          : `已生成 ${sectionRaw}（${result.draft.length} 字，${result.pipelineMode} 模式）`,
+          ? `已生成并写回 ${sectionRaw}（${result.draft.length} 字${fixNote}）`
+          : `已生成 ${sectionRaw}（${result.draft.length} 字，${result.pipelineMode}${fixNote}）`,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

@@ -9,11 +9,14 @@ import {
 } from "@/contracts/paper-passport";
 import { getCoreSectionKeysForMode } from "@/lib/section-registry";
 import { readWritingBlueprint } from "@/lib/project-writing-blueprint-db";
+import { readArgumentBlueprint } from "@/lib/project-argument-blueprint-db";
+import { parseArgumentBlueprint } from "@/contracts/argument-blueprint";
 import {
   recomputePassportProgress,
   type PassportProgressSignals,
 } from "@/lib/paper-passport-progress";
 import { enrichPassportSnapshots } from "@/lib/paper-passport-snapshots";
+import { evaluateCitationGate } from "@/lib/citation-gate";
 
 const MIN_SECTION_CHARS = 50;
 
@@ -67,7 +70,9 @@ function buildSignals(
     "outline" | "abstract" | "mode" | "expandedOutlineSections" | "references" | "sections"
   >,
   hasBlueprint: boolean,
+  hasArgumentBlueprint: boolean,
   reviewDoneCount: number,
+  argumentMeta?: { chainCount: number; rebuttalCount: number },
 ): PassportProgressSignals {
   const mode = project.mode === "research" ? "research" : "review";
   const coreKeys = getCoreSectionKeysForMode(mode);
@@ -76,15 +81,30 @@ function buildSignals(
     return (section?.content.trim().length ?? 0) >= MIN_SECTION_CHARS;
   }).length;
 
+  const gate = evaluateCitationGate({
+    texts: [
+      project.abstract ?? "",
+      ...project.sections.map((s) => s.content),
+    ],
+    refCount: project.references.length,
+  });
+
   return {
     referenceCount: project.references.length,
     hasBlueprint,
+    hasArgumentBlueprint,
     outlineChars: project.outline?.trim().length ?? 0,
     filledCoreSections,
     totalCoreSections: coreKeys.length,
     expandedOutlineCount: parseExpandedOutlineSections(project.expandedOutlineSections).length,
     abstractChars: project.abstract?.trim().length ?? 0,
     reviewDoneCount,
+    argumentChainCount: argumentMeta?.chainCount ?? 0,
+    argumentRebuttalCount: argumentMeta?.rebuttalCount ?? 0,
+    citationGatePassed: gate.passed,
+    citationExportReady: gate.exportReady,
+    citationOutOfBounds: gate.outOfBounds,
+    citationCount: gate.citationCount,
   };
 }
 
@@ -136,14 +156,27 @@ async function recomputeAndPersistPassport(
   project: ProjectPassportSnapshot,
   passport: PaperPassport,
 ): Promise<PaperPassport> {
-  const [blueprintRaw, reviewDoneCount] = await Promise.all([
+  const [blueprintRaw, argumentRaw] = await Promise.all([
     readWritingBlueprint(projectId),
-    prisma.reviewCheck.count({
-      where: { projectId, status: "done" },
-    }),
+    readArgumentBlueprint(projectId),
   ]);
 
-  const signals = buildSignals(project, Boolean(blueprintRaw?.trim()), reviewDoneCount);
+  // Phase 7 / 轮次：以 Passport 编排计数为准，不用全历史 ReviewCheck 条数
+  const reviewDoneCount = Math.min(
+    Math.max(0, passport.reviewRound?.doneCount ?? 0),
+    2,
+  );
+
+  const argument = parseArgumentBlueprint(argumentRaw);
+  const signals = buildSignals(
+    project,
+    Boolean(blueprintRaw?.trim()),
+    Boolean(argument),
+    reviewDoneCount,
+    argument
+      ? { chainCount: argument.chains.length, rebuttalCount: argument.rebuttals.length }
+      : undefined,
+  );
 
   const next = enrichPassportSnapshots(
     recomputePassportProgress(passport, signals),

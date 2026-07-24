@@ -23,6 +23,7 @@ model User {
 
   projects  Project[]
   directions Direction[]
+  agentSessions AgentSession[]
 }
 
 // 论文项目模型
@@ -69,6 +70,8 @@ model Project {
   expandedOutlineSections String?
   // 写作蓝图（JSON WritingBlueprint）
   writingBlueprint      String?
+  // 论证蓝图（JSON ArgumentBlueprint，Phase 3）
+  argumentBlueprint     String?
   // 论文 8 阶段生命周期快照（JSON PaperPassport）
   paperPassport         String?
 
@@ -304,4 +307,25 @@ model Direction {
 
   @@index([status])
   @@index([userId])
+}
+
+// Agent 会话断点（W2-CHECKPOINT：中断后续跑）
+model AgentSession {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId     String?
+  directionSlug String?
+  goal          String
+  /// running | interrupted | completed | error
+  status        String   @default("running")
+  /// AgentSessionSnapshot JSON（messages / plan / iteration …）
+  snapshot      Json?
+  errorMessage  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([userId, projectId, status])
+  @@index([status])
 }

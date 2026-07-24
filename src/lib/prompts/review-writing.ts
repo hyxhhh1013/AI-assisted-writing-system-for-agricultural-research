@@ -6,20 +6,23 @@ type PromptParams = { isGBT: boolean; isChinese: boolean };
 export const REVIEW_SECTION_PROMPTS: Record<string, SectionPrompt> = {
   abstract: ({ isChinese }: PromptParams) =>
     isChinese
-      ? `请撰写中文摘要（综述型）。一个完整段落，按以下逻辑组织：
+      ? `请撰写中文摘要（综述型）。**须基于已提供的全文各章内容综合提炼**，一个完整段落，按以下逻辑组织：
 1. 领域背景与综述必要性（1-2句）
 2. 本文综述范围与组织方式
 3. 主要进展或共识（概括性，不罗列试验细节）
 4. 主要争议、空白或趋势
 5. 结论性判断或展望方向
-禁止出现「本试验」「本研究采用」「材料与方法」等原创实验表述。`
-      : `Write a review abstract as one paragraph:
+硬性要求：
+· 摘要中**禁止出现任何文献引用标记**（如 [1]、[2,3]）；综述范围与结论用概括表述即可
+· 禁止出现「本试验」「本研究采用」「材料与方法」等原创实验表述
+· 不得编造全文未写到的具体数据或结论`
+      : `Write a review abstract as one paragraph, synthesized from the provided full-text sections:
 1. Why this topic warrants synthesis now
 2. Scope and organization of the review
 3. Major advances or consensus (synthetic, not experimental detail)
 4. Key controversies, gaps, or emerging trends
 5. Concluding outlook
-Do NOT describe original experiments or methods.`,
+Hard rules: NO in-text citations like [1] or [2,3]; do NOT invent findings absent from the provided body; do NOT describe original experiments.`,
 
   introduction: ({ isChinese }: PromptParams) =>
     isChinese

@@ -13,6 +13,7 @@
 | 参考文献 | 工作台侧栏 | `PATCH .../references` | `useReferenceReorder`, `contracts/project.ts` |
 | 分析结果 | 工作台 `data` Tab | `PATCH .../analysis-results` | `patchAnalysisResults` service |
 | 项目列表 | `src/app/projects/page.tsx` | `/api/projects` | — |
+| 写作 Agent 引导 | `src/app/academic-paper/page.tsx` | Project 列表 | `academic-paper-studio/components/AgentGuidePage.tsx` → `/workbench?tab=agent` |
 
 ### 工作台 Tab（`workbench-tab-switcher.tsx`）
 
@@ -32,7 +33,8 @@
 | 功能 | 页面 | API | 核心代码 |
 |------|------|-----|----------|
 | 扩写流水线 | 工作台 `writing` Tab | `POST /api/writing` SSE；`POST /api/writing/retrieve-preview` | `api/writing/pipeline/*`, `services/writing-context.ts` |
-| AI Agent | 工作台 `agent` Tab | `POST /api/agent` SSE | `lib/agent/langgraph/*`（编排），`lib/agent/core/agent-loop.ts`（入口），`services/agent.ts` |
+| AI Agent | 工作台 `agent` Tab | `POST /api/agent` SSE；`GET /api/agent/sessions` | `lib/agent/langgraph/*` + `phase-task-pack` + `session-store`；`services/agent.ts` |
+| 产品门禁评测 | 本地/CI | `npm run eval:gates`；可选 `npm run eval:pipeline` | `lib/eval/product-gates.ts`、`scripts/eval-pipeline-paper.ts` |
 | 证据中心 | 工作台 `data` | — | `evidence-hub-sections.tsx`、`data-panel.tsx` |
 | 配图编辑 | 写作面板内联 | — | `writing-figure-edit-links.tsx` |
 | 大纲生成 | 工作台 `outline` Tab | `POST /api/outline` SSE | `outline-panel.tsx`, `lib/prompts/outline.ts` |
@@ -73,7 +75,8 @@
 | 功能 | 页面 | API | 核心代码 |
 |------|------|-----|----------|
 | 统一质量中心 | `src/app/plagiarism/page.tsx` | `/api/plagiarism/v2` SSE | `QualityWorkspace`、`quality-persist.ts`、`quality-restore.ts` |
-| 审查 Tab | `/plagiarism?tab=review` | `POST /api/review` | `review-tab.tsx`、`review-service.ts` |
+| 审查 Tab | `/plagiarism?tab=review` | `POST /api/review`；`POST /api/review/rounds` | `review-tab.tsx`、`review-service.ts`、`lib/review-rounds.ts` |
+| 引用硬检 | Passport Phase 5 / PDF 导出 | `GET|POST /api/citations/gate` | `lib/citation-gate.ts`、`services/citations.ts` |
 | 查重 | 质量中心 | `POST /api/plagiarism/v2` | `plagiarism-service.ts`、`use-plagiarism-check` |
 | 降重改写 | 质量中心降重 Tab | `/api/plagiarism/rewrite` | `rewrite-service.ts`、`rewrite-view.tsx` |
 | 匹配预览 | 查重结果 | — | `match-content-preview.tsx` |
@@ -86,11 +89,12 @@
 
 | 功能 | 页面 | API | 核心代码 |
 |------|------|-----|----------|
-| 大纲生成 | 工作台 `outline` Tab | `POST /api/outline` SSE | `outline-panel.tsx`、`lib/prompts/outline.ts` |
+| 扩写管道 | 工作台写作 | `POST /api/writing` SSE | `run-pipeline` + `pipeline/verifier`（结构化 `review_report`） |
 | 写作蓝图（Phase 2） | 提纲侧栏 → 蓝图弹窗 | `POST /api/outline/blueprint` | `blueprint-workspace.tsx`、`contracts/writing-blueprint.ts` |
 | 蓝图恢复 | 工作台 | — | `blueprint-utils.ts`、`project-writing-blueprint-db.ts` |
 | 蓝图编辑器 | 工作台提纲 | — | `use-blueprint-editor.ts`、`blueprint-workspace-dialog.tsx` |
-| Argument Blueprint（Phase 3） | — | — | **Wave 3 待建**（≠ writing-blueprint） |
+| Argument Blueprint（Phase 3） | 工作台提纲侧栏 | `POST /api/outline/argument-blueprint` | `contracts/argument-blueprint.ts`、`outline-argument-summary.tsx`、`agent/tools/build-argument-blueprint.ts`（≠ writing-blueprint） |
+| 双语摘要（Phase 5b） | Agent / 项目设置 | `POST /api/abstract/bilingual` | `bilingual-abstract-controls.tsx`、`services/bilingual-abstract.ts` |
 
 ## Admin
 
@@ -145,7 +149,8 @@
 |------|------|-----|----------|
 | 登录注册 | `login`, `register` | `/api/auth/*` | `proxy.ts` |
 | PDF 导出 | 工作台 | `/api/export/pdf`, `/api/pdf` | Playwright |
-| DOCX | 工作台 hook | — | `useDocxExport` |
+| DOCX | 工作台 hook | 引用硬检 + 双语 + 题注 | `useDocxExport`、`lib/export-readiness.ts` |
+| PDF 导出 | 工作台 / API | `POST /api/export/pdf`（同硬检） | `services/pdf-export.ts`、`export-readiness` |
 
 ## Prompt 子系统
 

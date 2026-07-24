@@ -52,8 +52,8 @@ module.exports = {
       instances: 1,
       exec_mode: "fork",
       autorestart: true,
-      max_memory_restart: "5500M",
-      node_args: "--max-old-space-size=4096",
+      max_memory_restart: "4000M",
+      node_args: "--max-old-space-size=3072",
       env: {
         NODE_ENV: "production",
         PORT: pick("PORT", "3000"),
@@ -68,6 +68,10 @@ module.exports = {
         RAG_EMBEDDING_API_BASE: pick("RAG_EMBEDDING_API_BASE", ""),
         RAG_EMBEDDING_MODEL: pick("RAG_EMBEDDING_MODEL", ""),
         RAG_EMBEDDINGS_URL: pick("RAG_EMBEDDINGS_URL", ""),
+        // light=仅元数据预热（默认）；full=全库；0=关闭。流式分类检索默认开，峰值≈最大单分类
+        RAG_WARMUP: pick("RAG_WARMUP", "light"),
+        RAG_STREAM_CATEGORIES: pick("RAG_STREAM_CATEGORIES", "1"),
+        RAG_CATEGORY_CACHE_MAX: pick("RAG_CATEGORY_CACHE_MAX", "2"),
       },
     },
   ],

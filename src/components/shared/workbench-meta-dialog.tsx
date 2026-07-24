@@ -19,6 +19,7 @@ import type { ProjectData, ProjectLanguage } from "@/contracts/project";
 import { resolveProjectLanguage } from "@/contracts/project";
 import { getWritingModeMeta } from "@/contracts/writing-mode";
 import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
+import { BilingualAbstractControls } from "@/components/shared/bilingual-abstract-controls";
 import { cn } from "@/lib/utils";
 
 interface ProjectMetaDraft {
@@ -254,6 +255,14 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
                   className="min-h-[190px] resize-y"
                   value={tempMeta.abstract}
                   onChange={(e) => setTempMeta({ ...tempMeta, abstract: e.target.value })}
+                />
+                <BilingualAbstractControls
+                  project={project}
+                  primaryLanguage={tempMeta.language}
+                  abstract={tempMeta.abstract}
+                  onAbstractChange={(next) =>
+                    setTempMeta((prev) => ({ ...prev, abstract: next }))
+                  }
                 />
               </div>
             </section>

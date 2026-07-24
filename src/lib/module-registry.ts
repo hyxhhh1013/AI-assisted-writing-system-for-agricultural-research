@@ -5,6 +5,7 @@ import {
   BarChart3,
   BookOpen,
   FileText,
+  GraduationCap,
   Layout,
   Play,
   Radar,
@@ -46,6 +47,17 @@ export const APP_MODULES: AppModule[] = [
     homeCategory: "core",
     iconKey: "flask",
     order: 25,
+  },
+  {
+    id: "academic-paper",
+    title: "写作 Agent 引导",
+    description: "选论文项目，进入工作台 Agent Tab；八阶段由 Passport 管理，本页不做假流水线",
+    href: "/academic-paper",
+    flag: null,
+    placement: ["home"],
+    homeCategory: "core",
+    iconKey: "graduation-cap",
+    order: 12,
   },
   {
     id: "knowledge",
@@ -126,6 +138,7 @@ export const MODULE_ICON_MAP: Record<ModuleIconKey, LucideIcon> = {
   "book-open": BookOpen,
   play: Play,
   flask: Radar,
+  "graduation-cap": GraduationCap,
 };
 
 export function listModules(options?: {

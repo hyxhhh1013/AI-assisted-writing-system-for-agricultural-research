@@ -6,6 +6,7 @@ import type { PassportProgressSignals } from "@/lib/paper-passport-progress";
 const emptySignals: PassportProgressSignals = {
   referenceCount: 0,
   hasBlueprint: false,
+      hasArgumentBlueprint: false,
   outlineChars: 0,
   filledCoreSections: 0,
   totalCoreSections: 5,

@@ -5,6 +5,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@academic-paper-studio": path.resolve(__dirname, "./academic-paper-studio"),
     },
   },
   test: {

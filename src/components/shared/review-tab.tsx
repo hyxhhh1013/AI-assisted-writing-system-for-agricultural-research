@@ -26,7 +26,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useReview } from "@/hooks/use-review";
-import { patchSection } from "@/services/review";
+import { getReviewRoundStatusClient, patchSection, runReviewRound } from "@/services/review";
+import type { ReviewRoundStatus } from "@/contracts/review-rounds";
 import type {
   ReviewReport,
   ReviewDimension,
@@ -124,6 +125,8 @@ export function ReviewTab({
   const [expandedDimensions, setExpandedDimensions] = useState<Set<ReviewDimension>>(
     new Set()
   );
+  const [roundStatus, setRoundStatus] = useState<ReviewRoundStatus | null>(null);
+  const [isRoundRunning, setIsRoundRunning] = useState(false);
 
   useEffect(() => {
     if (initialReport) {
@@ -136,6 +139,24 @@ export function ReviewTab({
     }
   }, [initialReport, restoreReport]);
 
+  useEffect(() => {
+    if (!projectId) {
+      setRoundStatus(null);
+      return;
+    }
+    let cancelled = false;
+    void getReviewRoundStatusClient(projectId)
+      .then((status) => {
+        if (!cancelled) setRoundStatus(status);
+      })
+      .catch(() => {
+        if (!cancelled) setRoundStatus(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
   // 构建真实的 sectionContents 映射（修复之前传 {} 的 bug）
   const sectionContents = useMemo(() => {
     const map: Record<string, string> = {};
@@ -145,10 +166,78 @@ export function ReviewTab({
     return map;
   }, [sections]);
 
-  // 执行审查
+  const applyReportToUi = (result: FixableReviewReport) => {
+    restoreReport(result);
+    if (result.reviewId) onReportSaved?.(result.reviewId);
+    const dimsToExpand = new Set<ReviewDimension>();
+    for (const dim of selectedDimensions) {
+      if (result.dimensions[dim]?.issueCount > 0) {
+        dimsToExpand.add(dim);
+      }
+    }
+    setExpandedDimensions(dimsToExpand);
+  };
+
+  const toFixableReport = (raw: ReviewReport): FixableReviewReport => {
+    const dimensions = {} as FixableReviewReport["dimensions"];
+    for (const [dim, result] of Object.entries(raw.dimensions)) {
+      const dimension = dim as ReviewDimension;
+      dimensions[dimension] = {
+        ...result,
+        issues: result.issues.map((issue) => ({
+          ...issue,
+          status: "open" as IssueStatus,
+        })) as FixableReviewIssue[],
+      };
+    }
+    return { ...raw, dimensions };
+  };
+
+  /** W3-REVIEW-2：按 Passport 轮次跑下一轮（最多 2） */
+  const handleNextRound = async () => {
+    if (!projectId) {
+      toast.error("需要绑定项目才能使用多轮审查");
+      return;
+    }
+    if (sections.length === 0) {
+      toast.error("请先输入论文内容");
+      return;
+    }
+    setIsRoundRunning(true);
+    try {
+      const result = await runReviewRound({
+        projectId,
+        title,
+        sections: sections.map((s) => ({ key: s.key, content: s.content })),
+        outline,
+        projectMode: projectMode === "review" ? "review" : "research",
+      });
+      setRoundStatus(result.status);
+      if (!result.ran) {
+        toast.message(result.nextHint || "已达 2 轮上限");
+        return;
+      }
+      if (result.report) {
+        applyReportToUi(toFixableReport(result.report));
+      }
+      toast.success(`第 ${result.round} 轮审查完成`);
+      if (result.nextHint) toast.message(result.nextHint);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "多轮审查失败");
+    } finally {
+      setIsRoundRunning(false);
+    }
+  };
+
+  // 执行审查：绑定项目时走轮次编排（计入 Passport），否则单次审查
   const handleReview = async () => {
     if (sections.length === 0) {
       toast.error("请先输入论文内容");
+      return;
+    }
+
+    if (projectId) {
+      await handleNextRound();
       return;
     }
 
@@ -166,15 +255,7 @@ export function ReviewTab({
 
     if (result) {
       toast.success("审查完成");
-      if (result.reviewId) onReportSaved?.(result.reviewId);
-      // 自动展开有问题的维度
-      const dimsToExpand = new Set<ReviewDimension>();
-      for (const dim of selectedDimensions) {
-        if (result.dimensions[dim].issueCount > 0) {
-          dimsToExpand.add(dim);
-        }
-      }
-      setExpandedDimensions(dimsToExpand);
+      applyReportToUi(result);
     }
   };
 
@@ -390,9 +471,9 @@ export function ReviewTab({
               size="lg"
               className="bg-[#1a5632] hover:bg-[#144a2a]"
               onClick={handleReview}
-              disabled={isReviewing || selectedDimensions.length === 0}
+              disabled={isReviewing || isRoundRunning || selectedDimensions.length === 0}
             >
-              {isReviewing ? (
+              {isReviewing || isRoundRunning ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   审查中…
@@ -401,14 +482,46 @@ export function ReviewTab({
                 "开始审查"
               )}
             </Button>
+            {projectId && (
+              <Button
+                size="lg"
+                variant="secondary"
+                onClick={() => void handleNextRound()}
+                disabled={
+                  isReviewing ||
+                  isRoundRunning ||
+                  selectedDimensions.length === 0 ||
+                  Boolean(roundStatus?.complete)
+                }
+              >
+                {isRoundRunning ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    编排中…
+                  </>
+                ) : roundStatus?.complete ? (
+                  "已完成 2/2 轮"
+                ) : (
+                  `下一轮审查 ${(roundStatus?.doneCount ?? 0) + 1}/2`
+                )}
+              </Button>
+            )}
             {report && (
-              <Button size="lg" variant="outline" onClick={reset}>
+              <Button size="lg" variant="outline" onClick={reset} disabled={isRoundRunning}>
                 <RotateCcw className="mr-2 h-4 w-4" />
                 重新审查
               </Button>
             )}
           </div>
         </div>
+        {roundStatus && (
+          <p className="mt-2 text-[11px] text-[#6b7c72]">
+            多轮编排：已完成 {roundStatus.doneCount}/{roundStatus.maxRounds}
+            {roundStatus.lastScore != null
+              ? ` · 最近 ${roundStatus.lastScore} 分${roundStatus.lastGrade ? `（${roundStatus.lastGrade}）` : ""}`
+              : ""}
+          </p>
+        )}
         {progress && <p className="mt-3 text-xs text-[#6b7c72]">{progress}</p>}
         {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
       </div>
@@ -482,9 +595,12 @@ export function ReviewTab({
           <p>📄 论文标题：{title || "未设置"}</p>
           <p>📝 章节数量：{sections.length}</p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={handleReview} disabled={isReviewing || selectedDimensions.length === 0}>
-            {isReviewing ? (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={handleReview}
+            disabled={isReviewing || isRoundRunning || selectedDimensions.length === 0}
+          >
+            {isReviewing || isRoundRunning ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 审查中...
@@ -493,10 +609,35 @@ export function ReviewTab({
               "开始审查"
             )}
           </Button>
+          {projectId && (
+            <Button
+              variant="secondary"
+              onClick={() => void handleNextRound()}
+              disabled={
+                isReviewing ||
+                isRoundRunning ||
+                selectedDimensions.length === 0 ||
+                Boolean(roundStatus?.complete)
+              }
+            >
+              {isRoundRunning
+                ? "编排中..."
+                : roundStatus?.complete
+                  ? "已完成 2/2 轮"
+                  : `下一轮审查 ${(roundStatus?.doneCount ?? 0) + 1}/2`}
+            </Button>
+          )}
           {report && (
-            <Button variant="outline" onClick={reset}>重新审查</Button>
+            <Button variant="outline" onClick={reset} disabled={isRoundRunning}>
+              重新审查
+            </Button>
           )}
         </div>
+        {roundStatus && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            多轮编排：{roundStatus.doneCount}/{roundStatus.maxRounds}
+          </p>
+        )}
         {progress && <p className="mt-3 text-sm text-muted-foreground">{progress}</p>}
         {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
       </CardContent>

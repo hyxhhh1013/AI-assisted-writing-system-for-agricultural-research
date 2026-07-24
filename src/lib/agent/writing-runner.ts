@@ -98,8 +98,13 @@ export interface AgentWriteSectionResult {
   draft: string;
   references: string[];
   verification?: string;
+  issueCount: number;
   citationWarnings: number;
   pipelineMode: "fast" | "full";
+}
+
+function isAgentWriteAutoFixEnabled(): boolean {
+  return process.env.AGENT_WRITE_AUTO_FIX !== "0";
 }
 
 function collectWritingEvents(
@@ -110,6 +115,7 @@ function collectWritingEvents(
   let references: string[] = [];
   let verification: string | undefined;
   let citationWarnings = 0;
+  let issueCount = 0;
 
   for (const event of events) {
     if (event.type === "clear_result") {
@@ -129,7 +135,14 @@ function collectWritingEvents(
       continue;
     }
     if (event.type === "verification") {
-      verification = event.verification;
+      verification = (verification ?? "") + event.verification;
+      continue;
+    }
+    if (event.type === "review_report") {
+      issueCount = event.report.issues.length;
+      if (!event.report.passed && event.report.summary) {
+        verification = event.report.summary;
+      }
       continue;
     }
     if (event.type === "citation_warnings") {
@@ -141,14 +154,15 @@ function collectWritingEvents(
     draft: draft.trim(),
     references,
     verification,
+    issueCount,
     citationWarnings,
     pipelineMode,
   };
 }
 
-/** Agent write_section：复用扩写管道，默认 fast 模式 */
+/** Agent write_section：默认 fast；AGENT_WRITE_AUTO_FIX≠0 时走 full（Verifier+Refiner） */
 export async function runAgentWriteSection(
-  input: AgentWriteSectionInput,
+  input: AgentWriteSectionInput & { autoFix?: boolean },
 ): Promise<AgentWriteSectionResult> {
   if (!tryAcquireWritingSlot()) {
     throw new Error("扩写并发已满，请稍后再试");
@@ -166,7 +180,12 @@ export async function runAgentWriteSection(
     signal: input.signal,
   });
 
-  const pipelineMode = input.data.mode === "full" ? "full" : "fast";
+  const autoFix =
+    input.autoFix !== undefined
+      ? input.autoFix
+      : isAgentWriteAutoFixEnabled();
+  const pipelineMode =
+    input.data.mode === "full" || autoFix ? "full" : "fast";
 
   try {
     await runWritingPipeline({

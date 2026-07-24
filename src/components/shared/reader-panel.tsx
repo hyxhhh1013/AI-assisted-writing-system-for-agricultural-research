@@ -93,7 +93,7 @@ export function ReaderPanel({
   if (view === "import") {
     return (
       <TabPanelShell
-        title="补录文献"
+        title="文献（检索/导入）"
         icon={Library}
         actions={
           <Link href="/knowledge">
@@ -121,7 +121,7 @@ export function ReaderPanel({
 
   return (
     <TabPanelShell
-      title="补录文献"
+      title="文献（阅读 PDF）"
       icon={FileText}
       actions={
         <Link href="/knowledge">

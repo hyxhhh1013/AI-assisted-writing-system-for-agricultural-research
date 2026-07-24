@@ -13,7 +13,7 @@
 <!-- API_INDEX:AUTO:START -->
 ## 路由表（自动生成）
 
-> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-07-06 13:49:09**（共 **84** 个 route 文件，validateBody **41**，SSE **11**，requireAdmin **15**）。
+> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-07-24 08:11:03**（共 **89** 个 route 文件，validateBody **45**，SSE **11**，requireAdmin **15**）。
 
 图例：zod = 使用 validateBody；SSE = 含 text/event-stream / ReadableStream；admin = 含 requireAdmin。
 
@@ -52,6 +52,7 @@
 | 方法 | 路径 | zod | SSE | admin |
 |------|------|-----|-----|-------|
 | POST | `/api/outline` | ✓ | ✓ | — |
+| POST | `/api/outline/argument-blueprint` | ✓ | — | — |
 | POST | `/api/outline/blueprint` | ✓ | — | — |
 
 ### 文献对话
@@ -96,6 +97,7 @@
 | POST | `/api/review` | ✓ | — | — |
 | GET | `/api/review/[id]` | — | — | — |
 | GET | `/api/review/history` | — | — | — |
+| POST, GET | `/api/review/rounds` | ✓ | — | — |
 
 ### 查重
 
@@ -207,7 +209,10 @@
 
 | 方法 | 路径 | zod | SSE | admin |
 |------|------|-----|-----|-------|
+| POST | `/api/abstract/bilingual` | ✓ | — | — |
 | POST | `/api/agent` | ✓ | ✓ | — |
+| GET | `/api/agent/sessions` | — | — | — |
+| GET, POST | `/api/citations/gate` | ✓ | — | — |
 | GET, POST | `/api/directions` | ✓ | — | — |
 | GET, PUT, DELETE | `/api/directions/[slug]` | ✓ | — | — |
 | POST | `/api/directions/[slug]/analyze` | ✓ | ✓ | — |

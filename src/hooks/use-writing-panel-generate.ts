@@ -8,7 +8,6 @@ import type { OutlineTask } from "@/lib/utils";
 import {
   countProjectFigures,
   getOutlineTaskIdsForSectionCompletion,
-  parseOutline,
 } from "@/lib/utils";
 import { applyBlueprintSectionHintToContext } from "@/lib/blueprint-utils";
 import { detectedFigureToPlotHref } from "@/contracts/figure";
@@ -18,12 +17,20 @@ import type { UseWritingStreamReturn } from "@/hooks/use-writing-stream";
 import { batchUpsertReferences } from "@/services/references";
 import type { WritingPreviewPayload } from "@/components/shared/writing/writing-types";
 import type { GenerationStatus } from "@/components/shared/writing/writing-types";
-import { buildPreviewReferencesFromContent } from "@/lib/reference-reorder";
+import {
+  buildPreviewReferencesFromContent,
+  mergeSectionReferencesIntoProject,
+} from "@/lib/reference-reorder";
 import { getMinDraftChars, isWritingDraftReady, normalizeWritingBullets, shouldUseCollaborativeBulletExpand, toApiWriteMode, type ManualWritingPhase, type WritingFlowMode, type WritingRequest } from "@/contracts/writing";
 import type { WritingStreamResult } from "@/hooks/use-writing-stream";
 import { useWritingBulletExpand } from "@/hooks/use-writing-bullet-expand";
 import { createLogger } from "@/lib/logger";
 import { getErrorMessage } from "@/lib/error-utils";
+import {
+  buildAbstractSourceBody,
+  hasSubstantialBodySections,
+  stripInlineCitations,
+} from "@/lib/abstract-utils";
 
 const log = createLogger("writing-panel");
 
@@ -116,9 +123,14 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
   const buildWritingRequest = useCallback(
     (draftContext: string, mode: WritingRequest["mode"], subTitle?: string): WritingRequest => {
       const sectionPreviews: Record<string, string> = {};
+      const sectionBodies: Record<string, string> = {};
       Object.entries(project.sections).forEach(([key, content]) => {
-        if (content && key !== targetSectionKey) {
+        if (!content) return;
+        if (key !== targetSectionKey) {
           sectionPreviews[key] = content.slice(0, 150) + "...";
+        }
+        if (key !== "abstract" && content.trim()) {
+          sectionBodies[key] = content;
         }
       });
 
@@ -161,6 +173,14 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
           abstract: project.abstract,
           outline: project.outline,
           sectionPreviews,
+          ...(targetSectionKey === "abstract"
+            ? {
+                sectionBodies:
+                  Object.keys(sectionBodies).length > 0
+                    ? sectionBodies
+                    : undefined,
+              }
+            : {}),
           analysisResults: project.analysisResults || [],
           blueprint,
         },
@@ -174,29 +194,49 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
     async (fullText: string, subTitle: string | undefined, isChapterScope: boolean) => {
       figureCountRef.current = 0;
 
+      // 摘要通常不放引用：落库前剥离 [n]
+      const normalizedText =
+        targetSectionKey === "abstract" ? stripInlineCitations(fullText) : fullText;
+      if (normalizedText !== fullText) {
+        toast.message("已去除摘要中的文内引用标记");
+      }
+
       const citedRefs = buildPreviewReferencesFromContent(
-        fullText,
+        normalizedText,
         project.references || [],
         writingStream.detectedRefs,
         lastRefMapping,
       );
+
+      // 本节紧凑参考文献合并进项目全局表，并重写正文 [n]
+      const merged =
+        citedRefs.length > 0
+          ? mergeSectionReferencesIntoProject({
+              sectionText: normalizedText,
+              sectionReferences: citedRefs,
+              projectReferences: project.references || [],
+            })
+          : { text: normalizedText, references: project.references || [] };
+
       if (citedRefs.length > 0) {
         setDetectedRefs(citedRefs);
         if (onUpdateProject) {
-          onUpdateProject({ references: citedRefs });
+          onUpdateProject({ references: merged.references });
         }
       }
 
-      setResult(fullText);
-      resultRef.current = fullText;
+      let appliedText = merged.text;
+      setResult(appliedText);
+      resultRef.current = appliedText;
 
-      const { processedText: phText, count: placeholderCount } = replacePlaceholders(fullText);
+      const { processedText: phText, count: placeholderCount } = replacePlaceholders(appliedText);
       if (placeholderCount > 0) {
+        appliedText = phText;
         setResult(phText);
         resultRef.current = phText;
       }
 
-      const figureSource = placeholderCount > 0 ? phText : fullText;
+      const figureSource = appliedText;
       const figureBlocks = findFigureBlocks(figureSource);
       const detectedFigures: { tool: string; config: string; caption: string }[] = [];
       let processedText = figureSource;
@@ -415,6 +455,17 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
       return;
     }
 
+    if (targetSectionKey === "abstract") {
+      if (!hasSubstantialBodySections(project.sections)) {
+        toast.error("摘要建议在正文完成后再写：请先扩写引言及后续章节，再回来生成摘要");
+        return;
+      }
+      if (!buildAbstractSourceBody(project.sections)) {
+        toast.error("未找到可注入的正文内容");
+        return;
+      }
+    }
+
     const selectedTask = outlineTasks.find((t) => t.id === selectedSectionId);
     const subTitle = selectedTask && selectedTask.level > 1 ? selectedTask.title : undefined;
     const isChapterScope = !selectedTask || selectedTask.level <= 1;
@@ -453,9 +504,7 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
       setDetectedRefs(streamResult.references);
       setCitationWarnings(streamResult.citationWarnings);
       setDataClaimWarnings(streamResult.dataClaimWarnings);
-      if (streamResult.references.length > 0 && onUpdateProject) {
-        onUpdateProject({ references: streamResult.references });
-      }
+      // 参考文献合并放到 applyGenerationResult，避免用本节紧凑表覆盖全局表
 
       if (streamResult.refMapping && Object.keys(streamResult.refMapping).length > 0) {
         setLastRefMapping(streamResult.refMapping);

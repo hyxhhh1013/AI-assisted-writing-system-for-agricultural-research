@@ -12,6 +12,7 @@ import { projectStore } from "@/lib/store";
 import type { ProjectData } from "@/contracts/project";
 import { streamDataAnalysis } from "@/services/analysis";
 import { getErrorMessage } from "@/lib/error-utils";
+import { AiResultDisclaimer } from "@/components/shared/ai-result-disclaimer";
 
 interface AnalysisPanelProps {
   projectId: string;
@@ -203,7 +204,8 @@ export function AnalysisPanel({ projectId, project, onSave, onInsertToPaper, onI
               </div>
             )}
           </CardHeader>
-          <CardContent className="flex-1 overflow-auto p-4">
+          <CardContent className="flex-1 overflow-auto p-4 space-y-2">
+            {(result || isGenerating) && <AiResultDisclaimer compact />}
             {result ? (
               <div className="prose prose-sm max-w-none whitespace-pre-wrap leading-relaxed text-xs">
                 {result}

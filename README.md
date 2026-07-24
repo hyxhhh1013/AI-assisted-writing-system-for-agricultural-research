@@ -22,7 +22,7 @@
 
 - **前端**: Next.js 16 (Turbopack) + React 19 + Tailwind CSS v4 + Shadcn UI
 - **后端**: Next.js Route Handlers + SSE Streaming
-- **数据库**: Prisma + **PostgreSQL**（本地可用 `docker-compose.yml`）
+- **数据库**: Prisma + **PostgreSQL**（本地安装本机 PostgreSQL，默认 `localhost:5433`）
 - **AI**: DeepSeek Chat（主写）+ 智谱 GLM-4（Verifier，可选）
 - **RAG**: BM25 + 向量余弦混合检索 (RRF 融合)，索引文件 `data/index_*.json` + `.emb`
 - **图表**: Python (matplotlib) 子进程，`PYTHON_CMD` 环境变量
@@ -65,7 +65,7 @@ npx playwright install chromium
 
 ```bash
 DEEPSEEK_API_KEY=sk-xxxxxx
-DATABASE_URL=postgresql://grainscript:grainscript_dev_2024@localhost:5432/grainscript
+DATABASE_URL=postgresql://grainscript:grainscript_dev_2024@localhost:5433/grainscript
 ```
 
 可选智谱 AI（Verifier 独立验证）：
@@ -82,10 +82,18 @@ RAG_ARTICLES_DIR=papers
 PYTHON_CMD=python3
 ```
 
-### 4. 启动数据库并初始化
+### 4. 初始化本机 PostgreSQL
+
+确保本机 PostgreSQL 已安装并在运行（本仓库默认端口 `5433`），库与用户可用：
+
+```sql
+CREATE ROLE grainscript LOGIN PASSWORD 'grainscript_dev_2024';
+CREATE DATABASE grainscript OWNER grainscript;
+```
+
+然后：
 
 ```bash
-docker compose up -d db
 npx prisma generate
 npx prisma db push
 ```
@@ -162,7 +170,7 @@ npm run docs:api-index   # 刷新 docs/API_INDEX.md 路由表
 
 `npm run test:e2e` 会拉起 `npm run dev`（非 CI 时可复用已有 dev server）。需：
 
-1. `docker compose up -d db`，`.env` 配置 `DATABASE_URL`
+1. 本机 PostgreSQL 已启动，`.env` 配置 `DATABASE_URL`（默认 `localhost:5433`）
 2. `npx prisma migrate deploy`（或 `db push`）+ `npm run create-admin`
 3. 可选 `E2E_EMAIL` / `E2E_PASSWORD`（默认 `admin@lab.local` / `admin123456`）
 4. 首次运行：`npx playwright install chromium`
@@ -186,7 +194,7 @@ npm run docs:api-index   # 刷新 docs/API_INDEX.md 路由表
 | [docs/VIBECODING.md](docs/VIBECODING.md) | 单次功能开发模板 |
 | [docs/ENGINEERING_OPTIMIZATION_QUEUE.md](docs/ENGINEERING_OPTIMIZATION_QUEUE.md) | 工程 PR 接力队列 |
 | [ARCHITECTURE](docs/ARCHITECTURE.md) | 系统架构、ERD（历史文档，与 L2 索引互补） |
-| [DEPLOY](docs/DEPLOY.md) | Docker 部署与 RAG 迁移 |
+| [DEPLOY](docs/DEPLOY.md) | 部署与 RAG 迁移 |
 | [CONVENTIONS](docs/CONVENTIONS.md) | 规范地图 |
 
 ## 文档索引

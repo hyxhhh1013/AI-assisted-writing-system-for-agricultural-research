@@ -134,6 +134,8 @@ export interface WritingRequest {
     abstract?: string;
     outline?: string;
     sectionPreviews?: Record<string, string>;
+    /** 摘要写作专用：已完成正文全文（按章节注入） */
+    sectionBodies?: Record<string, string>;
     analysisResults?: string[];
     blueprint?: import("./writing-blueprint").WritingBlueprint | null;
   };

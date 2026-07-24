@@ -14,20 +14,25 @@ export async function register() {
       console.error("[uncaughtException]", error.message, error.stack?.slice(0, 500));
     });
 
-    // RAG 预热：后台预加载全库 chunks + 倒排索引，把冷启动开销移出用户首次检索。
-    // P0 后全库向量不再灌入 JS 内存（仅保留紧凑 .emb Buffer），预加载内存峰值可控。
-    // 设 RAG_WARMUP=0 可关闭（内存极紧张时回退按需加载）。
-    if (process.env.RAG_WARMUP !== "0") {
+    // RAG 预热：默认 light（仅元数据）；full=全库；RAG_WARMUP=0 关闭
+    if (ragWarmupMode() !== "off") {
       setTimeout(async () => {
         try {
           const { localRAG } = await import("@/lib/rag");
-          console.log("[warmup] RAG 全库预热开始...");
-          const { chunks, ms } = await localRAG.warmup();
-          console.log(`[warmup] RAG 预热完成：${chunks} chunks，耗时 ${ms}ms`);
+          console.log("[warmup] RAG 预热开始...");
+          const { chunks, ms, mode } = await localRAG.warmup();
+          console.log(`[warmup] RAG 预热完成：mode=${mode} chunks=${chunks}，耗时 ${ms}ms`);
         } catch (e) {
           console.warn("[warmup] RAG 预热失败（非致命）:", (e as Error).message);
         }
       }, 3000);
     }
   }
+}
+
+function ragWarmupMode(): "light" | "full" | "off" {
+  const raw = (process.env.RAG_WARMUP ?? "light").trim().toLowerCase();
+  if (raw === "0" || raw === "off" || raw === "false" || raw === "no") return "off";
+  if (raw === "full" || raw === "1" || raw === "true" || raw === "yes") return "full";
+  return "light";
 }

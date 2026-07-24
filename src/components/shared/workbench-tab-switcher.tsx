@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useGoBack } from "@/contexts/navigation-history";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { getModeAccent, getDataPanelTitle, getDataTabTooltip, getOutlineTabTooltip, getStructureTabTooltip } from "@/lib/mode-theme";
+import { getModeAccent, getDataTabTooltip, getOutlineTabTooltip, getStructureTabTooltip } from "@/lib/mode-theme";
 import { siteTheme } from "@/lib/site-theme";
 import {
   ArrowLeft, Layout, Database, Radar, BookOpen,
@@ -12,11 +12,6 @@ import {
 } from "lucide-react";
 import type { WorkbenchTab } from "@/app/workbench/page";
 import { getModuleHref, listModules, MODULE_ICON_MAP } from "@/lib/module-registry";
-import { parsePaperPassport } from "@/contracts/paper-passport";
-import {
-  getPrimaryTabForPhase,
-  isTabAlignedWithPhase,
-} from "@/lib/paper-passport-navigation";
 
 interface WorkbenchTabSwitcherProps {
   activeTab: WorkbenchTab;
@@ -25,7 +20,6 @@ interface WorkbenchTabSwitcherProps {
   handleSave: () => void;
   projectId: string | null;
   projectMode: "review" | "research";
-  paperPassportRaw?: string | null;
   setRightPanelMode: (mode: "preview" | "reader") => void;
   setIsPreviewOpen: (open: boolean) => void;
 }
@@ -69,7 +63,6 @@ function getTabTitle(tab: WorkbenchTab, mode: "review" | "research"): string {
 export function WorkbenchTabSwitcher({
   activeTab, setActiveTab, isWritingGenerating,
   handleSave, projectId, projectMode,
-  paperPassportRaw,
   setRightPanelMode, setIsPreviewOpen,
 }: WorkbenchTabSwitcherProps) {
   const goBack = useGoBack();
@@ -77,11 +70,6 @@ export function WorkbenchTabSwitcher({
   const sidebarModules = listModules({ placement: "workbench-sidebar" });
   const visibleTabs = TAB_DEFS;
   const accent = getModeAccent(projectMode);
-  const passport = parsePaperPassport(paperPassportRaw ?? null);
-  const currentPhase = passport?.currentPhase;
-  const primaryTab = currentPhase !== undefined
-    ? getPrimaryTabForPhase(currentPhase)
-    : null;
 
   const handleTabClick = (tabId: WorkbenchTab) => {
     setActiveTab(tabId);
@@ -99,9 +87,6 @@ export function WorkbenchTabSwitcher({
       <div className="flex-1 flex flex-col gap-2">
         {visibleTabs.map(tab => {
           const isActive = activeTab === tab.id;
-          const isPhaseTarget = passport
-            && currentPhase !== undefined
-            && isTabAlignedWithPhase(tab.id, currentPhase);
           return (
           <Button
             key={tab.id}
@@ -114,13 +99,9 @@ export function WorkbenchTabSwitcher({
               isActive && accent.activeTab,
               !isActive && siteTheme.btnGhost,
               tab.id === "writing" && isWritingGenerating && !isActive && cn("animate-pulse ring-2", accent.ring),
-              isPhaseTarget && !isActive && "ring-2 ring-[#1a5632]/35",
             )}
           >
             <tab.icon className={cn("h-5 w-5", tab.id === "writing" && isWritingGenerating && !isActive && accent.iconText)} />
-            {isPhaseTarget && (
-              <span className="absolute -bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-[#1a5632]" />
-            )}
           </Button>
         );})}
       </div>

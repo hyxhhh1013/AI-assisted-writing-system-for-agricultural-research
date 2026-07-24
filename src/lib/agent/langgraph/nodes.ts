@@ -6,6 +6,7 @@ import {
   checkRepeatCall,
   shouldRequestConfirmation,
 } from "@/lib/agent/core/safety";
+import { checkAgentToolPhaseGate } from "@/lib/agent/core/phase-gates";
 import {
   findTool,
   parseToolArgs,
@@ -35,7 +36,13 @@ export async function planNode(
   }
 
   try {
-    const plan = await createPlan(state.goal, agentContext);
+    // 续跑：已有 plan 则跳过重新规划
+    if (state.plan && state.messages.length > 0) {
+      events.push({ type: "agent/status", status: "thinking" });
+      return { events };
+    }
+
+    const plan = await createPlan(state.goal, agentContext, agentContext.projectBriefing);
     events.push({ type: "agent/plan", plan });
     return {
       plan,
@@ -85,7 +92,7 @@ export async function agentNode(
 
   events.push({ type: "agent/status", status: "thinking" });
 
-  const systemPrompt = buildAgentSystemPrompt(tools);
+  const systemPrompt = buildAgentSystemPrompt(tools, agentContext.projectBriefing);
   const llmMessages = [{ role: "system" as const, content: systemPrompt }, ...state.messages];
 
   let response;
@@ -172,6 +179,26 @@ export async function toolsNode(
     }
 
     events.push({ type: "agent/action", tool: tool.name, params });
+
+    const gate = checkAgentToolPhaseGate(
+      tool.name,
+      params,
+      agentContext.projectSnapshot,
+    );
+    if (!gate.ok) {
+      newSummaries.push(`[${tool.name}] 失败: ${gate.error}`);
+      newMessages.push({
+        role: "user",
+        content: `Tool result (${tool.name}):\n${gate.error}`,
+      });
+      events.push({
+        type: "agent/observation",
+        tool: tool.name,
+        result: { success: false, error: gate.error },
+        error: gate.error,
+      });
+      continue;
+    }
 
     if (shouldRequestConfirmation(tool) && !parseUserConfirmed(params)) {
       events.push({

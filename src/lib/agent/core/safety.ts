@@ -33,6 +33,14 @@ export function isAgentWriteEnabled(): boolean {
   return isAgentEnabled() && process.env.AGENT_WRITE_ENABLED === "1";
 }
 
+/** 前端展示「可写回」提示（与 AGENT_WRITE_ENABLED 对齐） */
+export function isAgentWritePublicEnabled(): boolean {
+  return (
+    isAgentPublicEnabled()
+    && process.env.NEXT_PUBLIC_AGENT_WRITE_ENABLED === "1"
+  );
+}
+
 export interface RepeatTracker {
   lastTool: string | null;
   lastArgsKey: string | null;

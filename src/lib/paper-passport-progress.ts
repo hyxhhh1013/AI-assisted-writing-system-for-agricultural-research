@@ -3,12 +3,21 @@ import type { PaperPassport, PaperPhase, PhaseStatus } from "@/contracts/paper-p
 export interface PassportProgressSignals {
   referenceCount: number;
   hasBlueprint: boolean;
+  hasArgumentBlueprint: boolean;
   outlineChars: number;
   filledCoreSections: number;
   totalCoreSections: number;
   expandedOutlineCount: number;
   abstractChars: number;
   reviewDoneCount: number;
+  argumentChainCount?: number;
+  argumentRebuttalCount?: number;
+  /** W3-CITE-GATE：无越界引用且正文有 [n] → Phase 5 done */
+  citationGatePassed?: boolean;
+  /** 可导出：有文献且无越界（可不含文内引用） */
+  citationExportReady?: boolean;
+  citationOutOfBounds?: number[];
+  citationCount?: number;
 }
 
 function phaseKey(n: number): `${PaperPhase}` {
@@ -64,9 +73,11 @@ export function recomputePassportProgress(
     }
   }
 
-  if (signals.expandedOutlineCount >= 1) {
+  if (signals.hasArgumentBlueprint) {
     phaseStatus["3"] = "done";
   } else if (phaseStatus["2"] === "done" && phaseStatus["3"] === "locked") {
+    phaseStatus["3"] = "ready";
+  } else if (phaseStatus["2"] === "done" && !signals.hasArgumentBlueprint) {
     phaseStatus["3"] = "ready";
   }
 
@@ -87,8 +98,21 @@ export function recomputePassportProgress(
   if (phaseStatus["4"] === "done" && phaseStatus["5"] === "locked") {
     phaseStatus["5"] = "ready";
   }
-  if (signals.referenceCount >= 3 && fillRatio >= 0.5) {
+  // W3-CITE-GATE：仅当引用硬检通过才标 Phase 5 done（旧逻辑仅靠文献数会误过稿）
+  if (signals.citationGatePassed) {
     phaseStatus["5"] = "done";
+  } else if (
+    signals.referenceCount >= 3
+    && fillRatio >= 0.5
+    && (signals.citationOutOfBounds?.length ?? 0) > 0
+  ) {
+    phaseStatus["5"] = "in_progress";
+  } else if (
+    signals.referenceCount >= 3
+    && fillRatio >= 0.5
+    && phaseStatus["4"] === "done"
+  ) {
+    phaseStatus["5"] = "in_progress";
   }
 
   if (signals.abstractChars >= 80) {
@@ -121,7 +145,7 @@ export function getNextPhaseHint(passport: PaperPassport): string | null {
     0: "完善论文配置",
     1: "导入或检索参考文献",
     2: "生成大纲与写作蓝图",
-    3: "扩写论证提纲子节",
+    3: "生成论证蓝图（主张—证据—推理）",
     4: "协作扩写各章节",
     5: "核对正文引用编号",
     6: "撰写摘要与关键词",

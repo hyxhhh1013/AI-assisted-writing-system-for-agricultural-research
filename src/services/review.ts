@@ -62,6 +62,47 @@ export async function runReview(
   return data.report;
 }
 
+/** POST /api/review/rounds — 下一轮审查（max 2） */
+export async function runReviewRound(input: {
+  projectId: string;
+  title: string;
+  sections: Array<{ key: string; content: string }>;
+  outline?: string;
+  projectMode?: "review" | "research";
+  force?: boolean;
+}): Promise<import("@/contracts/review-rounds").ReviewRoundResult> {
+  const res = await fetch("/api/review/rounds", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    success?: boolean;
+    error?: string;
+  } & Partial<import("@/contracts/review-rounds").ReviewRoundResult>;
+
+  if (!res.ok || data.success === false) {
+    throw new Error(data.error || "审查编排失败");
+  }
+  return data as import("@/contracts/review-rounds").ReviewRoundResult;
+}
+
+/** GET /api/review/rounds?projectId= */
+export async function getReviewRoundStatusClient(
+  projectId: string,
+): Promise<import("@/contracts/review-rounds").ReviewRoundStatus> {
+  const res = await fetch(`/api/review/rounds?projectId=${encodeURIComponent(projectId)}`);
+  const data = (await res.json().catch(() => ({}))) as {
+    success?: boolean;
+    status?: import("@/contracts/review-rounds").ReviewRoundStatus;
+    error?: string;
+  };
+  if (!res.ok || !data.success || !data.status) {
+    throw new Error(data.error || "获取审查轮次失败");
+  }
+  return data.status;
+}
+
 /** GET /api/review/history — 审查历史列表 */
 export async function getHistory(projectId?: string): Promise<ReviewHistoryItem[]> {
   const params = new URLSearchParams();

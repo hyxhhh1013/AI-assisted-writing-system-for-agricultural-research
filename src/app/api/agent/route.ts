@@ -10,6 +10,11 @@ import {
   runAgentLoop,
 } from "@/lib/agent";
 import type { AgentSSEEvent } from "@/contracts/agent";
+import {
+  createAgentSession,
+  getAgentSessionForUser,
+  snapshotToInitialState,
+} from "@/lib/agent/session-store";
 
 const log = createLogger("api/agent");
 
@@ -43,20 +48,74 @@ export async function POST(req: NextRequest) {
     const tools = createAgentTools();
     const encoder = new TextEncoder();
 
+    let goal = data.goal?.trim() ?? "";
+    let projectId = data.projectId;
+    let directionSlug = data.directionSlug;
+    let sessionId: string | undefined;
+    let resumeState: ReturnType<typeof snapshotToInitialState> | undefined;
+
+    if (data.resume && data.sessionId) {
+      const existing = await getAgentSessionForUser(data.sessionId, userId);
+      if (!existing) {
+        return new Response(JSON.stringify({ error: "会话不存在" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (existing.status !== "interrupted" && existing.status !== "running" && existing.status !== "error") {
+        return new Response(
+          JSON.stringify({ error: `会话状态为 ${existing.status}，无法续跑` }),
+          { status: 409, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (!existing.snapshot) {
+        return new Response(JSON.stringify({ error: "会话无可用断点快照" }), {
+          status: 409,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      sessionId = existing.id;
+      goal = existing.goal;
+      projectId = existing.projectId ?? undefined;
+      directionSlug = existing.directionSlug ?? undefined;
+      resumeState = snapshotToInitialState(existing.goal, existing.snapshot);
+    } else {
+      if (!goal) {
+        return new Response(JSON.stringify({ error: "目标不能为空" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      const created = await createAgentSession({
+        userId,
+        goal,
+        projectId,
+        directionSlug,
+      });
+      sessionId = created.id;
+    }
+
     const stream = new ReadableStream({
       async start(controller) {
         const context = createAgentContext({
           userId,
-          projectId: data.projectId,
-          directionSlug: data.directionSlug,
+          projectId,
+          directionSlug,
           signal: req.signal,
         });
 
+        if (resumeState) {
+          context.budget.currentIteration = resumeState.iteration ?? 0;
+          context.budget.toolCallCount = resumeState.toolCallCount ?? 0;
+        }
+
         try {
           for await (const event of runAgentLoop({
-            goal: data.goal,
+            goal,
             context,
             tools,
+            sessionId,
+            resumeState,
           })) {
             if (req.signal.aborted) break;
             controller.enqueue(encoder.encode(sseEncode(event)));

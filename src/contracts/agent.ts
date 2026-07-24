@@ -58,13 +58,23 @@ export type AgentSSEEvent =
     }
   | { type: "agent/confirm"; tool: string; params: Record<string, unknown>; message: string }
   | { type: "agent/complete"; summary: AgentSummary }
-  | { type: "agent/error"; error: string };
+  | { type: "agent/error"; error: string }
+  | {
+      type: "agent/session";
+      sessionId: string;
+      status: "running" | "interrupted" | "completed" | "error";
+      resumed?: boolean;
+      toolSummaries?: string[];
+    };
 
 export interface AgentRequest {
-  goal: string;
+  goal?: string;
   projectId?: string;
   directionSlug?: string;
   mode?: "auto" | "guided";
+  /** 续跑：已有 AgentSession id */
+  sessionId?: string;
+  resume?: boolean;
 }
 
 export function isAgentSSEEvent(value: unknown): value is AgentSSEEvent {

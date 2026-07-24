@@ -23,7 +23,7 @@ export const PHASE_PRIMARY_TAB: Record<PaperPhase, WorkbenchPhaseTab | "meta"> =
   3: "writing",
   4: "writing",
   5: "structure",
-  6: "structure",
+  6: "meta",
   7: "plagiarism",
 };
 
@@ -45,7 +45,8 @@ export function isTabAlignedWithPhase(
   phase: PaperPhase,
 ): boolean {
   const primary = getPrimaryTabForPhase(phase);
-  if (primary === "meta") return tab === "structure";
+  // meta（配置/双语摘要）没有对应 Tab；在 structure 上不算已对齐
+  if (primary === "meta") return false;
   return tab === primary;
 }
 
@@ -63,12 +64,18 @@ export function getPhaseNavigationAction(phase: PaperPhase): CockpitNavigationAc
     case 5:
       return { type: "workbench-tab", tab: "structure" };
     case 6:
-      return { type: "focus-section", sectionKey: "abstract" };
+      // W3-ABS-UI：双语摘要在项目设置
+      return { type: "open-meta" };
     case 7:
       return { type: "workbench-tab", tab: "plagiarism" };
     default:
       return null;
   }
+}
+
+/** Agent 模式下优先进 Agent Tab 的阶段（任务包可执行） */
+export function phasePrefersAgentTab(phase: PaperPhase): boolean {
+  return phase === 1 || phase === 3 || phase === 4 || phase === 5 || phase === 6 || phase === 7;
 }
 
 export function isPhaseNavigable(

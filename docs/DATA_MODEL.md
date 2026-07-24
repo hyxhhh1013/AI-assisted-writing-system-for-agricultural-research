@@ -27,8 +27,20 @@ KnowledgeFile 1──* KnowledgeChunk
 | `dataSources` | JSON `DataSourceAnalysis[]` |
 | `expandedOutlineSections` | JSON `string[]`，大纲扩写已完成任务 id（`stableHash(fullPath)`）；整章扩写时同 `sectionKey` 下子节一并标记 |
 | `writingBlueprint` | JSON `WritingBlueprint`（`src/contracts/writing-blueprint.ts`），扩写前全局叙事与配图规划 |
+| `argumentBlueprint` | JSON `ArgumentBlueprint`（`src/contracts/argument-blueprint.ts`），Phase 3 主张—证据—推理链（≠ writingBlueprint） |
 | `paperPassport` | JSON `PaperPassport`（`src/contracts/paper-passport.ts`）：8 阶段 + `config` / `literature` / `draftProgress` / `abstractSnapshot` / `reviewRound` 快照 |
 | `qualitySession` | JSON 质量中心会话快照（查重配置、审查展开状态、降重采纳记录），刷新/切项目恢复 |
+
+## Agent 会话（AgentSession · W2-CHECKPOINT）
+
+| 字段 | 说明 |
+|------|------|
+| `goal` | 用户目标原文 |
+| `status` | `running` \| `interrupted` \| `completed` \| `error` |
+| `snapshot` | JSON `AgentSessionSnapshot`（messages / plan / iteration / toolSummaries…） |
+| `projectId` | 可选，绑定论文项目 |
+
+中断后续跑：`POST /api/agent` `{ sessionId, resume: true }`；列表：`GET /api/agent/sessions?projectId=&status=interrupted`。
 
 **保存策略（当前）**
 
@@ -37,6 +49,7 @@ KnowledgeFile 1──* KnowledgeChunk
 - `AnalysisResult`：**增量 PATCH** `/api/projects/[id]/analysis-results`
 - `expandedOutlineSections`：随项目 **POST** `/api/projects` 写入（JSON 列）；自动保存/手动保存均走此路径
 - `writingBlueprint`：`project-writing-blueprint-db.ts` 统一读写蓝图数据
+- `argumentBlueprint`：`project-argument-blueprint-db.ts` 统一读写论证蓝图；Passport Phase 3 用 `hasArgumentBlueprint`
 - 禁止前端 `saveProject` 全量覆盖 refs/analysis（已迁移，见 ENG-PR-025b）
 
 ## 知识库（KnowledgeFile）

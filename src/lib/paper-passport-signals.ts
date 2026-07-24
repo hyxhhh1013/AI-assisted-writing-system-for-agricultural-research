@@ -23,6 +23,7 @@ export function buildPassportSignalsFromProject(
   return {
     referenceCount: project.references?.length ?? 0,
     hasBlueprint: Boolean(project.writingBlueprint?.trim()),
+    hasArgumentBlueprint: Boolean(project.argumentBlueprint?.trim()),
     outlineChars: project.outline?.trim().length ?? 0,
     filledCoreSections,
     totalCoreSections: coreKeys.length,

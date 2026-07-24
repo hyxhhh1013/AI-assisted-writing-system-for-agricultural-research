@@ -2,7 +2,8 @@ import { callAINonStreaming, getAgentModelConfig } from "@/lib/ai";
 import { buildRefinerSystemPrompt, buildRefinerPrompt } from "@/lib/prompts";
 import {
   collectInvalidCitationNumbers,
-  stripOutOfRangeCitations,
+  resolveAllowedCitationIndices,
+  stripDisallowedCitations,
 } from "@/lib/reference-reorder";
 import { normalizeAllCitationFormats } from "@/lib/citation";
 import type { PreparedWritingContext, WritingPipelineEmit } from "../types";
@@ -25,11 +26,12 @@ export async function runRefinerPhase(
   signal: AbortSignal,
   projectMode?: "review" | "research",
 ): Promise<RefinerPhaseResult> {
-  const { contextText, referencesByIndex } = prepared;
+  const { contextText, referencesByIndex, groundedRefIndices } = prepared;
   const maxRefIndex = referencesByIndex.length;
+  const allowed = resolveAllowedCitationIndices(maxRefIndex, groundedRefIndices);
 
   const normalizedDraft = normalizeAllCitationFormats(finalDraft || initialDraft);
-  const correctedDraft = stripOutOfRangeCitations(normalizedDraft, maxRefIndex);
+  const correctedDraft = stripDisallowedCitations(normalizedDraft, allowed);
   if (correctedDraft !== (finalDraft || initialDraft)) {
     emit({ type: "corrected_text", text: correctedDraft });
   }
@@ -73,9 +75,9 @@ export async function runRefinerPhase(
       });
 
       if (correctedText && correctedText.trim().length > 10) {
-        refinedDraft = stripOutOfRangeCitations(
+        refinedDraft = stripDisallowedCitations(
           normalizeAllCitationFormats(correctedText.trim()),
-          maxRefIndex,
+          allowed,
         );
         emit({ type: "corrected_text", text: refinedDraft });
         emit({ type: "pipeline_step", step: "refining", status: "done", detail: "已修正" });

@@ -8,7 +8,7 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-07-14（文档收拢：Phase 6 与 Phase 11 对齐；Wave 2 部分完成；入口重定向）  
+> **最后更新**：2026-07-24（收拢：写作 Agent 产品化为 Wave 2 主轴；`/academic-paper` 改引导页；ONESHOT 先于 CHECKPOINT）  
 > **实时 status 只看 §1 Phase 11**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
@@ -101,10 +101,10 @@
 | **ENG-PR-096b** | **要点列表 + `bullets[]` 契约** | 096a | 1d | done | 2026-06-13；`WritingBulletList` + schema |
 | **ENG-PR-096c** | **`expand_bullet` 逐条扩写 + 合并** | 096b | 2d | done | 2026-06-13；`bullet_done` SSE + `use-writing-bullet-expand` |
 | **ENG-PR-096d** | **工作台默认段落模式 + 选区助手** | 096c | 1～2d | **done** | **P1**；`paragraph-editor` / `use-ai-paragraph` 为主路径 |
-| ENG-PR-082 | Verifier 结构化 + 选择性 Refiner | **096c** | 2d | todo | 见 Phase 11；Wave 2 收尾 |
+| ENG-PR-082 | Verifier 结构化 + 选择性 Refiner | **096c** | 2d | **done** | 2026-07-24；`review_report` + Agent auto-fix |
 | ENG-PR-083 | 大纲骨架化 `userSkeleton` | — | 1d | **done** | 归档→W1-083；outline API/UI + prompt |
 | ~~ENG-PR-084~~ | ~~入口重构~~ | — | — | **cancelled** | 归档→Phase 11；由 Cockpit 取代；`/writing` 已重定向 |
-| ENG-PR-085 | 分析页 AI 免责标注 | — | 2h | todo | 见 Phase 11；目标改为工作台 data 面板 |
+| ENG-PR-085 | 分析页 AI 免责标注 | — | 2h | **done** | 2026-07-24；`AiResultDisclaimer` → data/knowledge/analysis |
 | ~~ENG-PR-086~~ | ~~编辑器对话面板~~ | — | — | **cancelled** | 归档→Phase 11；由 Agent Tab 取代 |
 | **Phase 7 — 文献库书目增强 + 外部文献发现** |
 | ENG-PR-090 | 文献库列表：期刊/DOI 列 + 筛选 + 契约扩展 | ENG-PR-027 | 1～2d | done | 列表列/筛选/ISSN 弹窗/响应式卡片 |
@@ -144,15 +144,25 @@
 | W0-WIP-B | Agent Phase A + direction bridge commit | SEC-01 | 1d | done | Wave 0；`e5a02c4`+`00d08b8` |
 | W1-PASSPORT | PaperPassport 契约 + Cockpit UI | W0-* | 2w | done | MVP：配置+任务卡+快照+导航 |
 | W2-LANGGRAPH | LangGraph + write tools | W1 | 2w | **done*** | *编排与工具已接；缺 AgentSession checkpoint（另项） |
-| W2-CHECKPOINT | AgentSession DB checkpoint / 中断恢复 | W2-LANGGRAPH | 2d | todo | Wave 2 缺口 |
+| W2-AGENT-GUIDE | `/academic-paper`→Agent 引导页 + `?tab=agent` | W2-LANGGRAPH | 0.5d | **done** | 2026-07-24；AgentGuidePage |
+| W2-AGENT-ONESHOT | 「写一节」闭环（检索→写→落盘） | W2-AGENT-GUIDE | 3～5d | **done** | 2026-07-24；写回刷新 + ONESHOT 提示 |
+| W2-CHECKPOINT | AgentSession DB checkpoint / 中断恢复 | W2-AGENT-ONESHOT | 2d | **done** | 2026-07-24；AgentSession + resume |
 | W1-083 | userSkeleton → Phase 2 | W1-PASSPORT | 1d | done | outline API/UI + prompt 骨架约束 |
 | W0-5 | 仓库卫生（分支收拢、tmp、误删 migration） | — | 0.5d | todo | MASTER_PLAN Wave 0 |
-| W3-ARGUMENT | Phase 3 Argument Blueprint | W1-PASSPORT | 1w | todo | Wave 3 主轴第一步 |
+| W3-ARGUMENT | Phase 3 Argument Blueprint | W2-CHECKPOINT | 1w | **done** | 2026-07-24；契约+API+提纲侧栏+Agent tool+Passport |
+| W3-ABSTRACT | Phase 5b 双语摘要 API | W3-ARGUMENT | 2d | **done** | 2026-07-24；`/api/abstract/bilingual` + Agent tool |
+| W3-PHASE-PACK | Passport 阶段任务包 + 硬门禁 | W3-ABSTRACT | 2d | **done** | 2026-07-24；任务包契约+门禁+「完成当前阶段」 |
+| W3-PHASE-UI | 「完成当前阶段」学生按钮 | W3-PHASE-PACK | 1d | **done** | Agent 面板 + Cockpit 任务包目标/Agent 导航 |
+| W3-REVIEW-2 | 审查 max-2 轮编排 | W3-PHASE-PACK | 3d | **done** | 2026-07-24；`/api/review/rounds` + Agent `run_review_rounds` + UI |
+| W3-CITE-GATE | 导出前引用硬检 | W3-REVIEW-2 | 1d | **done** | 2026-07-24；`/api/citations/gate` + PDF 422 + Passport Phase 5 |
+| W3-E2E-EVAL | 任务包/管道 eval 门禁 | W3-CITE-GATE | 2d | **done** | 2026-07-24；`npm run eval:gates` + pipeline EVAL_STRICT |
 | ~~ENG-PR-084~~ | ~~入口废弃~~ | — | — | cancelled | Cockpit；`/writing`→workbench |
 | ~~ENG-PR-086~~ | ~~编辑器对话面板~~ | — | — | cancelled | Agent Tab |
-| ENG-PR-082 | Verifier 结构化 | W2 | 2d | todo | Wave 2 收尾（可与 W3 并行） |
-| ENG-PR-085 | 工作台 data 免责标注 | — | 2h | todo | Wave 3；`/analysis` 已重定向 |
+| ENG-PR-082 | Verifier 结构化 | W2 | 2d | **done** | 2026-07-24；writing-verification + auto-fix |
+| W3-AUTO-FIX | Agent 写后自动核查修正 | ENG-PR-082 | 0.5d | **done** | `AGENT_WRITE_AUTO_FIX` 默认开 |
+| ENG-PR-085 | 工作台 data 免责标注 | — | 2h | **done** | 2026-07-24；`ai-result-disclaimer.tsx` |
 | ENG-PR-094 | OA 全文入库 | — | 1-2w | todo | Wave 4 backlog |
+| W4-EXPORT | DOCX/PDF 导出就绪 + 双语/题注 | W3-CITE-GATE | 1d | **done** | 2026-07-24；`export-readiness` + docx |
 
 
 | 来源 | 本队列处理方式 |
@@ -923,23 +933,33 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-07-06 | W1-PASSPORT + W1-083 | AI | Cockpit 阶段点击导航+任务卡；Directions 入 module-registry；ENG-PR-083 userSkeleton（outline API/UI/prompt） |
 | 2026-07-06 | W1-PASSPORT MVP done | AI | 任务卡点击跳转；passport 进度快照；Phase0 PATCH；人控/Agent 切换；Cockpit 侧栏集成 |
 | 2026-07-14 | docs-cleanup | AI | MASTER_PLAN §0 真相表；Phase 6↔11 状态同步；`/writing` `/analysis`→workbench；标 W2-CHECKPOINT / W3-ARGUMENT |
+| 2026-07-24 | W2-AGENT-GUIDE | AI | `/academic-paper`→AgentGuidePage；MASTER_PLAN 收拢；ONESHOT→CHECKPOINT→W3；禁平行流水线 |
+| 2026-07-24 | W2-AGENT-ONESHOT | AI | 写回后刷新编辑器；ONESHOT 提示词/快捷语；NEXT_PUBLIC_AGENT_WRITE_ENABLED |
+| 2026-07-24 | W2-CHECKPOINT | AI | AgentSession 表；中断落盘；resume API；面板「继续」 |
+| 2026-07-24 | W3-ARGUMENT | AI | ArgumentBlueprint 契约/API/提纲侧栏/Agent tool；Passport Phase 3 |
+| 2026-07-24 | W3-ABSTRACT | AI | 双语摘要 API + Agent tool；Passport abstractSnapshot 存 zh/en；阶段门禁 |
+| 2026-07-24 | W3-PHASE-PACK | AI | 阶段任务包契约；Passport 硬门禁；Agent「完成当前阶段」 |
+| 2026-07-24 | ENG-PR-082 | AI | Verifier JSON 结构化 + SSE review_report；fix_only 可选 issue |
+| 2026-07-24 | W3-AUTO-FIX | AI | Agent write 默认 full 核查修正（AGENT_WRITE_AUTO_FIX） |
+| 2026-07-24 | W3-REVIEW-2 | AI | 审查 max-2 轮编排 API/Agent/UI + Passport reviewRound |
+| 2026-07-24 | W3-CITE-GATE | AI | 引用硬检 gate API + PDF 拦截 + Phase 5 done 条件 |
+| 2026-07-24 | W3-E2E-EVAL | AI | `eval:gates` 固定样例门禁 + pipeline EVAL_STRICT |
+| 2026-07-24 | ENG-PR-085 | AI | 工作台 data / 知识库精读 AI 结果免责横幅 |
+| 2026-07-24 | W4-EXPORT | AI | DOCX/PDF 共用导出硬检；双语对照摘要 + 图表题注清单 |
 
 ---
 
 ## 5. 推荐执行顺序（给「下一次 AI」）
 
-**当前主轴（2026-07-14）**：先收拢工作区 WIP → 再 Wave 3（`W3-ARGUMENT`）或 Wave 2 缺口（`W2-CHECKPOINT` / `ENG-PR-082`）。  
-历史 Phase 0～10 均已 done，勿重开。详见 [`MASTER_PLAN.md`](./MASTER_PLAN.md) §0。
+**当前主轴（2026-07-24）**：W0-5 分支收拢，或 ENG-PR-094 OA / workbench 瘦身。W4-EXPORT 已闭环。
 
 | 优先级 | ID | 说明 |
 |--------|-----|------|
-| P0 | W0-5 + 分支收拢 | 未提交改动多在 `eng/pr-092-*`；按主题拆 commit 后合 main |
-| P1 | **W3-ARGUMENT** | Wave 3：Argument Blueprint → passport |
-| P1′ | W2-CHECKPOINT 或 ENG-PR-082 | Agent checkpoint / Verifier（与 W3 二选一，勿齐开） |
-| P2 | ENG-PR-085 | 工作台 data 免责 |
-| P3 | ENG-PR-094 | OA 入库 backlog |
+| P0 | W0-5 + 分支收拢 | 按主题拆 commit 后合 main |
+| P1 | ENG-PR-094 / workbench 瘦身 | Wave 4 余项 |
+| P2 | Cockpit×阶段任务包联动 | 可选增强 |
 
-**若只能做一个产品 PR**：做 **W3-ARGUMENT**。
+**若只能做一个产品 PR**：做 **W0-5 收拢** 或 **Cockpit 阶段联动**。
 
 ---
 

@@ -5,7 +5,7 @@ import { runAuditOnlyMode, runFixOnlyMode } from "./pipeline/modes";
 import { runWriterPhase, runExpandBulletPhase } from "./pipeline/writer";
 import { runVerifierPhase } from "./pipeline/verifier";
 import { runRefinerPhase } from "./pipeline/refiner";
-import { runFinalizePhase, emitDraftReferences } from "./pipeline/finalize";
+import { runFinalizePhase, finalizeAndEmitCitations } from "./pipeline/finalize";
 import type { WritingGlobalContext, WritingPipelineEmit } from "./types";
 
 const tick = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -51,7 +51,7 @@ export async function runWritingPipeline(params: {
   const { initialDraft, finalDraft } = await runWriterPhase(data, prepared, emit, signal);
 
   if (mode === "fast") {
-    emitDraftReferences(finalDraft, prepared, emit);
+    finalizeAndEmitCitations(finalDraft, prepared, emit);
     emit({ type: "status", status: "completed" });
     finishStream();
     return;

@@ -113,6 +113,12 @@ export function normalizeAllCitationFormats(text: string): string {
   if (!text) return text;
   let t = normalizeCitationBrackets(text);
 
+  // Markdown / 模型转义：\[11\]、\[11]、[11\] → [11]
+  const citeInner = "([0-9,\\s\\-–—，、]+)";
+  t = t.replace(new RegExp(`\\\\+\\[${citeInner}\\\\+\\]`, "g"), "[$1]");
+  t = t.replace(new RegExp(`\\\\+\\[${citeInner}\\]`, "g"), "[$1]");
+  t = t.replace(new RegExp(`\\[${citeInner}\\\\+\\]`, "g"), "[$1]");
+
   // [参考来源23] / [参考来源 [23]] → [23]
   t = t.replace(/\[参考来源\s*(?:\[)?(\d+)(?:\])?\]/g, "[$1]");
 

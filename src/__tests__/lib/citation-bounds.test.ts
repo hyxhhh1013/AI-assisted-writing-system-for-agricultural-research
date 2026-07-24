@@ -22,4 +22,9 @@ describe("citation bracket normalization", () => {
   it("normalizeAllCitationFormats handles [参考来源16]", () => {
     expect(normalizeAllCitationFormats("见[参考来源16]。")).toBe("见[16]。");
   });
+
+  it("normalizeAllCitationFormats unescapes markdown-style \\[n\\]", () => {
+    expect(normalizeAllCitationFormats("见\\[11\\]与\\[3,5\\]。")).toBe("见[11]与[3,5]。");
+    expect(normalizeAllCitationFormats("仅左逃逸\\[7]与右逃逸[8\\]。")).toBe("仅左逃逸[7]与右逃逸[8]。");
+  });
 });

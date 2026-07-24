@@ -66,19 +66,23 @@ else
   ok "server.js 存在"
 fi
 
-# --- PostgreSQL Docker ---
-if docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^grainscript-db$'; then
-  ok "Docker 容器 grainscript-db 运行中"
-else
-  fail "grainscript-db 未运行。请: docker start grainscript-db 或 docker compose up -d db"
-fi
-
+# --- PostgreSQL ---
 if [[ -n "$DATABASE_URL" && "$DATABASE_URL" == postgresql://* ]]; then
-  if PGPASSWORD="${PGPASSWORD:-grainscript_dev_2024}" psql -h 127.0.0.1 -p 5432 -U grainscript -d grainscript -t -A -c "SELECT 1" >/dev/null 2>&1; then
-    ok "psql SELECT 1 成功（127.0.0.1:5432）"
-  else
-    fail "无法连接 PostgreSQL（127.0.0.1:5432）。检查 Docker 端口映射与 DATABASE_URL 密码"
+  PG_HOST="127.0.0.1"
+  PG_PORT="5432"
+  if [[ "$DATABASE_URL" =~ @([^:/]+):([0-9]+)/ ]]; then
+    PG_HOST="${BASH_REMATCH[1]}"
+    PG_PORT="${BASH_REMATCH[2]}"
+  elif [[ "$DATABASE_URL" =~ @([^:/]+)/ ]]; then
+    PG_HOST="${BASH_REMATCH[1]}"
   fi
+  if PGPASSWORD="${PGPASSWORD:-grainscript_dev_2024}" psql -h "$PG_HOST" -p "$PG_PORT" -U grainscript -d grainscript -t -A -c "SELECT 1" >/dev/null 2>&1; then
+    ok "psql SELECT 1 成功（${PG_HOST}:${PG_PORT}）"
+  else
+    fail "无法连接 PostgreSQL（${PG_HOST}:${PG_PORT}）。检查本机/VPS PostgreSQL 服务与 DATABASE_URL"
+  fi
+else
+  warn "DATABASE_URL 未配置为 postgresql://，跳过数据库连通检查"
 fi
 
 # --- 文献 PDF ---

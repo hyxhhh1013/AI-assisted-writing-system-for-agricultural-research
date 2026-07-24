@@ -18,6 +18,7 @@ describe("paper-passport-snapshots", () => {
     const enriched = enrichPassportSnapshots(passport, {
       referenceCount: 5,
       hasBlueprint: true,
+      hasArgumentBlueprint: false,
       outlineChars: 200,
       filledCoreSections: 2,
       totalCoreSections: 5,

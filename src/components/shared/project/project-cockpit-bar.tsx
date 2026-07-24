@@ -13,12 +13,14 @@ import {
   getPrimaryTabForPhase,
   isPhaseNavigable,
   isTabAlignedWithPhase,
+  phasePrefersAgentTab,
   PHASE_TAB_LABELS,
   type CockpitNavigationAction,
   type CockpitControlMode,
 } from "@/lib/paper-passport-navigation";
 import { getPhaseTasks, countPendingTasks } from "@/lib/paper-passport-tasks";
 import type { PassportProgressSignals } from "@/lib/paper-passport-progress";
+import { getPhaseTaskPack } from "@/contracts/phase-task-pack";
 import { CheckCircle2, Circle, Lock } from "lucide-react";
 
 const AGENT_TAB_ENABLED = process.env.NEXT_PUBLIC_AGENT_ENABLED === "1";
@@ -50,11 +52,7 @@ function resolveNavigateTarget(
   phase: PaperPhase,
   controlMode: CockpitControlMode,
 ): CockpitNavigationAction | null {
-  if (
-    controlMode === "agent"
-    && AGENT_TAB_ENABLED
-    && (phase === 3 || phase === 4 || phase === 7)
-  ) {
+  if (controlMode === "agent" && AGENT_TAB_ENABLED && phasePrefersAgentTab(phase)) {
     return { type: "workbench-tab", tab: "agent" };
   }
   return getPhaseNavigationAction(phase);
@@ -77,12 +75,17 @@ export function ProjectCockpitSidebar({
   const currentPhase = passport.currentPhase;
   const currentStatus = passport.phaseStatus[phaseKey(currentPhase)] ?? "locked";
   const currentLabel = PAPER_PHASE_LABELS[currentPhase] ?? "";
+  const phasePack = getPhaseTaskPack(currentPhase);
   const primaryTab = getPrimaryTabForPhase(currentPhase);
-  const tabAligned = isTabAlignedWithPhase(activeTab, currentPhase)
-    || (controlMode === "agent" && activeTab === "agent" && (currentPhase === 3 || currentPhase === 4));
-  const primaryTabLabel = controlMode === "agent" && AGENT_TAB_ENABLED && (currentPhase === 3 || currentPhase === 4)
-    ? "Agent"
-    : PHASE_TAB_LABELS[primaryTab];
+  const agentAligned =
+    controlMode === "agent"
+    && activeTab === "agent"
+    && phasePrefersAgentTab(currentPhase);
+  const tabAligned = isTabAlignedWithPhase(activeTab, currentPhase) || agentAligned;
+  const primaryTabLabel =
+    controlMode === "agent" && AGENT_TAB_ENABLED && phasePrefersAgentTab(currentPhase)
+      ? "Agent"
+      : PHASE_TAB_LABELS[primaryTab];
 
   const tasks = getPhaseTasks(currentPhase, passport, signals, controlMode);
   const pendingCount = countPendingTasks(tasks);
@@ -141,20 +144,33 @@ export function ProjectCockpitSidebar({
               <span className="ml-1 font-normal text-[#6b7c72]">({pendingCount} 待办)</span>
             )}
           </p>
+          <p className="text-[10px] text-[#3d4f46] leading-snug line-clamp-2">
+            {phasePack.goal}
+          </p>
           {hint && currentStatus !== "done" && (
-            <p className="text-[10px] text-[#6b7c72] leading-snug line-clamp-2">{hint}</p>
+            <p className="text-[10px] text-[#6b7c72] leading-snug line-clamp-1">{hint}</p>
           )}
         </div>
-        {!tabAligned && hint && currentStatus !== "done" && onNavigate && (
+        {currentStatus !== "done" && onNavigate && (
           <button
             type="button"
             onClick={handleGoToPrimary}
             className="shrink-0 rounded-md bg-[#1a5632] px-2 py-1 text-[10px] font-medium text-white hover:bg-[#1a5632]/90"
           >
-            去{primaryTabLabel}
+            {controlMode === "agent" && phasePrefersAgentTab(currentPhase)
+              ? "完成阶段"
+              : tabAligned
+                ? `看${primaryTabLabel}`
+                : `去${primaryTabLabel}`}
           </button>
         )}
       </div>
+
+      {controlMode === "agent" && phasePack.preferredTools.length > 0 ? (
+        <p className="text-[9px] text-[#9aa8a0] leading-snug">
+          推荐工具：{phasePack.preferredTools.join(" → ")}
+        </p>
+      ) : null}
 
       <ul className="space-y-1 rounded-md bg-white/60 px-2 py-1.5">
         {tasks.map((item) => {

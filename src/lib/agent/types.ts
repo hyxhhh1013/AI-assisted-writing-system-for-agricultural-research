@@ -35,6 +35,10 @@ export interface AgentContext {
   projectId?: string;
   directionSlug?: string;
   signal: AbortSignal;
+  /** 运行前注入的项目简报（标题/阶段/空白章节等） */
+  projectBriefing?: string;
+  /** 运行前加载的项目快照（阶段门禁用） */
+  projectSnapshot?: import("@/lib/agent/project-loader").AgentProjectSnapshot | null;
   budget: {
     maxIterations: number;
     currentIteration: number;
@@ -47,6 +51,10 @@ export interface AgentLoopOptions {
   goal: string;
   context: AgentContext;
   tools: ToolDefinition[];
+  /** 已有会话：续跑或边跑边落盘 */
+  sessionId?: string;
+  /** 从快照恢复的初始图状态 */
+  resumeState?: Partial<import("@/lib/agent/langgraph/state").AgentGraphStateType>;
 }
 
 export interface LLMMessage {

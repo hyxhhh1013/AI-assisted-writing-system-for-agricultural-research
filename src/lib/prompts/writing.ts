@@ -15,20 +15,20 @@ export type { SectionPrompt, SectionPromptParams };
 export const WRITING_SECTION_PROMPTS: Record<string, SectionPrompt> = {
   abstract: ({ isChinese }: { isGBT: boolean; isChinese: boolean }) =>
     isChinese
-      ? `请撰写中文摘要。必须是一个完整段落，按以下逻辑组织：
+      ? `请撰写中文摘要。**须基于已提供的全文各章内容综合提炼**，必须是一个完整段落，按以下逻辑组织：
 1. 研究背景（1-2句，点明领域重要性）
 2. 研究缺口或问题
 3. 研究方法（简明）
-4. 关键结果（含量化数据）
+4. 关键结果（含量化数据，须与正文一致）
 5. 主要结论或意义
-不需要"摘要："前缀，禁止分点。`
-      : `请撰写英文摘要（Abstract）。按以下逻辑组织为一个段落：
+硬性要求：摘要中**禁止出现任何文献引用标记**（如 [1]、[2,3]）；不需要"摘要："前缀，禁止分点；不得编造正文未出现的数据。`
+      : `Write the Abstract as one paragraph synthesized from the provided full-text sections:
 1. Broad context — why the topic matters
 2. Specific gap or question
 3. Approach (brief)
-4. Key result with numbers
+4. Key result with numbers (must match the body)
 5. Implication
-Keep it selective: if a detail does not affect editorial triage, omit it.`,
+Hard rules: NO in-text citations like [1]; do not invent numbers absent from the body.`,
 
   introduction:
     `请撰写引言（Introduction）。严格按以下五步推进：
@@ -212,7 +212,24 @@ export function buildWriterSystemPrompt(params: {
   const major = sectionNumber ?? 2; // 默认值 2 兼容旧调用
 
   const isReview = projectMode !== "research";
-  const reviewSynthesisBlock = isReview ? buildReviewSynthesisWriterBlock(isChinese) : "";
+  const reviewSynthesisBlock =
+    isReview && !isAbstract ? buildReviewSynthesisWriterBlock(isChinese) : "";
+
+  if (isAbstract) {
+    return `${domainExpertise}
+你的任务是撰写论文摘要（Abstract）。模板：${isGBT ? "GB/T 7713 国标" : "SCI 国际期刊"}。输出语言：${isChinese ? "中文" : "英文"}。
+${globalReferenceInfo}
+
+—— 摘要写作铁律 ——
+· 摘要必须基于上方「已完成正文」综合提炼；正文未写到的结论/数据不得编造
+· **禁止任何文内引用标记**（[1]、[2,3]、[1-3]、【1】等一律不要）
+· 一个紧凑段落，禁止分点、禁止输出「摘要：」前缀
+· 禁止元文字、编辑批注、未完成标记
+
+${sectionInstruction}
+`;
+  }
+
   const rigorBlock = isReview
     ? `—— 综述严谨性约束 ——
 · 所有 borrowed 数据/结论须转述并标注 [n]，禁止照搬原文长句。
@@ -232,7 +249,7 @@ ${globalReferenceInfo}
 ${contextText}
 ${evidenceSummary ? `\n—— 实验数据证据（定量结论必须引用编号） ——\n${evidenceSummary}\n` : ""}
 —— 核心写作原则 ——
-原则1·学术质量：使用专业术语，逻辑层层递进。${isGBT ? "遵循 GB/T 7713 学术表达习惯。" : "遵循 SCI 学术论文规范。"}${isAbstract ? "摘要必须是一个紧凑段落，禁止分点。" : ""}
+原则1·学术质量：使用专业术语，逻辑层层递进。${isGBT ? "遵循 GB/T 7713 学术表达习惯。" : "遵循 SCI 学术论文规范。"}
 原则2·深度结合文献：每个主要观点应从文献库中寻找支撑或对比。正文中用半角方括号 [n] 标注引用（仅数字，如 [1]、[2,3]、[1-3]），编号须与文献库中 [参考来源 [n]] 严格对应。严禁使用 "[参考来源1]" "[文献2]" 等非标准格式；严禁用中文角括号【16】、全角方括号［16］标注引用——只能是 [16]、[16, 21] 这种半角方括号。${projectMode === "research" ? `\n原则2b·数据驱动写作：所有定量结论（数字、趋势、显著性）必须引用实验数据证据编号（如 [D1-C3]）。不得编造、修改证据声明中的数值。数据声明中的 text 字段可以直接改写为学术语言，但数值不可改变。` : ""}${reviewSynthesisBlock}
 原则3·结构与配图：使用多级编号子标题组织内容（如 "${major}.1 关键因素的影响"、"${major}.1.1 某一水平下的表现"），子标题独占一行。⚠️ 严禁使用 Markdown 标题语法（###、####、##### 等），直接用纯文本编号。禁止输出一级章节大标题（如 "1. 引言"、"Introduction"）。禁止在章节末尾生成目录结构（列出所有子标题）——读者不需要在正文中看到目录。（如 "1. 引言"、"Introduction"）。子标题编号以 ${major} 开头（本节属于第 ${major} 章），第一小节从 ${major}.1 开始计数。
 
@@ -339,6 +356,8 @@ export function buildVerifierSystemPrompt(
   role: "audit" | "full",
   projectMode?: ProjectWritingMode,
 ): string {
+  const jsonRule =
+    "最终只输出一个 JSON 对象（passed/summary/issues），不要 markdown 围栏，不要前言后语。";
   if (projectMode !== "research") {
     return role === "audit"
       ? `你是文献综述学术诚信审计员。职责：
@@ -346,25 +365,25 @@ export function buildVerifierSystemPrompt(
 2. 检测连续照搬原文（≥15 汉字）——要求转述改写
 3. 检测他人数据是否被写成「本研究」结果
 4. 检测无 [n] 的具体数值、overclaim、试验报告体例
-必须具体到每个引用编号和每处措辞。`
+必须具体到每个引用编号和每处措辞。${jsonRule}`
       : `你是文献综述审计员。职责：
 1. 逐条核实 [n] 是否有原文依据
 2. 标记疑似照搬、数据归属错误、未标注来源的数据
 3. 检查是否符合综述体例（非 IMRaD 试验报告）
 4. 检查 overclaim 并建议替换
-必须指出哪个编号、什么问题、如何改写。`;
+必须指出哪个编号、什么问题、如何改写。${jsonRule}`;
   }
   return role === "audit"
     ? `你是农业学术论文审计员。职责：
 1. 逐条核实每个 [n] 引用是否在文献原文中有确切依据
 2. 检查是否存在 overclaim（"首次""证明""最优"等）
 3. 检查 Results 中是否混入了 Discussion 句式
-不可泛泛评价，必须具体到每个引用编号和每处措辞。`
+不可泛泛评价，必须具体到每个引用编号和每处措辞。${jsonRule}`
     : `你是农业学术论文审计员，职责：
 1. 逐条核实每个 [n] 引用是否在原文中有确切依据——纠正引用偏差，但不无故删除引用
 2. 检查是否存在 overclaim 措辞并建议替换
 3. 检查 Results/Discussion 句式是否混淆
-必须具体指出哪个编号、什么问题、如何修正。`;
+必须具体指出哪个编号、什么问题、如何修正。${jsonRule}`;
 }
 
 export function buildVerifierPrompt(params: {
