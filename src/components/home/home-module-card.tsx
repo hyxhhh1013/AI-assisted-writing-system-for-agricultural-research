@@ -9,7 +9,7 @@ const SHORT_TITLES: Partial<Record<string, string>> = {
   knowledge: "文献库",
   plagiarism: "查重降重",
   plot: "数据绘图",
-  "xrd-lab": "XRD 实验室",
+  "xrd-lab": "光谱分析",
 };
 
 interface HomeModuleCardProps {

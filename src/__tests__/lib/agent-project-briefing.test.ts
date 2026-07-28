@@ -24,6 +24,7 @@ const sample: AgentProjectSnapshot = {
     { key: "literature_body", chars: 0 },
     { key: "abstract", chars: 0 },
   ],
+  hasPaperConfig: true,
 };
 
 describe("agent project briefing", () => {
@@ -33,12 +34,17 @@ describe("agent project briefing", () => {
     expect(text).toContain("Passport 当前阶段：4");
     expect(text).toContain("introduction:1200字");
     expect(text).toContain("literature_body");
+    expect(text).toContain("大纲全文");
+    expect(text).toContain("实验室范围");
+    expect(text).toContain("热化学");
+    expect(text).toContain("烟草");
   });
 
   it("injects briefing into system prompt", () => {
     const prompt = buildAgentSystemPrompt([], formatAgentProjectBriefing(sample));
-    expect(prompt).toContain("【当前项目简报】");
+    expect(prompt).toContain("【项目简报");
     expect(prompt).toContain("生物炭综述");
+    expect(prompt).toContain("实验室四方向");
   });
 
   it("suggests write next empty section", () => {

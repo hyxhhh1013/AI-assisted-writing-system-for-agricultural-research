@@ -20,6 +20,8 @@ export interface KnowledgeBib {
   issue?: string;
   pages?: string;
   doi?: string;
+  /** 外部导入无 PDF 时可选存摘要（不进正式书目展示也可） */
+  abstract?: string;
   issn?: string;
   eissn?: string;
   patentNumber?: string;
@@ -156,6 +158,18 @@ export function getKnowledgeIndexStatus(
       status: "partial",
       label: "待上传 PDF",
       missingFields: ["PDF"],
+    };
+  }
+
+  if (
+    file.chunkCount
+    && file.chunkCount > 0
+    && (file.size === 0 || file.hasPdfOnDisk === false)
+  ) {
+    return {
+      status: "partial",
+      label: "摘要已索引",
+      missingFields: ["PDF全文"],
     };
   }
 

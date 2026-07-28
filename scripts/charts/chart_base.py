@@ -17,6 +17,7 @@ from plot_style import (  # noqa: E402
     apply_legend,
     bar_error_kw,
     create_figure,
+    get_markers,
     get_palette,
     resolve_style,
     save_figure,
@@ -66,7 +67,12 @@ class ChartModule:
         return create_figure(style)
 
     def colors(self, style: dict[str, Any], n: int) -> list[str]:
+        style = dict(style)
+        style["_series_count"] = n
         return get_palette(style, n)
+
+    def markers(self, style: dict[str, Any], n: int) -> list[str]:
+        return get_markers(n)
 
     def apply_axis_extras(self, ax, config: dict, style: dict[str, Any]) -> None:
         """Nature-figure 常用轴选项：对数刻度、科学计数法、刻度旋转。"""

@@ -234,6 +234,10 @@ export interface ChartPanelResult {
   svgUrl?: string;
   pdfUrl?: string;
   caption: string;
+  styleValidation?: import("@/services/charts").ChartStyleValidation;
+  figWidth?: number;
+  columns?: number;
+  preset?: string;
 }
 
 export function useChartPanel(
@@ -508,11 +512,23 @@ export function useChartPanel(
         svgUrl: data.svgUrl,
         pdfUrl: data.pdfUrl,
         caption: title || chartName,
+        styleValidation: data.styleValidation,
+        figWidth: data.figWidth,
+        columns: data.columns,
+        preset: data.preset,
       });
       if (projectId && projectId !== "default") {
         writeStylePreset(projectId, fieldValues, styleFields);
       }
-      toast.success("图表生成成功");
+      const warns =
+        data.styleValidation?.checks?.filter((c) => c.level === "warn" || c.level === "fail") ?? [];
+      if (warns.length > 0) {
+        toast.message("已出图（刊规提示）", {
+          description: warns.map((w) => w.message).slice(0, 2).join("；"),
+        });
+      } else {
+        toast.success("图表生成成功");
+      }
     } catch (err: unknown) {
       toast.error(getErrorMessage(err));
     } finally {

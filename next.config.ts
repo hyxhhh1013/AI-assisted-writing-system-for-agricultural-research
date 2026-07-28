@@ -10,6 +10,8 @@ const studioRoot = path.resolve(__dirname, "academic-paper-studio");
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // 避免 Turbopack 缓存旧版 @prisma/client（schema 增字段后仍报 Unknown field）
+  serverExternalPackages: ["@prisma/client", "prisma"],
   outputFileTracingExcludes: {
     "/*": ["./data/charts/**/*", "./papers/**/*"],
   },

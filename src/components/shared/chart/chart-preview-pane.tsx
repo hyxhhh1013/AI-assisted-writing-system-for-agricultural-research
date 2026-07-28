@@ -101,6 +101,19 @@ export function ChartPreviewPane({
 
       {result && !loading && (
         <div className="shrink-0 border-t border-[#1a5632]/10 bg-white/95 px-5 py-3 backdrop-blur-sm">
+          {result.styleValidation?.checks?.some((c) => c.level === "warn" || c.level === "fail") ? (
+            <p className="mb-2 text-[10px] leading-relaxed text-amber-800">
+              刊规：
+              {result.styleValidation.checks
+                .filter((c) => c.level === "warn" || c.level === "fail")
+                .map((c) => c.message)
+                .join("；")}
+            </p>
+          ) : result.figWidth ? (
+            <p className="mb-2 text-[10px] text-[#6b7c72]">
+              {result.preset || "nature"} · {result.columns || 1} 栏 · 宽 {result.figWidth.toFixed(2)} in
+            </p>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2">
             <span className="mr-auto text-xs font-medium text-[#6b7c72]">导出与插入</span>
             <Button

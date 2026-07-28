@@ -4,7 +4,8 @@ export type PhaseGateResult =
   | { ok: true }
   | { ok: false; error: string };
 
-const MIN_OUTLINE_CHARS = 40;
+/** 与 ensure-write-prereqs / generate_* 工具一致 */
+const MIN_OUTLINE_CHARS = 20;
 const MIN_BODY_CHARS_FOR_ABSTRACT = 80;
 
 function outlineReady(project: AgentProjectSnapshot): boolean {
@@ -18,14 +19,35 @@ function hasBodyDraft(project: AgentProjectSnapshot): boolean {
 }
 
 /**
- * Passport / 产品阶段门禁：在工具执行前拦截明显不合阶段的动作。
- * 失败应作为 observation 返回，让 Agent 改道，而不是整次任务硬中止。
+ * 前置条件门禁（对齐 academic-paper）：缺什么就让 Agent 自己补，不要踢回人控 Tab。
+ * 失败作为 observation 返回，让 Agent 改道调用 generate_* / build_*。
  */
 export function checkAgentToolPhaseGate(
   toolName: string,
   params: Record<string, unknown>,
   project: AgentProjectSnapshot | null | undefined,
 ): PhaseGateResult {
+  const structureTools = new Set([
+    "generate_outline",
+    "generate_writing_blueprint",
+  ]);
+  if (structureTools.has(toolName)) {
+    if (!project) {
+      return {
+        ok: false,
+        error: `${toolName} 需要绑定论文项目；请先打开工作台项目后再试`,
+      };
+    }
+    if (toolName === "generate_writing_blueprint" && !outlineReady(project)) {
+      return {
+        ok: false,
+        error:
+          "写作蓝图需要先有大纲。请先调用 generate_outline，再调用 generate_writing_blueprint",
+      };
+    }
+    return { ok: true };
+  }
+
   const writeTools = new Set([
     "write_section",
     "refine_content",
@@ -44,14 +66,12 @@ export function checkAgentToolPhaseGate(
     };
   }
 
-  const phase = project.currentPhase;
-
   if (toolName === "write_bilingual_abstract") {
     if (!hasBodyDraft(project)) {
       return {
         ok: false,
         error:
-          "双语摘要需要先有正文草稿。请先写引言等方法/结果章节，再调用 write_bilingual_abstract",
+          "双语摘要需要先有正文草稿。请先 write_section 写引言等方法/结果，再调用 write_bilingual_abstract",
       };
     }
     return { ok: true };
@@ -62,14 +82,7 @@ export function checkAgentToolPhaseGate(
       return {
         ok: false,
         error:
-          "论证蓝图需要先有可用大纲（建议≥40字）。请先去提纲 Tab 生成大纲，或让用户补充大纲后再调用 build_argument_blueprint",
-      };
-    }
-    if (phase != null && phase < 3) {
-      return {
-        ok: false,
-        error:
-          "Passport 尚未进入论证阶段（需先完成文献与结构）。请先生成大纲与写作蓝图",
+          "论证蓝图需要大纲。请先 generate_outline（必要时再 generate_writing_blueprint），然后调用 build_argument_blueprint",
       };
     }
     return { ok: true };
@@ -80,26 +93,24 @@ export function checkAgentToolPhaseGate(
       return {
         ok: false,
         error:
-          "尚未生成足够大纲，不能写章节正文。请先完成提纲（Phase 2），再调用 write_section；可先用 search_knowledge 检索文献",
+          "尚未有可用大纲。请先调用 generate_outline → generate_writing_blueprint → build_argument_blueprint，再 write_section",
       };
     }
 
-    // 阶段任务包：起草前应先过结构；论证阶段优先论证蓝图
-    if (phase != null && phase < 4) {
-      if (phase <= 2) {
-        return {
-          ok: false,
-          error:
-            "当前处于结构阶段：请先在提纲 Tab 完成大纲与写作蓝图，Passport 进入起草后再写正文",
-        };
-      }
-      if (phase === 3 && !project.hasArgumentBlueprint) {
-        return {
-          ok: false,
-          error:
-            "当前处于论证阶段：请先调用 build_argument_blueprint 生成论证蓝图，再起草正文",
-        };
-      }
+    if (!project.hasWritingBlueprint) {
+      return {
+        ok: false,
+        error:
+          "尚无写作蓝图。请先调用 generate_writing_blueprint，再起草正文",
+      };
+    }
+
+    if (!project.hasArgumentBlueprint) {
+      return {
+        ok: false,
+        error:
+          "尚无论证蓝图。请先调用 build_argument_blueprint，再 write_section 起草",
+      };
     }
 
     const section = String(params.section ?? "").trim();
@@ -107,7 +118,7 @@ export function checkAgentToolPhaseGate(
       return {
         ok: false,
         error:
-          "摘要应在有正文后再写。请先写引言/方法/结果等章节，再调用 write_section(section=abstract)",
+          "摘要应在有正文后再写。请先写引言/方法/结果等章节，再调用 write_section(section=abstract) 或 write_bilingual_abstract",
       };
     }
 
@@ -119,11 +130,10 @@ export function checkAgentToolPhaseGate(
 
 /** 写入系统提示的门禁摘要 */
 export function phaseGatePromptRules(): string {
-  return `阶段门禁（违反会被工具拒绝，请改道）：
-- 严格遵循【阶段任务包】推荐工具，不要跳阶段
-- Phase≤2：禁止 write_section；先大纲+写作蓝图
-- Phase=3：优先 build_argument_blueprint，无论证蓝图禁止硬写正文
-- 无正文草稿时禁止 abstract / write_bilingual_abstract
-- Phase 5：必须用 validate_citations；越界引用编号不可标「可过稿」/导出
-- 每次优先完成当前阶段目标，再进入下一阶段`;
+  return `阶段策略（对齐 academic-paper；缺前置用工具自补，缺信息就问用户）：
+- 用 inspect_project 了解当前阶段与空白章节，再决定工具
+- 写章节时若缺大纲/写作蓝图/论证蓝图：可直接 write_section，系统会自动补齐前置（也可手动 generate_*）
+- 无正文时不要写摘要 / write_bilingual_abstract
+- 引用以 validate_citations 为准；不编造文献
+- 审查最多 2 轮；满轮后总结问题并征求用户是否继续改`;
 }

@@ -1,7 +1,26 @@
 import { Prisma } from "@prisma/client";
-import type { ReferencePatchOp } from "@/contracts/project";
+import type { ReferenceEvidenceMeta, ReferencePatchOp } from "@/contracts/project";
 
 const REF_LOCK_PREFIX = "refs:";
+
+function metaCreateData(meta?: ReferenceEvidenceMeta): {
+  doi?: string;
+  title?: string;
+  abstract?: string;
+  openAccessUrl?: string;
+  externalId?: string;
+  externalSource?: string;
+} {
+  if (!meta) return {};
+  return {
+    ...(meta.doi ? { doi: meta.doi } : {}),
+    ...(meta.title ? { title: meta.title } : {}),
+    ...(meta.abstract ? { abstract: meta.abstract } : {}),
+    ...(meta.openAccessUrl ? { openAccessUrl: meta.openAccessUrl } : {}),
+    ...(meta.externalId ? { externalId: meta.externalId } : {}),
+    ...(meta.externalSource ? { externalSource: meta.externalSource } : {}),
+  };
+}
 
 /** 同项目参考文献 PATCH 串行化（事务级 advisory lock） */
 export async function lockProjectReferences(
@@ -32,6 +51,7 @@ async function createReferenceAt(
   projectId: string,
   content: string,
   preferredIndex: number,
+  meta?: ReferenceEvidenceMeta,
 ): Promise<void> {
   const maxAttempts = 3;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -46,7 +66,12 @@ async function createReferenceAt(
         data: { order: { increment: 1 } },
       });
       await tx.reference.create({
-        data: { projectId, content, order: index },
+        data: {
+          projectId,
+          content,
+          order: index,
+          ...metaCreateData(meta),
+        },
       });
       return;
     } catch (error: unknown) {
@@ -70,14 +95,17 @@ export async function applyReferencePatchOps(
     if (op.op === "create") {
       const count = await tx.reference.count({ where: { projectId } });
       const index = op.index ?? count;
-      await createReferenceAt(tx, projectId, op.content, index);
+      await createReferenceAt(tx, projectId, op.content, index, op.meta);
       continue;
     }
 
     if (op.op === "update") {
       const updated = await tx.reference.updateMany({
         where: { id: op.id, projectId },
-        data: { content: op.content },
+        data: {
+          content: op.content,
+          ...metaCreateData(op.meta),
+        },
       });
       if (updated.count === 0) {
         throw new Error(`参考文献不存在: ${op.id}`);

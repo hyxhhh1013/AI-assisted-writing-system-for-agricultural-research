@@ -84,7 +84,7 @@ export const APP_MODULES: AppModule[] = [
   {
     id: "plot",
     title: "数据绘图",
-    description: "分组柱状图、折线图、XRD 图与 GB/T 三线表，一键生成论文配图",
+    description: "分组柱状图、折线图、XRD/XPS 光谱与 GB/T 三线表，一键生成论文配图",
     href: "/plot",
     requiresProjectId: true,
     flag: "CHART",
@@ -95,9 +95,9 @@ export const APP_MODULES: AppModule[] = [
   },
   {
     id: "xrd-lab",
-    title: "XRD 实验室",
-    description: "峰分解、背景扣除、晶胞拟合与 XPS 等材料表征分析工具",
-    href: "/xrd-lab",
+    title: "光谱分析",
+    description: "XRD 叠加、峰拟合、XPS 与 Scherrer 等（已并入科学绘图）",
+    href: "/plot?category=xrd",
     flag: "XRD",
     placement: ["home"],
     homeCategory: "tools",

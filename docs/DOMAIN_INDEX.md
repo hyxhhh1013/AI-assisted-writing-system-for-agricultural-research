@@ -33,7 +33,7 @@
 | 功能 | 页面 | API | 核心代码 |
 |------|------|-----|----------|
 | 扩写流水线 | 工作台 `writing` Tab | `POST /api/writing` SSE；`POST /api/writing/retrieve-preview` | `api/writing/pipeline/*`, `services/writing-context.ts` |
-| AI Agent | 工作台 `agent` Tab | `POST /api/agent` SSE；`GET /api/agent/sessions` | `lib/agent/langgraph/*` + `phase-task-pack` + `session-store`；`services/agent.ts` |
+| AI Agent | 工作台 `agent` Tab | `POST /api/agent` SSE；`GET /api/agent/sessions`（`history=1`） | Phase0 **问答配置**；行为 eval/空转/先读后写；文献相关度；`update_work_memory`；见 [`plans/W3-AP-BEHAVIOR.md`](./plans/W3-AP-BEHAVIOR.md) |
 | 产品门禁评测 | 本地/CI | `npm run eval:gates`；可选 `npm run eval:pipeline` | `lib/eval/product-gates.ts`、`scripts/eval-pipeline-paper.ts` |
 | 证据中心 | 工作台 `data` | — | `evidence-hub-sections.tsx`、`data-panel.tsx` |
 | 配图编辑 | 写作面板内联 | — | `writing-figure-edit-links.tsx` |
@@ -59,14 +59,21 @@
 
 详见 [`domain/rag-and-knowledge.md`](./domain/rag-and-knowledge.md)。
 
-## 图表与 XRD
+## 图表与 XRD / DFT
 
 | 功能 | 页面 | API | 核心代码 |
 |------|------|-----|----------|
 | 图表工作台 | `src/app/plot/page.tsx` | `GET /api/figures/registry` | `scripts/charts/registry.json` |
-| 通用图表 | plot / 工作台 | `POST /api/chart` | `scripts/charts/chart_base.py` |
+| 通用图表（含 Origin 向） | plot / 工作台 | `POST /api/chart` | `scripts/charts/chart_base.py`、`chart_types/` |
 | 三线表 | — | `POST /api/table` | Python table 模块 |
-| XRD 实验室 | `src/app/xrd-lab/page.tsx` | `/api/xrd/*` | `scripts/charts/chart_types/` |
+| XRD / Jade | `/plot` XRD 分类 · `/xrd-lab` | `/api/xrd/*`（含 stack、scherrer） | `xrd_*.py`、`components/shared/xrd/` |
+| DFT 能带 / DOS（CSV） | `/plot` DFT 分类 | `POST /api/chart` | `chart_types/dft_band.py`、`dft_dos.py` |
+| VASP DOSCAR / EIGENVAL / PROCAR | `/plot` DFT · VASP | `POST /api/dft/vasp` | `vasp_io.py`、`dft_vasp.py`、`dft_procar.py`、`components/shared/dft/` |
+| 期刊流程图 | `/plot` 示意图 · 流程图 | `POST /api/flow-diagram` | `flow_diagram_v2.py`、`flow-card.tsx` |
+| Mermaid 机理草图 | `/plot` 示意图 · Mermaid | 前端 Mermaid → `save-chart` | `mermaid-mechanism-card.tsx` |
+| 多面板机理图 a/b/c | `/plot` 示意图 · 多面板 | `POST /api/mechanism-panel` | `mechanism_panel.py`、`mechanism-panel-card.tsx` |
+| 仪器 .xy/.ras | XRD 各工具上传 | 经 `load_dataframe` | `instrument_io.py`、`lib/xrd-file-ext.ts` |
+| 科研作图队列 | — | — | [`plans/FIG-PR-scientific-plotting.md`](./plans/FIG-PR-scientific-plotting.md) |
 
 详见 [`domain/figures-and-python.md`](./domain/figures-and-python.md)。
 
@@ -108,7 +115,7 @@
 | 审查/查重记录 | `admin/reviews`, `plagiarism` | `/api/admin/reviews`, `plagiarism` | `admin-record-project-links.tsx` |
 | 使用统计 | `admin/usage` | `GET /api/admin/usage`, `usage/trends` | `services/admin-usage.ts` |
 | 系统健康 | `admin/health` | `GET /api/admin/health` | 可点击告警 |
-| 设置/Key | `admin/settings` | `PUT /api/admin/settings` | `lib/settings.ts` |
+| 设置/Key+模型 | `admin/settings` | `PUT /api/admin/settings` | `lib/settings.ts` + `resolveProviderModel`（`DEEPSEEK_MODEL`/`ZHIPU_MODEL` 热加载） |
 
 详见 [`ADMIN_ENHANCEMENT_PLAN.md`](./ADMIN_ENHANCEMENT_PLAN.md)。
 

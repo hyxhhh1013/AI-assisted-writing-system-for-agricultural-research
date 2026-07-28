@@ -91,14 +91,22 @@ model Section {
 
 // 参考文献模型
 model Reference {
-  id        String   @id @default(cuid())
-  content   String
-  order     Int      @default(0)
-  projectId String
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id             String   @id @default(cuid())
+  content        String
+  order          Int      @default(0)
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// 外部导入元数据：便于 Agent 读摘要 / 写作 soft-grounded
+  doi            String?
+  title          String?
+  abstract       String?  @db.Text
+  openAccessUrl  String?
+  externalId     String?
+  externalSource String?
 
   @@unique([projectId, order])
   @@index([projectId, order])
+  @@index([projectId, doi])
 }
 
 // 分析结果模型

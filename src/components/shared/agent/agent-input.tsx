@@ -1,27 +1,26 @@
 "use client";
 
-import { Loader2, Send, Square } from "lucide-react";
+import { Send, Square } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
 const FALLBACK_WRITE = [
-  "写引言并保存到当前项目",
-  "写方法部分并保存到当前项目",
-  "检索相关文献并总结研究缺口",
+  "看看项目卡在哪",
+  "写引言并保存",
+  "先生成大纲我确认后再写",
 ] as const;
 
 const FALLBACK_READ = [
-  "分析这个方向有什么可写的",
-  "检索生物炭土壤改良相关文献",
-  "检查当前项目引用的准确性",
+  "看看项目卡在哪",
+  "检索相关文献并总结缺口",
+  "检查当前引用",
 ] as const;
 
 interface AgentInputBarProps {
   disabled?: boolean;
   isRunning?: boolean;
   writeEnabled?: boolean;
-  /** 按项目阶段动态生成的快捷语；缺省用内置兜底 */
   prompts?: string[];
   onSend: (goal: string) => void;
   onCancel: () => void;
@@ -45,38 +44,35 @@ export function AgentInputBar({
 
   const submit = () => {
     const trimmed = value.trim();
-    if (!trimmed || disabled) return;
+    if (!trimmed || disabled || isRunning) return;
     onSend(trimmed);
     setValue("");
   };
 
   return (
-    <div className="space-y-2 border-t border-border/60 bg-background p-3">
-      <div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto">
+    <div className="shrink-0 border-t border-border/50 bg-white/95 px-4 pb-3.5 pt-2.5">
+      <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {chips.map((prompt) => (
           <Button
             key={prompt}
             type="button"
-            variant="outline"
+            variant="secondary"
             size="sm"
-            className="h-7 text-xs"
+            className="h-7 shrink-0 rounded-full px-3 text-[11px] font-normal"
             disabled={disabled || isRunning}
             onClick={() => onSend(prompt)}
           >
-            {prompt}
+            {prompt.length > 22 ? `${prompt.slice(0, 22)}…` : prompt}
           </Button>
         ))}
       </div>
-      <div className="flex gap-2">
+      <div className="flex items-end gap-2">
         <Textarea
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder={
-            writeEnabled
-              ? "例如：写引言并保存到当前项目；或先检索 XX 再写讨论"
-              : "描述目标，例如：检索 XX 主题文献并总结研究缺口"
-          }
-          className="min-h-[72px] resize-none text-sm"
+          placeholder="跟助手说你想做什么…（Enter 发送，Shift+Enter 换行）"
+          className="min-h-[48px] max-h-36 flex-1 resize-none rounded-xl border-border/60 bg-[#fafaf8] text-[13.5px] leading-relaxed"
+          rows={2}
           disabled={disabled || isRunning}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -85,18 +81,29 @@ export function AgentInputBar({
             }
           }}
         />
-        <div className="flex flex-col gap-2">
-          {isRunning ? (
-            <Button type="button" variant="destructive" size="icon" onClick={onCancel}>
-              <Square className="h-4 w-4" />
-            </Button>
-          ) : (
-            <Button type="button" size="icon" disabled={disabled || !value.trim()} onClick={submit}>
-              <Send className="h-4 w-4" />
-            </Button>
-          )}
-          {isRunning && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-        </div>
+        {isRunning ? (
+          <Button
+            type="button"
+            variant="destructive"
+            size="icon"
+            className="h-11 w-11 shrink-0 rounded-xl"
+            onClick={onCancel}
+            aria-label="停止"
+          >
+            <Square className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="icon"
+            className="h-11 w-11 shrink-0 rounded-xl"
+            disabled={disabled || !value.trim()}
+            onClick={submit}
+            aria-label="发送"
+          >
+            <Send className="h-4 w-4" />
+          </Button>
+        )}
       </div>
     </div>
   );

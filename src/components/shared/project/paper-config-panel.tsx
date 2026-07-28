@@ -49,7 +49,9 @@ interface PaperConfigPanelProps {
   saving?: boolean;
   /** Direction Handoff 项目：只读，回方向页修改 */
   readOnly?: boolean;
-  onSave: (config: PaperConfig) => Promise<void>;
+  /** 保存按钮文案，默认「保存配置」；Agent 检查点可用「保存并继续」 */
+  saveLabel?: string;
+  onSave: (config: PaperConfigRecord) => Promise<void>;
 }
 
 /** 工作台内嵌论文配置（Handoff 后为只读摘要） */
@@ -58,6 +60,7 @@ export function PaperConfigPanel({
   config: existing,
   saving = false,
   readOnly = false,
+  saveLabel = "保存配置",
   onSave,
 }: PaperConfigPanelProps) {
   const [draft, setDraft] = useState(() => configFromProject(project, existing));
@@ -188,7 +191,7 @@ export function PaperConfigPanel({
           onClick={() => void handleSave()}
         >
           {saving ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-          保存配置
+          {saveLabel}
         </Button>
       )}
     </div>

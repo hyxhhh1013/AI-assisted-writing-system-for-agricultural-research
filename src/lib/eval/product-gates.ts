@@ -38,6 +38,7 @@ function snap(partial: Partial<AgentProjectSnapshot> = {}): AgentProjectSnapshot
       { key: "introduction", chars: 200 },
       { key: "methods", chars: 0 },
     ],
+    hasPaperConfig: true,
     ...partial,
   };
 }

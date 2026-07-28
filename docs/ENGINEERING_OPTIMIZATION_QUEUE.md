@@ -8,7 +8,7 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-07-24（收拢：写作 Agent 产品化为 Wave 2 主轴；`/academic-paper` 改引导页；ONESHOT 先于 CHECKPOINT）  
+> **最后更新**：2026-07-26（**W3-AP-BEHAVIOR done**；见 `plans/W3-AP-BEHAVIOR.md`）  
 > **实时 status 只看 §1 Phase 11**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
@@ -111,7 +111,7 @@
 | ENG-PR-091 | 期刊指标 enrichment（CSV/Excel IF/分区 + OpenAlex） | ENG-PR-090 | 2～3d | done | §三；`metrics` + 中英文列别名；IF 年份角标；导入批次 UI 待二期 |
 | ENG-PR-092 | 外部文献检索 Tab + 加入参考文献 | — | 3～5d | done | §四；`eng/pr-092-external-literature-search` |
 | ENG-PR-093 | RIS / BibTeX 批量导入 | ENG-PR-090 | 2d | done | 2026-06-12；`import-bibliography` + 向导 + Crossref |
-| ENG-PR-094 | OA 全文自动入库 | ENG-PR-092, 093 | 1～2w | todo | backlog P3；§六 |
+| ENG-PR-094 | OA 全文自动入库 | ENG-PR-092, 093 | 1～2w | done | MVP：导入时若有 openAccessUrl 则下载到 papers/ 并增量索引；`ENABLE_OA_AUTO_IMPORT=0` 可关 |
 | **Phase 8 — RAG 运行时性能（库变大后卡顿/内存）** |
 | RAG-PR-006 | 两阶段检索：BM25 候选 → 候选集向量精排 | RAG-PR-002 | 1d | done | 2026-06-13；向量 O(全库)→O(候选)；去 ~770MB JS 向量内存 |
 | RAG-PR-007 | Query Embedding LRU 缓存（`(model,query)→向量`） | RAG-PR-006 | 0.5h | done | 2026-06-13；上限 256 |
@@ -119,6 +119,8 @@
 | RAG-PR-009 | warmup 真预加载 + `RAG_WARMUP`/`RAG_PERF_LOG` 开关 | RAG-PR-008 | 0.5h | done | 2026-06-13；冷启动移出首检索 |
 | RAG-PR-010 | `.emb` 按需 pread（去常驻内存） | RAG-PR-006 | 0.5d | done | 2026-06-13；`EmbeddingStore` 文件句柄 + `readSync`；省 ~885MB |
 | RAG-PR-011 | 扩写范围检索（按已选文献分类 scope） | RAG-PR-010 | 0.5d | done | 2026-06-13；`search({categories})` + `deriveScopeCategories`；无引用回退全库 |
+| RAG-PR-012 | 召回提升：同义词扩展 + 多 query RRF + 弱 BM25 全池向量 | RAG-PR-011 | 0.5d | done | 2026-07-27；`rag-query-expand.ts` |
+| RAG-PR-013 | 索引 n-gram 对齐 + 题名加权 + 条件 multi-query | RAG-PR-012 | 0.5d | done | 2026-07-27；倒排 bigram + metadata boost |
 | **Phase 9 — 研究方向战略规划（ENG-PR-100 系列）** |
 | ENG-PR-100 | 方向基础模块：Direction 表 + CRUD + 页面框架（33 files） | — | 3d | done | 2026-07-04；`d18a7e3` |
 | ENG-PR-110 | Socratic Mentor 预承诺（P0） | 100 | 2d | done | 2026-07-04；`314dd02` / `509a9a3` / `52823df` |
@@ -156,13 +158,45 @@
 | W3-REVIEW-2 | 审查 max-2 轮编排 | W3-PHASE-PACK | 3d | **done** | 2026-07-24；`/api/review/rounds` + Agent `run_review_rounds` + UI |
 | W3-CITE-GATE | 导出前引用硬检 | W3-REVIEW-2 | 1d | **done** | 2026-07-24；`/api/citations/gate` + PDF 422 + Passport Phase 5 |
 | W3-E2E-EVAL | 任务包/管道 eval 门禁 | W3-CITE-GATE | 2d | **done** | 2026-07-24；`npm run eval:gates` + pipeline EVAL_STRICT |
+| W3-AP-AUTONOMY | Agent 对齐 academic-paper：多上下文 + 自补大纲/蓝图 + 自主门禁 | W3-E2E-EVAL | 1d | **done** | 2026-07-24；generate_outline / generate_writing_blueprint |
+| W3-AP-PLAN-DRIVE | Plan 子任务真驱动执行环 | W3-AP-AUTONOMY | 1d | **done** | 2026-07-24；plan-progress + agent 续跑 |
+| W3-AP-CHECKPOINTS | academic-paper 铁律检查点（大纲批准等） | W3-AP-PLAN-DRIVE | 1d | **done** | 2026-07-24；outline/config checkpoint + 面板批准 |
+| W3-AP-AGENTIC | 对话式智能体：inspect/read + 思考提示 + 弱强制续跑 | W3-AP-CHECKPOINTS | 1d | **done** | 2026-07-24；取消全自动 Conductor |
+| W3-AP-MULTI-TURN | 同一会话跟聊 sessionId+goal；uiTranscript 续写 | W3-AP-AGENTIC | 0.5d | **done** | 2026-07-25；followUp + 新对话 |
+| W3-AP-CHART-BRIDGE | Agent 配图打通：figureSpecEnc+插章节+缩略图+工作台刷新 | W3-AP-MULTI-TURN | 0.5d | **done** | 2026-07-25 |
+| W3-AP-CONFIG-UI | Phase0 检查点嵌入 PaperConfigPanel + 统一 onProjectMutated 刷新 | W3-AP-CHART-BRIDGE | 0.5d | **done** | 2026-07-25 |
+| W3-AP-LIT-BRIDGE | 文献闭环：search_external hitJson → 确认卡 → import_reference 写回刷新 | W3-AP-CONFIG-UI | 0.5d | **done** | 2026-07-25 |
+| **W3-AP-BEHAVIOR** | **行为主轴：剧本验收→压空转→先读后写（暂停扩工具）** | W3-AP-LIT-BRIDGE | 2～3w | **done** | 2026-07-26；手测 P0～P3 绿；均 tool≈3.5；见 BEHAVIOR §7 |
+| W3-AP-EVAL-SCRIPTS | 固化 P1～P5 剧本 + `eval:agent` 断言 | W3-AP-BEHAVIOR | 1d | **done** | 2026-07-25；`lib/eval/agent-scripts` + `npm run eval:agent` |
+| W3-AP-ANTISPAM | 无进展熔断 + 检索/读窗口配额 | W3-AP-EVAL-SCRIPTS | 1～2d | **done** | 2026-07-25；`core/antispam` + toolsNode |
+| W3-AP-READ-BEFORE-WRITE | write/refine 先读后写硬门禁 | W3-AP-ANTISPAM | 1d | **done** | 2026-07-25；intro/discussion + toolsNode |
+| W3-AP-LIT-QUALITY | 文献相关度分+why；低相关无依据拒导 | W3-AP-READ-BEFORE-WRITE | 0.5d | **done** | 2026-07-25；`literature-relevance` |
+| W3-AP-CONFIG-QA | Phase0 配置改为一问一答（非整表） | W3-AP-CONFIG-UI | 0.5d | **done** | 2026-07-25；`AgentConfigQa` |
+| W3-AP-WORK-MEMORY | 会话工作记忆：主张/决策/待办 + update_work_memory | W3-AP-LIT-QUALITY | 1d | **done** | 2026-07-25；落盘 session snapshot |
+| ~~W3-AP-CONDUCTOR~~ | ~~八阶段全自动 Conductor~~ | — | — | **cancelled** | 与「边聊边做」定位冲突 |
 | ~~ENG-PR-084~~ | ~~入口废弃~~ | — | — | cancelled | Cockpit；`/writing`→workbench |
 | ~~ENG-PR-086~~ | ~~编辑器对话面板~~ | — | — | cancelled | Agent Tab |
 | ENG-PR-082 | Verifier 结构化 | W2 | 2d | **done** | 2026-07-24；writing-verification + auto-fix |
 | W3-AUTO-FIX | Agent 写后自动核查修正 | ENG-PR-082 | 0.5d | **done** | `AGENT_WRITE_AUTO_FIX` 默认开 |
 | ENG-PR-085 | 工作台 data 免责标注 | — | 2h | **done** | 2026-07-24；`ai-result-disclaimer.tsx` |
-| ENG-PR-094 | OA 全文入库 | — | 1-2w | todo | Wave 4 backlog |
+| ENG-PR-094 | OA 全文入库 | — | 1-2w | done | 导入链路已接 OA 下载 + 增量 index |
 | W4-EXPORT | DOCX/PDF 导出就绪 + 双语/题注 | W3-CITE-GATE | 1d | **done** | 2026-07-24；`export-readiness` + docx |
+| **Phase 12 — 科研作图靠拢 Jade / Origin / DFT（FIG-PR）** |
+| FIG-PR-001 | XRD 多谱 offset 叠加 | — | 0.5d | **done** | 2026-07-25；`/api/xrd/stack` + StackCard |
+| FIG-PR-002 | Scherrer 晶粒尺寸 | — | 0.5d | **done** | 2026-07-25；`/api/xrd/scherrer` + ScherrerCard |
+| FIG-PR-003 | 仪器格式导入（.xy/.xyd/.ras/ASCII .raw） | 001 | 1d | **done** | 2026-07-25；`instrument_io.py` |
+| FIG-PR-010 | 折线双 Y + 线性拟合 | — | 0.5d | **done** | 2026-07-25；`line.py` dual_y / trendline |
+| FIG-PR-011 | Offset 堆叠谱 `stack_offset` | — | 0.5d | **done** | 2026-07-25；Origin 瀑布谱 |
+| FIG-PR-012 | CSV 误差列后端配对 | 010 | 0.5d | **done** | 2026-07-25；`plot_generic.py` |
+| FIG-PR-020 | registry 新增 `dft` 分类 | — | 0.5d | **done** | 2026-07-25；registry v2.2 |
+| FIG-PR-021 | 能带结构 `dft_band` | 020 | 0.5d | **done** | 2026-07-25 |
+| FIG-PR-022 | DOS/PDOS `dft_dos` | 020 | 0.5d | **done** | 2026-07-25 |
+| FIG-PR-023 | VASP DOSCAR/EIGENVAL 解析 | 021,022 | 2d | **done** | 2026-07-25；`/api/dft/vasp` |
+| FIG-PR-024 | PROCAR 轨道投影能带 | 023 | 2d | **done** | 2026-07-27；`kind=procar` + `dft_procar` fat bands |
+| FIG-PR-025 | 峰拟合 FWHM + Scherrer 工作流自动填 | 001,002 | 1d | **done** | 2026-07-27；`compute_peak_fwhm_deg` + workflow |
+| FIG-PR-026 | XRD 相检索 MVP（内置参考库 + 工作流） | 001 | 1d | **done** | 2026-07-27；`/api/xrd/phase-search` + workflow 相检索 |
+| W3-AP-CHART-XRD | Agent XRD 桥接：Scherrer/相检索/峰表 | W3-AP-CHART-BRIDGE | 0.5d | **done** | 2026-07-27；`generate_xrd_analysis` + P6 剧本 |
+| — | 任务单细节 | — | — | — | [`plans/FIG-PR-scientific-plotting.md`](./plans/FIG-PR-scientific-plotting.md) |
 
 
 | 来源 | 本队列处理方式 |
@@ -946,20 +980,49 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-07-24 | W3-E2E-EVAL | AI | `eval:gates` 固定样例门禁 + pipeline EVAL_STRICT |
 | 2026-07-24 | ENG-PR-085 | AI | 工作台 data / 知识库精读 AI 结果免责横幅 |
 | 2026-07-24 | W4-EXPORT | AI | DOCX/PDF 共用导出硬检；双语对照摘要 + 图表题注清单 |
+| 2026-07-24 | W3-AP-AUTONOMY | AI | Agent 对齐 academic-paper：generate_outline/writing_blueprint；证据记忆；前置自补门禁；预算加大 |
+| 2026-07-24 | W3-AP-PLAN | AI | 整体规划 docs/plans/W3-AP-agent-academic-paper-orchestration.md；开干 S1 Plan 真驱动 |
+| 2026-07-24 | W3-AP-PLAN-DRIVE | AI | Plan 子任务真驱动 + 续跑；面板状态展示 |
+| 2026-07-24 | W3-AP-CHECKPOINTS | AI | config/outline 检查点 SSE；resume+decision；面板批准/需修改 + confirm 卡片 |
+| 2026-07-24 | W3-AP-AGENTIC | AI | 定位改为对话智能体；inspect_project/read_section；弱化强制续跑；取消 CONDUCTOR |
+| 2026-07-25 | W3-AP-MULTI-TURN | AI | 同一 sessionId 跟聊；followUp 状态；面板「新对话」；历史挂最近会话 |
+| 2026-07-25 | W3-AP-CHART-BRIDGE | AI | generate_chart：figureSpecEnc、插章节、气泡缩略图、工作台 charts 刷新 |
+| 2026-07-25 | W3-AP-CONFIG-UI | AI | config_confirm 嵌入 PaperConfigPanel；project-mutated 统一刷新工作台 |
+| 2026-07-25 | W3-AP-LIT-BRIDGE | AI | search_external+hitJson；import 确认中断；确认卡预览；写回刷新 |
+| 2026-07-25 | W3-AP-BEHAVIOR | AI | 主轴转向行为可靠；剧本 P1～P5 + 执行序写入 `plans/W3-AP-BEHAVIOR.md` |
+| 2026-07-25 | W3-AP-EVAL-SCRIPTS | AI | 轨迹断言器 + P1～P5 正/反例；`npm run eval:agent` |
+| 2026-07-25 | W3-AP-ANTISPAM | AI | 检索配额≤3；连续无进展熔断；search_external 纳入 repeat 软拦截 |
+| 2026-07-25 | W3-AP-READ-BEFORE-WRITE | AI | introduction/discussion 写前须 inspect/read/list；硬门禁 |
+| 2026-07-25 | W3-AP-LIT-QUALITY | AI | search 按相关度排序；import 需 why；低相关拒导；确认卡展示理由 |
+| 2026-07-25 | W3-AP-CONFIG-QA | AI | Phase0 检查点改为一问一答 AgentConfigQa |
+| 2026-07-25 | W3-AP-WORK-MEMORY | AI | workMemory 落盘；update_work_memory 工具；简报注入 |
+| 2026-07-26 | W3-AP-BEHAVIOR | AI | 收口启动：eval:agent + 门禁单测绿；手测清单写入 BEHAVIOR §7；CONFIG-QA 空壳/续跑修复 |
+| 2026-07-26 | W3-AP-BEHAVIOR | AI | 实机手测 P0✅ P1✅ P2✅ P3✅；修 P3 断言取末次成功写回；BEHAVIOR→done |
+| 2026-07-25 | FIG-PR-001～022 | AI | Phase 12 科研作图：Jade 多谱/Scherrer、Origin 双 Y/offset 谱、DFT 能带/DOS；registry v2.2；计划见 `plans/FIG-PR-scientific-plotting.md` |
+| 2026-07-25 | FIG-PR-003, 023 | AI | 仪器 `.xy/.ras` 解析 + VASP DOSCAR/EIGENVAL→`/api/dft/vasp` + VaspCard；fixtures 冒烟通过 |
+| 2026-07-27 | FIG-PR-024 | AI | PROCAR 轨道投影 fat bands：`parse_procar` + `dft_procar` + VaspCard 第三模式；fixture 冒烟通过 |
+| 2026-07-27 | FIG-MECH | AI | 期刊机理图一期～三期：flow Graphviz 预设+SVG/PDF、FlowCard 模板、Mermaid 入 /plot、mechanism_panel 多栏合成、draft_mechanism_figure |
+| 2026-07-27 | FIG-MECH-CANVAS | AI | 轻量 SVG 拖拽画布 `flow-canvas`：拖节点/点连线/边标签；接入 FlowCard + MechanismPanel；无 @xyflow |
+| 2026-07-27 | FIG-OSS-PORT | AI | 对照 SciencePlots/plotstyle/Kroki：ieee/acs/elsevier/agr_cn 预设、色盲+biomass 色板、标记循环、灰度校验、Mermaid/DOT 互通、生物质热解模板 |
+| 2026-07-27 | FIG-PR-026 | AI | 相检索 MVP：`data/xrd/phase-reference.json` + `matchXrdPhases` + workflow 按钮 |
+| 2026-07-27 | RAG-PR-012 | AI | 召回：同义词扩展 + 多 query RRF + 弱 BM25 全池向量 + 分类提示 |
+| 2026-07-27 | RAG-PR-013 | AI | 倒排 CJK n-gram 对齐、题名加权、轻量重排、multi-query 默认 auto |
 
 ---
 
 ## 5. 推荐执行顺序（给「下一次 AI」）
 
-**当前主轴（2026-07-24）**：W0-5 分支收拢，或 ENG-PR-094 OA / workbench 瘦身。W4-EXPORT 已闭环。
+**当前主轴（2026-07-25）**：**W3-AP-BEHAVIOR** — 暂停 Agent 横向扩工具；剧本回归 → 压空转 → 先读后写。  
+详规：[`plans/W3-AP-BEHAVIOR.md`](./plans/W3-AP-BEHAVIOR.md)。
 
 | 优先级 | ID | 说明 |
 |--------|-----|------|
-| P0 | W0-5 + 分支收拢 | 按主题拆 commit 后合 main |
-| P1 | ENG-PR-094 / workbench 瘦身 | Wave 4 余项 |
-| P2 | Cockpit×阶段任务包联动 | 可选增强 |
+| **P0** | 手测 | 配置问答 + 诊断 + 文献导入 + 写引言 |
+| P1 | 空转基线 | 记手测 toolCall，对照 ANTISPAM |
+| P2 | 行为收口 | BEHAVIOR 清单勾选手测项 |
+| P3 | FIG-PR 实测 / W0-5 | 作图与仓库卫生：不挡 Agent 行为主轴时可穿插 |
 
-**若只能做一个产品 PR**：做 **W0-5 收拢** 或 **Cockpit 阶段联动**。
+**若只能做一个产品 PR**：先让 P1（诊断）+ P3（写引言）两条剧本自动断言绿。
 
 ---
 

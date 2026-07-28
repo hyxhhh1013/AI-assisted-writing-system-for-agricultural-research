@@ -156,11 +156,38 @@ export interface ProjectReferenceRecord {
   id: string;
   content: string;
   order: number;
+  doi?: string | null;
+  title?: string | null;
+  abstract?: string | null;
+  openAccessUrl?: string | null;
+  externalId?: string | null;
+  externalSource?: string | null;
+}
+
+/** 外部导入 / 写作 soft-grounded 用的证据元数据 */
+export interface ReferenceEvidenceMeta {
+  doi?: string;
+  title?: string;
+  abstract?: string;
+  openAccessUrl?: string;
+  externalId?: string;
+  externalSource?: string;
+}
+
+/**
+ * 写作管道：项目文献上的摘要证据（1-based index）。
+ * 有足够长的 abstract 时可 soft-grounded，允许概括性引用。
+ */
+export interface SoftReferenceEvidence {
+  index: number;
+  title?: string;
+  abstract?: string;
+  doi?: string;
 }
 
 export type ReferencePatchOp =
-  | { op: "create"; content: string; index?: number }
-  | { op: "update"; id: string; content: string }
+  | { op: "create"; content: string; index?: number; meta?: ReferenceEvidenceMeta }
+  | { op: "update"; id: string; content: string; meta?: ReferenceEvidenceMeta }
   | { op: "delete"; id: string }
   | { op: "replace"; items: string[] };
 

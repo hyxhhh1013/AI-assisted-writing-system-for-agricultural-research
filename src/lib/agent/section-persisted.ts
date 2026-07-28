@@ -7,6 +7,13 @@ export interface AgentSectionPersistedInfo {
   referencesAdded?: number;
 }
 
+const SECTION_WRITE_TOOLS = new Set([
+  "write_section",
+  "refine_content",
+  "apply_revision_item",
+  "write_bilingual_abstract",
+]);
+
 export function extractSectionPersisted(
   tool: string,
   result: { success?: boolean; data?: unknown } | undefined,
@@ -14,11 +21,21 @@ export function extractSectionPersisted(
   if (!result?.success || result.data == null || typeof result.data !== "object") {
     return null;
   }
-  if (tool !== "write_section" && tool !== "refine_content") {
+  if (!SECTION_WRITE_TOOLS.has(tool)) {
     return null;
   }
 
   const data = result.data as Record<string, unknown>;
+
+  if (tool === "write_bilingual_abstract") {
+    if (data.persisted !== true && data.persisted !== "true") return null;
+    return {
+      sectionKey: "abstract",
+      tool,
+      charCount: typeof data.zhChars === "number" ? data.zhChars : undefined,
+    };
+  }
+
   const persisted = data.persisted;
   if (!persisted || typeof persisted !== "object") return null;
 

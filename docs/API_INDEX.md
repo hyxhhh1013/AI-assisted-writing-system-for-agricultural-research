@@ -13,7 +13,7 @@
 <!-- API_INDEX:AUTO:START -->
 ## 路由表（自动生成）
 
-> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-07-24 08:11:03**（共 **89** 个 route 文件，validateBody **45**，SSE **11**，requireAdmin **15**）。
+> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-07-27 11:54:54**（共 **94** 个 route 文件，validateBody **47**，SSE **11**，requireAdmin **15**）。
 
 图例：zod = 使用 validateBody；SSE = 含 text/event-stream / ReadableStream；admin = 含 requireAdmin。
 
@@ -145,7 +145,10 @@
 | POST | `/api/xrd/amorphous` | — | — | — |
 | POST | `/api/xrd/bragg` | ✓ | — | — |
 | POST | `/api/xrd/peakfit` | — | — | — |
+| POST | `/api/xrd/phase-search` | ✓ | — | — |
+| POST | `/api/xrd/scherrer` | ✓ | — | — |
 | POST | `/api/xrd/simulate` | — | — | — |
+| POST | `/api/xrd/stack` | — | — | — |
 | POST | `/api/xrd/unitcell` | — | — | — |
 | POST | `/api/xrd/xps` | — | — | — |
 
@@ -213,6 +216,7 @@
 | POST | `/api/agent` | ✓ | ✓ | — |
 | GET | `/api/agent/sessions` | — | — | — |
 | GET, POST | `/api/citations/gate` | ✓ | — | — |
+| POST | `/api/dft/vasp` | — | — | — |
 | GET, POST | `/api/directions` | ✓ | — | — |
 | GET, PUT, DELETE | `/api/directions/[slug]` | ✓ | — | — |
 | POST | `/api/directions/[slug]/analyze` | ✓ | ✓ | — |
@@ -229,6 +233,7 @@
 | GET | `/api/directions/[slug]/scan` | — | — | — |
 | GET | `/api/directions/summary` | — | — | — |
 | POST | `/api/literature/search` | ✓ | — | — |
+| POST | `/api/mechanism-panel` | — | — | — |
 | GET | `/api/presentation/stats` | — | — | — |
 <!-- API_INDEX:AUTO:END -->
 

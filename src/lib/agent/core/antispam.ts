@@ -1,0 +1,139 @@
+/**
+ * W3-AP-ANTISPAM — 检索配额 + 无进展熔断
+ * @see docs/plans/W3-AP-BEHAVIOR.md §3
+ */
+
+import type { AgentProjectSnapshot } from "@/lib/agent/project-loader";
+
+/**
+ * 同 goal 内 search_external + search_knowledge 上限。
+ * 综述需多轮换 query 凑 ~30 篇，8 次不够；20 次约可覆盖多源多同义检索。
+ */
+export const MAX_SEARCH_CALLS_PER_GOAL = 20;
+
+/** 连续未改变项目指纹的工具次数上限 */
+export const MAX_STAGNANT_TOOLS = 3;
+
+const SEARCH_TOOLS = new Set(["search_external", "search_knowledge"]);
+
+/** 认为可能推进项目的工具（成功后应刷新 fingerprint） */
+export const PROGRESS_TOOLS = new Set([
+  "update_paper_config",
+  "generate_outline",
+  "generate_writing_blueprint",
+  "build_argument_blueprint",
+  "write_section",
+  "refine_content",
+  "apply_revision_item",
+  "write_bilingual_abstract",
+  "import_reference",
+  "generate_chart",
+  "generate_xrd_analysis",
+  "validate_citations",
+  "run_review_rounds",
+]);
+
+export interface AntispamTracker {
+  searchCount: number;
+  stagnantCount: number;
+  lastFingerprint: string;
+}
+
+export function createAntispamTracker(
+  snap?: AgentProjectSnapshot | null,
+): AntispamTracker {
+  return {
+    searchCount: 0,
+    stagnantCount: 0,
+    lastFingerprint: projectFingerprint(snap),
+  };
+}
+
+export function projectFingerprint(snap: AgentProjectSnapshot | null | undefined): string {
+  if (!snap) return "none";
+  const chars = (snap.sectionFills ?? []).reduce((a, s) => a + (s.chars || 0), 0);
+  return [
+    snap.outline?.length ?? 0,
+    snap.references?.length ?? 0,
+    chars,
+    snap.hasWritingBlueprint ? 1 : 0,
+    snap.hasArgumentBlueprint ? 1 : 0,
+    snap.hasPaperConfig ? 1 : 0,
+    snap.currentPhase ?? "x",
+  ].join("|");
+}
+
+export function checkSearchQuota(
+  tracker: AntispamTracker,
+  toolName: string,
+): { allowed: boolean; warning?: string } {
+  if (!SEARCH_TOOLS.has(toolName)) {
+    return { allowed: true };
+  }
+  if (tracker.searchCount >= MAX_SEARCH_CALLS_PER_GOAL) {
+    return {
+      allowed: false,
+      warning:
+        `本轮检索已达 ${MAX_SEARCH_CALLS_PER_GOAL} 次上限。请停止 search_*，改用 list_references / 已有大纲继续，或直接用中文向用户汇报并询问是否继续搜。`,
+    };
+  }
+  return { allowed: true };
+}
+
+/** 检索工具即将执行时计数（仅在通过配额后调用） */
+export function noteSearchCall(tracker: AntispamTracker, toolName: string): void {
+  if (SEARCH_TOOLS.has(toolName)) {
+    tracker.searchCount += 1;
+  }
+}
+
+/**
+ * 工具执行后更新无进展计数。
+ * @returns stagnant=true 时应软中断并要求模型总结问用户
+ */
+export function noteToolProgress(
+  tracker: AntispamTracker,
+  toolName: string,
+  snapAfter: AgentProjectSnapshot | null | undefined,
+  toolSuccess: boolean,
+): { stagnant: boolean; warning?: string } {
+  if (!toolSuccess) {
+    return { stagnant: false };
+  }
+
+  const next = projectFingerprint(snapAfter);
+  const changed = next !== tracker.lastFingerprint;
+
+  // 检索本身不改项目指纹（导入才改），计入空转会误杀「先搜再导」流程
+  if (SEARCH_TOOLS.has(toolName)) {
+    if (changed) {
+      tracker.lastFingerprint = next;
+      tracker.stagnantCount = 0;
+    }
+    return { stagnant: false };
+  }
+
+  if (PROGRESS_TOOLS.has(toolName) && changed) {
+    tracker.lastFingerprint = next;
+    tracker.stagnantCount = 0;
+    return { stagnant: false };
+  }
+
+  // 只读 / 未改项目：累计空转
+  if (!changed) {
+    tracker.stagnantCount += 1;
+  } else {
+    tracker.lastFingerprint = next;
+    tracker.stagnantCount = 0;
+    return { stagnant: false };
+  }
+
+  if (tracker.stagnantCount >= MAX_STAGNANT_TOOLS) {
+    return {
+      stagnant: true,
+      warning:
+        `已连续 ${tracker.stagnantCount} 次工具调用未改变项目状态（大纲/文献/章节等）。请停止调工具，用中文总结已掌握的信息，并明确询问用户下一步。`,
+    };
+  }
+  return { stagnant: false };
+}

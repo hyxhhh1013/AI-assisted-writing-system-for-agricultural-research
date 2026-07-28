@@ -37,15 +37,16 @@ KnowledgeFile 1──* KnowledgeChunk
 |------|------|
 | `goal` | 用户目标原文 |
 | `status` | `running` \| `interrupted` \| `completed` \| `error` |
-| `snapshot` | JSON `AgentSessionSnapshot`（messages / plan / iteration / toolSummaries…） |
+| `snapshot` | JSON `AgentSessionSnapshot`（LLM `messages` / plan / iteration / toolSummaries / **`uiTranscript` 前端气泡**…） |
 | `projectId` | 可选，绑定论文项目 |
 
-中断后续跑：`POST /api/agent` `{ sessionId, resume: true }`；列表：`GET /api/agent/sessions?projectId=&status=interrupted`。
+中断后续跑：`POST /api/agent` `{ sessionId, resume: true }`；列表：`GET /api/agent/sessions?projectId=&status=interrupted`；聊天历史：`GET /api/agent/sessions?projectId=&history=1`（正序 + `uiTranscript`）。
 
 **保存策略（当前）**
 
 - `Section`：按 key **增量 PATCH** `/api/projects/[id]/sections/[key]`
 - `Reference`：**增量 PATCH** `/api/projects/[id]/references`（含 `replace`）；`(projectId, order)` **唯一约束**（SEC-03），并发 create 走 advisory lock + P2002 重试
+- 外部导入可附带 `doi` / `title` / `abstract` / `openAccessUrl` 等元数据；有摘要时可写作 soft-grounded，并同步进方向知识库（摘要块可 BM25 检索；无 PDF 时状态为「摘要已索引」）
 - `AnalysisResult`：**增量 PATCH** `/api/projects/[id]/analysis-results`
 - `expandedOutlineSections`：随项目 **POST** `/api/projects` 写入（JSON 列）；自动保存/手动保存均走此路径
 - `writingBlueprint`：`project-writing-blueprint-db.ts` 统一读写蓝图数据

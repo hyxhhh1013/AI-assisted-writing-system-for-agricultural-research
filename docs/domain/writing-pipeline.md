@@ -79,7 +79,8 @@ route.ts               SSE 外壳
 - **摘要**：建议正文完成后再写；注入 `sectionBodies` 全文；跳过 RAG；禁止文内 `[n]`（落库前 `stripInlineCitations`）。
 - **RAG scope**：分类范围 = 已有参考文献 ∪ 用户勾选文献；范围空命中自动扩全库（`writing-context.ts`）。
 - **主题过滤**：检索后按题名/方向主题词过滤跑题片段（`filterChunksByTopicRelevance`）；已有参考文献 pin 保留。
-- **引用白名单**：仅「有 RAG 全文」的 grounded 编号可深度引用；`grounded=[]` 时剥离全部 `[n]`。`fast` / `expand_bullet` / `refiner` / `fix_only` 均 sanitize。
+- **引用白名单**：有 RAG 全文的 grounded 编号可深度引用；**有摘要的外部导入**为 soft-grounded（可概括引用，禁止编造精确数据）；`grounded=[]` 时剥离全部 `[n]`。
+- **外部导入双写**：确认导入 → 项目 `Reference`（含摘要元数据）+ 方向/「外部摘要」知识库（有摘要则追加 index chunk，无 PDF 不阻塞）。
 - **定稿重排**：`finalizeAndEmitCitations` 将正文引用紧凑为 `[1]…[K]` 并与 SSE `references` 对齐；前端 `mergeSectionReferencesIntoProject` 合并进项目全局表。
 
 ## 前端

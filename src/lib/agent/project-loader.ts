@@ -1,11 +1,15 @@
 import type { EvidenceClaim } from "@/contracts/data-source";
 import type { WritingGlobalContext } from "@/app/api/writing/types";
+import { hasCompletePaperConfig } from "@/lib/agent/config-qa";
 import { readWritingBlueprint } from "@/lib/project-writing-blueprint-db";
+import { rowsToSoftReferenceEvidence } from "@/lib/reference-evidence";
 import prisma from "@/lib/prisma";
 
 export interface AgentSectionFill {
   key: string;
   chars: number;
+  /** 正文摘录，供 Agent 上下文（非全量） */
+  preview?: string;
 }
 
 export interface AgentProjectSnapshot {
@@ -17,6 +21,8 @@ export interface AgentProjectSnapshot {
   researchDirection: string;
   outline: string;
   references: string[];
+  /** 有摘要的项目文献（1-based），供写作 soft-grounded */
+  referenceEvidence?: import("@/contracts/project").SoftReferenceEvidence[];
   dataClaims: EvidenceClaim[];
   globalContext?: WritingGlobalContext;
   /** Passport currentPhase 0–7 */
@@ -24,6 +30,12 @@ export interface AgentProjectSnapshot {
   hasWritingBlueprint: boolean;
   hasArgumentBlueprint: boolean;
   sectionFills: AgentSectionFill[];
+  /** 写作蓝图短摘要（thesis / 词数） */
+  writingBlueprintSummary?: string | null;
+  /** 论证蓝图短摘要 */
+  argumentBlueprintSummary?: string | null;
+  /** Passport 是否已有 config 记录 */
+  hasPaperConfig: boolean;
 }
 
 export async function loadAgentProject(
@@ -65,21 +77,69 @@ export async function loadAgentProject(
   const styleRaw = project.citationStyle;
 
   let currentPhase: number | null = null;
+  let hasPaperConfig = false;
   if (project.paperPassport) {
     try {
-      const parsed = JSON.parse(project.paperPassport) as { currentPhase?: unknown };
+      const parsed = JSON.parse(project.paperPassport) as {
+        currentPhase?: unknown;
+        config?: unknown;
+      };
       if (typeof parsed.currentPhase === "number") {
         currentPhase = parsed.currentPhase;
       }
+      // 须有题目等完整字段；空壳 config 仍要走问答
+      hasPaperConfig = hasCompletePaperConfig(parsed.config);
     } catch {
       currentPhase = null;
+      hasPaperConfig = false;
     }
   }
 
-  const sectionFills = project.sections.map((s) => ({
-    key: s.key,
-    chars: s.content?.replace(/\s+/g, "").length ?? 0,
-  }));
+  const sectionFills = project.sections.map((s) => {
+    const content = s.content ?? "";
+    return {
+      key: s.key,
+      chars: content.replace(/\s+/g, "").length,
+      preview: content.trim() ? content.trim().slice(0, 280) : undefined,
+    };
+  });
+
+  let writingBlueprintSummary: string | null = null;
+  if (writingBlueprint?.trim()) {
+    try {
+      const bp = JSON.parse(writingBlueprint) as {
+        thesis?: string;
+        estimatedWordCount?: { min?: number; max?: number };
+      };
+      const words =
+        bp.estimatedWordCount?.min != null && bp.estimatedWordCount?.max != null
+          ? `词数约 ${bp.estimatedWordCount.min}-${bp.estimatedWordCount.max}`
+          : "";
+      writingBlueprintSummary = [bp.thesis?.slice(0, 200), words]
+        .filter(Boolean)
+        .join("；") || "（已有写作蓝图）";
+    } catch {
+      writingBlueprintSummary = "（已有写作蓝图）";
+    }
+  }
+
+  let argumentBlueprintSummary: string | null = null;
+  if (project.argumentBlueprint?.trim()) {
+    try {
+      const ab = JSON.parse(project.argumentBlueprint) as {
+        centralThesis?: string;
+        chains?: unknown[];
+      };
+      argumentBlueprintSummary = [
+        ab.centralThesis?.slice(0, 200),
+        Array.isArray(ab.chains) ? `链条 ${ab.chains.length} 条` : "",
+      ]
+        .filter(Boolean)
+        .join("；") || "（已有论证蓝图）";
+    } catch {
+      argumentBlueprintSummary = "（已有论证蓝图）";
+    }
+  }
 
   return {
     title: project.title,
@@ -93,11 +153,15 @@ export async function loadAgentProject(
     researchDirection: project.researchDirection || "",
     outline: project.outline || "",
     references: project.references.map((r) => r.content),
+    referenceEvidence: rowsToSoftReferenceEvidence(project.references),
     dataClaims,
     globalContext,
     currentPhase,
     hasWritingBlueprint: Boolean(writingBlueprint?.trim()),
     hasArgumentBlueprint: Boolean(project.argumentBlueprint?.trim()),
     sectionFills,
+    writingBlueprintSummary,
+    argumentBlueprintSummary,
+    hasPaperConfig,
   };
 }

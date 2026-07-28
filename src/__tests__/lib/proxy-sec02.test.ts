@@ -36,4 +36,12 @@ describe("proxy SEC-02 protected routes", () => {
     const res = await proxy(req("/api/knowledge"));
     expect(res.status).not.toBe(429);
   });
+
+  it("does not rate-limit GET /api/agent/sessions for authenticated-shaped requests", async () => {
+    process.env.AUTH_BYPASS = "true";
+    for (let i = 0; i < 25; i++) {
+      const res = await proxy(req("/api/agent/sessions?projectId=x", "GET"));
+      expect(res.status).not.toBe(429);
+    }
+  });
 });

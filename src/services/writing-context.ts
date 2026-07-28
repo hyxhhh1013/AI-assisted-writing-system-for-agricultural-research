@@ -9,6 +9,8 @@ import type {
   RetrievePreviewRequest,
   RetrievePreviewResponse,
 } from "@/contracts/writing-retrieve-preview";
+import type { SoftReferenceEvidence } from "@/contracts/project";
+import { formatSoftEvidenceBlock, isSoftGroundable } from "@/lib/reference-evidence";
 
 export interface WritingContext {
   contextText: string;
@@ -20,6 +22,8 @@ export interface WritingContext {
   refRangeHint: string;
   /** 本次有 RAG 全文片段、允许深度引用的编号 */
   groundedRefIndices: number[];
+  /** 仅有摘要、允许概括引用的编号（外部导入 soft-grounded） */
+  softGroundedRefIndices: number[];
   /** 是否因范围空命中而扩到全库 */
   expandedToFullLibrary: boolean;
   /** 是否因主题相关性丢掉了部分命中 */
@@ -118,9 +122,8 @@ const TITLE_CATEGORY_HINTS: Array<{ pattern: RegExp; category: string }> = [
   { pattern: /茶|绿茶|红茶|乌龙|普洱|香气|挥发性|杀青|摊放|茶汤/, category: "茶学" },
   { pattern: /烟花|烟火|推进剂|含能|火药|燃烧剂|高氯酸/, category: "烟花" },
   { pattern: /烤烟|烟草|烟叶|植烟|卷烟/, category: "烟草" },
-  { pattern: /热解|共热解|热化学|裂解|生物质.*塑料|碳纳米|秸秆.*热解|营养元素.*迁移/, category: "热化学" },
+  { pattern: /热解|共热解|热化学|裂解|生物质.*塑料|碳纳米|秸秆.*热解|营养元素.*迁移|生物炭|biochar/i, category: "热化学" },
   { pattern: /控释|缓释|包衣|包膜|肥料|氮素淋|生物炭基肥/, category: "控释肥类" },
-  { pattern: /生物炭|biochar/i, category: "烟草" },
 ];
 
 /**
@@ -383,6 +386,7 @@ export async function searchWritingRagChunks(
 
   const topicTerms = extractTopicTerms(title, researchDirection, context);
   const filtered = filterChunksByTopicRelevance(chunks, topicTerms, {
+    minScore: chunks.length <= 6 ? 0 : 1,
     pinSources: mergeScopeSourceKeys(params.existingReferences, selectedSourceIds),
     keepAtLeast: Math.min(6, Math.max(3, Math.floor(ragLimit / 3))),
   });
@@ -453,20 +457,32 @@ function formatRefListLine(idx: number, filename: string): string {
 }
 
 /**
- * 构建引用范围提示：可深度引用（有 chunk）vs 仅书目（勿深引）。
+ * 构建引用范围提示：可深度引用（有 chunk）/ 有摘要 soft-grounded / 仅书目。
  * 纯函数便于单测。
  */
 export function buildWritingRefRangeHint(params: {
   referencesByIndex: string[];
   groundedRefIndices: number[];
+  softGroundedRefIndices?: number[];
   expandedToFullLibrary?: boolean;
 }): string {
-  const { referencesByIndex, groundedRefIndices, expandedToFullLibrary } = params;
+  const {
+    referencesByIndex,
+    groundedRefIndices,
+    softGroundedRefIndices = [],
+    expandedToFullLibrary,
+  } = params;
   const totalRefs = referencesByIndex.filter(Boolean).length;
-  if (totalRefs === 0 && groundedRefIndices.length === 0) return "";
+  if (totalRefs === 0 && groundedRefIndices.length === 0 && softGroundedRefIndices.length === 0) {
+    return "";
+  }
 
-  const groundedSet = new Set(groundedRefIndices);
-  const groundedLines: string[] = [];
+  const fullSet = new Set(groundedRefIndices);
+  const softSet = new Set(softGroundedRefIndices.filter((n) => !fullSet.has(n)));
+  const allowedSet = new Set([...fullSet, ...softSet]);
+
+  const fullLines: string[] = [];
+  const softLines: string[] = [];
   const bibOnlyLines: string[] = [];
 
   for (let i = 0; i < referencesByIndex.length; i++) {
@@ -474,23 +490,29 @@ export function buildWritingRefRangeHint(params: {
     if (!filename) continue;
     const idx = i + 1;
     const line = formatRefListLine(idx, filename);
-    if (groundedSet.has(idx)) groundedLines.push(`${line} ★有全文`);
+    if (fullSet.has(idx)) fullLines.push(`${line} ★有全文`);
+    else if (softSet.has(idx)) softLines.push(`${line} ★有摘要`);
     else bibOnlyLines.push(line);
   }
 
-  const groundedNums = [...groundedSet].sort((a, b) => a - b);
+  const allowedNums = [...allowedSet].sort((a, b) => a - b);
   const expandNote = expandedToFullLibrary
     ? "\n（提示：分类范围检索无命中，已自动扩大到全库。）"
     : "";
 
   return `
 ⚠️ 引用铁律：
-· **可深度引用**的编号仅限：${groundedNums.length > 0 ? groundedNums.map((n) => `[${n}]`).join("、") : "（无）"}——这些来源有 RAG 全文片段，可用 [n] 支撑具体观点/数据。
-· **仅书目**编号（无全文片段）**禁止**引用具体数据、统计结果或细致结论；一般不要使用这些 [n]。若必须提及，只用极概括表述且不加编号。
+· **可引用**的编号仅限：${allowedNums.length > 0 ? allowedNums.map((n) => `[${n}]`).join("、") : "（无）"}。
+· ★有全文：可用 [n] 支撑具体观点/数据（须来自片段）。
+· ★有摘要：可概括主题与主要结论并标注 [n]；**禁止编造摘要未出现的精确数据/统计量**。
+· **仅书目**编号禁止深引；一般不要使用这些 [n]。
 · 严禁编造列表外的编号。${expandNote}
 
 【可深度引用 · 有 RAG 全文】
-${groundedLines.length > 0 ? groundedLines.join("\n") : "  （无）"}
+${fullLines.length > 0 ? fullLines.join("\n") : "  （无）"}
+
+【可概括引用 · 有摘要】
+${softLines.length > 0 ? softLines.join("\n") : "  （无）"}
 
 【仅书目 · 勿深引】
 ${bibOnlyLines.length > 0 ? bibOnlyLines.join("\n") : "  （无）"}
@@ -575,7 +597,7 @@ export async function retrieveWritingPreview(
 }
 
 export async function retrieveWritingContext(
-  params: WritingRequest,
+  params: WritingRequest & { referenceEvidence?: SoftReferenceEvidence[] },
   existingReferences: string[],
 ): Promise<WritingContext> {
   const { retrievalMode = "balanced", selectedSourceIds } = params;
@@ -610,7 +632,7 @@ export async function retrieveWritingContext(
 
   const contextRefIndices: number[] = [];
 
-  const contextText =
+  let contextText =
     contextChunks.length > 0
       ? contextChunks
           .map((c) => {
@@ -638,10 +660,31 @@ export async function retrieveWritingContext(
         ? "（未选择任何文献来源，请根据通用学术知识扩写，避免编造具体数据）"
         : "（未找到直接相关的文献参考，请根据通用学术知识扩写）";
 
-  const groundedRefIndices = contextRefIndices.sort((a, b) => a - b);
+  const softEvidence = (params.referenceEvidence ?? []).filter((e) =>
+    isSoftGroundable(e.abstract),
+  );
+  const softGroundedRefIndices = softEvidence
+    .map((e) => e.index)
+    .filter((n) => Number.isFinite(n) && n >= 1)
+    .sort((a, b) => a - b);
+
+  if (softEvidence.length > 0) {
+    const softBlock = softEvidence.map(formatSoftEvidenceBlock).join("\n\n");
+    contextText =
+      contextText && !contextText.startsWith("（未")
+        ? `${contextText}\n\n【项目文献摘要 · 可概括引用】\n${softBlock}`
+        : `【项目文献摘要 · 可概括引用】\n${softBlock}`;
+  }
+
+  const ragGrounded = contextRefIndices.sort((a, b) => a - b);
+  const groundedRefIndices = [
+    ...new Set([...ragGrounded, ...softGroundedRefIndices]),
+  ].sort((a, b) => a - b);
+
   const refRangeHint = buildWritingRefRangeHint({
     referencesByIndex,
-    groundedRefIndices,
+    groundedRefIndices: ragGrounded,
+    softGroundedRefIndices,
     expandedToFullLibrary,
   });
 
@@ -654,6 +697,7 @@ export async function retrieveWritingContext(
     ragMaxPerSource,
     refRangeHint,
     groundedRefIndices,
+    softGroundedRefIndices,
     expandedToFullLibrary,
     topicFiltered,
     topicSoftKept,

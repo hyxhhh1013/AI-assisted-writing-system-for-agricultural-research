@@ -55,6 +55,10 @@ export async function POST(req: NextRequest) {
       pdfUrl: generated.pdfUrl,
       fileName: generated.fileName,
       baseName: generated.baseName,
+      styleValidation: generated.styleValidation,
+      figWidth: generated.figWidth,
+      columns: generated.columns,
+      preset: generated.preset,
     });
   } catch (error: unknown) {
     logger.error("Chart API error:", error);

@@ -2,6 +2,7 @@ import prisma from "@/lib/prisma";
 import { validateCitations } from "@/lib/citation";
 import { evaluateCitationGate } from "@/lib/citation-gate";
 import { syncProjectPaperPassport } from "@/lib/project-paper-passport-sync";
+import { findReferenceRowsLite } from "@/lib/reference-rows";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 
 export const validateCitationsTool: ToolDefinition = {
@@ -40,22 +41,26 @@ export const validateCitationsTool: ToolDefinition = {
       select: {
         abstract: true,
         sections: { select: { content: true } },
-        references: { select: { content: true }, orderBy: { order: "asc" } },
       },
     });
     if (!project) {
       return { success: false, error: "项目不存在或无权访问" };
     }
 
-    refCount = project.references.length;
+    const references = await findReferenceRowsLite(ctx.projectId, ctx.userId);
+    refCount = references.length;
     if (!draftText.trim()) {
       draftText = [project.abstract ?? "", ...project.sections.map((s) => s.content)]
         .filter(Boolean)
         .join("\n\n");
     }
     if (!contextText.trim()) {
-      contextText = project.references
-        .map((r, i) => `[${i + 1}] ${r.content}`)
+      contextText = references
+        .map((r, i) => {
+          const abs = r.abstract?.trim();
+          const head = `[${i + 1}] ${r.title || r.content}`;
+          return abs ? `${head}\n${abs.slice(0, 1500)}` : head;
+        })
         .join("\n\n");
     }
 

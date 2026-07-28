@@ -145,12 +145,14 @@ const PDFViewer = dynamic(() => import("@/components/pdf-viewer"), {
 
 export type WorkbenchTab = "structure" | "data" | "outline" | "writing" | "agent" | "reader" | "plagiarism" | "xrd";
 
+const AGENT_TAB_ENABLED = process.env.NEXT_PUBLIC_AGENT_ENABLED === "1";
+
 const WORKBENCH_TABS: WorkbenchTab[] = [
+  ...(AGENT_TAB_ENABLED ? (["agent"] as const) : []),
   "structure",
   "data",
   "outline",
   "writing",
-  ...(process.env.NEXT_PUBLIC_AGENT_ENABLED === "1" ? (["agent"] as const) : []),
   "reader",
   "plagiarism",
   "xrd",
@@ -184,7 +186,9 @@ function WorkbenchContent() {
   const [activeSection, setActiveSection] = useState("introduction");
   const [editingContent, setEditingContent] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState<WorkbenchTab>("structure");
+  const [activeTab, setActiveTab] = useState<WorkbenchTab>(
+    AGENT_TAB_ENABLED ? "agent" : "structure",
+  );
   const [isPreviewOpen, setIsPreviewOpen] = useState(true);
   const [rightPanelMode, setRightPanelMode] = useState<"preview" | "reader">("preview");
   const [editorMode, setEditorMode] = useState<"classic" | "paragraph">("paragraph");
@@ -425,6 +429,64 @@ function WorkbenchContent() {
       }
     },
     [projectId, focusEditorAfterDraft],
+  );
+
+  const handleAgentChartPersisted = useCallback(
+    async (info: { imageUrl: string; sectionKey?: string; caption?: string }) => {
+      if (!projectId) return;
+      try {
+        const data = await projectStore.get(projectId);
+        if (data) {
+          setProject(data);
+          if (info.sectionKey) {
+            focusEditorAfterDraft(info.sectionKey);
+            toast.success(
+              info.caption
+                ? `图表「${info.caption}」已插入「${info.sectionKey}」`
+                : `图表已插入「${info.sectionKey}」`,
+            );
+          } else {
+            toast.success(
+              info.caption
+                ? `图表「${info.caption}」已登记到项目图表库`
+                : "图表已登记到项目图表库",
+            );
+          }
+        }
+      } catch {
+        toast.error("图表已生成，但刷新项目失败，请手动刷新页面");
+      }
+    },
+    [projectId, focusEditorAfterDraft],
+  );
+
+  /** Agent 任意写回（配置/大纲/蓝图/文献等）后刷新工作台项目 */
+  const handleAgentProjectMutated = useCallback(
+    async (info: { label: string; tool: string }) => {
+      if (!projectId) return;
+      // 章节/图表已有专属 toast + 跳转，避免重复提示
+      if (
+        info.tool === "write_section"
+        || info.tool === "refine_content"
+        || info.tool === "apply_revision_item"
+        || info.tool === "write_bilingual_abstract"
+        || info.tool === "generate_chart"
+      ) {
+        const data = await projectStore.get(projectId);
+        if (data) setProject(data);
+        return;
+      }
+      try {
+        const data = await projectStore.get(projectId);
+        if (data) {
+          setProject(data);
+          toast.success(`Agent 已更新「${info.label}」`);
+        }
+      } catch {
+        toast.error("项目已更新，但刷新失败，请手动刷新页面");
+      }
+    },
+    [projectId],
   );
 
   const handleApplyAiContent = (content: string, sectionId: string, subsectionTitle?: string) => {
@@ -711,15 +773,31 @@ function WorkbenchContent() {
         setIsPreviewOpen={setIsPreviewOpen}
       />
 
-      {/* Second Left: Dynamic Panel */}
+      {/* Second Left: Dynamic Panel — Agent 加宽，便于阅读长回复 */}
       <div 
         className={cn(
           "border-r flex flex-col transition-all duration-300 ease-in-out overflow-hidden bg-white/90",
           modeAccent.borderTint,
-          isSidebarOpen ? (activeTab === "writing" || activeTab === "agent" ? "w-96" : "w-80") : "w-0",
+          isSidebarOpen
+            ? activeTab === "agent"
+              ? "w-[min(36rem,46vw)] min-w-[22rem]"
+              : activeTab === "writing"
+                ? "w-96"
+                : "w-80"
+            : "w-0",
         )}
       >
-        <div className={cn("flex flex-col h-full", activeTab === "writing" || activeTab === "agent" ? "w-96" : "w-80")}>
+        <div
+          className={cn(
+            "flex h-full min-w-0 flex-col",
+            activeTab === "agent"
+              ? "w-full"
+              : activeTab === "writing"
+                ? "w-96"
+                : "w-80",
+          )}
+        >
+          {activeTab !== "agent" ? (
           <header className={cn("border-b shrink-0 px-4 py-3", modeAccent.headerTint, modeAccent.borderTint)}>
             <div className="flex items-start justify-between gap-2">
               <div className="flex flex-col min-w-0 gap-0.5 flex-1">
@@ -729,7 +807,6 @@ function WorkbenchContent() {
                     {activeTab === "data" && "实验数据"}
                     {activeTab === "outline" && "论证提纲"}
                     {activeTab === "writing" && "章节协作向导"}
-                    {activeTab === "agent" && "AI Agent"}
                     {activeTab === "reader" && "补录文献"}
                     {activeTab === "plagiarism" && "论文质量检测"}
                     {activeTab === "xrd" && "XRD 分析"}
@@ -747,8 +824,12 @@ function WorkbenchContent() {
               </Button>
             </div>
           </header>
+          ) : null}
           
-          <div className={cn("flex-1 overflow-hidden", activeTab === "writing" || activeTab === "agent" ? "p-3" : "p-4")}>
+          <div className={cn(
+            "flex-1 overflow-hidden",
+            activeTab === "agent" ? "p-0" : activeTab === "writing" ? "p-3" : "p-4",
+          )}>
             {activeTab === "plagiarism" && (
               <div className="h-full min-h-0 flex flex-col overflow-hidden">
                 <ErrorBoundary>
@@ -926,6 +1007,9 @@ function WorkbenchContent() {
                 <LazyAgentPanel
                   projectId={projectId ?? undefined}
                   onSectionPersisted={(info) => void handleAgentSectionPersisted(info)}
+                  onChartPersisted={(info) => void handleAgentChartPersisted(info)}
+                  onProjectMutated={(info) => void handleAgentProjectMutated(info)}
+                  onCollapse={() => setIsSidebarOpen(false)}
                 />
               </ErrorBoundary>
             </div>

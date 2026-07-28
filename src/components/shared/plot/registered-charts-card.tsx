@@ -43,7 +43,7 @@ export function RegisteredChartsCard({
         <CardContent className="space-y-2">
           {sorted.length === 0 ? (
             <p className="text-xs text-muted-foreground py-2">
-              暂无已登记图表。在科学绘图页生成并「插入论文」后，会出现在这里。
+              暂无已登记图表。可在「科学绘图」页生成并插入，或让 Agent 调用 generate_chart（会写入本列表）。
             </p>
           ) : (
             sorted.map((asset) => {

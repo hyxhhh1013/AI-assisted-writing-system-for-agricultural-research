@@ -2,12 +2,19 @@ import {
   emptyAgentSessionSnapshot,
   isAgentSessionSnapshot,
   type AgentSessionSnapshot,
+  type AgentUiMessage,
 } from "@/contracts/agent-session";
 import type { AgentGraphStateType } from "@/lib/agent/langgraph/state";
+import { normalizeWorkMemory } from "@/lib/agent/work-memory";
 
 export { emptyAgentSessionSnapshot, isAgentSessionSnapshot };
 
-export function graphStateToSnapshot(state: AgentGraphStateType): AgentSessionSnapshot {
+export function graphStateToSnapshot(
+  state: AgentGraphStateType,
+  uiTranscript?: AgentUiMessage[],
+  workMemory?: import("@/lib/agent/work-memory").AgentWorkMemory | null,
+): AgentSessionSnapshot {
+  const mem = normalizeWorkMemory(workMemory ?? null);
   return {
     version: 1,
     messages: state.messages,
@@ -18,6 +25,11 @@ export function graphStateToSnapshot(state: AgentGraphStateType): AgentSessionSn
     pendingToolCalls: state.pendingToolCalls,
     finished: state.finished,
     error: state.error,
+    awaitingCheckpoint: state.awaitingCheckpoint ?? null,
+    awaitingConfirm: state.awaitingConfirm ?? null,
+    approvedCheckpointKinds: state.approvedCheckpointKinds ?? [],
+    ...(uiTranscript ? { uiTranscript } : {}),
+    ...(mem ? { workMemory: mem } : {}),
   };
 }
 
@@ -39,5 +51,10 @@ export function snapshotToInitialState(
     error: null,
     events: [],
     finalThought: null,
+    planContinueCount: 0,
+    awaitingCheckpoint: null,
+    awaitingConfirm: null,
+    grantedConfirm: null,
+    approvedCheckpointKinds: snapshot.approvedCheckpointKinds ?? [],
   };
 }

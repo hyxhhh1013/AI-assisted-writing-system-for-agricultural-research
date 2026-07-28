@@ -14,6 +14,7 @@ const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
 import { PYTHON_CMD } from "@/services/xrd-runner";
 import { parseOptionalJsonConfig } from "@/lib/api-validate";
+import { resolveXrdUploadExt } from "@/lib/xrd-file-ext";
 
 if (!fs.existsSync(CHARTS_DIR)) {
   fs.mkdirSync(CHARTS_DIR, { recursive: true });
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
     const tmpDir = path.join(process.cwd(), ".tmp", randomUUID());
     fs.mkdirSync(tmpDir, { recursive: true });
 
-    const ext = dataFile.name.toLowerCase().endsWith(".csv") ? ".csv" : ".csv";
+    const ext = resolveXrdUploadExt(dataFile.name);
     const dataPath = path.join(tmpDir, `data${ext}`);
     const buffer = Buffer.from(await dataFile.arrayBuffer());
     fs.writeFileSync(dataPath, buffer);

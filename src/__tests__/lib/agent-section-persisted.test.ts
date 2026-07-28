@@ -36,4 +36,33 @@ describe("extractSectionPersisted", () => {
       }),
     ).toBeNull();
   });
+
+  it("parses apply_revision_item persisted payload", () => {
+    const info = extractSectionPersisted("apply_revision_item", {
+      success: true,
+      data: {
+        section: "discussion",
+        charCount: 800,
+        persisted: { sectionKey: "discussion", referencesAdded: 0 },
+      },
+    });
+    expect(info).toEqual({
+      sectionKey: "discussion",
+      tool: "apply_revision_item",
+      charCount: 800,
+      referencesAdded: 0,
+    });
+  });
+
+  it("maps write_bilingual_abstract to abstract", () => {
+    const info = extractSectionPersisted("write_bilingual_abstract", {
+      success: true,
+      data: { persisted: true, zhChars: 240 },
+    });
+    expect(info).toEqual({
+      sectionKey: "abstract",
+      tool: "write_bilingual_abstract",
+      charCount: 240,
+    });
+  });
 });

@@ -7,6 +7,61 @@ export interface PersistAgentDraftResult {
   referencesAdded: number;
 }
 
+/** 在章节末尾追加 Markdown（Agent 配图插入正文） */
+export async function appendAgentSectionMarkdown(
+  userId: string,
+  projectId: string,
+  sectionKey: string,
+  markdown: string,
+): Promise<{ sectionKey: string }> {
+  const owned = await prisma.project.findFirst({
+    where: { id: projectId, userId },
+    select: { id: true },
+  });
+  if (!owned) {
+    throw new Error("项目不存在或无权访问");
+  }
+
+  const chunk = markdown.startsWith("\n") ? markdown : `\n${markdown}`;
+
+  if (sectionKey === "abstract") {
+    const row = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { abstract: true },
+    });
+    await prisma.project.update({
+      where: { id: projectId },
+      data: {
+        abstract: `${row?.abstract ?? ""}${chunk}`,
+        lastUpdated: new Date(),
+      },
+    });
+  } else {
+    const existing = await prisma.section.findUnique({
+      where: { projectId_key: { projectId, key: sectionKey } },
+      select: { content: true },
+    });
+    const next = `${existing?.content ?? ""}${chunk}`;
+    await prisma.section.upsert({
+      where: { projectId_key: { projectId, key: sectionKey } },
+      update: { content: next },
+      create: { projectId, key: sectionKey, content: next },
+    });
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { lastUpdated: new Date() },
+    });
+  }
+
+  try {
+    await syncProjectPaperPassport(projectId);
+  } catch {
+    /* 不阻塞 */
+  }
+
+  return { sectionKey };
+}
+
 /** Agent 写工具：将正文与新增参考文献增量写入项目 */
 export async function persistAgentDraft(
   userId: string,

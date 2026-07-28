@@ -14,10 +14,20 @@ export type PlotReplayTool =
   | "mechanism"
   | "molecule"
   | "xrd_peakfit"
+  | "xrd_workflow"
   | "xrd_unitcell"
   | "xrd_amorphous"
   | "xrd_bragg"
-  | "xrd_xps";
+  | "xrd_xps"
+  | "xrd_stack"
+  | "xrd_scherrer"
+  | "xrd_simulate"
+  | "dft_band"
+  | "dft_dos"
+  | "dft_vasp_dos"
+  | "dft_vasp_band"
+  | "dft_vasp_procar"
+  | "mechanism_panel";
 
 /** @deprecated 使用 PlotReplayTool */
 export type FigureTool = PlotReplayTool;
@@ -28,10 +38,20 @@ const PLOT_REPLAY_TOOLS = new Set<string>([
   "mechanism",
   "molecule",
   "xrd_peakfit",
+  "xrd_workflow",
   "xrd_unitcell",
   "xrd_amorphous",
   "xrd_bragg",
   "xrd_xps",
+  "xrd_stack",
+  "xrd_scherrer",
+  "xrd_simulate",
+  "dft_band",
+  "dft_dos",
+  "dft_vasp_dos",
+  "dft_vasp_band",
+  "dft_vasp_procar",
+  "mechanism_panel",
 ]);
 
 export function isPlotReplayTool(tool: string): tool is PlotReplayTool {
@@ -176,8 +196,8 @@ export interface ChartPanelPrefill {
 export interface FlowPanelPrefill {
   title?: string;
   direction?: "vertical" | "horizontal";
-  nodes?: { id: string; label: string; shape?: string }[];
-  edges?: { from: string; to: string }[];
+  nodes?: { id: string; label: string; shape?: string; role?: string }[];
+  edges?: { from: string; to: string; label?: string }[];
 }
 
 export function chartConfigToPrefill(cfg: ChartConfig, figureId?: string): ChartPanelPrefill {
@@ -202,6 +222,12 @@ const CHART_TYPE_TO_FIGURE: Record<string, string> = {
   area: "area",
   forest: "forest",
   radar: "radar",
+  stack_offset: "stack_offset",
+  waterfall: "stack_offset",
+  dft_band: "dft_band",
+  dft_dos: "dft_dos",
+  band: "dft_band",
+  dos: "dft_dos",
 };
 
 /** 写作 FIGURE 标记 tool → registry figure id */
@@ -209,12 +235,19 @@ export function figureToolToRegistryId(
   tool: string,
   config?: Record<string, unknown>,
 ): string {
-  if (tool === "flow" || tool === "mechanism") return "flow";
+  if (tool === "flow") return "flow";
+  if (tool === "mechanism") return "mechanism";
   if (tool === "chart") {
     const raw = String(config?.type ?? config?.chart_type ?? "bar");
     return CHART_TYPE_TO_FIGURE[raw] ?? chartTypeToFigureId(raw as ChartType);
   }
-  if (tool.startsWith("xrd_") || tool === "molecule" || tool === "table_three_line") {
+  if (
+    tool.startsWith("xrd_") ||
+    tool.startsWith("dft_") ||
+    tool === "molecule" ||
+    tool === "table_three_line" ||
+    tool === "stack_offset"
+  ) {
     return tool;
   }
   return tool;
@@ -363,9 +396,12 @@ export function buildPlotInsertReplay(
   tool: PlotReplayTool,
   caption: string,
   config: Record<string, unknown>,
+  extras?: { svgUrl?: string; pdfUrl?: string },
 ): PlotInsertReplay {
   return {
     figureSpecEnc: encodeFigureSpecParam({ tool, caption, config }),
+    svgUrl: extras?.svgUrl,
+    pdfUrl: extras?.pdfUrl,
   };
 }
 
@@ -391,7 +427,11 @@ export function figureSpecToFlowPrefill(spec: FigureSpec): FlowPanelPrefill | nu
   if (Array.isArray(edgesRaw)) {
     for (const item of edgesRaw) {
       if (!isRecord(item) || typeof item.from !== "string" || typeof item.to !== "string") continue;
-      edges.push({ from: item.from, to: item.to });
+      edges.push({
+        from: item.from,
+        to: item.to,
+        label: typeof item.label === "string" ? item.label : undefined,
+      });
     }
   }
   return {
@@ -611,7 +651,11 @@ export function figureBlockJsonToPlotHref(
     return buildPlotPageHref({
       projectId,
       figureId,
-      figureSpec: { tool: "flow", config, caption },
+      figureSpec: {
+        tool: tool === "mechanism" ? "mechanism" : "flow",
+        config,
+        caption,
+      },
     });
   }
   if (isPlotReplayTool(tool) && tool !== "chart") {

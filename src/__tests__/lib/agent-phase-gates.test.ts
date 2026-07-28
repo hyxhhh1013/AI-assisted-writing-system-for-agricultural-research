@@ -19,6 +19,7 @@ function snap(overrides: Partial<AgentProjectSnapshot> = {}): AgentProjectSnapsh
     hasWritingBlueprint: false,
     hasArgumentBlueprint: false,
     sectionFills: [],
+    hasPaperConfig: true,
     ...overrides,
   };
 }
@@ -28,47 +29,63 @@ describe("checkAgentToolPhaseGate", () => {
     expect(checkAgentToolPhaseGate("search_knowledge", {}, null).ok).toBe(true);
   });
 
-  it("blocks write_section without outline", () => {
+  it("blocks write_section without outline and points to generate_outline", () => {
     const r = checkAgentToolPhaseGate(
       "write_section",
       { section: "introduction" },
       snap({ outline: "太短", currentPhase: 4 }),
     );
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toMatch(/大纲/);
+    if (!r.ok) expect(r.error).toMatch(/generate_outline/);
   });
 
-  it("blocks write_section in structure phase even with outline", () => {
+  it("blocks write_section without writing blueprint even with outline", () => {
     const r = checkAgentToolPhaseGate(
       "write_section",
       { section: "introduction" },
       snap({ outline: "A".repeat(50), currentPhase: 2 }),
     );
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toMatch(/结构/);
+    if (!r.ok) expect(r.error).toMatch(/generate_writing_blueprint/);
   });
 
-  it("blocks write_section in argument phase without argument blueprint", () => {
+  it("blocks write_section without argument blueprint", () => {
     const r = checkAgentToolPhaseGate(
       "write_section",
       { section: "introduction" },
       snap({
         outline: "A".repeat(50),
         currentPhase: 3,
+        hasWritingBlueprint: true,
         hasArgumentBlueprint: false,
       }),
     );
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toMatch(/论证/);
+    if (!r.ok) expect(r.error).toMatch(/build_argument_blueprint/);
   });
 
-  it("allows write_section in drafting phase with outline", () => {
+  it("allows write_section when outline + blueprints ready regardless of phase number", () => {
     const r = checkAgentToolPhaseGate(
       "write_section",
       { section: "introduction" },
-      snap({ outline: "A".repeat(50), currentPhase: 4 }),
+      snap({
+        outline: "A".repeat(50),
+        currentPhase: 2,
+        hasWritingBlueprint: true,
+        hasArgumentBlueprint: true,
+      }),
     );
     expect(r.ok).toBe(true);
+  });
+
+  it("allows generate_outline without existing outline", () => {
+    expect(checkAgentToolPhaseGate("generate_outline", {}, snap()).ok).toBe(true);
+  });
+
+  it("blocks generate_writing_blueprint without outline", () => {
+    const r = checkAgentToolPhaseGate("generate_writing_blueprint", {}, snap());
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/generate_outline/);
   });
 
   it("blocks abstract before body draft", () => {
@@ -78,6 +95,8 @@ describe("checkAgentToolPhaseGate", () => {
       snap({
         outline: "A".repeat(50),
         currentPhase: 4,
+        hasWritingBlueprint: true,
+        hasArgumentBlueprint: true,
         sectionFills: [{ key: "introduction", chars: 10 }],
       }),
     );
@@ -92,6 +111,8 @@ describe("checkAgentToolPhaseGate", () => {
       snap({
         outline: "A".repeat(50),
         currentPhase: 6,
+        hasWritingBlueprint: true,
+        hasArgumentBlueprint: true,
         sectionFills: [{ key: "introduction", chars: 200 }],
       }),
     );
@@ -126,6 +147,12 @@ describe("resolvePhaseTaskPack", () => {
     );
     expect(r.pack.phase).toBe(4);
     expect(r.goal).toMatch(/introduction|引言/);
+  });
+
+  it("phase 2 prefers generate_outline tools", () => {
+    const pack = getPhaseTaskPack(2);
+    expect(pack.preferredTools).toContain("generate_outline");
+    expect(pack.preferredTools).toContain("generate_writing_blueprint");
   });
 
   it("exposes pack titles for all phases", () => {

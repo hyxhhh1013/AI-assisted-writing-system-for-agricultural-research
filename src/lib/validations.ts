@@ -51,6 +51,17 @@ export const writingSchema = z
     bullets: z.array(z.string()).max(MAX_WRITING_BULLETS).optional(),
     bulletIndex: z.number().int().min(0).optional(),
     draftSoFar: z.string().optional(),
+    /** 项目文献摘要证据（外部导入 soft-grounded） */
+    referenceEvidence: z
+      .array(
+        z.object({
+          index: z.number().int().min(1),
+          title: z.string().optional(),
+          abstract: z.string().optional(),
+          doi: z.string().optional(),
+        }),
+      )
+      .optional(),
   })
   .superRefine((data, ctx) => {
     if (!isSectionValidForMode(data.section, data.projectMode)) {
@@ -762,6 +773,37 @@ export const xrdBraggSchema = z.object({
 });
 export type XrdBraggInput = z.infer<typeof xrdBraggSchema>;
 
+const scherrerPeakSchema = z.object({
+  two_theta: z.number(),
+  fwhm: z.number().positive(),
+  label: z.string().optional(),
+});
+
+export const xrdScherrerSchema = z.object({
+  peaks: z.array(scherrerPeakSchema).min(1).max(40),
+  wavelength: z.number().positive().optional(),
+  shape_factor: z.number().positive().optional(),
+  fwhm_unit: z.enum(["degree", "radian"]).optional(),
+  title: z.string().optional(),
+  preset: z.string().optional(),
+  dpi: z.union([z.string(), z.number()]).optional(),
+});
+export type XrdScherrerInput = z.infer<typeof xrdScherrerSchema>;
+
+const phaseSearchPeakSchema = z.object({
+  two_theta: z.number(),
+  intensity: z.number().optional(),
+  relative_intensity: z.number().optional(),
+});
+
+export const xrdPhaseSearchSchema = z.object({
+  peaks: z.array(phaseSearchPeakSchema).min(1).max(60),
+  tolerance_deg: z.number().positive().optional(),
+  top_k: z.number().int().min(1).max(20).optional(),
+  min_score: z.number().min(0).max(1).optional(),
+});
+export type XrdPhaseSearchInput = z.infer<typeof xrdPhaseSearchSchema>;
+
 const literatureSourceSchema = z.enum([
   "openalex",
   "semantic-scholar",
@@ -947,6 +989,20 @@ export const agentSchema = z
     mode: z.enum(["auto", "guided"]).optional().default("auto"),
     sessionId: z.string().optional(),
     resume: z.boolean().optional(),
+    checkpointDecision: z
+      .object({
+        checkpointId: z.string().min(1),
+        decision: z.enum(["approve", "revise"]),
+        note: z.string().max(2000).optional(),
+      })
+      .optional(),
+    confirmDecision: z
+      .object({
+        tool: z.string().min(1),
+        params: z.record(z.string(), z.unknown()),
+        approved: z.boolean(),
+      })
+      .optional(),
   })
   .superRefine((data, ctx) => {
     if (data.resume) {

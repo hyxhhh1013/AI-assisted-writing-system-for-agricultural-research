@@ -10,12 +10,17 @@ function baseState(overrides: Partial<AgentGraphStateType> = {}): AgentGraphStat
     messages: [],
     iteration: 0,
     toolCallCount: 0,
+    planContinueCount: 0,
     finalThought: null,
     toolSummaries: [],
     pendingToolCalls: [],
     finished: false,
     error: null,
     events: [],
+    awaitingCheckpoint: null,
+    awaitingConfirm: null,
+    grantedConfirm: null,
+    approvedCheckpointKinds: [],
     ...overrides,
   };
 }
@@ -35,6 +40,35 @@ describe("agent langgraph", () => {
     expect(routeAfterAgent(baseState({ finished: true }))).toBe("finalize");
     expect(routeAfterAgent(baseState({ error: "boom" }))).toBe("finalize");
     expect(routeAfterAgent(baseState())).toBe("finalize");
+  });
+
+  it("finalizes when awaiting checkpoint", () => {
+    expect(
+      routeAfterAgent(
+        baseState({
+          awaitingCheckpoint: {
+            id: "cp1",
+            kind: "outline_approve",
+            title: "批准大纲",
+            message: "请确认",
+          },
+        }),
+      ),
+    ).toBe("finalize");
+  });
+
+  it("finalizes when awaiting confirm", () => {
+    expect(
+      routeAfterAgent(
+        baseState({
+          awaitingConfirm: {
+            tool: "import_reference",
+            params: {},
+            message: "确认导入？",
+          },
+        }),
+      ),
+    ).toBe("finalize");
   });
 
   it("buildAgentGraph compiles", () => {

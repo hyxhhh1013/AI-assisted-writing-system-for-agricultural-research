@@ -29,8 +29,20 @@ def _normalize_label(text: str) -> str:
 
 
 def load_dataframe(data_path: str) -> pd.DataFrame:
-    """自动检测文件格式和编码加载数据，支持 CSV 和 Excel"""
+    """自动检测文件格式和编码加载数据，支持 CSV、Excel 与 XRD 仪器文本格式"""
     raw = open(data_path, "rb").read()
+
+    # ===== 策略 0: 仪器格式 (.xy/.xyd/.ras/ASCII .raw 等) =====
+    try:
+        from instrument_io import load_instrument_dataframe
+
+        inst = load_instrument_dataframe(data_path, raw=raw)
+        if inst is not None and not inst.empty:
+            return inst
+    except ValueError:
+        raise
+    except Exception:
+        pass
 
     # ===== 策略 1: 作为 Excel 打开 =====
     is_zip = raw[:2] == b"PK"

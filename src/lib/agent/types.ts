@@ -39,6 +39,8 @@ export interface AgentContext {
   projectBriefing?: string;
   /** 运行前加载的项目快照（阶段门禁用） */
   projectSnapshot?: import("@/lib/agent/project-loader").AgentProjectSnapshot | null;
+  /** 本会话工作记忆（主张/决策/待办） */
+  workMemory?: import("@/lib/agent/work-memory").AgentWorkMemory | null;
   budget: {
     maxIterations: number;
     currentIteration: number;
@@ -55,6 +57,18 @@ export interface AgentLoopOptions {
   sessionId?: string;
   /** 从快照恢复的初始图状态 */
   resumeState?: Partial<import("@/lib/agent/langgraph/state").AgentGraphStateType>;
+  /** 同一会话跟聊（completed 后带新 goal），非断点 resume */
+  followUp?: boolean;
+  /** S2：检查点决策（续跑时注入） */
+  checkpointDecision?: import("@/contracts/agent").AgentCheckpointDecision;
+  /** 决策对应的检查点种类（来自中断快照） */
+  pendingCheckpointKind?: import("@/contracts/agent").AgentCheckpointKind;
+  /** 写工具确认决策 */
+  confirmDecision?: {
+    tool: string;
+    params: Record<string, unknown>;
+    approved: boolean;
+  };
 }
 
 export interface LLMMessage {

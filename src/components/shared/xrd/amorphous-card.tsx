@@ -83,7 +83,7 @@ export function AmorphousCard({ title: toolTitle, description, onInsertToPaper, 
               <Label className="text-xs">XRD 数据文件</Label>
               <Input
                 type="file"
-                accept=".csv,.xyd,.txt"
+                accept=".csv,.txt,.tsv,.xy,.xyd,.ras,.raw,.uxd,.dif,.xlsx,.xls"
                 className="mt-1 h-8 text-xs"
                 onChange={(e) => {
                   const f = e.target.files?.[0];

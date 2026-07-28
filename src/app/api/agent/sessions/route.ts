@@ -2,14 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { createLogger } from "@/lib/logger";
 import { getErrorMessage } from "@/lib/error-utils";
 import { isAgentEnabled } from "@/lib/agent";
-import { listAgentSessions } from "@/lib/agent/session-store";
+import {
+  listAgentSessions,
+  listProjectAgentHistory,
+} from "@/lib/agent/session-store";
 import type { AgentSessionStatus } from "@/contracts/agent-session";
 
 const log = createLogger("api/agent/sessions");
 
 export const runtime = "nodejs";
 
-/** GET /api/agent/sessions?projectId=&status=interrupted */
+/**
+ * GET /api/agent/sessions?projectId=&status=interrupted|completed|all&includeTranscript=1
+ * history=1 时按时间正序返回同项目近期会话（含气泡），供聊天历史恢复
+ */
 export async function GET(req: NextRequest) {
   if (!isAgentEnabled()) {
     return NextResponse.json(
@@ -26,6 +32,21 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const projectId = searchParams.get("projectId") ?? undefined;
+    const includeTranscript = searchParams.get("includeTranscript") === "1";
+    const asHistory = searchParams.get("history") === "1";
+
+    if (asHistory) {
+      if (!projectId) {
+        return NextResponse.json({ error: "history=1 需要 projectId" }, { status: 400 });
+      }
+      const sessions = await listProjectAgentHistory({
+        userId,
+        projectId,
+        limit: 20,
+      });
+      return NextResponse.json({ sessions });
+    }
+
     const statusRaw = searchParams.get("status") ?? "interrupted";
     const allowed: AgentSessionStatus[] = [
       "running",
@@ -33,15 +54,19 @@ export async function GET(req: NextRequest) {
       "completed",
       "error",
     ];
-    const status = allowed.includes(statusRaw as AgentSessionStatus)
-      ? (statusRaw as AgentSessionStatus)
-      : "interrupted";
+    const status =
+      statusRaw === "all"
+        ? undefined
+        : allowed.includes(statusRaw as AgentSessionStatus)
+          ? (statusRaw as AgentSessionStatus)
+          : "interrupted";
 
     const sessions = await listAgentSessions({
       userId,
       projectId,
       status,
-      limit: 10,
+      limit: includeTranscript ? 20 : 10,
+      includeTranscript,
     });
 
     return NextResponse.json({ sessions });

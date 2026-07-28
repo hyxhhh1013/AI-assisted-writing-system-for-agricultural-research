@@ -27,12 +27,12 @@ interface WorkbenchTabSwitcherProps {
 const AGENT_TAB_ENABLED = process.env.NEXT_PUBLIC_AGENT_ENABLED === "1";
 
 const TAB_DEFS: { id: WorkbenchTab; icon: typeof Layout }[] = [
+  ...(AGENT_TAB_ENABLED ? [{ id: "agent" as const, icon: Bot }] : []),
   { id: "structure", icon: Layout },
   { id: "data", icon: Database },
   { id: "xrd", icon: Radar },
   { id: "outline", icon: BookOpen },
   { id: "writing", icon: FileText },
-  ...(AGENT_TAB_ENABLED ? [{ id: "agent" as const, icon: Bot }] : []),
   { id: "reader", icon: FileSearch },
   { id: "plagiarism", icon: Search },
 ];
@@ -50,7 +50,7 @@ function getTabTitle(tab: WorkbenchTab, mode: "review" | "research"): string {
     case "writing":
       return "侧栏整章扩写（RAG + 多阶段），应用后写入所选章";
     case "agent":
-      return "AI Agent：自主检索、分析、验证（Phase A 只读）";
+      return "AI Agent：边聊边做（检索 / 写回 / 检查点）";
     case "reader":
       return "补录参考文献或阅读 PDF";
     case "plagiarism":

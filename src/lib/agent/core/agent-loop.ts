@@ -7,8 +7,17 @@ import { runAgentGraphLoop } from "@/lib/agent/langgraph/run-graph";
 import { analyzeDirectionTool } from "@/lib/agent/tools/analyze-direction";
 import { checkPlagiarismTool } from "@/lib/agent/tools/check-plagiarism";
 import { generateChartTool } from "@/lib/agent/tools/generate-chart";
+import { generateXrdAnalysisTool } from "@/lib/agent/tools/generate-xrd-analysis";
+import { draftMechanismFigureTool } from "@/lib/agent/tools/draft-mechanism-figure";
 import { getFullTextTool } from "@/lib/agent/tools/get-full-text";
 import { importReferenceTool } from "@/lib/agent/tools/import-reference";
+import { listPlotSourcesTool } from "@/lib/agent/tools/list-plot-sources";
+import { listReferencesTool } from "@/lib/agent/tools/list-references";
+import { readReferenceTool } from "@/lib/agent/tools/read-reference";
+import { parseRevisionCommentsTool } from "@/lib/agent/tools/parse-revision-comments";
+import { applyRevisionItemTool } from "@/lib/agent/tools/apply-revision-item";
+import { exportManuscriptMarkdownTool } from "@/lib/agent/tools/export-manuscript-markdown";
+import { recallRecentWorkTool } from "@/lib/agent/tools/recall-recent-work";
 import { refineContentTool } from "@/lib/agent/tools/refine-content";
 import { reviewContentTool } from "@/lib/agent/tools/review-content";
 import { runReviewRoundsTool } from "@/lib/agent/tools/run-review-rounds";
@@ -19,6 +28,13 @@ import { verifyContentTool } from "@/lib/agent/tools/verify-content";
 import { writeSectionTool } from "@/lib/agent/tools/write-section";
 import { buildArgumentBlueprintTool } from "@/lib/agent/tools/build-argument-blueprint";
 import { writeBilingualAbstractTool } from "@/lib/agent/tools/write-bilingual-abstract";
+import { generateOutlineTool } from "@/lib/agent/tools/generate-outline";
+import { generateWritingBlueprintTool } from "@/lib/agent/tools/generate-writing-blueprint";
+import { inspectProjectTool } from "@/lib/agent/tools/inspect-project";
+import { readProjectAssetTool } from "@/lib/agent/tools/read-project-asset";
+import { readSectionTool } from "@/lib/agent/tools/read-section";
+import { updatePaperConfigTool } from "@/lib/agent/tools/update-paper-config";
+import { updateWorkMemoryTool } from "@/lib/agent/tools/update-work-memory";
 import type { AgentContext, AgentLoopOptions, ToolDefinition } from "@/lib/agent/types";
 
 /** LangGraph ReAct 编排（W2-LANGGRAPH） */
@@ -50,6 +66,15 @@ export function createAgentContext(params: {
 
 export function createReadOnlyTools(): ToolDefinition[] {
   return [
+    inspectProjectTool,
+    recallRecentWorkTool,
+    updateWorkMemoryTool,
+    readProjectAssetTool,
+    readSectionTool,
+    listReferencesTool,
+    readReferenceTool,
+    listPlotSourcesTool,
+    draftMechanismFigureTool,
     searchKnowledgeTool,
     searchExternalTool,
     getFullTextTool,
@@ -59,6 +84,8 @@ export function createReadOnlyTools(): ToolDefinition[] {
     analyzeDirectionTool,
     checkPlagiarismTool,
     runReviewRoundsTool,
+    parseRevisionCommentsTool,
+    exportManuscriptMarkdownTool,
   ];
 }
 
@@ -67,10 +94,15 @@ export function createAgentTools(): ToolDefinition[] {
   const tools = createReadOnlyTools();
   if (isAgentWriteEnabled()) {
     tools.push(
+      updatePaperConfigTool,
+      generateOutlineTool,
+      generateWritingBlueprintTool,
       writeSectionTool,
       refineContentTool,
+      applyRevisionItemTool,
       importReferenceTool,
       generateChartTool,
+      generateXrdAnalysisTool,
       buildArgumentBlueprintTool,
       writeBilingualAbstractTool,
     );

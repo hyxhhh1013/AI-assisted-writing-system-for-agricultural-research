@@ -63,10 +63,14 @@ export async function postAgentStream(
 export async function listAgentSessions(params: {
   projectId?: string;
   status?: string;
+  includeTranscript?: boolean;
+  history?: boolean;
 }): Promise<AgentSessionListItem[]> {
   const qs = new URLSearchParams();
   if (params.projectId) qs.set("projectId", params.projectId);
   if (params.status) qs.set("status", params.status);
+  if (params.includeTranscript) qs.set("includeTranscript", "1");
+  if (params.history) qs.set("history", "1");
   const res = await fetch(`/api/agent/sessions?${qs.toString()}`);
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
@@ -74,4 +78,11 @@ export async function listAgentSessions(params: {
   }
   const data = (await res.json()) as { sessions: AgentSessionListItem[] };
   return data.sessions ?? [];
+}
+
+/** 同项目聊天历史（时间正序，含 uiTranscript） */
+export async function loadAgentChatHistory(
+  projectId: string,
+): Promise<AgentSessionListItem[]> {
+  return listAgentSessions({ projectId, history: true });
 }

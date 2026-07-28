@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 
 const RL_WINDOW_MS = 60_000;
-const RL_MAX = 10;
+/** 综述补文献会连续 search_external；开发放宽 */
+const RL_MAX = process.env.NODE_ENV === "development" ? 60 : 20;
 const store = new Map<string, { count: number; resetAt: number }>();
 
-/** 外部文献检索：每用户 10 次/分钟 */
+/** 外部文献检索限流（开发 60/分，生产 20/分） */
 export function checkLiteratureRateLimit(userId: string): NextResponse | null {
   const now = Date.now();
   const entry = store.get(userId);

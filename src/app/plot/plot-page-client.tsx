@@ -41,12 +41,19 @@ import { PlotFigurePanel } from "@/components/shared/plot/plot-figure-panel";
 import { PlotInsertDialog } from "@/components/shared/plot-insert-dialog";
 import { useGoBack } from "@/contexts/navigation-history";
 import { workbenchFallback } from "@/lib/navigation";
+import {
+  groupXrdFigures,
+  XRD_DEFAULT_FIGURE_ID,
+  XRD_FIGURE_TIERS,
+} from "@/contracts/xrd-figures";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 const CATEGORY_ICONS: Record<string, ElementType> = {
   chart: BarChart,
   table: Table2,
   diagram: GitBranch,
   xrd: Radar,
+  dft: Atom,
 };
 
 const FIGURE_ICONS: Record<string, ElementType> = {
@@ -60,15 +67,26 @@ const FIGURE_ICONS: Record<string, ElementType> = {
   area: Layers,
   forest: ForestIcon,
   radar: Radar,
+  stack_offset: Layers,
   table_three_line: Table2,
   flow: GitBranch,
+  mechanism: GitBranch,
+  mechanism_panel: Layers,
   molecule: Atom,
+  xrd_workflow: Radar,
   xrd_peakfit: Radar,
   xrd_unitcell: Radar,
   xrd_amorphous: Radar,
   xrd_bragg: Radar,
   xrd_simulate: Radar,
   xrd_xps: Radar,
+  xrd_stack: Layers,
+  xrd_scherrer: Radar,
+  dft_band: Atom,
+  dft_dos: Atom,
+  dft_vasp_dos: Atom,
+  dft_vasp_band: Atom,
+  dft_vasp_procar: Atom,
 };
 
 function PlotContent() {
@@ -77,6 +95,7 @@ function PlotContent() {
   const goBack = useGoBack();
   const routeProjectId = searchParams.get("id");
   const figureParam = searchParams.get("figure");
+  const categoryParam = searchParams.get("category");
   const chartIdxParam = searchParams.get("chartIdx");
   const figureSpecParam = searchParams.get("figureSpec");
   const chartAssetIdParam = searchParams.get("chartAssetId");
@@ -86,8 +105,9 @@ function PlotContent() {
 
   const [registry, setRegistry] = useState<FigureRegistry | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeCategory, setActiveCategory] = useState("chart");
+  const [activeCategory, setActiveCategory] = useState(categoryParam || "chart");
   const [selectedFigure, setSelectedFigure] = useState<FigureDef | null>(null);
+  const [xrdAdvancedOpen, setXrdAdvancedOpen] = useState(false);
   const [chartPrefill, setChartPrefill] = useState<ChartPanelPrefill | null>(null);
   const [flowPrefill, setFlowPrefill] = useState<FlowPanelPrefill | null>(null);
   const [toolPrefill, setToolPrefill] = useState<PlotToolPrefill | null>(null);
@@ -123,12 +143,36 @@ function PlotContent() {
     return registry.figures.filter((f) => f.category === activeCategory);
   }, [registry, activeCategory]);
 
+  const xrdGroups = useMemo(() => groupXrdFigures(categoryFigures), [categoryFigures]);
+
   useEffect(() => {
-    if (registry && !selectedFigure) {
+    if (!registry || prefillApplied) return;
+
+    if (categoryParam && registry.categories.some((c) => c.id === categoryParam)) {
+      setActiveCategory(categoryParam);
+    }
+
+    if (figureParam) {
+      const fig = registry.figures.find((f) => f.id === figureParam);
+      if (fig) {
+        setActiveCategory(fig.category);
+        setSelectedFigure(fig);
+        if (fig.category === "xrd" && XRD_FIGURE_TIERS[fig.id] === "advanced") {
+          setXrdAdvancedOpen(true);
+        }
+      }
+    } else if (categoryParam === "xrd") {
+      const defaultFig = registry.figures.find((f) => f.id === XRD_DEFAULT_FIGURE_ID);
+      if (defaultFig) setSelectedFigure(defaultFig);
+    }
+  }, [registry, categoryParam, figureParam, prefillApplied]);
+
+  useEffect(() => {
+    if (registry && !selectedFigure && !figureParam && !categoryParam) {
       const first = registry.figures[0];
       if (first) setSelectedFigure(first);
     }
-  }, [registry, selectedFigure]);
+  }, [registry, selectedFigure, figureParam, categoryParam]);
 
   useEffect(() => {
     if (prefillApplied || !registry) return;
@@ -206,10 +250,18 @@ function PlotContent() {
 
   useEffect(() => {
     if (prefillApplied) return;
-    if (categoryFigures.length > 0) {
-      setSelectedFigure(categoryFigures[0]);
+    if (categoryFigures.length === 0) return;
+    if (figureParam) return;
+
+    if (activeCategory === "xrd") {
+      const preferred =
+        categoryFigures.find((f) => f.id === XRD_DEFAULT_FIGURE_ID) ?? categoryFigures[0];
+      setSelectedFigure(preferred);
+      return;
     }
-  }, [activeCategory, categoryFigures, prefillApplied]);
+
+    setSelectedFigure(categoryFigures[0]);
+  }, [activeCategory, categoryFigures, prefillApplied, figureParam]);
 
   const handleInsertToPaper = useCallback(
     (imageUrl: string, caption: string, replay?: PlotInsertReplay) => {
@@ -245,6 +297,41 @@ function PlotContent() {
       onInsertTable: handleInsertTable,
     };
   }, [selectedFigure, handleInsertToPaper, handleInsertTable]);
+
+  const selectFigure = useCallback(
+    (fig: FigureDef) => {
+      setSelectedFigure(fig);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("category", fig.category);
+      params.set("figure", fig.id);
+      router.replace(`/plot?${params.toString()}`, { scroll: false });
+    },
+    [router, searchParams],
+  );
+
+  const renderFigureButton = (fig: FigureDef) => {
+    const Icon = FIGURE_ICONS[fig.id] ?? BarChart3;
+    const active = selectedFigure?.id === fig.id;
+    return (
+      <button
+        key={fig.id}
+        onClick={() => selectFigure(fig)}
+        title={fig.description}
+        className={`group w-full rounded-lg px-2.5 py-2 text-left transition-all ${
+          active ? "bg-[#1a5632] text-white shadow-sm" : "text-[#3d4f46] hover:bg-[#1a5632]/8"
+        }`}
+      >
+        <div className="flex items-center gap-2">
+          <Icon
+            className={`h-3.5 w-3.5 shrink-0 ${
+              active ? "text-white" : "text-[#1a5632]/50 group-hover:text-[#1a5632]"
+            }`}
+          />
+          <span className="truncate text-xs font-medium">{fig.name}</span>
+        </div>
+      </button>
+    );
+  };
 
   if (loading) {
     return (
@@ -297,6 +384,13 @@ function PlotContent() {
                     setActiveCategory(cat.id);
                     const params = new URLSearchParams(searchParams.toString());
                     params.set("category", cat.id);
+                    if (cat.id === "xrd") {
+                      params.set("figure", XRD_DEFAULT_FIGURE_ID);
+                      const fig = registry?.figures.find((f) => f.id === XRD_DEFAULT_FIGURE_ID);
+                      if (fig) setSelectedFigure(fig);
+                    } else {
+                      params.delete("figure");
+                    }
                     router.replace(`/plot?${params.toString()}`, { scroll: false });
                   }}
                 >
@@ -317,36 +411,30 @@ function PlotContent() {
             </p>
           </div>
           <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
-            {categoryFigures.map((fig) => {
-              const Icon = FIGURE_ICONS[fig.id] ?? BarChart3;
-              const active = selectedFigure.id === fig.id;
-              return (
+            {activeCategory === "xrd" ? (
+              <>
+                <p className="px-1 pb-1 text-[9px] font-semibold uppercase tracking-wide text-[#6b7c72]">
+                  常用
+                </p>
+                {xrdGroups.common.map(renderFigureButton)}
                 <button
-                  key={fig.id}
-                  onClick={() => {
-                    setSelectedFigure(fig);
-                    const params = new URLSearchParams(searchParams.toString());
-                    params.set("figure", fig.id);
-                    router.replace(`/plot?${params.toString()}`, { scroll: false });
-                  }}
-                  title={fig.description}
-                  className={`group w-full rounded-lg px-2.5 py-2 text-left transition-all ${
-                    active
-                      ? "bg-[#1a5632] text-white shadow-sm"
-                      : "text-[#3d4f46] hover:bg-[#1a5632]/8"
-                  }`}
+                  type="button"
+                  onClick={() => setXrdAdvancedOpen((v) => !v)}
+                  className="mt-2 flex w-full items-center gap-1 rounded-md px-1 py-1 text-[9px] font-semibold uppercase tracking-wide text-[#6b7c72] hover:bg-[#1a5632]/6"
                 >
-                  <div className="flex items-center gap-2">
-                    <Icon
-                      className={`h-3.5 w-3.5 shrink-0 ${
-                        active ? "text-white" : "text-[#1a5632]/50 group-hover:text-[#1a5632]"
-                      }`}
-                    />
-                    <span className="truncate text-xs font-medium">{fig.name}</span>
-                  </div>
+                  {xrdAdvancedOpen ? (
+                    <ChevronDown className="h-3 w-3" />
+                  ) : (
+                    <ChevronRight className="h-3 w-3" />
+                  )}
+                  高级
                 </button>
-              );
-            })}
+                {xrdAdvancedOpen && xrdGroups.advanced.map(renderFigureButton)}
+                {xrdGroups.other.map(renderFigureButton)}
+              </>
+            ) : (
+              categoryFigures.map(renderFigureButton)
+            )}
           </div>
         </aside>
 

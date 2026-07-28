@@ -15,7 +15,7 @@
 | P1 | **ENG-PR-091** | 期刊指标 enrichment（CSV + OpenAlex） | 090 | 2～3d | done | 导入批次 UI 待二期 |
 | P1 | **ENG-PR-092** | 外部文献检索 Tab + 加入参考文献 | — | 3～5d | done | 2026-06-06 |
 | P2 | **ENG-PR-093** | RIS / BibTeX 批量导入 | 090 | 2d | done | 2026-06-12；`import-bibliography` + 向导 |
-| P3 | **ENG-PR-094** | OA 全文自动入库（可选） | 092, 093 | 1～2w | todo | backlog；有 OA 链则进 RAG |
+| P3 | **ENG-PR-094** | OA 全文自动入库（可选） | 092, 093 | 1～2w | **done（MVP）** | `oa-download` + 导入时落盘 `papers/` + 增量 `index-pdfs --skip-stage3`；`ENABLE_OA_AUTO_IMPORT=0` 可关 |
 
 **推荐接力顺序**：
 
@@ -249,24 +249,26 @@ flowchart TB
 
 ---
 
-## 六、ENG-PR-094 — OA 全文自动入库（backlog）
+## 六、ENG-PR-094 — OA 全文自动入库（MVP done）
 
-> **状态**：P3 backlog，092/093 完成后再立项。
+> **状态**：MVP 已接入导入链路（2026-07-28）。
 
 ### 目标
 
-外部检索结果若带开放获取 PDF 链接，用户确认后：下载 → `papers/<分类>/` → 触发 `index-pdfs.mjs --files=...`。
+外部检索结果若带开放获取 PDF 链接，用户确认导入后：下载 → `papers/<分类>/` → 触发 `index-pdfs.mjs --files=... --skip-stage3`。
 
-### 范围（摘要）
+### 实现
 
-- `src/lib/oa-download.ts`（合法性检查、大小上限、MIME）
-- 队列任务或同步小文件；失败可重试
-- Admin 开关 `ENABLE_OA_AUTO_IMPORT`
+- `src/lib/oa-download.ts`：URL/SSRF 基础校验、40MB 上限、`%PDF` 魔数
+- `src/lib/knowledge-partial-reindex.ts`：增量索引
+- `src/lib/external-knowledge-ingest.ts`：有 `openAccessUrl` 时优先 PDF，否则摘要/书目
+- 开关：`ENABLE_OA_AUTO_IMPORT=0` 关闭（默认开）
 
-### 风险
+### 风险（仍在）
 
-- 出版社 TOC 限制；农业中文 OA 比例低 → 设为**可选**能力
-
+- 许多条目无 OA 链或链到 HTML 落地页 → 仍回退摘要/书目
+- 出版社限流；中文 OA 比例低
+- 默认跳过 embedding（BM25 可用）；全库向量可事后 reindex
 ---
 
 ## 七、风险与应对

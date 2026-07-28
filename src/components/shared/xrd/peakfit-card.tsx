@@ -106,6 +106,10 @@ export function PeakFitCard({ title: toolTitle, description, onInsertToPaper, pr
       });
       setResult({ imageBase64: json.imageBase64, imageUrl: json.imageUrl, data: json.data });
       toast.success(`峰分解完成，检测到 ${json.data.n_peaks} 个峰`);
+      const withFwhm = json.data.peaks.filter((p) => p.fwhm != null && p.fwhm > 0).length;
+      if (withFwhm > 0) {
+        toast.info(`${withFwhm} 个峰已估算 FWHM，可直接用于 Scherrer`);
+      }
     } catch (err: unknown) {
       toast.error(getErrorMessage(err));
     } finally {
@@ -114,8 +118,16 @@ export function PeakFitCard({ title: toolTitle, description, onInsertToPaper, pr
   };
 
   const exportCsv = (peaks: PeakInfo[]) => {
-    const header = "Peak#,2theta,intensity,relative_intensity\n";
-    const rows = peaks.map((p, i) => `${i + 1},${p.two_theta.toFixed(4)},${p.intensity.toFixed(2)},${p.relative_intensity.toFixed(2)}`).join("\n");
+    const hasFwhm = peaks.some((p) => p.fwhm != null && p.fwhm > 0);
+    const header = hasFwhm
+      ? "Peak#,2theta,intensity,relative_intensity,fwhm\n"
+      : "Peak#,2theta,intensity,relative_intensity\n";
+    const rows = peaks
+      .map((p, i) => {
+        const base = `${i + 1},${p.two_theta.toFixed(4)},${p.intensity.toFixed(2)},${p.relative_intensity.toFixed(2)}`;
+        return hasFwhm ? `${base},${p.fwhm != null && p.fwhm > 0 ? p.fwhm.toFixed(4) : ""}` : base;
+      })
+      .join("\n");
     const blob = new Blob(["﻿" + header + rows], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -143,7 +155,7 @@ export function PeakFitCard({ title: toolTitle, description, onInsertToPaper, pr
           <div className="space-y-3 px-4 pb-5 pt-3">
             <div>
               <Label className="text-xs">XRD 数据文件 (CSV/XYD)</Label>
-              <Input type="file" accept=".csv,.xyd,.txt,.xlsx" className="mt-1 h-8 text-xs" onChange={handleFile} />
+              <Input type="file" accept=".csv,.txt,.tsv,.xy,.xyd,.ras,.raw,.uxd,.dif,.xlsx,.xls" className="mt-1 h-8 text-xs" onChange={handleFile} />
               {file && <p className="mt-1 truncate text-[10px] text-[#6b7c72]">{file.name} ({(file.size / 1024).toFixed(1)} KB)</p>}
               {dataInfo && <p className="text-[10px] text-[#6b7c72]">{dataInfo}</p>}
               {previewData && previewData.x.length > 10 && (() => {
@@ -210,7 +222,9 @@ export function PeakFitCard({ title: toolTitle, description, onInsertToPaper, pr
           footer={
             result ? (
               <div className="space-y-2">
-                {result.data.peaks.length > 0 && (
+                {result.data.peaks.length > 0 && (() => {
+                  const showFwhm = result.data.peaks.some((p) => p.fwhm != null && p.fwhm > 0);
+                  return (
                   <div className="max-h-28 overflow-y-auto rounded border border-[#1a5632]/10 bg-white p-2">
                     <p className="mb-1 flex items-center gap-1 text-xs font-medium text-[#6b7c72]">
                       <Table2 className="h-3 w-3" />检测到的衍射峰
@@ -221,7 +235,8 @@ export function PeakFitCard({ title: toolTitle, description, onInsertToPaper, pr
                           <th className="py-0.5 pr-2 text-left">#</th>
                           <th className="py-0.5 pr-2 text-left">2θ (°)</th>
                           <th className="py-0.5 pr-2 text-left">Intensity</th>
-                          <th className="py-0.5 text-left">Rel. Int. (%)</th>
+                          <th className="py-0.5 pr-2 text-left">Rel. Int. (%)</th>
+                          {showFwhm && <th className="py-0.5 text-left">FWHM (°)</th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -230,13 +245,19 @@ export function PeakFitCard({ title: toolTitle, description, onInsertToPaper, pr
                             <td className="py-0.5 pr-2 text-[#6b7c72]">{i + 1}</td>
                             <td className="py-0.5 pr-2 font-mono font-medium">{peak.two_theta.toFixed(2)}</td>
                             <td className="py-0.5 pr-2 font-mono">{peak.intensity.toFixed(1)}</td>
-                            <td className="py-0.5 font-mono">{peak.relative_intensity.toFixed(1)}</td>
+                            <td className="py-0.5 pr-2 font-mono">{peak.relative_intensity.toFixed(1)}</td>
+                            {showFwhm && (
+                              <td className="py-0.5 font-mono">
+                                {peak.fwhm != null && peak.fwhm > 0 ? peak.fwhm.toFixed(3) : "—"}
+                              </td>
+                            )}
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                )}
+                  );
+                })()}
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="mr-auto text-xs font-medium text-[#6b7c72]">导出与插入</span>
                   {result.data.peaks.length > 0 && (

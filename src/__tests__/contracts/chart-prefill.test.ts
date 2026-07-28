@@ -121,7 +121,7 @@ describe("chart prefill contracts", () => {
     expect(prefill?.figureId).toBe("bar_grouped");
     expect(prefill?.pasteText).toContain("A,10");
     expect(figureToolToRegistryId("chart", block.config)).toBe("bar_grouped");
-    expect(figureToolToRegistryId("mechanism", {})).toBe("flow");
+    expect(figureToolToRegistryId("mechanism", {})).toBe("mechanism");
 
     const spec = { tool: "chart" as const, config: block.config, caption: block.caption };
     const encoded = encodeFigureSpecParam(spec);

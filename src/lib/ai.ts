@@ -45,7 +45,42 @@ export function getAIError(provider: ModelProviderKey): string | null {
 let _keyCache: Record<string, string[]> | null = null;
 let _keyCacheTime = 0;
 let _keyRoundRobin = 0; // 轮转计数器
+let _modelNameCache: Record<string, string> | null = null;
+let _modelNameCacheTime = 0;
 const KEY_CACHE_TTL = 30_000; // 30 秒
+
+/** 解析实际调用的模型名：Admin DB（DEEPSEEK_MODEL 等）> env > 代码默认 */
+export async function resolveProviderModel(
+  provider: ModelProviderKey,
+): Promise<string> {
+  const config = getModelConfig(provider);
+  const settingKey = config.modelSettingKey;
+  try {
+    if (!_modelNameCache || Date.now() - _modelNameCacheTime > KEY_CACHE_TTL) {
+      const { getSetting } = await import("./settings");
+      const next: Record<string, string> = {};
+      for (const key of ["DEEPSEEK_MODEL", "ZHIPU_MODEL"] as const) {
+        const v = await getSetting(key);
+        if (v?.trim()) next[key] = v.trim();
+      }
+      _modelNameCache = next;
+      _modelNameCacheTime = Date.now();
+    }
+    const fromDb = _modelNameCache[settingKey];
+    if (fromDb) return fromDb;
+  } catch {
+    /* DB 失败则回退 */
+  }
+  return config.model;
+}
+
+/** 测试或 Admin 保存后可清缓存，立刻生效 */
+export function clearAiRuntimeCaches(): void {
+  _keyCache = null;
+  _keyCacheTime = 0;
+  _modelNameCache = null;
+  _modelNameCacheTime = 0;
+}
 
 /** 收集所有可用的 API Key（DB + env），支持 DEEPSEEK_API_KEY, DEEPSEEK_API_KEY_2, ... */
 async function getAllKeys(provider: ModelProviderKey): Promise<string[]> {
@@ -113,6 +148,7 @@ async function pickApiKey(provider: ModelProviderKey): Promise<string | undefine
 export async function callAI(options: AICallOptions): Promise<Response> {
   const config = getModelConfig(options.provider);
   const apiKey = await pickApiKey(options.provider);
+  const model = await resolveProviderModel(options.provider);
 
   const keyError = validateProviderKey(options.provider);
   if (keyError) {
@@ -133,7 +169,7 @@ export async function callAI(options: AICallOptions): Promise<Response> {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: config.model,
+        model,
         messages: options.messages,
         stream: options.stream ?? true,
         ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
@@ -165,7 +201,7 @@ export async function callAI(options: AICallOptions): Promise<Response> {
       `ai:${options.provider}`,
       {
         provider: options.provider,
-        model: config.model,
+        model,
         messageCount: options.messages.length,
         stream: options.stream ?? true,
       },

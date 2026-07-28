@@ -14,6 +14,7 @@ export function buildAgentGraph() {
     .addEdge("plan_step", "agent_step")
     .addConditionalEdges("agent_step", routeAfterAgent, {
       tools: "tools_step",
+      agent: "agent_step",
       finalize: "finalize_step",
     })
     .addEdge("tools_step", "agent_step")

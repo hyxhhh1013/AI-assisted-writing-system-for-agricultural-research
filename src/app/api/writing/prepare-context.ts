@@ -74,6 +74,7 @@ export async function prepareWritingContext(
             retrievalMode,
             projectMode,
             selectedSourceIds: data.selectedSourceIds,
+            referenceEvidence: data.referenceEvidence,
           },
           existingReferences,
         ),

@@ -111,6 +111,7 @@ export const writeSectionTool: ToolDefinition = {
       language: project.language,
       template: project.template as WritingInput["template"],
       existingReferences: project.references,
+      referenceEvidence: project.referenceEvidence ?? [],
       globalContext: project.globalContext,
       mode: pipelineMode,
       retrievalMode: "balanced",

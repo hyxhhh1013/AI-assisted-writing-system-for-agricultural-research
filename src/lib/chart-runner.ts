@@ -14,12 +14,30 @@ export interface RunChartGenerationInput {
   mode?: ChartRunMode;
 }
 
+export interface ChartStyleValidationCheck {
+  level: "pass" | "warn" | "fail" | string;
+  code: string;
+  message: string;
+}
+
+export interface ChartStyleValidation {
+  ok: boolean;
+  preset?: string;
+  columns?: number;
+  target_width_in?: number;
+  checks: ChartStyleValidationCheck[];
+}
+
 export interface RunChartGenerationResult {
   imageUrl: string;
   svgUrl?: string;
   pdfUrl?: string;
   fileName: string;
   baseName: string;
+  styleValidation?: ChartStyleValidation;
+  figWidth?: number;
+  columns?: number;
+  preset?: string;
 }
 
 const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
@@ -64,7 +82,11 @@ export async function runChartGeneration(
   const scriptPath = path.join(SCRIPTS_DIR, scriptName);
 
   try {
-    const result = await new Promise<{ success: boolean; error?: string }>((resolve) => {
+    const result = await new Promise<{
+      success: boolean;
+      error?: string;
+      meta?: Record<string, unknown>;
+    }>((resolve) => {
       const proc = spawn(
         PYTHON_CMD,
         [scriptPath, "--data", dataPath, "--config", configPath, "--output", outputPath],
@@ -89,9 +111,20 @@ export async function runChartGeneration(
             success: false,
             error: stderr || stdout || `Python 进程退出码 ${code}`,
           });
-        } else {
-          resolve({ success: true });
+          return;
         }
+        let meta: Record<string, unknown> | undefined;
+        try {
+          const line = stdout
+            .trim()
+            .split(/\r?\n/)
+            .filter(Boolean)
+            .pop();
+          if (line) meta = JSON.parse(line) as Record<string, unknown>;
+        } catch {
+          meta = undefined;
+        }
+        resolve({ success: true, meta });
       });
       proc.on("error", (err) => {
         resolve({ success: false, error: formatPythonSpawnError(getErrorMessage(err)) });
@@ -111,12 +144,22 @@ export async function runChartGeneration(
     const svgPath = path.join(CHARTS_DIR, svgName);
     const pdfPath = path.join(CHARTS_DIR, pdfName);
 
+    const meta = result.meta ?? {};
+    const styleValidation =
+      meta.styleValidation && typeof meta.styleValidation === "object"
+        ? (meta.styleValidation as ChartStyleValidation)
+        : undefined;
+
     return {
       imageUrl: `/api/charts/${outputName}`,
       svgUrl: fs.existsSync(svgPath) ? `/api/charts/${svgName}` : undefined,
       pdfUrl: fs.existsSync(pdfPath) ? `/api/charts/${pdfName}` : undefined,
       fileName: outputName,
       baseName,
+      styleValidation,
+      figWidth: typeof meta.fig_width === "number" ? meta.fig_width : undefined,
+      columns: typeof meta.columns === "number" ? meta.columns : undefined,
+      preset: typeof meta.preset === "string" ? meta.preset : undefined,
     };
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });

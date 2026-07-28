@@ -16,12 +16,17 @@ function baseState(overrides: Partial<AgentGraphStateType> = {}): AgentGraphStat
     messages: [{ role: "user", content: "写引言" }],
     iteration: 2,
     toolCallCount: 1,
+    planContinueCount: 0,
     finalThought: null,
     toolSummaries: ["[search_knowledge] 完成"],
     pendingToolCalls: [],
     finished: false,
     error: null,
     events: [],
+    awaitingCheckpoint: null,
+    awaitingConfirm: null,
+    grantedConfirm: null,
+    approvedCheckpointKinds: [],
     ...overrides,
   };
 }

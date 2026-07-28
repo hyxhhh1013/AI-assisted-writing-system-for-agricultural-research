@@ -35,16 +35,26 @@ interface ChartWorkspaceProps {
 
 /** DPI 选项的人话标签 */
 const DPI_LABELS: Record<string, string> = {
-  "300": "300 dpi（标准）",
-  "600": "600 dpi（高清 · Nature 推荐）",
+  "300": "300 dpi（投稿常用）",
+  "600": "600 dpi（线稿/灰度高清）",
   "1200": "1200 dpi（超高清）",
 };
 
 /** 预设的人话标签 */
 const PRESET_LABELS: Record<string, string> = {
-  nature: "Nature 风格（紧凑 · 600dpi）",
-  agr_journal: "农业期刊风格（宽图 · 网格）",
-  slide: "汇报 PPT 风格（大字号）",
+  nature: "Nature（单栏 89mm · 7pt）",
+  agr_journal: "农业期刊（双栏宽图 · 网格）",
+  agr_cn: "国内农学刊（双栏近似）",
+  ieee: "IEEE（窄栏 + 标记）",
+  acs: "ACS（化学/催化）",
+  elsevier: "Elsevier（双栏）",
+  print_bw: "打印灰度（600dpi）",
+  slide: "汇报 PPT（大字号）",
+};
+
+const COLUMN_LABELS: Record<string, string> = {
+  "1": "单栏（≈89 mm）",
+  "2": "双栏（≈183 mm）",
 };
 
 function presetOptionLabel(value: string): string {
@@ -55,12 +65,32 @@ function dpiOptionLabel(value: string): string {
   return DPI_LABELS[value] ?? `${value} dpi`;
 }
 
+function columnsOptionLabel(value: string): string {
+  return COLUMN_LABELS[value] ?? `${value} 栏`;
+}
+
 function paletteOptionLabel(value: string): string {
   if (value === "") return "跟随预设";
   const labels: Record<string, string> = {
     nature: "Nature 学术色",
     agr: "农学经典色",
+    biomass: "生物质/催化语义色",
+    bright: "色盲友好 bright",
+    tol: "Paul Tol 色盲安全",
+    muted: "柔和 muted",
+    high_vis: "高可视 high-vis",
     pastel: "柔和色",
+    print_bw: "灰度打印",
+  };
+  return labels[value] ?? value;
+}
+
+function exportFormatsOptionLabel(value: string): string {
+  const labels: Record<string, string> = {
+    "png,svg,pdf": "PNG + SVG + PDF（投稿）",
+    "png,svg,pdf,tiff": "投稿 + TIFF",
+    "png,svg": "PNG + SVG",
+    png: "仅 PNG",
   };
   return labels[value] ?? value;
 }
@@ -385,9 +415,13 @@ export function ChartWorkspace({
                                           ? presetOptionLabel(opt)
                                           : field.key === "dpi"
                                             ? dpiOptionLabel(opt)
-                                            : field.key === "export_formats"
-                                              ? opt
-                                              : opt}
+                                            : field.key === "columns"
+                                              ? columnsOptionLabel(opt)
+                                              : field.key === "export_formats"
+                                                ? exportFormatsOptionLabel(opt)
+                                                : field.key === "palette"
+                                                  ? paletteOptionLabel(opt)
+                                                  : opt}
                                       </SelectItem>
                                     ))}
                                   </SelectContent>

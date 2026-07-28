@@ -1,6 +1,6 @@
 # 禾书耕文（GrainScript）整体规划 v2
 
-> **状态**：生效中（2026-07-24 收拢修订）  
+> **状态**：生效中（2026-07-26：Wave 3.6 行为主轴已收口）  
 > **取代**：分散的「部分规划」作为唯一战略主轴；任务状态以 `ENGINEERING_OPTIMIZATION_QUEUE.md` **§1 Phase 11** 为准  
 > **北极星**：从「功能齐全的 AI 写作工具箱」→「可走完一篇论文全生命周期的科研写作系统」
 
@@ -14,7 +14,9 @@
 | Wave 1 Passport + Cockpit | ✅ MVP | 契约 / sync / 任务卡 / 阶段导航已落地 |
 | Wave 2 LangGraph + write tools | ✅ 产品化 MVP | GUIDE + ONESHOT + CHECKPOINT；**ENG-PR-082 done** |
 | Wave 3 学术完整性 | ✅ 基本完成 | STUDENT / ABS-UI / E2E / CITE / REVIEW-2 已落地 |
-| Wave 4 导出抛光 | ⚠️ 进行中 | **W4-EXPORT** done（硬检+双语+题注）；OA/瘦身 backlog |
+| Wave 3.5 Agent≈AP 编排 | ✅ 能力桥收口 | LIT/CONFIG/CHART/MULTI-TURN done；见 orchestration 计划 |
+| Wave 3.6 Agent 行为可靠 | 📋 **当前主轴** | [`plans/W3-AP-BEHAVIOR.md`](./plans/W3-AP-BEHAVIOR.md)：剧本 eval → 压空转 → 先读后写；**暂停扩工具** |
+| Wave 4 导出抛光 | ⚠️ backlog | **W4-EXPORT** done；OA/瘦身让路给 3.6 |
 | 从 Demo→完整产品 | 📋 规划生效 | 见 [`PRODUCT_COMPLETION_PLAN.md`](./PRODUCT_COMPLETION_PLAN.md) |
 | `/academic-paper` | ➡️ 引导页 | **不是**第二套流水线；只引导进工作台 **Agent Tab** |
 | 产品主入口 | 工作台 | 人控 Tab + 自主 Agent Tab；质量中心 / 知识库为深链 |
@@ -157,6 +159,26 @@ Wave 2 产品化三项已完成。
 | **W3-E2E-EVAL** | ✅ done | `npm run eval:gates` + `eval:pipeline`（EVAL_STRICT） |
 | ENG-PR-085 | ✅ done | 工作台 data / 知识库精读 AI 免责 |
 | W3-STUDENT / W3-ABS-UI | ✅ done | 学生模式 Agent；双语摘要进项目设置 |
+| **W3-AP-AUTONOMY** | ✅ done | 自补大纲/蓝图、证据记忆、改道门禁 |
+| **W3-AP-PLAN-DRIVE** | ✅ done | Plan 子任务真驱动执行环（S1） |
+| **W3-AP-CHECKPOINTS** | ✅ done | 大纲/配置人在环检查点（对话确认） |
+| **W3-AP-AGENTIC** | ✅ done | 对话式：inspect/read、思考-工具-对话；已取消全自动 Conductor |
+| W3-AP-LIT/CONFIG/CHART/MULTI-TURN | ✅ done | 能力桥收口（2026-07-25） |
+| **W3-AP-BEHAVIOR** | ✅ done | 行为主轴收口；见 [`plans/W3-AP-BEHAVIOR.md`](./plans/W3-AP-BEHAVIOR.md) |
+| ~~W3-AP-CONDUCTOR~~ | cancelled | 与边聊边做冲突 |
+
+### Wave 3.6 — Agent 行为可靠（当前主轴）
+
+| 项 | 状态 | 说明 |
+|----|------|------|
+| **W3-AP-EVAL-SCRIPTS** | ✅ done | P1～P5 轨迹断言；`npm run eval:agent` |
+| **W3-AP-ANTISPAM** | ✅ done | 检索配额 + 无进展熔断 |
+| **W3-AP-READ-BEFORE-WRITE** | ✅ done | intro/discussion 写前须读上下文 |
+| **W3-AP-LIT-QUALITY** | ✅ done | 相关度分 + why；低相关拒导 |
+| **W3-AP-CONFIG-QA** | ✅ done | Phase0 一问一答配置 |
+| **W3-AP-WORK-MEMORY** | ✅ done | 主张/决策/待办落盘 |
+
+原则：新 Agent 工具仅服务失败剧本；Wave 4 抛光不抢主轴。
 
 ### Wave 4 — 导出与抛光（backlog）
 

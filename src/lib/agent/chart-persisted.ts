@@ -1,0 +1,49 @@
+/** 从 Agent generate_chart observation 解析「已登记图表」 */
+
+export interface AgentChartPersistedInfo {
+  tool: string;
+  imageUrl: string;
+  caption?: string;
+  sectionKey?: string;
+  chartAssetId?: string;
+}
+
+export function extractChartPersisted(
+  tool: string,
+  result: { success?: boolean; data?: unknown } | undefined,
+): AgentChartPersistedInfo | null {
+  if (tool !== "generate_chart") return null;
+  if (!result?.success || result.data == null || typeof result.data !== "object") {
+    return null;
+  }
+
+  const data = result.data as Record<string, unknown>;
+  const imageUrl = typeof data.imageUrl === "string" ? data.imageUrl.trim() : "";
+  if (!imageUrl) return null;
+
+  const persisted = data.persisted;
+  let sectionKey: string | undefined;
+  let chartAssetId: string | undefined;
+  let caption: string | undefined;
+
+  if (persisted && typeof persisted === "object") {
+    const p = persisted as Record<string, unknown>;
+    if (typeof p.sectionKey === "string" && p.sectionKey.trim()) {
+      sectionKey = p.sectionKey.trim();
+    }
+    if (typeof p.id === "string") chartAssetId = p.id;
+    if (typeof p.caption === "string") caption = p.caption;
+  }
+
+  if (typeof data.insertedSection === "string" && data.insertedSection.trim()) {
+    sectionKey = data.insertedSection.trim();
+  }
+
+  return {
+    tool,
+    imageUrl,
+    caption,
+    sectionKey,
+    chartAssetId,
+  };
+}

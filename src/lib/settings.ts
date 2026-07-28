@@ -76,14 +76,16 @@ export async function deleteSetting(key: string): Promise<void> {
   await prisma.systemSetting.deleteMany({ where: { key } });
 }
 
-/** 获取所有设置（key 明文，value 脱敏）*/
+/** 获取所有设置（key 明文，value 脱敏；模型名等非密钥完整展示）*/
 export async function getAllSettings(): Promise<Array<{ key: string; maskedValue: string; updatedAt: string }>> {
   const records = await prisma.systemSetting.findMany({ orderBy: { key: "asc" } });
   return records.map(r => {
     let masked = "****";
     try {
       const decrypted = decrypt(r.value);
-      if (decrypted.length <= 8) {
+      if (/_MODEL$/i.test(r.key) || r.key.includes("MODEL_NAME")) {
+        masked = decrypted;
+      } else if (decrypted.length <= 8) {
         masked = "****";
       } else {
         masked = decrypted.slice(0, 4) + "****" + decrypted.slice(-4);
@@ -98,6 +100,8 @@ export async function initDefaultSettings(): Promise<void> {
   const defaults: [string, string | undefined][] = [
     ["DEEPSEEK_API_KEY", process.env.DEEPSEEK_API_KEY],
     ["ZHIPU_API_KEY", process.env.ZHIPU_API_KEY],
+    ["DEEPSEEK_MODEL", process.env.DEEPSEEK_MODEL],
+    ["ZHIPU_MODEL", process.env.ZHIPU_MODEL],
   ];
 
   for (const [key, envValue] of defaults) {

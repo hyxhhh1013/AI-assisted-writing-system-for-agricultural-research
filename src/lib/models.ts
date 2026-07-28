@@ -3,16 +3,33 @@ export interface ModelProvider {
   model: string;
   baseUrl: string;
   apiKeyEnvVar: string;
+  /** Admin / DB 热加载用的模型名设置键 */
+  modelSettingKey: string;
   getApiKey: () => string | undefined;
   enabled: boolean;
 }
 
+/** DeepSeek 当前可用模型（chat/reasoner 已退役） */
+export const DEEPSEEK_MODEL_OPTIONS = [
+  "deepseek-v4-flash",
+  "deepseek-v4-pro",
+] as const;
+
+export const ZHIPU_MODEL_OPTIONS = [
+  "glm-4-plus",
+  "glm-4-flash",
+  "glm-4",
+  "glm-4-air",
+] as const;
+
 export const MODEL_PROVIDERS = {
   deepseek: {
     name: "DeepSeek",
-    model: "deepseek-chat",
+    // 2026-07-24 起 deepseek-chat / deepseek-reasoner 已退役，仅支持 v4-flash / v4-pro
+    model: process.env.DEEPSEEK_MODEL || "deepseek-v4-flash",
     baseUrl: "https://api.deepseek.com/chat/completions",
     apiKeyEnvVar: "DEEPSEEK_API_KEY",
+    modelSettingKey: "DEEPSEEK_MODEL",
     getApiKey: () => process.env.DEEPSEEK_API_KEY,
     enabled: true,
   },
@@ -21,6 +38,7 @@ export const MODEL_PROVIDERS = {
     model: process.env.ZHIPU_MODEL || "glm-4-plus",
     baseUrl: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
     apiKeyEnvVar: "ZHIPU_API_KEY",
+    modelSettingKey: "ZHIPU_MODEL",
     getApiKey: () => process.env.ZHIPU_API_KEY,
     enabled: !!process.env.ZHIPU_API_KEY,
   },

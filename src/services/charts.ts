@@ -21,6 +21,20 @@ export interface ChartPasteInlineConfig {
   [key: string]: unknown;
 }
 
+export interface ChartStyleValidationCheck {
+  level: string;
+  code: string;
+  message: string;
+}
+
+export interface ChartStyleValidation {
+  ok: boolean;
+  preset?: string;
+  columns?: number;
+  target_width_in?: number;
+  checks?: ChartStyleValidationCheck[];
+}
+
 export interface ChartGenerateResponse {
   imageBase64?: string;
   imageUrl?: string;
@@ -30,6 +44,10 @@ export interface ChartGenerateResponse {
   baseName?: string;
   caption?: string;
   error?: string;
+  styleValidation?: ChartStyleValidation;
+  figWidth?: number;
+  columns?: number;
+  preset?: string;
 }
 
 export async function postChartForm(body: FormData): Promise<ChartGenerateResponse> {

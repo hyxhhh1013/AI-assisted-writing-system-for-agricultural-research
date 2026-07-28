@@ -5,6 +5,7 @@ export type AgentStatus =
   | "thinking"
   | "executing"
   | "finalizing"
+  | "awaiting_checkpoint"
   | "completed"
   | "error"
   | "cancelled";
@@ -13,10 +14,14 @@ export interface AgentSubTask {
   id: string;
   title: string;
   status: "pending" | "running" | "done" | "skipped";
+  /** 可选：与该子任务对齐的工具名，便于 Plan 真驱动匹配 */
+  toolHints?: string[];
 }
 
 export interface AgentPlan {
   subtasks: AgentSubTask[];
+  /** 当前焦点子任务 id（可选，由执行环维护） */
+  focusSubtaskId?: string | null;
 }
 
 export interface AgentToolResult {
@@ -42,6 +47,25 @@ export interface AgentConfirmRequest {
   tool: string;
   params: Record<string, unknown>;
   message: string;
+  /** 文献导入等：确认卡下方预览行 */
+  preview?: string;
+}
+
+/** academic-paper 铁律检查点（S2） */
+export type AgentCheckpointKind = "config_confirm" | "outline_approve";
+
+export interface AgentCheckpointRequest {
+  id: string;
+  kind: AgentCheckpointKind;
+  title: string;
+  message: string;
+  preview?: string;
+}
+
+export interface AgentCheckpointDecision {
+  checkpointId: string;
+  decision: "approve" | "revise";
+  note?: string;
 }
 
 /** Agent SSE 事件联合类型 */
@@ -56,7 +80,14 @@ export type AgentSSEEvent =
       result?: AgentToolResult;
       error?: string;
     }
-  | { type: "agent/confirm"; tool: string; params: Record<string, unknown>; message: string }
+  | {
+      type: "agent/confirm";
+      tool: string;
+      params: Record<string, unknown>;
+      message: string;
+      preview?: string;
+    }
+  | { type: "agent/checkpoint"; checkpoint: AgentCheckpointRequest }
   | { type: "agent/complete"; summary: AgentSummary }
   | { type: "agent/error"; error: string }
   | {
@@ -72,9 +103,21 @@ export interface AgentRequest {
   projectId?: string;
   directionSlug?: string;
   mode?: "auto" | "guided";
-  /** 续跑：已有 AgentSession id */
+  /**
+   * 已有会话 id：
+   * - 与 resume 联用 → 断点续跑
+   * - 与 goal 联用（无 resume）→ 同一会话跟聊
+   */
   sessionId?: string;
   resume?: boolean;
+  /** 检查点决策（与 resume 联用） */
+  checkpointDecision?: AgentCheckpointDecision;
+  /** 写操作确认（如 import_reference） */
+  confirmDecision?: {
+    tool: string;
+    params: Record<string, unknown>;
+    approved: boolean;
+  };
 }
 
 export function isAgentSSEEvent(value: unknown): value is AgentSSEEvent {

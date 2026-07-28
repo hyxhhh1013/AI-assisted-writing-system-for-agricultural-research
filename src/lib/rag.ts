@@ -10,6 +10,7 @@ import {
   listKnowledgeCategories,
 } from "@/lib/knowledge-metadata";
 import { cosineSimilarity } from "./similarity";
+import { buildRagSearchTerms, expandRagQueries, inferCategoriesFromQuery, collectIndexTermTf, shouldUseMultiQuery } from "@/lib/rag-query-expand";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("rag");
@@ -244,29 +245,30 @@ function getEmbeddingApiKey(): string | undefined {
     || undefined;
 }
 
-// ── 分词 ──────────────────────────────────────────────────────────────────
+// ── 分词（BM25 词项；含同义词扩展见 rag-query-expand.ts） ─────────────────
 
-function extractQueryTerms(query: string): string[] {
-  const q = query.trim();
-  if (!q) return [];
-  const keywords: string[] = [];
-  if (/[一-龥]/.test(q)) {
-    const segments = q.toLowerCase().split(/[^一-龥a-z0-9]+/i).filter((s) => s.length >= 1);
-    for (const seg of segments) {
-      if (/[一-龥]/.test(seg)) {
-        for (let i = 0; i < seg.length; i++) keywords.push(seg[i]);
-        if (seg.length >= 2) {
-          for (let i = 0; i < seg.length - 1; i++) keywords.push(seg.substring(i, i + 2));
-        }
-        if (seg.length >= 3) keywords.push(seg);
-      } else if (seg.length > 1) {
-        keywords.push(seg);
-      }
-    }
-  } else {
-    keywords.push(...q.toLowerCase().split(/\s+/).filter((k) => k.length > 1));
+function pickVectorScanTargets(
+  poolSize: number,
+  bm25: number[],
+  limit: number,
+): number[] {
+  const candidateCount = Math.max(limit * 40, 400);
+  const candidates: number[] = [];
+  let maxBm25 = 0;
+  for (const i of argsortDescending(bm25)) {
+    if (bm25[i] <= 0) break;
+    maxBm25 = Math.max(maxBm25, bm25[i]);
+    candidates.push(i);
+    if (candidates.length >= candidateCount) break;
   }
-  return Array.from(new Set(keywords)).filter((t) => t.length > 0);
+  const weakLexical =
+    candidates.length === 0
+    || maxBm25 < 2.5
+    || candidates.length < Math.min(80, limit * 8);
+  if (weakLexical) {
+    return Array.from({ length: poolSize }, (_, i) => i);
+  }
+  return candidates;
 }
 
 // ── 倒排索引 ──────────────────────────────────────────────────────────────
@@ -283,14 +285,7 @@ function yieldToEventLoop(): Promise<void> {
 
 /** 把单个 chunk 的词项写入倒排索引（globalIndex = 该 chunk 在 pool 中的下标） */
 function indexChunkInto(idx: InvertedIndex, content: string, globalIndex: number): void {
-  const tokens = content.toLowerCase().split(/[^a-z0-9一-鿿]+/).filter(Boolean);
-  const tfMap = new Map<string, number>();
-  for (const t of tokens) {
-    tfMap.set(t, (tfMap.get(t) || 0) + 1);
-    if (/[一-鿿]/.test(t)) {
-      for (const ch of t) tfMap.set(ch, (tfMap.get(ch) || 0) + 1);
-    }
-  }
+  const tfMap = collectIndexTermTf(content);
   for (const [term, tf] of tfMap) {
     let posting = idx.get(term);
     if (!posting) {
@@ -299,6 +294,69 @@ function indexChunkInto(idx: InvertedIndex, content: string, globalIndex: number
     }
     posting.set(globalIndex, tf);
   }
+}
+
+/**
+ * 文件名 / 论文题名命中加权（补 chunk 正文 BM25 盲区）
+ * 原地修改 scores
+ */
+function applyMetadataBoost(
+  scores: number[],
+  chunks: RagChunk[],
+  query: string,
+  terms: string[],
+): void {
+  const qLower = query.toLowerCase().trim();
+  const meaningful = terms.filter((t) => t.length >= 2);
+  if (meaningful.length === 0 && qLower.length < 2) return;
+
+  for (let i = 0; i < chunks.length; i++) {
+    const raw = chunks[i].metadata.source || "";
+    const src = path.basename(raw.replace(/\\/g, "/")).toLowerCase();
+    const bib = resolveBibEntry(raw);
+    const title = (bib?.bib?.title || "").toLowerCase();
+    if (!src && !title) continue;
+
+    let boost = 0;
+    for (const t of meaningful) {
+      if (src.includes(t)) boost += 1.5;
+      if (title.includes(t)) boost += 2.5;
+    }
+    // 整句/长短语落在题名
+    if (qLower.length >= 4) {
+      const needle = qLower.slice(0, Math.min(32, qLower.length));
+      if (title.includes(needle)) boost += 4;
+      if (src.includes(needle.replace(/\s+/g, ""))) boost += 2;
+    }
+    if (boost > 0) scores[i] += boost;
+  }
+}
+
+/** Top 结果轻量词重叠重排（不调用 LLM） */
+function lexicalRerank(chunks: RagChunk[], query: string, terms: string[]): RagChunk[] {
+  if (chunks.length <= 1) return chunks;
+  const meaningful = terms.filter((t) => t.length >= 2).slice(0, 24);
+  if (meaningful.length === 0) return chunks;
+  const qLower = query.toLowerCase();
+
+  const scored = chunks.map((c, idx) => {
+    const src = path.basename((c.metadata.source || "").replace(/\\/g, "/")).toLowerCase();
+    const bib = resolveBibEntry(c.metadata.source);
+    const title = (bib?.bib?.title || "").toLowerCase();
+    const head = (c.content || "").toLowerCase().slice(0, 800);
+    let s = 0;
+    for (const t of meaningful) {
+      if (title.includes(t)) s += 3;
+      if (src.includes(t)) s += 2;
+      if (head.includes(t)) s += 1;
+    }
+    if (qLower.length >= 4 && title.includes(qLower.slice(0, 24))) s += 4;
+    return { c, s, idx };
+  });
+  scored.sort((a, b) => b.s - a.s || a.idx - b.idx);
+  // 重排分全 0 则保持原序
+  if (scored.every((x) => x.s === 0)) return chunks;
+  return scored.map((x) => x.c);
 }
 
 /** 协作式构建倒排索引：每 INDEX_BUILD_BATCH 个 chunk 让出一次事件循环 */
@@ -407,6 +465,35 @@ function diversifyBySource(order: number[], chunks: RagChunk[], limit: number, m
     if (out.length >= limit) break;
   }
   return out;
+}
+
+function reorderByCategoryHints(chunks: RagChunk[], hints: string[]): RagChunk[] {
+  if (hints.length === 0 || chunks.length <= 1) return chunks;
+  const hintSet = new Set(hints);
+  const primary: RagChunk[] = [];
+  const rest: RagChunk[] = [];
+  for (const c of chunks) {
+    if (hintSet.has(c.metadata.category)) primary.push(c);
+    else rest.push(c);
+  }
+  if (primary.length === 0) return chunks;
+  return [...primary, ...rest];
+}
+
+function finalizeSearchResults(
+  chunks: RagChunk[],
+  limit: number,
+  hints: string[],
+  query?: string,
+  terms?: string[],
+): RagChunk[] {
+  let out = reorderByCategoryHints(chunks, hints);
+  if (query && terms && terms.length > 0) {
+    out = lexicalRerank(out, query, terms);
+    // 分类提示后再过一次，避免重排把跑题类顶回 Top1
+    out = reorderByCategoryHints(out, hints);
+  }
+  return out.slice(0, limit);
 }
 
 // ── LocalRAG 主类 ────────────────────────────────────────────────────────
@@ -737,12 +824,20 @@ export class LocalRAG {
     query: string,
     options:
       | number
-      | { limit?: number; category?: string; categories?: string[]; maxPerSource?: number } = {},
+      | {
+          limit?: number;
+          category?: string;
+          categories?: string[];
+          maxPerSource?: number;
+          /** 多 query：true=总开；false=关闭；默认 auto（弱召回才开） */
+          multiQuery?: boolean | "auto";
+        } = {},
   ): Promise<RagChunk[]> {
     let limit = 8;
     let category: string | undefined;
     let categories: string[] | undefined;
     let maxPerSource = DEFAULT_MAX_PER_SOURCE;
+    let multiMode: boolean | "auto" = "auto";
 
     if (typeof options === "number") {
       limit = options;
@@ -751,10 +846,105 @@ export class LocalRAG {
       category = options.category;
       categories = options.categories;
       maxPerSource = options.maxPerSource ?? DEFAULT_MAX_PER_SOURCE;
+      if (options.multiQuery === false) multiMode = false;
+      else if (options.multiQuery === true) multiMode = true;
+      else multiMode = "auto";
     }
 
     const q = query.trim();
     if (!q) return [];
+
+    const primary = await this.searchOnce(q, { limit, category, categories, maxPerSource });
+
+    const useMulti =
+      multiMode === true
+      || (multiMode === "auto" && shouldUseMultiQuery(q, primary, limit));
+
+    if (!useMulti) return primary;
+
+    const variants = expandRagQueries(q).filter((v) => v !== q);
+    if (variants.length === 0) return primary;
+
+    const perLimit = Math.max(limit * 2, 16);
+    const lists = await Promise.all(
+      variants.map((variant) =>
+        this.searchOnce(variant, {
+          limit: perLimit,
+          category,
+          categories,
+          maxPerSource,
+        }),
+      ),
+    );
+    const hints = inferCategoriesFromQuery(q);
+    const terms = buildRagSearchTerms(q);
+    return finalizeSearchResults(
+      rrfMergeChunkLists([primary, ...lists]),
+      limit,
+      hints,
+      q,
+      terms,
+    );
+  }
+
+  private async searchOnce(
+    q: string,
+    opts: {
+      limit: number;
+      category?: string;
+      categories?: string[];
+      maxPerSource: number;
+      skipHintScope?: boolean;
+    },
+  ): Promise<RagChunk[]> {
+    const { limit, category, categories, maxPerSource, skipHintScope } = opts;
+    const queryHints = inferCategoriesFromQuery(q);
+    const scopeCatsEarly = categories?.filter((c) => c && c !== "全部");
+
+    if (!skipHintScope && !category && (!scopeCatsEarly || scopeCatsEarly.length === 0) && queryHints.length > 0) {
+      const available = await this.getCategories();
+      const validHints = queryHints.filter((h) => available.includes(h));
+      if (validHints.length > 0) {
+        const scoped = await this.searchOnce(q, {
+          limit: limit * 2,
+          maxPerSource,
+          categories: validHints,
+          skipHintScope: true,
+        });
+        const minScoped = Math.max(3, Math.ceil(limit * 0.5));
+        if (scoped.length >= minScoped) {
+          return finalizeSearchResults(scoped, limit, validHints, q, buildRagSearchTerms(q));
+        }
+        const full = await this.searchOnce(q, {
+          limit: limit * 2,
+          maxPerSource,
+          skipHintScope: true,
+        });
+        const merged = rrfMergeChunkLists([scoped, full]);
+        return finalizeSearchResults(merged, limit, validHints, q, buildRagSearchTerms(q));
+      }
+    }
+
+    return this.searchOnceCore(q, {
+      limit,
+      category,
+      categories,
+      maxPerSource,
+      queryHints,
+    });
+  }
+
+  private async searchOnceCore(
+    q: string,
+    opts: {
+      limit: number;
+      category?: string;
+      categories?: string[];
+      maxPerSource: number;
+      queryHints: string[];
+    },
+  ): Promise<RagChunk[]> {
+    const { limit, category, categories, maxPerSource, queryHints } = opts;
 
     // 分段计时（仅 RAG_PERF_LOG=1 时输出，生产可见）
     const perf = process.env.RAG_PERF_LOG === "1";
@@ -795,14 +985,15 @@ export class LocalRAG {
       singleCat = category;
     } else {
       // 全库：逐分类打分再 RRF，避免 ensureAllLoaded 常驻双倍倒排索引
-      return this.searchAllCategories(q, { limit, maxPerSource, perf, tStart });
+      return this.searchAllCategories(q, { limit, maxPerSource, perf, tStart, queryHints });
     }
     if (perf) tAfterLoad = Date.now();
 
     if (pool.length === 0) return [];
 
-    const terms = extractQueryTerms(q);
+    const terms = buildRagSearchTerms(q);
     const bm25 = idx ? bm25FromIndex(idx, pool, terms) : new Array(pool.length).fill(0);
+    applyMetadataBoost(bm25, pool, q, terms);
     if (perf) tAfterBm25 = Date.now();
 
     const queryVector = await this.getEmbedding(q);
@@ -815,16 +1006,9 @@ export class LocalRAG {
     let hasUsefulVec = false;
     let vecScanCount = 0;
     if (hasVec) {
-      const candidateCount = Math.max(limit * 20, 200);
-      const candidates: number[] = [];
-      for (const i of argsortDescending(bm25)) {
-        if (bm25[i] <= 0) break;
-        candidates.push(i);
-        if (candidates.length >= candidateCount) break;
-      }
-      const targets = candidates.length > 0 ? candidates : pool.map((_, i) => i);
-      vecScanCount = targets.length;
-      for (const i of targets) {
+      const candidates = pickVectorScanTargets(pool.length, bm25, limit);
+      vecScanCount = candidates.length;
+      for (const i of candidates) {
         const emb = this.getPoolEmbedding(i, singleCat, poolEmbRef);
         if (emb && emb.length === queryVector.length) {
           const s = cosineSimilarity(queryVector, emb);
@@ -870,7 +1054,7 @@ export class LocalRAG {
     if (nonZero.length === 0) return [];
     const diversified = diversifyBySource(nonZero, pool, limit * 2, maxPerSource);
     const catDiversified = diversifyByCategory(diversified, pool);
-    return catDiversified.slice(0, limit);
+    return finalizeSearchResults(catDiversified, limit, queryHints, q, terms);
   }
 
   /**
@@ -879,15 +1063,15 @@ export class LocalRAG {
    */
   private async searchAllCategories(
     q: string,
-    opts: { limit: number; maxPerSource: number; perf: boolean; tStart: number },
+    opts: { limit: number; maxPerSource: number; perf: boolean; tStart: number; queryHints: string[] },
   ): Promise<RagChunk[]> {
-    const { limit, maxPerSource, perf, tStart } = opts;
+    const { limit, maxPerSource, perf, tStart, queryHints } = opts;
     const cats = await this.getCategories();
     if (cats.length === 0) {
       await this.ensureLoaded();
       const pool = this.chunks || [];
       if (pool.length === 0) return [];
-      const terms = extractQueryTerms(q);
+      const terms = buildRagSearchTerms(q);
       const bm25 = new Array(pool.length).fill(0);
       // 无分类索引时退回朴素：仅 embedding 全扫意义不大，用内容子串近似
       for (let i = 0; i < pool.length; i++) {
@@ -896,10 +1080,11 @@ export class LocalRAG {
       }
       const order = argsortDescending(bm25).filter((i) => bm25[i] > 0);
       if (order.length === 0) return [];
-      return diversifyBySource(order, pool, limit, maxPerSource).slice(0, limit);
+      const naive = diversifyBySource(order, pool, limit, maxPerSource);
+      return finalizeSearchResults(naive, limit, queryHints, q, terms);
     }
 
-    const terms = extractQueryTerms(q);
+    const terms = buildRagSearchTerms(q);
     const queryVector = await this.getEmbedding(q);
     const hasVec = queryVector.length > 0;
     const perCatTop: RagChunk[][] = [];
@@ -918,19 +1103,13 @@ export class LocalRAG {
         await this.ensureEmbeddingsLoaded(cat);
 
         const bm25 = idx ? bm25FromIndex(idx, pool, terms) : new Array(pool.length).fill(0);
+        applyMetadataBoost(bm25, pool, q, terms);
         const vecScores = new Array(pool.length).fill(0);
         let hasUsefulVec = false;
         if (hasVec) {
-          const candidateCount = Math.max(limit * 20, 200);
-          const candidates: number[] = [];
-          for (const i of argsortDescending(bm25)) {
-            if (bm25[i] <= 0) break;
-            candidates.push(i);
-            if (candidates.length >= candidateCount) break;
-          }
-          const targets = candidates.length > 0 ? candidates : pool.map((_, i) => i);
-          totalVecScan += targets.length;
-          for (const i of targets) {
+          const candidates = pickVectorScanTargets(pool.length, bm25, limit);
+          totalVecScan += candidates.length;
+          for (const i of candidates) {
             const emb = this.getPoolEmbedding(i, cat, null);
             if (emb && emb.length === queryVector.length) {
               const s = cosineSimilarity(queryVector, emb);
@@ -979,7 +1158,7 @@ export class LocalRAG {
     const order = asPool.map((_, i) => i);
     const diversified = diversifyBySource(order, asPool, limit * 2, maxPerSource);
     const catDiversified = diversifyByCategory(diversified, asPool);
-    return catDiversified.slice(0, limit);
+    return finalizeSearchResults(catDiversified, limit, queryHints, q, terms);
   }
 
   /** 按页码/chunkIndex 拼接全文（异步） */

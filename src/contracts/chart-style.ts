@@ -1,13 +1,32 @@
 /** 图表样式 — 前后端与 registry global_style_fields 对齐 */
 
-export type ChartStylePreset = "nature" | "agr_journal" | "slide";
+export type ChartStylePreset =
+  | "nature"
+  | "agr_journal"
+  | "agr_cn"
+  | "ieee"
+  | "acs"
+  | "elsevier"
+  | "print_bw"
+  | "slide";
 
-export type ChartPalette = "nature" | "agr" | "pastel";
+export type ChartPalette =
+  | "nature"
+  | "agr"
+  | "biomass"
+  | "bright"
+  | "tol"
+  | "muted"
+  | "high_vis"
+  | "pastel"
+  | "print_bw";
 
 export type ChartExportFormat = "png" | "svg" | "pdf" | "tiff";
 
 export interface ChartStyleConfig {
   preset?: ChartStylePreset;
+  /** 1=单栏刊宽，2=双栏刊宽（对照 plotstyle 栏宽 mm） */
+  columns?: 1 | 2 | number;
   font_size?: number;
   title_font_size?: number;
   axes_linewidth?: number;
@@ -24,6 +43,8 @@ export interface ChartStyleConfig {
   export_formats?: ChartExportFormat[];
   x_tick_rotation?: number;
   y_sci_notation?: boolean;
+  /** SciencePlots / IEEE：不同系列用不同标记，灰度印刷可辨 */
+  use_markers?: boolean;
 }
 
 export interface ChartRegistryField {
@@ -40,17 +61,36 @@ export interface ChartRegistryField {
 }
 
 export const CHART_STYLE_PRESET_LABELS: Record<ChartStylePreset, string> = {
-  nature: "Nature / 高影响因子（紧凑、600dpi）",
-  agr_journal: "农业期刊（宽图、网格）",
+  nature: "Nature（单栏 89mm、7pt）",
+  agr_journal: "农业期刊（双栏宽图、网格）",
+  agr_cn: "国内农学刊（双栏近似）",
+  ieee: "IEEE（窄栏 + 标记 + 600dpi）",
+  acs: "ACS（化学/催化刊）",
+  elsevier: "Elsevier（双栏）",
+  print_bw: "打印灰度（600dpi）",
   slide: "汇报幻灯（大字号）",
+};
+
+export const CHART_PALETTE_LABELS: Record<ChartPalette, string> = {
+  nature: "Nature 学术色",
+  agr: "农学经典色",
+  biomass: "生物质/催化语义色",
+  bright: "色盲友好 bright",
+  tol: "Paul Tol 色盲安全",
+  muted: "柔和 muted",
+  high_vis: "高可视 high-vis",
+  pastel: "柔和 pastel",
+  print_bw: "灰度打印",
 };
 
 export const DEFAULT_CHART_STYLE: ChartStyleConfig = {
   preset: "nature",
+  columns: 1,
   palette: "nature",
   show_grid: false,
   legend_frame: false,
-  export_formats: ["png", "svg"],
+  export_formats: ["png", "svg", "pdf"],
+  use_markers: false,
 };
 
 /** registry 全局样式字段默认值 */
@@ -110,6 +150,9 @@ export function buildChartStylePayload(
   if (values.bar_edge !== undefined) {
     style.bar_edge = values.bar_edge === true || values.bar_edge === "true";
   }
+  if (values.use_markers !== undefined) {
+    style.use_markers = values.use_markers === true || values.use_markers === "true";
+  }
   if (values.axes_linewidth !== undefined && values.axes_linewidth !== "") {
     style.axes_linewidth = Number(values.axes_linewidth);
   }
@@ -118,6 +161,9 @@ export function buildChartStylePayload(
   }
   if (values.y_sci_notation !== undefined) {
     style.y_sci_notation = values.y_sci_notation === true || values.y_sci_notation === "true";
+  }
+  if (values.columns !== undefined && values.columns !== "") {
+    style.columns = Number(values.columns) >= 2 ? 2 : 1;
   }
   const exports = values.export_formats;
   if (typeof exports === "string" && exports) {

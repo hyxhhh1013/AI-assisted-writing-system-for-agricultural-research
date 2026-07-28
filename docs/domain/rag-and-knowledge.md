@@ -69,13 +69,18 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 
 ## RAG 引擎要点
 
-- `localRAG`：BM25 + 余弦相似度，RRF 融合
+- `localRAG`：BM25 + 余弦相似度，RRF 融合；**查询同义词扩展 + 多 query RRF**（`lib/rag-query-expand.ts`）
 - `getBibMap` / `getCategories` / `search` 走 Prisma 缓存
 - 写作上下文：`services/writing-context.ts` 组装 `contextText` + `refMapping`
 
 ### 检索性能（库变大后）
 
-- **两阶段检索**：先 BM25 召回候选（`limit×20`，下限 200），向量只在候选集上算余弦；向量按需取，不再把全库向量灌入 JS 内存。BM25 完全无命中时回退全库向量扫描。
+- **两阶段检索**：先 BM25（含同义词扩展词项）召回候选；向量在候选集上精排。**BM25 弱命中**（候选过少或最高分偏低）时对该分类**全池向量扫描**，避免语义相关但被 lexical 挡住的片段。
+- **多 query RRF**：`expandRagQueries` 自动生成 2～4 个变体（如 `biochar` ↔ `生物炭`），分路检索再 RRF 合并（默认开启，`multiQuery: false` 可关）。
+- **查询分类提示**：`inferCategoriesFromQuery` 从 query 推断分类（茶/热解/biochar 等）；全库检索时**优先在相关分类子集检索**，避免大块分类（如控释肥类）压制 Top1；命中不足再与全库 RRF 合并。
+- **索引 n-gram 对齐（RAG-PR-013）**：倒排写入 CJK char + bigram（短段补 trigram），与 query 分词一致；否则「热解」「生物炭」等词在 BM25 侧几乎失联。
+- **题名/文件名加权 + 轻量重排**：`applyMetadataBoost` / `lexicalRerank` 用 bib.title 与 source 抬高相关 chunk。
+- **条件化 multi-query**：默认 `auto`——弱召回、纯英文、或 Top 分类偏离提示时才展开变体；避免每请求 4 路全扫。
 - **`.emb` 按需 pread**：`EmbeddingStore` 不再把整个 `.emb` 读进内存，只保留文件句柄 + 维度；`get()` 用 `fs.readSync` 按偏移读单条向量（配合两阶段，每次仅读候选那几千条）。内存不再随库大小线性膨胀。
 - **倒排索引协作式构建**：`buildInvertedIndexAsync` 分批 `setImmediate` 让出事件循环，避免大库构建时冻结整个服务；全库索引由各分类索引按 offset **合并**得到（`mergeInvertedIndexInto`），不重复分词。
 - **范围检索**：`search({ categories })` 只加载相关分类（子集缓存 `subsetCache`）。扩写经 `writing-context.ts` 用**已有参考文献 ∪ 用户勾选**反推分类；若仍为空则按题名/方向关键词提示分类（如「绿茶香气」→ 茶学）；范围内 0 命中则自动扩到全库。
