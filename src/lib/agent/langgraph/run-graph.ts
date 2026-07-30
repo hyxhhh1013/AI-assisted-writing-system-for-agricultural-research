@@ -11,12 +11,9 @@ import {
   projectFingerprint,
 } from "@/lib/agent/core/antispam";
 import {
-  diagnoseGoalNudge,
-  draftGoalNudge,
   isDiagnoseStyleGoal,
-  isLiteratureHuntGoal,
-  isSectionDraftGoal,
-  literatureHuntNudge,
+  mergeFollowUpGoalHint,
+  mergeGoalWithIntentHint,
 } from "@/lib/agent/core/goal-intents";
 import { createRepeatTracker } from "@/lib/agent/core/safety";
 import { getCompiledAgentGraph } from "@/lib/agent/langgraph/graph";
@@ -84,8 +81,6 @@ export async function* runAgentGraphLoop(
 
   // 诊断任务跳过跨会话记忆，避免被上轮「待导入文献」带偏
   const diagnoseGoal = isDiagnoseStyleGoal(goal);
-  const draftGoal = isSectionDraftGoal(goal);
-  const litHuntGoal = isLiteratureHuntGoal(goal);
 
   // 跟聊已自带完整消息历史，不必再注入跨会话 prior / 记忆（简报仍可保留）
   const memoryPromise =
@@ -130,25 +125,24 @@ export async function* runAgentGraphLoop(
     : {
         goal,
         messages: [
-          { role: "user", content: goal },
-          ...(diagnoseGoal
-            ? [{ role: "user" as const, content: diagnoseGoalNudge() }]
-            : litHuntGoal
-              ? [{ role: "user" as const, content: literatureHuntNudge(goal) }]
-              : draftGoal
-                ? [{ role: "user" as const, content: draftGoalNudge(goal) }]
-                : []),
+          { role: "user", content: mergeGoalWithIntentHint(goal) },
         ],
       };
 
-  if (followUp && diagnoseGoal) {
-    initialState = {
-      ...initialState,
-      messages: [
-        ...(initialState.messages ?? []),
-        { role: "user", content: diagnoseGoalNudge() },
-      ],
-    };
+  if (followUp) {
+    const nudge = mergeFollowUpGoalHint(
+      goal,
+      initialState.toolSummaries ?? [],
+    );
+    if (nudge) {
+      initialState = {
+        ...initialState,
+        messages: [
+          ...(initialState.messages ?? []),
+          { role: "user", content: nudge },
+        ],
+      };
+    }
   }
 
   if (resumeState && sessionId) {

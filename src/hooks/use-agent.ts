@@ -220,6 +220,7 @@ export function useAgent(options: UseAgentOptions = {}) {
             summary: event.result?.summary,
             error: event.error ?? event.result?.error,
             ...(imageUrl ? { imageUrl } : {}),
+            ...(data != null && event.tool === "validate_citations" ? { data } : {}),
           },
         ]);
         const persisted = extractSectionPersisted(event.tool, event.result);

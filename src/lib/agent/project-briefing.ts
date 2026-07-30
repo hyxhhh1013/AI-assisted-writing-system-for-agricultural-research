@@ -1,5 +1,9 @@
 import type { AgentProjectSnapshot } from "@/lib/agent/project-loader";
 import { formatLabScopeBlock } from "@/lib/agent/lab-scope";
+import {
+  evaluateDraftCoverage,
+  sectionCharsFromFills,
+} from "@/lib/draft-coverage";
 
 const PHASE_LABELS: Record<number, string> = {
   0: "配置",
@@ -15,6 +19,20 @@ const PHASE_LABELS: Record<number, string> = {
 const OUTLINE_BRIEF_CHARS = 3500;
 const REF_BRIEF_COUNT = 12;
 const REF_LINE_CHARS = 160;
+
+function sectionLabel(key: string): string {
+  const map: Record<string, string> = {
+    abstract: "摘要",
+    introduction: "引言",
+    background: "研究现状",
+    literature_body: "综述正文",
+    methods: "方法",
+    results: "结果",
+    discussion: "讨论",
+    conclusion: "结论",
+  };
+  return map[key] ?? key;
+}
 
 /** 压缩项目快照为 Agent 系统提示中的「当前项目」简报（尽量多上下文） */
 export function formatAgentProjectBriefing(
@@ -44,6 +62,12 @@ export function formatAgentProjectBriefing(
     .map((s) => s.key)
     .join(", ");
 
+  const coverage = evaluateDraftCoverage({
+    mode: project.mode,
+    language: project.language,
+    sectionChars: sectionCharsFromFills(project.sectionFills),
+  });
+
   const phase =
     project.currentPhase != null
       ? `${project.currentPhase}（${PHASE_LABELS[project.currentPhase] ?? "?"}）`
@@ -66,6 +90,15 @@ export function formatAgentProjectBriefing(
     `研究方向：${project.researchDirection || "（未填）"}`,
     `Passport 当前阶段：${phase}（对齐 academic-paper Phase ${project.currentPhase ?? "?"}）`,
     `PaperConfig：${project.hasPaperConfig ? "已填写" : "未填写（可用 update_paper_config）"}`,
+    `写作入口：${
+      project.agentEntryMode === "outline_ready"
+        ? "已有大纲（勿主动 generate_outline）"
+        : project.agentEntryMode === "data_ready"
+          ? "已有数据（先 list_plot_sources / 结果方法）"
+          : project.agentEntryMode === "full"
+            ? "从零推进（配置→文献→大纲→分节写）"
+            : "未选定（新建项目时可设；或 update_paper_config）"
+    }`,
     `文献条数：${project.references.length}`,
     `证据声明：${project.dataClaims.length} 条`,
     `写作蓝图：${project.hasWritingBlueprint ? "有" : "无"}${
@@ -76,6 +109,7 @@ export function formatAgentProjectBriefing(
     }`,
     `已有正文：${filled || "无"}`,
     `空白章节：${empty || "无"}`,
+    `分节完整度：必写 ${coverage.okRequiredCount}/${coverage.requiredCount}；${coverage.hint}`,
     `大纲全文：\n${outlinePreview}`,
   ];
 
@@ -101,8 +135,19 @@ export function suggestNextAgentActions(input: {
   hasOutline: boolean;
   hasArgumentBlueprint: boolean;
   emptySections: string[];
+  /** 优先于 emptySections 的薄节/缺口 */
+  nextSectionKey?: string | null;
+  thinOrGapSections?: string[];
 }): string[] {
-  const { currentPhase, writeEnabled, hasOutline, hasArgumentBlueprint, emptySections } = input;
+  const {
+    currentPhase,
+    writeEnabled,
+    hasOutline,
+    hasArgumentBlueprint,
+    emptySections,
+    nextSectionKey,
+    thinOrGapSections,
+  } = input;
   const tips: string[] = [];
 
   if ((currentPhase ?? 1) <= 1) {
@@ -114,23 +159,21 @@ export function suggestNextAgentActions(input: {
   if (hasOutline && !hasArgumentBlueprint && writeEnabled) {
     tips.push("基于大纲生成论证蓝图并写回项目");
   }
-  if (writeEnabled && emptySections.includes("introduction")) {
-    tips.push("写引言并保存到当前项目");
-  } else if (writeEnabled && emptySections[0] && emptySections[0] !== "abstract") {
-    const key = emptySections[0];
-    const label =
-      key === "methods"
-        ? "方法"
-        : key === "results"
-          ? "结果"
-          : key === "discussion"
-            ? "讨论"
-            : key === "conclusion"
-              ? "结论"
-              : key === "literature_body"
-                ? "综述正文"
-                : key;
-    tips.push(`写${label}并保存到当前项目`);
+
+  const writeTarget =
+    nextSectionKey
+    || thinOrGapSections?.[0]
+    || (emptySections.includes("introduction")
+      ? "introduction"
+      : emptySections.find((k) => k !== "abstract"));
+
+  if (writeEnabled && writeTarget) {
+    const thinHint =
+      thinOrGapSections?.includes(writeTarget)
+      && !emptySections.includes(writeTarget)
+        ? "（当前偏薄，建议扩写/补强）"
+        : "";
+    tips.push(`写${sectionLabel(writeTarget)}并保存到当前项目${thinHint}`);
   }
   if (writeEnabled && (currentPhase ?? 0) >= 4) {
     tips.push("按 academic-paper 流程继续：起草→引用检查→双语摘要→审查");

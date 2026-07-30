@@ -101,14 +101,26 @@ describe("routeAfterAgent plan continue", () => {
         }),
       ),
     ).toBe("agent");
-  });
-
-  it("finalizes when plan continue exhausted", () => {
     expect(
       routeAfterAgent(
         base({
-          plan: markFocusRunning(plan()),
-          planContinueCount: 99,
+          plan: null,
+          pendingToolCalls: [],
+          finished: false,
+          planContinueCount: 2,
+        }),
+      ),
+    ).toBe("agent");
+  });
+
+  it("finalizes when intent continue exhausted (> MAX_INTENT_CONTINUES)", () => {
+    expect(
+      routeAfterAgent(
+        base({
+          plan: null,
+          pendingToolCalls: [],
+          finished: false,
+          planContinueCount: 3,
         }),
       ),
     ).toBe("finalize");

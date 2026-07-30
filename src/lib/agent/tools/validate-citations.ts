@@ -1,6 +1,10 @@
 import prisma from "@/lib/prisma";
 import { validateCitations } from "@/lib/citation";
 import { evaluateCitationGate } from "@/lib/citation-gate";
+import {
+  evaluateCitationGrounding,
+  refsFromLiteRows,
+} from "@/lib/citation-grounding";
 import { syncProjectPaperPassport } from "@/lib/project-paper-passport-sync";
 import { findReferenceRowsLite } from "@/lib/reference-rows";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
@@ -8,7 +12,8 @@ import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 export const validateCitationsTool: ToolDefinition = {
   name: "validate_citations",
   description:
-    "检查正文引用：① 编号是否超出项目参考文献数量（硬门禁）；② 与检索上下文的词重叠。越界则不可标「可过稿」",
+    "一次检查全文引用（硬检越界 + 语义可疑项 + soft 池未引用）。优先于逐条 read_reference；"
+    + "可省略 draftText 自动用项目全文。交付前必调；核查任务第一步应调用本工具",
   parameters: {
     type: "object",
     properties: {
@@ -18,7 +23,7 @@ export const validateCitationsTool: ToolDefinition = {
       },
       contextText: {
         type: "string",
-        description: "RAG 检索上下文或参考文献摘要文本；省略则用项目参考文献拼接",
+        description: "可选：旧版全池词重叠上下文；省略则自动用各条题录/摘要做语义接地",
       },
     },
     required: [],
@@ -68,10 +73,14 @@ export const validateCitationsTool: ToolDefinition = {
       return { success: false, error: "draftText 不能为空（或绑定有正文的项目）" };
     }
 
-    // 只用真实文献数，禁止用正文最大编号伪装 refCount
     const gate = evaluateCitationGate({
       texts: [draftText],
       refCount,
+    });
+
+    const grounding = evaluateCitationGrounding({
+      draftText,
+      references: refsFromLiteRows(references),
     });
 
     const checks = contextText.trim()
@@ -82,12 +91,39 @@ export const validateCitationsTool: ToolDefinition = {
     await syncProjectPaperPassport(ctx.projectId).catch(() => null);
 
     const blocked = !gate.exportReady;
+    const soft = grounding.softPool;
+    const softHint =
+      soft.unusedRatio != null && soft.unusedRatio >= 0.5
+        ? `；soft 池未引用 ${soft.softUnusedCount}/${soft.softGroundableCount}`
+        : "";
+
+    let summary: string;
+    if (blocked) {
+      summary = `引用硬检未通过：${gate.hint}`;
+    } else if (!gate.passed) {
+      summary = `可导出，但 Phase 5 未完成：${gate.hint}`;
+    } else if (grounding.suspiciousCount > 0) {
+      summary = `硬检通过，但有 ${grounding.suspiciousCount} 处语义可疑引用：${grounding.hint}${softHint}`;
+    } else if (overlapIssues.length > 0) {
+      summary = `硬检通过，语义接地未见明显错引；全池重叠低 ${overlapIssues.length} 处可人工核对${softHint}`;
+    } else {
+      summary = `引用检查通过（硬检 OK，语义接地 OK，${checks.length || gate.citationCount} 处引用）${softHint}`;
+    }
+
     return {
       success: true,
       data: {
         gate,
         exportReady: gate.exportReady,
         phase5Passed: gate.passed,
+        grounding: {
+          checkedCount: grounding.checkedCount,
+          suspiciousCount: grounding.suspiciousCount,
+          ungroundableCount: grounding.ungroundableCount,
+          hint: grounding.hint,
+          softPool: grounding.softPool,
+          suspicious: grounding.hits.filter((h) => h.suspicious).slice(0, 8),
+        },
         totalChecks: checks.length,
         overlapIssueCount: overlapIssues.length,
         overlapIssues: overlapIssues.map((c) => ({
@@ -97,13 +133,7 @@ export const validateCitationsTool: ToolDefinition = {
           citedSentence: c.citedSentence?.slice(0, 120),
         })),
       },
-      summary: blocked
-        ? `引用硬检未通过：${gate.hint}`
-        : !gate.passed
-          ? `可导出，但 Phase 5 未完成：${gate.hint}`
-          : overlapIssues.length === 0
-            ? `引用检查通过（硬检 OK，${checks.length || gate.citationCount} 处引用）`
-            : `硬检通过，但有 ${overlapIssues.length} 处低重叠引用需人工核对`,
+      summary,
     };
   },
 };

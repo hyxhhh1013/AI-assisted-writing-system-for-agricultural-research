@@ -11,10 +11,26 @@ import type { AgentProjectSnapshot } from "@/lib/agent/project-loader";
  */
 export const MAX_SEARCH_CALLS_PER_GOAL = 20;
 
-/** 连续未改变项目指纹的工具次数上限 */
+/** 连续「本应推进项目却未改指纹」的工具次数上限 */
 export const MAX_STAGNANT_TOOLS = 3;
 
 const SEARCH_TOOLS = new Set(["search_external", "search_knowledge"]);
+
+/**
+ * 取上下文只读工具：先读后写时会连续调用，不可计入空转
+ * （否则读 3 篇文献就被红条打断，写作体验极差）
+ */
+export const CONTEXT_READ_TOOLS = new Set([
+  "inspect_project",
+  "read_project_asset",
+  "read_section",
+  "list_references",
+  "read_reference",
+  "list_plot_sources",
+  "recall_recent_work",
+  "get_full_text",
+  "update_work_memory",
+]);
 
 /** 认为可能推进项目的工具（成功后应刷新 fingerprint） */
 export const PROGRESS_TOOLS = new Set([
@@ -104,8 +120,8 @@ export function noteToolProgress(
   const next = projectFingerprint(snapAfter);
   const changed = next !== tracker.lastFingerprint;
 
-  // 检索本身不改项目指纹（导入才改），计入空转会误杀「先搜再导」流程
-  if (SEARCH_TOOLS.has(toolName)) {
+  // 检索 / 读上下文：不计入空转（写引言前连读多篇文献是正常路径）
+  if (SEARCH_TOOLS.has(toolName) || CONTEXT_READ_TOOLS.has(toolName)) {
     if (changed) {
       tracker.lastFingerprint = next;
       tracker.stagnantCount = 0;
@@ -119,7 +135,7 @@ export function noteToolProgress(
     return { stagnant: false };
   }
 
-  // 只读 / 未改项目：累计空转
+  // 写工具未改指纹，或其他非只读工具空转：累计
   if (!changed) {
     tracker.stagnantCount += 1;
   } else {

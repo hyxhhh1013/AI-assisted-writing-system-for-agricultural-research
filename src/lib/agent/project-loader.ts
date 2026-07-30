@@ -36,6 +36,8 @@ export interface AgentProjectSnapshot {
   argumentBlueprintSummary?: string | null;
   /** Passport 是否已有 config 记录 */
   hasPaperConfig: boolean;
+  /** 写作入口（新建项目选定） */
+  agentEntryMode?: import("@/contracts/paper-passport").AgentEntryModeId | null;
 }
 
 export async function loadAgentProject(
@@ -78,20 +80,28 @@ export async function loadAgentProject(
 
   let currentPhase: number | null = null;
   let hasPaperConfig = false;
+  let agentEntryMode: import("@/contracts/paper-passport").AgentEntryModeId | null = null;
   if (project.paperPassport) {
     try {
       const parsed = JSON.parse(project.paperPassport) as {
         currentPhase?: unknown;
-        config?: unknown;
+        config?: {
+          agentEntryMode?: unknown;
+        };
       };
       if (typeof parsed.currentPhase === "number") {
         currentPhase = parsed.currentPhase;
       }
       // 须有题目等完整字段；空壳 config 仍要走问答
       hasPaperConfig = hasCompletePaperConfig(parsed.config);
+      const em = parsed.config?.agentEntryMode;
+      if (em === "full" || em === "outline_ready" || em === "data_ready") {
+        agentEntryMode = em;
+      }
     } catch {
       currentPhase = null;
       hasPaperConfig = false;
+      agentEntryMode = null;
     }
   }
 
@@ -163,5 +173,6 @@ export async function loadAgentProject(
     writingBlueprintSummary,
     argumentBlueprintSummary,
     hasPaperConfig,
+    agentEntryMode,
   };
 }

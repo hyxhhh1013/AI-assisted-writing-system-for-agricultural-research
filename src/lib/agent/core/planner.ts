@@ -17,7 +17,7 @@ export async function createPlan(
 - 对齐 academic-paper 阶段思路，但只规划「本轮对话能做完」的事
 - 用户明确要求撰写某章时才加 write_section；不要默认规划全文八阶段
 - 缺大纲/蓝图时用 generate_* 工具名写进标题或 toolHints
-- 综述/备文献：规划多轮检索 + 分批导入，目标约 ≥30 篇
+- 综述/备文献：规划多轮检索 + 分批导入；综述目标约 ≥30 篇，普通检索约 15 篇
 - 子任务标题写清意图，便于执行与向用户汇报`,
     },
     {
@@ -66,7 +66,7 @@ function fallbackPlan(goal: string): AgentPlan {
         },
         {
           id: "2",
-          title: "分批 import_reference 导入约 30 篇（hitsJson）",
+          title: "分批 import_reference 导入约 15 篇（hitsJson；综述再抬到 30）",
           status: "pending",
           toolHints: ["import_reference"],
         },

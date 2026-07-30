@@ -34,6 +34,7 @@ describe("agent project briefing", () => {
     expect(text).toContain("Passport 当前阶段：4");
     expect(text).toContain("introduction:1200字");
     expect(text).toContain("literature_body");
+    expect(text).toContain("分节完整度");
     expect(text).toContain("大纲全文");
     expect(text).toContain("实验室范围");
     expect(text).toContain("热化学");
@@ -44,7 +45,7 @@ describe("agent project briefing", () => {
     const prompt = buildAgentSystemPrompt([], formatAgentProjectBriefing(sample));
     expect(prompt).toContain("【项目简报");
     expect(prompt).toContain("生物炭综述");
-    expect(prompt).toContain("实验室四方向");
+    expect(prompt).toContain("四个研究方向");
   });
 
   it("suggests write next empty section", () => {
@@ -54,7 +55,22 @@ describe("agent project briefing", () => {
       hasOutline: true,
       hasArgumentBlueprint: false,
       emptySections: ["literature_body", "abstract"],
+      nextSectionKey: "literature_body",
+      thinOrGapSections: ["literature_body"],
     });
     expect(tips.some((t) => t.includes("综述正文") || t.includes("论证"))).toBe(true);
+  });
+
+  it("suggests thickening a thin section", () => {
+    const tips = suggestNextAgentActions({
+      currentPhase: 4,
+      writeEnabled: true,
+      hasOutline: true,
+      hasArgumentBlueprint: true,
+      emptySections: [],
+      nextSectionKey: "introduction",
+      thinOrGapSections: ["introduction"],
+    });
+    expect(tips.some((t) => t.includes("引言") && t.includes("偏薄"))).toBe(true);
   });
 });

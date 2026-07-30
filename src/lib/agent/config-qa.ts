@@ -1,8 +1,10 @@
+import type { PaperConfigRecord } from "@/contracts/paper-passport";
+import { paperConfigToRecord } from "@/contracts/paper-passport";
+
 /**
  * Phase 0 配置 — 问答步骤（非整表填写）
+ * 主入口已迁到「新建项目」向导；此处供 Agent 补填/修改旧项目。
  */
-
-import type { PaperConfigRecord } from "@/contracts/paper-passport";
 
 export type ConfigQaField = keyof PaperConfigRecord;
 
@@ -24,6 +26,18 @@ export interface ConfigQaStep {
 }
 
 export const CONFIG_QA_STEPS: ConfigQaStep[] = [
+  {
+    id: "agentEntryMode",
+    kind: "choice",
+    question: "写作入口更接近哪一种？（可之后再改）",
+    hint: "对齐 academic-paper：全流程 / 已有大纲 / 已有数据",
+    optional: true,
+    choices: [
+      { value: "full", label: "从零推进（配置→文献→大纲→分节写）" },
+      { value: "outline_ready", label: "已有大纲（按大纲写，不主动重做结构）" },
+      { value: "data_ready", label: "已有数据（先图表/结果，再方法与讨论）" },
+    ],
+  },
   {
     id: "paperTitle",
     kind: "text",
@@ -86,6 +100,7 @@ export function defaultConfigQaAnswers(
   projectTitle?: string,
 ): Partial<PaperConfigRecord> {
   return {
+    agentEntryMode: existing?.agentEntryMode,
     paperTitle: existing?.paperTitle || projectTitle || "",
     paperType: existing?.paperType || "research",
     language: existing?.language || "zh",
@@ -116,19 +131,31 @@ export function toPaperConfigRecord(
   answers: Partial<PaperConfigRecord>,
 ): PaperConfigRecord | null {
   if (!isConfigQaComplete(answers)) return null;
-  return {
+  return paperConfigToRecord({
     paperTitle: answers.paperTitle!.trim(),
     paperType: answers.paperType as PaperConfigRecord["paperType"],
     language: answers.language as PaperConfigRecord["language"],
     citationStyle: answers.citationStyle as PaperConfigRecord["citationStyle"],
     wordCount: answers.wordCount || "8000-12000",
     targetJournal: (answers.targetJournal ?? "").trim(),
-  };
+    ...(answers.agentEntryMode
+      ? { agentEntryMode: answers.agentEntryMode }
+      : {}),
+  });
 }
 
 export function formatConfigQaSummary(cfg: PaperConfigRecord): string {
   const typeLabel = cfg.paperType === "research" ? "研究论文" : "综述";
   const lang = cfg.language === "en" ? "英文" : "中文";
   const journal = cfg.targetJournal || "未定刊";
-  return `${cfg.paperTitle} · ${typeLabel} · ${lang} · ${cfg.citationStyle} · ${cfg.wordCount} · ${journal}`;
+  const entry =
+    cfg.agentEntryMode === "outline_ready"
+      ? "已有大纲"
+      : cfg.agentEntryMode === "data_ready"
+        ? "已有数据"
+        : cfg.agentEntryMode === "full"
+          ? "从零推进"
+          : null;
+  const base = `${cfg.paperTitle} · ${typeLabel} · ${lang} · ${cfg.citationStyle} · ${cfg.wordCount} · ${journal}`;
+  return entry ? `${base} · ${entry}` : base;
 }

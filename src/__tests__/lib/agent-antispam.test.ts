@@ -50,12 +50,23 @@ describe("agent antispam", () => {
     expect(blocked.warning).toMatch(/上限/);
   });
 
-  it("stagnates after repeated non-mutating tools", () => {
+  it("does not stagnate on context reads (read_reference before write)", () => {
+    const base = snap({ references: ["r1", "r2", "r3"] });
+    const tracker = createAntispamTracker(base);
+    for (let i = 0; i < MAX_STAGNANT_TOOLS + 3; i++) {
+      const r = noteToolProgress(tracker, "read_reference", base, true);
+      expect(r.stagnant).toBe(false);
+    }
+    expect(tracker.stagnantCount).toBe(0);
+  });
+
+  it("stagnates after repeated non-mutating write-ish tools", () => {
     const base = snap();
     const tracker = createAntispamTracker(base);
-    let last = noteToolProgress(tracker, "inspect_project", base, true);
+    // verify_content 非只读豁免，也不改指纹 → 计入空转
+    let last = noteToolProgress(tracker, "verify_content", base, true);
     for (let i = 1; i < MAX_STAGNANT_TOOLS; i++) {
-      last = noteToolProgress(tracker, "inspect_project", base, true);
+      last = noteToolProgress(tracker, "verify_content", base, true);
     }
     expect(last.stagnant).toBe(true);
     expect(last.warning).toMatch(/未改变项目状态/);
@@ -69,19 +80,18 @@ describe("agent antispam", () => {
       expect(r.stagnant).toBe(false);
     }
     expect(tracker.stagnantCount).toBe(0);
-    // 只读工具仍会累计
-    let last = noteToolProgress(tracker, "list_references", base, true);
-    for (let i = 1; i < MAX_STAGNANT_TOOLS; i++) {
-      last = noteToolProgress(tracker, "inspect_project", base, true);
+    // 只读工具仍不计空转
+    for (let i = 0; i < MAX_STAGNANT_TOOLS; i++) {
+      expect(noteToolProgress(tracker, "list_references", base, true).stagnant).toBe(false);
     }
-    expect(last.stagnant).toBe(true);
+    expect(tracker.stagnantCount).toBe(0);
   });
 
   it("resets stagnant count when write progresses fingerprint", () => {
     const before = snap();
     const tracker = createAntispamTracker(before);
-    noteToolProgress(tracker, "inspect_project", before, true);
-    noteToolProgress(tracker, "list_references", before, true);
+    noteToolProgress(tracker, "verify_content", before, true);
+    noteToolProgress(tracker, "review_content", before, true);
     const after = snap({
       sectionFills: [{ key: "introduction", chars: 800 }],
     });

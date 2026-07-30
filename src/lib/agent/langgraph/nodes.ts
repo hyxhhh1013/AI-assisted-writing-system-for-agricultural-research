@@ -21,7 +21,6 @@ import {
 import {
   advancePlanAfterTool,
   buildContinueNudge,
-  buildFocusNudge,
   getFocusSubtask,
   markFocusRunning,
   planHasPendingWork,
@@ -39,13 +38,23 @@ import {
   isWriteToolNeedingPrereqs,
 } from "@/lib/agent/core/ensure-write-prereqs";
 import {
+  buildIntentStopAskUser,
+  checkCitationCheckGate,
+  checkCitationSideTripGate,
   checkDiagnoseInspectGate,
   checkDraftSearchGate,
+  citationCheckReportReady,
+  hasCitationRefineSuccess,
+  isAcademicPaperPipelineGoal,
+  isCitationApplyGoal,
+  isCitationCheckGoal,
   isLiteratureHuntGoal,
   isReviewWritingGoal,
   isSectionDraftGoal,
   parseLiteratureImportTarget,
+  resolveApPipelineStep,
   reviewRefsShortageNudge,
+  shouldSkipPlanner,
 } from "@/lib/agent/core/goal-intents";
 import { enrichImportReferenceParams } from "@/lib/agent/literature-relevance";
 import { MAX_INTENT_CONTINUES } from "@/lib/agent/langgraph/state";
@@ -169,11 +178,16 @@ export async function planNode(
       return { events };
     }
 
+    // 诊断 / 单节起草 / 引用核查·修正：跳过 Planner LLM，直接对话
+    if (shouldSkipPlanner(state.goal, state.toolSummaries ?? [])) {
+      events.push({ type: "agent/status", status: "thinking" });
+      return { events, plan: null };
+    }
+
     const rawPlan = await createPlan(state.goal, agentContext, agentContext.projectBriefing);
     const plan = markFocusRunning(rawPlan);
     const focus = getFocusSubtask(plan);
     events.push({ type: "agent/plan", plan });
-    const focusHint = buildFocusNudge(plan);
     return {
       plan: { ...plan, focusSubtaskId: focus?.id ?? null },
       events,
@@ -182,9 +196,6 @@ export async function planNode(
           role: "assistant",
           content: `Plan:\n${plan.subtasks.map((s, i) => `${i + 1}. [${s.status}] ${s.title}`).join("\n")}`,
         },
-        ...(focusHint
-          ? [{ role: "user" as const, content: focusHint }]
-          : []),
       ],
     };
   } catch (error) {
@@ -226,12 +237,8 @@ export async function agentNode(
   events.push({ type: "agent/status", status: "thinking" });
 
   const plan = state.plan ? markFocusRunning(state.plan) : null;
+  // 对话式：不再每轮注入【计划焦点】假 user（Plan 仅作 UI / 收尾提示）
   const extraMessages: AgentGraphStateType["messages"] = [];
-  const focusNudge = buildFocusNudge(plan);
-  const lastContent = state.messages[state.messages.length - 1]?.content ?? "";
-  if (focusNudge && !lastContent.includes("【计划焦点】") && !lastContent.startsWith("【系统】")) {
-    extraMessages.push({ role: "user", content: focusNudge });
-  }
 
   const systemPrompt = buildAgentSystemPrompt(tools, agentContext.projectBriefing);
   const llmMessages = [
@@ -303,10 +310,42 @@ export async function agentNode(
       isReviewWritingGoal(state.goal)
         ? reviewRefsShortageNudge(refTotal, importTarget)
         : null;
-    const intentNudge =
-      (isLiteratureHuntGoal(state.goal) || Boolean(reviewShort))
-      && !importedOk
-      && state.planContinueCount < MAX_INTENT_CONTINUES
+    const litIncomplete =
+      (isLiteratureHuntGoal(state.goal) || Boolean(reviewShort)) && !importedOk;
+    const draftIncomplete =
+      isSectionDraftGoal(state.goal)
+      && !isReviewWritingGoal(state.goal)
+      && !wroteOk;
+    const reviewWriteIncomplete =
+      isReviewWritingGoal(state.goal) && importedOk && !wroteOk;
+    const citeCheckIncomplete =
+      isCitationCheckGoal(state.goal) && !citationCheckReportReady(lines);
+    const citeApplyIncomplete =
+      isCitationApplyGoal(state.goal, lines) && !hasCitationRefineSuccess(lines);
+    const pipelineStep = resolveApPipelineStep(state.goal, lines);
+    const pipelineFixIncomplete = pipelineStep === "citation_fix";
+    const pipelineAbstractIncomplete = pipelineStep === "abstract";
+    const pipelineReviewIncomplete = pipelineStep === "review";
+    const pipelineCheckIncomplete = pipelineStep === "citation_check";
+
+    const canIntentContinue = state.planContinueCount < MAX_INTENT_CONTINUES;
+    const intentNudge = !canIntentContinue
+      ? null
+      : pipelineFixIncomplete
+        ? "【系统】academic-paper 流程·引用修正：read_section(literature_body) 后立刻 "
+          + "refine_content(section=literature_body, draftText=全文, feedback=validate 报告中的改引清单, persistToProject=true)。"
+          + "background/introduction 有错引时同样 refine。不要只 read；不要写摘要直到 refine 写回。"
+        : pipelineAbstractIncomplete
+          ? "【系统】academic-paper 流程·双语摘要：引用已修正，请立刻 write_bilingual_abstract 写回 abstract。"
+          : pipelineReviewIncomplete
+            ? "【系统】academic-paper 流程·审查：请调用 run_review_rounds 产出审查报告。"
+            : pipelineCheckIncomplete
+              ? "【系统】academic-paper 流程·引用检查：请立刻 validate_citations（一次全文），汇报 suspicious [n]。"
+              : citeApplyIncomplete
+        ? "【系统】用户已确认引用修正，但尚未 refine_content 写回。"
+          + "请 read_section(literature_body) 后立刻 refine_content(section=literature_body, draftText=全文, feedback=上轮修正清单)。"
+          + "background/introduction 有错引时同样处理。不要只 read 不写回；不要 search/import/写摘要。"
+        : litIncomplete
         ? importCount === 0 && refTotal < importTarget && searchedOk
           ? `【系统】已检索但项目文献仍不足（现有 ${refTotal} 篇，目标约 ${importTarget} 篇）。`
             + `请立刻批量 import_reference(hitsJson=suggestedHitsJson, query, why≥8字)；不够则换 query 再搜再导。`
@@ -315,18 +354,16 @@ export async function agentNode(
               + "请先 search_knowledge / search_external（多换同义英文 query），再分批 import_reference。"
             : `【系统】已有/本轮导入合计仍不足：项目 ${refTotal} 篇，本轮导入约 ${importCount} 篇，目标约 ${importTarget} 篇。`
               + "请继续 search + import_reference(hitsJson=...) 补足。"
-        : isSectionDraftGoal(state.goal)
-            && !isReviewWritingGoal(state.goal)
-            && !wroteOk
-            && state.planContinueCount < MAX_INTENT_CONTINUES
+        : draftIncomplete
           ? "【系统】用户要写章节，但尚未成功 write_section 写回。"
             + "请先读大纲/文献（或 inspect），再直接 write_section（蓝图可自动补）；不要只提问。"
-          : isReviewWritingGoal(state.goal)
-              && importedOk
-              && !wroteOk
-              && state.planContinueCount < MAX_INTENT_CONTINUES
+          : reviewWriteIncomplete
             ? "【系统】文献体量已够，请 list_references 核对后 write_section(literature_body) 写回综述正文。"
-            : null;
+            : citeCheckIncomplete
+              ? "【系统】用户要做引用核查，但尚未成功 validate_citations。"
+                + "请立刻调用 validate_citations（默认检查全文），用中文汇报硬检结果与 suspicious [n]；"
+                + "不要继续逐条 read_reference。"
+              : null;
 
     if (canContinue && plan) {
       updates.finished = false;
@@ -345,13 +382,78 @@ export async function agentNode(
       ];
     } else {
       updates.finished = true;
-      // 对话式收尾：有未完成计划时提醒用户，不强制续跑
-      if (planHasPendingWork(plan) && plan) {
+      const intentAsk =
+        litIncomplete
+          ? buildIntentStopAskUser({
+              kind: "literature",
+              refTotal,
+              importTarget,
+              importCount,
+            })
+          : draftIncomplete
+            ? buildIntentStopAskUser({
+                kind: "draft",
+                refTotal,
+                importTarget,
+                importCount,
+              })
+            : reviewWriteIncomplete
+              ? buildIntentStopAskUser({
+                  kind: "review_write",
+                  refTotal,
+                  importTarget,
+                  importCount,
+                })
+              : pipelineFixIncomplete
+                ? buildIntentStopAskUser({
+                    kind: "pipeline_fix",
+                    refTotal,
+                    importTarget,
+                    importCount,
+                  })
+                : pipelineAbstractIncomplete
+                  ? buildIntentStopAskUser({
+                      kind: "pipeline_abstract",
+                      refTotal,
+                      importTarget,
+                      importCount,
+                    })
+                  : pipelineReviewIncomplete
+                    ? buildIntentStopAskUser({
+                        kind: "pipeline_review",
+                        refTotal,
+                        importTarget,
+                        importCount,
+                      })
+                    : citeApplyIncomplete
+                ? buildIntentStopAskUser({
+                    kind: "citation_apply",
+                    refTotal,
+                    importTarget,
+                    importCount,
+                  })
+                : citeCheckIncomplete
+                ? buildIntentStopAskUser({
+                    kind: "citation",
+                    refTotal,
+                    importTarget,
+                    importCount,
+                  })
+                : null;
+      // 对话式收尾：意图未完成 → 问用户；有未完成计划 → 提醒可继续（引用修正跟聊不提示旧 plan）
+      let hint = intentAsk;
+      const suppressPlanHint =
+        isAcademicPaperPipelineGoal(state.goal)
+        || isCitationApplyGoal(state.goal, lines)
+        || isCitationCheckGoal(state.goal);
+      if (!hint && !suppressPlanHint && planHasPendingWork(plan) && plan) {
         const left = plan.subtasks
           .filter((s) => s.status === "pending" || s.status === "running")
           .map((s) => s.title);
-        const hint =
+        hint =
           `\n\n——\n还有未完成步骤：${left.join("；")}。你可以直接说「继续」或指定下一步（例如「先写引言」）。`;
+      }
+      if (hint) {
         if (updates.finalThought) {
           updates.finalThought = `${updates.finalThought}${hint}`;
           updates.messages = [
@@ -499,6 +601,48 @@ export async function toolsNode(
         tool: tool.name,
         result: { success: false, error: draftSearchGate.error },
         error: draftSearchGate.error,
+      });
+      plan = advancePlanAfterTool(plan, tool.name, false);
+      continue;
+    }
+
+    const citationGate = checkCitationCheckGate(
+      state.goal,
+      tool.name,
+      recentLines,
+    );
+    if (!citationGate.ok) {
+      newSummaries.push(`[${tool.name}] 失败: ${citationGate.error}`);
+      newMessages.push({
+        role: "user",
+        content: `Tool result (${tool.name}):\n${citationGate.error}`,
+      });
+      events.push({
+        type: "agent/observation",
+        tool: tool.name,
+        result: { success: false, error: citationGate.error },
+        error: citationGate.error,
+      });
+      plan = advancePlanAfterTool(plan, tool.name, false);
+      continue;
+    }
+
+    const citationSideTripGate = checkCitationSideTripGate(
+      state.goal,
+      tool.name,
+      recentLines,
+    );
+    if (!citationSideTripGate.ok) {
+      newSummaries.push(`[${tool.name}] 失败: ${citationSideTripGate.error}`);
+      newMessages.push({
+        role: "user",
+        content: `Tool result (${tool.name}):\n${citationSideTripGate.error}`,
+      });
+      events.push({
+        type: "agent/observation",
+        tool: tool.name,
+        result: { success: false, error: citationSideTripGate.error },
+        error: citationSideTripGate.error,
       });
       plan = advancePlanAfterTool(plan, tool.name, false);
       continue;

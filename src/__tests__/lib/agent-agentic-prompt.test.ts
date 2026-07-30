@@ -10,6 +10,7 @@ describe("agentic conversational posture", () => {
     expect(prompt).toContain("inspect_project");
     expect(prompt).toContain("对话推进");
     expect(prompt).not.toContain("一口气做完");
+    expect(prompt.length).toBeLessThan(3500);
   });
 
   it("registers inspect and read as read tools", () => {

@@ -92,6 +92,42 @@ function formatEvidence(toolName: string, data: unknown): string {
     }
   }
 
+  if (typeof data === "object" && data !== null && "grounding" in data) {
+    const payload = data as {
+      grounding?: {
+        checkedCount?: number;
+        suspiciousCount?: number;
+        ungroundableCount?: number;
+        hint?: string;
+        suspicious?: Array<{
+          number?: number;
+          overlap?: number;
+          citedSentence?: string;
+          refTitle?: string;
+          reason?: string;
+        }>;
+      };
+      gate?: { hint?: string; exportReady?: boolean; passed?: boolean };
+    };
+    const g = payload.grounding;
+    if (g) {
+      const head = [
+        `checked=${g.checkedCount ?? 0}`,
+        `suspicious=${g.suspiciousCount ?? 0}`,
+        g.hint ? `hint=${g.hint}` : null,
+      ]
+        .filter(Boolean)
+        .join(" | ");
+      const lines = (g.suspicious ?? []).slice(0, 8).map((h) => {
+        const n = h.number ?? "?";
+        const sent = String(h.citedSentence ?? "").slice(0, 100);
+        const title = String(h.refTitle ?? "").slice(0, 60);
+        return `[${n}] overlap=${((h.overlap ?? 0) * 100).toFixed(0)}% ${title}\n  ${sent}`;
+      });
+      return truncate(`${head}\n\n${lines.join("\n\n")}`, MAX_EVIDENCE_CHARS);
+    }
+  }
+
   if (typeof data === "object" && data !== null && "hits" in data) {
     const hits = (data as { hits?: unknown }).hits;
     if (Array.isArray(hits) && hits.length > 0) {

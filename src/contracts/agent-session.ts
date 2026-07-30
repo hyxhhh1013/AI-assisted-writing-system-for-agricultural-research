@@ -24,6 +24,8 @@ export type AgentUiMessage =
       error?: string;
       /** generate_chart 等工具返回的预览图 */
       imageUrl?: string;
+      /** validate_citations 等结构化结果 */
+      data?: unknown;
     }
   | { kind: "summary"; summary: AgentSummary }
   /** 多会话历史 /「新对话」分界（仅 UI，可不落库） */

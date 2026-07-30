@@ -1,6 +1,7 @@
 "use client";
 
 import { Bot, ChevronDown, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -10,23 +11,61 @@ import type { AgentProjectMutatedInfo } from "@/lib/agent/project-mutated";
 import type { AgentSectionPersistedInfo } from "@/lib/agent/section-persisted";
 import { isAgentWritePublicEnabled } from "@/lib/agent/core/safety";
 import { suggestNextAgentActions } from "@/lib/agent/project-briefing";
+import {
+  evaluateDraftCoverage,
+  sectionCharsFromFills,
+} from "@/lib/draft-coverage";
 import { resolvePhaseTaskPack } from "@/lib/agent/phase-task-pack";
 import type { AgentProjectSnapshot } from "@/lib/agent/project-loader";
 import {
   AgentActionCard,
   AgentThought,
   AgentSummaryContent,
+  AgentWorkingIndicator,
 } from "@/components/shared/agent/agent-thought";
 import { AgentInputBar } from "@/components/shared/agent/agent-input";
 import { AgentConfigQa } from "@/components/shared/agent/agent-config-qa";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AgentCitationReportCard } from "@/components/shared/agent/agent-citation-report";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getProject, patchPaperPassportConfig } from "@/services/project";
 import type { ProjectData } from "@/contracts/project";
 import { parsePaperPassport, type PaperConfigRecord } from "@/contracts/paper-passport";
 import { formatConfigQaSummary, hasCompletePaperConfig } from "@/lib/agent/config-qa";
+import {
+  applyEntryModeToGoal,
+  getAgentEntryMode,
+  type AgentEntryMode,
+} from "@/lib/agent/entry-mode";
 import { getCoreSectionKeysForMode } from "@/lib/section-registry";
 import type { PhaseTaskPack } from "@/contracts/phase-task-pack";
+import { resolveLiveProgress } from "@/lib/agent/ui-progress";
 import { toast } from "sonner";
+
+const easeOut = [0.22, 1, 0.36, 1] as const;
+
+function MessageEnter({
+  children,
+  animate,
+  className,
+}: {
+  children: ReactNode;
+  animate: boolean;
+  className?: string;
+}) {
+  if (!animate) {
+    return <div className={className}>{children}</div>;
+  }
+  return (
+    <motion.div
+      className={className}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.28, ease: easeOut }}
+    >
+      {children}
+    </motion.div>
+  );
+}
 
 interface AgentPanelProps {
   projectId?: string;
@@ -92,15 +131,21 @@ export function AgentPanel({
     [project?.paperPassport],
   );
   const configComplete = hasCompletePaperConfig(paperConfig);
+  const entryMode: AgentEntryMode | null =
+    getAgentEntryMode(paperConfig?.agentEntryMode)?.id ?? null;
+  const entryModeLabel = getAgentEntryMode(entryMode)?.label ?? null;
   const isConfigCheckpoint =
     agent.pendingCheckpoint?.kind === "config_confirm";
+  /** 仅手动展开或检查点时出完整表单；缺配置时先给轻量邀请，避免一进 Tab 整块砸脸 */
   const showConfigQa =
+    Boolean(projectId) && (isConfigCheckpoint || manualConfigQa);
+  const showConfigInvite =
     Boolean(projectId)
-    && (
-      isConfigCheckpoint
-      || manualConfigQa
-      || (!configComplete && !agent.isRunning && !configQaDismissed)
-    );
+    && !configComplete
+    && !agent.isRunning
+    && !configQaDismissed
+    && !manualConfigQa
+    && !isConfigCheckpoint;
 
   const applyProjectSnapshot = useCallback((p: ProjectData) => {
     setProject(p);
@@ -142,6 +187,11 @@ export function AgentPanel({
     const resolved = resolvePhaseTaskPack(snapshot);
     setPhasePack(resolved.pack);
     setPhaseGoal(resolved.goal);
+    const coverage = evaluateDraftCoverage({
+      mode,
+      language: snapshot.language,
+      sectionChars: sectionCharsFromFills(sectionFills),
+    });
     setQuickPrompts(
       [
         "看看项目卡在哪，建议下一步",
@@ -151,6 +201,11 @@ export function AgentPanel({
           hasOutline: Boolean(p.outline?.trim()),
           hasArgumentBlueprint: Boolean(p.argumentBlueprint?.trim()),
           emptySections,
+          nextSectionKey: coverage.nextSectionKey,
+          thinOrGapSections: [
+            ...coverage.requiredGaps,
+            ...coverage.thinKeys,
+          ],
         }),
       ]
         .filter((x, i, arr) => arr.indexOf(x) === i)
@@ -263,6 +318,15 @@ export function AgentPanel({
   const planDone = agent.plan?.subtasks.filter((s) => s.status === "done").length ?? 0;
   const planTotal = agent.plan?.subtasks.length ?? 0;
   const interrupted = agent.interruptedSessions[0] ?? null;
+  const liveProgress = useMemo(
+    () =>
+      resolveLiveProgress({
+        status: agent.status,
+        isRunning: agent.isRunning,
+        messages: agent.messages,
+      }),
+    [agent.status, agent.isRunning, agent.messages],
+  );
 
   return (
     <div className={cn("flex h-full min-h-0 flex-col bg-[#fafaf8]", className)}>
@@ -277,11 +341,21 @@ export function AgentPanel({
               agent.isRunning
                 ? "bg-primary/10 text-primary"
                 : agent.status === "awaiting_checkpoint"
-                  ? "bg-amber-100 text-amber-900"
+                  ? "bg-[#e8f0ea] text-[#1a5632]"
                   : "bg-muted text-muted-foreground",
             )}
           >
-            {statusHint}
+            {agent.isRunning ? (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/50 opacity-60" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
+                </span>
+                {statusHint}
+              </span>
+            ) : (
+              statusHint
+            )}
           </span>
           <div className="ml-auto flex items-center gap-0.5">
             {interrupted && !agent.isRunning ? (
@@ -361,33 +435,85 @@ export function AgentPanel({
                 type="button"
                 className={cn(
                   "underline-offset-2 hover:underline",
-                  configComplete ? "text-muted-foreground" : "font-medium text-amber-800",
+                  configComplete ? "text-muted-foreground" : "font-medium text-[#1a5632]",
                 )}
                 onClick={() => {
                   setConfigQaDismissed(false);
                   setManualConfigQa((v) => !v);
                 }}
               >
-                {configComplete ? "改论文信息" : "填写论文信息"}
+                {configComplete
+                  ? entryModeLabel
+                    ? `改配置（${entryModeLabel}）`
+                    : "改论文信息"
+                  : "填写论文信息"}
               </button>
             </>
           ) : null}
         </div>
 
-        {showConfigQa && !isConfigCheckpoint ? (
-          <div className="mt-2 max-h-[min(52vh,28rem)] overflow-y-auto rounded-md border border-amber-200/70 bg-amber-50/50 p-1">
-            <AgentConfigQa
-              projectTitle={projectTitle ?? undefined}
-              existing={paperConfig}
-              saving={configSaving}
-              onComplete={handleConfigSaveAndApprove}
-              onSkip={() => {
-                setManualConfigQa(false);
-                setConfigQaDismissed(true);
-              }}
-            />
-          </div>
-        ) : null}
+        <AnimatePresence initial={false} mode="popLayout">
+          {showConfigInvite ? (
+            <motion.div
+              key="config-invite"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.32, ease: easeOut }}
+              className="overflow-hidden"
+            >
+              <div className="mt-2 flex items-center gap-2 rounded-lg border border-[#1a5632]/12 bg-[#f0f4f1]/70 px-2.5 py-2">
+                <p className="min-w-0 flex-1 text-[11px] leading-snug text-[#3d4f46]">
+                  补全题目与类型后，写作建议会更准
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-7 shrink-0 px-2.5 text-[11px]"
+                  onClick={() => {
+                    setConfigQaDismissed(false);
+                    setManualConfigQa(true);
+                  }}
+                >
+                  去填写
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 shrink-0 px-2 text-[11px] text-muted-foreground"
+                  onClick={() => setConfigQaDismissed(true)}
+                >
+                  稍后
+                </Button>
+              </div>
+            </motion.div>
+          ) : null}
+
+          {showConfigQa && !isConfigCheckpoint ? (
+            <motion.div
+              key="config-qa"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.36, ease: easeOut }}
+              className="overflow-hidden"
+            >
+              <div className="mt-2 max-h-[min(52vh,28rem)] overflow-y-auto">
+                <AgentConfigQa
+                  projectTitle={projectTitle ?? undefined}
+                  existing={paperConfig}
+                  saving={configSaving}
+                  onComplete={handleConfigSaveAndApprove}
+                  onSkip={() => {
+                    setManualConfigQa(false);
+                    setConfigQaDismissed(true);
+                  }}
+                />
+              </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
 
         {agent.plan && planTotal > 0 ? (
           <button
@@ -458,24 +584,27 @@ export function AgentPanel({
           )}
 
           {agent.messages.map((msg, i) => {
+            const animateEnter = i >= agent.messages.length - 4;
             if (msg.kind === "divider") {
               return (
-                <div key={i} className="flex items-center gap-2 py-1" role="separator">
-                  <div className="h-px flex-1 bg-border/70" />
-                  <span className="shrink-0 text-[10px] text-muted-foreground">
-                    {msg.label?.trim() || "新对话"}
-                  </span>
-                  <div className="h-px flex-1 bg-border/70" />
-                </div>
+                <MessageEnter key={i} animate={animateEnter}>
+                  <div className="flex items-center gap-2 py-1" role="separator">
+                    <div className="h-px flex-1 bg-border/70" />
+                    <span className="shrink-0 text-[10px] text-muted-foreground">
+                      {msg.label?.trim() || "新对话"}
+                    </span>
+                    <div className="h-px flex-1 bg-border/70" />
+                  </div>
+                </MessageEnter>
               );
             }
             if (msg.kind === "user") {
               return (
-                <div key={i} className="flex justify-end">
+                <MessageEnter key={i} animate={animateEnter} className="flex justify-end">
                   <div className="max-w-[90%] rounded-2xl rounded-br-md bg-primary px-3.5 py-2 text-[13.5px] leading-relaxed text-primary-foreground">
                     {msg.text}
                   </div>
-                </div>
+                </MessageEnter>
               );
             }
             if (msg.kind === "thought") {
@@ -483,182 +612,235 @@ export function AgentPanel({
                 agent.isRunning
                 && agent.messages.findLastIndex((m) => m.kind === "thought") === i;
               return (
-                <AgentThought key={i} text={msg.text} defaultOpen={isLatestThought} />
+                <MessageEnter key={i} animate={animateEnter}>
+                  <AgentThought text={msg.text} defaultOpen={isLatestThought} />
+                </MessageEnter>
               );
             }
             if (msg.kind === "action") {
               const obs = agent.messages[i + 1];
               const observation =
                 obs?.kind === "observation" && obs.tool === msg.tool ? obs : undefined;
+              const pending =
+                agent.isRunning
+                && !observation
+                && agent.messages.findLastIndex((m) => m.kind === "action") === i;
+              if (
+                msg.tool === "validate_citations"
+                && observation?.summary
+                && !observation.error
+              ) {
+                return (
+                  <MessageEnter key={i} animate={animateEnter}>
+                    <AgentCitationReportCard
+                      summary={observation.summary}
+                      data={observation.data}
+                    />
+                  </MessageEnter>
+                );
+              }
               return (
-                <AgentActionCard
-                  key={i}
-                  tool={msg.tool}
-                  params={msg.params}
-                  summary={observation?.summary}
-                  error={observation?.error}
-                  imageUrl={observation?.imageUrl}
-                />
+                <MessageEnter key={i} animate={animateEnter}>
+                  <AgentActionCard
+                    tool={msg.tool}
+                    params={msg.params}
+                    summary={observation?.summary}
+                    error={observation?.error}
+                    imageUrl={observation?.imageUrl}
+                    pending={pending}
+                  />
+                </MessageEnter>
               );
             }
             if (msg.kind === "observation") {
               const prev = agent.messages[i - 1];
               if (prev?.kind === "action" && prev.tool === msg.tool) return null;
+              if (msg.tool === "validate_citations" && msg.summary && !msg.error) {
+                return (
+                  <MessageEnter key={i} animate={animateEnter}>
+                    <AgentCitationReportCard summary={msg.summary} data={msg.data} />
+                  </MessageEnter>
+                );
+              }
               return (
-                <AgentActionCard
-                  key={i}
-                  tool={msg.tool}
-                  params={{}}
-                  summary={msg.summary}
-                  error={msg.error}
-                  imageUrl={msg.imageUrl}
-                />
+                <MessageEnter key={i} animate={animateEnter}>
+                  <AgentActionCard
+                    tool={msg.tool}
+                    params={{}}
+                    summary={msg.summary}
+                    error={msg.error}
+                    imageUrl={msg.imageUrl}
+                  />
+                </MessageEnter>
               );
             }
             if (msg.kind === "summary") {
               return (
-                <div
-                  key={i}
-                  className="rounded-2xl rounded-bl-md border border-border/45 bg-white px-4 py-3 shadow-sm shadow-black/[0.02]"
-                >
-                  <AgentSummaryContent text={msg.summary?.text} />
-                </div>
+                <MessageEnter key={i} animate={animateEnter}>
+                  <div className="rounded-2xl rounded-bl-md border border-border/45 bg-white px-4 py-3 shadow-sm shadow-black/[0.02]">
+                    <AgentSummaryContent text={msg.summary?.text} />
+                  </div>
+                </MessageEnter>
               );
             }
             return null;
           })}
 
           {lastFailure && !agent.isRunning ? (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-              <p className="line-clamp-3">{lastFailure}</p>
-              {lastUserGoal ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="mt-2 h-7 text-xs"
-                  onClick={() => void agent.sendGoal(lastUserGoal)}
-                >
-                  再试一次
-                </Button>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      </div>
-
-      {/* 人在环：贴在输入上方，不占整块顶栏 */}
-      {agent.pendingCheckpoint && !agent.isRunning ? (
-        <div className="shrink-0 border-t border-amber-200/80 bg-amber-50/90 px-3 py-2.5">
-          <p className="text-xs font-medium text-amber-950">{agent.pendingCheckpoint.title}</p>
-          <p className="mt-0.5 text-[11px] text-amber-900/80">{agent.pendingCheckpoint.message}</p>
-          {isConfigCheckpoint ? (
-            <div className="mt-2 max-h-[min(52vh,28rem)] overflow-y-auto">
-              <AgentConfigQa
-                projectTitle={projectTitle ?? undefined}
-                existing={paperConfig}
-                saving={configSaving}
-                onComplete={handleConfigSaveAndApprove}
-                onSkip={() => void agent.resolveCheckpoint("approve")}
-              />
-            </div>
-          ) : (
-            <>
-              {agent.pendingCheckpoint.preview ? (
-                <pre className="mt-2 max-h-24 overflow-y-auto whitespace-pre-wrap rounded-md border border-amber-200/60 bg-white/80 p-2 text-[10px] text-[#3d4f46]">
-                  {agent.pendingCheckpoint.preview}
-                </pre>
-              ) : null}
-              {showRevise ? (
-                <div className="mt-2 space-y-2">
-                  <Textarea
-                    value={reviseNote}
-                    onChange={(e) => setReviseNote(e.target.value)}
-                    placeholder="想怎么改？可留空"
-                    className="min-h-[56px] resize-none text-xs"
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="h-8 flex-1 text-xs"
-                      onClick={() => {
-                        void agent.resolveCheckpoint("revise", reviseNote.trim() || undefined);
-                        setShowRevise(false);
-                        setReviseNote("");
-                      }}
-                    >
-                      提交修改意见
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 text-xs"
-                      onClick={() => setShowRevise(false)}
-                    >
-                      取消
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-2 flex gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="h-8 flex-1 text-xs"
-                    onClick={() => void agent.resolveCheckpoint("approve")}
-                  >
-                    批准
-                  </Button>
+            <MessageEnter animate>
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                <p className="line-clamp-3">{lastFailure}</p>
+                {lastUserGoal ? (
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="h-8 flex-1 text-xs"
-                    onClick={() => setShowRevise(true)}
+                    className="mt-2 h-7 text-xs"
+                    onClick={() => void agent.sendGoal(lastUserGoal)}
                   >
-                    需修改
+                    再试一次
                   </Button>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      ) : null}
-
-      {agent.pendingConfirm && !agent.isRunning ? (
-        <div className="shrink-0 border-t border-amber-200/80 bg-amber-50/90 px-3 py-2.5">
-          <p className="text-xs font-medium text-amber-950">
-            {agent.pendingConfirm.tool === "import_reference" ? "确认导入文献" : "需要你确认"}
-          </p>
-          <p className="mt-0.5 text-[11px] text-amber-900/80">{agent.pendingConfirm.message}</p>
-          {agent.pendingConfirm.preview ? (
-            <pre className="mt-2 max-h-20 overflow-y-auto whitespace-pre-wrap rounded-md border border-amber-200/60 bg-white/80 p-2 text-[10px] leading-relaxed text-[#3d4f46]">
-              {agent.pendingConfirm.preview}
-            </pre>
+                ) : null}
+              </div>
+            </MessageEnter>
           ) : null}
-          <div className="mt-2 flex gap-2">
-            <Button
-              type="button"
-              size="sm"
-              className="h-8 flex-1 text-xs"
-              onClick={() => void agent.resolveConfirm(true)}
-            >
-              {agent.pendingConfirm.tool === "import_reference" ? "确认导入" : "确认"}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-8 text-xs"
-              onClick={() => void agent.resolveConfirm(false)}
-            >
-              取消
-            </Button>
-          </div>
+
+          {liveProgress ? (
+            <MessageEnter animate>
+              <AgentWorkingIndicator label={liveProgress} />
+            </MessageEnter>
+          ) : null}
         </div>
-      ) : null}
+      </div>
+
+      {/* 人在环：贴在输入上方，滑入而非硬切 */}
+      <AnimatePresence initial={false}>
+        {agent.pendingCheckpoint && !agent.isRunning ? (
+          <motion.div
+            key="checkpoint"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            transition={{ duration: 0.32, ease: easeOut }}
+            className="shrink-0 border-t border-[#1a5632]/15 bg-[#f6f8f6] px-3 py-2.5"
+          >
+            <p className="text-xs font-medium text-[#122820]">{agent.pendingCheckpoint.title}</p>
+            <p className="mt-0.5 text-[11px] text-[#3d4f46]/90">{agent.pendingCheckpoint.message}</p>
+            {isConfigCheckpoint ? (
+              <div className="mt-2 max-h-[min(52vh,28rem)] overflow-y-auto">
+                <AgentConfigQa
+                  projectTitle={projectTitle ?? undefined}
+                  existing={paperConfig}
+                  saving={configSaving}
+                  onComplete={handleConfigSaveAndApprove}
+                  onSkip={() => void agent.resolveCheckpoint("approve")}
+                />
+              </div>
+            ) : (
+              <>
+                {agent.pendingCheckpoint.preview ? (
+                  <pre className="mt-2 max-h-24 overflow-y-auto whitespace-pre-wrap rounded-md border border-border/50 bg-white/90 p-2 text-[10px] text-[#3d4f46]">
+                    {agent.pendingCheckpoint.preview}
+                  </pre>
+                ) : null}
+                {showRevise ? (
+                  <div className="mt-2 space-y-2">
+                    <Textarea
+                      value={reviseNote}
+                      onChange={(e) => setReviseNote(e.target.value)}
+                      placeholder="想怎么改？可留空"
+                      className="min-h-[56px] resize-none text-xs"
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-8 flex-1 text-xs"
+                        onClick={() => {
+                          void agent.resolveCheckpoint("revise", reviseNote.trim() || undefined);
+                          setShowRevise(false);
+                          setReviseNote("");
+                        }}
+                      >
+                        提交修改意见
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 text-xs"
+                        onClick={() => setShowRevise(false)}
+                      >
+                        取消
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-2 flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-8 flex-1 text-xs"
+                      onClick={() => void agent.resolveCheckpoint("approve")}
+                    >
+                      批准
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 flex-1 text-xs"
+                      onClick={() => setShowRevise(true)}
+                    >
+                      需修改
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </motion.div>
+        ) : null}
+
+        {agent.pendingConfirm && !agent.isRunning ? (
+          <motion.div
+            key="confirm"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            transition={{ duration: 0.32, ease: easeOut }}
+            className="shrink-0 border-t border-[#1a5632]/15 bg-[#f6f8f6] px-3 py-2.5"
+          >
+            <p className="text-xs font-medium text-[#122820]">
+              {agent.pendingConfirm.tool === "import_reference" ? "确认导入文献" : "需要你确认"}
+            </p>
+            <p className="mt-0.5 text-[11px] text-[#3d4f46]/90">{agent.pendingConfirm.message}</p>
+            {agent.pendingConfirm.preview ? (
+              <pre className="mt-2 max-h-20 overflow-y-auto whitespace-pre-wrap rounded-md border border-border/50 bg-white/90 p-2 text-[10px] leading-relaxed text-[#3d4f46]">
+                {agent.pendingConfirm.preview}
+              </pre>
+            ) : null}
+            <div className="mt-2 flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 flex-1 text-xs"
+                onClick={() => void agent.resolveConfirm(true)}
+              >
+                {agent.pendingConfirm.tool === "import_reference" ? "确认导入" : "确认"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs"
+                onClick={() => void agent.resolveConfirm(false)}
+              >
+                取消
+              </Button>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       {/* 输入始终可见 */}
       <AgentInputBar
@@ -666,7 +848,13 @@ export function AgentPanel({
         isRunning={agent.isRunning}
         writeEnabled={WRITE_PUBLIC}
         prompts={quickPrompts}
-        onSend={(goal) => void agent.sendGoal(goal)}
+        onSend={(goal) => {
+          const firstUser = !agent.messages.some((m) => m.kind === "user");
+          const payload = firstUser
+            ? applyEntryModeToGoal(goal, entryMode)
+            : goal;
+          void agent.sendGoal(payload);
+        }}
         onCancel={agent.cancel}
       />
     </div>

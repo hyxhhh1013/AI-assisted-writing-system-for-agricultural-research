@@ -86,9 +86,9 @@ export const MAX_PLAN_CONTINUES = 0;
 
 /**
  * 意图未完成时的弱续跑（检索未导入 / 写节未写回）。
- * 综述需多轮搜+分批导满 ~30 篇，原 2 次续跑不够。
+ * 对话式定位：最多轻推 2 次，再不够则停下来问用户（勿伪装成流水线）。
  */
-export const MAX_INTENT_CONTINUES = 10;
+export const MAX_INTENT_CONTINUES = 2;
 
 /** 纯函数：agent 节点后的路由（单测友好） */
 export function routeAfterAgent(state: AgentGraphStateType): AgentGraphRoute {

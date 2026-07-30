@@ -7,9 +7,10 @@ import {
 } from "@/lib/agent/config-qa";
 
 describe("config Q&A", () => {
-  it("has six guided steps", () => {
-    expect(CONFIG_QA_STEPS).toHaveLength(6);
-    expect(CONFIG_QA_STEPS[0]?.id).toBe("paperTitle");
+  it("has guided steps including optional entry mode", () => {
+    expect(CONFIG_QA_STEPS.length).toBeGreaterThanOrEqual(6);
+    expect(CONFIG_QA_STEPS[0]?.id).toBe("agentEntryMode");
+    expect(CONFIG_QA_STEPS[0]?.optional).toBe(true);
     expect(CONFIG_QA_STEPS.at(-1)?.id).toBe("targetJournal");
     expect(CONFIG_QA_STEPS.at(-1)?.optional).toBe(true);
   });
