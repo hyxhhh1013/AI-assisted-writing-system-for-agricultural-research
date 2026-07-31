@@ -16,6 +16,14 @@ import {
   resolveApPipelineStep,
   shouldSkipPlanner,
 } from "@/lib/agent/core/goal-intents";
+import type { ToolObservation } from "@/lib/agent/types";
+
+/** 成功观察快捷构造 */
+const ok = (tool: string, data?: unknown): ToolObservation => ({
+  tool,
+  success: true,
+  ...(data !== undefined ? { data } : {}),
+});
 
 describe("goal-intents", () => {
   it("detects diagnose and draft goals", () => {
@@ -59,7 +67,7 @@ describe("goal-intents", () => {
 
   it("resolves pipeline steps after validate and refine", () => {
     const goal = "按 academic-paper 流程继续：起草→引用检查→双语摘要→审查";
-    const afterValidate = ["[validate_citations] 硬检通过，8 处可疑"];
+    const afterValidate = [ok("validate_citations")];
     expect(resolveApPipelineStep(goal, afterValidate)).toBe("citation_fix");
     const blocked = checkCitationSideTripGate(
       goal,
@@ -69,7 +77,7 @@ describe("goal-intents", () => {
     expect(blocked.ok).toBe(false);
     const afterRefine = [
       ...afterValidate,
-      "[refine_content] 已修正并写回 literature_body（3200 字）",
+      ok("refine_content", { persisted: true }),
     ];
     expect(resolveApPipelineStep(goal, afterRefine)).toBe("abstract");
     expect(
@@ -78,10 +86,11 @@ describe("goal-intents", () => {
   });
 
   it("detects citation apply after validate report", () => {
-    const lines = ["[validate_citations] 硬检通过，8 处可疑"];
-    expect(isCitationApplyGoal("好", lines)).toBe(true);
+    const observations = [ok("validate_citations")];
+    expect(isCitationApplyGoal("好", observations)).toBe(true);
     expect(isCitationApplyGoal("好", [])).toBe(false);
-    expect(shouldSkipPlanner("好", lines)).toBe(true);
+    expect(shouldSkipPlanner("好", observations)).toBe(true);
+    expect(citationCheckReportReady(observations)).toBe(true);
   });
 
   it("blocks side trips during citation check", () => {
@@ -97,12 +106,12 @@ describe("goal-intents", () => {
   });
 
   it("blocks side trips during citation apply until refine", () => {
-    const lines = ["[validate_citations] 报告就绪"];
-    const blocked = checkCitationSideTripGate("好", "import_reference", lines);
+    const observations = [ok("validate_citations")];
+    const blocked = checkCitationSideTripGate("好", "import_reference", observations);
     expect(blocked.ok).toBe(false);
     const afterRefine = [
-      ...lines,
-      "[refine_content] 已修正并写回 literature_body（3200 字）",
+      ...observations,
+      ok("refine_content", { persisted: true }),
     ];
     expect(hasCitationRefineSuccess(afterRefine)).toBe(true);
     expect(
@@ -112,16 +121,16 @@ describe("goal-intents", () => {
 
   it("blocks excessive read_reference before validate_citations", () => {
     const lines = [
-      "[read_reference] [1]",
-      "[read_reference] [2]",
-      "[read_reference] [3]",
-      "[read_reference] [4]",
+      ok("read_reference"),
+      ok("read_reference"),
+      ok("read_reference"),
+      ok("read_reference"),
     ];
     const blocked = checkCitationCheckGate("检查引用", "read_reference", lines);
     expect(blocked.ok).toBe(false);
     expect(checkCitationCheckGate("检查引用", "read_reference", [
       ...lines,
-      "[validate_citations] 硬检通过",
+      ok("validate_citations"),
     ]).ok).toBe(true);
   });
 
@@ -136,7 +145,7 @@ describe("goal-intents", () => {
     const after = checkDiagnoseInspectGate(
       "看看项目现在卡在哪",
       "search_external",
-      ["[inspect_project] 缺大纲"],
+      [ok("inspect_project")],
     );
     expect(after.ok).toBe(true);
   });
@@ -146,7 +155,7 @@ describe("goal-intents", () => {
     expect(blocked.ok).toBe(false);
 
     const afterInspect = checkDraftSearchGate("写引言", "search_knowledge", [
-      "[inspect_project] 已有大纲与文献",
+      ok("inspect_project"),
     ]);
     expect(afterInspect.ok).toBe(false);
   });

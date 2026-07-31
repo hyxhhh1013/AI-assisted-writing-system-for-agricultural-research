@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { X, Expand, ImageIcon, Trash2 } from "lucide-react";
+import { X, ImageIcon, Trash2 } from "lucide-react";
 
 interface EmbeddedImage {
   id: number;
@@ -16,18 +16,27 @@ interface EditorImageGalleryProps {
   onChange: (newContent: string) => void;
 }
 
-/** 从 Markdown 文本中提取所有嵌入图片 */
-function extractImages(content: string): EmbeddedImage[] {
-  const regex = /!\[([^\]]*)\]\(data:image\/[^;]+;base64,[^)]+\)/g;
+/**
+ * 匹配 Markdown 图片，两种来源都支持：
+ * - base64 内嵌：`![alt](data:image/png;base64,...)`
+ * - URL 引用：`![alt](/api/charts/xxx.png)`、`![alt](https://…png)`、相对路径
+ * 其中 URL 引用是 Agent generate_chart / 写作流水线 generateFigure 插入的格式。
+ */
+const IMAGE_MARKDOWN_PATTERN = String.raw`!\[([^\]]*)\]\(((?:data:image\/[^;]+;base64,[^)]+)|(?:(?:https?:\/\/|\/)[^)\s]*\.(?:png|jpe?g|svg|gif|webp|tiff?)(?:\?[^)]*)?))\)`;
+
+/** 从 Markdown 文本中提取所有嵌入图片（供单测导出） */
+export function extractImages(content: string): EmbeddedImage[] {
+  // 每次新建 regex（带 g 的共享实例会有 lastIndex 残留问题）
+  const re = new RegExp(IMAGE_MARKDOWN_PATTERN, "gi");
   const images: EmbeddedImage[] = [];
   let match: RegExpExecArray | null;
   let id = 0;
-  while ((match = regex.exec(content)) !== null) {
+  while ((match = re.exec(content)) !== null) {
     images.push({
       id: id++,
       markdown: match[0],
       alt: match[1] || "image",
-      src: match[0].match(/\(([^)]+)\)/)?.[1] || "",
+      src: match[2] || "",
     });
   }
   return images;
@@ -46,7 +55,10 @@ export function EditorImageGallery({ content, onChange }: EditorImageGalleryProp
   };
 
   const removeAll = () => {
-    const newContent = content.replace(/!\[([^\]]*)\]\(data:image\/[^;]+;base64,[^)]+\)\n*/g, "");
+    const newContent = content.replace(
+      new RegExp(`${IMAGE_MARKDOWN_PATTERN}\\n*`, "gi"),
+      "",
+    );
     onChange(newContent);
   };
 

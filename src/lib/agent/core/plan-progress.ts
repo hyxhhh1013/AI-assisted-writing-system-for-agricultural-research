@@ -153,7 +153,8 @@ export function buildContinueNudge(plan: AgentPlan): string {
     .filter((s) => s.status === "pending" || s.status === "running")
     .map((s) => `- [${s.status}] ${s.title}`);
   return [
-    "【系统】你过早结束了。计划仍有未完成项，请继续调用工具推进：",
+    "【系统】计划尚有未完成子任务，请继续调用工具推进；全部完成后可直接回复用户。",
+    "若确实需要用户澄清才能继续，请直接说明问题，不要重复调用相同工具。",
     ...lines,
     focus ? `当前应优先：${focus.title}` : "",
   ]

@@ -1,4 +1,5 @@
 import { scoreLiteratureRelevance } from "@/lib/agent/literature-relevance";
+import { storeLastAgentSearch } from "@/lib/agent/last-search";
 import { searchExternalLiteratureWithStats } from "@/lib/literature-search";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import type { ExternalLiteratureHit } from "@/contracts/literature";
@@ -40,7 +41,7 @@ export const searchExternalTool: ToolDefinition = {
     required: ["query"],
   },
   safety: "read",
-  async execute(params, _ctx: AgentContext) {
+  async execute(params, ctx: AgentContext) {
     const query = String(params.query ?? "").trim();
     if (!query) {
       return { success: false, error: "query 不能为空" };
@@ -96,6 +97,12 @@ export const searchExternalTool: ToolDefinition = {
     const hitsJsonHint = JSON.stringify(
       ranked.slice(0, topN).map((r) => JSON.parse(String(r.hitJson))),
     );
+    /** 存服务端：Agent 可用小体积 hitIndices 引用，避免重贴大 JSON */
+    const importableHits = ranked.map(
+      (r) => JSON.parse(String(r.hitJson)) as ExternalLiteratureHit,
+    );
+    storeLastAgentSearch(ctx.userId, importableHits);
+    const hitIndicesHint = ranked.slice(0, topN).map((r) => r.index);
 
     return {
       success: true,
@@ -105,13 +112,17 @@ export const searchExternalTool: ToolDefinition = {
         sourceCounts,
         count: ranked.length,
         items: ranked,
-        /** 便于 Agent 一次导入 Top-N */
+        /** 便于 Agent 一次导入 Top-N（整段 JSON，模型输出可能截断） */
         suggestedHitsJson: hitsJsonHint,
         suggestedCount: topN,
+        /** 推荐用 hitIndices 批量导入（小参数，最可靠）：import_reference(hitIndices=[...]) */
+        suggestedHitIndices: hitIndicesHint,
+        hitIndicesHint,
       },
       summary:
         `外部检索「${query}」返回 ${ranked.length} 篇（已按相关度排序）。${hint}。`
-        + `建议一次导入 Top ${topN}：import_reference(hitsJson=data.suggestedHitsJson, query, why)。`
+        + `建议一次导入 Top ${topN}：import_reference(hitIndices=[${hitIndicesHint.join(",")}], query, why)，`
+        + "或 hitsJson=data.suggestedHitsJson。"
         + (ranked.length > topN
           ? `其余可换 query 再搜，综述目标通常 ≥30 篇。`
           : ""),

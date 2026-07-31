@@ -74,7 +74,6 @@ export function createReadOnlyTools(): ToolDefinition[] {
     listReferencesTool,
     readReferenceTool,
     listPlotSourcesTool,
-    draftMechanismFigureTool,
     searchKnowledgeTool,
     searchExternalTool,
     getFullTextTool,
@@ -103,6 +102,7 @@ export function createAgentTools(): ToolDefinition[] {
       importReferenceTool,
       generateChartTool,
       generateXrdAnalysisTool,
+      draftMechanismFigureTool,
       buildArgumentBlueprintTool,
       writeBilingualAbstractTool,
     );

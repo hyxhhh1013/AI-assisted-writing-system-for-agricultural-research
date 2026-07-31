@@ -3,6 +3,8 @@
  * @see docs/plans/W3-AP-BEHAVIOR.md §4
  */
 
+import type { ToolObservation } from "@/lib/agent/types";
+
 export type ReadBeforeWriteResult =
   | { ok: true }
   | { ok: false; error: string };
@@ -22,19 +24,13 @@ const GATED_SECTIONS = new Set(["introduction", "discussion"]);
 
 const WRITE_TOOLS = new Set(["write_section", "refine_content"]);
 
-function lineMentionsContextTool(line: string): boolean {
-  return CONTEXT_TOOLS.some(
-    (name) => line.includes(`[${name}]`) || line.includes(`${name}`),
-  );
-}
-
 /**
- * @param recentToolLines 本会话 toolSummaries（含本轮已执行），形如 `[inspect_project] …`
+ * @param observations 本会话结构化工具结果（含本轮已执行）
  */
 export function checkReadBeforeWrite(
   toolName: string,
   params: Record<string, unknown>,
-  recentToolLines: readonly string[],
+  observations: readonly ToolObservation[],
 ): ReadBeforeWriteResult {
   if (!WRITE_TOOLS.has(toolName)) {
     return { ok: true };
@@ -45,7 +41,9 @@ export function checkReadBeforeWrite(
     return { ok: true };
   }
 
-  const hasContext = recentToolLines.some(lineMentionsContextTool);
+  const hasContext = observations.some(
+    (o) => o.success && (CONTEXT_TOOLS as readonly string[]).includes(o.tool),
+  );
   if (!hasContext) {
     return {
       ok: false,

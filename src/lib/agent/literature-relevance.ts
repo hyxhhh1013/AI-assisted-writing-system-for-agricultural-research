@@ -2,6 +2,8 @@
  * W3-AP-LIT-QUALITY — 文献与查询的轻量相关度（无 LLM）
  */
 
+import { expandRagQueries } from "@/lib/rag-query-expand";
+
 /** 低于此分且无 DOI 精确命中时，劝阻 / 拒绝导入 */
 export const MIN_IMPORT_RELEVANCE = 0.12;
 
@@ -74,6 +76,20 @@ export function scoreLiteratureRelevance(
   }
 
   const tokens = tokenizeQuery(q);
+  // 中文 query 对英文文献词重叠≈0（导致批量导入被相关度过滤拒掉）。
+  // 外部库文献基本是英文：有英文同义词时改用英文 token 打分，中文 2-gram 只作无同义词时的兜底。
+  if (tokens.length > 0 && /[一-鿿]/.test(q)) {
+    const en = new Set<string>();
+    for (const variant of expandRagQueries(q)) {
+      for (const t of tokenizeQuery(variant)) {
+        if (/[a-z]/i.test(t)) en.add(t);
+      }
+    }
+    if (en.size > 0) {
+      tokens.length = 0;
+      tokens.push(...en);
+    }
+  }
   if (tokens.length === 0) {
     return { score: 0.2, why: "查询词过短，相关度仅供参考", matchedTokens: [] };
   }

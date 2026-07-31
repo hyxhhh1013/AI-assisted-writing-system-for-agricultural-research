@@ -80,9 +80,10 @@ export const listPlotSourcesTool: ToolDefinition = {
         candidates: bundle.candidates,
         claimSample,
         howTo:
-          "调用 generate_chart(chartIndex=N) 即可用推荐配置出图；也可自备 csvData+chartType。",
+          "调用 generate_chart(chartIndex=N) 或 chartIndices=[0,1,…]（最多 6）出图；也可自备 csvData+chartType。"
+          + "期刊出图：误差棒列名加 _sd/_se/_ci 后缀；传 x_label/y_label 带单位；多系列用多列数据。",
       },
-      summary: `发现 ${bundle.candidates.length} 个可配图候选（数据源 ${bundle.sources.length} 个，已有图 ${bundle.existingChartCount} 张）。用 generate_chart(chartIndex=0…) 生成。`,
+      summary: `发现 ${bundle.candidates.length} 个可配图候选（数据源 ${bundle.sources.length} 个，已有图 ${bundle.existingChartCount} 张）。用 generate_chart(chartIndex=0…) 或 chartIndices 批量生成。`,
     };
   },
 };

@@ -9,6 +9,7 @@ import { persistAgentChart } from "@/lib/agent/chart-persist";
 import {
   loadAgentPlotSources,
   resolvePlotCandidate,
+  type AgentPlotSourcesBundle,
 } from "@/lib/agent/plot-sources";
 import { appendAgentSectionMarkdown } from "@/lib/agent/project-persist";
 import {
@@ -25,6 +26,7 @@ import {
 } from "@/lib/chart-runner";
 
 const MAX_CSV_CHARS = 100_000;
+const MAX_BATCH_CHARTS = 6;
 
 function normalizeChartType(raw: string): string {
   const t = raw.trim();
@@ -61,16 +63,181 @@ function buildFigureSpecEnc(params: {
   return spec ? encodeChartAssetReplay(spec) : undefined;
 }
 
+function parseChartIndices(params: Record<string, unknown>): number[] {
+  const out: number[] = [];
+  const push = (n: unknown) => {
+    const v = Number(n);
+    if (Number.isFinite(v)) out.push(Math.floor(v));
+  };
+
+  if (params.chartIndices != null) {
+    const raw = params.chartIndices;
+    if (typeof raw === "string") {
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (Array.isArray(parsed)) parsed.forEach(push);
+      } catch {
+        String(raw)
+          .split(/[,，\s]+/)
+          .filter(Boolean)
+          .forEach(push);
+      }
+    } else if (Array.isArray(raw)) {
+      raw.forEach(push);
+    }
+  }
+
+  if (out.length === 0 && params.chartIndex != null) {
+    push(params.chartIndex);
+  }
+
+  return [...new Set(out)];
+}
+
+async function generateOneChart(input: {
+  ctx: AgentContext;
+  csvData: string;
+  chartType: string;
+  title: string;
+  xLabel: string;
+  yLabel: string;
+  caption: string;
+  sectionKey?: string;
+  persistToProject: boolean;
+  extras: Record<string, unknown>;
+  chartIndex?: number;
+  /** 期刊样式预设：nature（通用/Nature 风）/ agr_journal（农业期刊双栏）/ print_bw（黑白打印） */
+  preset?: "nature" | "agr_journal" | "print_bw";
+}): Promise<{
+  success: boolean;
+  error?: string;
+  data?: Record<string, unknown>;
+  summary?: string;
+}> {
+  const chartType = normalizeChartType(input.chartType);
+  if (!isAgentChartType(chartType)) {
+    return {
+      success: false,
+      error: `无效 chartType: ${chartType || "（空）"}。手写 CSV 时必填合法类型`,
+    };
+  }
+  if (!input.csvData) {
+    return {
+      success: false,
+      error: "缺少数据：请先 list_plot_sources 后传 chartIndex，或提供 csvData+chartType",
+    };
+  }
+  if (input.csvData.length > MAX_CSV_CHARS) {
+    return { success: false, error: `csvData 过长（>${MAX_CSV_CHARS} 字符）` };
+  }
+
+  const title = input.title || "图表";
+  const caption = input.caption || title;
+  const style = {
+    preset: input.preset || "nature",
+    dpi: 600,
+    export_formats: "png,svg",
+  };
+  const config: Record<string, unknown> = {
+    chart_type: chartType,
+    title,
+    ...(input.xLabel ? { x_label: input.xLabel } : {}),
+    ...(input.yLabel ? { y_label: input.yLabel } : {}),
+    style,
+    ...input.extras,
+  };
+
+  try {
+    const generated = await runChartGeneration({
+      dataBuffer: Buffer.from(input.csvData, "utf-8"),
+      dataFileName: "agent-data.csv",
+      config,
+      mode: "generic",
+    });
+
+    const figureSpecEnc = buildFigureSpecEnc({
+      csvData: input.csvData,
+      chartType,
+      title,
+      caption,
+      xLabel: input.xLabel,
+      yLabel: input.yLabel,
+      style: isRecord(input.extras.style)
+        ? (input.extras.style as Record<string, unknown>)
+        : style,
+    });
+
+    let persisted: ProjectChartAsset | null = null;
+    let insertedSection: string | undefined;
+
+    if (input.persistToProject) {
+      persisted = await persistAgentChart(input.ctx.userId, input.ctx.projectId!, {
+        figureId: chartType,
+        caption,
+        imageUrl: generated.imageUrl,
+        svgUrl: generated.svgUrl,
+        pdfUrl: generated.pdfUrl,
+        sectionKey: input.sectionKey,
+        figureSpecEnc,
+      });
+    }
+
+    if (input.sectionKey) {
+      const md = `\n\n![${caption}](${generated.imageUrl})\n\n`;
+      await appendAgentSectionMarkdown(
+        input.ctx.userId,
+        input.ctx.projectId!,
+        input.sectionKey,
+        md,
+      );
+      insertedSection = input.sectionKey;
+    }
+
+    const bits = [`已生成 ${chartType}「${title}」`];
+    if (persisted) bits.push("已登记到项目图表库");
+    if (insertedSection) bits.push(`已插入章节 ${insertedSection}`);
+    if (figureSpecEnc) bits.push("可回放编辑");
+
+    return {
+      success: true,
+      data: {
+        chartType,
+        chartIndex: input.chartIndex,
+        imageUrl: generated.imageUrl,
+        svgUrl: generated.svgUrl,
+        pdfUrl: generated.pdfUrl,
+        fileName: generated.fileName,
+        persisted,
+        insertedSection,
+        hasReplay: Boolean(figureSpecEnc),
+      },
+      summary: bits.join("；"),
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, error: message };
+  }
+}
+
 export const generateChartTool: ToolDefinition = {
   name: "generate_chart",
   description:
-    "生成科学图表并默认写入项目图表库。优先：先 list_plot_sources，再 generate_chart(chartIndex=N)。传 sectionKey（如 results）会把图插入该章节正文。也可直接传 csvData+chartType。无数据时不要编造数值",
+    "生成期刊级图表并写入项目图表库。先 list_plot_sources，再 generate_chart(chartIndex=N) 或 chartIndices=[0,1,2] 一次多张（最多 6）。也可 csvData+chartType。"
+    + "期刊出图要点：①误差棒——数据列加 _sd/_se/_ci 后缀（如「产量,产量_sd」）自动渲染；"
+    + "②轴标签带单位——务必传 x_label/y_label（如 y_label=\"产量 (kg/ha)\"）；"
+    + "③多系列对比——多列数据即可，图例自动出现；④选型——对比/分组→bar_grouped，趋势→line，占比→pie，热区→heatmap，森林图→forest（四列：研究,估计值,CI下限,CI上限）。"
+    + "无数据不要编造数值",
   parameters: {
     type: "object",
     properties: {
       chartIndex: {
         type: "number",
-        description: "list_plot_sources 返回的候选 index（优先；有则无需 csvData）",
+        description: "list_plot_sources 返回的单个候选 index",
+      },
+      chartIndices: {
+        type: "string",
+        description:
+          "批量：JSON 数组字符串，如 \"[0,1,2]\"（与 chartIndex 二选一；优先 indices）",
       },
       chartType: {
         type: "string",
@@ -81,7 +248,7 @@ export const generateChartTool: ToolDefinition = {
         type: "string",
         description: "CSV 数据（首行为表头），例：温度,N₂,CO₂\\n500,44,44",
       },
-      title: { type: "string", description: "图表标题（可覆盖推荐配置）" },
+      title: { type: "string", description: "图表标题（可覆盖推荐配置；批量时忽略）" },
       xLabel: { type: "string", description: "X 轴标签" },
       yLabel: { type: "string", description: "Y 轴标签" },
       caption: {
@@ -97,6 +264,11 @@ export const generateChartTool: ToolDefinition = {
         type: "string",
         description: "可选：额外 config 字段 JSON 对象字符串",
       },
+      preset: {
+        type: "string",
+        description: "期刊样式预设：nature（通用/Nature 风，单栏 89mm）| agr_journal（农业期刊双栏 170mm，9pt）| print_bw（黑白打印）",
+        enum: ["nature", "agr_journal", "print_bw"],
+      },
       persistToProject: {
         type: "string",
         description: "是否写入 Project.charts（默认 true）",
@@ -110,50 +282,6 @@ export const generateChartTool: ToolDefinition = {
       return { success: false, error: "generate_chart 需要关联 projectId" };
     }
 
-    let chartType = String(params.chartType ?? "").trim();
-    let csvData = String(params.csvData ?? "").trim();
-    let title = String(params.title ?? "").trim();
-    let xLabel = String(params.xLabel ?? "").trim();
-    let yLabel = String(params.yLabel ?? "").trim();
-
-    const rawIndex = Number(params.chartIndex);
-    if (Number.isFinite(rawIndex)) {
-      const bundle = await loadAgentPlotSources(ctx.userId, ctx.projectId);
-      if (!bundle) {
-        return { success: false, error: "项目不存在或无权访问" };
-      }
-      const resolved = resolvePlotCandidate(bundle, Math.floor(rawIndex));
-      if ("error" in resolved) {
-        return { success: false, error: resolved.error };
-      }
-      csvData = resolved.csv;
-      chartType = resolved.figureId;
-      if (!title) title = resolved.cfg.title;
-      if (!xLabel && resolved.cfg.xLabel) xLabel = resolved.cfg.xLabel;
-      if (!yLabel && resolved.cfg.yLabel) yLabel = resolved.cfg.yLabel;
-    }
-
-    if (!csvData) {
-      return {
-        success: false,
-        error:
-          "缺少数据：请先 list_plot_sources 后传 chartIndex，或提供 csvData+chartType；不要编造数值",
-      };
-    }
-    if (csvData.length > MAX_CSV_CHARS) {
-      return { success: false, error: `csvData 过长（>${MAX_CSV_CHARS} 字符）` };
-    }
-
-    chartType = normalizeChartType(chartType);
-    if (!isAgentChartType(chartType)) {
-      return {
-        success: false,
-        error: `无效 chartType: ${chartType || "（空）"}。手写 CSV 时必填合法类型`,
-      };
-    }
-
-    title = title || "图表";
-    const caption = String(params.caption ?? "").trim() || title;
     const persistToProject = parsePersistToProject(params.persistToProject);
     const sectionKeyRaw = params.sectionKey ? String(params.sectionKey).trim() : "";
     const sectionKey =
@@ -181,86 +309,121 @@ export const generateChartTool: ToolDefinition = {
       }
     }
 
-    const style = { preset: "nature", dpi: 600, export_formats: "png,svg" };
-    const config: Record<string, unknown> = {
-      chart_type: chartType,
-      title,
-      ...(xLabel ? { x_label: xLabel } : {}),
-      ...(yLabel ? { y_label: yLabel } : {}),
-      style,
-      ...extras,
-    };
+    const indices = parseChartIndices(params);
+    if (indices.length > MAX_BATCH_CHARTS) {
+      return {
+        success: false,
+        error: `一次最多生成 ${MAX_BATCH_CHARTS} 张图，请拆分 chartIndices`,
+      };
+    }
 
-    try {
-      const generated = await runChartGeneration({
-        dataBuffer: Buffer.from(csvData, "utf-8"),
-        dataFileName: "agent-data.csv",
-        config,
-        mode: "generic",
-      });
+    // —— 批量：按 list_plot_sources 候选出多图 ——
+    if (indices.length >= 1) {
+      const bundle = await loadAgentPlotSources(ctx.userId, ctx.projectId);
+      if (!bundle) {
+        return { success: false, error: "项目不存在或无权访问" };
+      }
 
-      const figureSpecEnc = buildFigureSpecEnc({
-        csvData,
-        chartType,
-        title,
-        caption,
-        xLabel,
-        yLabel,
-        style: isRecord(extras.style) ? (extras.style as Record<string, unknown>) : style,
-      });
-
-      let persisted: ProjectChartAsset | null = null;
-      let insertedSection: string | undefined;
-
-      if (persistToProject) {
-        persisted = await persistAgentChart(ctx.userId, ctx.projectId, {
-          figureId: chartType,
-          caption,
-          imageUrl: generated.imageUrl,
-          svgUrl: generated.svgUrl,
-          pdfUrl: generated.pdfUrl,
+      const results: Array<Record<string, unknown>> = [];
+      const errors: string[] = [];
+      for (const idx of indices) {
+        const one = await generateFromBundle({
+          ctx,
+          bundle,
+          chartIndex: idx,
+          titleOverride: indices.length === 1 ? String(params.title ?? "").trim() : "",
+          xLabelOverride: String(params.xLabel ?? "").trim(),
+          yLabelOverride: String(params.yLabel ?? "").trim(),
+          captionOverride: String(params.caption ?? "").trim(),
           sectionKey: sectionKey ?? undefined,
-          figureSpecEnc,
+          persistToProject,
+          preset: parsePresetParam(params.preset),
+          extras,
         });
+        if (!one.success) {
+          errors.push(`[${idx}] ${one.error ?? "失败"}`);
+          continue;
+        }
+        if (one.data) results.push(one.data);
       }
 
-      if (sectionKey) {
-        const md = `\n\n![${caption}](${generated.imageUrl})\n\n`;
-        await appendAgentSectionMarkdown(
-          ctx.userId,
-          ctx.projectId,
-          sectionKey,
-          md,
-        );
-        insertedSection = sectionKey;
+      if (results.length === 0) {
+        return {
+          success: false,
+          error: errors.join("；") || "批量出图失败",
+        };
       }
-
-      const bits = [`已生成 ${chartType}「${title}」`];
-      if (persisted) bits.push("已登记到项目图表库");
-      if (insertedSection) bits.push(`已插入章节 ${insertedSection}`);
-      if (figureSpecEnc) bits.push("可回放编辑");
 
       return {
         success: true,
         data: {
-          chartType,
-          chartIndex: Number.isFinite(rawIndex) ? Math.floor(rawIndex) : undefined,
-          imageUrl: generated.imageUrl,
-          svgUrl: generated.svgUrl,
-          pdfUrl: generated.pdfUrl,
-          fileName: generated.fileName,
-          persisted,
-          insertedSection,
-          hasReplay: Boolean(figureSpecEnc),
+          count: results.length,
+          charts: results,
+          errors: errors.length ? errors : undefined,
         },
-        summary: bits.join("；"),
+        summary:
+          `已生成 ${results.length} 张图`
+          + (errors.length ? `（${errors.length} 张失败）` : ""),
       };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return { success: false, error: message };
     }
+
+    // —— 单次：手写 csvData ——
+    return generateOneChart({
+      ctx,
+      csvData: String(params.csvData ?? "").trim(),
+      chartType: String(params.chartType ?? "").trim(),
+      title: String(params.title ?? "").trim(),
+      xLabel: String(params.xLabel ?? "").trim(),
+      yLabel: String(params.yLabel ?? "").trim(),
+      caption: String(params.caption ?? "").trim(),
+      sectionKey: sectionKey ?? undefined,
+      persistToProject,
+      preset: parsePresetParam(params.preset),
+      extras,
+    });
   },
 };
+
+async function generateFromBundle(input: {
+  ctx: AgentContext;
+  bundle: AgentPlotSourcesBundle;
+  chartIndex: number;
+  titleOverride: string;
+  xLabelOverride: string;
+  yLabelOverride: string;
+  captionOverride: string;
+  sectionKey?: string;
+  persistToProject: boolean;
+  preset?: "nature" | "agr_journal" | "print_bw";
+  extras: Record<string, unknown>;
+}) {
+  const resolved = resolvePlotCandidate(input.bundle, input.chartIndex);
+  if ("error" in resolved) {
+    return { success: false as const, error: resolved.error };
+  }
+  return generateOneChart({
+    ctx: input.ctx,
+    csvData: resolved.csv,
+    chartType: resolved.figureId,
+    title: input.titleOverride || resolved.cfg.title,
+    xLabel: input.xLabelOverride || resolved.cfg.xLabel || "",
+    yLabel: input.yLabelOverride || resolved.cfg.yLabel || "",
+    caption: input.captionOverride || input.titleOverride || resolved.cfg.title,
+    sectionKey: input.sectionKey,
+    persistToProject: input.persistToProject,
+    preset: input.preset,
+    extras: input.extras,
+    chartIndex: input.chartIndex,
+  });
+}
+
+/** 校验期刊预设参数，非法回退 nature */
+function parsePresetParam(
+  raw: unknown,
+): "nature" | "agr_journal" | "print_bw" {
+  const v = String(raw ?? "").trim();
+  return v === "agr_journal" || v === "print_bw" ? v : "nature";
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

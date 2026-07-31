@@ -87,6 +87,13 @@ export function buildToolConfirmMessage(
     if (doi) {
       return { message: `确认按 DOI「${doi}」检索并导入到参考文献？` };
     }
+    if (params.hitIndices != null && String(params.hitIndices).trim()) {
+      return {
+        message:
+          `确认按 hitIndices=[${String(params.hitIndices)}] 批量导入文献到项目参考文献？`
+          + "批准后将按最近一次检索结果的对应编号导入。",
+      };
+    }
   }
 
   return {

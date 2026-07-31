@@ -119,8 +119,10 @@ export async function* runAgentGraphLoop(
         awaitingCheckpoint: null,
         awaitingConfirm: null,
         grantedConfirm: null,
-        // 诊断跟聊：清空上轮工具摘要，强制本轮重新 inspect
-        ...(followUp && diagnoseGoal ? { toolSummaries: [] as string[] } : {}),
+        // 诊断跟聊：清空上轮工具摘要与观察，强制本轮重新 inspect
+        ...(followUp && diagnoseGoal
+          ? { toolSummaries: [] as string[], observations: [] }
+          : {}),
       }
     : {
         goal,
@@ -132,7 +134,7 @@ export async function* runAgentGraphLoop(
   if (followUp) {
     const nudge = mergeFollowUpGoalHint(
       goal,
-      initialState.toolSummaries ?? [],
+      initialState.observations ?? [],
     );
     if (nudge) {
       initialState = {
@@ -304,6 +306,15 @@ export async function* runAgentGraphLoop(
       grantedConfirm: null,
       toolCallCount: (initialState.toolCallCount ?? 0) + 1,
       toolSummaries: [...(initialState.toolSummaries ?? []), line],
+      observations: [
+        ...(initialState.observations ?? []),
+        {
+          tool: tool.name,
+          success: result.success,
+          error: result.error,
+          data: result.data,
+        },
+      ],
       messages: [
         ...(initialState.messages ?? []),
         {

@@ -7,7 +7,7 @@ import {
   markFocusRunning,
   planHasPendingWork,
 } from "@/lib/agent/core/plan-progress";
-import { routeAfterAgent } from "@/lib/agent/langgraph/state";
+import { MAX_PLAN_CONTINUES, routeAfterAgent } from "@/lib/agent/langgraph/state";
 import type { AgentGraphStateType } from "@/lib/agent/langgraph/state";
 import { COST_LIMITS } from "@/lib/agent/core/safety";
 
@@ -64,8 +64,10 @@ describe("routeAfterAgent plan continue", () => {
       iteration: 1,
       toolCallCount: 0,
       planContinueCount: 0,
+      reflectCount: 0,
       finalThought: "done early",
       toolSummaries: [],
+      observations: [],
       pendingToolCalls: [],
       finished: false,
       error: null,
@@ -78,13 +80,56 @@ describe("routeAfterAgent plan continue", () => {
     };
   }
 
-  it("finalizes when plan pending but force-continue disabled (对话式，不绑架用户)", () => {
+  it("finalizes when plan pending but no tool progress yet (开局提问不绑架)", () => {
     expect(
       routeAfterAgent(
         base({
           plan: markFocusRunning(plan()),
           pendingToolCalls: [],
           finished: false,
+          toolSummaries: [],
+        }),
+      ),
+    ).toBe("finalize");
+  });
+
+  it("re-enters agent to continue plan when tool progress exists and within budget", () => {
+    expect(
+      routeAfterAgent(
+        base({
+          plan: markFocusRunning(plan()),
+          pendingToolCalls: [],
+          finished: false,
+          toolSummaries: ["[search_knowledge] 完成"],
+          planContinueCount: 1,
+        }),
+      ),
+    ).toBe("agent");
+  });
+
+  it("delivers the last nudge at exactly MAX_PLAN_CONTINUES", () => {
+    expect(
+      routeAfterAgent(
+        base({
+          plan: markFocusRunning(plan()),
+          pendingToolCalls: [],
+          finished: false,
+          toolSummaries: ["[search_knowledge] 完成"],
+          planContinueCount: MAX_PLAN_CONTINUES,
+        }),
+      ),
+    ).toBe("agent");
+  });
+
+  it("finalizes when plan continue budget exhausted (> MAX_PLAN_CONTINUES)", () => {
+    expect(
+      routeAfterAgent(
+        base({
+          plan: markFocusRunning(plan()),
+          pendingToolCalls: [],
+          finished: false,
+          toolSummaries: ["[search_knowledge] 完成"],
+          planContinueCount: MAX_PLAN_CONTINUES + 1,
         }),
       ),
     ).toBe("finalize");

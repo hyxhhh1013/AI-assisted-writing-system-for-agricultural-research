@@ -55,8 +55,10 @@ import {
   resolveApPipelineStep,
   reviewRefsShortageNudge,
   shouldSkipPlanner,
+  sumImportedCount,
 } from "@/lib/agent/core/goal-intents";
 import { enrichImportReferenceParams } from "@/lib/agent/literature-relevance";
+import { analyzeReflection, MAX_REFLECT_ROUNDS } from "@/lib/agent/core/reflect";
 import { MAX_INTENT_CONTINUES } from "@/lib/agent/langgraph/state";
 import { formatToolObservationForLlm } from "@/lib/agent/observation-memory";
 import { loadAgentProject } from "@/lib/agent/project-loader";
@@ -64,23 +66,8 @@ import {
   appendPhasePackToBriefing,
 } from "@/lib/agent/phase-task-pack";
 import { formatAgentProjectBriefing } from "@/lib/agent/project-briefing";
+import type { ToolObservation } from "@/lib/agent/types";
 
-/** 从工具摘要统计已成功导入篇数（含批量） */
-function countImportedRefsFromSummaries(lines: readonly string[]): number {
-  let n = 0;
-  for (const l of lines) {
-    if (!l.includes("[import_reference]")) continue;
-    const batch = l.match(/已批量导入\s*(\d+)\s*篇/);
-    if (batch) {
-      n += Number(batch[1]);
-      continue;
-    }
-    if (/已导入参考文献|已导入/.test(l) && !/失败|待确认/.test(l)) {
-      n += 1;
-    }
-  }
-  return n;
-}
 import {
   appendMemoryToBriefing,
   buildRecentAgentMemoryBlock,
@@ -179,7 +166,7 @@ export async function planNode(
     }
 
     // 诊断 / 单节起草 / 引用核查·修正：跳过 Planner LLM，直接对话
-    if (shouldSkipPlanner(state.goal, state.toolSummaries ?? [])) {
+    if (shouldSkipPlanner(state.goal, state.observations ?? [])) {
       events.push({ type: "agent/status", status: "thinking" });
       return { events, plan: null };
     }
@@ -237,7 +224,7 @@ export async function agentNode(
   events.push({ type: "agent/status", status: "thinking" });
 
   const plan = state.plan ? markFocusRunning(state.plan) : null;
-  // 对话式：不再每轮注入【计划焦点】假 user（Plan 仅作 UI / 收尾提示）
+  // 不每轮注入【计划焦点】假 user；改为提前结束时用 buildContinueNudge 轻推（见下方 canContinue）
   const extraMessages: AgentGraphStateType["messages"] = [];
 
   const systemPrompt = buildAgentSystemPrompt(tools, agentContext.projectBriefing);
@@ -287,24 +274,29 @@ export async function agentNode(
     const canContinue =
       planHasPendingWork(plan)
       && nextIteration < agentContext.budget.maxIterations
-      && state.planContinueCount < MAX_PLAN_CONTINUES;
+      // 与 routeAfterAgent 的 ≤ 对齐：确保第 MAX_PLAN_CONTINUES 次 nudge 也能送达
+      && state.planContinueCount + 1 <= MAX_PLAN_CONTINUES
+      // 仅当本轮已有工具进展时才续跑：Agent 开局就停下来提问时，不强制继续（避免绑架对话）
+      && state.toolSummaries.length > 0;
 
     updates.pendingToolCalls = [];
 
-    const lines = state.toolSummaries;
-    const searchedOk = lines.some(
-      (l) =>
-        (l.includes("[search_external]") || l.includes("[search_knowledge]"))
-        && !l.includes("失败"),
+    const observations = state.observations;
+    const searchedOk = observations.some(
+      (o) =>
+        (o.tool === "search_external" || o.tool === "search_knowledge")
+        && o.success,
     );
-    const importCount = countImportedRefsFromSummaries(lines);
+    const importCount = sumImportedCount(observations);
     const importTarget = parseLiteratureImportTarget(state.goal);
     const refTotal = agentContext.projectSnapshot?.references?.length ?? 0;
     const importedOk = refTotal >= importTarget || importCount >= importTarget;
-    const wroteOk = lines.some(
-      (l) =>
-        l.includes("[write_section]")
-        && (l.includes("已写回") || l.includes("已生成并写回")),
+    const wroteOk = observations.some(
+      (o) =>
+        o.tool === "write_section"
+        && o.success
+        && o.data != null
+        && (o.data as { persisted?: unknown }).persisted != null,
     );
     const reviewShort =
       isReviewWritingGoal(state.goal)
@@ -319,10 +311,10 @@ export async function agentNode(
     const reviewWriteIncomplete =
       isReviewWritingGoal(state.goal) && importedOk && !wroteOk;
     const citeCheckIncomplete =
-      isCitationCheckGoal(state.goal) && !citationCheckReportReady(lines);
+      isCitationCheckGoal(state.goal) && !citationCheckReportReady(observations);
     const citeApplyIncomplete =
-      isCitationApplyGoal(state.goal, lines) && !hasCitationRefineSuccess(lines);
-    const pipelineStep = resolveApPipelineStep(state.goal, lines);
+      isCitationApplyGoal(state.goal, observations) && !hasCitationRefineSuccess(observations);
+    const pipelineStep = resolveApPipelineStep(state.goal, observations);
     const pipelineFixIncomplete = pipelineStep === "citation_fix";
     const pipelineAbstractIncomplete = pipelineStep === "abstract";
     const pipelineReviewIncomplete = pipelineStep === "review";
@@ -373,7 +365,8 @@ export async function agentNode(
         { role: "user", content: buildContinueNudge(plan) },
       ];
       events.push({ type: "agent/plan", plan: updates.plan! });
-    } else if (intentNudge) {
+    } else if (intentNudge && state.toolSummaries.length > 0) {
+      // 与计划续跑同一门卫：开局就停下提问时不强推
       updates.finished = false;
       updates.planContinueCount = state.planContinueCount + 1;
       updates.messages = [
@@ -444,7 +437,7 @@ export async function agentNode(
       let hint = intentAsk;
       const suppressPlanHint =
         isAcademicPaperPipelineGoal(state.goal)
-        || isCitationApplyGoal(state.goal, lines)
+        || isCitationApplyGoal(state.goal, observations)
         || isCitationCheckGoal(state.goal);
       if (!hint && !suppressPlanHint && planHasPendingWork(plan) && plan) {
         const left = plan.subtasks
@@ -475,6 +468,7 @@ export async function agentNode(
 
   updates.pendingToolCalls = response.toolCalls;
   updates.planContinueCount = 0; // 有工具进展则重置续跑计数
+  // reflectCount 不在此重置：仅在 write_section 成功时于 toolsNode 重置，避免「验证→修正→再验证」无限循环
   if (updates.plan) {
     events.push({ type: "agent/plan", plan: updates.plan });
   }
@@ -494,6 +488,9 @@ export async function toolsNode(
   const events: AgentSSEEvent[] = [{ type: "agent/status", status: "executing" }];
   const newMessages: AgentGraphStateType["messages"] = [];
   const newSummaries: string[] = [];
+  const newObservations: ToolObservation[] = [];
+  /** 本轮是否有 write_section 成功写回：新写入需重新给反思预算 */
+  let reflectReset = false;
   let toolCallCount = state.toolCallCount;
   let error: string | null = null;
   let finished = false;
@@ -563,11 +560,11 @@ export async function toolsNode(
     }
 
     // agent/action 在门禁全部通过后再发，避免被拒的 search/写节污染时间线
-    const recentLines = [...state.toolSummaries, ...newSummaries];
+    const recentObs = [...state.observations, ...newObservations];
     const diagnoseGate = checkDiagnoseInspectGate(
       state.goal,
       tool.name,
-      recentLines,
+      recentObs,
     );
     if (!diagnoseGate.ok) {
       newSummaries.push(`[${tool.name}] 失败: ${diagnoseGate.error}`);
@@ -588,7 +585,7 @@ export async function toolsNode(
     const draftSearchGate = checkDraftSearchGate(
       state.goal,
       tool.name,
-      recentLines,
+      recentObs,
     );
     if (!draftSearchGate.ok) {
       newSummaries.push(`[${tool.name}] 失败: ${draftSearchGate.error}`);
@@ -609,7 +606,7 @@ export async function toolsNode(
     const citationGate = checkCitationCheckGate(
       state.goal,
       tool.name,
-      recentLines,
+      recentObs,
     );
     if (!citationGate.ok) {
       newSummaries.push(`[${tool.name}] 失败: ${citationGate.error}`);
@@ -630,7 +627,7 @@ export async function toolsNode(
     const citationSideTripGate = checkCitationSideTripGate(
       state.goal,
       tool.name,
-      recentLines,
+      recentObs,
     );
     if (!citationSideTripGate.ok) {
       newSummaries.push(`[${tool.name}] 失败: ${citationSideTripGate.error}`);
@@ -649,7 +646,7 @@ export async function toolsNode(
     }
 
     // 先读后写：须在自动补蓝图之前，避免未读上下文就烧 LLM 生成蓝图
-    const readGate = checkReadBeforeWrite(tool.name, params, recentLines);
+    const readGate = checkReadBeforeWrite(tool.name, params, recentObs);
     if (!readGate.ok) {
       newSummaries.push(`[${tool.name}] 失败: ${readGate.error}`);
       newMessages.push({
@@ -693,6 +690,12 @@ export async function toolsNode(
           tool: step.tool,
           result: step.result,
           error: step.result.success ? undefined : step.result.error,
+        });
+        newObservations.push({
+          tool: step.tool,
+          success: step.result.success,
+          error: step.result.error,
+          data: step.result.data,
         });
         plan = advancePlanAfterTool(plan, step.tool, step.result.success);
         noteToolProgress(
@@ -786,9 +789,11 @@ export async function toolsNode(
           pendingToolCalls: [],
           toolCallCount,
           toolSummaries: newSummaries,
+          observations: newObservations,
           messages: newMessages,
           events,
           plan,
+          ...(reflectReset ? { reflectCount: 0 } : {}),
           awaitingConfirm: confirmReq,
           grantedConfirm: null,
           finished: true,
@@ -818,6 +823,13 @@ export async function toolsNode(
         result,
         error: result.success ? undefined : result.error,
       });
+      newObservations.push({
+        tool: tool.name,
+        success: result.success,
+        error: result.error,
+        data: result.data,
+      });
+      if (result.success && tool.name === "write_section") reflectReset = true;
       plan = advancePlanAfterTool(plan, tool.name, result.success);
       if (result.success && SNAPSHOT_REFRESH_TOOLS.has(tool.name)) {
         await refreshAgentProjectContext(agentContext);
@@ -875,9 +887,11 @@ export async function toolsNode(
           pendingToolCalls: [],
           toolCallCount,
           toolSummaries: newSummaries,
+          observations: newObservations,
           messages: newMessages,
           events,
           plan,
+          ...(reflectReset ? { reflectCount: 0 } : {}),
           awaitingCheckpoint: checkpoint,
           finished: true,
         };
@@ -887,6 +901,7 @@ export async function toolsNode(
       newSummaries.push(`[${tool.name}] 失败: ${errMsg}`);
       newMessages.push({ role: "user", content: `Tool result (${tool.name}):\n${errMsg}` });
       events.push({ type: "agent/observation", tool: tool.name, error: errMsg });
+      newObservations.push({ tool: tool.name, success: false, error: errMsg });
       plan = advancePlanAfterTool(plan, tool.name, false);
     }
   }
@@ -901,12 +916,43 @@ export async function toolsNode(
     pendingToolCalls: [],
     toolCallCount,
     toolSummaries: newSummaries,
+    observations: newObservations,
     messages: newMessages,
     events,
     error,
+    ...(reflectReset ? { reflectCount: 0 } : {}),
     finished: finished || undefined,
     plan,
     grantedConfirm,
+  };
+}
+
+/** 反思节点：写完章节未自查时轻推验证/修正，再回 agent；否则放行收尾 */
+export async function reflectNode(
+  state: AgentGraphStateType,
+  config: LangGraphRunnableConfig,
+): Promise<Partial<AgentGraphStateType>> {
+  const { agentContext } = getAgentGraphRuntime(config.configurable);
+  const events: AgentSSEEvent[] = [];
+
+  if (agentContext.signal.aborted) {
+    return {
+      finished: true,
+      events: [{ type: "agent/status", status: "cancelled" }],
+    };
+  }
+
+  const analysis = analyzeReflection(state.observations);
+  if (!analysis.nudge || state.reflectCount >= MAX_REFLECT_ROUNDS) {
+    return { finished: true, events };
+  }
+
+  events.push({ type: "agent/status", status: "thinking" });
+  return {
+    finished: false,
+    reflectCount: state.reflectCount + 1,
+    messages: [{ role: "user", content: analysis.nudge }],
+    events,
   };
 }
 

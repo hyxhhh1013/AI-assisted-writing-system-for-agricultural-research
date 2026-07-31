@@ -84,6 +84,15 @@ export interface ParsedToolCall {
   args: Record<string, unknown>;
 }
 
+/** 一次工具执行的结构化结果（供完成度判断，替代解析 toolSummaries 字符串） */
+export interface ToolObservation {
+  tool: string;
+  success: boolean;
+  error?: string | null;
+  /** 工具 execute 返回的 data（如 import_reference.imported、write_section.persisted） */
+  data?: unknown;
+}
+
 export interface LLMWithToolsResponse {
   content: string | null;
   toolCalls: ParsedToolCall[];

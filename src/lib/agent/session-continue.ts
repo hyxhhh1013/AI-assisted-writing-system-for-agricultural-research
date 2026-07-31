@@ -34,6 +34,7 @@ export function buildFollowUpInitialState(
     grantedConfirm: null,
     approvedCheckpointKinds: base.approvedCheckpointKinds ?? [],
     toolSummaries: (base.toolSummaries ?? []).slice(-20),
+    observations: (base.observations ?? []).slice(-20),
   };
 }
 

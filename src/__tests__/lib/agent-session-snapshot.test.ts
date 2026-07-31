@@ -17,8 +17,10 @@ function baseState(overrides: Partial<AgentGraphStateType> = {}): AgentGraphStat
     iteration: 2,
     toolCallCount: 1,
     planContinueCount: 0,
+    reflectCount: 0,
     finalThought: null,
     toolSummaries: ["[search_knowledge] 完成"],
+    observations: [{ tool: "search_knowledge", success: true }],
     pendingToolCalls: [],
     finished: false,
     error: null,
@@ -37,12 +39,18 @@ describe("agent session snapshot", () => {
     expect(isAgentSessionSnapshot(snap)).toBe(true);
     expect(snap.iteration).toBe(2);
     expect(snap.toolSummaries).toHaveLength(1);
+    expect(snap.observations).toEqual([{ tool: "search_knowledge", success: true }]);
 
     const initial = snapshotToInitialState("写引言", snap);
     expect(initial.iteration).toBe(2);
     expect(initial.plan?.subtasks[0]?.title).toBe("检索");
     expect(initial.finished).toBe(false);
     expect(initial.events).toEqual([]);
+    expect(initial.observations).toEqual([{ tool: "search_knowledge", success: true }]);
+
+    // 旧快照缺失 observations 时兜底为空数组
+    const legacy = snapshotToInitialState("写引言", { ...snap, observations: undefined as never });
+    expect(legacy.observations).toEqual([]);
   });
 
   it("empty snapshot has user goal message", () => {

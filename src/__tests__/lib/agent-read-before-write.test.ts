@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { checkReadBeforeWrite } from "@/lib/agent/core/read-before-write";
+import type { ToolObservation } from "@/lib/agent/types";
+
+const ok = (tool: string): ToolObservation => ({ tool, success: true });
 
 describe("read-before-write gate", () => {
   it("blocks introduction write with empty history", () => {
@@ -16,7 +19,7 @@ describe("read-before-write gate", () => {
     const r = checkReadBeforeWrite(
       "write_section",
       { section: "introduction" },
-      ["[inspect_project] 缺文献"],
+      [ok("inspect_project")],
     );
     expect(r.ok).toBe(true);
   });
@@ -34,7 +37,7 @@ describe("read-before-write gate", () => {
     const r = checkReadBeforeWrite(
       "refine_content",
       { section: "discussion" },
-      ["[generate_outline] ok"],
+      [ok("generate_outline")],
     );
     expect(r.ok).toBe(false);
   });
@@ -43,8 +46,17 @@ describe("read-before-write gate", () => {
     const r = checkReadBeforeWrite(
       "refine_content",
       { section: "discussion" },
-      ["[list_references] 5 条"],
+      [ok("list_references")],
     );
     expect(r.ok).toBe(true);
+  });
+
+  it("does not count failed context attempts", () => {
+    const r = checkReadBeforeWrite(
+      "write_section",
+      { section: "introduction" },
+      [{ tool: "inspect_project", success: false, error: "超时" }],
+    );
+    expect(r.ok).toBe(false);
   });
 });

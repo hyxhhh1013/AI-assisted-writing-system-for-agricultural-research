@@ -38,6 +38,8 @@ export interface AgentSessionSnapshot {
   iteration: number;
   toolCallCount: number;
   toolSummaries: string[];
+  /** 结构化工具结果（完成度判断用；旧快照可能缺失，读取时兜底为空数组） */
+  observations: import("@/lib/agent/types").ToolObservation[];
   pendingToolCalls: ParsedToolCall[];
   finished: boolean;
   error: string | null;
@@ -81,6 +83,7 @@ export function emptyAgentSessionSnapshot(goal: string): AgentSessionSnapshot {
     iteration: 0,
     toolCallCount: 0,
     toolSummaries: [],
+    observations: [],
     pendingToolCalls: [],
     finished: false,
     error: null,

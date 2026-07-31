@@ -9,6 +9,7 @@ import {
   scoreLiteratureRelevance,
 } from "@/lib/agent/literature-relevance";
 import { searchExternalLiterature } from "@/lib/literature-search";
+import { resolveAgentHitIndices } from "@/lib/agent/last-search";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import { externalLiteratureHitSchema } from "@/lib/validations";
 import { formatExternalLiteratureHit } from "@/lib/external-literature-format";
@@ -161,10 +162,18 @@ function parseHitsBatch(params: Record<string, unknown>): ExternalLiteratureHit[
 export const importReferenceTool: ToolDefinition = {
   name: "import_reference",
   description:
-    "将 search_external 结果导入项目。单篇用 hitJson；多篇用 hitsJson（文献对象数组，最多 15 篇）。须传 query 与 why（为何导入，≥8字）。低相关且无 why 会拒绝。综述目标通常 ≥30 篇，请多轮分批导入",
+    "将 search_external 结果导入项目。多篇最推荐用 hitIndices=[1,3,5]（1 起，引用最近一次 search_external 的 index，最省 token 不截断）；"
+    + "也可用 hitsJson（文献对象数组，最多 15 篇）或单篇 hitJson。须传 query 与 why（为何导入，≥8字）。"
+    + "综述目标通常 ≥30 篇，可分批导入",
   parameters: {
     type: "object",
     properties: {
+      hitIndices: {
+        type: "string",
+        description:
+          "多篇：最近一次 search_external 返回的 items[].index 数组，如 \"[1,2,3]\" 或 \"1,2,3\"（1 起）。"
+          + "与 hitsJson 二选一，最推荐（参数小、不会被模型截断）",
+      },
       hitJson: {
         type: "string",
         description: "单篇：ExternalLiteratureHit JSON（来自 search_external items[].hitJson）",
@@ -217,6 +226,16 @@ export const importReferenceTool: ToolDefinition = {
     }
 
     let hits = batchOrErr;
+
+    // hitIndices → 复用最近一次 search_external 的命中（1 起），避免 Agent 重贴大 JSON 被截断
+    if (hits.length === 0) {
+      const fromStore = resolveAgentHitIndices(params.hitIndices, ctx.userId);
+      if ("error" in fromStore) {
+        return { success: false, error: fromStore.error };
+      }
+      hits = fromStore.hits;
+    }
+
     if (hits.length === 0) {
       let hit = parseHitFromParams(params);
       const doi = String(params.doi ?? "").trim();

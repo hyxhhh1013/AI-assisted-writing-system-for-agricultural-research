@@ -2,9 +2,51 @@
  * 用户 goal 意图门禁 — 抗跨会话记忆带偏 / 写稿时无谓检索
  */
 
+import type { ToolObservation } from "@/lib/agent/types";
+
 export type GoalIntentGateResult =
   | { ok: true }
   | { ok: false; error: string };
+
+/** 该工具是否存在成功记录 */
+function hasSuccessfulTool(
+  observations: readonly ToolObservation[],
+  toolName: string,
+): boolean {
+  return observations.some((o) => o.tool === toolName && o.success);
+}
+
+/** 该工具成功次数 */
+function countSuccessfulTool(
+  observations: readonly ToolObservation[],
+  toolName: string,
+): number {
+  return observations.filter((o) => o.tool === toolName && o.success).length;
+}
+
+/** 工具成功且已写回项目（data.persisted 非空；对应摘要里的「已写回」语义） */
+function hasPersistedTool(
+  observations: readonly ToolObservation[],
+  toolName: string,
+): boolean {
+  return observations.some(
+    (o) =>
+      o.tool === toolName
+      && o.success
+      && o.data != null
+      && (o.data as { persisted?: unknown }).persisted != null,
+  );
+}
+
+/** 累计成功导入篇数（import_reference.data.imported，含批量） */
+export function sumImportedCount(observations: readonly ToolObservation[]): number {
+  return observations
+    .filter((o) => o.tool === "import_reference" && o.success)
+    .reduce((n, o) => {
+      const imported = (o.data as { imported?: unknown } | undefined)?.imported;
+      return n + (typeof imported === "number" ? imported : Number(imported) || 0);
+    }, 0);
+}
 
 /** 诊断卡点：必须先看最新项目快照 */
 export function isDiagnoseStyleGoal(goal: string): boolean {
@@ -39,33 +81,25 @@ export type ApPipelineStep =
   | "abstract"
   | "review";
 
-function hasSuccessfulAbstractWrite(recentToolLines: readonly string[]): boolean {
-  return recentToolLines.some(
-    (l) =>
-      lineMentionsTool(l, "write_bilingual_abstract")
-      && /已生成|已写回/.test(l)
-      && !/失败|等待用户确认|已达/.test(l),
-  );
+function hasSuccessfulAbstractWrite(observations: readonly ToolObservation[]): boolean {
+  // 摘要工具成功即算（对应摘要「已生成/已写回」语义）
+  return hasSuccessfulTool(observations, "write_bilingual_abstract");
 }
 
-function hasSuccessfulReview(recentToolLines: readonly string[]): boolean {
-  return recentToolLines.some(
-    (l) =>
-      lineMentionsTool(l, "run_review_rounds")
-      && !/失败|等待用户确认|已达/.test(l),
-  );
+function hasSuccessfulReview(observations: readonly ToolObservation[]): boolean {
+  return hasSuccessfulTool(observations, "run_review_rounds");
 }
 
 /** 解析 academic-paper 流程当前应执行的子步骤 */
 export function resolveApPipelineStep(
   goal: string,
-  recentToolLines: readonly string[],
+  observations: readonly ToolObservation[],
 ): ApPipelineStep | null {
   if (!isAcademicPaperPipelineGoal(goal)) return null;
-  if (!citationCheckReportReady(recentToolLines)) return "citation_check";
-  if (!hasCitationRefineSuccess(recentToolLines)) return "citation_fix";
-  if (!hasSuccessfulAbstractWrite(recentToolLines)) return "abstract";
-  if (!hasSuccessfulReview(recentToolLines)) return "review";
+  if (!citationCheckReportReady(observations)) return "citation_check";
+  if (!hasCitationRefineSuccess(observations)) return "citation_fix";
+  if (!hasSuccessfulAbstractWrite(observations)) return "abstract";
+  if (!hasSuccessfulReview(observations)) return "review";
   return null;
 }
 
@@ -81,23 +115,13 @@ export function isCitationCheckGoal(goal: string): boolean {
   );
 }
 
-function countSuccessfulTool(recentToolLines: readonly string[], toolName: string): number {
-  return recentToolLines.filter(
-    (l) => lineMentionsTool(l, toolName) && !/失败|等待用户确认|已达/.test(l),
-  ).length;
-}
-
-function hasSuccessfulValidateCitations(recentToolLines: readonly string[]): boolean {
-  return recentToolLines.some(
-    (l) =>
-      lineMentionsTool(l, "validate_citations")
-      && !/失败|等待用户确认|已达/.test(l),
-  );
+function hasSuccessfulValidateCitations(observations: readonly ToolObservation[]): boolean {
+  return hasSuccessfulTool(observations, "validate_citations");
 }
 
 /** 本轮是否已成功产出引用核查报告 */
-export function citationCheckReportReady(recentToolLines: readonly string[]): boolean {
-  return hasSuccessfulValidateCitations(recentToolLines);
+export function citationCheckReportReady(observations: readonly ToolObservation[]): boolean {
+  return hasSuccessfulValidateCitations(observations);
 }
 
 /** 短确认：用户同意执行上轮引用修正方案（跟聊 goal 常为「好」） */
@@ -107,9 +131,9 @@ const CITATION_APPLY_SHORT =
 /** 用户已确认应用引用修正（须已有 validate_citations 报告） */
 export function isCitationApplyGoal(
   goal: string,
-  recentToolLines: readonly string[],
+  observations: readonly ToolObservation[],
 ): boolean {
-  if (!citationCheckReportReady(recentToolLines)) return false;
+  if (!citationCheckReportReady(observations)) return false;
   const g = goal.trim();
   if (CITATION_APPLY_SHORT.test(g)) return true;
   return /执行.*修正|按.*方案.*改|开始.*refine|应用.*修正|修正.*引用|改引|refine_content/i.test(
@@ -120,34 +144,29 @@ export function isCitationApplyGoal(
 /** 引用核查或确认修正阶段（禁止岔去检索/写摘要） */
 export function isCitationFlowGoal(
   goal: string,
-  recentToolLines: readonly string[],
+  observations: readonly ToolObservation[],
 ): boolean {
-  const pipelineStep = resolveApPipelineStep(goal, recentToolLines);
+  const pipelineStep = resolveApPipelineStep(goal, observations);
   if (pipelineStep === "citation_check" || pipelineStep === "citation_fix") {
     return true;
   }
-  return isCitationCheckGoal(goal) || isCitationApplyGoal(goal, recentToolLines);
+  return isCitationCheckGoal(goal) || isCitationApplyGoal(goal, observations);
 }
 
 /** 本轮是否已成功 refine_content 写回 */
-export function hasCitationRefineSuccess(recentToolLines: readonly string[]): boolean {
-  return recentToolLines.some(
-    (l) =>
-      lineMentionsTool(l, "refine_content")
-      && /已修正并写回|已修正正文/.test(l)
-      && !/失败|等待用户确认|已达/.test(l),
-  );
+export function hasCitationRefineSuccess(observations: readonly ToolObservation[]): boolean {
+  return hasPersistedTool(observations, "refine_content");
 }
 
 /** 诊断 / 单节起草 / 引用核查·修正 / AP 流程：跳过 Planner LLM，直接进对话循环 */
 export function shouldSkipPlanner(
   goal: string,
-  recentToolLines: readonly string[] = [],
+  observations: readonly ToolObservation[] = [],
 ): boolean {
   if (isDiagnoseStyleGoal(goal)) return true;
   if (isAcademicPaperPipelineGoal(goal)) return true;
   if (isCitationCheckGoal(goal)) return true;
-  if (isCitationApplyGoal(goal, recentToolLines)) return true;
+  if (isCitationApplyGoal(goal, observations)) return true;
   if (isSectionDraftGoal(goal) && !isReviewWritingGoal(goal)) return true;
   return false;
 }
@@ -185,16 +204,8 @@ export function isSectionDraftGoal(goal: string): boolean {
   );
 }
 
-function lineMentionsTool(line: string, name: string): boolean {
-  return line.includes(`[${name}]`) || line.includes(name);
-}
-
-function hasSuccessfulInspect(recentToolLines: readonly string[]): boolean {
-  return recentToolLines.some(
-    (line) =>
-      lineMentionsTool(line, "inspect_project")
-      && !/失败|等待用户确认|已达/.test(line),
-  );
+function hasSuccessfulInspect(observations: readonly ToolObservation[]): boolean {
+  return hasSuccessfulTool(observations, "inspect_project");
 }
 
 /**
@@ -203,11 +214,11 @@ function hasSuccessfulInspect(recentToolLines: readonly string[]): boolean {
 export function checkDiagnoseInspectGate(
   goal: string,
   toolName: string,
-  recentToolLines: readonly string[],
+  observations: readonly ToolObservation[],
 ): GoalIntentGateResult {
   if (!isDiagnoseStyleGoal(goal)) return { ok: true };
   if (toolName === "inspect_project") return { ok: true };
-  if (hasSuccessfulInspect(recentToolLines)) return { ok: true };
+  if (hasSuccessfulInspect(observations)) return { ok: true };
   return {
     ok: false,
     error:
@@ -224,7 +235,7 @@ export function checkDiagnoseInspectGate(
 export function checkDraftSearchGate(
   goal: string,
   toolName: string,
-  _recentToolLines: readonly string[],
+  _observations: readonly ToolObservation[],
 ): GoalIntentGateResult {
   if (!isSectionDraftGoal(goal)) return { ok: true };
   if (isReviewWritingGoal(goal)) return { ok: true };
@@ -270,7 +281,7 @@ export function literatureHuntNudge(goal = ""): string {
   return (
     "【系统】本轮是检索并导入：优先 search_knowledge；外部用 search_external（中文自动转英文）。"
     + `默认目标约 ${n} 篇。效率优先：单次 limit=20～25，用 1～2 个宽泛英文 query 即可，不要碎成很多次小搜；`
-    + "立刻 import_reference(hitsJson=suggestedHitsJson, query, why≥8字) 分批导入（单次最多约 15 篇），不够再换一个同义 query 补一轮。"
+    + "立刻 import_reference(hitIndices=data.suggestedHitIndices, query, why≥8字) 分批导入（单次最多约 15 篇，hitIndices 最省 token 不截断；也可 hitsJson），不够再换一个同义 query 补一轮。"
     + "禁止只导几篇就停。命中离题则说明；禁止改题；禁止编造 hitJson。"
   );
 }
@@ -288,9 +299,9 @@ export function citationCheckNudge(): string {
 /** academic-paper 流程子步骤提示 */
 export function apPipelineNudge(
   goal: string,
-  recentToolLines: readonly string[],
+  observations: readonly ToolObservation[],
 ): string {
-  const step = resolveApPipelineStep(goal, recentToolLines);
+  const step = resolveApPipelineStep(goal, observations);
   switch (step) {
     case "citation_check":
       return (
@@ -355,9 +366,9 @@ const PIPELINE_SEARCH_TOOLS = new Set([
 export function checkCitationSideTripGate(
   goal: string,
   toolName: string,
-  recentToolLines: readonly string[],
+  observations: readonly ToolObservation[],
 ): GoalIntentGateResult {
-  const pipelineStep = resolveApPipelineStep(goal, recentToolLines);
+  const pipelineStep = resolveApPipelineStep(goal, observations);
   if (pipelineStep) {
     if (pipelineStep === "abstract" && toolName === "write_bilingual_abstract") {
       return { ok: true };
@@ -403,11 +414,11 @@ export function checkCitationSideTripGate(
     return { ok: true };
   }
 
-  if (!isCitationFlowGoal(goal, recentToolLines)) return { ok: true };
+  if (!isCitationFlowGoal(goal, observations)) return { ok: true };
   if (!CITATION_SIDE_TRIP_TOOLS.has(toolName)) return { ok: true };
   if (
-    isCitationApplyGoal(goal, recentToolLines)
-    && hasCitationRefineSuccess(recentToolLines)
+    isCitationApplyGoal(goal, observations)
+    && hasCitationRefineSuccess(observations)
   ) {
     return { ok: true };
   }
@@ -425,18 +436,18 @@ export function checkCitationSideTripGate(
 export function checkCitationCheckGate(
   goal: string,
   toolName: string,
-  recentToolLines: readonly string[],
+  observations: readonly ToolObservation[],
 ): GoalIntentGateResult {
-  const pipelineStep = resolveApPipelineStep(goal, recentToolLines);
+  const pipelineStep = resolveApPipelineStep(goal, observations);
   const inCitationCheck =
     isCitationCheckGoal(goal)
     || pipelineStep === "citation_check";
   if (!inCitationCheck) return { ok: true };
   if (toolName === "validate_citations") return { ok: true };
   if (toolName !== "read_reference") return { ok: true };
-  if (hasSuccessfulValidateCitations(recentToolLines)) return { ok: true };
+  if (hasSuccessfulValidateCitations(observations)) return { ok: true };
 
-  const readRefCount = countSuccessfulTool(recentToolLines, "read_reference");
+  const readRefCount = countSuccessfulTool(observations, "read_reference");
   if (readRefCount >= 4) {
     return {
       ok: false,
@@ -516,15 +527,15 @@ export function buildIntentStopAskUser(opts: {
   );
 }
 
-/** 跟聊时按 toolSummaries 注入意图提示（如「好」→ 引用修正） */
+/** 跟聊时按 observations 注入意图提示（如「好」→ 引用修正） */
 export function mergeFollowUpGoalHint(
   goal: string,
-  recentToolLines: readonly string[],
+  observations: readonly ToolObservation[],
 ): string | null {
   if (isAcademicPaperPipelineGoal(goal)) {
-    return apPipelineNudge(goal, recentToolLines);
+    return apPipelineNudge(goal, observations);
   }
-  if (isCitationApplyGoal(goal, recentToolLines)) {
+  if (isCitationApplyGoal(goal, observations)) {
     return citationApplyNudge();
   }
   if (isDiagnoseStyleGoal(goal)) {

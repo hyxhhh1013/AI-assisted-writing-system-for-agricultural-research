@@ -92,6 +92,9 @@ const STATUS_LABEL: Record<string, string> = {
 
 const WRITE_PUBLIC = isAgentWritePublicEnabled();
 
+/** 观察-only 卡片的稳定空 params，避免每次渲染新建对象破坏 memo */
+const EMPTY_PARAMS: Record<string, unknown> = {};
+
 /**
  * 聊天优先：对话区占满，状态/确认收成紧凑条，输入框始终可见。
  */
@@ -304,11 +307,35 @@ export function AgentPanel({
     ],
   );
 
-  useEffect(() => {
+  /** 是否贴近底部：贴近时新消息自动滚到底；往上翻历史时不再被拽下去 */
+  const [atBottom, setAtBottom] = useState(true);
+  const atBottomRef = useRef(true);
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    atBottomRef.current = near;
+    setAtBottom(near);
+  }, []);
+  const scrollToBottom = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [agent.messages, agent.status, agent.pendingCheckpoint, agent.pendingConfirm]);
+    atBottomRef.current = true;
+    setAtBottom(true);
+  }, []);
+  /** 打字机逐字推进时跟随（仅贴近底部才滚，避免打扰正在读历史）；恒等稳定，便于气泡 memo */
+  const scrollIfNearBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || !atBottomRef.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (atBottom) el.scrollTop = el.scrollHeight;
+  }, [agent.messages, agent.status, agent.pendingCheckpoint, agent.pendingConfirm, atBottom]);
 
   const statusHint = useMemo(
     () => STATUS_LABEL[agent.status] ?? agent.status,
@@ -327,6 +354,28 @@ export function AgentPanel({
       }),
     [agent.status, agent.isRunning, agent.messages],
   );
+
+  /** 预计算每条消息的渲染标志，避免渲染循环内 O(n²) 扫描 */
+  const msgFlags = useMemo(() => {
+    const msgs = agent.messages;
+    const n = msgs.length;
+    const latestThoughtIdx = agent.isRunning
+      ? msgs.findLastIndex((m) => m.kind === "thought")
+      : -1;
+    const latestActionIdx = agent.isRunning
+      ? msgs.findLastIndex((m) => m.kind === "action")
+      : -1;
+    const obsForAction = new Map<number, number>();
+    for (let i = 0; i < n - 1; i++) {
+      const m = msgs[i];
+      if (m.kind !== "action") continue;
+      const next = msgs[i + 1];
+      if (next?.kind === "observation" && next.tool === m.tool) {
+        obsForAction.set(i, i + 1);
+      }
+    }
+    return { latestThoughtIdx, latestActionIdx, obsForAction };
+  }, [agent.messages, agent.isRunning]);
 
   return (
     <div className={cn("flex h-full min-h-0 flex-col bg-[#fafaf8]", className)}>
@@ -551,6 +600,7 @@ export function AgentPanel({
       {/* 对话主区：加宽阅读列 */}
       <div
         ref={scrollRef}
+        onScroll={handleScroll}
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4"
       >
         <div className="mx-auto flex w-full max-w-none flex-col gap-2.5">
@@ -608,23 +658,27 @@ export function AgentPanel({
               );
             }
             if (msg.kind === "thought") {
-              const isLatestThought =
-                agent.isRunning
-                && agent.messages.findLastIndex((m) => m.kind === "thought") === i;
+              const isLatestThought = msgFlags.latestThoughtIdx === i;
               return (
                 <MessageEnter key={i} animate={animateEnter}>
-                  <AgentThought text={msg.text} defaultOpen={isLatestThought} />
+                  <AgentThought
+                    text={msg.text}
+                    defaultOpen={isLatestThought}
+                    live={isLatestThought}
+                    onTypeTick={isLatestThought ? scrollIfNearBottom : undefined}
+                  />
                 </MessageEnter>
               );
             }
             if (msg.kind === "action") {
-              const obs = agent.messages[i + 1];
+              const obsIdx = msgFlags.obsForAction.get(i);
+              const candidate = obsIdx != null ? agent.messages[obsIdx] : undefined;
               const observation =
-                obs?.kind === "observation" && obs.tool === msg.tool ? obs : undefined;
+                candidate?.kind === "observation" ? candidate : undefined;
               const pending =
                 agent.isRunning
                 && !observation
-                && agent.messages.findLastIndex((m) => m.kind === "action") === i;
+                && msgFlags.latestActionIdx === i;
               if (
                 msg.tool === "validate_citations"
                 && observation?.summary
@@ -653,8 +707,7 @@ export function AgentPanel({
               );
             }
             if (msg.kind === "observation") {
-              const prev = agent.messages[i - 1];
-              if (prev?.kind === "action" && prev.tool === msg.tool) return null;
+              if (msgFlags.obsForAction.has(i - 1)) return null;
               if (msg.tool === "validate_citations" && msg.summary && !msg.error) {
                 return (
                   <MessageEnter key={i} animate={animateEnter}>
@@ -666,7 +719,7 @@ export function AgentPanel({
                 <MessageEnter key={i} animate={animateEnter}>
                   <AgentActionCard
                     tool={msg.tool}
-                    params={{}}
+                    params={EMPTY_PARAMS}
                     summary={msg.summary}
                     error={msg.error}
                     imageUrl={msg.imageUrl}
@@ -711,6 +764,20 @@ export function AgentPanel({
             </MessageEnter>
           ) : null}
         </div>
+
+        {/* 用户往上翻历史时，新消息不再强制滚底；给一个悬浮回底按钮 */}
+        {!atBottom ? (
+          <div className="pointer-events-none sticky bottom-0 z-10 flex justify-end pb-2">
+            <button
+              type="button"
+              onClick={scrollToBottom}
+              className="pointer-events-auto flex items-center gap-1 rounded-full border border-border/60 bg-white/95 px-2.5 py-1.5 text-[11px] text-muted-foreground shadow-sm shadow-black/[0.05] transition-colors hover:text-foreground"
+            >
+              <ChevronDown className="h-3 w-3" />
+              回到底部
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {/* 人在环：贴在输入上方，滑入而非硬切 */}
