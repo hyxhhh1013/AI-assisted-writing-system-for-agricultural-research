@@ -68,3 +68,4 @@ deploy.tar.gz
 # Backup files
 backup_*
 .gstack/
+grainscript_recover.sql

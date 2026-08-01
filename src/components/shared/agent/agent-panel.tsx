@@ -324,18 +324,12 @@ export function AgentPanel({
     atBottomRef.current = true;
     setAtBottom(true);
   }, []);
-  /** 打字机逐字推进时跟随（仅贴近底部才滚，避免打扰正在读历史）；恒等稳定，便于气泡 memo */
-  const scrollIfNearBottom = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el || !atBottomRef.current) return;
-    el.scrollTop = el.scrollHeight;
-  }, []);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     if (atBottom) el.scrollTop = el.scrollHeight;
-  }, [agent.messages, agent.status, agent.pendingCheckpoint, agent.pendingConfirm, atBottom]);
+  }, [agent.messages, agent.status, agent.streamingText, agent.pendingCheckpoint, agent.pendingConfirm, atBottom]);
 
   const statusHint = useMemo(
     () => STATUS_LABEL[agent.status] ?? agent.status,
@@ -586,6 +580,7 @@ export function AgentPanel({
               <li
                 key={s.id}
                 className={cn(
+                  "break-words",
                   s.status === "done" && "line-through opacity-60",
                   s.status === "running" && "font-medium text-foreground",
                 )}
@@ -601,9 +596,9 @@ export function AgentPanel({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4"
+        className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-4 py-4"
       >
-        <div className="mx-auto flex w-full max-w-none flex-col gap-2.5">
+        <div className="mx-auto flex w-full min-w-0 max-w-none flex-col gap-2.5">
           {agent.messages.length === 0 && (
             <div className="rounded-xl border border-dashed border-border/60 bg-white/70 px-5 py-8 text-sm text-muted-foreground">
               {!projectId ? (
@@ -651,7 +646,7 @@ export function AgentPanel({
             if (msg.kind === "user") {
               return (
                 <MessageEnter key={i} animate={animateEnter} className="flex justify-end">
-                  <div className="max-w-[90%] rounded-2xl rounded-br-md bg-primary px-3.5 py-2 text-[13.5px] leading-relaxed text-primary-foreground">
+                  <div className="max-w-[90%] break-words rounded-2xl rounded-br-md bg-primary px-3.5 py-2 text-[13.5px] leading-relaxed text-primary-foreground">
                     {msg.text}
                   </div>
                 </MessageEnter>
@@ -661,12 +656,7 @@ export function AgentPanel({
               const isLatestThought = msgFlags.latestThoughtIdx === i;
               return (
                 <MessageEnter key={i} animate={animateEnter}>
-                  <AgentThought
-                    text={msg.text}
-                    defaultOpen={isLatestThought}
-                    live={isLatestThought}
-                    onTypeTick={isLatestThought ? scrollIfNearBottom : undefined}
-                  />
+                  <AgentThought text={msg.text} defaultOpen={isLatestThought} />
                 </MessageEnter>
               );
             }
@@ -738,6 +728,13 @@ export function AgentPanel({
             }
             return null;
           })}
+
+          {/* 真流式：agent 回复正在逐 token 到达 */}
+          {agent.streamingText ? (
+            <MessageEnter animate>
+              <AgentThought text={agent.streamingText} defaultOpen streaming />
+            </MessageEnter>
+          ) : null}
 
           {lastFailure && !agent.isRunning ? (
             <MessageEnter animate>

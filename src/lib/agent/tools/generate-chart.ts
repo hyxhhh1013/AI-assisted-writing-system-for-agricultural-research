@@ -11,6 +11,7 @@ import {
   resolvePlotCandidate,
   type AgentPlotSourcesBundle,
 } from "@/lib/agent/plot-sources";
+import { runPanelGeneration, type PanelSpec } from "@/lib/agent/panel-runner";
 import { appendAgentSectionMarkdown } from "@/lib/agent/project-persist";
 import {
   AGENT_WRITING_SECTIONS,
@@ -92,6 +93,50 @@ function parseChartIndices(params: Record<string, unknown>): number[] {
   }
 
   return [...new Set(out)];
+}
+
+/** 解析多面板复合图参数（panelsJson） */
+export function parsePanelsJson(raw: unknown): { panels: PanelSpec[] } | { error: string } {
+  let parsed: unknown;
+  try {
+    parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+  } catch {
+    return { error: "panelsJson 必须是 JSON 数组" };
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    return { error: "panelsJson 至少需要 1 个面板" };
+  }
+  if (parsed.length > MAX_BATCH_CHARTS) {
+    return { error: `一次最多 ${MAX_BATCH_CHARTS} 个面板` };
+  }
+  const panels: PanelSpec[] = [];
+  for (let i = 0; i < parsed.length; i++) {
+    const p = parsed[i];
+    if (!p || typeof p !== "object") {
+      return { error: `panels[${i}] 不是对象` };
+    }
+    const o = p as Record<string, unknown>;
+    const chartType = normalizeChartType(String(o.chartType ?? "").trim());
+    if (!chartType || !isAgentChartType(chartType)) {
+      return {
+        error:
+          `panels[${i}] 无效 chartType: ${String(o.chartType ?? "").trim() || "（空）"}。`
+          + `可用：${AGENT_CHART_TYPES.join(", ")}`,
+      };
+    }
+    const csv = String(o.csv ?? "").trim();
+    if (!csv) {
+      return { error: `panels[${i}] 缺 csv 数据` };
+    }
+    panels.push({
+      chartType,
+      csv,
+      title: String(o.title ?? "").trim(),
+      xLabel: String(o.xLabel ?? o.x_label ?? "").trim(),
+      yLabel: String(o.yLabel ?? o.y_label ?? "").trim(),
+    });
+  }
+  return { panels };
 }
 
 async function generateOneChart(input: {
@@ -222,7 +267,8 @@ async function generateOneChart(input: {
 export const generateChartTool: ToolDefinition = {
   name: "generate_chart",
   description:
-    "生成期刊级图表并写入项目图表库。先 list_plot_sources，再 generate_chart(chartIndex=N) 或 chartIndices=[0,1,2] 一次多张（最多 6）。也可 csvData+chartType。"
+    "生成期刊级图表并写入项目图表库。两种用法：①多面板复合图（期刊主图，推荐）——传 panelsJson=[{chartType,csv,xLabel,yLabel},...]（2~6 个面板），自动拼成 a/b/c 网格图；"
+    + "②单图——先 list_plot_sources 再 generate_chart(chartIndex=N) 或 chartIndices=[0,1,2]（最多 6），也可 csvData+chartType。"
     + "期刊出图要点：①误差棒——数据列加 _sd/_se/_ci 后缀（如「产量,产量_sd」）自动渲染；"
     + "②轴标签带单位——务必传 x_label/y_label（如 y_label=\"产量 (kg/ha)\"）；"
     + "③多系列对比——多列数据即可，图例自动出现；④选型——对比/分组→bar_grouped，趋势→line，占比→pie，热区→heatmap，森林图→forest（四列：研究,估计值,CI下限,CI上限）。"
@@ -230,6 +276,12 @@ export const generateChartTool: ToolDefinition = {
   parameters: {
     type: "object",
     properties: {
+      panelsJson: {
+        type: "string",
+        description:
+          "多面板复合图（推荐）：JSON 数组，每项 {chartType, csv, title?, xLabel?, yLabel?}，2~6 个面板，自动拼成 a/b/c 期刊网格图。"
+          + "例：\"[{\\\"chartType\\\":\\\"bar_grouped\\\",\\\"csv\\\":\\\"处理,产量,产量_sd\\\\n对照,12,1\\\\n处理A,15,0.9\\\",\\\"xLabel\\\":\\\"处理\\\",\\\"yLabel\\\":\\\"产量\\\"}]\"",
+      },
       chartIndex: {
         type: "number",
         description: "list_plot_sources 返回的单个候选 index",
@@ -295,6 +347,62 @@ export const generateChartTool: ToolDefinition = {
         success: false,
         error: `无效 sectionKey: ${sectionKeyRaw}。可用：${AGENT_WRITING_SECTIONS.join(", ")}`,
       };
+    }
+
+    // —— 多面板复合图：panelsJson（2~6 个面板拼成 a/b/c 期刊网格图）——
+    if (params.panelsJson != null && String(params.panelsJson).trim()) {
+      const parsedPanels = parsePanelsJson(params.panelsJson);
+      if ("error" in parsedPanels) {
+        return { success: false, error: parsedPanels.error };
+      }
+      const title = String(params.title ?? "").trim() || "复合图";
+      const caption = String(params.caption ?? "").trim() || title;
+      const preset = parsePresetParam(params.preset);
+      try {
+        const generated = await runPanelGeneration({
+          title,
+          preset,
+          panels: parsedPanels.panels,
+        });
+        let persisted: ProjectChartAsset | null = null;
+        if (persistToProject) {
+          persisted = await persistAgentChart(ctx.userId, ctx.projectId!, {
+            figureId: "panel_multi",
+            caption,
+            imageUrl: generated.imageUrl,
+            sectionKey: sectionKey ?? undefined,
+          });
+        }
+        let insertedSection: string | undefined;
+        if (sectionKey) {
+          await appendAgentSectionMarkdown(
+            ctx.userId,
+            ctx.projectId!,
+            sectionKey,
+            `\n\n![${caption}](${generated.imageUrl})\n\n`,
+          );
+          insertedSection = sectionKey;
+        }
+        const bits = [
+          `已生成 ${parsedPanels.panels.length} 面板复合图「${title}」`,
+        ];
+        if (persisted) bits.push("已登记到项目图表库");
+        if (insertedSection) bits.push(`已插入章节 ${insertedSection}`);
+        return {
+          success: true,
+          data: {
+            imageUrl: generated.imageUrl,
+            panelCount: generated.panelCount,
+            persisted,
+            insertedSection,
+            figureId: "panel_multi",
+          },
+          summary: bits.join("；"),
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { success: false, error: message };
+      }
     }
 
     let extras: Record<string, unknown> = {};

@@ -1,7 +1,10 @@
 import type { AgentSSEEvent } from "@/contracts/agent";
 import { buildAgentSystemPrompt } from "@/lib/agent/core/prompts";
 import { createPlan } from "@/lib/agent/core/planner";
-import { callAINonStreamingWithTools } from "@/lib/agent/core/llm-tools";
+import {
+  callAINonStreamingWithTools,
+  callAIStreamingWithTools,
+} from "@/lib/agent/core/llm-tools";
 import {
   checkSearchQuota,
   noteSearchCall,
@@ -236,13 +239,44 @@ export async function agentNode(
 
   let response;
   try {
-    response = await callAINonStreamingWithTools({
-      messages: llmMessages,
-      tools: toolsToOpenAISchema(tools),
-      signal: agentContext.signal,
-      userId: agentContext.userId,
-      temperature: 0.3,
-    });
+    // 真流式：逐 token 实时推送 thought_delta；流式失败自动回退非流式
+    try {
+      response = await callAIStreamingWithTools(
+        {
+          messages: llmMessages,
+          tools: toolsToOpenAISchema(tools),
+          signal: agentContext.signal,
+          userId: agentContext.userId,
+          temperature: 0.3,
+        },
+        (delta) => {
+          if (!delta) return;
+          runtime.emitLiveEvent?.({ type: "agent/thought_delta", content: delta });
+        },
+      );
+      // 流式退化：既无内容也无工具调用、或工具调用名称为空（流式识别可能失败，
+      // 空名会触发「未知工具」→ 重试死循环），回退非流式重试
+      const degenerate =
+        (!response.content && response.toolCalls.length === 0)
+        || response.toolCalls.some((tc) => !tc.name);
+      if (degenerate) {
+        response = await callAINonStreamingWithTools({
+          messages: llmMessages,
+          tools: toolsToOpenAISchema(tools),
+          signal: agentContext.signal,
+          userId: agentContext.userId,
+          temperature: 0.3,
+        });
+      }
+    } catch {
+      response = await callAINonStreamingWithTools({
+        messages: llmMessages,
+        tools: toolsToOpenAISchema(tools),
+        signal: agentContext.signal,
+        userId: agentContext.userId,
+        temperature: 0.3,
+      });
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "LLM 调用失败";
     return {

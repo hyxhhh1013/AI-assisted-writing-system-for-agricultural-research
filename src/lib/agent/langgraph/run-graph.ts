@@ -328,7 +328,9 @@ export async function* runAgentGraphLoop(
     };
   }
 
-  const recursionLimit = Math.max(context.budget.maxIterations * 4, 16);
+  // 反思节点上线后，每个 write_section 会额外产生 reflect_step + 触发的 agent/tools 节点，
+  // 长会话节点数可远超 maxIterations*2；给足余量避免误触递归上限
+  const recursionLimit = Math.max(context.budget.maxIterations * 8, 64);
   let lastEventCount = 0;
   let lastPersistedAt = 0;
   let latestState: AgentGraphStateType | null = null;
@@ -416,8 +418,17 @@ export async function* runAgentGraphLoop(
       signal: context.signal,
     });
 
-    for await (const snapshot of stream) {
-      const state = snapshot as AgentGraphStateType;
+    // 真流式：agentNode LLM 逐 token 走实时通道，graph 快照事件照常
+    const liveQueue = new LiveEventQueue();
+    runtime.emitLiveEvent = (e) => liveQueue.push(e);
+
+    for await (const item of mergeGraphAndLive(stream, liveQueue)) {
+      if (item.type === "live") {
+        // 实时 token delta：直接推给前端（不持久化，不进 uiTranscript）
+        yield item.event;
+        continue;
+      }
+      const state = item.state;
       latestState = state;
       context.budget.toolCallCount = state.toolCallCount;
       context.budget.currentIteration = state.iteration;
@@ -552,4 +563,80 @@ function applyCheckpointDecision(
       },
     ],
   };
+}
+
+/** 实时 SSE 事件队列：agentNode LLM 流式 delta 与 graph 快照流合并用 */
+export class LiveEventQueue {
+  private items: AgentSSEEvent[] = [];
+  private waiters: Array<(value: IteratorResult<AgentSSEEvent>) => void> = [];
+  private closed = false;
+  private pending: Promise<IteratorResult<AgentSSEEvent>> | null = null;
+
+  push(event: AgentSSEEvent): void {
+    const waiter = this.waiters.shift();
+    if (waiter) waiter({ done: false, value: event });
+    else this.items.push(event);
+    this.pending = null;
+  }
+
+  close(): void {
+    this.closed = true;
+    this.pending = null;
+    for (const waiter of this.waiters.splice(0)) {
+      waiter({ done: true, value: undefined as never });
+    }
+  }
+
+  next(): Promise<IteratorResult<AgentSSEEvent>> {
+    if (this.items.length > 0) {
+      return Promise.resolve({ done: false, value: this.items.shift()! });
+    }
+    if (this.closed) {
+      return Promise.resolve({ done: true, value: undefined as never });
+    }
+    this.pending ??= new Promise((resolve) => {
+      this.waiters.push(resolve);
+    });
+    return this.pending;
+  }
+}
+
+/** 合并 graph 快照流与实时事件通道：实时事件即时产出，graph 快照按其节奏产出 */
+export async function* mergeGraphAndLive(
+  graphStream: AsyncIterable<AgentGraphStateType>,
+  queue: LiveEventQueue,
+): AsyncGenerator<
+  | { type: "graph"; state: AgentGraphStateType }
+  | { type: "live"; event: AgentSSEEvent }
+> {
+  const g = graphStream[Symbol.asyncIterator]();
+  let gPending: Promise<{ kind: "graph"; value: IteratorResult<AgentGraphStateType> }> | null = null;
+  let lPending: Promise<{ kind: "live"; value: IteratorResult<AgentSSEEvent> }> | null = null;
+
+  try {
+    while (true) {
+      if (!gPending) gPending = g.next().then((value) => ({ kind: "graph" as const, value }));
+      if (!lPending) lPending = queue.next().then((value) => ({ kind: "live" as const, value }));
+      const r = await Promise.race([gPending, lPending]);
+      if (r.kind === "graph") {
+        gPending = null;
+        if (r.value.done) {
+          // graph 结束：排空剩余实时事件后结束
+          queue.close();
+          for (;;) {
+            const l = await queue.next();
+            if (l.done) break;
+            yield { type: "live", event: l.value };
+          }
+          return;
+        }
+        yield { type: "graph", state: r.value.value };
+      } else {
+        lPending = null;
+        if (!r.value.done) yield { type: "live", event: r.value.value };
+      }
+    }
+  } finally {
+    queue.close();
+  }
 }

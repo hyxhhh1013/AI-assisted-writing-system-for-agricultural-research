@@ -73,6 +73,8 @@ export type AgentSSEEvent =
   | { type: "agent/status"; status: AgentStatus }
   | { type: "agent/plan"; plan: AgentPlan }
   | { type: "agent/thought"; content: string | null }
+  /** 真流式：agent 回复的逐 token 增量（前端累积进当前思考气泡） */
+  | { type: "agent/thought_delta"; content: string }
   | { type: "agent/action"; tool: string; params: Record<string, unknown> }
   | {
       type: "agent/observation";

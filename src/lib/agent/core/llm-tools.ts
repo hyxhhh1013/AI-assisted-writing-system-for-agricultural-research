@@ -77,6 +77,114 @@ export async function callAINonStreamingWithTools(
   };
 }
 
+/**
+ * 流式调用（真流式）：逐 token 推内容增量，末尾识别工具调用（原生 tool_calls 或提示式）。
+ * onDelta 收到每个内容增量，可经实时 SSE 通道直接推给前端。
+ */
+export async function callAIStreamingWithTools(
+  options: CallWithToolsOptions,
+  onDelta?: (content: string) => void,
+): Promise<LLMWithToolsResponse> {
+  const { provider } = getAgentModelConfig("writer");
+  const useNative = options.useNativeTools !== false && (options.tools?.length ?? 0) > 0;
+  const messages = useNative
+    ? options.messages
+    : injectPromptTools(options.messages, options.tools ?? []);
+
+  const response = await callAI({
+    provider,
+    messages,
+    stream: true,
+    signal: options.signal,
+    userId: options.userId,
+    temperature: options.temperature,
+    ...(useNative && options.tools?.length
+      ? { tools: options.tools, tool_choice: options.toolChoice ?? "auto" }
+      : {}),
+  });
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("AI 流式响应不可用");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let fullContent = "";
+  const toolCalls: Array<{ index: number; id: string; name: string; args: string }> = [];
+
+  const handleLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("data:") || trimmed === "data: [DONE]") return;
+    try {
+      const data = JSON.parse(trimmed.slice(5).trim()) as {
+        choices?: Array<{ delta?: Record<string, unknown> }>;
+      };
+      const delta = (data.choices?.[0]?.delta ?? {}) as Record<string, unknown>;
+      const content =
+        typeof delta.content === "string"
+          ? delta.content
+          : typeof delta.reasoning_content === "string"
+            ? delta.reasoning_content
+            : "";
+      if (content) {
+        fullContent += content;
+        onDelta?.(content);
+      }
+      const tcs = delta.tool_calls;
+      if (Array.isArray(tcs)) {
+        for (const tc of tcs) {
+          if (!tc || typeof tc !== "object") continue;
+          const o = tc as { index?: unknown; id?: unknown; function?: { name?: unknown; arguments?: unknown } };
+          const idx = typeof o.index === "number" ? o.index : 0;
+          const cur = toolCalls[idx] ?? { index: idx, id: "", name: "", args: "" };
+          if (typeof o.id === "string") cur.id += o.id;
+          if (typeof o.function?.name === "string") cur.name += o.function.name;
+          if (typeof o.function?.arguments === "string") cur.args += o.function.arguments;
+          toolCalls[idx] = cur;
+        }
+      }
+    } catch {
+      /* 忽略单行解析失败 */
+    }
+  };
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) handleLine(line);
+    }
+    if (buffer.trim()) handleLine(buffer);
+  } finally {
+    reader.releaseLock?.();
+  }
+
+  if (toolCalls.length > 0) {
+    return {
+      content: fullContent || null,
+      toolCalls: toolCalls.map((t) => ({
+        id: t.id,
+        name: t.name,
+        args: safeParseArgs(t.args),
+      })),
+      finishReason: "tool_calls",
+    };
+  }
+
+  const promptCalls = parsePromptBasedToolCalls(fullContent);
+  if (promptCalls.length > 0) {
+    return { content: fullContent, toolCalls: promptCalls, finishReason: "tool_calls" };
+  }
+
+  return {
+    content: fullContent || null,
+    toolCalls: [],
+    finishReason: fullContent ? "stop" : "unknown",
+  };
+}
+
 async function callNativeWithTools(
   provider: "deepseek" | "zhipu",
   options: CallWithToolsOptions,

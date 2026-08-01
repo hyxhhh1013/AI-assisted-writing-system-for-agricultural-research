@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronRight, Loader2, Wrench } from "lucide-react";
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { splitExecSummary } from "@/lib/agent/split-exec-summary";
@@ -26,7 +26,7 @@ export const AgentMarkdown = memo(function AgentMarkdown({
   return (
     <div
       className={cn(
-        "prose prose-sm dark:prose-invert max-w-none text-[13.5px] leading-[1.65] text-foreground/90",
+        "prose prose-sm dark:prose-invert max-w-none break-words text-[13.5px] leading-[1.65] text-foreground/90",
         "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
         "prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-foreground",
         "prose-h1:mb-2 prose-h1:mt-3 prose-h1:text-base",
@@ -37,7 +37,7 @@ export const AgentMarkdown = memo(function AgentMarkdown({
         "prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-li:leading-relaxed",
         "prose-strong:font-semibold prose-strong:text-foreground",
         "prose-code:rounded prose-code:bg-muted/70 prose-code:px-1 prose-code:py-0.5 prose-code:text-[12px] prose-code:before:content-none prose-code:after:content-none",
-        "prose-pre:my-2 prose-pre:rounded-lg prose-pre:bg-muted/60 prose-pre:text-[11.5px]",
+        "prose-pre:my-2 prose-pre:max-w-full prose-pre:overflow-x-auto prose-pre:rounded-lg prose-pre:bg-muted/60 prose-pre:text-[11.5px]",
         "prose-blockquote:border-l-primary/40 prose-blockquote:text-muted-foreground",
         "prose-hr:my-3 prose-hr:border-border/60",
         "prose-a:text-primary prose-a:no-underline hover:prose-a:underline",
@@ -53,23 +53,15 @@ interface AgentThoughtProps {
   text: string;
   /** 中间思考默认折叠，减少占屏；变化时跟随（最新展开、变旧收起） */
   defaultOpen?: boolean;
-  /** 是否为当前正在运行的「最新思考」：启用打字机效果 + 光标 */
-  live?: boolean;
-  /** 打字过程中回调（父级可借此做「粘底」滚动） */
-  onTypeTick?: () => void;
+  /** 真流式：文本正在逐 token 到达，直接展示（纯文本 + 光标），不重放打字机 */
+  streaming?: boolean;
 }
 
-/** 打字机边界：超过此长度的思考直接完整显示，避免等待过久 */
-const TYPING_MAX_CHARS = 600;
-const TYPING_STEP = 12;
-const TYPING_MS = 20;
-
-/** 过程思考：默认折叠为一行预览；最新运行中的思考带打字机效果（纯文本渐进，完成后再渲染 Markdown） */
+/** 过程思考：默认折叠为一行预览；真流式时展示递增文本 + 光标 */
 export const AgentThought = memo(function AgentThought({
   text,
   defaultOpen = false,
-  live = false,
-  onTypeTick,
+  streaming = false,
 }: AgentThoughtProps) {
   const [open, setOpen] = useState(defaultOpen);
   // 双向跟随：成为最新时展开，变旧时自动收起（避免长对话堆满展开的思考气泡）
@@ -77,49 +69,7 @@ export const AgentThought = memo(function AgentThought({
     setOpen(defaultOpen);
   }, [defaultOpen]);
 
-  // 初始即按 live 决定，避免首帧先闪完整 markdown 再变空重打
-  const [typedLen, setTypedLen] = useState(
-    live && text.length <= TYPING_MAX_CHARS ? 0 : text.length,
-  );
-  const everStartedRef = useRef(false);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const onTypeTickRef = useRef(onTypeTick);
-  useEffect(() => {
-    onTypeTickRef.current = onTypeTick;
-  }, [onTypeTick]);
-
-  useEffect(() => {
-    // 仅「最新且展开且不太长」的思考启用打字机；每个思考只播一次，避免折叠重开重打
-    if (live && open && text.length <= TYPING_MAX_CHARS) {
-      if (everStartedRef.current) {
-        setTypedLen(text.length);
-        return;
-      }
-      everStartedRef.current = true;
-      setTypedLen(0);
-      timerRef.current = setInterval(() => {
-        onTypeTickRef.current?.();
-        setTypedLen((prev) => Math.min(prev + TYPING_STEP, text.length));
-      }, TYPING_MS);
-      return () => {
-        if (timerRef.current) clearInterval(timerRef.current);
-        timerRef.current = null;
-      };
-    }
-    setTypedLen(text.length);
-    return undefined;
-  }, [live, open, text]);
-
-  // 打完后停表（防 interval 空转）
-  useEffect(() => {
-    if (typedLen >= text.length && timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  }, [typedLen, text.length]);
-
   const preview = text.replace(/\s+/g, " ").trim();
-  const typing = typedLen < text.length;
 
   return (
     <div className="w-full max-w-full overflow-hidden rounded-xl border border-border/40 bg-muted/15 text-[13px]">
@@ -135,9 +85,9 @@ export const AgentThought = memo(function AgentThought({
         )}
         {open ? (
           <div className="min-w-0 flex-1">
-            {typing ? (
-              <p className="whitespace-pre-wrap break-words leading-[1.65] text-[13.5px] text-foreground/90">
-                {text.slice(0, typedLen)}
+            {streaming ? (
+              <p className="min-w-0 whitespace-pre-wrap break-words leading-[1.65] text-[13.5px] text-foreground/90">
+                {text}
                 <span className="ml-0.5 inline-block h-[1.05em] w-[2px] translate-y-[0.15em] animate-pulse rounded-full bg-primary/70" />
               </p>
             ) : (

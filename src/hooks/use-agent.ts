@@ -45,6 +45,8 @@ export function useAgent(options: UseAgentOptions = {}) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [interruptedSessions, setInterruptedSessions] = useState<AgentSessionListItem[]>([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  /** 真流式：agent 回复正在逐 token 到达的增量文本 */
+  const [streamingText, setStreamingText] = useState("");
 
   const abortRef = useRef<AbortController | null>(null);
   const onPersistedRef = useRef(options.onSectionPersisted);
@@ -134,6 +136,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     abortRef.current = null;
     setStatus("idle");
     setMessages([]);
+    setStreamingText("");
     setPlan(null);
     setSummary(null);
     setPendingConfirm(null);
@@ -166,6 +169,7 @@ export function useAgent(options: UseAgentOptions = {}) {
   const cancel = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    setStreamingText("");
     setStatus("cancelled");
     void refreshInterrupted();
   }, [refreshInterrupted]);
@@ -193,10 +197,16 @@ export function useAgent(options: UseAgentOptions = {}) {
       case "agent/plan":
         setPlan(event.plan);
         break;
+      case "agent/thought_delta":
+        if (event.content) {
+          setStreamingText((prev) => prev + event.content);
+        }
+        break;
       case "agent/thought":
         if (event.content?.trim()) {
           setMessages((prev) => [...prev, { kind: "thought", text: event.content! }]);
         }
+        setStreamingText("");
         break;
       case "agent/action":
         setMessages((prev) => [
@@ -257,6 +267,7 @@ export function useAgent(options: UseAgentOptions = {}) {
         ]);
         break;
       case "agent/complete":
+        setStreamingText("");
         setSummary(event.summary);
         setMessages((prev) => [...prev, { kind: "summary", summary: event.summary }]);
         setPendingCheckpoint(null);
@@ -264,6 +275,7 @@ export function useAgent(options: UseAgentOptions = {}) {
         void refreshInterrupted();
         break;
       case "agent/error":
+        setStreamingText("");
         toast.error(event.error);
         setStatus("error");
         void refreshInterrupted();
@@ -426,6 +438,7 @@ export function useAgent(options: UseAgentOptions = {}) {
   return {
     status,
     messages,
+    streamingText,
     plan,
     summary,
     pendingConfirm,
