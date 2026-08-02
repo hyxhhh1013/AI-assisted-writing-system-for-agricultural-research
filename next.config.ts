@@ -16,6 +16,8 @@ const nextConfig: NextConfig = {
     "/*": ["./data/charts/**/*", "./papers/**/*"],
   },
   experimental: {
+    // 附件上传上限 20MB，需大于该值（含 multipart 开销），否则 Next 默认 10MB 会静默截断请求体
+    proxyClientMaxBodySize: "24mb",
     optimizePackageImports: [
       "lucide-react",
       "react-resizable-panels",

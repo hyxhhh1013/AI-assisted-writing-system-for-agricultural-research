@@ -6,6 +6,14 @@ import { resolveProjectRuntimePath } from "@/lib/runtime-paths";
 import prisma from "@/lib/prisma";
 import type { AgentAttachmentInfo, AttachmentExtractSource } from "@/contracts/agent-attachment";
 
+/** 客户端输入不合法（超限/类型不支持）——路由据此返回 400，不视为服务端错误 */
+export class AttachmentValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AttachmentValidationError";
+  }
+}
+
 function extOf(name: string): string {
   const idx = name.lastIndexOf(".");
   return idx >= 0 ? name.slice(idx + 1).toLowerCase() : "";
@@ -13,10 +21,10 @@ function extOf(name: string): string {
 
 export function assertAttachmentAcceptable(file: { name: string; size: number }): void {
   if (file.size > MAX_ATTACHMENT_BYTES) {
-    throw new Error(`文件过大（上限 ${MAX_ATTACHMENT_BYTES / 1024 / 1024}MB）`);
+    throw new AttachmentValidationError(`文件过大（上限 ${MAX_ATTACHMENT_BYTES / 1024 / 1024}MB）`);
   }
   if (!ATTACHMENT_ALLOWED_EXTENSIONS.has(extOf(file.name))) {
-    throw new Error(`不支持的文件类型：${file.name}（允许 ${[...ATTACHMENT_ALLOWED_EXTENSIONS].join("/")}）`);
+    throw new AttachmentValidationError(`不支持的文件类型：${file.name}（允许 ${[...ATTACHMENT_ALLOWED_EXTENSIONS].join("/")}）`);
   }
 }
 
@@ -55,32 +63,38 @@ export async function createAttachmentFromFile(
     extractSource = "failed";
   }
 
-  const row = await prisma.agentAttachment.create({
-    data: {
-      id: attachmentId,
-      userId,
-      sessionId: sessionId ?? null,
-      fileKey,
-      originalName: file.name,
-      mimeType: file.type || "application/octet-stream",
-      size: buf.length,
-      status,
-      extractSource,
-      extractedText,
-    },
-  });
-  return {
-    id: row.id,
-    originalName: row.originalName,
-    mimeType: row.mimeType,
-    size: row.size,
-    status: row.status,
-    extractSource: row.extractSource as AttachmentExtractSource | null,
-    charCount,
-    truncated,
-    pinned: row.pinned,
-    createdAt: row.createdAt.toISOString(),
-  };
+  try {
+    const row = await prisma.agentAttachment.create({
+      data: {
+        id: attachmentId,
+        userId,
+        sessionId: sessionId ?? null,
+        fileKey,
+        originalName: file.name,
+        mimeType: file.type || "application/octet-stream",
+        size: buf.length,
+        status,
+        extractSource,
+        extractedText,
+      },
+    });
+    return {
+      id: row.id,
+      originalName: row.originalName,
+      mimeType: row.mimeType,
+      size: row.size,
+      status: row.status,
+      extractSource: row.extractSource as AttachmentExtractSource | null,
+      charCount,
+      truncated,
+      pinned: row.pinned,
+      createdAt: row.createdAt.toISOString(),
+    };
+  } catch (error) {
+    // DB 写入失败：清理已落盘的孤儿文件后重抛，避免残留无主文件
+    deleteAttachmentFile(userId, attachmentId);
+    throw error;
+  }
 }
 
 export async function pinAttachment(
