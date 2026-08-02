@@ -4,6 +4,8 @@
 
 import type { AgentPlan, AgentSummary } from "@/contracts/agent";
 import type { AgentUiMessage } from "@/contracts/agent-session";
+import type { DirectionAnalysis, DirectionAsset, DirectionRoadmap } from "@/contracts/direction";
+import type { DirectionLiteratureEntry } from "@/contracts/direction-literature";
 
 // ==================== 璇锋眰鍙傛暟 ====================
 
@@ -308,6 +310,25 @@ export interface AdminDirectionRecord {
   roadmapConfirmed: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+/** 方向详情：完整资产 / 文献语料 / 分析 / 路线图 */
+export interface AdminDirectionDetail {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  categories: string[];
+  status: "active" | "archived";
+  userId: string;
+  userName?: string;
+  createdAt: string;
+  updatedAt: string;
+  assets: DirectionAsset[];
+  literatureEntries: DirectionLiteratureEntry[];
+  literatureConfirmedAt: number | null;
+  analysis: DirectionAnalysis | null;
+  roadmap: DirectionRoadmap | null;
 }
 
 // ==================== 瀹℃煡 / 鏌ラ噸 ====================

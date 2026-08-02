@@ -6,6 +6,7 @@ import type {
   AdminAgentSessionDetail,
   AdminAgentSessionRecord,
   AdminAiStatusResponse,
+  AdminDirectionDetail,
   AdminDirectionRecord,
   AdminHealthData,
   AdminKnowledgeFile,
@@ -33,6 +34,7 @@ export type {
   AdminAiRoles,
   AdminAiStatusProvider,
   AdminAiStatusResponse,
+  AdminDirectionDetail,
   AdminDirectionRecord,
   AdminHealthData,
   AdminKnowledgeFile,
@@ -389,6 +391,15 @@ export async function setAdminDirectionStatus(
   const data = await parseJson<AdminSuccessResponse & { error?: string }>(res);
   if (res.ok && data.success) return { ok: true };
   return { ok: false, error: data.error || data.message || "操作失败" };
+}
+
+/** GET /api/admin/directions/[id] — 方向详情（资产/文献/分析/路线图） */
+export async function getAdminDirectionDetail(
+  id: string,
+): Promise<AdminDirectionDetail | null> {
+  const res = await fetch(`/api/admin/directions/${id}`);
+  const data = await parseJson<AdminSuccessResponse<AdminDirectionDetail>>(res);
+  return data.success ? (data.data ?? null) : null;
 }
 
 /** GET /api/admin/plagiarism */
