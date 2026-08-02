@@ -189,7 +189,8 @@ Agent = **会诊断、会取证、会落地、会停下来问你的写作搭档*
 ### 手测通过后
 
 1. 勾选本文 §6「P1～P3 手测」与「空转指标」（填入三轮 tool 次数均值即可）  
-2. 队列 `W3-AP-BEHAVIOR` → `done`；MASTER_PLAN Wave 3.6 同步
+2. 队列 `W3-AP-BEHAVIOR` → `done`；MASTER_PLAN Wave 3.6 同步  
+3. **下一主轴**：[`W3-AP-QUALITY.md`](./W3-AP-QUALITY.md)（Wave 3.7）
 
 ### 代码入口（S0）
 

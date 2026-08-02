@@ -8,7 +8,7 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-07-26（**W3-AP-BEHAVIOR done**；见 `plans/W3-AP-BEHAVIOR.md`）  
+> **最后更新**：2026-07-28（**W3-AP-DRAFT-COVER done**；下一优先 WQC；见 `plans/W3-AP-QUALITY.md`）  
 > **实时 status 只看 §1 Phase 11**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
@@ -197,6 +197,17 @@
 | FIG-PR-026 | XRD 相检索 MVP（内置参考库 + 工作流） | 001 | 1d | **done** | 2026-07-27；`/api/xrd/phase-search` + workflow 相检索 |
 | W3-AP-CHART-XRD | Agent XRD 桥接：Scherrer/相检索/峰表 | W3-AP-CHART-BRIDGE | 0.5d | **done** | 2026-07-27；`generate_xrd_analysis` + P6 剧本 |
 | — | 任务单细节 | — | — | — | [`plans/FIG-PR-scientific-plotting.md`](./plans/FIG-PR-scientific-plotting.md) |
+| **Phase 11b — Wave 3.7 Agent 写作质量（对齐 academic-paper Phase 4→7）** |
+| **W3-AP-QUALITY** | **质量主轴：引用接地→分节完整→文风质检→摘要/审查收口** | W3-AP-BEHAVIOR | 3～5w | **todo** | 详规 [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md) |
+| W3-AP-ENTRY-WIZARD | 新建向导：入口三档 full/outline_ready/data_ready + 配置迁入 | W3-AP-CONFIG-QA | 0.5d | **todo** | 代码多已落地；收口测+文档 |
+| W3-AP-CHART-CJK | 图表中文：CSV utf-8 优先解码 + chartIndices 批量（≤6） | W3-AP-CHART-BRIDGE | 0.5d | **todo** | `plot_utils.py` / `generate-chart.ts`；重生成验证 |
+| W3-AP-CITE-GROUND | 引用语义接地：可疑 [n] 检测/告警 + soft-grounded 使用率 | W3-CITE-GATE, W3-AP-LIT-QUALITY | 2～3d | **done** | 2026-07-28；`citation-grounding` + validate/inspect |
+| W3-AP-DRAFT-COVER | 分节完整度：薄节报告 + 综述/研究期望节 + Agent 补节提示 | W3-AP-READ-BEFORE-WRITE | 1～2d | **done** | 2026-07-28；`draft-coverage` + inspect/简报 |
+| W3-AP-WQC | 写作质检轻量：AI 腔 / overclaim / 段长；warn 默认不阻断 | W3-AP-DRAFT-COVER | 1～2d | **todo** | verify_content 增强；非 skill 全文移植 |
+| W3-AP-ABS-FLOW | 正文够长推双语摘要；Passport 5b 信号 | W3-ABSTRACT, W3-AP-DRAFT-COVER | 1d | **todo** | write_bilingual_abstract 路径 |
+| W3-AP-REVIEW-FLOW | 摘要后可选审查；revision-coach 剧本加固 | W3-REVIEW-2, W3-AP-ABS-FLOW | 1～2d | **todo** | 不引入五人组外审 |
+| W3-AP-LIVE-EVAL | 可选 live/录制质量冒烟（错引/节完整/摘要） | W3-AP-CITE-GROUND, W3-AP-DRAFT-COVER | 1～2d | **todo** | 扩展 eval:agent；默认仍 mock |
+| — | 质量主轴细节 | — | — | — | [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md) |
 
 
 | 来源 | 本队列处理方式 |
@@ -206,7 +217,7 @@
 | `rag-index-refactor.md` | RAG-PR-001～005 原样纳入 §1；细节见该文 §3 |
 | `CLAUDE.md` p1-1～p3-5 | 映射见 §8 |
 | `docs/plans/ENG-PR-080-human-in-the-loop.md` | ENG-PR-087～086 + **096a～d** 任务单以该文 §0～§十六 为准；**096 为产品主轴**；合并时同步 §1 Phase 6 |
-| `docs/plans/ENG-PR-090-knowledge-enrichment.md` | ENG-PR-090～094 任务单以该文 §0～§十 为准；**090 先于 091**；合并时同步 §1 Phase 7 |
+| `docs/plans/W3-AP-QUALITY.md` | Wave 3.7 质量主轴任务单；合并时同步 §1 Phase 11b |
 
 ### 1.2 已完成（勿重复开 PR）
 
@@ -1007,22 +1018,28 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-07-27 | FIG-PR-026 | AI | 相检索 MVP：`data/xrd/phase-reference.json` + `matchXrdPhases` + workflow 按钮 |
 | 2026-07-27 | RAG-PR-012 | AI | 召回：同义词扩展 + 多 query RRF + 弱 BM25 全池向量 + 分类提示 |
 | 2026-07-27 | RAG-PR-013 | AI | 倒排 CJK n-gram 对齐、题名加权、轻量重排、multi-query 默认 auto |
+| 2026-07-28 | W3-AP-QUALITY | AI | 质量主轴挂载：对照 academic-paper 缺口规划；`plans/W3-AP-QUALITY.md`；队列 Phase 11b |
+| 2026-07-28 | W3-AP-CHART-CJK | AI | 定位乱码=CSV latin-1；改 utf-8 优先；generate_chart 支持 chartIndices；待提交验证 |
+| 2026-07-28 | W3-AP-CITE-GROUND | AI | 语义接地：按条题录/摘要 bigram 重叠；中英脚本跳过；validate_citations + inspect；单测绿 |
+| 2026-07-28 | W3-AP-DRAFT-COVER | AI | 分节完整度：期望节阈值+alt 组；inspect/简报/快捷语；nextSectionKey |
 
 ---
 
 ## 5. 推荐执行顺序（给「下一次 AI」）
 
-**当前主轴（2026-07-25）**：**W3-AP-BEHAVIOR** — 暂停 Agent 横向扩工具；剧本回归 → 压空转 → 先读后写。  
-详规：[`plans/W3-AP-BEHAVIOR.md`](./plans/W3-AP-BEHAVIOR.md)。
+**当前主轴（2026-07-28）**：**W3-AP-QUALITY** — Agent 写作质量（引用接地 → 分节完整 → 文风质检 → 摘要/审查收口）。  
+详规：[`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md)。  
+行为主轴已收口：[`plans/W3-AP-BEHAVIOR.md`](./plans/W3-AP-BEHAVIOR.md)。
 
 | 优先级 | ID | 说明 |
 |--------|-----|------|
-| **P0** | 手测 | 配置问答 + 诊断 + 文献导入 + 写引言 |
-| P1 | 空转基线 | 记手测 toolCall，对照 ANTISPAM |
-| P2 | 行为收口 | BEHAVIOR 清单勾选手测项 |
-| P3 | FIG-PR 实测 / W0-5 | 作图与仓库卫生：不挡 Agent 行为主轴时可穿插 |
+| **P0** | **W3-AP-WQC** | AI 腔 / overclaim 轻量质检（DRAFT-COVER 已 done） |
+| P0b | W3-AP-CHART-CJK / ENTRY-WIZARD | 收口已写代码：中文图 + 入口向导测 |
+| P1 | W3-AP-ABS-FLOW → REVIEW-FLOW | 摘要与可选审查收口 |
+| P2 | W3-AP-LIVE-EVAL / W0-5 | 质量冒烟；仓库卫生可穿插 |
 
-**若只能做一个产品 PR**：先让 P1（诊断）+ P3（写引言）两条剧本自动断言绿。
+**若只能做一个产品 PR**：先做 **WQC**（文风质检）。  
+**明确不做本波**：全自动 Conductor、plan 苏格拉底、五人组外审、LaTeX/disclosure、Generator–Evaluator 纸盲合同。
 
 ---
 

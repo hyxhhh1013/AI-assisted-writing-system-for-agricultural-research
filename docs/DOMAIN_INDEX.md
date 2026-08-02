@@ -33,7 +33,7 @@
 | 功能 | 页面 | API | 核心代码 |
 |------|------|-----|----------|
 | 扩写流水线 | 工作台 `writing` Tab | `POST /api/writing` SSE；`POST /api/writing/retrieve-preview` | `api/writing/pipeline/*`, `services/writing-context.ts` |
-| AI Agent | 工作台 `agent` Tab | `POST /api/agent` SSE；`GET /api/agent/sessions`（`history=1`） | Phase0 **问答配置**；行为 eval/空转/先读后写；文献相关度；`update_work_memory`；见 [`plans/W3-AP-BEHAVIOR.md`](./plans/W3-AP-BEHAVIOR.md) |
+| AI Agent | 工作台 `agent` Tab | `POST /api/agent` SSE；`GET /api/agent/sessions`（`history=1`） | Phase0 问答配置；行为 eval；**质量主轴**见 [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md)；行为底稿 [`W3-AP-BEHAVIOR.md`](./plans/W3-AP-BEHAVIOR.md) |
 | 产品门禁评测 | 本地/CI | `npm run eval:gates`；可选 `npm run eval:pipeline` | `lib/eval/product-gates.ts`、`scripts/eval-pipeline-paper.ts` |
 | 证据中心 | 工作台 `data` | — | `evidence-hub-sections.tsx`、`data-panel.tsx` |
 | 配图编辑 | 写作面板内联 | — | `writing-figure-edit-links.tsx` |
@@ -84,6 +84,8 @@
 | 统一质量中心 | `src/app/plagiarism/page.tsx` | `/api/plagiarism/v2` SSE | `QualityWorkspace`、`quality-persist.ts`、`quality-restore.ts` |
 | 审查 Tab | `/plagiarism?tab=review` | `POST /api/review`；`POST /api/review/rounds` | `review-tab.tsx`、`review-service.ts`、`lib/review-rounds.ts` |
 | 引用硬检 | Passport Phase 5 / PDF 导出 | `GET|POST /api/citations/gate` | `lib/citation-gate.ts`、`services/citations.ts` |
+| 引用语义接地 | Agent `validate_citations` / inspect |（工具内） | `lib/citation-grounding.ts`、`contracts/citation-grounding.ts`（W3-AP-CITE-GROUND） |
+| 分节完整度 | Agent inspect / 简报 |（工具内） | `lib/draft-coverage.ts`、`contracts/draft-coverage.ts`（W3-AP-DRAFT-COVER） |
 | 查重 | 质量中心 | `POST /api/plagiarism/v2` | `plagiarism-service.ts`、`use-plagiarism-check` |
 | 降重改写 | 质量中心降重 Tab | `/api/plagiarism/rewrite` | `rewrite-service.ts`、`rewrite-view.tsx` |
 | 匹配预览 | 查重结果 | — | `match-content-preview.tsx` |

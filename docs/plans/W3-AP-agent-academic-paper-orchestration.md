@@ -62,13 +62,15 @@ LangGraph ReAct（思考 ↔ 工具）
 | **W3-AP-LIT-BRIDGE** | 文献闭环：search_external hitJson → 确认 → 导入写回 | **done** |
 | ~~W3-AP-CONDUCTOR~~ | ~~全自动八阶段~~ | **cancelled**（与对话定位冲突） |
 
-### 3.1 下一主轴（能力桥收口后）
+### 3.1 下一主轴
 
 | ID | 内容 | 状态 |
 |----|------|------|
-| **W3-AP-BEHAVIOR** | 暂停扩工具；剧本验收 → 压空转 → 先读后写 | **todo**（当前主轴） |
+| **W3-AP-BEHAVIOR** | 暂停扩工具；剧本验收 → 压空转 → 先读后写 | **done**（2026-07-26） |
+| **W3-AP-QUALITY** | 写作质量：引用接地 → 分节完整 → WQC → 摘要/审查 | **todo**（**当前主轴**） |
 
-详规与五条剧本断言：[`W3-AP-BEHAVIOR.md`](./W3-AP-BEHAVIOR.md)。
+行为详规：[`W3-AP-BEHAVIOR.md`](./W3-AP-BEHAVIOR.md)。  
+质量详规：[`W3-AP-QUALITY.md`](./W3-AP-QUALITY.md)。
 
 ---
 

@@ -1,7 +1,7 @@
 # 禾书耕文（GrainScript）整体规划 v2
 
-> **状态**：生效中（2026-07-26：Wave 3.6 行为主轴已收口）  
-> **取代**：分散的「部分规划」作为唯一战略主轴；任务状态以 `ENGINEERING_OPTIMIZATION_QUEUE.md` **§1 Phase 11** 为准  
+> **状态**：生效中（2026-07-28：Wave 3.7 质量主轴挂载）  
+> **取代**：分散的「部分规划」作为唯一战略主轴；任务状态以 `ENGINEERING_OPTIMIZATION_QUEUE.md` **§1 Phase 11 / 11b** 为准  
 > **北极星**：从「功能齐全的 AI 写作工具箱」→「可走完一篇论文全生命周期的科研写作系统」
 
 ---
@@ -15,8 +15,9 @@
 | Wave 2 LangGraph + write tools | ✅ 产品化 MVP | GUIDE + ONESHOT + CHECKPOINT；**ENG-PR-082 done** |
 | Wave 3 学术完整性 | ✅ 基本完成 | STUDENT / ABS-UI / E2E / CITE / REVIEW-2 已落地 |
 | Wave 3.5 Agent≈AP 编排 | ✅ 能力桥收口 | LIT/CONFIG/CHART/MULTI-TURN done；见 orchestration 计划 |
-| Wave 3.6 Agent 行为可靠 | 📋 **当前主轴** | [`plans/W3-AP-BEHAVIOR.md`](./plans/W3-AP-BEHAVIOR.md)：剧本 eval → 压空转 → 先读后写；**暂停扩工具** |
-| Wave 4 导出抛光 | ⚠️ backlog | **W4-EXPORT** done；OA/瘦身让路给 3.6 |
+| Wave 3.6 Agent 行为可靠 | ✅ 已收口 | [`plans/W3-AP-BEHAVIOR.md`](./plans/W3-AP-BEHAVIOR.md)：剧本 eval → 压空转 → 先读后写 |
+| Wave 3.7 Agent 写作质量 | 📋 **当前主轴** | [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md)：引用接地 → 分节完整 → WQC → 摘要/审查；队列 Phase 11b |
+| Wave 4 导出抛光 | ⚠️ backlog | **W4-EXPORT** done；LaTeX/disclosure 等让路给 3.7 |
 | 从 Demo→完整产品 | 📋 规划生效 | 见 [`PRODUCT_COMPLETION_PLAN.md`](./PRODUCT_COMPLETION_PLAN.md) |
 | `/academic-paper` | ➡️ 引导页 | **不是**第二套流水线；只引导进工作台 **Agent Tab** |
 | 产品主入口 | 工作台 | 人控 Tab + 自主 Agent Tab；质量中心 / 知识库为深链 |
@@ -167,7 +168,7 @@ Wave 2 产品化三项已完成。
 | **W3-AP-BEHAVIOR** | ✅ done | 行为主轴收口；见 [`plans/W3-AP-BEHAVIOR.md`](./plans/W3-AP-BEHAVIOR.md) |
 | ~~W3-AP-CONDUCTOR~~ | cancelled | 与边聊边做冲突 |
 
-### Wave 3.6 — Agent 行为可靠（当前主轴）
+### Wave 3.6 — Agent 行为可靠（已收口）
 
 | 项 | 状态 | 说明 |
 |----|------|------|
@@ -178,7 +179,19 @@ Wave 2 产品化三项已完成。
 | **W3-AP-CONFIG-QA** | ✅ done | Phase0 一问一答配置 |
 | **W3-AP-WORK-MEMORY** | ✅ done | 主张/决策/待办落盘 |
 
-原则：新 Agent 工具仅服务失败剧本；Wave 4 抛光不抢主轴。
+### Wave 3.7 — Agent 写作质量（当前主轴）
+
+| 项 | 状态 | 说明 |
+|----|------|------|
+| **W3-AP-QUALITY** | 📋 todo | 主轴；详规 [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md) |
+| W3-AP-CITE-GROUND | ✅ done | 语义可疑引用告警；`citation-grounding` |
+| W3-AP-DRAFT-COVER | ✅ done | 分节完整 / 薄节；`draft-coverage` |
+| W3-AP-WQC | todo | AI 腔 / overclaim 轻量质检 |
+| W3-AP-WQC | todo | AI 腔 / overclaim 轻量质检 |
+| W3-AP-ABS-FLOW / REVIEW-FLOW | todo | 摘要与可选审查收口 |
+| W3-AP-CHART-CJK / ENTRY-WIZARD | todo | 收口已有实现 |
+
+原则：先质量后扩模式；不做 Conductor / plan 苏格拉底 / 五人组外审 / LaTeX disclosure（本波）。
 
 ### Wave 4 — 导出与抛光（backlog）
 
@@ -201,10 +214,10 @@ Wave 2 产品化三项已完成。
 | 1 RESEARCH | RAG + 外部检索 + 210 文献注入 | 0–1 | ✅ |
 | 2 ARCHITECTURE | outline + writing blueprint + userSkeleton | 1 | ✅ |
 | 3 ARGUMENTATION | Argument Blueprint | 3 | ✅ MVP |
-| 4 DRAFTING | writing pipeline + Agent write tools | 2 | ✅ |
-| 5a CITATIONS | validateCitations + CITE-GATE | 3 | ✅ |
-| 5b ABSTRACT | 双语摘要 API + ABS-UI | 3 | ✅ |
-| 6 PEER REVIEW | review-service + max-2 轮编排 | 3 | ✅ |
+| 4 DRAFTING | writing pipeline + Agent write tools | 2 / **3.7** | ✅ 能写；**质量收口中** |
+| 5a CITATIONS | validateCitations + CITE-GATE + **CITE-GROUND** | 3 / **3.7** | ✅ 编号；**语义接地 done** |
+| 5b ABSTRACT | 双语摘要 API + ABS-FLOW | 3 / **3.7** | ✅ API；**Agent 收口路径 todo** |
+| 6 PEER REVIEW | review-service + max-2 + REVIEW-FLOW | 3 / **3.7** | ✅ 内审；外审五人组不做 |
 | 7 FORMAT | DOCX/PDF + W4-EXPORT | 4 | ✅ MVP |
 
 ---
@@ -226,7 +239,7 @@ Wave 2 产品化三项已完成。
 |------|------|
 | **本文件** | 唯一战略主轴 + §0 当前真相 |
 | `PRODUCT_COMPLETION_PLAN.md` | Demo→完整产品五层与波次 |
-| `ENGINEERING_OPTIMIZATION_QUEUE.md` §1 Phase 11 | Wave 任务表（实时 status） |
+| `ENGINEERING_OPTIMIZATION_QUEUE.md` §1 Phase 11 / **11b** | Wave 任务表（实时 status）；**11b = 质量主轴** |
 | `DOMAIN_INDEX.md` | 功能 → 代码入口 |
 | `SECURITY_FIX_PLAN_2026-07-05.md` | Wave 0 安全 PR |
 | `plans/*` | 设计底稿（非 status 源） |
