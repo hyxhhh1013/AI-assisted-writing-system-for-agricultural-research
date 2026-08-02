@@ -12,6 +12,8 @@ import {
 } from "@/lib/agent";
 import type { AgentSSEEvent } from "@/contracts/agent";
 import type { AttachmentExtractSource } from "@/contracts/agent-attachment";
+import { MAX_ATTACHMENT_TEXT_CHARS } from "@/lib/agent/attachments/constants";
+import { buildAttachmentManifest } from "@/lib/agent/attachments/manifest";
 import { buildFollowUpInitialState } from "@/lib/agent/session-continue";
 import {
   createAgentSession,
@@ -58,6 +60,8 @@ export async function POST(req: NextRequest) {
     let directionSlug = data.directionSlug;
     let sessionId: string | undefined;
     let resumeState: ReturnType<typeof snapshotToInitialState> | undefined;
+    /** resume 续跑时回退的会话附件 id（来自快照，避免清空 traceability） */
+    let resumeSnapshotAttachmentIds: string[] | undefined;
     let followUp = false;
     let pendingCheckpointKind: import("@/contracts/agent").AgentCheckpointKind | undefined;
     const checkpointDecision = data.checkpointDecision;
@@ -106,6 +110,7 @@ export async function POST(req: NextRequest) {
         });
       }
       resumeState = snapshotToInitialState(existing.goal, existing.snapshot);
+      resumeSnapshotAttachmentIds = existing.snapshot.attachmentIds;
     } else if (data.sessionId && goal) {
       // 同一会话跟聊：completed / interrupted / error 均可接新目标
       const existing = await getAgentSessionForUser(data.sessionId, userId);
@@ -166,10 +171,13 @@ export async function POST(req: NextRequest) {
 
     // 附件：加载并生成清单（失败降级不阻断对话）
     let attachmentManifest: string | undefined;
-    const attachmentIds = data.attachmentIds ?? [];
+    // resume 且客户端不传附件 id 时回退快照（避免清空 traceability）
+    const attachmentIds =
+      (data.attachmentIds && data.attachmentIds.length > 0)
+        ? data.attachmentIds
+        : (data.resume ? resumeSnapshotAttachmentIds ?? [] : []);
     if (attachmentIds.length > 0) {
       try {
-        const { buildAttachmentManifest } = await import("@/lib/agent/attachments/manifest");
         const rows = await prisma.agentAttachment.findMany({
           where: { id: { in: attachmentIds }, userId },
         });
@@ -177,6 +185,7 @@ export async function POST(req: NextRequest) {
           id: r.id, originalName: r.originalName, mimeType: r.mimeType, size: r.size,
           status: r.status, extractSource: r.extractSource as AttachmentExtractSource | null,
           charCount: r.extractedText?.length ?? 0,
+          truncated: (r.extractedText?.length ?? 0) >= MAX_ATTACHMENT_TEXT_CHARS,
           pinned: r.pinned, createdAt: r.createdAt.toISOString(),
         })));
       } catch { /* 清单失败仅降级 */ }

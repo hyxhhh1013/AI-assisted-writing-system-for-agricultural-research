@@ -132,16 +132,17 @@ export async function* runAgentGraphLoop(
         ],
       };
 
-  // 附件清单：非 resume 时拼进首条 user 消息（清单已在历史里则不重复注入）
-  if (attachmentManifest && !resumeState && initialState.messages?.length) {
-    const first = initialState.messages[0];
-    initialState = {
-      ...initialState,
-      messages: [
-        { ...first, content: `${attachmentManifest}\n\n${first.content}` },
-        ...(initialState.messages?.slice(1) ?? []),
-      ],
-    };
+  // 附件清单：有清单即注入到"最后一条 user 消息"（fresh / followUp 均适用；纯 resume 无清单不触发）
+  if (attachmentManifest && initialState.messages?.length) {
+    let lastUserIdx = -1;
+    for (let i = initialState.messages.length - 1; i >= 0; i--) {
+      if (initialState.messages[i].role === "user") { lastUserIdx = i; break; }
+    }
+    if (lastUserIdx >= 0) {
+      initialState.messages = initialState.messages.map((msg, i) =>
+        i === lastUserIdx ? { ...msg, content: `${attachmentManifest}\n\n${msg.content}` } : msg,
+      );
+    }
   }
 
   if (followUp) {
