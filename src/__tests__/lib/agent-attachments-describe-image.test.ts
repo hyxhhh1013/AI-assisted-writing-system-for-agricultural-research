@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { describeImage } from "@/lib/agent/attachments/describe-image";
+import { MAX_VISION_IMAGE_BYTES } from "@/lib/agent/attachments/constants";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -35,5 +36,15 @@ describe("describeImage", () => {
     const r = await describeImage(fakePng());
     expect(r.status).toBe("extract_failed");
     expect(r.source).toBe("image_ocr");
+  });
+
+  it("rejects oversized images before calling vision", async () => {
+    const big = path.join(os.tmpdir(), "att-vision-big.png");
+    fs.writeFileSync(big, Buffer.alloc(MAX_VISION_IMAGE_BYTES + 1, 1));
+    const r = await describeImage(big);
+    expect(r.status).toBe("extract_failed");
+    expect(r.source).toBe("image_ocr");
+    expect(r.error).toContain("图片过大");
+    expect(mockCallAI).not.toHaveBeenCalled();
   });
 });

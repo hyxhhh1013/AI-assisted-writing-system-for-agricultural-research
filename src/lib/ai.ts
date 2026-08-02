@@ -1,6 +1,6 @@
 import { fetchWithRetry } from "./fetch-with-retry";
 import { withKeyConcurrency } from "./ai-concurrency";
-import { getModelConfig, ModelProviderKey, validateProviderKey } from "./models";
+import { getModelConfig, MODEL_PROVIDERS, ModelProviderKey, validateProviderKey } from "./models";
 import { usageLog } from "./usage-log";
 export { getAgentModelConfig } from "./models";
 
@@ -72,7 +72,12 @@ export async function resolveProviderModel(
     if (!_modelNameCache || Date.now() - _modelNameCacheTime > KEY_CACHE_TTL) {
       const { getSetting } = await import("./settings");
       const next: Record<string, string> = {};
-      for (const key of ["DEEPSEEK_MODEL", "ZHIPU_MODEL"] as const) {
+      // 遍历所有 provider 的 modelSettingKey（去重），保证新增 provider（如 vision）的
+      // 模型名设置也能从 Admin DB 热加载，而无需手动维护硬编码列表。
+      const settingKeys = [...new Set(
+        Object.values(MODEL_PROVIDERS).map((p) => p.modelSettingKey),
+      )];
+      for (const key of settingKeys) {
         const v = await getSetting(key);
         if (v?.trim()) next[key] = v.trim();
       }
