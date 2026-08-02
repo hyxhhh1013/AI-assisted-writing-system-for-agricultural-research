@@ -62,6 +62,32 @@ export async function GET(req: NextRequest) {
     select: { title: true, lastUpdated: true, owner: { select: { name: true } } },
   });
 
+  // Agent 会话状态分布
+  const agentSessionByStatus = await prisma.agentSession.groupBy({
+    by: ["status"], _count: { id: true },
+  });
+
+  // 近 7 天 Agent 会话趋势（按天）
+  const recentSessions = await prisma.agentSession.findMany({
+    where: { createdAt: { gte: sevenDaysAgo } },
+    select: { createdAt: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const agentSessionTrend: { date: string; count: number }[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().slice(0, 10);
+    const count = recentSessions.filter((s) => s.createdAt.toISOString().slice(0, 10) === dateStr).length;
+    agentSessionTrend.push({ date: dateStr, count });
+  }
+
+  // 最近活跃方向
+  const recentDirections = await prisma.direction.findMany({
+    take: 5,
+    orderBy: { updatedAt: "desc" },
+    select: { name: true, slug: true, status: true, updatedAt: true },
+  });
+
   const aiUsage = await getAiUsageDashboard();
 
   return NextResponse.json({
@@ -76,6 +102,11 @@ export async function GET(req: NextRequest) {
     projectTrend,
     recentActivity: recentActivity.map(a => ({
       title: a.title, user: a.owner?.name ?? "未知", time: a.lastUpdated.toISOString(),
+    })),
+    agentSessionByStatus: agentSessionByStatus.map(s => ({ status: s.status, count: s._count.id })),
+    agentSessionTrend,
+    recentDirections: recentDirections.map(d => ({
+      name: d.name, slug: d.slug, status: d.status, time: d.updatedAt.toISOString(),
     })),
     aiUsage,
   });

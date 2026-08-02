@@ -18,6 +18,13 @@ import { AdminMetricStrip } from "@/components/admin/admin-stat-card";
 import { AdminAlertStrip } from "@/components/admin/admin-alert-strip";
 import { AdminSparkline, isSparseTrend } from "@/components/admin/admin-sparkline";
 
+const ADMIN_SESSION_STATUS_LABEL: Record<string, string> = {
+  running: "运行中",
+  interrupted: "已中断",
+  completed: "已完成",
+  error: "出错",
+};
+
 function formatTime(iso: string) {
   const d = new Date(iso);
   const now = Date.now();
@@ -96,6 +103,22 @@ export default function AdminDashboard() {
         value: `${u.count} 次`,
       }))
     : [];
+
+  const sessionTrend = (stats.agentSessionTrend ?? []).map((d) => ({
+    label: d.date.slice(5),
+    value: d.count,
+  }));
+  const statusItems = (stats.agentSessionByStatus ?? [])
+    .map((s) => ({
+      label: ADMIN_SESSION_STATUS_LABEL[s.status] ?? s.status,
+      value: s.count,
+    }))
+    .sort((a, b) => b.value - a.value);
+  const recentDirItems = (stats.recentDirections ?? []).map((d) => ({
+    label: d.name,
+    value: formatTime(d.time),
+    hint: d.status === "active" ? "启用" : "已归档",
+  }));
 
   return (
     <div className="space-y-5">
@@ -230,6 +253,31 @@ export default function AdminDashboard() {
                   })),
                 ]}
               />
+            </AdminPanel>
+          )}
+
+          {(sessionTrend.some((t) => t.value > 0) || statusItems.length > 0) && (
+            <AdminPanel title="Agent 会话概览" subtitle="近 7 天">
+              {sessionTrend.some((t) => t.value > 0) && (
+                <AdminBarChart variant="bar" points={sessionTrend} height={80} />
+              )}
+              {statusItems.length > 0 && (
+                <div className="mt-3">
+                  <AdminCompactList items={statusItems} />
+                </div>
+              )}
+              <Link href="/admin/agent-sessions" className="mt-3 inline-flex items-center gap-1 text-xs text-[#1a5632] hover:underline">
+                查看会话 <ArrowRight className="h-3 w-3" />
+              </Link>
+            </AdminPanel>
+          )}
+
+          {recentDirItems.length > 0 && (
+            <AdminPanel title="方向活跃" subtitle="最近更新">
+              <AdminCompactList items={recentDirItems} />
+              <Link href="/admin/directions" className="mt-3 inline-flex items-center gap-1 text-xs text-[#1a5632] hover:underline">
+                管理方向 <ArrowRight className="h-3 w-3" />
+              </Link>
             </AdminPanel>
           )}
         </div>

@@ -81,6 +81,9 @@ export interface AdminStats {
   projectsByMode: { mode: "review" | "research"; count: number }[];
   projectTrend: { date: string; count: number }[];
   recentActivity: { title: string; user: string; time: string }[];
+  agentSessionByStatus: { status: string; count: number }[];
+  agentSessionTrend: { date: string; count: number }[];
+  recentDirections: { name: string; slug: string; status: string; time: string }[];
   aiUsage?: {
     totalCalls: number;
     todayCount: number;
