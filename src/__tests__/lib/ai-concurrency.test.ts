@@ -99,4 +99,35 @@ describe("withKeyConcurrency", () => {
     const out = await withKeyConcurrency("key-d", async () => 42);
     expect(out).toBe(42);
   });
+
+  it("removes a queued waiter immediately when its signal aborts", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const ctrl = new AbortController();
+    // A 占用唯一槽位
+    const a = withKeyConcurrency("qk", async () => { await gate; }, undefined, 1);
+    // B 排队，随后 abort——应即时移出队列，不再阻塞后续请求
+    const b = withKeyConcurrency("qk", async () => "never", ctrl.signal, 1)
+      .then(() => "done")
+      .catch(() => "aborted");
+    await new Promise((r) => setTimeout(r, 10));
+    const sem = getKeySemaphore("qk");
+    expect(sem.pending).toBe(1);
+    ctrl.abort();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(sem.pending).toBe(0);
+    release();
+    await a;
+    expect(await b).toBe("aborted");
+  });
+
+  it("reuses a fresh semaphore after a key goes fully idle", async () => {
+    // 用完即弃：不残留旧状态，也不因历史 key 常驻内存
+    await withKeyConcurrency("idle-key", async () => "x", undefined, 2);
+    const again = getKeySemaphore("idle-key");
+    expect(again.pending).toBe(0);
+    // 可再次正常限流
+    const out = await withKeyConcurrency("idle-key", async () => 7, undefined, 2);
+    expect(out).toBe(7);
+  });
 });
