@@ -86,3 +86,24 @@ export async function loadAgentChatHistory(
 ): Promise<AgentSessionListItem[]> {
   return listAgentSessions({ projectId, history: true });
 }
+
+/** 上传附件：成功返回附件信息，失败抛出带后端 error 文案的错误 */
+export async function postAgentAttachment(
+  file: File,
+  sessionId?: string,
+  signal?: AbortSignal,
+): Promise<{ attachment: import("@/contracts/agent-attachment").AgentAttachmentInfo }> {
+  const form = new FormData();
+  form.append("file", file);
+  if (sessionId) form.append("sessionId", sessionId);
+  const res = await fetch("/api/agent/attachments", {
+    method: "POST",
+    body: form,
+    signal,
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error || "上传失败");
+  }
+  return (await res.json()) as { attachment: import("@/contracts/agent-attachment").AgentAttachmentInfo };
+}

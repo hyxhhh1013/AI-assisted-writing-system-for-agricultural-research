@@ -338,10 +338,9 @@ export function useAgent(options: UseAgentOptions = {}) {
   );
 
   const sendGoal = useCallback(
-    async (goal: string) => {
+    async (goal: string, opts?: { attachmentIds?: string[] }) => {
       const trimmed = goal.trim();
       if (!trimmed) return;
-      // 有 sessionId 时走同一会话跟聊（无 resume）；否则新建会话
       await runStream(
         {
           goal: trimmed,
@@ -349,6 +348,7 @@ export function useAgent(options: UseAgentOptions = {}) {
           directionSlug: options.directionSlug,
           mode: "auto",
           ...(sessionId ? { sessionId } : {}),
+          ...(opts?.attachmentIds?.length ? { attachmentIds: opts.attachmentIds } : {}),
         },
         trimmed,
       );

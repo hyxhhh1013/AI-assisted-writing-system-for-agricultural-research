@@ -912,12 +912,13 @@ export function AgentPanel({
         isRunning={agent.isRunning}
         writeEnabled={WRITE_PUBLIC}
         prompts={quickPrompts}
-        onSend={(goal) => {
+        sessionId={agent.sessionId ?? undefined}
+        onSend={(goal, opts) => {
           const firstUser = !agent.messages.some((m) => m.kind === "user");
           const payload = firstUser
             ? applyEntryModeToGoal(goal, entryMode)
             : goal;
-          void agent.sendGoal(payload);
+          void agent.sendGoal(payload, opts);
         }}
         onCancel={agent.cancel}
       />
