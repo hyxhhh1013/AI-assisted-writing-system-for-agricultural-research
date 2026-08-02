@@ -73,8 +73,10 @@ export function getModelConfig(provider: ModelProviderKey): ModelProvider {
 export function validateProviderKey(provider: ModelProviderKey): string | null {
   const config = getModelConfig(provider);
   const key = config.getApiKey();
-  if (!key || key.includes("your_")) {
-    return `${config.name} API Key 未正确配置，请在 .env.local 中填写 ${config.apiKeyEnvVar}`;
+  // 只拦明显的占位符；env 未配置 key 不在此报错——key 可能已在 Admin DB 配置，
+  // 实际调用时 getAllKeys 会从 DB 兜底；真正无 key 由 callAI 抛「API Key 未配置」。
+  if (key?.includes("your_")) {
+    return `${config.name} API Key 未正确配置（占位符未替换），请在 .env.local 填写 ${config.apiKeyEnvVar}`;
   }
   return null;
 }

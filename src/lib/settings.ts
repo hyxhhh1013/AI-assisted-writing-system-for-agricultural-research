@@ -83,7 +83,11 @@ export async function getAllSettings(): Promise<Array<{ key: string; maskedValue
     let masked = "****";
     try {
       const decrypted = decrypt(r.value);
-      if (/_MODEL$/i.test(r.key) || r.key.includes("MODEL_NAME")) {
+      if (
+        /_MODEL$/i.test(r.key)
+        || r.key.includes("MODEL_NAME")
+        || r.key.startsWith("AGENT_ROLE_") // 角色映射值是非敏感 provider 名
+      ) {
         masked = decrypted;
       } else if (decrypted.length <= 8) {
         masked = "****";

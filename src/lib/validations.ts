@@ -714,7 +714,7 @@ export const adminSettingDeleteSchema = z.object({
 export type AdminSettingDeleteInput = z.infer<typeof adminSettingDeleteSchema>;
 
 export const adminAiTestSchema = z.object({
-  provider: z.enum(["deepseek", "zhipu"]),
+  provider: z.enum(["deepseek", "zhipu", "vision"]),
   model: z.string().trim().optional(),
   apiKey: z.string().trim().optional(),
 });
