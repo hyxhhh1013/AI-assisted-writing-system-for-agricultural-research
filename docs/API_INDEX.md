@@ -13,7 +13,7 @@
 <!-- API_INDEX:AUTO:START -->
 ## 路由表（自动生成）
 
-> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-07-27 11:54:54**（共 **94** 个 route 文件，validateBody **47**，SSE **11**，requireAdmin **15**）。
+> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-08-02 16:28:14**（共 **104** 个 route 文件，validateBody **48**，SSE **11**，requireAdmin **23**）。
 
 图例：zod = 使用 validateBody；SSE = 含 text/event-stream / ReadableStream；admin = 含 requireAdmin。
 
@@ -192,7 +192,15 @@
 
 | 方法 | 路径 | zod | SSE | admin |
 |------|------|-----|-----|-------|
+| GET | `/api/admin/agent-sessions` | — | — | ✓ |
+| GET, PATCH | `/api/admin/agent-sessions/[id]` | — | — | ✓ |
+| GET | `/api/admin/agent-sessions/stats` | — | — | ✓ |
+| GET | `/api/admin/ai-status` | — | — | ✓ |
+| POST | `/api/admin/ai-test` | ✓ | — | ✓ |
+| GET | `/api/admin/directions` | — | — | ✓ |
+| GET, PATCH | `/api/admin/directions/[id]` | — | — | ✓ |
 | GET | `/api/admin/health` | — | — | ✓ |
+| GET | `/api/admin/insights` | — | — | ✓ |
 | POST | `/api/admin/journal-metrics` | — | — | ✓ |
 | GET, DELETE, POST | `/api/admin/knowledge` | ✓ | — | ✓ |
 | GET | `/api/admin/plagiarism` | — | — | ✓ |
@@ -214,6 +222,8 @@
 |------|------|-----|-----|-------|
 | POST | `/api/abstract/bilingual` | ✓ | — | — |
 | POST | `/api/agent` | ✓ | ✓ | — |
+| POST | `/api/agent/attachments` | — | — | — |
+| POST | `/api/agent/attachments/[id]/pin` | — | — | — |
 | GET | `/api/agent/sessions` | — | — | — |
 | GET, POST | `/api/citations/gate` | ✓ | — | — |
 | POST | `/api/dft/vasp` | — | — | — |

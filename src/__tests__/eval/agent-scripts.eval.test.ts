@@ -8,7 +8,7 @@ import {
 } from "@/lib/eval/agent-scripts";
 
 describe("W3-AP-EVAL-SCRIPTS agent behavior scripts", () => {
-  it("covers P1–P6 with pass and fail fixtures", () => {
+  it("covers every registered script id with pass and fail fixtures", () => {
     const ids = new Set(AGENT_SCRIPT_FIXTURES.map((f) => f.trace.scriptId));
     for (const id of listAgentScriptIds()) {
       expect(ids.has(id), `missing fixtures for ${id}`).toBe(true);
@@ -74,5 +74,17 @@ describe("W3-AP-EVAL-SCRIPTS agent behavior scripts", () => {
       referenceCountAfter: 1,
     });
     expect(fails.some((f) => f.code === "p2-fabricated-hit")).toBe(true);
+  });
+
+  it("FILE-READ reject non-read first tool", () => {
+    const fails = assertAgentScriptTrace({
+      scriptId: "FILE-READ",
+      goals: ["读取上传的 report.pdf 并总结要点"],
+      tools: [
+        { tool: "search_external", params: { query: "report" }, success: true },
+      ],
+      finalText: "已读取附件 report.pdf 并总结要点。",
+    });
+    expect(fails.some((f) => f.code === "file-read-first-tool")).toBe(true);
   });
 });

@@ -3,7 +3,14 @@
  * @see docs/plans/W3-AP-BEHAVIOR.md
  */
 
-export type AgentScriptId = "P1" | "P2" | "P3" | "P4" | "P5" | "P6";
+export type AgentScriptId =
+  | "P1"
+  | "P2"
+  | "P3"
+  | "P4"
+  | "P5"
+  | "P6"
+  | "FILE-READ";
 
 /** 单次工具观测 */
 export interface AgentScriptToolStep {

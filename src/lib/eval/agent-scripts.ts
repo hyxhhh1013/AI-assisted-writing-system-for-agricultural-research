@@ -104,6 +104,9 @@ export function assertAgentScriptTrace(
     case "P6":
       assertP6(trace, names, fails);
       break;
+    case "FILE-READ":
+      assertFileRead(trace, names, fails);
+      break;
     default:
       pushFail(fails, "unknown-script", `未知剧本 ${trace.scriptId as string}`);
   }
@@ -424,6 +427,28 @@ function assertP6(
   }
 }
 
+function assertFileRead(
+  trace: AgentScriptTrace,
+  names: string[],
+  fails: AgentScriptAssertionFail[],
+) {
+  void trace.goals;
+  // 读附件目标不该一上来就 search / write：首个工具必须是读/列附件之一
+  const first = names[0];
+  if (first !== "read_attachment" && first !== "list_attachments") {
+    pushFail(
+      fails,
+      "file-read-first-tool",
+      "首个工具应为 read_attachment / list_attachments（读附件目标不该先 search/write）",
+    );
+  }
+  // 最终回复应引用附件名（含 report 或 附件）
+  const text = trace.finalText ?? "";
+  if (!/report|附件/.test(text)) {
+    pushFail(fails, "file-read-final", "最终回复应引用附件名（含 report 或 附件）");
+  }
+}
+
 // ─── Golden / anti fixtures ─────────────────────────────────────────
 
 const HIT_A = JSON.stringify({
@@ -707,6 +732,35 @@ export const AGENT_SCRIPT_FIXTURES: {
       finalText: "已估算晶粒尺寸。",
     },
   },
+  // FILE-READ pass — read_attachment 先行 + 最终回复引用附件名
+  {
+    fixtureId: "file-upload-read",
+    expectPass: true,
+    trace: {
+      scriptId: "FILE-READ",
+      goals: ["读取上传的 report.pdf 并总结要点"],
+      tools: [{ tool: "read_attachment", success: true }],
+      finalText: "已读取附件 report.pdf，报告要点：……",
+    },
+  },
+  // FILE-READ fail — 读附件目标却先 search（首工具不是读/列附件）
+  {
+    fixtureId: "FILE-READ-fail-search-first",
+    expectPass: false,
+    trace: {
+      scriptId: "FILE-READ",
+      goals: ["读取上传的 report.pdf 并总结要点"],
+      tools: [
+        {
+          tool: "search_external",
+          params: { query: "report 报告" },
+          success: true,
+        },
+        { tool: "read_attachment", success: true },
+      ],
+      finalText: "已读取附件 report.pdf，报告要点：……",
+    },
+  },
 ];
 
 export function runAgentScriptCases(): AgentScriptCaseResult[] {
@@ -742,5 +796,5 @@ export function summarizeAgentScriptResults(results: AgentScriptCaseResult[]): {
 }
 
 export function listAgentScriptIds(): AgentScriptId[] {
-  return ["P1", "P2", "P3", "P4", "P5", "P6"];
+  return ["P1", "P2", "P3", "P4", "P5", "P6", "FILE-READ"];
 }
