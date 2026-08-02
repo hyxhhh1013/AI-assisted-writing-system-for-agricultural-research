@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { callAI } from "@/lib/ai";
-import { MAX_ATTACHMENT_TEXT_CHARS } from "@/lib/agent/attachments/constants";
+import { MAX_ATTACHMENT_TEXT_CHARS, MAX_VISION_IMAGE_BYTES } from "@/lib/agent/attachments/constants";
 
 const IMAGE_PROMPT =
   "你是论文配图理解助手。请用中文输出固定结构：\n"
@@ -25,6 +25,9 @@ export async function describeImage(
   filePath: string,
 ): Promise<{ status: "ready" | "extract_failed"; text?: string; truncated?: boolean; source: "image_vision" | "image_ocr"; error?: string }> {
   try {
+    if (fs.statSync(filePath).size > MAX_VISION_IMAGE_BYTES) {
+      return { status: "extract_failed", source: "image_ocr", error: "图片过大，视觉模型暂不支持" };
+    }
     const data = fs.readFileSync(filePath).toString("base64");
     const response = await callAI({
       provider: "vision",

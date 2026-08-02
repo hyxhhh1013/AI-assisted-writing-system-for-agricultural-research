@@ -1,5 +1,7 @@
 export const MAX_ATTACHMENT_MB = 20;
 export const MAX_ATTACHMENT_BYTES = MAX_ATTACHMENT_MB * 1024 * 1024;
+/** 视觉模型（GLM-4V）单张图片大小上限：超过直接失败，避免大图转 base64 打爆超时 */
+export const MAX_VISION_IMAGE_BYTES = 8 * 1024 * 1024;
 /** 提取文本入库上限（超过截断并标记 truncated） */
 export const MAX_ATTACHMENT_TEXT_CHARS = 500_000;
 /** read_attachment 单次默认/最大返回字符 */
