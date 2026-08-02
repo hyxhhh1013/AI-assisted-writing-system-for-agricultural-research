@@ -53,6 +53,8 @@ export interface AgentSessionSnapshot {
   uiTranscript?: AgentUiMessage[];
   /** 本会话工作记忆 */
   workMemory?: import("@/lib/agent/work-memory").AgentWorkMemory | null;
+  /** 本会话附件 id（traceability；归属以 AgentAttachment.sessionId 为准） */
+  attachmentIds?: string[];
 }
 
 export interface AgentSessionListItem {

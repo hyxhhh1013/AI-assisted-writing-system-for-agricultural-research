@@ -59,6 +59,7 @@ export async function* runAgentGraphLoop(
     checkpointDecision,
     confirmDecision,
     pendingCheckpointKind,
+    attachmentManifest,
   } = options;
   const graph = getCompiledAgentGraph();
   const repeatTracker = createRepeatTracker();
@@ -130,6 +131,18 @@ export async function* runAgentGraphLoop(
           { role: "user", content: mergeGoalWithIntentHint(goal) },
         ],
       };
+
+  // 附件清单：非 resume 时拼进首条 user 消息（清单已在历史里则不重复注入）
+  if (attachmentManifest && !resumeState && initialState.messages?.length) {
+    const first = initialState.messages[0];
+    initialState = {
+      ...initialState,
+      messages: [
+        { ...first, content: `${attachmentManifest}\n\n${first.content}` },
+        ...(initialState.messages?.slice(1) ?? []),
+      ],
+    };
+  }
 
   if (followUp) {
     const nudge = mergeFollowUpGoalHint(
@@ -356,7 +369,7 @@ export async function* runAgentGraphLoop(
       try {
         await saveAgentSessionSnapshot(
           sessionId,
-          graphStateToSnapshot(state, uiTranscript, context.workMemory),
+          graphStateToSnapshot(state, uiTranscript, context.workMemory, options.attachmentIds),
           status,
           errorMessage,
         );

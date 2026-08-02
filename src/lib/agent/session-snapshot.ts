@@ -13,6 +13,7 @@ export function graphStateToSnapshot(
   state: AgentGraphStateType,
   uiTranscript?: AgentUiMessage[],
   workMemory?: import("@/lib/agent/work-memory").AgentWorkMemory | null,
+  attachmentIds?: string[],
 ): AgentSessionSnapshot {
   const mem = normalizeWorkMemory(workMemory ?? null);
   return {
@@ -31,6 +32,7 @@ export function graphStateToSnapshot(
     approvedCheckpointKinds: state.approvedCheckpointKinds ?? [],
     ...(uiTranscript ? { uiTranscript } : {}),
     ...(mem ? { workMemory: mem } : {}),
+    ...(attachmentIds && attachmentIds.length ? { attachmentIds } : {}),
   };
 }
 

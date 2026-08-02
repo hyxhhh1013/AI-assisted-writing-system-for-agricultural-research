@@ -3,6 +3,7 @@ import { createLogger } from "@/lib/logger";
 import { getErrorMessage } from "@/lib/error-utils";
 import { validateBody } from "@/lib/api-validate";
 import { agentSchema } from "@/lib/validations";
+import prisma from "@/lib/prisma";
 import {
   createAgentContext,
   createAgentTools,
@@ -10,6 +11,7 @@ import {
   runAgentLoop,
 } from "@/lib/agent";
 import type { AgentSSEEvent } from "@/contracts/agent";
+import type { AttachmentExtractSource } from "@/contracts/agent-attachment";
 import { buildFollowUpInitialState } from "@/lib/agent/session-continue";
 import {
   createAgentSession,
@@ -162,6 +164,24 @@ export async function POST(req: NextRequest) {
       sessionId = created.id;
     }
 
+    // 附件：加载并生成清单（失败降级不阻断对话）
+    let attachmentManifest: string | undefined;
+    const attachmentIds = data.attachmentIds ?? [];
+    if (attachmentIds.length > 0) {
+      try {
+        const { buildAttachmentManifest } = await import("@/lib/agent/attachments/manifest");
+        const rows = await prisma.agentAttachment.findMany({
+          where: { id: { in: attachmentIds }, userId },
+        });
+        attachmentManifest = buildAttachmentManifest(rows.map((r) => ({
+          id: r.id, originalName: r.originalName, mimeType: r.mimeType, size: r.size,
+          status: r.status, extractSource: r.extractSource as AttachmentExtractSource | null,
+          charCount: r.extractedText?.length ?? 0,
+          pinned: r.pinned, createdAt: r.createdAt.toISOString(),
+        })));
+      } catch { /* 清单失败仅降级 */ }
+    }
+
     const stream = new ReadableStream({
       async start(controller) {
         const context = createAgentContext({
@@ -189,6 +209,8 @@ export async function POST(req: NextRequest) {
             checkpointDecision,
             confirmDecision,
             pendingCheckpointKind,
+            attachmentManifest,
+            attachmentIds,
           })) {
             if (req.signal.aborted) break;
             controller.enqueue(encoder.encode(sseEncode(event)));

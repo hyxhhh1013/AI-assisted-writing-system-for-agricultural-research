@@ -1010,6 +1010,7 @@ export const agentSchema = z
         approved: z.boolean(),
       })
       .optional(),
+    attachmentIds: z.array(z.string().min(1)).max(20).optional(),
   })
   .superRefine((data, ctx) => {
     if (data.resume) {

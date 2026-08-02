@@ -71,6 +71,10 @@ export interface AgentLoopOptions {
     params: Record<string, unknown>;
     approved: boolean;
   };
+  /** 附件清单（首条 user 消息注入用；非 resume 时生效） */
+  attachmentManifest?: string;
+  /** 本会话附件 id（快照持久化用） */
+  attachmentIds?: string[];
 }
 
 export interface LLMMessage {

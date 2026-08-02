@@ -120,6 +120,8 @@ export interface AgentRequest {
     params: Record<string, unknown>;
     approved: boolean;
   };
+  /** 本消息携带的附件 id（上传后从 /api/agent/attachments 获得） */
+  attachmentIds?: string[];
 }
 
 export function isAgentSSEEvent(value: unknown): value is AgentSSEEvent {
