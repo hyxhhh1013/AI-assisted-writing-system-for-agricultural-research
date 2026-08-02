@@ -62,6 +62,7 @@ import {
 } from "@/lib/agent/core/goal-intents";
 import { enrichImportReferenceParams } from "@/lib/agent/literature-relevance";
 import { analyzeReflection, MAX_REFLECT_ROUNDS } from "@/lib/agent/core/reflect";
+import { compactAgentMessages } from "@/lib/agent/core/context-compact";
 import { MAX_INTENT_CONTINUES } from "@/lib/agent/langgraph/state";
 import { formatToolObservationForLlm } from "@/lib/agent/observation-memory";
 import { loadAgentProject } from "@/lib/agent/project-loader";
@@ -231,9 +232,10 @@ export async function agentNode(
   const extraMessages: AgentGraphStateType["messages"] = [];
 
   const systemPrompt = buildAgentSystemPrompt(tools, agentContext.projectBriefing);
+  // 长会话压缩：超过阈值时把早期轮次的工具观察压成摘要块，控制 LLM 输入长度
   const llmMessages = [
     { role: "system" as const, content: systemPrompt },
-    ...state.messages,
+    ...compactAgentMessages(state.messages),
     ...extraMessages,
   ];
 
