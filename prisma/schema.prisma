@@ -24,6 +24,7 @@ model User {
   projects  Project[]
   directions Direction[]
   agentSessions AgentSession[]
+  agentAttachments AgentAttachment[]
 }
 
 // 论文项目模型
@@ -336,4 +337,34 @@ model AgentSession {
   @@index([userId, createdAt])
   @@index([userId, projectId, status])
   @@index([status])
+}
+
+// Agent 会话附件（W3-FILE-UPLOAD：上传 → 提取 → read_attachment）
+model AgentAttachment {
+  id            String           @id @default(cuid())
+  userId        String
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId     String?          // 会话级归属
+  projectId     String?          // "固定到项目"后填写
+  pinned        Boolean          @default(false)
+  fileKey       String           // data/attachments/{userId}/{id}/{safeName} 相对路径
+  originalName  String
+  mimeType      String
+  size          Int
+  status        AttachmentStatus @default(extracting)
+  extractSource String?          // pdf | docx | csv | excel | text | image_vision | image_ocr | failed
+  extractedText String?          // read_attachment 返回内容（按 MAX_ATTACHMENT_TEXT_CHARS 截断）
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([userId, sessionId])
+  @@index([userId, projectId])
+  @@index([status])
+}
+
+enum AttachmentStatus {
+  extracting
+  ready
+  extract_failed
+  unsupported
 }
