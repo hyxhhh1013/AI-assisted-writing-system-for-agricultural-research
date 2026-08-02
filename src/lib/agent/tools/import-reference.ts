@@ -162,9 +162,11 @@ function parseHitsBatch(params: Record<string, unknown>): ExternalLiteratureHit[
 export const importReferenceTool: ToolDefinition = {
   name: "import_reference",
   description:
-    "将 search_external 结果导入项目。多篇最推荐用 hitIndices=[1,3,5]（1 起，引用最近一次 search_external 的 index，最省 token 不截断）；"
-    + "也可用 hitsJson（文献对象数组，最多 15 篇）或单篇 hitJson。须传 query 与 why（为何导入，≥8字）。"
-    + "综述目标通常 ≥30 篇，可分批导入",
+    "将文献导入项目。**优先 hitIndices**：引用最近一次 search_external 返回的命中 index（1 起，如 \"[1,3,5]\"），参数小、不会被截断，不要手写 JSON。"
+    + "仅当没有可用 hitIndices 时才用 hitsJson；手写合法示例："
+    + `[{"id":"doi:10.1000/abc","title":"论文标题","authors":["作者A","作者B"],"year":2023,"journal":"期刊名","doi":"10.1000/abc","source":"crossref"}]`
+    + "（source 仅限 openalex|semantic-scholar|crossref|pubmed；authors 必须是字符串数组；有 doi 可省略 id）。"
+    + "须传 query 与 why（≥8字）。综述目标通常 ≥30 篇，可分批导入",
   parameters: {
     type: "object",
     properties: {
@@ -182,8 +184,9 @@ export const importReferenceTool: ToolDefinition = {
         type: "string",
         description:
           "多篇：JSON 数组。优先直接用 search_external 返回的 suggestedHitsJson（含合法 id/source）。"
-          + "手写时 source 仅允许 openalex|semantic-scholar|crossref|pubmed；写错会自动纠正。"
-          + "有 doi 时可省略 id",
+          + "手写合法示例："
+          + `[{"id":"doi:10.1000/abc","title":"标题","authors":["作者A"],"year":2023,"journal":"期刊","source":"crossref"}]`
+          + "（source 仅限 openalex|semantic-scholar|crossref|pubmed；authors 必须是字符串数组；有 doi 可省略 id）",
       },
       doi: {
         type: "string",

@@ -24,6 +24,13 @@ export function buildAgentSystemPrompt(
 3. 完成用户当前请求即可，汇报结果并给 1～3 个可选下一步；用户改口要立刻改道。
 4. 跨轮承接「继续 / 按刚才的」；重要主张与待办可用 update_work_memory。
 
+## 工具纪律（先判任务，再选工具）
+- 写章节任务：不要 search_external / search_knowledge，除非用户明确说「检索 / 找文献」；用 inspect / read_project_asset / list_references 取上下文。
+- 引用核查/修正任务：只 validate_citations + 修订，不要导入文献、写摘要或其它章节。
+- 诊断任务：先 inspect_project 看最新快照，再决定下一步。
+- import_reference：优先 hitIndices 引用最近一次 search_external 的命中；确需手写 hitsJson 时，source 仅限 openalex|semantic-scholar|crossref|pubmed，authors 必须是字符串数组，有 doi 可省略 id。
+- 连续多次调工具仍无进展时：停止调用，用中文总结已掌握信息并询问用户。
+
 ## 写作入口
 若消息含 \`【写作入口=…】\`：full=从零推进；outline_ready=读大纲后写；data_ready=优先 methods/results/配图。用户只要引用检查、修订、摘要时选对应工具即可。
 
