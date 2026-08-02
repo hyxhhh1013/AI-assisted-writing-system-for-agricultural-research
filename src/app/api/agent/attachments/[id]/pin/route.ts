@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getErrorMessage } from "@/lib/error-utils";
+import { createLogger } from "@/lib/logger";
 import { isAgentEnabled } from "@/lib/agent/core/safety";
+import { assertProjectOwnedByUser } from "@/lib/plagiarism-access";
 import { pinAttachment } from "@/lib/agent/attachments/service";
 
 export const runtime = "nodejs";
+
+const log = createLogger("api/agent/attachments/[id]/pin");
 
 export async function POST(
   req: NextRequest,
@@ -23,12 +26,17 @@ export async function POST(
     const projectId = body.projectId?.trim();
     if (!projectId) return NextResponse.json({ error: "缺少 projectId" }, { status: 400 });
 
+    if (!(await assertProjectOwnedByUser(projectId, userId))) {
+      return NextResponse.json({ error: "项目不存在或无权访问" }, { status: 404 });
+    }
+
     const attachment = await pinAttachment(userId, id, projectId);
     if (!attachment) {
       return NextResponse.json({ error: "附件不存在或无权访问" }, { status: 404 });
     }
     return NextResponse.json({ attachment });
   } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error) || "固定失败" }, { status: 400 });
+    log.fail("固定附件失败", error);
+    return NextResponse.json({ error: "固定失败" }, { status: 500 });
   }
 }
