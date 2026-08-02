@@ -12,6 +12,7 @@ const SECTION_WRITE_TOOLS = new Set([
   "refine_content",
   "apply_revision_item",
   "write_bilingual_abstract",
+  "generate_table",
 ]);
 
 export function extractSectionPersisted(
@@ -26,6 +27,13 @@ export function extractSectionPersisted(
   }
 
   const data = result.data as Record<string, unknown>;
+
+  // generate_table 用 insertedSection 标识已插入章节
+  if (tool === "generate_table") {
+    const sectionKey = String(data.insertedSection ?? "").trim();
+    if (!sectionKey) return null;
+    return { sectionKey, tool };
+  }
 
   if (tool === "write_bilingual_abstract") {
     if (data.persisted !== true && data.persisted !== "true") return null;

@@ -14,7 +14,28 @@ import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 export function buildFlowDiagramConfig(input: {
   title: string;
   notes: string;
+  flowSteps?: string[];
 }): Record<string, unknown> {
+  const steps = (input.flowSteps ?? [])
+    .map((s) => String(s).trim())
+    .filter(Boolean);
+  if (steps.length >= 2) {
+    // 按用户步骤成链，首尾 start_end，中间 process
+    return {
+      title: input.title,
+      preset: "nature",
+      direction: "vertical",
+      nodes: steps.map((label, i) => ({
+        id: String(i + 1),
+        label,
+        role: i === 0 || i === steps.length - 1 ? "start_end" : "process",
+      })),
+      edges: steps
+        .slice(1)
+        .map((_, i) => ({ from: String(i + 1), to: String(i + 2) })),
+    };
+  }
+  // 未提供步骤时用默认模板（兜底，不建议）
   return {
     title: input.title,
     preset: "nature",
@@ -117,6 +138,11 @@ export const draftMechanismFigureTool: ToolDefinition = {
         items: { type: "string" },
         description: "多面板时各栏标题（2～3 个）",
       },
+      flowSteps: {
+        type: "array",
+        items: { type: "string" },
+        description: "kind=flow 时的流程步骤列表（2~8 步，按顺序成链）。如 [\"原料预处理\",\"热解反应\",\"产物分离\",\"生物炭\"]。不传则用通用模板",
+      },
       pathwayNotes: {
         type: "string",
         description: "路径/机理要点（用于脚注与 callout）",
@@ -189,10 +215,13 @@ export const draftMechanismFigureTool: ToolDefinition = {
     }
 
     // ── flow / mechanism_panel：直接出图 ──
+    const flowSteps = Array.isArray(params.flowSteps)
+      ? params.flowSteps.map((s) => String(s).trim()).filter(Boolean).slice(0, 8)
+      : [];
     let config: Record<string, unknown>;
     let figureId: "flow" | "mechanism_panel";
     if (kind === "flow") {
-      config = buildFlowDiagramConfig({ title, notes });
+      config = buildFlowDiagramConfig({ title, notes, flowSteps });
       figureId = "flow";
     } else {
       config = buildMechanismPanelConfig({ title, panelTitles, notes });

@@ -6,6 +6,9 @@ import {
 import { runAgentGraphLoop } from "@/lib/agent/langgraph/run-graph";
 import { analyzeDirectionTool } from "@/lib/agent/tools/analyze-direction";
 import { checkPlagiarismTool } from "@/lib/agent/tools/check-plagiarism";
+import { checkConsistencyTool } from "@/lib/agent/tools/check-consistency";
+import { rewritePlagiarismTool } from "@/lib/agent/tools/rewrite-plagiarism";
+import { generateTableTool } from "@/lib/agent/tools/generate-table";
 import { generateChartTool } from "@/lib/agent/tools/generate-chart";
 import { generateXrdAnalysisTool } from "@/lib/agent/tools/generate-xrd-analysis";
 import { draftMechanismFigureTool } from "@/lib/agent/tools/draft-mechanism-figure";
@@ -82,6 +85,8 @@ export function createReadOnlyTools(): ToolDefinition[] {
     reviewContentTool,
     analyzeDirectionTool,
     checkPlagiarismTool,
+    rewritePlagiarismTool,
+    checkConsistencyTool,
     runReviewRoundsTool,
     parseRevisionCommentsTool,
     exportManuscriptMarkdownTool,
@@ -102,6 +107,7 @@ export function createAgentTools(): ToolDefinition[] {
       importReferenceTool,
       generateChartTool,
       generateXrdAnalysisTool,
+      generateTableTool,
       draftMechanismFigureTool,
       buildArgumentBlueprintTool,
       writeBilingualAbstractTool,

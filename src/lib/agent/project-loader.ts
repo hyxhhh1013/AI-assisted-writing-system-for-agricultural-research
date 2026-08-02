@@ -113,6 +113,14 @@ export async function loadAgentProject(
       preview: content.trim() ? content.trim().slice(0, 280) : undefined,
     };
   });
+  // 摘要存于 Project.abstract 列（不在 sections 表），单独纳入统计，
+  // 否则 inspect_project / draftCoverage 永远误报摘要空白
+  const abstractText = (project.abstract ?? "").trim();
+  sectionFills.push({
+    key: "abstract",
+    chars: abstractText.replace(/\s+/g, "").length,
+    preview: abstractText ? abstractText.slice(0, 280) : undefined,
+  });
 
   let writingBlueprintSummary: string | null = null;
   if (writingBlueprint?.trim()) {

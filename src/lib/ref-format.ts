@@ -86,15 +86,25 @@ function hasValidBib(bib: BibEntry["bib"] | null): boolean {
 
 /** 从文件名中提取中文作者名（兜底方案） */
 function extractAuthorFromFilename(filename: string): string {
-  // 文件名格式通常是 "标题_作者.pdf"
+  // 文件名格式常见两种：
+  //   "标题_作者.pdf"（作者在末尾）
+  //   "28-2024-董航-油茶壳...研究.pdf"（序号-年份-作者-标题，作者在年份后）
   const cleaned = filename.replace(/\.pdf$/i, "");
-  const parts = cleaned.split(/[_\-]/);
-  if (parts.length >= 2) {
-    const lastPart = parts[parts.length - 1].trim();
-    // 检查是否是中文姓名（2-5个汉字）
-    if (/^[一-鿿]{2,5}$/.test(lastPart)) {
-      return lastPart;
+  const parts = cleaned.split(/[_\-]/).map((p) => p.trim()).filter(Boolean);
+  if (parts.length < 2) return "";
+
+  // 优先：年份后的第一个 2-5 字中文名（序号-年份-作者-标题 模式）
+  let afterYear = false;
+  for (const p of parts) {
+    if (/^(19|20)\d{2}$/.test(p)) {
+      afterYear = true;
+      continue;
     }
+    if (afterYear && /^[一-鿿]{2,5}$/.test(p)) return p;
+  }
+  // 兜底：最后一个 2-5 字中文名（标题_作者 模式）
+  for (let i = parts.length - 1; i >= 0; i--) {
+    if (/^[一-鿿]{2,5}$/.test(parts[i])) return parts[i];
   }
   return "";
 }
@@ -182,6 +192,7 @@ export function formatReference(
   // ── 兜底：从文件名提取 ──
   const fallbackAuthor = extractAuthorFromFilename(filename);
   const cleanedName = cleanSourceName(filename);
+  const year = filename.match(/(19|20)\d{2}/)?.[0] ?? "";
 
   if (style === "rag") {
     const pageStr = options?.pageStart != null
@@ -190,10 +201,15 @@ export function formatReference(
     return `${cleanedName}${pageStr}`;
   }
 
-  // GB/T 7714 兜底
+  // GB/T 7714 兜底：优先「作者. 标题[J], 年份.」，去掉文件名里的序号/年份/作者
   if (fallbackAuthor) {
-    const titlePart = cleanedName.replace(new RegExp(`[_\\-]?${fallbackAuthor}$`), "").trim();
-    return `${fallbackAuthor}. ${titlePart}[${docTag}]`;
+    let titlePart = cleanedName;
+    if (year) titlePart = titlePart.replace(year, " ");
+    titlePart = titlePart.replace(fallbackAuthor, " ");
+    titlePart = titlePart.replace(/^\s*\d+\s*/, "").replace(/\s+/g, " ").trim();
+    if (titlePart) {
+      return `${fallbackAuthor}. ${titlePart}[${docTag}]${year ? `, ${year}` : ""}.`;
+    }
   }
   return `${cleanedName}[${docTag}]`;
 }

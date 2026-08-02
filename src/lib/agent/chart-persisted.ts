@@ -8,16 +8,7 @@ export interface AgentChartPersistedInfo {
   chartAssetId?: string;
 }
 
-export function extractChartPersisted(
-  tool: string,
-  result: { success?: boolean; data?: unknown } | undefined,
-): AgentChartPersistedInfo | null {
-  if (tool !== "generate_chart") return null;
-  if (!result?.success || result.data == null || typeof result.data !== "object") {
-    return null;
-  }
-
-  const data = result.data as Record<string, unknown>;
+function extractOneChart(tool: string, data: Record<string, unknown>): AgentChartPersistedInfo | null {
   const imageUrl = typeof data.imageUrl === "string" ? data.imageUrl.trim() : "";
   if (!imageUrl) return null;
 
@@ -46,4 +37,27 @@ export function extractChartPersisted(
     sectionKey,
     chartAssetId,
   };
+}
+
+export function extractChartPersisted(
+  tool: string,
+  result: { success?: boolean; data?: unknown } | undefined,
+): AgentChartPersistedInfo | null {
+  if (tool !== "generate_chart" && tool !== "draft_mechanism_figure") return null;
+  if (!result?.success || result.data == null || typeof result.data !== "object") {
+    return null;
+  }
+
+  const data = result.data as Record<string, unknown>;
+
+  // 批量：取第一张成功图（UI 预览）
+  if (Array.isArray(data.charts) && data.charts.length > 0) {
+    const first = data.charts.find(
+      (c): c is Record<string, unknown> =>
+        typeof c === "object" && c !== null && typeof (c as Record<string, unknown>).imageUrl === "string",
+    );
+    if (first) return extractOneChart(tool, first);
+  }
+
+  return extractOneChart(tool, data);
 }

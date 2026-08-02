@@ -12,7 +12,7 @@ import { mergeEditorIntoProject, buildPlagiarismContentFromProject } from "@/lib
 import { ensureSubsectionNumbering, majorNumberFromSectionId, maxSecondLevelInText } from "@/lib/academic-numbering";
 import { useDocxExport } from "@/hooks/use-docx-export";
 import { useReferenceReorder } from "@/hooks/use-reference-reorder";
-import { pruneUncitedReferences, collectAllCitedIndices, stripOutOfRangeCitations, remapPrunedCitations, buildPreviewReferencesFromContent } from "@/lib/reference-reorder";
+import { pruneUncitedReferences, collectAllCitedIndices, stripOutOfRangeCitations, stripEmbeddedBibliography, remapPrunedCitations, buildPreviewReferencesFromContent } from "@/lib/reference-reorder";
 import { normalizeAllCitationFormats } from "@/lib/citation";
 import { useEditorSync } from "@/hooks/use-editor-sync";
 import { useAutoSave } from "@/hooks/use-auto-save";
@@ -471,6 +471,7 @@ function WorkbenchContent() {
         || info.tool === "apply_revision_item"
         || info.tool === "write_bilingual_abstract"
         || info.tool === "generate_chart"
+        || info.tool === "generate_table"
       ) {
         const data = await projectStore.get(projectId);
         if (data) setProject(data);
@@ -587,6 +588,7 @@ function WorkbenchContent() {
     processedContent = normalizeAllCitationFormats(processedContent);
     // 清理草稿痕迹 + 去重 + 越界引用剥离后再写入
     const refCount = currentProject.references?.length || 0;
+    processedContent = stripEmbeddedBibliography(processedContent);
     processedContent = stripOutOfRangeCitations(processedContent, refCount);
     processedContent = cleanDraftArtifacts(processedContent);
     processedContent = deduplicateParagraphs(processedContent);

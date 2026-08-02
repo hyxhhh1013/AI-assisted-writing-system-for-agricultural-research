@@ -103,6 +103,13 @@ export const writeSectionTool: ToolDefinition = {
           ? true
           : undefined;
 
+    // 确保 writer 能看到完整大纲（blueprint 的 globalContext 可能缺 outline，
+    // 大纲缺失会导致只写 Agent 传入的 bullets 子节、漏掉其它大纲子节）
+    const globalContext = {
+      ...(project.globalContext ?? {}),
+      outline: project.outline || project.globalContext?.outline || undefined,
+    };
+
     const data: WritingInput = {
       title: project.title,
       section: sectionRaw,
@@ -112,7 +119,7 @@ export const writeSectionTool: ToolDefinition = {
       template: project.template as WritingInput["template"],
       existingReferences: project.references,
       referenceEvidence: project.referenceEvidence ?? [],
-      globalContext: project.globalContext,
+      globalContext,
       mode: pipelineMode,
       retrievalMode: "balanced",
       researchDirection: project.researchDirection,
@@ -129,7 +136,7 @@ export const writeSectionTool: ToolDefinition = {
         data,
         context: draftContext,
         dataClaims: project.dataClaims,
-        globalContext: project.globalContext,
+        globalContext,
         userId: ctx.userId,
         signal: ctx.signal,
         autoFix,

@@ -269,10 +269,14 @@ ${isChinese ? `—— 证据强度分级（选择准确的动词）——
 —— 引文铁律 ——
 · 严禁虚构引用！文献库中找不到依据的观点，直接陈述即可。
 · 文献库中的 [n] 编号必须与引用处严格一致。
+· 引用的文献必须与该句内容**主题直接相关**（例如讲重金属吸附就只引关于重金属的文献）；不确定该编号对应哪篇时，先看【参考来源 [n]】的标题与摘要再决定，禁止凭编号猜。
+· 同一括号内编号不得重复（如 [17,17] 须合并为 [17]）；编号按升序排列。
 · 引用格式唯一合法形态：半角方括号 + 数字，如 [3]、[2,5]、[1-3]。禁止【3】、［3］、(3) 等变体。
+· 概括性结论优先引用有摘要可 soft-grounded 的文献；勿把不相关条目挂到句末充数。
 · 禁止输出解释、道歉、前言后记等"元文字"。只输出正文。
 · ${isAbstract ? "摘要一个段落到底，不分点。" : "段落间用空行分隔，逻辑清晰。"}
 · 结尾不加收尾语。
+· ⚠️ 章节正文末尾严禁输出「参考文献」「References」列表或完整书目条目；文中只用 [n]，文献表由系统侧栏统一管理。
 
 —— 元文字禁令 ——
 以下内容绝不允许出现在输出中（包括方括号内）：
@@ -283,6 +287,7 @@ ${isChinese ? `—— 证据强度分级（选择准确的动词）——
 上述任何形式出现在输出中均视为违规。
 
 —— 中文写作质量 ——
+· 单位与符号全文统一：同一指标全文只用一种写法（如 °C 前是否空格、g/cm³ 与 g·cm⁻³ 选一种、百分比符号），数字与单位间距一致；章节/子节编号不得重复。
 · 空洞措辞禁用：禁止"具有重要的意义""展现出较大的潜力""引起了广泛关注"等虚词填充。用具体事实替代价值判断。
 · 套话禁用：禁止"随着…的发展""在…背景下""众所周知""日益严峻"开头。
 · 句子要求：每句有明确主语（本研究/该处理/温度/生物炭？），不用"被"字句堆砌。超过50字的句子必须拆分。
@@ -305,6 +310,7 @@ ${section === "introduction" ? "—— Gap 语言规范 ——\n· 精准: \"尚
 · Never fabricate citations! If a claim has no support in the reference library, state it directly without [n].
 · [n] numbers must match the reference library exactly.
 · Output ONLY the body text. No meta-commentary, no introductions, no summaries at the end.
+· Never append a "References" / bibliography list at the end of the section; use in-text [n] only.
 · ${isAbstract ? "Single paragraph, no bullet points." : "Separate paragraphs with blank lines."}
 
 ${section === "introduction" ? "—— Gap Language ——\n· Use: \"remains poorly understood\" \"has not been examined in\" \"few studies have addressed\"\n· Avoid: \"no one has ever studied\" \"completely unknown\"\n" : ""}${section === "discussion" || section === "conclusion" || section === "abstract" ? "—— Limitation Requirement ——\n· Must include at least one substantive limitation or boundary statement\n" : ""}`}
@@ -348,8 +354,8 @@ ${rigorBlock}
 
 ${buildCitationStyleBlock(citationStyle, isChinese)}
 · 引用参考文献时严禁使用 ".pdf" 后缀（如"Title of paper.pdf"）。
-· 若无法确定某条文献的完整信息，使用标记 [文献×待补充] 而非编造不完整引用。
-· 参考文献列表中的编号必须与正文引用一一对应，不得出现正文未引用的文献。`;
+· 若无法确定某条文献的完整信息：该处不要写 [n]，直接陈述观点；禁止输出「[文献待补充]」或半截书目。
+· 上方格式示例仅说明项目文献表应如何著录——不要在本章正文末尾生成参考文献列表。`;
 }
 
 export function buildVerifierSystemPrompt(

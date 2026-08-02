@@ -134,7 +134,35 @@ export function normalizeAllCitationFormats(text: string): string {
   // [来源23] → [23]
   t = t.replace(/\[来源\s*(\d+)\]/g, "[$1]");
 
+  // 组内去重 + 排序 + 连续区间压缩：[20,17,17] → [17,20]；[1,2,3] → [1-3]
+  t = t.replace(CITATION_GROUP_RE, (_m, raw: string) => dedupeCitationGroup(raw));
+
   return t;
+}
+
+/** 引用组内去重并压缩连续区间 */
+function dedupeCitationGroup(raw: string): string {
+  const trimmed = raw.replace(/[，、]/g, ",").trim();
+  if (!trimmed) return `[${raw}]`;
+  const nums = expandCiteGroup(trimmed);
+  if (nums.length === 0) return `[${raw}]`;
+  const uniq = [...new Set(nums)].sort((a, b) => a - b);
+  const parts: string[] = [];
+  let runStart = uniq[0];
+  let prev = uniq[0];
+  for (let i = 1; i <= uniq.length; i++) {
+    const cur = uniq[i];
+    if (cur === prev + 1) {
+      prev = cur;
+      continue;
+    }
+    parts.push(prev === runStart ? `${runStart}` : `${runStart}-${prev}`);
+    if (i < uniq.length) {
+      runStart = cur;
+      prev = cur;
+    }
+  }
+  return `[${parts.join(",")}]`;
 }
 
 export interface BoundsCheckResult {
