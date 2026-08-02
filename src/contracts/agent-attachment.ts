@@ -1,0 +1,25 @@
+/**
+ * Agent 附件（W3-FILE-UPLOAD）— 前后端共享类型
+ * 与 prisma/schema.prisma `AgentAttachment` 对齐（不含 extractedText 全文）
+ */
+
+export type AttachmentExtractSource =
+  | "pdf" | "docx" | "csv" | "excel" | "text"
+  | "image_vision" | "image_ocr" | "failed";
+
+export type AttachmentStatus =
+  | "extracting" | "ready" | "extract_failed" | "unsupported";
+
+/** 前后端共享的附件摘要（不含 extractedText 全文） */
+export interface AgentAttachmentInfo {
+  id: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  status: AttachmentStatus;
+  extractSource?: AttachmentExtractSource | null;
+  charCount?: number;
+  truncated?: boolean;
+  pinned: boolean;
+  createdAt: string;
+}

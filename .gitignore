@@ -65,6 +65,9 @@ deploy.tar.gz
 # Generated temp files
 .tmp/
 
+# Agent attachments (W3-FILE-UPLOAD)
+data/attachments/
+
 # Backup files
 backup_*
 .gstack/

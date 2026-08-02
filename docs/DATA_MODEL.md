@@ -53,6 +53,32 @@ KnowledgeFile 1──* KnowledgeChunk
 - `argumentBlueprint`：`project-argument-blueprint-db.ts` 统一读写论证蓝图；Passport Phase 3 用 `hasArgumentBlueprint`
 - 禁止前端 `saveProject` 全量覆盖 refs/analysis（已迁移，见 ENG-PR-025b）
 
+### Agent 附件（AgentAttachment · W3-FILE-UPLOAD）
+
+上传 → 提取文本 → `read_attachment` 供给 Agent 阅读；支持 `pin` 到项目。
+
+| 字段 | 说明 |
+|------|------|
+| `userId` | String FK → User，onDelete: Cascade |
+| `sessionId` | 可选，会话级归属 |
+| `projectId` | 可选，`pin` 到项目后填写 |
+| `pinned` | 是否固定到项目（默认 `false`） |
+| `fileKey` | `data/attachments/{userId}/{id}/{safeName}` 相对路径（磁盘为唯一真相） |
+| `originalName` | 原始文件名（净化后存盘，`sanitizeAttachmentName` 去目录段/控制字符，截断 128） |
+| `mimeType` / `size` | 上传时记录的 MIME 与字节数 |
+| `status` | `extracting` \| `ready` \| `extract_failed` \| `unsupported` |
+| `extractSource` | `pdf` \| `docx` \| `csv` \| `excel` \| `text` \| `image_vision` \| `image_ocr` \| `failed` |
+| `extractedText` | `read_attachment` 返回内容；按 `MAX_ATTACHMENT_TEXT_CHARS`（500k）截断 |
+| `createdAt` / `updatedAt` | 时间戳 |
+
+索引：`(userId, sessionId)`、`(userId, projectId)`、`(status)`。
+
+**存储与上限**
+
+- 文件存 `data/attachments/{userId}/{attachmentId}/`（`ATTACHMENT_ROOT`），单附件上限 `MAX_ATTACHMENT_MB`（20MB）。
+- 前后端共享摘要类型：`src/contracts/agent-attachment.ts` `AgentAttachmentInfo`（不含全文）。
+- 读文本上限：`READ_ATTACHMENT_DEFAULT_CHARS`（3000）/ `READ_ATTACHMENT_MAX_CHARS`（8000）。
+
 ## 知识库（KnowledgeFile）
 
 | 字段 | 说明 |
