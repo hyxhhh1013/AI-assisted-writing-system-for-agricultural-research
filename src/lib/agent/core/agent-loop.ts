@@ -34,6 +34,8 @@ import { writeBilingualAbstractTool } from "@/lib/agent/tools/write-bilingual-ab
 import { generateOutlineTool } from "@/lib/agent/tools/generate-outline";
 import { generateWritingBlueprintTool } from "@/lib/agent/tools/generate-writing-blueprint";
 import { inspectProjectTool } from "@/lib/agent/tools/inspect-project";
+import { readAttachmentTool } from "@/lib/agent/tools/read-attachment";
+import { listAttachmentsTool } from "@/lib/agent/tools/list-attachments";
 import { readProjectAssetTool } from "@/lib/agent/tools/read-project-asset";
 import { readSectionTool } from "@/lib/agent/tools/read-section";
 import { updatePaperConfigTool } from "@/lib/agent/tools/update-paper-config";
@@ -49,12 +51,14 @@ export async function* runAgentLoop(
 
 export function createAgentContext(params: {
   userId: string;
+  sessionId?: string;
   projectId?: string;
   directionSlug?: string;
   signal: AbortSignal;
 }): AgentContext {
   return {
     userId: params.userId,
+    sessionId: params.sessionId,
     projectId: params.projectId,
     directionSlug: params.directionSlug,
     signal: params.signal,
@@ -69,6 +73,8 @@ export function createAgentContext(params: {
 
 export function createReadOnlyTools(): ToolDefinition[] {
   return [
+    readAttachmentTool,
+    listAttachmentsTool,
     inspectProjectTool,
     recallRecentWorkTool,
     updateWorkMemoryTool,

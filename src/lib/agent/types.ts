@@ -32,6 +32,8 @@ export interface ToolDefinition {
 
 export interface AgentContext {
   userId: string;
+  /** 当前会话 id（会话级附件归属校验用） */
+  sessionId?: string;
   projectId?: string;
   directionSlug?: string;
   signal: AbortSignal;

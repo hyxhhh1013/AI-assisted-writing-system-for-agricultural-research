@@ -166,6 +166,7 @@ export async function POST(req: NextRequest) {
       async start(controller) {
         const context = createAgentContext({
           userId,
+          sessionId,
           projectId,
           directionSlug,
           signal: req.signal,
