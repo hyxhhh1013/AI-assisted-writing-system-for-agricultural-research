@@ -340,7 +340,7 @@ export function useAgent(options: UseAgentOptions = {}) {
   const sendGoal = useCallback(
     async (goal: string, opts?: { attachmentIds?: string[] }) => {
       const trimmed = goal.trim();
-      if (!trimmed) return;
+      if (!trimmed && !opts?.attachmentIds?.length) return;
       await runStream(
         {
           goal: trimmed,

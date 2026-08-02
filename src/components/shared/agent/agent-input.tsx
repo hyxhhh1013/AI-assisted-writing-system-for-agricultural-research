@@ -20,6 +20,9 @@ const FALLBACK_READ = [
   "检查当前引用",
 ] as const;
 
+/** 附件-only 发送（无文本）时的默认 goal */
+const ATTACHMENT_DEFAULT_GOAL = "请基于我上传的附件帮我处理";
+
 interface AgentInputBarProps {
   disabled?: boolean;
   isRunning?: boolean;
@@ -33,7 +36,7 @@ interface AgentInputBarProps {
 type Chip = {
   file: File;
   attachmentId: string | null;
-  status: "uploading" | "ready" | "failed";
+  status: "uploading" | "extracting" | "ready" | "failed";
   error?: string;
 };
 
@@ -67,9 +70,21 @@ export function AgentInputBar({
     setChips((prev) => [...prev, { file, attachmentId: null, status: "uploading" }]);
     try {
       const { attachment } = await postAgentAttachment(file, sessionId);
+      const status: Chip["status"] =
+        attachment.status === "ready"
+          ? "ready"
+          : attachment.status === "extracting"
+            ? "extracting"
+            : "failed";
+      const error =
+        attachment.status === "extract_failed" || attachment.status === "unsupported"
+          ? "未能解析"
+          : undefined;
       setChips((prev) =>
         prev.map((c) =>
-          c.file === file ? { ...c, attachmentId: attachment.id, status: "ready" } : c,
+          c.file === file
+            ? { ...c, attachmentId: attachment.id, status, ...(error ? { error } : {}) }
+            : c,
         ),
       );
     } catch (error) {
@@ -93,6 +108,7 @@ export function AgentInputBar({
 
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
+    if (disabled || isRunning) return;
     const files = e.dataTransfer.files;
     if (files) {
       for (const file of Array.from(files)) void uploadFile(file);
@@ -103,13 +119,18 @@ export function AgentInputBar({
     setChips((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const submit = () => {
-    const trimmed = value.trim();
-    if ((!trimmed && readyChips.length === 0) || disabled || isRunning) return;
-    onSend(trimmed, {
+  /** 携带已就绪附件发送：附件-only 时用默认 goal 兜底 */
+  const sendWithAttachments = (goal: string) => {
+    onSend(goal, {
       attachmentIds: readyChips.map((c) => c.attachmentId!),
     });
     setChips([]);
+  };
+
+  const submit = () => {
+    const trimmed = value.trim();
+    if ((!trimmed && readyChips.length === 0) || disabled || isRunning) return;
+    sendWithAttachments(trimmed || ATTACHMENT_DEFAULT_GOAL);
     setValue("");
   };
 
@@ -124,7 +145,10 @@ export function AgentInputBar({
             size="sm"
             className="h-7 shrink-0 rounded-full px-3 text-[11px] font-normal"
             disabled={disabled || isRunning}
-            onClick={() => onSend(prompt)}
+            onClick={() => {
+              sendWithAttachments(prompt);
+              setValue("");
+            }}
           >
             {prompt.length > 22 ? `${prompt.slice(0, 22)}…` : prompt}
           </Button>
@@ -132,16 +156,21 @@ export function AgentInputBar({
       </div>
       {chips.length > 0 ? (
         <div className="mb-2 flex flex-wrap gap-1.5">
-          {chips.map((chip, i) => (
+          {chips.map((chip) => (
             <span
-              key={`${chip.file.name}-${i}`}
+              key={`${chip.file.name}-${chip.file.size}`}
               className="inline-flex h-7 max-w-[240px] items-center gap-1.5 rounded-full border border-border/60 bg-white px-2.5 text-[11px] text-[#3d4f46]"
             >
               <span className="max-w-[140px] truncate" title={chip.file.name}>
                 {chip.file.name}
               </span>
-              {chip.status === "uploading" ? (
-                <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground" />
+              {chip.status === "uploading" || chip.status === "extracting" ? (
+                <span
+                  className="inline-flex shrink-0"
+                  title={chip.status === "extracting" ? "解析中…" : "上传中…"}
+                >
+                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                </span>
               ) : chip.status === "failed" ? (
                 <span className="max-w-[120px] truncate text-red-600" title={chip.error}>
                   {chip.error ?? "上传失败"}
@@ -149,7 +178,7 @@ export function AgentInputBar({
               ) : null}
               <button
                 type="button"
-                onClick={() => removeChip(i)}
+                onClick={() => removeChip(chips.indexOf(chip))}
                 aria-label="移除附件"
                 className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-black/5 hover:text-[#3d4f46]"
               >
