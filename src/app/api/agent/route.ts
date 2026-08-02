@@ -62,6 +62,8 @@ export async function POST(req: NextRequest) {
     let resumeState: ReturnType<typeof snapshotToInitialState> | undefined;
     /** resume 续跑时回退的会话附件 id（来自快照，避免清空 traceability） */
     let resumeSnapshotAttachmentIds: string[] | undefined;
+    /** 跟聊时前会话快照已记录的附件 id（防快照丢历史附件） */
+    let followUpSnapshotAttachmentIds: string[] | undefined;
     let followUp = false;
     let pendingCheckpointKind: import("@/contracts/agent").AgentCheckpointKind | undefined;
     const checkpointDecision = data.checkpointDecision;
@@ -152,6 +154,7 @@ export async function POST(req: NextRequest) {
       directionSlug = existing.directionSlug ?? directionSlug;
       resumeState = buildFollowUpInitialState(goal, existing.snapshot);
       followUp = true;
+      followUpSnapshotAttachmentIds = existing.snapshot.attachmentIds;
       await markAgentSessionFollowUp(sessionId, goal);
     } else {
       if (!goal) {
@@ -172,10 +175,23 @@ export async function POST(req: NextRequest) {
     // 附件：加载并生成清单（失败降级不阻断对话）
     let attachmentManifest: string | undefined;
     // resume 且客户端不传附件 id 时回退快照（避免清空 traceability）
-    const attachmentIds =
+    let attachmentIds =
       (data.attachmentIds && data.attachmentIds.length > 0)
         ? data.attachmentIds
         : (data.resume ? resumeSnapshotAttachmentIds ?? [] : []);
+    // followUp：合并前会话快照已记录的附件 id（防快照丢历史附件）
+    if (followUp && followUpSnapshotAttachmentIds?.length) {
+      attachmentIds = Array.from(new Set([...attachmentIds, ...followUpSnapshotAttachmentIds]));
+    }
+    // 首消息回填 sessionId：新对话上传的附件（sessionId=null）归属到本会话，保证 list_attachments 可发现
+    if (sessionId && attachmentIds.length > 0) {
+      try {
+        await prisma.agentAttachment.updateMany({
+          where: { id: { in: attachmentIds }, userId, sessionId: null },
+          data: { sessionId },
+        });
+      } catch { /* 回填失败不阻断 */ }
+    }
     if (attachmentIds.length > 0) {
       try {
         const rows = await prisma.agentAttachment.findMany({

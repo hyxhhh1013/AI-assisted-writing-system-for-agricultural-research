@@ -107,3 +107,20 @@ export async function postAgentAttachment(
   }
   return (await res.json()) as { attachment: import("@/contracts/agent-attachment").AgentAttachmentInfo };
 }
+
+/** 把附件固定到项目（跨会话可发现），成功返回更新后的附件信息 */
+export async function postPinAttachment(
+  attachmentId: string,
+  projectId: string,
+): Promise<{ attachment: import("@/contracts/agent-attachment").AgentAttachmentInfo }> {
+  const res = await fetch(`/api/agent/attachments/${encodeURIComponent(attachmentId)}/pin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ projectId }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error || "固定失败");
+  }
+  return (await res.json()) as { attachment: import("@/contracts/agent-attachment").AgentAttachmentInfo };
+}

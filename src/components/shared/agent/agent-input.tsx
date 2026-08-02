@@ -6,7 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { clientRejectReason } from "@/lib/agent/attachments/client-validate";
-import { postAgentAttachment } from "@/services/agent";
+import { postAgentAttachment, postPinAttachment } from "@/services/agent";
+
+/** 同时保留的最大附件数（与服务端 agentSchema.attachmentIds.max(20) 对齐） */
+const MAX_ATTACHMENT_CHIPS = 20;
 
 const FALLBACK_WRITE = [
   "看看项目卡在哪",
@@ -29,6 +32,7 @@ interface AgentInputBarProps {
   writeEnabled?: boolean;
   prompts?: string[];
   sessionId?: string;
+  projectId?: string;
   onSend: (goal: string, opts?: { attachmentIds?: string[] }) => void;
   onCancel: () => void;
 }
@@ -38,6 +42,8 @@ type Chip = {
   attachmentId: string | null;
   status: "uploading" | "extracting" | "ready" | "failed";
   error?: string;
+  pinned: boolean;
+  pinning?: boolean;
 };
 
 export function AgentInputBar({
@@ -46,6 +52,7 @@ export function AgentInputBar({
   writeEnabled,
   prompts,
   sessionId,
+  projectId,
   onSend,
   onCancel,
 }: AgentInputBarProps) {
@@ -67,7 +74,14 @@ export function AgentInputBar({
       toast.error(`${file.name}：${reason}`);
       return;
     }
-    setChips((prev) => [...prev, { file, attachmentId: null, status: "uploading" }]);
+    if (chips.length >= MAX_ATTACHMENT_CHIPS) {
+      toast.error(`最多同时上传 ${MAX_ATTACHMENT_CHIPS} 个附件`);
+      return;
+    }
+    setChips((prev) => [
+      ...prev,
+      { file, attachmentId: null, status: "uploading", pinned: false },
+    ]);
     try {
       const { attachment } = await postAgentAttachment(file, sessionId);
       const status: Chip["status"] =
@@ -98,10 +112,19 @@ export function AgentInputBar({
     }
   };
 
+  /** 单次多选/拖拽同时加入多个文件：按剩余名额截断，超出提示（uploadFile 内另有兜底校验） */
+  const enqueueFiles = (files: File[]) => {
+    const available = Math.max(MAX_ATTACHMENT_CHIPS - chips.length, 0);
+    for (const file of files.slice(0, available)) void uploadFile(file);
+    if (files.length > available) {
+      toast.error(`最多同时上传 ${MAX_ATTACHMENT_CHIPS} 个附件`);
+    }
+  };
+
   const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files) {
-      for (const file of Array.from(files)) void uploadFile(file);
+      enqueueFiles(Array.from(files));
     }
     e.target.value = "";
   };
@@ -111,12 +134,33 @@ export function AgentInputBar({
     if (disabled || isRunning) return;
     const files = e.dataTransfer.files;
     if (files) {
-      for (const file of Array.from(files)) void uploadFile(file);
+      enqueueFiles(Array.from(files));
     }
   };
 
   const removeChip = (index: number) => {
     setChips((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  /** 固定附件到当前项目（跨会话可发现）；成功后置 pinned，失败 toast 报错 */
+  const pinChip = async (chip: Chip) => {
+    if (!chip.attachmentId || !projectId || chip.pinned || chip.pinning) return;
+    setChips((prev) =>
+      prev.map((c) => (c.file === chip.file ? { ...c, pinning: true } : c)),
+    );
+    try {
+      await postPinAttachment(chip.attachmentId, projectId);
+      setChips((prev) =>
+        prev.map((c) =>
+          c.file === chip.file ? { ...c, pinned: true, pinning: false } : c,
+        ),
+      );
+    } catch (error) {
+      setChips((prev) =>
+        prev.map((c) => (c.file === chip.file ? { ...c, pinning: false } : c)),
+      );
+      toast.error(error instanceof Error ? error.message : "固定失败");
+    }
   };
 
   /** 携带已就绪附件发送：附件-only 时用默认 goal 兜底 */
@@ -175,6 +219,21 @@ export function AgentInputBar({
                 <span className="max-w-[120px] truncate text-red-600" title={chip.error}>
                   {chip.error ?? "上传失败"}
                 </span>
+              ) : null}
+              {chip.status === "ready" && chip.attachmentId && projectId ? (
+                <button
+                  type="button"
+                  disabled={chip.pinned || chip.pinning}
+                  onClick={() => void pinChip(chip)}
+                  title={chip.pinned ? "已固定到项目" : "固定到项目"}
+                  className={`shrink-0 rounded-full px-1.5 text-[10px] transition-colors ${
+                    chip.pinned
+                      ? "cursor-default text-muted-foreground"
+                      : "text-[#3d4f46] hover:bg-black/5"
+                  }`}
+                >
+                  {chip.pinned ? "已固定" : chip.pinning ? "固定中…" : "固定"}
+                </button>
               ) : null}
               <button
                 type="button"

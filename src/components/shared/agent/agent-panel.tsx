@@ -913,6 +913,7 @@ export function AgentPanel({
         writeEnabled={WRITE_PUBLIC}
         prompts={quickPrompts}
         sessionId={agent.sessionId ?? undefined}
+        projectId={projectId}
         onSend={(goal, opts) => {
           const firstUser = !agent.messages.some((m) => m.kind === "user");
           const payload = firstUser

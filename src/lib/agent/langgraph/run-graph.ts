@@ -138,7 +138,11 @@ export async function* runAgentGraphLoop(
     for (let i = initialState.messages.length - 1; i >= 0; i--) {
       if (initialState.messages[i].role === "user") { lastUserIdx = i; break; }
     }
-    if (lastUserIdx >= 0) {
+    // 防重复注入：resume 时快照首条 user 消息已带【附件】清单，再注入会双份 → 已含则跳过
+    if (
+      lastUserIdx >= 0
+      && !initialState.messages[lastUserIdx].content.includes("【附件】")
+    ) {
       initialState.messages = initialState.messages.map((msg, i) =>
         i === lastUserIdx ? { ...msg, content: `${attachmentManifest}\n\n${msg.content}` } : msg,
       );
