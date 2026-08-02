@@ -34,6 +34,11 @@ export const updatePaperConfigTool: ToolDefinition = {
       },
       targetJournal: { type: "string", description: "目标期刊（可空字符串）" },
       wordCount: { type: "string", description: "目标词数/字数说明，如 8000" },
+      agentEntryMode: {
+        type: "string",
+        description: "写作入口：full / outline_ready / data_ready",
+        enum: ["full", "outline_ready", "data_ready"],
+      },
     },
     required: [],
   },
@@ -70,6 +75,14 @@ export const updatePaperConfigTool: ToolDefinition = {
     const languageRaw = String(params.language ?? prev?.language ?? project.language ?? "zh");
     const language: PaperConfigRecord["language"] = languageRaw === "en" ? "en" : "zh";
 
+    const entryRaw = String(
+      params.agentEntryMode ?? prev?.agentEntryMode ?? "",
+    ).trim();
+    const agentEntryMode =
+      entryRaw === "full" || entryRaw === "outline_ready" || entryRaw === "data_ready"
+        ? entryRaw
+        : undefined;
+
     const config: PaperConfigRecord = {
       paperTitle:
         String(params.paperTitle ?? prev?.paperTitle ?? project.title).trim() || project.title,
@@ -82,6 +95,7 @@ export const updatePaperConfigTool: ToolDefinition = {
           : (prev?.targetJournal ?? ""),
       wordCount:
         String(params.wordCount ?? prev?.wordCount ?? "").trim() || "未定",
+      ...(agentEntryMode ? { agentEntryMode } : {}),
     };
 
     if (!config.paperTitle.trim()) {

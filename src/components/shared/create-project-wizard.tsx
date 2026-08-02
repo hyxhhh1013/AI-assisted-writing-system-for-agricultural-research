@@ -27,6 +27,7 @@ import {
   type ProjectWritingMode,
 } from "@/contracts/writing-mode";
 import type { ProjectLanguage } from "@/contracts/project";
+import type { AgentEntryModeId } from "@/contracts/paper-passport";
 import { ProjectReferenceImportPanel } from "@/components/shared/project/project-reference-import-panel";
 import {
   buildConfigFromWizard,
@@ -34,6 +35,7 @@ import {
 } from "@/services/project-handoff";
 import { syncPaperPassport, getProject } from "@/services/project";
 import { MIN_REVIEW_HANDOFF_ENTRIES } from "@/contracts/direction-literature";
+import { AGENT_ENTRY_MODES } from "@/lib/agent/entry-mode";
 import { toast } from "sonner";
 
 const WORD_COUNT_PRESETS = [
@@ -75,6 +77,7 @@ export function CreateProjectWizard({
   const [wordCount, setWordCount] = useState("8000-12000");
   const [citationStyle, setCitationStyle] =
     useState<(typeof CITATION_STYLES)[number]["value"]>("gbt7714");
+  const [entryMode, setEntryMode] = useState<AgentEntryModeId | null>("full");
 
   const reset = () => {
     setStep(1);
@@ -86,6 +89,7 @@ export function CreateProjectWizard({
     setTargetJournal("");
     setWordCount("8000-12000");
     setCitationStyle("gbt7714");
+    setEntryMode("full");
   };
 
   const handleOpenChange = (next: boolean) => {
@@ -105,6 +109,7 @@ export function CreateProjectWizard({
         targetJournal,
         wordCount,
         citationStyle,
+        entryMode ?? undefined,
       );
 
       if (mode === "research") {
@@ -160,7 +165,10 @@ export function CreateProjectWizard({
     }
   };
 
-  const stepLabels = mode === "review" ? ["类型", "论文配置", "导入文献"] : ["类型", "论文配置"];
+  const stepLabels =
+    mode === "review"
+      ? ["类型", "配置与入口", "导入文献"]
+      : ["类型", "配置与入口"];
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -168,7 +176,9 @@ export function CreateProjectWizard({
         <DialogHeader>
           <DialogTitle>新建论文项目</DialogTitle>
           <DialogDescription>
-            先完成论文配置{mode === "review" ? "与参考文献导入" : ""}，然后进入写作工作台。
+            一次填完基础配置与写作入口
+            {mode === "review" ? "，并可导入参考文献" : ""}
+            ，进入工作台后 Agent 按入口推进（对齐 academic-paper）。
           </DialogDescription>
           <div className="flex gap-1 pt-1">
             {stepLabels.map((label, i) => (
@@ -245,10 +255,37 @@ export function CreateProjectWizard({
           )}
 
           {step === 2 && (
-            <div className="space-y-3">
-              <p className="text-[10px] text-muted-foreground">论文配置</p>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-xs">写作入口（Agent 怎么开局）</Label>
+                <p className="text-[10px] text-muted-foreground">
+                  对应 academic-paper 常用场景；可之后在 Agent「改论文信息」里调整
+                </p>
+                <div className="grid gap-2">
+                  {AGENT_ENTRY_MODES.map((m) => {
+                    const selected = entryMode === m.id;
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setEntryMode(m.id)}
+                        className={cn(
+                          "rounded-lg border px-3 py-2 text-left transition-all",
+                          selected
+                            ? "border-[#1a5632]/35 bg-[#1a5632]/5 ring-1 ring-[#1a5632]/25"
+                            : "border-border hover:bg-muted/40",
+                        )}
+                      >
+                        <p className="text-xs font-semibold text-[#122820]">{m.label}</p>
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">{m.hint}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="space-y-1.5">
-                <Label className="text-xs">目标期刊</Label>
+                <Label className="text-xs">目标期刊（可选）</Label>
                 <Input
                   className="h-8 text-xs"
                   value={targetJournal}

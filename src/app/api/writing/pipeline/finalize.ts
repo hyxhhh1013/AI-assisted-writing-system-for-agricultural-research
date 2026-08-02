@@ -3,6 +3,7 @@ import {
   compactCitationsToUsedReferences,
   resolveAllowedCitationIndices,
   stripDisallowedCitations,
+  stripEmbeddedBibliography,
 } from "@/lib/reference-reorder";
 import { normalizeAllCitationFormats, validateCitations, validateDataClaims } from "@/lib/citation";
 import type { PreparedWritingContext, WritingPipelineEmit } from "../types";
@@ -16,7 +17,8 @@ export function sanitizeDraftCitations(
     prepared.referencesByIndex.length,
     prepared.groundedRefIndices,
   );
-  return stripDisallowedCitations(normalizeAllCitationFormats(draft), allowed);
+  const normalized = stripEmbeddedBibliography(normalizeAllCitationFormats(draft));
+  return stripDisallowedCitations(normalized, allowed);
 }
 
 export interface FinalizeCitationsResult {

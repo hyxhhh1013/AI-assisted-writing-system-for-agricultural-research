@@ -322,6 +322,30 @@ export function remapPrunedCitations(text: string, indexMap: Record<number, numb
 }
 
 /**
+ * 去掉章节正文末尾误生成的「参考文献 / References」整表。
+ * 项目参考文献在侧栏统一维护；章节内只保留文中 [n]，不附列表。
+ */
+export function stripEmbeddedBibliography(text: string): string {
+  if (!text) return text;
+  let t = text;
+  const patterns: RegExp[] = [
+    /\n\s*---+\s*\n\s*\*{0,2}参考文献\*{0,2}\s*(?:\n|$)[\s\S]*$/i,
+    /\n\s*\*{0,2}参考文献\*{0,2}\s*\n\s*(?:\[\d+\]|［\d+］)[\s\S]*$/i,
+    /\n\s*#{1,3}\s*参考文献\s*\n[\s\S]*$/i,
+    /\n\s*---+\s*\n\s*\*{0,2}References\*{0,2}\s*(?:\n|$)[\s\S]*$/i,
+    /\n\s*\*{0,2}References\*{0,2}\s*\n\s*\[\d+\][\s\S]*$/i,
+    /\n\s*#{1,3}\s*References\s*\n[\s\S]*$/i,
+  ];
+  for (const re of patterns) {
+    t = t.replace(re, "");
+  }
+  // 残留占位引用标记
+  t = t.replace(/\s*\[文献待补充\]/g, "");
+  t = t.replace(/\s*\[引用\?\]/g, "");
+  return t.replace(/\n{3,}/g, "\n\n").trimEnd();
+}
+
+/**
  * 从文本中移除超出 [1..refCount] 范围的引用号。
  * 合法引用保留；全组越界返回空字符串；混合组仅保留合法部分。
  * 支持中文标点（，、）和全角方括号（［］）。

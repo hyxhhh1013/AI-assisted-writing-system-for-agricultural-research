@@ -32,6 +32,30 @@ describe("chart bridge", () => {
     });
   });
 
+  it("extracts first chart from batch generate_chart result", () => {
+    const info = extractChartPersisted("generate_chart", {
+      success: true,
+      data: {
+        count: 2,
+        charts: [
+          {
+            imageUrl: "/api/charts/b1.png",
+            persisted: { id: "b1", caption: "图A" },
+          },
+          {
+            imageUrl: "/api/charts/b2.png",
+            persisted: { id: "b2", caption: "图B" },
+          },
+        ],
+      },
+    });
+    expect(info).toMatchObject({
+      imageUrl: "/api/charts/b1.png",
+      caption: "图A",
+      chartAssetId: "b1",
+    });
+  });
+
   it("stores imageUrl on observation ui transcript", () => {
     const t = appendUiFromAgentEvent([], {
       type: "agent/observation",

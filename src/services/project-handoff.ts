@@ -76,6 +76,7 @@ export function buildConfigFromWizard(
   targetJournal: string,
   wordCount: string,
   citationStyle: PaperConfigRecord["citationStyle"],
+  agentEntryMode?: PaperConfigRecord["agentEntryMode"],
 ): PaperConfigRecord {
   return paperConfigToRecord({
     paperTitle: paperTitle.trim() || "未命名项目",
@@ -84,5 +85,6 @@ export function buildConfigFromWizard(
     wordCount,
     language,
     citationStyle,
+    ...(agentEntryMode ? { agentEntryMode } : {}),
   });
 }

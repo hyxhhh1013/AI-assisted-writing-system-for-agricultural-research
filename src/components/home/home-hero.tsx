@@ -15,12 +15,9 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { projectStore } from "@/lib/store";
 import { searchKnowledge } from "@/services/knowledge";
 import type { ProjectListItem } from "@/services/project";
-import type { ProjectWritingMode } from "@/contracts/writing-mode";
-import type { ProjectLanguage } from "@/contracts/project";
-import { CreateProjectDialog } from "@/components/shared/create-project-dialog";
+import { CreateProjectWizard } from "@/components/shared/create-project-wizard";
 import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
 import { cn } from "@/lib/utils";
 
@@ -62,7 +59,6 @@ export function HomeHero({ projects }: HomeHeroProps) {
   const router = useRouter();
   const [stats, setStats] = useState<KnowledgeStats | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
 
   const recentProject = projects[0] ?? null;
   const otherProjects = projects.slice(1, 5);
@@ -85,17 +81,9 @@ export function HomeHero({ projects }: HomeHeroProps) {
     };
   }, []);
 
-  const handleCreate = async (mode: ProjectWritingMode, title: string, language: ProjectLanguage) => {
-    setIsCreating(true);
-    try {
-      const created = await projectStore.create(mode, title, language);
-      if (created) {
-        setCreateOpen(false);
-        router.push(`/workbench?id=${created.id}`);
-      }
-    } finally {
-      setIsCreating(false);
-    }
+  const handleCreated = (projectId: string) => {
+    setCreateOpen(false);
+    router.push(`/workbench?id=${projectId}`);
   };
 
   return (
@@ -336,11 +324,10 @@ export function HomeHero({ projects }: HomeHeroProps) {
         </aside>
       </div>
 
-      <CreateProjectDialog
+      <CreateProjectWizard
         open={createOpen}
         onOpenChange={setCreateOpen}
-        onCreate={handleCreate}
-        isCreating={isCreating}
+        onCreated={handleCreated}
       />
     </section>
   );

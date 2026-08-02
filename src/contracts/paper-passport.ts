@@ -17,6 +17,9 @@ export const PAPER_PHASE_LABELS: readonly string[] = [
   "审查",
 ] as const;
 
+/** Agent 写作入口（对齐 academic-paper 常用场景，新建项目时选定） */
+export type AgentEntryModeId = "full" | "outline_ready" | "data_ready";
+
 export interface PaperConfigRecord {
   paperTitle: string;
   paperType: "review" | "research";
@@ -24,6 +27,8 @@ export interface PaperConfigRecord {
   wordCount: string;
   language: "zh" | "en";
   citationStyle: "gbt7714" | "vancouver" | "apa7" | "ieee";
+  /** 可选：写作入口；旧项目可能没有 */
+  agentEntryMode?: AgentEntryModeId;
 }
 
 export interface PaperPassportSource {
@@ -105,12 +110,24 @@ const CITATION_STYLES = new Set<PaperConfigRecord["citationStyle"]>([
   "ieee",
 ]);
 
+const AGENT_ENTRY_MODE_IDS = new Set<AgentEntryModeId>([
+  "full",
+  "outline_ready",
+  "data_ready",
+]);
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isPaperConfigRecord(value: unknown): value is PaperConfigRecord {
   if (!isRecord(value)) return false;
+  const entryOk =
+    value.agentEntryMode === undefined
+    || (
+      typeof value.agentEntryMode === "string"
+      && AGENT_ENTRY_MODE_IDS.has(value.agentEntryMode as AgentEntryModeId)
+    );
   return (
     typeof value.paperTitle === "string"
     && (value.paperType === "review" || value.paperType === "research")
@@ -119,6 +136,7 @@ function isPaperConfigRecord(value: unknown): value is PaperConfigRecord {
     && (value.language === "zh" || value.language === "en")
     && typeof value.citationStyle === "string"
     && CITATION_STYLES.has(value.citationStyle as PaperConfigRecord["citationStyle"])
+    && entryOk
   );
 }
 
@@ -252,7 +270,7 @@ export function serializePaperPassport(passport: PaperPassport): string {
   return JSON.stringify(passport);
 }
 
-/** 将 paper-config-dialog 的配置写入 passport */
+/** 将 paper-config-dialog / 新建向导的配置写入 passport */
 export function paperConfigToRecord(config: {
   paperTitle: string;
   paperType: "review" | "research";
@@ -260,6 +278,13 @@ export function paperConfigToRecord(config: {
   wordCount: string;
   language: "zh" | "en";
   citationStyle: "gbt7714" | "vancouver" | "apa7" | "ieee";
+  agentEntryMode?: AgentEntryModeId;
 }): PaperConfigRecord {
-  return { ...config };
+  const { agentEntryMode, ...rest } = config;
+  return {
+    ...rest,
+    ...(agentEntryMode && AGENT_ENTRY_MODE_IDS.has(agentEntryMode)
+      ? { agentEntryMode }
+      : {}),
+  };
 }

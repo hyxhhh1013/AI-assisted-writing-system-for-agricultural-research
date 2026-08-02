@@ -5,6 +5,7 @@ import type { WritingGlobalContext } from "@/app/api/writing/types";
 import type { WritingInput } from "@/lib/validations";
 import {
   collectInvalidCitationNumbers,
+  stripEmbeddedBibliography,
   stripOutOfRangeCitations,
 } from "@/lib/reference-reorder";
 import { normalizeAllCitationFormats } from "@/lib/citation";
@@ -69,7 +70,9 @@ export async function runAgentRefineContent(
       throw new Error("Refiner 未返回有效正文");
     }
 
-    let refined = normalizeAllCitationFormats(correctedText.trim());
+    let refined = stripEmbeddedBibliography(
+      normalizeAllCitationFormats(correctedText.trim()),
+    );
     if (input.maxRefIndex > 0) {
       refined = stripOutOfRangeCitations(refined, input.maxRefIndex);
       const lingering = collectInvalidCitationNumbers(refined, input.maxRefIndex);
@@ -151,7 +154,7 @@ function collectWritingEvents(
   }
 
   return {
-    draft: draft.trim(),
+    draft: stripEmbeddedBibliography(draft.trim()),
     references,
     verification,
     issueCount,
