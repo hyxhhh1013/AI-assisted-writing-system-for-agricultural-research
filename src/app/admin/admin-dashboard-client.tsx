@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   Users, FileText, Database, Search, Clock, Loader2, Heart, ArrowRight,
+  Compass, Bot, AlertTriangle, BarChart3,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getAdminStats, getAdminHealth, type AdminStats } from "@/services/admin";
@@ -13,6 +14,7 @@ import { adminModeLabel, adminTplLabel } from "@/lib/admin-labels";
 import { AdminHeroBand } from "@/components/admin/admin-hero-band";
 import { AdminPanel, AdminCompactList } from "@/components/admin/admin-panel";
 import { AdminBarChart, AdminHBarChart } from "@/components/admin/admin-bar-chart";
+import { AdminMetricStrip } from "@/components/admin/admin-stat-card";
 import { AdminAlertStrip } from "@/components/admin/admin-alert-strip";
 import { AdminSparkline, isSparseTrend } from "@/components/admin/admin-sparkline";
 
@@ -119,6 +121,15 @@ export default function AdminDashboard() {
           { label: "审查", value: stats.reviewCount, icon: Search, href: "/admin/reviews" },
         ]}
         aiLine={aiLine}
+      />
+
+      <AdminMetricStrip
+        items={[
+          { label: "研究方向", value: stats.directionCount, icon: Compass, href: "/admin/directions" },
+          { label: "Agent 会话", value: stats.agentSessionCount, icon: Bot, href: "/admin/agent-sessions" },
+          { label: "Agent 出错", value: stats.agentSessionErrorCount, icon: AlertTriangle, href: "/admin/agent-sessions?status=error" },
+          { label: "分析记录", value: stats.analysisCount, icon: BarChart3 },
+        ]}
       />
 
       <div className="grid gap-5 lg:grid-cols-5">

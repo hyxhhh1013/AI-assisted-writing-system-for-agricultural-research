@@ -20,6 +20,8 @@ export interface AdminListParams {
   dateFrom?: string;
   dateTo?: string;
   indexStatus?: string;
+  /** 通用状态筛选（agent-sessions / directions 等） */
+  status?: string;
 }
 
 // ==================== 鍒嗛〉鍝嶅簲 ====================
@@ -65,6 +67,10 @@ export interface AdminStats {
   knowledgeChunkCount: number;
   plagiarismCount: number;
   reviewCount: number;
+  directionCount: number;
+  agentSessionCount: number;
+  agentSessionErrorCount: number;
+  analysisCount: number;
   filesByCategory: { category: string; count: number }[];
   projectsByTemplate: { template: string; count: number }[];
   projectsByMode: { mode: "review" | "research"; count: number }[];
@@ -221,6 +227,78 @@ export interface AdminSearchResponse {
 export interface AdminSettingRecord {
   key: string;
   maskedValue: string;
+  updatedAt: string;
+}
+
+export type AiProviderKey = "deepseek" | "zhipu";
+
+/** GET /api/admin/ai-status 返回的单个 provider 状态 */
+export interface AdminAiStatusProvider {
+  provider: AiProviderKey;
+  name: string;
+  enabled: boolean;
+  model: string;
+  modelSource: "db" | "env" | "default";
+  keyCount: number;
+  /** 脱敏后的 key 展示 */
+  keys: string[];
+}
+
+/** Agent 角色→provider 映射（当前生效） */
+export interface AdminAiRoles {
+  writer: AiProviderKey;
+  verifier: AiProviderKey;
+  refiner: AiProviderKey;
+}
+
+/** GET /api/admin/ai-status 响应 */
+export interface AdminAiStatusResponse {
+  providers: AdminAiStatusProvider[];
+  roles: AdminAiRoles;
+}
+
+// ==================== Agent 会话监控 ====================
+
+export type AdminAgentSessionStatus = "running" | "interrupted" | "completed" | "error";
+
+export interface AdminAgentSessionRecord {
+  id: string;
+  userId: string;
+  userName?: string;
+  projectId: string | null;
+  projectTitle?: string | null;
+  directionSlug: string | null;
+  goal: string;
+  status: AdminAgentSessionStatus;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 会话详情：额外含快照概要 */
+export interface AdminAgentSessionDetail extends AdminAgentSessionRecord {
+  iteration: number;
+  toolCallCount: number;
+}
+
+// ==================== 研究方向管理 ====================
+
+export interface AdminDirectionRecord {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  categories: string[];
+  status: "active" | "archived";
+  userId: string;
+  userName?: string;
+  assetCount: number;
+  literatureCount: number;
+  coreLiteratureCount: number;
+  analysisAt: number | null;
+  roadmapPapers: number;
+  roadmapConfirmed: boolean;
+  createdAt: string;
   updatedAt: string;
 }
 

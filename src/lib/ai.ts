@@ -1,4 +1,5 @@
 import { fetchWithRetry } from "./fetch-with-retry";
+import { withKeyConcurrency } from "./ai-concurrency";
 import { getModelConfig, ModelProviderKey, validateProviderKey } from "./models";
 import { usageLog } from "./usage-log";
 export { getAgentModelConfig } from "./models";
@@ -83,7 +84,7 @@ export function clearAiRuntimeCaches(): void {
 }
 
 /** 收集所有可用的 API Key（DB + env），支持 DEEPSEEK_API_KEY, DEEPSEEK_API_KEY_2, ... */
-async function getAllKeys(provider: ModelProviderKey): Promise<string[]> {
+export async function getAllKeys(provider: ModelProviderKey): Promise<string[]> {
   const config = getModelConfig(provider);
   const baseKey = config.apiKeyEnvVar; // e.g. "DEEPSEEK_API_KEY"
   const keys: string[] = [];
@@ -160,27 +161,33 @@ export async function callAI(options: AICallOptions): Promise<Response> {
   }
 
   const timeoutMs = options.timeoutMs ?? (options.stream ? 300_000 : 30_000);
-  const response = await fetchWithRetry(
-    config.baseUrl,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+  // per-key 并发限流：每个 key 同时最多 PER_KEY_CONCURRENCY 个请求，超出的排队，
+  // 避免单 key 多用户并发时把上游打爆触发 429。仅覆盖到响应头返回；流式正文由调用方继续读。
+  const response = await withKeyConcurrency(
+    apiKey,
+    () => fetchWithRetry(
+      config.baseUrl,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: options.messages,
+          stream: options.stream ?? true,
+          ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+          ...(options.tools?.length
+            ? { tools: options.tools, tool_choice: options.tool_choice ?? "auto" }
+            : {}),
+        }),
+        signal: options.signal,
       },
-      body: JSON.stringify({
-        model,
-        messages: options.messages,
-        stream: options.stream ?? true,
-        ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
-        ...(options.tools?.length
-          ? { tools: options.tools, tool_choice: options.tool_choice ?? "auto" }
-          : {}),
-      }),
-      signal: options.signal,
-    },
-    1,             // retries: 只重试 1 次（避免叠加等待过长）
-    timeoutMs,
+      1,             // retries: 只重试 1 次（避免叠加等待过长）
+      timeoutMs,
+    ),
+    options.signal,
   );
 
   if (!response.ok) {
@@ -263,9 +270,9 @@ export async function* streamAIResponse(
         if (trimmed.startsWith("data:") && trimmed !== "data: [DONE]") {
           try {
             const data = JSON.parse(trimmed.slice(5).trim());
-            const content = data.choices?.[0]?.delta?.content
-              || data.choices?.[0]?.delta?.reasoning_content
-              || "";
+            // 只取 delta.content：reasoning_content 是模型的思考过程（chain-of-thought），
+            // 若拼进正文会泄漏「嗯，用户是让我…」等元文字（DeepSeek 推理模型常见）
+            const content = data.choices?.[0]?.delta?.content || "";
             if (content) yield { content };
           } catch {}
         }
@@ -278,9 +285,7 @@ export async function* streamAIResponse(
       if (trimmed.startsWith("data:") && trimmed !== "data: [DONE]") {
         try {
           const data = JSON.parse(trimmed.slice(5).trim());
-          const content = data.choices?.[0]?.delta?.content
-            || data.choices?.[0]?.delta?.reasoning_content
-            || "";
+          const content = data.choices?.[0]?.delta?.content || "";
           if (content) yield { content };
         } catch {}
       }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { success, badRequest } from "@/lib/admin-response";
 import { clearAiRuntimeCaches } from "@/lib/ai";
+import { loadAgentRoleProviders } from "@/lib/models";
 import { getAllSettings, getSetting, setSetting, deleteSetting, initDefaultSettings } from "@/lib/settings";
 import { validateBody } from "@/lib/api-validate";
 import { adminSettingDeleteSchema, adminSettingPutSchema } from "@/lib/validations";
@@ -45,6 +46,7 @@ export async function PUT(req: NextRequest) {
 
     await setSetting(key, value);
     clearAiRuntimeCaches();
+    await loadAgentRoleProviders();
     return success(undefined, `已保存 ${key}（已立即刷新 AI 缓存）`);
   } catch (err: unknown) {
     const message = err instanceof Error ? getErrorMessage(err) : String(err);
@@ -64,5 +66,6 @@ export async function DELETE(req: NextRequest) {
 
   await deleteSetting(key);
   clearAiRuntimeCaches();
+  await loadAgentRoleProviders();
   return success(undefined, `已删除 ${key}`);
 }

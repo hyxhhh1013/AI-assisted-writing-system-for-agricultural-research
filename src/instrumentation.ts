@@ -14,6 +14,15 @@ export async function register() {
       console.error("[uncaughtException]", error.message, error.stack?.slice(0, 500));
     });
 
+    // 加载 Admin 配置的角色→provider 映射（同步读内存缓存，不阻塞启动）
+    setTimeout(() => {
+      import("@/lib/models").then(({ loadAgentRoleProviders }) => {
+        loadAgentRoleProviders().then(() => {
+          console.log("[models] 角色→provider 映射已加载");
+        }).catch((e) => console.warn("[models] 角色映射加载失败（非致命）:", (e as Error).message));
+      }).catch(() => {});
+    }, 0);
+
     // RAG 预热：默认 light（仅元数据）；full=全库；RAG_WARMUP=0 关闭
     if (ragWarmupMode() !== "off") {
       setTimeout(async () => {

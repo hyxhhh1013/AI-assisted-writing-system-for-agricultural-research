@@ -71,19 +71,47 @@ export function validateProviderKey(provider: ModelProviderKey): string | null {
 }
 
 // ==================== Agent 角色模型映射 ====================
-// 可独立配置 Writer / Verifier / Refiner 使用不同模型提供者
-// 当 Verifier 使用与 Writer 不同的模型时，实现真正的独立验证
+// Writer / Verifier / Refiner 可独立配置使用不同模型提供者
+// 当 Verifier 使用与 Writer 不同的模型时，实现真正的独立验证。
+// 默认值硬编码；Admin 保存 AGENT_ROLE_* 设置后由 loadAgentRoleProviders() 刷新内存缓存，
+// 保持 getAgentProvider 同步——全库有 27+ 处同步调用，不能改成 async。
 
 export type AgentRole = "writer" | "verifier" | "refiner";
 
-export const AGENT_MODELS: Record<AgentRole, ModelProviderKey> = {
-  writer: "deepseek",
-  verifier: MODEL_PROVIDERS.zhipu.enabled ? "zhipu" : "deepseek",
-  refiner: "deepseek",
+/** 角色→provider 设置的存储键（值: "deepseek" | "zhipu"） */
+export const AGENT_ROLE_SETTING_KEYS: Record<AgentRole, string> = {
+  writer: "AGENT_ROLE_WRITER",
+  verifier: "AGENT_ROLE_VERIFIER",
+  refiner: "AGENT_ROLE_REFINER",
 };
 
+function defaultAgentRoleProviders(): Record<AgentRole, ModelProviderKey> {
+  return {
+    writer: "deepseek",
+    verifier: MODEL_PROVIDERS.zhipu.enabled ? "zhipu" : "deepseek",
+    refiner: "deepseek",
+  };
+}
+
+let agentRoleProviders: Record<AgentRole, ModelProviderKey> = defaultAgentRoleProviders();
+
+/** 从 DB 设置加载角色→provider 映射（应用启动时 + Admin 保存设置后调用） */
+export async function loadAgentRoleProviders(): Promise<void> {
+  try {
+    const { getSetting } = await import("./settings");
+    const next: Record<AgentRole, ModelProviderKey> = { ...agentRoleProviders };
+    for (const role of ["writer", "verifier", "refiner"] as const) {
+      const v = await getSetting(AGENT_ROLE_SETTING_KEYS[role]);
+      if (v === "deepseek" || v === "zhipu") next[role] = v;
+    }
+    agentRoleProviders = next;
+  } catch {
+    /* DB 读取失败则保持当前映射 */
+  }
+}
+
 export function getAgentProvider(role: AgentRole): ModelProviderKey {
-  return AGENT_MODELS[role];
+  return agentRoleProviders[role];
 }
 
 /** 获取某 agent 角色的模型配置，含 key 有效性检查 */

@@ -713,6 +713,13 @@ export const adminSettingDeleteSchema = z.object({
 });
 export type AdminSettingDeleteInput = z.infer<typeof adminSettingDeleteSchema>;
 
+export const adminAiTestSchema = z.object({
+  provider: z.enum(["deepseek", "zhipu"]),
+  model: z.string().trim().optional(),
+  apiKey: z.string().trim().optional(),
+});
+export type AdminAiTestInput = z.infer<typeof adminAiTestSchema>;
+
 // === Chart / Table / XRD ===
 export const chartModeSchema = z.enum(["generic", "crd"]).default("generic");
 

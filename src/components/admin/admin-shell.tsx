@@ -13,6 +13,8 @@ import {
   Shield,
   Heart,
   Settings,
+  Compass,
+  Bot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AdminGlobalSearch } from "@/components/admin/admin-global-search";
@@ -32,6 +34,7 @@ const NAV_GROUPS = [
       { href: "/admin/users", label: "用户管理", icon: Users },
       { href: "/admin/projects", label: "项目管理", icon: FileText },
       { href: "/admin/knowledge", label: "文献管理", icon: Database },
+      { href: "/admin/directions", label: "研究方向", icon: Compass },
     ],
   },
   {
@@ -45,6 +48,7 @@ const NAV_GROUPS = [
     label: "数据",
     items: [
       { href: "/admin/usage", label: "使用统计", icon: Activity },
+      { href: "/admin/agent-sessions", label: "Agent 会话", icon: Bot },
     ],
   },
 ];

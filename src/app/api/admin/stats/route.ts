@@ -7,15 +7,22 @@ export async function GET(req: NextRequest) {
   const { error } = await requireAdmin(req);
   if (error) return error;
 
-  const [userCount, projectCount, knowledgeFileCount, knowledgeChunkCount, plagiarismCount, reviewCount] =
-    await Promise.all([
-      prisma.user.count(),
-      prisma.project.count(),
-      prisma.knowledgeFile.count(),
-      prisma.knowledgeChunk.count(),
-      prisma.plagiarismCheck.count(),
-      prisma.reviewCheck.count(),
-    ]);
+  const [
+    userCount, projectCount, knowledgeFileCount, knowledgeChunkCount,
+    plagiarismCount, reviewCount, directionCount, agentSessionCount,
+    agentSessionErrorCount, analysisCount,
+  ] = await Promise.all([
+    prisma.user.count(),
+    prisma.project.count(),
+    prisma.knowledgeFile.count(),
+    prisma.knowledgeChunk.count(),
+    prisma.plagiarismCheck.count(),
+    prisma.reviewCheck.count(),
+    prisma.direction.count(),
+    prisma.agentSession.count(),
+    prisma.agentSession.count({ where: { status: "error" } }),
+    prisma.analysisResult.count(),
+  ]);
 
   // 文献分类分布
   const filesByCategory = await prisma.knowledgeFile.groupBy({
@@ -59,6 +66,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     userCount, projectCount, knowledgeFileCount, knowledgeChunkCount, plagiarismCount, reviewCount,
+    directionCount, agentSessionCount, agentSessionErrorCount, analysisCount,
     filesByCategory: filesByCategory.map(f => ({ category: f.category, count: f._count.id })),
     projectsByTemplate: projectsByTemplate.map(p => ({ template: p.template, count: p._count.id })),
     projectsByMode: projectsByMode.map(p => ({

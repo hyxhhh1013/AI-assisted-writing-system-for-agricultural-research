@@ -60,5 +60,6 @@ export function parseListParams(searchParams: URLSearchParams): AdminListParams 
     userId: searchParams.get("userId") || undefined,
     projectId: searchParams.get("projectId") || undefined,
     indexStatus: searchParams.get("indexStatus") || undefined,
+    status: searchParams.get("status") || undefined,
   };
 }

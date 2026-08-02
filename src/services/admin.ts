@@ -3,6 +3,10 @@
  */
 
 import type {
+  AdminAgentSessionDetail,
+  AdminAgentSessionRecord,
+  AdminAiStatusResponse,
+  AdminDirectionRecord,
   AdminHealthData,
   AdminKnowledgeFile,
   AdminKnowledgeListResponse,
@@ -24,6 +28,12 @@ import type {
 } from "@/contracts/admin";
 
 export type {
+  AdminAgentSessionDetail,
+  AdminAgentSessionRecord,
+  AdminAiRoles,
+  AdminAiStatusProvider,
+  AdminAiStatusResponse,
+  AdminDirectionRecord,
   AdminHealthData,
   AdminKnowledgeFile,
   AdminKnowledgeListResponse,
@@ -300,6 +310,85 @@ export async function deleteAdminSetting(key: string): Promise<boolean> {
     body: JSON.stringify({ key }),
   });
   return res.ok;
+}
+
+/** GET /api/admin/ai-status — 各 provider 当前生效模型与 Key 概览（不含明文）+ 角色映射 */
+export async function getAiStatus(): Promise<AdminAiStatusResponse> {
+  const res = await fetch("/api/admin/ai-status");
+  const data = await parseJson<AdminSuccessResponse<AdminAiStatusResponse>>(res);
+  return (
+    data.data ?? { providers: [], roles: { writer: "deepseek", verifier: "deepseek", refiner: "deepseek" } }
+  );
+}
+
+/** POST /api/admin/ai-test — 用指定 key/model 做最小连通性测试（不落库） */
+export async function testAiConnection(input: {
+  provider: string;
+  model?: string;
+  apiKey?: string;
+}): Promise<{ ok: boolean; message?: string; error?: string }> {
+  const res = await fetch("/api/admin/ai-test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const data = await parseJson<AdminSuccessResponse & { error?: string }>(res);
+  if (res.ok && data.success) return { ok: true, message: data.message };
+  return { ok: false, error: data.error || data.message || `${res.status} ${res.statusText}` };
+}
+
+/** GET /api/admin/agent-sessions — Agent 会话列表（跨用户） */
+export async function listAdminAgentSessions(
+  params: AdminListParams,
+): Promise<AdminListResult<AdminAgentSessionRecord>> {
+  const res = await fetch(`/api/admin/agent-sessions${buildQuery(params)}`);
+  return parsePaginated<AdminAgentSessionRecord>(res);
+}
+
+/** GET /api/admin/agent-sessions/[id] — 会话详情（含快照概要） */
+export async function getAdminAgentSessionDetail(
+  id: string,
+): Promise<AdminAgentSessionDetail | null> {
+  const res = await fetch(`/api/admin/agent-sessions/${id}`);
+  const data = await parseJson<AdminSuccessResponse<AdminAgentSessionDetail>>(res);
+  return data.success ? (data.data ?? null) : null;
+}
+
+/** PATCH /api/admin/agent-sessions/[id] — 强制中断会话 */
+export async function interruptAdminAgentSession(
+  id: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch(`/api/admin/agent-sessions/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "interrupt" }),
+  });
+  const data = await parseJson<AdminSuccessResponse & { error?: string }>(res);
+  if (res.ok && data.success) return { ok: true };
+  return { ok: false, error: data.error || data.message || "中断失败" };
+}
+
+/** GET /api/admin/directions — 研究方向列表 */
+export async function listAdminDirections(
+  params: AdminListParams,
+): Promise<AdminListResult<AdminDirectionRecord>> {
+  const res = await fetch(`/api/admin/directions${buildQuery(params)}`);
+  return parsePaginated<AdminDirectionRecord>(res);
+}
+
+/** PATCH /api/admin/directions/[id] — 切换 active / archived */
+export async function setAdminDirectionStatus(
+  id: string,
+  status: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch(`/api/admin/directions/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  const data = await parseJson<AdminSuccessResponse & { error?: string }>(res);
+  if (res.ok && data.success) return { ok: true };
+  return { ok: false, error: data.error || data.message || "操作失败" };
 }
 
 /** GET /api/admin/plagiarism */
