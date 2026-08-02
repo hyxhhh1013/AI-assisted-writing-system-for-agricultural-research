@@ -72,6 +72,21 @@ module.exports = {
         RAG_WARMUP: pick("RAG_WARMUP", "light"),
         RAG_STREAM_CATEGORIES: pick("RAG_STREAM_CATEGORIES", "1"),
         RAG_CATEGORY_CACHE_MAX: pick("RAG_CATEGORY_CACHE_MAX", "2"),
+        WRITING_MAX_CONCURRENT: pick("WRITING_MAX_CONCURRENT", "2"),
+        WRITING_VERIFIER_MAX_FULL_SOURCES: pick(
+          "WRITING_VERIFIER_MAX_FULL_SOURCES",
+          "5",
+        ),
+        WRITING_DEFAULT_MODE: pick("WRITING_DEFAULT_MODE", "fast"),
+        // Wave 2 Agent（须 .env 中 AGENT_ENABLED=1；NEXT_PUBLIC_* 另需在 build 时注入）
+        AGENT_ENABLED: pick("AGENT_ENABLED", "0"),
+        AGENT_WRITE_ENABLED: pick("AGENT_WRITE_ENABLED", "0"),
+        AGENT_WRITE_AUTO_FIX: pick("AGENT_WRITE_AUTO_FIX", "1"),
+        NEXT_PUBLIC_AGENT_ENABLED: pick("NEXT_PUBLIC_AGENT_ENABLED", "0"),
+        NEXT_PUBLIC_AGENT_WRITE_ENABLED: pick(
+          "NEXT_PUBLIC_AGENT_WRITE_ENABLED",
+          "0",
+        ),
       },
     },
   ],

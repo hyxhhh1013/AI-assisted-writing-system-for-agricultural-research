@@ -9,15 +9,19 @@ _PREFERRED_SANS = [
     "Microsoft YaHei UI",
     "SimHei",
     "SimSun",
+    # 新版 Noto / Source Han 在 Windows 上常注册为无 “CJK” 后缀的族名
+    "Noto Sans SC",
     "Noto Sans CJK SC",
     "Noto Sans CJK JP",
     "Noto Sans CJK TC",
-    "Source Han Sans SC",
+    "Noto Serif SC",
     "Source Han Sans CN",
+    "Source Han Sans SC",
     "WenQuanYi Micro Hei",
     "PingFang SC",
     "Heiti SC",
     "STHeiti",
+    "STXihei",
     "Arial Unicode MS",
     "Arial",
     "Helvetica",
@@ -40,12 +44,27 @@ def build_sans_serif_stack() -> list[str]:
             stack.append(name)
 
     # 模糊匹配：如 "Microsoft YaHei" 与 "Microsoft YaHei UI" 等
-    if not any("YaHei" in s or "SimHei" in s or "CJK" in s or "PingFang" in s for s in stack):
+    if not any(
+        any(k in s for k in ("YaHei", "SimHei", "CJK", "PingFang", "Noto Sans SC", "Source Han", "STXihei"))
+        for s in stack
+    ):
         for avail in sorted(installed):
             lower = avail.lower()
             if any(
                 key in lower
-                for key in ("yahei", "simhei", "simsun", "cjk", "pingfang", "heiti", "wenquanyi", "source han")
+                for key in (
+                    "yahei",
+                    "simhei",
+                    "simsun",
+                    "cjk",
+                    "noto sans sc",
+                    "noto serif sc",
+                    "pingfang",
+                    "heiti",
+                    "wenquanyi",
+                    "source han",
+                    "stxihei",
+                )
             ):
                 if avail not in stack:
                     stack.append(avail)
