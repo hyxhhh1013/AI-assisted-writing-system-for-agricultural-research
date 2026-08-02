@@ -56,7 +56,7 @@ export function checkRepeatCall(
   tracker: RepeatTracker,
   toolName: string,
   params: Record<string, unknown>,
-): { allowed: boolean; warning?: string } {
+): { allowed: boolean; warning?: string; repeatCount: number } {
   const argsKey = stableArgsKey(toolName, params);
   if (tracker.lastTool === toolName && tracker.lastArgsKey === argsKey) {
     tracker.repeatCount += 1;
@@ -65,8 +65,9 @@ export function checkRepeatCall(
         allowed: false,
         warning:
           toolName === "read_section"
-            ? `你已连续多次读取同一章节窗口。请改用 part="tail" / 更大的 offset，或停止读取并直接回复用户（已有长文时先问要不要改写）。`
+            ? `你已连续 ${tracker.repeatCount} 次读取同一章节（不同窗口也算）。请停止空转读取：改用 part="tail"、一次性读完整章节，或直接基于已有内容回复用户。`
             : `工具 ${toolName} 连续调用 ${tracker.repeatCount} 次且参数实质相同，已停止以防死循环`,
+        repeatCount: tracker.repeatCount,
       };
     }
   } else {
@@ -74,20 +75,18 @@ export function checkRepeatCall(
     tracker.lastArgsKey = argsKey;
     tracker.repeatCount = 1;
   }
-  return { allowed: true };
+  return { allowed: true, repeatCount: tracker.repeatCount };
 }
 
-/** 忽略无关参数差异，避免「改一下 maxChars」仍空转重读 */
+/**
+ * 忽略无关参数差异，避免「改一下 maxChars」仍空转重读。
+ * read_section 只按 section 判定重复：Agent 反复读同一章节的不同窗口（换 offset）
+ * 是死循环典型模式，不能被 offset 差异放行；正常分页读最多几窗，靠软/硬停阈值兜底。
+ */
 function stableArgsKey(toolName: string, params: Record<string, unknown>): string {
   if (toolName === "read_section") {
     const section = String(params.section ?? "");
-    const part = String(params.part ?? "head");
-    const offset = Number.isFinite(Number(params.offset))
-      ? Math.floor(Number(params.offset))
-      : part === "tail"
-        ? "tail"
-        : 0;
-    return JSON.stringify({ section, offset });
+    return JSON.stringify({ section });
   }
   if (toolName === "search_knowledge" || toolName === "search_external") {
     const q = String(params.query ?? params.q ?? "")

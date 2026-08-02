@@ -31,6 +31,28 @@ describe("agent safety", () => {
     expect(again.allowed).toBe(true);
   });
 
+  it("blocks repeated reads of the SAME section across different offsets (dead-loop guard)", () => {
+    const tracker = createRepeatTracker();
+    const allowed: boolean[] = [];
+    for (let i = 0; i < COST_LIMITS.maxConsecutiveSameTool + 2; i++) {
+      allowed.push(
+        checkRepeatCall(tracker, "read_section", { section: "literature_body", offset: i * 1700 }).allowed,
+      );
+    }
+    // 前 maxConsecutiveSameTool 次放行（允许正常分页），之后即使换 offset 也应拦截
+    expect(allowed.slice(0, COST_LIMITS.maxConsecutiveSameTool).every(Boolean)).toBe(true);
+    expect(allowed[COST_LIMITS.maxConsecutiveSameTool]).toBe(false);
+  });
+
+  it("reports repeatCount so callers can escalate soft warning to hard stop", () => {
+    const tracker = createRepeatTracker();
+    let last: { allowed: boolean; repeatCount: number } | null = null;
+    for (let i = 0; i < 5; i++) {
+      last = checkRepeatCall(tracker, "read_section", { section: "s", offset: i });
+    }
+    expect(last?.repeatCount).toBe(5);
+  });
+
   it("isAgentWriteEnabled requires AGENT_ENABLED and AGENT_WRITE_ENABLED", () => {
     const prevAgent = process.env.AGENT_ENABLED;
     const prevWrite = process.env.AGENT_WRITE_ENABLED;

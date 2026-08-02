@@ -329,8 +329,12 @@ export async function* runAgentGraphLoop(
   }
 
   // 反思节点上线后，每个 write_section 会额外产生 reflect_step + 触发的 agent/tools 节点，
-  // 长会话节点数可远超 maxIterations*2；给足余量避免误触递归上限
-  const recursionLimit = Math.max(context.budget.maxIterations * 8, 64);
+  // 长会话节点数可远超 maxIterations*2；死循环有 read_section 硬停兜底，这里给足余量避免误触
+  const recursionLimit = Math.max(
+    context.budget.maxIterations * 16,
+    context.budget.maxToolCalls * 4,
+    512,
+  );
   let lastEventCount = 0;
   let lastPersistedAt = 0;
   let latestState: AgentGraphStateType | null = null;

@@ -41,24 +41,19 @@ import {
   isWriteToolNeedingPrereqs,
 } from "@/lib/agent/core/ensure-write-prereqs";
 import {
-  buildIntentStopAskUser,
   checkCitationCheckGate,
   checkCitationSideTripGate,
   checkDiagnoseInspectGate,
   checkDraftSearchGate,
-  citationCheckReportReady,
-  hasCitationRefineSuccess,
   isAcademicPaperPipelineGoal,
   isCitationApplyGoal,
   isCitationCheckGoal,
-  isLiteratureHuntGoal,
-  isReviewWritingGoal,
-  isSectionDraftGoal,
   parseLiteratureImportTarget,
-  resolveApPipelineStep,
-  reviewRefsShortageNudge,
+  pickIntentNudge,
+  pickIntentStopAsk,
   shouldSkipPlanner,
   sumImportedCount,
+  type IntentClosureContext,
 } from "@/lib/agent/core/goal-intents";
 import { enrichImportReferenceParams } from "@/lib/agent/literature-relevance";
 import { analyzeReflection, MAX_REFLECT_ROUNDS } from "@/lib/agent/core/reflect";
@@ -78,7 +73,7 @@ import {
 } from "@/lib/agent/session-memory";
 import { getAgentGraphRuntime } from "@/lib/agent/langgraph/runtime";
 import {
-  MAX_PLAN_CONTINUES,
+  shouldContinuePlanWork,
   type AgentGraphStateType,
 } from "@/lib/agent/langgraph/state";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
@@ -307,13 +302,14 @@ export async function agentNode(
   }
 
   if (response.finishReason === "stop" || response.toolCalls.length === 0) {
-    const canContinue =
-      planHasPendingWork(plan)
-      && nextIteration < agentContext.budget.maxIterations
-      // 与 routeAfterAgent 的 ≤ 对齐：确保第 MAX_PLAN_CONTINUES 次 nudge 也能送达
-      && state.planContinueCount + 1 <= MAX_PLAN_CONTINUES
-      // 仅当本轮已有工具进展时才续跑：Agent 开局就停下来提问时，不强制继续（避免绑架对话）
-      && state.toolSummaries.length > 0;
+    // 与 routeAfterAgent 共用同一续跑判断（参数传「更新后」的值，见 shouldContinuePlanWork 文档）
+    const canContinue = shouldContinuePlanWork({
+      plan,
+      iteration: nextIteration,
+      planContinueCount: state.planContinueCount + 1,
+      toolSummaries: state.toolSummaries,
+      maxIterations: agentContext.budget.maxIterations,
+    });
 
     updates.pendingToolCalls = [];
 
@@ -326,7 +322,6 @@ export async function agentNode(
     const importCount = sumImportedCount(observations);
     const importTarget = parseLiteratureImportTarget(state.goal);
     const refTotal = agentContext.projectSnapshot?.references?.length ?? 0;
-    const importedOk = refTotal >= importTarget || importCount >= importTarget;
     const wroteOk = observations.some(
       (o) =>
         o.tool === "write_section"
@@ -334,64 +329,20 @@ export async function agentNode(
         && o.data != null
         && (o.data as { persisted?: unknown }).persisted != null,
     );
-    const reviewShort =
-      isReviewWritingGoal(state.goal)
-        ? reviewRefsShortageNudge(refTotal, importTarget)
-        : null;
-    const litIncomplete =
-      (isLiteratureHuntGoal(state.goal) || Boolean(reviewShort)) && !importedOk;
-    const draftIncomplete =
-      isSectionDraftGoal(state.goal)
-      && !isReviewWritingGoal(state.goal)
-      && !wroteOk;
-    const reviewWriteIncomplete =
-      isReviewWritingGoal(state.goal) && importedOk && !wroteOk;
-    const citeCheckIncomplete =
-      isCitationCheckGoal(state.goal) && !citationCheckReportReady(observations);
-    const citeApplyIncomplete =
-      isCitationApplyGoal(state.goal, observations) && !hasCitationRefineSuccess(observations);
-    const pipelineStep = resolveApPipelineStep(state.goal, observations);
-    const pipelineFixIncomplete = pipelineStep === "citation_fix";
-    const pipelineAbstractIncomplete = pipelineStep === "abstract";
-    const pipelineReviewIncomplete = pipelineStep === "review";
-    const pipelineCheckIncomplete = pipelineStep === "citation_check";
+
+    // 意图收尾续跑 / 停下问用户：由 goal-intents 的意图表统一驱动（见 pickIntentNudge / pickIntentStopAsk）
+    const intentCtx: IntentClosureContext = {
+      goal: state.goal,
+      observations,
+      searchedOk,
+      importCount,
+      importTarget,
+      refTotal,
+      wroteOk,
+    };
 
     const canIntentContinue = state.planContinueCount < MAX_INTENT_CONTINUES;
-    const intentNudge = !canIntentContinue
-      ? null
-      : pipelineFixIncomplete
-        ? "【系统】academic-paper 流程·引用修正：read_section(literature_body) 后立刻 "
-          + "refine_content(section=literature_body, draftText=全文, feedback=validate 报告中的改引清单, persistToProject=true)。"
-          + "background/introduction 有错引时同样 refine。不要只 read；不要写摘要直到 refine 写回。"
-        : pipelineAbstractIncomplete
-          ? "【系统】academic-paper 流程·双语摘要：引用已修正，请立刻 write_bilingual_abstract 写回 abstract。"
-          : pipelineReviewIncomplete
-            ? "【系统】academic-paper 流程·审查：请调用 run_review_rounds 产出审查报告。"
-            : pipelineCheckIncomplete
-              ? "【系统】academic-paper 流程·引用检查：请立刻 validate_citations（一次全文），汇报 suspicious [n]。"
-              : citeApplyIncomplete
-        ? "【系统】用户已确认引用修正，但尚未 refine_content 写回。"
-          + "请 read_section(literature_body) 后立刻 refine_content(section=literature_body, draftText=全文, feedback=上轮修正清单)。"
-          + "background/introduction 有错引时同样处理。不要只 read 不写回；不要 search/import/写摘要。"
-        : litIncomplete
-        ? importCount === 0 && refTotal < importTarget && searchedOk
-          ? `【系统】已检索但项目文献仍不足（现有 ${refTotal} 篇，目标约 ${importTarget} 篇）。`
-            + `请立刻批量 import_reference(hitsJson=suggestedHitsJson, query, why≥8字)；不够则换 query 再搜再导。`
-          : !searchedOk && refTotal < importTarget
-            ? `【系统】写综述/备文献需要约 ${importTarget} 篇，当前仅 ${refTotal} 篇。`
-              + "请先 search_knowledge / search_external（多换同义英文 query），再分批 import_reference。"
-            : `【系统】已有/本轮导入合计仍不足：项目 ${refTotal} 篇，本轮导入约 ${importCount} 篇，目标约 ${importTarget} 篇。`
-              + "请继续 search + import_reference(hitsJson=...) 补足。"
-        : draftIncomplete
-          ? "【系统】用户要写章节，但尚未成功 write_section 写回。"
-            + "请先读大纲/文献（或 inspect），再直接 write_section（蓝图可自动补）；不要只提问。"
-          : reviewWriteIncomplete
-            ? "【系统】文献体量已够，请 list_references 核对后 write_section(literature_body) 写回综述正文。"
-            : citeCheckIncomplete
-              ? "【系统】用户要做引用核查，但尚未成功 validate_citations。"
-                + "请立刻调用 validate_citations（默认检查全文），用中文汇报硬检结果与 suspicious [n]；"
-                + "不要继续逐条 read_reference。"
-              : null;
+    const intentNudge = !canIntentContinue ? null : pickIntentNudge(intentCtx);
 
     if (canContinue && plan) {
       updates.finished = false;
@@ -411,66 +362,8 @@ export async function agentNode(
       ];
     } else {
       updates.finished = true;
-      const intentAsk =
-        litIncomplete
-          ? buildIntentStopAskUser({
-              kind: "literature",
-              refTotal,
-              importTarget,
-              importCount,
-            })
-          : draftIncomplete
-            ? buildIntentStopAskUser({
-                kind: "draft",
-                refTotal,
-                importTarget,
-                importCount,
-              })
-            : reviewWriteIncomplete
-              ? buildIntentStopAskUser({
-                  kind: "review_write",
-                  refTotal,
-                  importTarget,
-                  importCount,
-                })
-              : pipelineFixIncomplete
-                ? buildIntentStopAskUser({
-                    kind: "pipeline_fix",
-                    refTotal,
-                    importTarget,
-                    importCount,
-                  })
-                : pipelineAbstractIncomplete
-                  ? buildIntentStopAskUser({
-                      kind: "pipeline_abstract",
-                      refTotal,
-                      importTarget,
-                      importCount,
-                    })
-                  : pipelineReviewIncomplete
-                    ? buildIntentStopAskUser({
-                        kind: "pipeline_review",
-                        refTotal,
-                        importTarget,
-                        importCount,
-                      })
-                    : citeApplyIncomplete
-                ? buildIntentStopAskUser({
-                    kind: "citation_apply",
-                    refTotal,
-                    importTarget,
-                    importCount,
-                  })
-                : citeCheckIncomplete
-                ? buildIntentStopAskUser({
-                    kind: "citation",
-                    refTotal,
-                    importTarget,
-                    importCount,
-                  })
-                : null;
       // 对话式收尾：意图未完成 → 问用户；有未完成计划 → 提醒可继续（引用修正跟聊不提示旧 plan）
-      let hint = intentAsk;
+      let hint = pickIntentStopAsk(intentCtx);
       const suppressPlanHint =
         isAcademicPaperPipelineGoal(state.goal)
         || isCitationApplyGoal(state.goal, observations)
@@ -533,6 +426,22 @@ export async function toolsNode(
   let plan = state.plan;
   let grantedConfirm = state.grantedConfirm ?? null;
 
+  /** 门禁失败统一记录：摘要 + LLM 消息 + SSE observation + 计划标记失败 */
+  const rejectGate = (toolName: string, error: string) => {
+    newSummaries.push(`[${toolName}] 失败: ${error}`);
+    newMessages.push({
+      role: "user",
+      content: `Tool result (${toolName}):\n${error}`,
+    });
+    events.push({
+      type: "agent/observation",
+      tool: toolName,
+      result: { success: false, error },
+      error,
+    });
+    plan = advancePlanAfterTool(plan, toolName, false);
+  };
+
   for (const toolCall of state.pendingToolCalls) {
     if (agentContext.budget.toolCallCount >= agentContext.budget.maxToolCalls) {
       error = `单次任务最多调用 ${agentContext.budget.maxToolCalls} 次工具`;
@@ -552,13 +461,15 @@ export async function toolsNode(
     let params = parseToolArgs(toolCall.args);
     const repeat = checkRepeatCall(repeatTracker, tool.name, params);
     if (!repeat.allowed) {
-      const soft =
+      const isSoftTool =
         tool.name === "read_section"
         || tool.name === "search_knowledge"
-        || tool.name === "search_external"
-          ? (repeat.warning ?? "请停止重复调用，改换策略或直接回复用户")
-          : null;
-      if (soft) {
+        || tool.name === "search_external";
+      // 软警告有上限：连续重复超过此数仍硬停，防止「读同一章节换窗口」类死循环
+      const SOFT_REPEAT_CAP = 8;
+      const hardStop = !isSoftTool || (repeat.repeatCount ?? 0) > SOFT_REPEAT_CAP;
+      if (!hardStop) {
+        const soft = repeat.warning ?? "请停止重复调用，改换策略或直接回复用户";
         newSummaries.push(`[${tool.name}] ${soft}`);
         newMessages.push({
           role: "user",
@@ -597,105 +508,25 @@ export async function toolsNode(
 
     // agent/action 在门禁全部通过后再发，避免被拒的 search/写节污染时间线
     const recentObs = [...state.observations, ...newObservations];
-    const diagnoseGate = checkDiagnoseInspectGate(
-      state.goal,
-      tool.name,
-      recentObs,
-    );
-    if (!diagnoseGate.ok) {
-      newSummaries.push(`[${tool.name}] 失败: ${diagnoseGate.error}`);
-      newMessages.push({
-        role: "user",
-        content: `Tool result (${tool.name}):\n${diagnoseGate.error}`,
-      });
-      events.push({
-        type: "agent/observation",
-        tool: tool.name,
-        result: { success: false, error: diagnoseGate.error },
-        error: diagnoseGate.error,
-      });
-      plan = advancePlanAfterTool(plan, tool.name, false);
-      continue;
+    // 意图门禁 + 先读后写：任一不过 → 拒绝本轮工具调用（记录失败，让模型改道）。
+    // 这些门禁在自动补蓝图之前，避免未读上下文就烧 LLM 生成蓝图。
+    const prePrereqGates: Array<() => { ok: boolean; error?: string }> = [
+      () => checkDiagnoseInspectGate(state.goal, tool.name, recentObs),
+      () => checkDraftSearchGate(state.goal, tool.name, recentObs),
+      () => checkCitationCheckGate(state.goal, tool.name, recentObs),
+      () => checkCitationSideTripGate(state.goal, tool.name, recentObs),
+      () => checkReadBeforeWrite(tool.name, params, recentObs),
+    ];
+    let gateReject: string | null = null;
+    for (const gate of prePrereqGates) {
+      const r = gate();
+      if (!r.ok) {
+        gateReject = r.error ?? "门禁未通过";
+        break;
+      }
     }
-
-    const draftSearchGate = checkDraftSearchGate(
-      state.goal,
-      tool.name,
-      recentObs,
-    );
-    if (!draftSearchGate.ok) {
-      newSummaries.push(`[${tool.name}] 失败: ${draftSearchGate.error}`);
-      newMessages.push({
-        role: "user",
-        content: `Tool result (${tool.name}):\n${draftSearchGate.error}`,
-      });
-      events.push({
-        type: "agent/observation",
-        tool: tool.name,
-        result: { success: false, error: draftSearchGate.error },
-        error: draftSearchGate.error,
-      });
-      plan = advancePlanAfterTool(plan, tool.name, false);
-      continue;
-    }
-
-    const citationGate = checkCitationCheckGate(
-      state.goal,
-      tool.name,
-      recentObs,
-    );
-    if (!citationGate.ok) {
-      newSummaries.push(`[${tool.name}] 失败: ${citationGate.error}`);
-      newMessages.push({
-        role: "user",
-        content: `Tool result (${tool.name}):\n${citationGate.error}`,
-      });
-      events.push({
-        type: "agent/observation",
-        tool: tool.name,
-        result: { success: false, error: citationGate.error },
-        error: citationGate.error,
-      });
-      plan = advancePlanAfterTool(plan, tool.name, false);
-      continue;
-    }
-
-    const citationSideTripGate = checkCitationSideTripGate(
-      state.goal,
-      tool.name,
-      recentObs,
-    );
-    if (!citationSideTripGate.ok) {
-      newSummaries.push(`[${tool.name}] 失败: ${citationSideTripGate.error}`);
-      newMessages.push({
-        role: "user",
-        content: `Tool result (${tool.name}):\n${citationSideTripGate.error}`,
-      });
-      events.push({
-        type: "agent/observation",
-        tool: tool.name,
-        result: { success: false, error: citationSideTripGate.error },
-        error: citationSideTripGate.error,
-      });
-      plan = advancePlanAfterTool(plan, tool.name, false);
-      continue;
-    }
-
-    // 先读后写：须在自动补蓝图之前，避免未读上下文就烧 LLM 生成蓝图
-    const readGate = checkReadBeforeWrite(tool.name, params, recentObs);
-    if (!readGate.ok) {
-      newSummaries.push(`[${tool.name}] 失败: ${readGate.error}`);
-      newMessages.push({
-        role: "user",
-        content: `Tool result (${tool.name}):\n${readGate.error}`,
-      });
-      events.push({
-        type: "agent/observation",
-        tool: tool.name,
-        result: { success: false, error: readGate.error },
-        error: readGate.error,
-      });
-      plan = advancePlanAfterTool(plan, tool.name, false);
+    if (gateReject) {
+      rejectGate(tool.name, gateReject);
       continue;
     }
 
@@ -768,24 +599,13 @@ export async function toolsNode(
       }
     }
 
-    const gate = checkAgentToolPhaseGate(
+    const phaseGate = checkAgentToolPhaseGate(
       tool.name,
       params,
       agentContext.projectSnapshot,
     );
-    if (!gate.ok) {
-      newSummaries.push(`[${tool.name}] 失败: ${gate.error}`);
-      newMessages.push({
-        role: "user",
-        content: `Tool result (${tool.name}):\n${gate.error}`,
-      });
-      events.push({
-        type: "agent/observation",
-        tool: tool.name,
-        result: { success: false, error: gate.error },
-        error: gate.error,
-      });
-      plan = advancePlanAfterTool(plan, tool.name, false);
+    if (!phaseGate.ok) {
+      rejectGate(tool.name, phaseGate.error);
       continue;
     }
 
