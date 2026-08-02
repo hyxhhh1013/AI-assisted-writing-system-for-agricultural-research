@@ -12,6 +12,7 @@ import {
   listAdminAgentSessions,
   type AdminAgentSessionDetail,
 } from "@/services/admin";
+import type { AgentUiMessage } from "@/contracts/agent-session";
 import { useAdminList } from "@/hooks/use-admin-list";
 import { AdminPageHeader, AdminFilterPills } from "@/components/admin/admin-page-header";
 import { AdminPagination } from "@/components/admin/admin-pagination";
@@ -31,6 +32,92 @@ const STATUS_COLOR: Record<string, string> = {
   completed: "bg-green-100 text-green-700",
   error: "bg-red-100 text-red-700",
 };
+
+/** 对话回放：把 uiTranscript 时间线渲染成可读的 Agent 执行记录 */
+function TranscriptTimeline({ transcript }: { transcript: AgentUiMessage[] }) {
+  return (
+    <div className="space-y-2">
+      {transcript.map((m, i) => {
+        switch (m.kind) {
+          case "user":
+            return (
+              <div key={i} className="flex justify-end">
+                <div className="max-w-[85%] rounded-lg bg-[#1a5632] px-3 py-2 text-xs text-white">{m.text}</div>
+              </div>
+            );
+          case "thought":
+            return (
+              <div key={i} className="flex gap-2">
+                <span className="shrink-0 text-xs">🧠</span>
+                <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs italic text-amber-800">{m.text}</div>
+              </div>
+            );
+          case "action":
+            return (
+              <div key={i} className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs">
+                <div className="flex items-center gap-2 text-blue-800">
+                  <span>🔧</span>
+                  <code className="font-mono font-medium">{m.tool}</code>
+                </div>
+                <details className="mt-1">
+                  <summary className="cursor-pointer text-[10px] text-blue-500">查看参数</summary>
+                  <pre className="mt-1 max-h-40 overflow-auto rounded bg-white p-2 text-[10px] text-[#3d4f46]">
+                    {JSON.stringify(m.params, null, 2)}
+                  </pre>
+                </details>
+              </div>
+            );
+          case "observation":
+            return (
+              <div key={i} className="rounded-lg border border-[#1a5632]/10 bg-white px-3 py-2 text-xs">
+                <div className="flex items-start gap-2">
+                  <span className="shrink-0">📥</span>
+                  <div className="min-w-0 flex-1">
+                    <code className="font-mono font-medium text-[#1a5632]">{m.tool}</code>
+                    {m.error ? (
+                      <p className="mt-0.5 text-red-600">{m.error}</p>
+                    ) : m.summary ? (
+                      <p className="mt-0.5 text-[#3d4f46]">{m.summary}</p>
+                    ) : null}
+                    {m.imageUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={m.imageUrl} alt="工具结果" className="mt-1 max-h-40 rounded border" />
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          case "summary":
+            return (
+              <div key={i} className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-900">
+                <p className="mb-1 font-medium">✅ 完成摘要</p>
+                <p>{m.summary.text}</p>
+                {m.summary.keyFindings.length > 0 && (
+                  <div className="mt-1.5 space-y-0.5">
+                    {m.summary.keyFindings.map((k, j) => (
+                      <p key={j} className="text-[10px]">
+                        • {k.fact} <span className="text-green-600">[{k.source}]</span>
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          case "divider":
+            return (
+              <div key={i} className="flex items-center gap-2 text-[10px] text-[#9aa8a0]">
+                <div className="h-px flex-1 bg-[#1a5632]/10" />
+                {m.label ?? "会话分界"}
+                <div className="h-px flex-1 bg-[#1a5632]/10" />
+              </div>
+            );
+          default:
+            return null;
+        }
+      })}
+    </div>
+  );
+}
 
 export default function AdminAgentSessionsPage() {
   const searchParams = useSearchParams();
@@ -118,6 +205,35 @@ export default function AdminAgentSessionsPage() {
                 <p className="text-[10px] font-semibold text-[#1a5632]/60">目标</p>
                 <p className="rounded border border-[#1a5632]/10 bg-white p-2 text-xs text-[#3d4f46]">{detail.goal}</p>
               </div>
+
+              {detail.plan && detail.plan.subtasks.length > 0 && (
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold text-[#1a5632]/60">计划</p>
+                  <div className="space-y-1">
+                    {detail.plan.subtasks.map((s, i) => (
+                      <div
+                        key={s.id ?? i}
+                        className="flex items-center gap-2 rounded border border-[#1a5632]/10 bg-white px-2 py-1.5 text-xs"
+                      >
+                        <span
+                          className={`h-2 w-2 shrink-0 rounded-full ${
+                            s.status === "done"
+                              ? "bg-green-500"
+                              : s.status === "running"
+                                ? "bg-blue-500"
+                                : s.status === "skipped"
+                                  ? "bg-gray-300"
+                                  : "bg-[#1a5632]/15"
+                          }`}
+                        />
+                        <span className="text-[#3d4f46]">{i + 1}. {s.title}</span>
+                        <span className="ml-auto text-[9px] text-[#9aa8a0]">{s.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {detail.errorMessage && (
                 <div>
                   <p className="text-[10px] font-semibold text-red-600">错误信息</p>
@@ -126,6 +242,14 @@ export default function AdminAgentSessionsPage() {
                   </p>
                 </div>
               )}
+
+              {detail.uiTranscript && detail.uiTranscript.length > 0 && (
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold text-[#1a5632]/60">执行记录</p>
+                  <TranscriptTimeline transcript={detail.uiTranscript} />
+                </div>
+              )}
+
               {detail.status === "running" && (
                 <Button
                   size="sm" variant="destructive" className="gap-1"

@@ -2,6 +2,9 @@
  * Admin API 缁熶竴濂戠害 鈥?鍒嗛〉/鎼滅储/鍝嶅簲鏍煎紡
  */
 
+import type { AgentPlan, AgentSummary } from "@/contracts/agent";
+import type { AgentUiMessage } from "@/contracts/agent-session";
+
 // ==================== 璇锋眰鍙傛暟 ====================
 
 export interface AdminListParams {
@@ -275,10 +278,15 @@ export interface AdminAgentSessionRecord {
   updatedAt: string;
 }
 
-/** 会话详情：额外含快照概要 */
+/** 会话详情：额外含快照概要 + 对话回放 */
 export interface AdminAgentSessionDetail extends AdminAgentSessionRecord {
   iteration: number;
   toolCallCount: number;
+  /** 对话气泡时间线（思考/工具调用/观察/摘要） */
+  uiTranscript?: AgentUiMessage[];
+  plan?: AgentPlan | null;
+  error?: string | null;
+  summary?: AgentSummary | null;
 }
 
 // ==================== 研究方向管理 ====================

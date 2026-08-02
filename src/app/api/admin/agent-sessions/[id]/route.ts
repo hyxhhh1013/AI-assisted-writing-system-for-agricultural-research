@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { success, notFound, badRequest } from "@/lib/admin-response";
 import { isAgentSessionSnapshot } from "@/contracts/agent-session";
+import { normalizeUiTranscript } from "@/lib/agent/ui-transcript";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,8 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
   }
 
   const snap = isAgentSessionSnapshot(row.snapshot) ? row.snapshot : null;
+  const transcript = snap?.uiTranscript ? normalizeUiTranscript(snap.uiTranscript) : [];
+  const lastSummary = [...transcript].reverse().find((m) => m.kind === "summary");
   return success({
     id: row.id,
     userId: row.userId,
@@ -44,6 +47,10 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
     updatedAt: row.updatedAt.toISOString(),
     iteration: snap?.iteration ?? 0,
     toolCallCount: snap?.toolCallCount ?? 0,
+    uiTranscript: transcript,
+    plan: snap?.plan ?? null,
+    error: snap?.error ?? null,
+    summary: lastSummary?.kind === "summary" ? lastSummary.summary : null,
   });
 }
 
