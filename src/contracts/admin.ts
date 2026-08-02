@@ -313,6 +313,15 @@ export interface AdminAgentSessionStats {
   }[];
 }
 
+/** GET /api/admin/insights — 使用洞察（目标高频 / 工具榜 / 失败模式） */
+export interface AdminInsights {
+  totalSessions: number;
+  errorSessionCount: number;
+  goalIntents: { intent: string; count: number }[];
+  toolCalls: { tool: string; count: number }[];
+  errorPatterns: { pattern: string; count: number }[];
+}
+
 // ==================== 研究方向管理 ====================
 
 export interface AdminDirectionRecord {

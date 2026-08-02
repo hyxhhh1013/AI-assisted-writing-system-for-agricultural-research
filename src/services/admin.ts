@@ -10,6 +10,7 @@ import type {
   AdminDirectionDetail,
   AdminDirectionRecord,
   AdminHealthData,
+  AdminInsights,
   AdminKnowledgeFile,
   AdminKnowledgeListResponse,
   AdminListParams,
@@ -38,6 +39,7 @@ export type {
   AdminAiStatusResponse,
   AdminDirectionDetail,
   AdminDirectionRecord,
+  AdminInsights,
   AdminHealthData,
   AdminKnowledgeFile,
   AdminKnowledgeListResponse,
@@ -362,6 +364,13 @@ export async function getAdminAgentSessionDetail(
 export async function getAdminAgentSessionStats(): Promise<AdminAgentSessionStats | null> {
   const res = await fetch("/api/admin/agent-sessions/stats");
   const data = await parseJson<AdminSuccessResponse<AdminAgentSessionStats>>(res);
+  return data.success ? (data.data ?? null) : null;
+}
+
+/** GET /api/admin/insights — 使用洞察（目标高频 / 工具榜 / 失败模式） */
+export async function getAdminInsights(): Promise<AdminInsights | null> {
+  const res = await fetch("/api/admin/insights");
+  const data = await parseJson<AdminSuccessResponse<AdminInsights>>(res);
   return data.success ? (data.data ?? null) : null;
 }
 

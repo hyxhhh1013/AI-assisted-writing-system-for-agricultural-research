@@ -15,6 +15,7 @@ import {
   Settings,
   Compass,
   Bot,
+  Lightbulb,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AdminGlobalSearch } from "@/components/admin/admin-global-search";
@@ -49,6 +50,7 @@ const NAV_GROUPS = [
     items: [
       { href: "/admin/usage", label: "使用统计", icon: Activity },
       { href: "/admin/agent-sessions", label: "Agent 会话", icon: Bot },
+      { href: "/admin/insights", label: "使用洞察", icon: Lightbulb },
     ],
   },
 ];
