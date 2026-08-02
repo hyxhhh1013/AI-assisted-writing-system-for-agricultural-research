@@ -26,6 +26,24 @@ const SECTION_TITLE: Record<string, string> = {
   conclusion: "结论",
 };
 
+/** 导出时把未生成的 FIGURE / 【图N】 占位替换为可读图注，避免正文残留原始 JSON */
+export function replaceFigurePlaceholders(markdown: string): string {
+  return markdown
+    .replace(/【FIGURE:([\s\S]*?)】/g, (_m, raw: string) => {
+      try {
+        const json = JSON.parse(raw.trim()) as { caption?: unknown };
+        const caption =
+          typeof json.caption === "string" && json.caption.trim()
+            ? json.caption.trim()
+            : "";
+        return `\n\n**图${caption ? `：${caption}` : "（待生成）"}**（图片需在绘图工作台生成）\n\n`;
+      } catch {
+        return "\n\n**（图待生成）**\n\n";
+      }
+    })
+    .replace(/【图\s*\d+】/g, "\n\n**（图待生成）**\n\n");
+}
+
 /**
  * 轻量「formatter」：打包 Markdown 手稿 + 引用就绪检查（非 DOCX/PDF 二进制）。
  */
@@ -104,7 +122,7 @@ export const exportManuscriptMarkdownTool: ToolDefinition = {
       parts.push("");
     }
 
-    const markdown = parts.join("\n");
+    const markdown = replaceFigurePlaceholders(parts.join("\n"));
     const texts = [
       project.abstract ?? "",
       ...project.sections.map((s) => s.content ?? ""),
