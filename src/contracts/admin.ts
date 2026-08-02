@@ -294,6 +294,25 @@ export interface AdminAgentSessionDetail extends AdminAgentSessionRecord {
   summary?: AgentSummary | null;
 }
 
+/** GET /api/admin/agent-sessions/stats — 会话深度分析 */
+export interface AdminAgentSessionStats {
+  total: number;
+  errorCount: number;
+  errorRate: number;
+  avgToolCalls: number;
+  avgIterations: number;
+  byUser: {
+    userId: string;
+    userName?: string;
+    sessionCount: number;
+    errorCount: number;
+    errorRate: number;
+    avgToolCalls: number;
+    avgIterations: number;
+    lastActive: string;
+  }[];
+}
+
 // ==================== 研究方向管理 ====================
 
 export interface AdminDirectionRecord {

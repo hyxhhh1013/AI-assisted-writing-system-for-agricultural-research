@@ -5,6 +5,7 @@
 import type {
   AdminAgentSessionDetail,
   AdminAgentSessionRecord,
+  AdminAgentSessionStats,
   AdminAiStatusResponse,
   AdminDirectionDetail,
   AdminDirectionRecord,
@@ -31,6 +32,7 @@ import type {
 export type {
   AdminAgentSessionDetail,
   AdminAgentSessionRecord,
+  AdminAgentSessionStats,
   AdminAiRoles,
   AdminAiStatusProvider,
   AdminAiStatusResponse,
@@ -353,6 +355,13 @@ export async function getAdminAgentSessionDetail(
 ): Promise<AdminAgentSessionDetail | null> {
   const res = await fetch(`/api/admin/agent-sessions/${id}`);
   const data = await parseJson<AdminSuccessResponse<AdminAgentSessionDetail>>(res);
+  return data.success ? (data.data ?? null) : null;
+}
+
+/** GET /api/admin/agent-sessions/stats — 会话深度分析（全量聚合 + 按用户 Top） */
+export async function getAdminAgentSessionStats(): Promise<AdminAgentSessionStats | null> {
+  const res = await fetch("/api/admin/agent-sessions/stats");
+  const data = await parseJson<AdminSuccessResponse<AdminAgentSessionStats>>(res);
   return data.success ? (data.data ?? null) : null;
 }
 

@@ -1,22 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Loader2, Ban } from "lucide-react";
+import { Loader2, Ban, Bot, AlertTriangle, Activity, Wrench } from "lucide-react";
 import {
   getAdminAgentSessionDetail,
+  getAdminAgentSessionStats,
   interruptAdminAgentSession,
   listAdminAgentSessions,
   type AdminAgentSessionDetail,
+  type AdminAgentSessionStats,
 } from "@/services/admin";
 import type { AgentUiMessage } from "@/contracts/agent-session";
 import { useAdminList } from "@/hooks/use-admin-list";
 import { AdminPageHeader, AdminFilterPills } from "@/components/admin/admin-page-header";
 import { AdminPagination } from "@/components/admin/admin-pagination";
 import { AdminExpandableList } from "@/components/admin/admin-expandable-list";
+import { AdminMetricStrip } from "@/components/admin/admin-stat-card";
+import { AdminPanel } from "@/components/admin/admin-panel";
 
 const STATUS_OPTIONS = [
   { value: "", label: "全部" },
@@ -125,6 +129,13 @@ export default function AdminAgentSessionsPage() {
   const [detail, setDetail] = useState<AdminAgentSessionDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [interrupting, setInterrupting] = useState<string | null>(null);
+  const [stats, setStats] = useState<AdminAgentSessionStats | null>(null);
+
+  useEffect(() => {
+    getAdminAgentSessionStats()
+      .then(setStats)
+      .catch(() => {});
+  }, []);
 
   const { setPage, data: sessions, meta, loading, reload } = useAdminList({
     fetcher: listAdminAgentSessions,
@@ -170,6 +181,53 @@ export default function AdminAgentSessionsPage() {
           <AdminFilterPills value={statusFilter} options={STATUS_OPTIONS} onChange={setStatusFilter} />
         }
       />
+
+      {stats && (
+        <div className="space-y-4">
+          <AdminMetricStrip
+            items={[
+              { label: "总会话", value: stats.total, icon: Bot },
+              { label: "错误会话", value: stats.errorCount, icon: AlertTriangle, href: "/admin/agent-sessions?status=error" },
+              { label: "错误率", value: stats.errorRate, icon: Activity, suffix: "%" },
+              { label: "平均工具调用", value: stats.avgToolCalls, icon: Wrench },
+            ]}
+          />
+          {stats.byUser.length > 0 && (
+            <AdminPanel title="按用户分析" subtitle="会话量 Top 10">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[#1a5632]/10 text-left text-[10px] text-[#6b7c72]">
+                      <th className="px-2 py-2 font-medium">用户</th>
+                      <th className="px-2 py-2 font-medium">会话</th>
+                      <th className="px-2 py-2 font-medium">错误</th>
+                      <th className="px-2 py-2 font-medium">错误率</th>
+                      <th className="px-2 py-2 font-medium">平均工具</th>
+                      <th className="px-2 py-2 font-medium">平均迭代</th>
+                      <th className="px-2 py-2 font-medium">最近活跃</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stats.byUser.map((u) => (
+                      <tr key={u.userId} className="border-b border-[#1a5632]/5 text-xs">
+                        <td className="px-2 py-2 font-medium text-[#122820]">{u.userName ?? u.userId.slice(0, 8)}</td>
+                        <td className="px-2 py-2 tabular-nums">{u.sessionCount}</td>
+                        <td className="px-2 py-2 tabular-nums">{u.errorCount}</td>
+                        <td className={`px-2 py-2 tabular-nums ${u.errorRate > 30 ? "text-red-600" : u.errorRate > 10 ? "text-amber-600" : "text-green-600"}`}>
+                          {u.errorRate}%
+                        </td>
+                        <td className="px-2 py-2 tabular-nums">{u.avgToolCalls}</td>
+                        <td className="px-2 py-2 tabular-nums">{u.avgIterations}</td>
+                        <td className="px-2 py-2 text-[#9aa8a0]">{new Date(u.lastActive).toLocaleString("zh-CN")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </AdminPanel>
+          )}
+        </div>
+      )}
 
       <AdminExpandableList
         items={sessions}
