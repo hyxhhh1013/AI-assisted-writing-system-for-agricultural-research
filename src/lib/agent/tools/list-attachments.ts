@@ -17,6 +17,16 @@ export const listAttachmentsTool: ToolDefinition = {
       scopes.length === 0
         ? []
         : await prisma.agentAttachment.findMany({
+            // 投影：避免拉取 fileKey/mimeType/size 等无关列；extractedText 用于算 chars
+            // （extract 阶段已按 MAX_ATTACHMENT_TEXT_CHARS 截断，chars 即截断后字符数）
+            select: {
+              id: true,
+              originalName: true,
+              status: true,
+              extractSource: true,
+              extractedText: true,
+              pinned: true,
+            },
             where: {
               userId: ctx.userId,
               OR: scopes,
@@ -26,7 +36,12 @@ export const listAttachmentsTool: ToolDefinition = {
           });
     return {
       success: true,
-      summary: rows.length === 0 ? "当前无附件" : `共 ${rows.length} 个附件`,
+      summary:
+        rows.length === 0
+          ? "当前无附件"
+          : rows.length >= 30
+            ? `返回前 ${rows.length} 个（可能还有更多）`
+            : `共 ${rows.length} 个附件`,
       data: {
         attachments: rows.map((r) => ({
           id: r.id,

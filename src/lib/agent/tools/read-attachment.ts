@@ -34,10 +34,11 @@ export const readAttachmentTool: ToolDefinition = {
     if (row.userId !== ctx.userId) {
       return { success: false, error: "附件不存在或无权访问" };
     }
-    // 归属：会话级须匹配当前会话；已 pin 转项目级则校验 projectId
-    const sessionOk = row.sessionId == null || row.sessionId === ctx.sessionId;
-    const projectOk = !row.pinned || (ctx.projectId != null && row.projectId === ctx.projectId);
-    if (!sessionOk || !projectOk) {
+    // 归属：会话级须匹配当前会话；已 pin 转项目级则按 projectId 复用（可跨会话读取）
+    const owned =
+      (row.sessionId == null || row.sessionId === ctx.sessionId)
+      || (row.pinned && ctx.projectId != null && row.projectId === ctx.projectId);
+    if (!owned) {
       return { success: false, error: "该附件不属于当前会话/项目" };
     }
 
@@ -49,14 +50,17 @@ export const readAttachmentTool: ToolDefinition = {
     }
 
     const text = row.extractedText;
+    const maxCharsRaw = Number(params.maxChars);
     const maxChars = Math.min(
-      typeof params.maxChars === "number" && params.maxChars > 0 ? Math.floor(params.maxChars) : READ_ATTACHMENT_DEFAULT_CHARS,
+      Number.isFinite(maxCharsRaw) && maxCharsRaw > 0 ? Math.floor(maxCharsRaw) : READ_ATTACHMENT_DEFAULT_CHARS,
       READ_ATTACHMENT_MAX_CHARS,
     );
     const part = params.part === "tail" ? "tail" : "head";
     let start = 0;
-    if (params.offset != null && typeof params.offset === "number" && params.offset > 0) {
-      start = Math.floor(params.offset);
+    const rawOffset = Number(params.offset);
+    if (params.offset != null && Number.isFinite(rawOffset) && rawOffset >= 0) {
+      // offset=0 是合法的"从头读"；越界时 clamp 到最后一个字符（对齐 read_section）
+      start = Math.min(Math.floor(rawOffset), Math.max(text.length - 1, 0));
     } else if (part === "tail") {
       start = Math.max(0, text.length - maxChars);
     }
