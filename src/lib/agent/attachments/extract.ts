@@ -44,7 +44,9 @@ function toMarkdownTable(rows: unknown[][]): string {
     .filter((r) => r.some((c) => String(c ?? "").trim() !== ""))
     .slice(0, 500)
     .map((r) => `| ${r.map((c) => esc(String(c ?? ""))).join(" | ")} |`);
-  return [headLine, sepLine, ...bodyLines].join("\n");
+  const parts = [headLine, sepLine, ...bodyLines];
+  if (body.length > 500) parts.push("...（仅展示前 500 行）");
+  return parts.join("\n");
 }
 
 export async function extractAttachmentText(
@@ -78,15 +80,19 @@ export async function extractAttachmentText(
       return { status: "ready", ...truncateTo(parts.join("\n\n") || "(空表格)"), source: "excel" };
     }
     if (ext === "pdf") {
-      // pdf-parse v2 为类 API：new PDFParse({ data }) → getText()
+      // pdf-parse v2 为类 API：new PDFParse({ data }) → getText()；用后 destroy 释放 pdfjs 文档对象
       const parser = new PDFParse({ data: fs.readFileSync(filePath) });
-      const result = await parser.getText();
-      const text = (result.text ?? "").replace(/\n{3,}/g, "\n\n");
-      return { status: "ready", ...truncateTo(text.trim() || "(PDF 无文本层)"), source: "pdf" };
+      try {
+        const result = await parser.getText();
+        const text = (result.text ?? "").replace(/\n{3,}/g, "\n\n");
+        return { status: "ready", ...truncateTo(text.trim() || "(PDF 无文本层)"), source: "pdf" };
+      } finally {
+        await parser.destroy();
+      }
     }
     if (ext === "docx") {
       const result = await mammoth.extractRawText({ path: filePath });
-      return { status: "ready", ...truncateTo(result.value.trim()), source: "docx" };
+      return { status: "ready", ...truncateTo(result.value.trim() || "(空文档)"), source: "docx" };
     }
     if (ATTACHMENT_IMAGE_EXTENSIONS.has(ext)) {
       return await describeImage(filePath);
