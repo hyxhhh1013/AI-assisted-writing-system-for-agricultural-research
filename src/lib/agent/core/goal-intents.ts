@@ -87,7 +87,12 @@ function hasSuccessfulAbstractWrite(observations: readonly ToolObservation[]): b
 }
 
 function hasSuccessfulReview(observations: readonly ToolObservation[]): boolean {
-  return hasSuccessfulTool(observations, "run_review_rounds");
+  // run_review_rounds 走 Passport Phase 7 轮次；review_content 一次性四维审查，
+  // 两者都产出四维审查报告，任一成功即视为 review 步完成
+  return (
+    hasSuccessfulTool(observations, "run_review_rounds")
+    || hasSuccessfulTool(observations, "review_content")
+  );
 }
 
 /** 解析 academic-paper 流程当前应执行的子步骤 */
@@ -321,7 +326,7 @@ export function apPipelineNudge(
       );
     case "review":
       return (
-        "【系统】academic-paper 流程·④审查：调用 run_review_rounds 产出四维度审查报告。"
+        "【系统】academic-paper 流程·④审查：调用 run_review_rounds（Phase 7 轮次）或 review_content 产出四维度审查报告。"
       );
     default:
       return (
@@ -373,7 +378,10 @@ export function checkCitationSideTripGate(
     if (pipelineStep === "abstract" && toolName === "write_bilingual_abstract") {
       return { ok: true };
     }
-    if (pipelineStep === "review" && toolName === "run_review_rounds") {
+    if (
+      pipelineStep === "review"
+      && (toolName === "run_review_rounds" || toolName === "review_content")
+    ) {
       return { ok: true };
     }
     if (pipelineStep === "citation_fix" && toolName === "refine_content") {
@@ -408,7 +416,7 @@ export function checkCitationSideTripGate(
       return {
         ok: false,
         error:
-          "academic-paper 流程·摘要/审查阶段：请勿检索或导入文献，专注 write_bilingual_abstract 或 run_review_rounds。",
+          "academic-paper 流程·摘要/审查阶段：请勿检索或导入文献，专注 write_bilingual_abstract 或 run_review_rounds / review_content。",
       };
     }
     return { ok: true };
@@ -497,7 +505,7 @@ export function buildIntentStopAskUser(opts: {
   }
   if (opts.kind === "pipeline_review") {
     return (
-      "\n\n——\n审查尚未运行。请说「运行审查」或「run_review_rounds」。"
+      "\n\n——\n审查尚未运行。请说「运行审查」或「run_review_rounds / review_content」。"
     );
   }
   if (opts.kind === "citation_apply") {
@@ -565,4 +573,219 @@ export function mergeGoalWithIntentHint(goal: string): string {
     return `${goal}\n\n${draftGoalNudge(goal)}`;
   }
   return goal;
+}
+
+/* ==================== 意图收尾续跑表（agentNode 提前结束时用） ==================== */
+
+/**
+ * 意图续跑判断所需的会话上下文。
+ * agentNode 在 Agent 提前结束时计算一次注入，避免各处重复 parse goal / observations。
+ */
+export interface IntentClosureContext {
+  goal: string;
+  observations: ToolObservation[];
+  /** 本轮是否有检索成功 */
+  searchedOk: boolean;
+  /** 本轮累计成功导入篇数 */
+  importCount: number;
+  /** 文献目标篇数 */
+  importTarget: number;
+  /** 项目现有文献数 */
+  refTotal: number;
+  /** 是否已成功 write_section 写回（含批量） */
+  wroteOk: boolean;
+}
+
+export type IntentKind =
+  | "pipeline_fix"
+  | "pipeline_abstract"
+  | "pipeline_review"
+  | "pipeline_check"
+  | "citation_apply"
+  | "literature"
+  | "draft"
+  | "review_write"
+  | "citation";
+
+export interface IntentClosureEntry {
+  kind: IntentKind;
+  /** 该意图处于「未完成」状态（主导且缺关键动作） */
+  isIncomplete: (ctx: IntentClosureContext) => boolean;
+  /** 续跑轻推（预算用尽前每轮注入） */
+  nudge: (ctx: IntentClosureContext) => string | null;
+  /** 停下问用户 */
+  stopAsk: (ctx: IntentClosureContext) => string | null;
+}
+
+function importedOk(ctx: IntentClosureContext): boolean {
+  return ctx.refTotal >= ctx.importTarget || ctx.importCount >= ctx.importTarget;
+}
+
+function reviewShort(ctx: IntentClosureContext): string | null {
+  return isReviewWritingGoal(ctx.goal)
+    ? reviewRefsShortageNudge(ctx.refTotal, ctx.importTarget)
+    : null;
+}
+
+function stopAskOpts(ctx: IntentClosureContext): {
+  refTotal: number;
+  importTarget: number;
+  importCount: number;
+} {
+  return {
+    refTotal: ctx.refTotal,
+    importTarget: ctx.importTarget,
+    importCount: ctx.importCount,
+  };
+}
+
+const INTENT_CLOSURES: Record<IntentKind, IntentClosureEntry> = {
+  pipeline_fix: {
+    kind: "pipeline_fix",
+    isIncomplete: (ctx) =>
+      resolveApPipelineStep(ctx.goal, ctx.observations) === "citation_fix",
+    nudge: () =>
+      "【系统】academic-paper 流程·引用修正：read_section(literature_body) 后立刻 "
+      + "refine_content(section=literature_body, draftText=全文, feedback=validate 报告中的改引清单, persistToProject=true)。"
+      + "background/introduction 有错引时同样 refine。不要只 read；不要写摘要直到 refine 写回。",
+    stopAsk: (ctx) =>
+      buildIntentStopAskUser({ kind: "pipeline_fix", ...stopAskOpts(ctx) }),
+  },
+  pipeline_abstract: {
+    kind: "pipeline_abstract",
+    isIncomplete: (ctx) =>
+      resolveApPipelineStep(ctx.goal, ctx.observations) === "abstract",
+    nudge: () =>
+      "【系统】academic-paper 流程·双语摘要：引用已修正，请立刻 write_bilingual_abstract 写回 abstract。",
+    stopAsk: (ctx) =>
+      buildIntentStopAskUser({ kind: "pipeline_abstract", ...stopAskOpts(ctx) }),
+  },
+  pipeline_review: {
+    kind: "pipeline_review",
+    isIncomplete: (ctx) =>
+      resolveApPipelineStep(ctx.goal, ctx.observations) === "review",
+    nudge: () =>
+      "【系统】academic-paper 流程·审查：请调用 run_review_rounds（Phase 7 轮次）或 review_content 产出审查报告。",
+    stopAsk: (ctx) =>
+      buildIntentStopAskUser({ kind: "pipeline_review", ...stopAskOpts(ctx) }),
+  },
+  pipeline_check: {
+    kind: "pipeline_check",
+    isIncomplete: (ctx) =>
+      resolveApPipelineStep(ctx.goal, ctx.observations) === "citation_check",
+    nudge: () =>
+      "【系统】academic-paper 流程·引用检查：请立刻 validate_citations（一次全文），汇报 suspicious [n]。",
+    // 引用检查未出报告时无专属「问用户」文案，落到通用收尾
+    stopAsk: () => null,
+  },
+  citation_apply: {
+    kind: "citation_apply",
+    isIncomplete: (ctx) =>
+      isCitationApplyGoal(ctx.goal, ctx.observations)
+      && !hasCitationRefineSuccess(ctx.observations),
+    nudge: () =>
+      "【系统】用户已确认引用修正，但尚未 refine_content 写回。"
+      + "请 read_section(literature_body) 后立刻 refine_content(section=literature_body, draftText=全文, feedback=上轮修正清单)。"
+      + "background/introduction 有错引时同样处理。不要只 read 不写回；不要 search/import/写摘要。",
+    stopAsk: (ctx) =>
+      buildIntentStopAskUser({ kind: "citation_apply", ...stopAskOpts(ctx) }),
+  },
+  literature: {
+    kind: "literature",
+    isIncomplete: (ctx) =>
+      (isLiteratureHuntGoal(ctx.goal) || Boolean(reviewShort(ctx))) && !importedOk(ctx),
+    nudge: (ctx) => {
+      if (ctx.importCount === 0 && ctx.refTotal < ctx.importTarget && ctx.searchedOk) {
+        return `【系统】已检索但项目文献仍不足（现有 ${ctx.refTotal} 篇，目标约 ${ctx.importTarget} 篇）。`
+          + `请立刻批量 import_reference(hitsJson=suggestedHitsJson, query, why≥8字)；不够则换 query 再搜再导。`;
+      }
+      if (!ctx.searchedOk && ctx.refTotal < ctx.importTarget) {
+        return `【系统】写综述/备文献需要约 ${ctx.importTarget} 篇，当前仅 ${ctx.refTotal} 篇。`
+          + "请先 search_knowledge / search_external（多换同义英文 query），再分批 import_reference。";
+      }
+      return `【系统】已有/本轮导入合计仍不足：项目 ${ctx.refTotal} 篇，本轮导入约 ${ctx.importCount} 篇，目标约 ${ctx.importTarget} 篇。`
+        + "请继续 search + import_reference(hitsJson=...) 补足。";
+    },
+    stopAsk: (ctx) =>
+      buildIntentStopAskUser({ kind: "literature", ...stopAskOpts(ctx) }),
+  },
+  draft: {
+    kind: "draft",
+    isIncomplete: (ctx) =>
+      isSectionDraftGoal(ctx.goal) && !isReviewWritingGoal(ctx.goal) && !ctx.wroteOk,
+    nudge: () =>
+      "【系统】用户要写章节，但尚未成功 write_section 写回。"
+      + "请先读大纲/文献（或 inspect），再直接 write_section（蓝图可自动补）；不要只提问。",
+    stopAsk: (ctx) =>
+      buildIntentStopAskUser({ kind: "draft", ...stopAskOpts(ctx) }),
+  },
+  review_write: {
+    kind: "review_write",
+    isIncomplete: (ctx) =>
+      isReviewWritingGoal(ctx.goal) && importedOk(ctx) && !ctx.wroteOk,
+    nudge: () =>
+      "【系统】文献体量已够，请 list_references 核对后 write_section(literature_body) 写回综述正文。",
+    stopAsk: (ctx) =>
+      buildIntentStopAskUser({ kind: "review_write", ...stopAskOpts(ctx) }),
+  },
+  citation: {
+    kind: "citation",
+    isIncomplete: (ctx) =>
+      isCitationCheckGoal(ctx.goal) && !citationCheckReportReady(ctx.observations),
+    nudge: () =>
+      "【系统】用户要做引用核查，但尚未成功 validate_citations。"
+      + "请立刻调用 validate_citations（默认检查全文），用中文汇报硬检结果与 suspicious [n]；"
+      + "不要继续逐条 read_reference。",
+    stopAsk: (ctx) =>
+      buildIntentStopAskUser({ kind: "citation", ...stopAskOpts(ctx) }),
+  },
+};
+
+/**
+ * nudge 注入优先顺序（与历史行为一致）：先 academic-paper 流程子步，再引用应用，
+ * 再文献/写作/引用核查。
+ */
+const NUDGE_ORDER: IntentKind[] = [
+  "pipeline_fix",
+  "pipeline_abstract",
+  "pipeline_review",
+  "pipeline_check",
+  "citation_apply",
+  "literature",
+  "draft",
+  "review_write",
+  "citation",
+];
+
+/**
+ * 「停下问用户」优先顺序。注意与 NUDGE_ORDER 不同：文献/写作在前
+ * （continue 预算用尽前先轻推 AP 流程，用尽后优先问用户文献/写作等用户驱动强意图）。
+ */
+const STOP_ORDER: IntentKind[] = [
+  "literature",
+  "draft",
+  "review_write",
+  "pipeline_fix",
+  "pipeline_abstract",
+  "pipeline_review",
+  "citation_apply",
+  "citation",
+];
+
+/** 意图未完成时选一条续跑 nudge（按 NUDGE_ORDER 优先级；无则 null） */
+export function pickIntentNudge(ctx: IntentClosureContext): string | null {
+  for (const kind of NUDGE_ORDER) {
+    const entry = INTENT_CLOSURES[kind];
+    if (entry.isIncomplete(ctx)) return entry.nudge(ctx);
+  }
+  return null;
+}
+
+/** 意图未完成时选一条「停下问用户」文案（按 STOP_ORDER 优先级；无则 null） */
+export function pickIntentStopAsk(ctx: IntentClosureContext): string | null {
+  for (const kind of STOP_ORDER) {
+    const entry = INTENT_CLOSURES[kind];
+    if (entry.isIncomplete(ctx)) return entry.stopAsk(ctx);
+  }
+  return null;
 }

@@ -4,7 +4,7 @@
  *
  * 触发语义：
  * - 只有 write_section（新增内容）才要求自查；refine_content 是修正动作，天然响应某份报告，不再单独要求验证。
- * - 写完后无 validate_citations / verify_content → 推 verify
+ * - 写完后无 validate_citations / verify_content / review_content / run_review_rounds → 推 verify
  * - validate_citations 发现问题且未在之后 refine → 推 refine
  * - 已验证通过 / 已修正 / 无新增写入 → 放行
  */
@@ -18,8 +18,13 @@ export const MAX_REFLECT_ROUNDS = 2;
 const WRITE_TOOLS = new Set(["write_section"]);
 /** 修正动作（不算新写入，但可解除 refine 待办） */
 const REFINE_TOOLS = new Set(["refine_content"]);
-/** 自查工具 */
-const VERIFY_TOOLS = new Set(["validate_citations", "verify_content"]);
+/** 自查工具（任一成功即视为已自查）：引用核查、质量核查、四维审查、Phase 7 审查 */
+const VERIFY_TOOLS = new Set([
+  "validate_citations",
+  "verify_content",
+  "review_content",
+  "run_review_rounds",
+]);
 
 export type ReflectionAction = "verify" | "refine" | null;
 
@@ -133,7 +138,7 @@ export function analyzeReflection(
     section,
     nudge:
       `【系统】你刚写入了${section ? `「${section}」` : "章节"}，但尚未自查。`
-      + "收尾前请先 validate_citations 检查引用（或 verify_content 检查内容质量），"
+      + "收尾前请先 validate_citations 检查引用，或 verify_content / review_content / run_review_rounds 做质量审查，"
       + "若报告有问题按报告 refine_content 修正写回，再向用户总结。不要只汇报不检查。",
   };
 }

@@ -13,9 +13,12 @@ import {
   isReviewWritingGoal,
   isSectionDraftGoal,
   parseLiteratureImportTarget,
+  pickIntentNudge,
+  pickIntentStopAsk,
   resolveApPipelineStep,
   shouldSkipPlanner,
 } from "@/lib/agent/core/goal-intents";
+import type { IntentClosureContext } from "@/lib/agent/core/goal-intents";
 import type { ToolObservation } from "@/lib/agent/types";
 
 /** 成功观察快捷构造 */
@@ -83,6 +86,22 @@ describe("goal-intents", () => {
     expect(
       checkCitationSideTripGate(goal, "write_bilingual_abstract", afterRefine).ok,
     ).toBe(true);
+  });
+
+  it("review step completes with either run_review_rounds or review_content", () => {
+    const goal = "按 academic-paper 流程继续：起草→引用检查→双语摘要→审查";
+    const beforeReview = [
+      ok("validate_citations"),
+      ok("refine_content", { persisted: true }),
+      ok("write_bilingual_abstract"),
+    ];
+    expect(resolveApPipelineStep(goal, beforeReview)).toBe("review");
+    expect(
+      resolveApPipelineStep(goal, [...beforeReview, ok("run_review_rounds")]),
+    ).toBeNull();
+    expect(
+      resolveApPipelineStep(goal, [...beforeReview, ok("review_content")]),
+    ).toBeNull();
   });
 
   it("detects citation apply after validate report", () => {
@@ -174,5 +193,75 @@ describe("goal-intents", () => {
         [],
       ).ok,
     ).toBe(true);
+  });
+});
+
+describe("intent continuation pickers", () => {
+  function ctx(overrides: Partial<IntentClosureContext> = {}): IntentClosureContext {
+    return {
+      goal: "",
+      observations: [],
+      searchedOk: false,
+      importCount: 0,
+      importTarget: 15,
+      refTotal: 0,
+      wroteOk: false,
+      ...overrides,
+    };
+  }
+
+  const AP_GOAL = "按 academic-paper 流程继续：起草→引用检查→双语摘要→审查";
+
+  it("returns null when nothing is incomplete", () => {
+    expect(pickIntentNudge(ctx())).toBeNull();
+    expect(pickIntentStopAsk(ctx())).toBeNull();
+  });
+
+  it("nudges academic-paper citation_fix step after validate", () => {
+    const observations = [ok("validate_citations")];
+    expect(pickIntentNudge(ctx({ goal: AP_GOAL, observations }))).toContain(
+      "refine_content",
+    );
+  });
+
+  it("nudges citation_check step and has no stop-ask", () => {
+    expect(pickIntentNudge(ctx({ goal: AP_GOAL }))).toContain("validate_citations");
+    expect(pickIntentStopAsk(ctx({ goal: AP_GOAL }))).toBeNull();
+  });
+
+  it("nudges literature hunt toward import after a search", () => {
+    const nudge = pickIntentNudge(
+      ctx({ goal: "检索并导入 5 篇文献", searchedOk: true, refTotal: 0, importTarget: 5 }),
+    );
+    expect(nudge).toContain("import_reference");
+  });
+
+  it("stops to ask user for draft when write_section not persisted", () => {
+    const nudge = pickIntentNudge(ctx({ goal: "写引言", refTotal: 5 }));
+    expect(nudge).toContain("write_section");
+    const stop = pickIntentStopAsk(ctx({ goal: "写引言", refTotal: 5 }));
+    expect(stop).toContain("继续写");
+  });
+
+  it("prioritizes review_write over nothing when refs enough but body missing", () => {
+    const c = ctx({ goal: "写一篇生物炭综述", refTotal: 30, importTarget: 30 });
+    expect(pickIntentNudge(c)).toContain("write_section(literature_body)");
+    expect(pickIntentStopAsk(c)).toContain("综述正文尚未写回");
+  });
+
+  it("nudge order and stop-ask order diverge for AP pipeline + literature", () => {
+    // 同一组合 goal：引用修正未写回（pipeline_fix）+ 文献未足（literature）同时成立。
+    // NUDGE_ORDER 先 AP 流程 → nudge 应提 refine_content；
+    // STOP_ORDER 先文献 → stopAsk 应优先问文献体量。
+    const observations = [ok("validate_citations")];
+    const c = ctx({
+      goal: "按 academic-paper 流程继续：起草→引用检查→双语摘要→审查，并检索导入 5 篇文献",
+      observations,
+      refTotal: 2,
+      importTarget: 5,
+      importCount: 0,
+    });
+    expect(pickIntentNudge(c)).toContain("refine_content");
+    expect(pickIntentStopAsk(c)).toContain("本轮已导入");
   });
 });

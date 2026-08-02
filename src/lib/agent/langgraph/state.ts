@@ -107,6 +107,33 @@ export const MAX_PLAN_CONTINUES = 3;
  */
 export const MAX_INTENT_CONTINUES = 2;
 
+/**
+ * 计划驱动的续跑判断（纯函数）：Agent 在 plan 未完成时提前结束，且本轮已有工具进展，
+ * 返回 true 表示应注入「继续」nudge。
+ *
+ * 参数约定：传「本轮更新后」的值——`iteration` / `planContinueCount` 均已 +1。
+ * - agentNode 在应用 update 前用 nextIteration / count+1 调用（判断是否注入 nudge）；
+ * - routeAfterAgent 看到的是 agentNode 已应用的值，同样传入。
+ * 两处共用同一条件，防止续跑逻辑分叉（历史上靠注释"对齐"维护）。
+ */
+export function shouldContinuePlanWork(state: {
+  plan: AgentPlan | null;
+  /** 更新后的迭代号（agentNode 传 nextIteration） */
+  iteration: number;
+  /** 更新后的续跑计数（agentNode 传 planContinueCount + 1） */
+  planContinueCount: number;
+  /** 已有工具进展（避免开局提问被强制续跑，绑架对话） */
+  toolSummaries: string[];
+  maxIterations: number;
+}): boolean {
+  return (
+    planHasPendingWork(state.plan)
+    && state.iteration < state.maxIterations
+    && state.planContinueCount <= MAX_PLAN_CONTINUES
+    && state.toolSummaries.length > 0
+  );
+}
+
 /** 纯函数：agent 节点后的路由（单测友好） */
 export function routeAfterAgent(state: AgentGraphStateType): AgentGraphRoute {
   if (state.error || state.awaitingCheckpoint || state.awaitingConfirm) {
@@ -114,12 +141,13 @@ export function routeAfterAgent(state: AgentGraphStateType): AgentGraphRoute {
   }
   if (state.pendingToolCalls.length > 0) return "tools";
   if (
-    planHasPendingWork(state.plan)
-    && state.iteration < COST_LIMITS.maxIterations
-    // agentNode 注入 nudge 时已 +1，此处须 ≤ 才能送达「第 MAX_PLAN_CONTINUES 次」nudge
-    && state.planContinueCount <= MAX_PLAN_CONTINUES
-    // 无工具进展（如开局提问）不续跑，避免绑架对话
-    && state.toolSummaries.length > 0
+    shouldContinuePlanWork({
+      plan: state.plan,
+      iteration: state.iteration,
+      planContinueCount: state.planContinueCount,
+      toolSummaries: state.toolSummaries,
+      maxIterations: COST_LIMITS.maxIterations,
+    })
   ) {
     return "agent";
   }

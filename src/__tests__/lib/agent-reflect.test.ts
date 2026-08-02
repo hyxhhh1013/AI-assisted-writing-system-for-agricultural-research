@@ -81,6 +81,18 @@ describe("analyzeReflection", () => {
     ).toBeNull();
   });
 
+  it("review_content after write → treated as verified", () => {
+    expect(
+      analyzeReflection([WRITE, obs("review_content", { overallScore: 85 })]).action,
+    ).toBeNull();
+  });
+
+  it("run_review_rounds after write → treated as verified", () => {
+    expect(
+      analyzeReflection([WRITE, obs("run_review_rounds", { round: 1, complete: true })]).action,
+    ).toBeNull();
+  });
+
   it("failed validate does not count as verified", () => {
     const r = analyzeReflection([
       WRITE,
