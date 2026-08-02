@@ -42,6 +42,15 @@ export const MODEL_PROVIDERS = {
     getApiKey: () => process.env.ZHIPU_API_KEY,
     enabled: !!process.env.ZHIPU_API_KEY,
   },
+  vision: {
+    name: "智谱视觉",
+    model: process.env.ZHIPU_VISION_MODEL || "glm-4v",
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+    apiKeyEnvVar: "ZHIPU_API_KEY",
+    modelSettingKey: "ZHIPU_VISION_MODEL",
+    getApiKey: () => process.env.ZHIPU_API_KEY,
+    enabled: !!process.env.ZHIPU_API_KEY,
+  },
 } as const;
 
 export type ModelProviderKey = keyof typeof MODEL_PROVIDERS;

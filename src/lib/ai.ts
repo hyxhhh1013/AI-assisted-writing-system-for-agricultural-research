@@ -13,9 +13,21 @@ export interface AIToolSchema {
   };
 }
 
+/** 多模态消息内容片段（OpenAI 兼容）。目前支持文本与图片 URL。 */
+export type AIChatContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
+export type AIChatMessage = {
+  role: string;
+  content: string | AIChatContentPart[];
+  tool_call_id?: string;
+  name?: string;
+};
+
 export interface AICallOptions {
   provider: ModelProviderKey;
-  messages: { role: string; content: string; tool_call_id?: string; name?: string }[];
+  messages: AIChatMessage[];
   stream?: boolean;
   timeoutMs?: number;
   signal?: AbortSignal;

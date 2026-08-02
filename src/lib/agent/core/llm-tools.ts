@@ -1,5 +1,6 @@
 import { callAI, getAgentModelConfig } from "@/lib/ai";
 import type { AIToolSchema } from "@/lib/ai";
+import type { ModelProviderKey } from "@/lib/models";
 import type { LLMMessage, LLMWithToolsResponse, ParsedToolCall } from "@/lib/agent/types";
 import { parsePromptBasedToolCalls } from "@/lib/agent/core/prompt-tools";
 
@@ -186,7 +187,7 @@ export async function callAIStreamingWithTools(
 }
 
 async function callNativeWithTools(
-  provider: "deepseek" | "zhipu",
+  provider: ModelProviderKey,
   options: CallWithToolsOptions,
 ): Promise<LLMWithToolsResponse> {
   const response = await callAI({
