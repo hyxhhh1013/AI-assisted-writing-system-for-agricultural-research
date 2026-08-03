@@ -121,4 +121,24 @@ export async function pinAttachment(
   };
 }
 
+/** 删除附件：删 DB 记录 + 同步删磁盘文件，避免孤儿文件。归属按 userId + sessionId。 */
+export async function deleteAttachment(
+  userId: string,
+  sessionId: string | undefined,
+  attachmentId: string,
+): Promise<boolean> {
+  const row = await prisma.agentAttachment.findFirst({
+    where: { id: attachmentId, userId },
+    select: { id: true, sessionId: true },
+  });
+  if (!row) return false;
+  // 会话级隔离：提供 sessionId 时，仅允许删除本会话（或不属于任何会话）的附件
+  if (sessionId && row.sessionId && row.sessionId !== sessionId) {
+    return false;
+  }
+  await prisma.agentAttachment.delete({ where: { id: attachmentId } });
+  deleteAttachmentFile(userId, attachmentId);
+  return true;
+}
+
 export { deleteAttachmentFile, readAttachmentFile };

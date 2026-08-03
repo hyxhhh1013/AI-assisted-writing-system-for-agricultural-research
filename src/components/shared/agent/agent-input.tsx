@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { clientRejectReason } from "@/lib/agent/attachments/client-validate";
-import { postAgentAttachment, postPinAttachment } from "@/services/agent";
+import { deleteAgentAttachment, postAgentAttachment, postPinAttachment } from "@/services/agent";
 
 /** 同时保留的最大附件数（与服务端 agentSchema.attachmentIds.max(20) 对齐） */
 const MAX_ATTACHMENT_CHIPS = 20;
@@ -138,8 +138,14 @@ export function AgentInputBar({
     }
   };
 
-  const removeChip = (index: number) => {
-    setChips((prev) => prev.filter((_, i) => i !== index));
+  const removeChip = (chip: Chip) => {
+    // 已上传的附件同步删除服务端记录与磁盘文件；未上传的仅移除本地
+    if (chip.attachmentId) {
+      void deleteAgentAttachment(chip.attachmentId, sessionId).catch(() => {
+        toast.error(`${chip.file.name}：删除失败（已保留）`);
+      });
+    }
+    setChips((prev) => prev.filter((c) => c !== chip));
   };
 
   /** 固定附件到当前项目（跨会话可发现）；成功后置 pinned，失败 toast 报错 */
@@ -237,7 +243,7 @@ export function AgentInputBar({
               ) : null}
               <button
                 type="button"
-                onClick={() => removeChip(chips.indexOf(chip))}
+                onClick={() => removeChip(chip)}
                 aria-label="移除附件"
                 className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-black/5 hover:text-[#3d4f46]"
               >

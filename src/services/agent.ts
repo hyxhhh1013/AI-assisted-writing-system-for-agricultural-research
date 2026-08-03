@@ -108,6 +108,21 @@ export async function postAgentAttachment(
   return (await res.json()) as { attachment: import("@/contracts/agent-attachment").AgentAttachmentInfo };
 }
 
+/** DELETE /api/agent/attachments/[id] — 删除附件（服务端同步清 DB + 磁盘） */
+export async function deleteAgentAttachment(
+  attachmentId: string,
+  sessionId?: string,
+): Promise<void> {
+  const qs = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : "";
+  const res = await fetch(`/api/agent/attachments/${encodeURIComponent(attachmentId)}${qs}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error || "删除失败");
+  }
+}
+
 /** 把附件固定到项目（跨会话可发现），成功返回更新后的附件信息 */
 export async function postPinAttachment(
   attachmentId: string,
