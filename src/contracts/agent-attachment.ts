@@ -5,7 +5,7 @@
 
 export type AttachmentExtractSource =
   | "pdf" | "docx" | "csv" | "excel" | "text"
-  | "image_vision" | "image_ocr" | "failed";
+  | "image_vision" | "image_ocr" | "pdf_vision" | "failed";
 
 export type AttachmentStatus =
   | "extracting" | "ready" | "extract_failed" | "unsupported";

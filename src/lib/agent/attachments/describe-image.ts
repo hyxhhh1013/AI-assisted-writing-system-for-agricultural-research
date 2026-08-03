@@ -20,15 +20,21 @@ function mimeOf(filePath: string): string {
   return map[ext] ?? "image/png";
 }
 
-/** 图片 → 结构化文本描述（GLM-4V）。无视觉 key 或失败降级 extract_failed。 */
-export async function describeImage(
-  filePath: string,
-): Promise<{ status: "ready" | "extract_failed"; text?: string; truncated?: boolean; source: "image_vision" | "image_ocr"; error?: string }> {
+export interface VisionDescription {
+  status: "ready" | "extract_failed";
+  text?: string;
+  truncated?: boolean;
+  source: "image_vision" | "image_ocr";
+  error?: string;
+}
+
+/** 用 GLM-4V 理解一张图片 Buffer（PDF 渲染页、图片附件共用） */
+export async function describeImageBuffer(
+  data: Buffer,
+  mime: string,
+): Promise<VisionDescription> {
   try {
-    if (fs.statSync(filePath).size > MAX_VISION_IMAGE_BYTES) {
-      return { status: "extract_failed", source: "image_ocr", error: "图片过大，视觉模型暂不支持" };
-    }
-    const data = fs.readFileSync(filePath).toString("base64");
+    const base64 = data.toString("base64");
     const response = await callAI({
       provider: "vision",
       messages: [
@@ -37,7 +43,7 @@ export async function describeImage(
           role: "user",
           content: [
             { type: "text", text: "请理解这张图片：" },
-            { type: "image_url", image_url: { url: `data:${mimeOf(filePath)};base64,${data}` } },
+            { type: "image_url", image_url: { url: `data:${mime};base64,${base64}` } },
           ],
         },
       ],
@@ -53,6 +59,24 @@ export async function describeImage(
       truncated: content.length > MAX_ATTACHMENT_TEXT_CHARS,
       source: "image_vision",
     };
+  } catch (err) {
+    return {
+      status: "extract_failed",
+      source: "image_ocr",
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/** 图片附件 → 结构化文本描述（GLM-4V）。无视觉 key 或失败降级 extract_failed。 */
+export async function describeImage(
+  filePath: string,
+): Promise<VisionDescription> {
+  try {
+    if (fs.statSync(filePath).size > MAX_VISION_IMAGE_BYTES) {
+      return { status: "extract_failed", source: "image_ocr", error: "图片过大，视觉模型暂不支持" };
+    }
+    return await describeImageBuffer(fs.readFileSync(filePath), mimeOf(filePath));
   } catch (err) {
     return {
       status: "extract_failed",

@@ -5,10 +5,12 @@ import papa from "papaparse";
 import * as XLSX from "xlsx";
 import mammoth from "mammoth";
 import { describeImage } from "@/lib/agent/attachments/describe-image";
+import { describePdfPages } from "@/lib/agent/attachments/describe-pdf";
 import {
   ATTACHMENT_ALLOWED_EXTENSIONS,
   ATTACHMENT_IMAGE_EXTENSIONS,
   MAX_ATTACHMENT_TEXT_CHARS,
+  MAX_PDF_VISION_PAGES,
 } from "@/lib/agent/attachments/constants";
 import type { AttachmentExtractSource } from "@/contracts/agent-attachment";
 
@@ -83,15 +85,31 @@ export async function extractAttachmentText(
       return { status: "ready", ...truncateTo(parts.join("\n\n") || "(空表格)"), source: "excel" };
     }
     if (ext === "pdf") {
-      // pdf-parse v2 为类 API：new PDFParse({ data }) → getText()；用后 destroy 释放 pdfjs 文档对象
+      // 文字层：pdf-parse v2 为类 API；用后 destroy 释放 pdfjs 文档对象
       const parser = new PDFParse({ data: fs.readFileSync(filePath) });
+      let text = "";
       try {
         const result = await parser.getText();
-        const text = (result.text ?? "").replace(/\n{3,}/g, "\n\n");
-        return { status: "ready", ...truncateTo(text.trim() || "(PDF 无文本层)"), source: "pdf" };
+        text = (result.text ?? "").replace(/\n{3,}/g, "\n\n").trim();
       } finally {
         await parser.destroy();
       }
+      // 图表理解：渲染前 N 页用 GLM-4V 逐页理解（扫描件/图表多的 PDF 也能拿到内容）
+      const vision = await describePdfPages(filePath);
+      const blocks = [
+        text ? `【正文文字】\n${text}` : "",
+        vision.status === "ready" && vision.text
+          ? `【页面图表理解（前 ${MAX_PDF_VISION_PAGES} 页）】\n${vision.text}`
+          : "",
+      ].filter(Boolean);
+      if (blocks.length === 0) {
+        return { status: "extract_failed", source: "image_ocr", error: "PDF 无文本层且页面理解失败" };
+      }
+      return {
+        status: "ready",
+        ...truncateTo(blocks.join("\n\n")),
+        source: vision.status === "ready" ? "pdf_vision" : "pdf",
+      };
     }
     if (ext === "docx") {
       const result = await mammoth.extractRawText({ path: filePath });
