@@ -26,10 +26,13 @@ function extOf(filePath: string): string {
 }
 
 function truncateTo(text: string): { text: string; truncated: boolean } {
-  if (text.length <= MAX_ATTACHMENT_TEXT_CHARS) {
-    return { text, truncated: false };
+  // Postgres text 字段不允许 NUL（\x00）：二进制伪装成文本（.csv/.txt 等）会带 NUL，
+  // 提取后入库触发 22021 编码错误 → 上传失败。统一清洗后再截断。
+  const clean = text.replace(/\x00/g, "");
+  if (clean.length <= MAX_ATTACHMENT_TEXT_CHARS) {
+    return { text: clean, truncated: false };
   }
-  return { text: text.slice(0, MAX_ATTACHMENT_TEXT_CHARS), truncated: true };
+  return { text: clean.slice(0, MAX_ATTACHMENT_TEXT_CHARS), truncated: true };
 }
 
 /** CSV / Excel → Markdown 表格 */

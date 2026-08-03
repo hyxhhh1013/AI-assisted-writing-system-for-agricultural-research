@@ -19,6 +19,11 @@ function extOf(name: string): string {
   return idx >= 0 ? name.slice(idx + 1).toLowerCase() : "";
 }
 
+/** Postgres text 字段不允许 NUL（\x00）；兜底清洗所有入库文本（图片描述等不走 extract.truncateTo） */
+function sanitizeTextForDb(text: string | null): string | null {
+  return text?.replace(/\x00/g, "") ?? null;
+}
+
 export function assertAttachmentAcceptable(file: { name: string; size: number }): void {
   if (file.size > MAX_ATTACHMENT_BYTES) {
     throw new AttachmentValidationError(`文件过大（上限 ${MAX_ATTACHMENT_BYTES / 1024 / 1024}MB）`);
@@ -75,7 +80,7 @@ export async function createAttachmentFromFile(
         size: buf.length,
         status,
         extractSource,
-        extractedText,
+        extractedText: sanitizeTextForDb(extractedText),
       },
     });
     return {
