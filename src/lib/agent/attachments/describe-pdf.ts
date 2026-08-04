@@ -1,7 +1,22 @@
 import fs from "fs";
-import { getDocument } from "pdfjs-dist/legacy/build/pdf";
+import path from "path";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { createCanvas } from "@napi-rs/canvas";
+
+// Turbopack 打包后 pdfjs 找不到内部相对 worker（Cannot find module './pdf.worker.js'），
+// require.resolve 又返回虚拟路径。改用 node_modules 真实路径，pdfjs 可动态 import。
+const workerFile = path.join(
+  process.cwd(),
+  "node_modules",
+  "pdfjs-dist",
+  "legacy",
+  "build",
+  "pdf.worker.js",
+);
+if (fs.existsSync(workerFile)) {
+  GlobalWorkerOptions.workerSrc = workerFile;
+}
 import { describeImageBuffer } from "@/lib/agent/attachments/describe-image";
 import {
   MAX_ATTACHMENT_TEXT_CHARS,

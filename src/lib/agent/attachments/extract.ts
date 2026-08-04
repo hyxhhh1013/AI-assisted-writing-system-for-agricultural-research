@@ -85,14 +85,19 @@ export async function extractAttachmentText(
       return { status: "ready", ...truncateTo(parts.join("\n\n") || "(空表格)"), source: "excel" };
     }
     if (ext === "pdf") {
-      // 文字层：pdf-parse v2 为类 API；用后 destroy 释放 pdfjs 文档对象
-      const parser = new PDFParse({ data: fs.readFileSync(filePath) });
+      // 文字层：pdf-parse v2 为类 API；用后 destroy 释放 pdfjs 文档对象。
+      // 文字层失败不阻断视觉理解（Turbopack 环境或部分 PDF 下 getText 可能抛）。
       let text = "";
       try {
-        const result = await parser.getText();
-        text = (result.text ?? "").replace(/\n{3,}/g, "\n\n").trim();
-      } finally {
-        await parser.destroy();
+        const parser = new PDFParse({ data: fs.readFileSync(filePath) });
+        try {
+          const result = await parser.getText();
+          text = (result.text ?? "").replace(/\n{3,}/g, "\n\n").trim();
+        } finally {
+          await parser.destroy();
+        }
+      } catch {
+        /* 文字层失败继续走视觉理解 */
       }
       // 图表理解：渲染前 N 页用 GLM-4V 逐页理解（扫描件/图表多的 PDF 也能拿到内容）
       const vision = await describePdfPages(filePath);

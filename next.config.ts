@@ -10,10 +10,15 @@ const studioRoot = path.resolve(__dirname, "academic-paper-studio");
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  // 避免 Turbopack 缓存旧版 @prisma/client（schema 增字段后仍报 Unknown field）
-  serverExternalPackages: ["@prisma/client", "prisma"],
+  // 避免 Turbopack 缓存旧版 @prisma/client（schema 增字段后仍报 Unknown field）；
+  // @napi-rs/canvas 是原生模块，须 external，否则 Turbopack 打包时 "Failed to load native binding"
+  serverExternalPackages: ["@prisma/client", "prisma", "@napi-rs/canvas"],
   outputFileTracingExcludes: {
     "/*": ["./data/charts/**/*", "./papers/**/*"],
+  },
+  // standalone 部署时把 pdfjs worker 文件带进 tracing（PDF 页面渲染视觉理解需要）
+  outputFileTracingIncludes: {
+    "/*": ["./node_modules/pdfjs-dist/legacy/build/pdf.worker.js"],
   },
   experimental: {
     // 附件上传上限 20MB，需大于该值（含 multipart 开销），否则 Next 默认 10MB 会静默截断请求体
