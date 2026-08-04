@@ -59,24 +59,30 @@ export async function describePdfPages(
     }
 
     const factory = new NodeCanvasFactory();
-    const parts: string[] = [];
-    for (let i = 1; i <= pageCount; i++) {
-      try {
-        const page = await doc.getPage(i);
-        const viewport = page.getViewport({ scale: 1.5 });
-        const cc = factory.create(viewport.width, viewport.height);
-        // @napi-rs/canvas 的 SKRSContext2D 与 DOM context 类型不完全一致，运行时兼容
-        await page.render({ canvasContext: cc.context as unknown as CanvasRenderingContext2D, viewport }).promise;
-        const png = (cc.canvas as { toBuffer: (fmt: string) => Buffer }).toBuffer("image/png");
-        factory.destroy(cc);
-        const desc = await describeImageBuffer(png, "image/png");
-        if (desc.status === "ready" && desc.text) {
-          parts.push(`【第 ${i} 页】\n${desc.text}`);
+    // 并发渲染 + 并发视觉理解：GLM-4V 调用走 callAI 的 per-key 信号量（默认 4），
+    // 不会打爆上游；串行会拖到 5×单页耗时，并行可压到一批。
+    const pageNumbers = Array.from({ length: pageCount }, (_, i) => i + 1);
+    const results = await Promise.all(
+      pageNumbers.map(async (num) => {
+        try {
+          const page = await doc!.getPage(num);
+          const viewport = page.getViewport({ scale: 1.2 });
+          const cc = factory.create(viewport.width, viewport.height);
+          // @napi-rs/canvas 的 SKRSContext2D 与 DOM context 类型不完全一致，运行时兼容
+          await page.render({ canvasContext: cc.context as unknown as CanvasRenderingContext2D, viewport }).promise;
+          const png = (cc.canvas as { toBuffer: (fmt: string) => Buffer }).toBuffer("image/png");
+          factory.destroy(cc);
+          const desc = await describeImageBuffer(png, "image/png");
+          return { num, desc };
+        } catch {
+          return { num, desc: null as { status: "extract_failed"; source: "image_ocr"; text?: string; error?: string } | null };
         }
-      } catch {
-        /* 单页失败跳过（如损坏页），不中断整体 */
-      }
-    }
+      }),
+    );
+
+    const parts = results
+      .filter((r): r is { num: number; desc: NonNullable<typeof r.desc> } => r.desc?.status === "ready" && !!r.desc.text)
+      .map((r) => `【第 ${r.num} 页】\n${r.desc.text}`);
 
     if (parts.length === 0) {
       return { status: "extract_failed", source: "image_ocr", error: "PDF 页面渲染/理解失败" };
