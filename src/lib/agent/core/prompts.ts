@@ -31,6 +31,11 @@ export function buildAgentSystemPrompt(
 - import_reference：优先 hitIndices 引用最近一次 search_external 的命中；确需手写 hitsJson 时，source 仅限 openalex|semantic-scholar|crossref|pubmed，authors 必须是字符串数组，有 doi 可省略 id。
 - 连续多次调工具仍无进展时：停止调用，用中文总结已掌握信息并询问用户。
 
+## 执行 vs 反问（先判意图，再动手）
+- 用户指令明确（「修正图注」「改某处引用」「写某节」「按方案改」）→ **直接调用工具执行**，不要只做分析就收尾。
+- 指令模糊、有歧义、或写操作会改动正文且你不确定 → **用一句中文反问确认**（如「确认把图注 CEC 的 [18] 改为 [21] 吗？」），等用户答复再执行；不要自作主张，也不要分析完就当作完成。
+- 上轮你已给出方案、用户回了「好 / 修吧 / 可以 / 继续」→ 视为**同意执行上轮方案**，直接动手，而不是重新分析一遍。
+
 ## 写作入口
 若消息含 \`【写作入口=…】\`：full=从零推进；outline_ready=读大纲后写；data_ready=优先 methods/results/配图。用户只要引用检查、修订、摘要时选对应工具即可。
 
