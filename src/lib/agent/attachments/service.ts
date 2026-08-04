@@ -41,35 +41,14 @@ export async function createAttachmentFromFile(
   assertAttachmentAcceptable(file);
   const attachmentId = randomUUID();
   const buf = Buffer.from(await file.arrayBuffer());
-  // 一次落盘拿到 fileKey，再交给提取层（fileKey 即相对路径，DB 只存它）
+  // 一次落盘拿到 fileKey（fileKey 即相对路径，DB 只存它）
   const fileKey = writeAttachmentFile(userId, attachmentId, file.name, buf);
 
-  let status: AgentAttachmentInfo["status"] = "ready";
-  let extractedText: string | null = null;
-  let extractSource: AttachmentExtractSource | null = null;
-  let truncated = false;
-  let charCount = 0;
+  let row;
   try {
-    const result = await extractAttachmentText(
-      resolveProjectRuntimePath(fileKey),
-      file.name,
-    );
-    if (result.status === "ready") {
-      extractedText = result.text ?? null;
-      charCount = result.charCount ?? (result.text?.length ?? 0);
-      truncated = result.truncated ?? false;
-      extractSource = result.source;
-    } else {
-      status = result.status === "unsupported" ? "unsupported" : "extract_failed";
-      extractSource = result.source;
-    }
-  } catch {
-    status = "extract_failed";
-    extractSource = "failed";
-  }
-
-  try {
-    const row = await prisma.agentAttachment.create({
+    // 先落库为 extracting，立即返回——提取（含 PDF 页面 GLM-4V）放后台完成，
+    // 上传响应不再阻塞等待，用户可继续操作。
+    row = await prisma.agentAttachment.create({
       data: {
         id: attachmentId,
         userId,
@@ -78,27 +57,65 @@ export async function createAttachmentFromFile(
         originalName: file.name,
         mimeType: file.type || "application/octet-stream",
         size: buf.length,
-        status,
-        extractSource,
-        extractedText: sanitizeTextForDb(extractedText),
+        status: "extracting",
+        extractSource: null,
+        extractedText: null,
       },
     });
-    return {
-      id: row.id,
-      originalName: row.originalName,
-      mimeType: row.mimeType,
-      size: row.size,
-      status: row.status,
-      extractSource: row.extractSource as AttachmentExtractSource | null,
-      charCount,
-      truncated,
-      pinned: row.pinned,
-      createdAt: row.createdAt.toISOString(),
-    };
   } catch (error) {
     // DB 写入失败：清理已落盘的孤儿文件后重抛，避免残留无主文件
     deleteAttachmentFile(userId, attachmentId);
     throw error;
+  }
+
+  // 后台异步提取：不阻塞上传响应；完成后更新记录状态与文本。
+  // fire-and-forget：PM2 standalone 常驻，Node 事件循环会等它跑完。
+  void extractAttachmentInBackground(attachmentId, userId, fileKey, file.name);
+
+  return {
+    id: row.id,
+    originalName: row.originalName,
+    mimeType: row.mimeType,
+    size: row.size,
+    status: row.status as AgentAttachmentInfo["status"],
+    extractSource: null,
+    pinned: false,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/** 后台提取附件文本（图片走 GLM-4V；PDF 渲染前 N 页视觉理解），完成后更新记录 */
+async function extractAttachmentInBackground(
+  attachmentId: string,
+  userId: string,
+  fileKey: string,
+  originalName: string,
+): Promise<void> {
+  try {
+    const result = await extractAttachmentText(
+      resolveProjectRuntimePath(fileKey),
+      originalName,
+    );
+    await prisma.agentAttachment.update({
+      where: { id: attachmentId },
+      data: {
+        status: result.status === "ready"
+          ? "ready"
+          : result.status === "unsupported"
+            ? "unsupported"
+            : "extract_failed",
+        extractSource: result.source,
+        extractedText: sanitizeTextForDb(result.text ?? null),
+      },
+    });
+  } catch {
+    // 提取失败标记 extract_failed（附件仍保留，用户可删/重传）
+    await prisma.agentAttachment
+      .update({
+        where: { id: attachmentId },
+        data: { status: "extract_failed", extractSource: "failed" },
+      })
+      .catch(() => {});
   }
 }
 

@@ -123,6 +123,19 @@ export async function deleteAgentAttachment(
   }
 }
 
+/** GET /api/agent/attachments/[id] — 单附件信息（异步提取后轮询状态） */
+export async function getAgentAttachment(
+  attachmentId: string,
+): Promise<import("@/contracts/agent-attachment").AgentAttachmentInfo> {
+  const res = await fetch(`/api/agent/attachments/${encodeURIComponent(attachmentId)}`);
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error || "读取失败");
+  }
+  const body = (await res.json()) as { attachment: import("@/contracts/agent-attachment").AgentAttachmentInfo };
+  return body.attachment;
+}
+
 /** 把附件固定到项目（跨会话可发现），成功返回更新后的附件信息 */
 export async function postPinAttachment(
   attachmentId: string,

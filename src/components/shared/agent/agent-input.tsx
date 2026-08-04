@@ -1,12 +1,17 @@
 "use client";
 
 import { Loader2, Paperclip, Send, Square, X } from "lucide-react";
-import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { clientRejectReason } from "@/lib/agent/attachments/client-validate";
-import { deleteAgentAttachment, postAgentAttachment, postPinAttachment } from "@/services/agent";
+import {
+  deleteAgentAttachment,
+  getAgentAttachment,
+  postAgentAttachment,
+  postPinAttachment,
+} from "@/services/agent";
 
 /** 同时保留的最大附件数（与服务端 agentSchema.attachmentIds.max(20) 对齐） */
 const MAX_ATTACHMENT_CHIPS = 20;
@@ -111,6 +116,38 @@ export function AgentInputBar({
       );
     }
   };
+
+  // 异步提取：轮询 extracting 附件直到 ready / 失败（PDF 视觉理解在后台跑）
+  useEffect(() => {
+    const pending = chips.filter((c) => c.status === "extracting" && c.attachmentId);
+    if (pending.length === 0) return;
+    let cancelled = false;
+    const timer = setInterval(async () => {
+      for (const chip of pending) {
+        if (cancelled) return;
+        try {
+          const att = await getAgentAttachment(chip.attachmentId!);
+          if (att.status === "ready") {
+            setChips((prev) => prev.map((c) => (c.file === chip.file ? { ...c, status: "ready" } : c)));
+          } else if (att.status === "extract_failed" || att.status === "unsupported") {
+            setChips((prev) =>
+              prev.map((c) =>
+                c.file === chip.file
+                  ? { ...c, status: "failed", error: att.status === "unsupported" ? "不支持的类型" : "未能解析" }
+                  : c,
+              ),
+            );
+          }
+        } catch {
+          /* 单次轮询失败忽略，下轮重试 */
+        }
+      }
+    }, 2000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [chips]);
 
   /** 单次多选/拖拽同时加入多个文件：按剩余名额截断，超出提示（uploadFile 内另有兜底校验） */
   const enqueueFiles = (files: File[]) => {
