@@ -51,11 +51,26 @@ export function buildConfigCheckpoint(): AgentCheckpointRequest {
   };
 }
 
+/** 通用澄清检查点（ask_user 工具触发）：Agent 提问，用户输入回答后继续 */
+export function buildClarifyCheckpoint(question: string): AgentCheckpointRequest {
+  return {
+    id: `cp_clarify_${Date.now()}`,
+    kind: "clarify",
+    title: "需要你确认一下",
+    message: question,
+  };
+}
+
 export function decisionMessage(
   kind: AgentCheckpointKind,
   decision: "approve" | "revise",
   note?: string,
 ): string {
+  if (kind === "clarify") {
+    return note?.trim()
+      ? `【用户回答】${note.trim()}\n请据此继续执行；若仍有疑问可再调用 ask_user。`
+      : "【用户回答】已收到你的回复。请继续。";
+  }
   if (kind === "outline_approve") {
     if (decision === "approve") {
       return "【检查点】用户已批准大纲。请用中文简短确认，并询问下一步：生成写作蓝图 / 论证蓝图 / 写某一节？不要擅自写完整篇。";

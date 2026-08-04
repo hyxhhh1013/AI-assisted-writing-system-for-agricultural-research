@@ -13,6 +13,7 @@ import { generateChartTool } from "@/lib/agent/tools/generate-chart";
 import { generateXrdAnalysisTool } from "@/lib/agent/tools/generate-xrd-analysis";
 import { draftMechanismFigureTool } from "@/lib/agent/tools/draft-mechanism-figure";
 import { getFullTextTool } from "@/lib/agent/tools/get-full-text";
+import { askUserTool } from "@/lib/agent/tools/ask-user";
 import { importReferenceTool } from "@/lib/agent/tools/import-reference";
 import { listPlotSourcesTool } from "@/lib/agent/tools/list-plot-sources";
 import { listReferencesTool } from "@/lib/agent/tools/list-references";
@@ -73,6 +74,7 @@ export function createAgentContext(params: {
 
 export function createReadOnlyTools(): ToolDefinition[] {
   return [
+    askUserTool,
     readAttachmentTool,
     listAttachmentsTool,
     inspectProjectTool,

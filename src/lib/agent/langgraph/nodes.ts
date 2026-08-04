@@ -29,6 +29,7 @@ import {
   planHasPendingWork,
 } from "@/lib/agent/core/plan-progress";
 import {
+  buildClarifyCheckpoint,
   buildConfigCheckpoint,
   buildOutlineCheckpoint,
   shouldPauseForConfigConfirm,
@@ -710,6 +711,26 @@ export async function toolsNode(
           error: progress.warning,
         });
         break;
+      }
+
+      // ask_user：通用澄清检查点——暂停等用户回答（指令模糊/缺信息/有风险时）
+      const clarifyData = (result.data ?? null) as { needClarification?: boolean; question?: string } | null;
+      if (result.success && clarifyData?.needClarification && clarifyData.question) {
+        const checkpoint = buildClarifyCheckpoint(clarifyData.question);
+        events.push({ type: "agent/checkpoint", checkpoint });
+        events.push({ type: "agent/status", status: "awaiting_checkpoint" });
+        return {
+          pendingToolCalls: [],
+          toolCallCount,
+          toolSummaries: newSummaries,
+          observations: newObservations,
+          messages: newMessages,
+          events,
+          plan,
+          ...(reflectReset ? { reflectCount: 0 } : {}),
+          awaitingCheckpoint: checkpoint,
+          finished: true,
+        };
       }
 
       if (

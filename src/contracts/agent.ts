@@ -51,8 +51,8 @@ export interface AgentConfirmRequest {
   preview?: string;
 }
 
-/** academic-paper 铁律检查点（S2） */
-export type AgentCheckpointKind = "config_confirm" | "outline_approve";
+/** academic-paper 铁律检查点（S2）+ 通用澄清（ask_user） */
+export type AgentCheckpointKind = "config_confirm" | "outline_approve" | "clarify";
 
 export interface AgentCheckpointRequest {
   id: string;

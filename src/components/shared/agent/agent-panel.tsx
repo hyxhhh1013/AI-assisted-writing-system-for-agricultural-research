@@ -122,6 +122,7 @@ export function AgentPanel({
   const [planOpen, setPlanOpen] = useState(false);
   const [reviseNote, setReviseNote] = useState("");
   const [showRevise, setShowRevise] = useState(false);
+  const [clarifyNote, setClarifyNote] = useState("");
   const [configSaving, setConfigSaving] = useState(false);
   /** 手动打开问答（不依赖检查点也能填） */
   const [manualConfigQa, setManualConfigQa] = useState(false);
@@ -139,6 +140,8 @@ export function AgentPanel({
   const entryModeLabel = getAgentEntryMode(entryMode)?.label ?? null;
   const isConfigCheckpoint =
     agent.pendingCheckpoint?.kind === "config_confirm";
+  const isClarifyCheckpoint =
+    agent.pendingCheckpoint?.kind === "clarify";
   /** 仅手动展开或检查点时出完整表单；缺配置时先给轻量邀请，避免一进 Tab 整块砸脸 */
   const showConfigQa =
     Boolean(projectId) && (isConfigCheckpoint || manualConfigQa);
@@ -799,6 +802,40 @@ export function AgentPanel({
                   onComplete={handleConfigSaveAndApprove}
                   onSkip={() => void agent.resolveCheckpoint("approve")}
                 />
+              </div>
+            ) : isClarifyCheckpoint ? (
+              <div className="mt-2 space-y-2">
+                <Textarea
+                  value={clarifyNote}
+                  onChange={(e) => setClarifyNote(e.target.value)}
+                  placeholder="输入你的回答…"
+                  className="min-h-[56px] resize-none text-xs"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-8 flex-1 text-xs"
+                    onClick={() => {
+                      void agent.resolveCheckpoint("approve", clarifyNote.trim() || undefined);
+                      setClarifyNote("");
+                    }}
+                  >
+                    提交回答
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 text-xs"
+                    onClick={() => {
+                      setClarifyNote("");
+                      void agent.resolveCheckpoint("approve", "请继续");
+                    }}
+                  >
+                    跳过
+                  </Button>
+                </div>
               </div>
             ) : (
               <>
