@@ -376,6 +376,27 @@ export async function agentNode(
         hint =
           `\n\n——\n还有未完成步骤：${left.join("；")}。你可以直接说「继续」或指定下一步（例如「先写引言」）。`;
       }
+      // 收尾兜底：执行型指令（用户要实际改动）但整轮无落地写操作 → 引导 Agent 用 ask_user 确认，
+      // 避免「分析完就当完成」——这是 ask_user 澄清链路的关键触发点
+      const execWords = /(改|修|调整|优化|更新|修正|refine|执行|按方案|补|删|插入|替换|生成|重写|润色|扩展|处理|弄)/i;
+      const landedWrite = observations.some(
+        (o) => o.success
+          && (o.tool === "write_section" || o.tool === "refine_content"
+            || o.tool === "update_paper_config" || o.tool === "generate_outline"
+            || o.tool === "write_bilingual_abstract" || o.tool === "import_reference"
+            || o.tool === "generate_chart" || o.tool === "apply_revision_item"
+            || o.tool === "build_argument_blueprint" || o.tool === "generate_writing_blueprint"),
+      );
+      if (
+        !hint
+        && execWords.test(state.goal)
+        && observations.length > 0
+        && !landedWrite
+      ) {
+        hint =
+          "\n\n——\n这是需要实际改动的任务，但你还没落地任何修改。"
+          + "若指令有歧义或需要确认修改范围，请调用 ask_user 向用户确认；否则请直接执行你要做的修改。";
+      }
       if (hint) {
         if (updates.finalThought) {
           updates.finalThought = `${updates.finalThought}${hint}`;
