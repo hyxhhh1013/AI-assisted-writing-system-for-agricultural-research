@@ -4,7 +4,10 @@ import {
   suggestNextAgentActions,
 } from "@/lib/agent/project-briefing";
 import type { AgentProjectSnapshot } from "@/lib/agent/project-loader";
-import { buildAgentSystemPrompt } from "@/lib/agent/core/prompts";
+import {
+  buildAgentBriefingMessage,
+  buildAgentSystemPrompt,
+} from "@/lib/agent/core/prompts";
 
 const sample: AgentProjectSnapshot = {
   title: "生物炭综述",
@@ -41,11 +44,15 @@ describe("agent project briefing", () => {
     expect(text).toContain("烟草");
   });
 
-  it("injects briefing into system prompt", () => {
-    const prompt = buildAgentSystemPrompt([], formatAgentProjectBriefing(sample));
-    expect(prompt).toContain("【项目简报");
-    expect(prompt).toContain("生物炭综述");
-    expect(prompt).toContain("四个研究方向");
+  it("briefing 经独立 user 消息注入，system prompt 前缀稳定", () => {
+    const msg = buildAgentBriefingMessage(formatAgentProjectBriefing(sample));
+    expect(msg).not.toBeNull();
+    expect(msg!.content).toContain("【项目简报");
+    expect(msg!.content).toContain("生物炭综述");
+    expect(msg!.content).toContain("四个研究方向");
+    // system prompt 不再内嵌易变的项目简报
+    const prompt = buildAgentSystemPrompt([]);
+    expect(prompt).not.toContain("【项目简报");
   });
 
   it("suggests write next empty section", () => {

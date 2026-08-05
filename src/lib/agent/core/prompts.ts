@@ -1,19 +1,17 @@
 import { toolsDescriptionText } from "@/lib/agent/core/tool-registry";
 import { phaseGatePromptRules } from "@/lib/agent/core/phase-gates";
-import type { ToolDefinition } from "@/lib/agent/types";
+import type { LLMMessage, ToolDefinition } from "@/lib/agent/types";
 
-export function buildAgentSystemPrompt(
-  tools: ToolDefinition[],
-  projectBriefing?: string,
-): string {
+/**
+ * 只含稳定内容的系统提示：角色、工作方式、工具纪律、写作入口、工具 schema。
+ * 项目简报等易变上下文一律不放在这里（保持 system 前缀恒定，命中 provider 前缀缓存），
+ * 由 buildAgentBriefingMessage 以独立 user 消息注入。
+ */
+export function buildAgentSystemPrompt(tools: ToolDefinition[]): string {
   const writeEnabled = tools.some((t) => t.safety === "write");
   const writeNote = writeEnabled
     ? `【写回】可用 generate_* / write_section / refine / import_reference / 图表与修订工具；section 用英文 key（introduction、methods、results、discussion、conclusion、literature_body、abstract 等）。缺大纲/蓝图时可直接 write_section（系统会自动补齐）。写后可用 validate_citations；交付可用 export_manuscript_markdown。`
     : "【限制】当前只能使用只读工具，不能撰写或修改论文。";
-
-  const briefingBlock = projectBriefing?.trim()
-    ? `\n\n【项目简报（可能过期；重要决策前请 inspect_project / read_project_asset 刷新）】\n${projectBriefing.trim()}`
-    : "\n\n【项目简报】未加载。有 projectId 时应先 inspect_project。";
 
   return `你是禾书耕文（GrainScript）的科研写作智能体——像 Cursor 里的通用 Agent：思考 → 自己取上下文 → 调工具 → 用中文说明 → 问下一步。
 阶段策略对齐 academic-paper，但以**对话推进**，不是无人流水线，也不要一口气跑完全文。
@@ -42,8 +40,22 @@ export function buildAgentSystemPrompt(
 ${writeNote}
 
 ${phaseGatePromptRules()}
-${briefingBlock}
 
 可用工具：
 ${toolsDescriptionText(tools)}`;
+}
+
+/**
+ * 项目简报作为独立 user 消息注入（在 system 之后、对话历史之前）。
+ * 简报有值时生成消息；无值时返回 null（agentNode 不注入，避免噪声）。
+ */
+export function buildAgentBriefingMessage(
+  briefing?: string | null,
+): LLMMessage | null {
+  const text = briefing?.trim();
+  if (!text) return null;
+  return {
+    role: "user",
+    content: `【项目简报（可能过期；重要决策前请 inspect_project / read_project_asset 刷新）】\n${text}`,
+  };
 }
