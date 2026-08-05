@@ -1,4 +1,4 @@
-import { loadAgentProject } from "@/lib/agent/project-loader";
+import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import { callAI, getAgentModelConfig } from "@/lib/ai";
 import { matchCategoryFromDirection } from "@/lib/knowledge-metadata";
@@ -41,7 +41,7 @@ export const generateOutlineTool: ToolDefinition = {
       return { success: false, error: "generate_outline 需要 projectId" };
     }
 
-    const project = await loadAgentProject(ctx.userId, ctx.projectId);
+    const project = await getAgentProjectSnapshot(ctx);
     if (!project) {
       return { success: false, error: "项目不存在或无权访问" };
     }

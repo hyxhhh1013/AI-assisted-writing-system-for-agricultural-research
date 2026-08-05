@@ -1,5 +1,5 @@
 import { runPlagiarismCheck } from "@/services/plagiarism-service";
-import { loadAgentProject } from "@/lib/agent/project-loader";
+import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 
 const MAX_CONTENT_CHARS = 80_000;
@@ -35,7 +35,7 @@ export const checkPlagiarismTool: ToolDefinition = {
 
     let title = String(params.title ?? "").trim();
     if (!title && ctx.projectId) {
-      const project = await loadAgentProject(ctx.userId, ctx.projectId);
+      const project = await getAgentProjectSnapshot(ctx);
       title = project?.title ?? "Agent 查重";
     }
     if (!title) title = "Agent 查重";

@@ -1,5 +1,5 @@
 import type { WritingBlueprint } from "@/contracts/writing-blueprint";
-import { loadAgentProject } from "@/lib/agent/project-loader";
+import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import { callAI, getAgentModelConfig } from "@/lib/ai";
 import { computeOutlineHash } from "@/lib/blueprint-utils";
@@ -48,7 +48,7 @@ export const generateWritingBlueprintTool: ToolDefinition = {
       return { success: false, error: "generate_writing_blueprint 需要 projectId" };
     }
 
-    const project = await loadAgentProject(ctx.userId, ctx.projectId);
+    const project = await getAgentProjectSnapshot(ctx);
     if (!project) {
       return { success: false, error: "项目不存在或无权访问" };
     }

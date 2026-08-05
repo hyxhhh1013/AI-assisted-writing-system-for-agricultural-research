@@ -1,5 +1,5 @@
 import type { BilingualAbstract } from "@/contracts/bilingual-abstract";
-import { loadAgentProject } from "@/lib/agent/project-loader";
+import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
 import { callAI, getAgentModelConfig } from "@/lib/ai";
 import { buildBilingualAbstractPrompt } from "@/lib/prompts/bilingual-abstract";
 import {
@@ -50,7 +50,7 @@ export const writeBilingualAbstractTool: ToolDefinition = {
       return { success: false, error: "write_bilingual_abstract 需要 projectId" };
     }
 
-    const project = await loadAgentProject(ctx.userId, ctx.projectId);
+    const project = await getAgentProjectSnapshot(ctx);
     if (!project) {
       return { success: false, error: "项目不存在或无权访问" };
     }

@@ -1,5 +1,5 @@
-import { loadAgentProject } from "@/lib/agent/project-loader";
 import { formatAgentProjectBriefing } from "@/lib/agent/project-briefing";
+import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
 import { resolvePhaseTaskPack } from "@/lib/agent/phase-task-pack";
 import { loadAgentPlotSources } from "@/lib/agent/plot-sources";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
@@ -36,12 +36,11 @@ export const inspectProjectTool: ToolDefinition = {
     if (!ctx.projectId) {
       return { success: false, error: "inspect_project 需要绑定 projectId" };
     }
-    const project = await loadAgentProject(ctx.userId, ctx.projectId);
+    const project = await getAgentProjectSnapshot(ctx);
     if (!project) {
       return { success: false, error: "项目不存在或无权访问" };
     }
 
-    ctx.projectSnapshot = project;
     const briefing = formatAgentProjectBriefing(project);
     ctx.projectBriefing = briefing;
 

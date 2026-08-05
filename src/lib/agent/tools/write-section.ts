@@ -1,6 +1,6 @@
 import { resolveWritingDraftContext } from "@/contracts/writing";
-import { loadAgentProject } from "@/lib/agent/project-loader";
 import { persistAgentDraft } from "@/lib/agent/project-persist";
+import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
 import { runAgentWriteSection } from "@/lib/agent/writing-runner";
 import {
   AGENT_WRITING_SECTIONS,
@@ -59,7 +59,7 @@ export const writeSectionTool: ToolDefinition = {
 
     const persistToProject = parsePersistToProject(params.persistToProject);
 
-    const project = await loadAgentProject(ctx.userId, ctx.projectId);
+    const project = await getAgentProjectSnapshot(ctx);
     if (!project) {
       return { success: false, error: "项目不存在或无权访问" };
     }

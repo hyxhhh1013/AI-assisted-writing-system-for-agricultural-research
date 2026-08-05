@@ -21,8 +21,10 @@ import type { AgentGraphRuntime } from "@/lib/agent/langgraph/runtime";
 import type { AgentGraphStateType } from "@/lib/agent/langgraph/state";
 import { formatToolObservationForLlm } from "@/lib/agent/observation-memory";
 import { formatAgentProjectBriefing } from "@/lib/agent/project-briefing";
-import { appendPhasePackToBriefing } from "@/lib/agent/phase-task-pack";
-import { loadAgentProject } from "@/lib/agent/project-loader";
+import {
+  markAgentProjectDirty,
+  refreshAgentProjectContext,
+} from "@/lib/agent/project-refresh";
 import {
   appendMemoryToBriefing,
   buildRecentAgentMemoryBlock,
@@ -65,14 +67,9 @@ export async function* runAgentGraphLoop(
   const repeatTracker = createRepeatTracker();
 
   if (!context.projectBriefing && context.projectId) {
-    try {
-      const snap = await loadAgentProject(context.userId, context.projectId);
-      context.projectSnapshot = snap;
-      context.projectBriefing = appendPhasePackToBriefing(
-        formatAgentProjectBriefing(snap),
-        snap,
-      );
-    } catch {
+    await refreshAgentProjectContext(context, { withMemory: false });
+    // refresh 内部吞掉 DB 错误保留旧状态；前导无旧简报可保留，需显式兜底
+    if (!context.projectBriefing) {
       context.projectSnapshot = null;
       context.projectBriefing = formatAgentProjectBriefing(null);
     }
@@ -298,22 +295,14 @@ export async function* runAgentGraphLoop(
 
     if (result.success && context.projectId) {
       try {
-        const snap = await loadAgentProject(context.userId, context.projectId);
-        context.projectSnapshot = snap;
-        context.projectBriefing = appendPhasePackToBriefing(
-          formatAgentProjectBriefing(snap),
-          snap,
+        markAgentProjectDirty(context);
+        await refreshAgentProjectContext(context, { withMemory: false });
+        antispamTracker.lastFingerprint = projectFingerprint(
+          context.projectSnapshot ?? undefined,
         );
-        const memBlock = formatWorkMemoryBlock(context.workMemory ?? null);
-        if (memBlock) {
-          context.projectBriefing = appendMemoryToBriefing(
-            context.projectBriefing,
-            memBlock,
-          );
-        }
-        antispamTracker.lastFingerprint = projectFingerprint(snap);
         antispamTracker.stagnantCount = 0;
       } catch {
+        // refresh 内部已吞错，此 catch 仅兜底（无副作用）
         /* ignore */
       }
     }

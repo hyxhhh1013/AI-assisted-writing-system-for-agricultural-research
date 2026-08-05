@@ -41,6 +41,8 @@ export interface AgentContext {
   projectBriefing?: string;
   /** 运行前加载的项目快照（阶段门禁用） */
   projectSnapshot?: import("@/lib/agent/project-loader").AgentProjectSnapshot | null;
+  /** 项目已被本会话写工具变更：下一次 refreshAgentProjectContext 必须重载（防同轮复用陈旧快照） */
+  projectDirty?: boolean;
   /** 本会话工作记忆（主张/决策/待办） */
   workMemory?: import("@/lib/agent/work-memory").AgentWorkMemory | null;
   budget: {

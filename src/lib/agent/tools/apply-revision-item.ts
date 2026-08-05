@@ -1,5 +1,5 @@
-import { loadAgentProject } from "@/lib/agent/project-loader";
 import { persistAgentDraft } from "@/lib/agent/project-persist";
+import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
 import {
   AGENT_WRITING_SECTIONS,
   isAgentWritingSectionKey,
@@ -115,7 +115,7 @@ export const applyRevisionItemTool: ToolDefinition = {
       };
     }
 
-    const project = await loadAgentProject(ctx.userId, ctx.projectId);
+    const project = await getAgentProjectSnapshot(ctx);
     if (!project) {
       return { success: false, error: "项目不存在或无权访问" };
     }

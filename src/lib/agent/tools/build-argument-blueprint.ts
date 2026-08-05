@@ -2,7 +2,7 @@ import {
   parseArgumentBlueprint,
   serializeArgumentBlueprint,
 } from "@/contracts/argument-blueprint";
-import { loadAgentProject } from "@/lib/agent/project-loader";
+import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
 import { callAI, getAgentModelConfig } from "@/lib/ai";
 import { buildArgumentBlueprintPrompt } from "@/lib/prompts/argument-blueprint";
 import { computeOutlineHash } from "@/lib/blueprint-utils";
@@ -55,7 +55,7 @@ export const buildArgumentBlueprintTool: ToolDefinition = {
       return { success: false, error: "build_argument_blueprint 需要 projectId" };
     }
 
-    const project = await loadAgentProject(ctx.userId, ctx.projectId);
+    const project = await getAgentProjectSnapshot(ctx);
     if (!project) {
       return { success: false, error: "项目不存在或无权访问" };
     }

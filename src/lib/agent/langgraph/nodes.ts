@@ -61,65 +61,18 @@ import { analyzeReflection, MAX_REFLECT_ROUNDS } from "@/lib/agent/core/reflect"
 import { compactAgentMessages } from "@/lib/agent/core/context-compact";
 import { MAX_INTENT_CONTINUES } from "@/lib/agent/langgraph/state";
 import { formatToolObservationForLlm } from "@/lib/agent/observation-memory";
-import { loadAgentProject } from "@/lib/agent/project-loader";
 import {
-  appendPhasePackToBriefing,
-} from "@/lib/agent/phase-task-pack";
-import { formatAgentProjectBriefing } from "@/lib/agent/project-briefing";
+  markAgentProjectDirty,
+  refreshAgentProjectContext,
+} from "@/lib/agent/project-refresh";
+import { isProjectMutatingTool } from "@/lib/agent/project-mutated";
 import type { ToolObservation } from "@/lib/agent/types";
-
-import {
-  appendMemoryToBriefing,
-  buildRecentAgentMemoryBlock,
-} from "@/lib/agent/session-memory";
 import { getAgentGraphRuntime } from "@/lib/agent/langgraph/runtime";
 import {
   shouldContinuePlanWork,
   type AgentGraphStateType,
 } from "@/lib/agent/langgraph/state";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
-
-const SNAPSHOT_REFRESH_TOOLS = new Set([
-  "generate_outline",
-  "generate_writing_blueprint",
-  "build_argument_blueprint",
-  "write_section",
-  "refine_content",
-  "write_bilingual_abstract",
-  "import_reference",
-  "validate_citations",
-  "run_review_rounds",
-  "generate_chart",
-  "generate_xrd_analysis",
-  "update_paper_config",
-  "apply_revision_item",
-]);
-
-async function refreshAgentProjectContext(
-  agentContext: import("@/lib/agent/types").AgentContext,
-): Promise<void> {
-  if (!agentContext.projectId) return;
-  try {
-    const snap = await loadAgentProject(agentContext.userId, agentContext.projectId);
-    agentContext.projectSnapshot = snap;
-    let briefing = appendPhasePackToBriefing(
-      formatAgentProjectBriefing(snap),
-      snap,
-    );
-    try {
-      const memory = await buildRecentAgentMemoryBlock(
-        agentContext.userId,
-        agentContext.projectId,
-      );
-      briefing = appendMemoryToBriefing(briefing, memory);
-    } catch {
-      /* ignore */
-    }
-    agentContext.projectBriefing = briefing;
-  } catch {
-    /* 刷新失败不阻断 */
-  }
-}
 
 export async function planNode(
   state: AgentGraphStateType,
@@ -557,7 +510,10 @@ export async function toolsNode(
       const ensured = await ensureWritePrerequisites(
         agentContext,
         tools,
-        () => refreshAgentProjectContext(agentContext),
+        () => {
+          markAgentProjectDirty(agentContext);
+          return refreshAgentProjectContext(agentContext);
+        },
       );
       toolCallCount = agentContext.budget.toolCallCount;
       for (const step of ensured.steps) {
@@ -709,7 +665,8 @@ export async function toolsNode(
       });
       if (result.success && tool.name === "write_section") reflectReset = true;
       plan = advancePlanAfterTool(plan, tool.name, result.success);
-      if (result.success && SNAPSHOT_REFRESH_TOOLS.has(tool.name)) {
+      if (result.success && isProjectMutatingTool(tool.name)) {
+        markAgentProjectDirty(agentContext);
         await refreshAgentProjectContext(agentContext);
       }
 

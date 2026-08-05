@@ -1,5 +1,5 @@
-import { loadAgentProject } from "@/lib/agent/project-loader";
 import { persistAgentDraft } from "@/lib/agent/project-persist";
+import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
 import { runAgentRefineContent } from "@/lib/agent/writing-runner";
 import {
   AGENT_WRITING_SECTIONS,
@@ -67,7 +67,7 @@ export const refineContentTool: ToolDefinition = {
     let projectMode: "review" | "research" | undefined;
     let maxRefIndex = 0;
     if (ctx.projectId) {
-      const project = await loadAgentProject(ctx.userId, ctx.projectId);
+      const project = await getAgentProjectSnapshot(ctx);
       if (!project) {
         return { success: false, error: "项目不存在或无权访问" };
       }
