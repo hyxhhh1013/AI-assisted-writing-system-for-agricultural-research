@@ -18,9 +18,9 @@ import { buildFollowUpInitialState } from "@/lib/agent/session-continue";
 import {
   createAgentSession,
   getAgentSessionForUser,
-  markAgentSessionFollowUp,
   reclaimStaleRunningSessions,
   snapshotToInitialState,
+  tryAcquireAgentSession,
 } from "@/lib/agent/session-store";
 
 const log = createLogger("api/agent");
@@ -111,6 +111,15 @@ export async function POST(req: NextRequest) {
           headers: { "Content-Type": "application/json" },
         });
       }
+      // 原子抢占执行权（interrupted/error → running）；running 说明并发请求或僵尸未回收 → 409，
+      // 防止两个请求并发跑同一 agent 图、快照互相覆盖
+      const claim = await tryAcquireAgentSession(data.sessionId, userId);
+      if (claim === "conflict") {
+        return new Response(
+          JSON.stringify({ error: "会话仍在执行中，请稍候或先停止" }),
+          { status: 409, headers: { "Content-Type": "application/json" } },
+        );
+      }
       resumeState = snapshotToInitialState(existing.goal, existing.snapshot);
       resumeSnapshotAttachmentIds = existing.snapshot.attachmentIds;
     } else if (data.sessionId && goal) {
@@ -155,7 +164,18 @@ export async function POST(req: NextRequest) {
       resumeState = buildFollowUpInitialState(goal, existing.snapshot);
       followUp = true;
       followUpSnapshotAttachmentIds = existing.snapshot.attachmentIds;
-      await markAgentSessionFollowUp(sessionId, goal);
+      // 原子抢占执行权（completed/interrupted/error → running），同时写入新 goal；
+      // 抢占失败说明并发请求已开始跑同一会话 → 409，防双跑
+      const claim = await tryAcquireAgentSession(sessionId, userId, {
+        goal,
+        fromStatuses: ["completed", "interrupted", "error"],
+      });
+      if (claim === "conflict") {
+        return new Response(
+          JSON.stringify({ error: "会话仍在执行中，请稍候或先停止" }),
+          { status: 409, headers: { "Content-Type": "application/json" } },
+        );
+      }
     } else {
       if (!goal) {
         return new Response(JSON.stringify({ error: "目标不能为空" }), {

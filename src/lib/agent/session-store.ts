@@ -115,19 +115,44 @@ export async function saveAgentSessionSnapshot(
   });
 }
 
-/** 跟聊开始：更新 goal 并标为 running */
-export async function markAgentSessionFollowUp(
+export type AgentSessionClaimResult = "acquired" | "conflict" | "not_found";
+
+/**
+ * 原子抢占会话执行权（Postgres updateMany 保证并发安全）：
+ * 仅当会话当前 status ∈ fromStatuses 时置为 running，防止两个请求并发双跑同一 agent 图。
+ *
+ * 用法：
+ * - resume 续跑：fromStatuses = [interrupted, error]（completed 需走跟聊新目标）
+ * - 跟聊：fromStatuses = [completed, interrupted, error]（同时写入新 goal）
+ *
+ * 返回：
+ * - acquired：抢到执行权（已置 running），可开始跑图
+ * - conflict：会话状态不在 fromStatuses（通常是已 running = 并发请求或僵尸未回收）
+ * - not_found：会话不存在或无权限
+ */
+export async function tryAcquireAgentSession(
   sessionId: string,
-  goal: string,
-): Promise<void> {
-  await prisma.agentSession.update({
-    where: { id: sessionId },
+  userId: string,
+  opts?: {
+    /** 跟聊时写入的新 goal */
+    goal?: string;
+    /** 允许抢占的源状态；默认 [interrupted, error] */
+    fromStatuses?: readonly AgentSessionStatus[];
+  },
+): Promise<AgentSessionClaimResult> {
+  const fromStatuses = opts?.fromStatuses ?? (["interrupted", "error"] as const);
+  const claimed = await prisma.agentSession.updateMany({
+    where: { id: sessionId, userId, status: { in: [...fromStatuses] } },
     data: {
-      goal: goal.trim(),
+      ...(opts?.goal !== undefined ? { goal: opts.goal.trim() } : {}),
       status: "running",
       errorMessage: null,
     },
   });
+  if (claimed.count > 0) return "acquired";
+  const existing = await getAgentSessionForUser(sessionId, userId);
+  if (!existing) return "not_found";
+  return "conflict";
 }
 
 export async function listAgentSessions(params: {
