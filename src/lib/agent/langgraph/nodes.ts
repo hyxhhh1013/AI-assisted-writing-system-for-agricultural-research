@@ -76,6 +76,10 @@ import {
   type AgentGraphStateType,
 } from "@/lib/agent/langgraph/state";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
+import {
+  allParallelSafe,
+  runParallelReads,
+} from "@/lib/agent/langgraph/parallel-tools";
 
 export async function planNode(
   state: AgentGraphStateType,
@@ -395,6 +399,10 @@ export async function toolsNode(
 
   const runtime = getAgentGraphRuntime(config.configurable);
   const { agentContext, tools, repeatTracker, antispamTracker } = runtime;
+  // 纯读批次快路径：全部调用可并行时并发执行（结果按原顺序），其余走下方串行循环
+  if (allParallelSafe(state.pendingToolCalls, tools)) {
+    return await runParallelReads(state, runtime);
+  }
   const events: AgentSSEEvent[] = [{ type: "agent/status", status: "executing" }];
   const newMessages: AgentGraphStateType["messages"] = [];
   const newSummaries: string[] = [];
