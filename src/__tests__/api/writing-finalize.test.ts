@@ -41,10 +41,11 @@ describe("emitDraftReferences", () => {
     const usedNew = emitDraftReferences(draft, makePrepared(), emit);
 
     expect(usedNew).toEqual([]);
+    // 紧凑重排：仅保留被引文献，refMapping 重建为连续 1..K（未引用的 new.pdf 不进映射）
     expect(emit).toHaveBeenCalledWith({
       type: "references",
       references: ["old.pdf"],
-      refMapping: { "old.pdf": 1, "new.pdf": 2 },
+      refMapping: { "old.pdf": 1 },
     });
   });
 
@@ -62,10 +63,16 @@ describe("emitDraftReferences", () => {
       emit,
     );
 
+    // 正文重排 [1,3]→[1,2]、[2]→[3]，先发 corrected_text
+    expect(emit).toHaveBeenCalledWith({
+      type: "corrected_text",
+      text: "Results showed significant yield increase [1, 2]. Prior work [3] supports this.",
+    });
+    // references 按首次出现紧凑重排，refMapping 重建为连续索引（与 references 顺序对齐）
     expect(emit).toHaveBeenCalledWith({
       type: "references",
       references: ["smith2020.pdf", "wang2021.pdf", "lee2019.pdf"],
-      refMapping: { "smith2020.pdf": 1, "lee2019.pdf": 2, "wang2021.pdf": 3 },
+      refMapping: { "smith2020.pdf": 1, "wang2021.pdf": 2, "lee2019.pdf": 3 },
     });
   });
 });
