@@ -5,13 +5,26 @@ import { createAttachmentFromFile } from "@/lib/agent/attachments/service";
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   findFirst: vi.fn(),
+  findUnique: vi.fn(),
+  update: vi.fn(),
+  updateMany: vi.fn(),
+  delete: vi.fn(),
   extract: vi.fn(),
   write: vi.fn(),
   remove: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
-  default: { agentAttachment: { create: mocks.create, findFirst: mocks.findFirst } },
+  default: {
+    agentAttachment: {
+      create: mocks.create,
+      findFirst: mocks.findFirst,
+      findUnique: mocks.findUnique,
+      update: mocks.update,
+      updateMany: mocks.updateMany,
+      delete: mocks.delete,
+    },
+  },
 }));
 
 vi.mock("@/lib/agent/attachments/extract", () => ({
@@ -37,8 +50,8 @@ beforeEach(() => {
     originalName: "hello.txt",
     mimeType: "text/plain",
     size: 5,
-    status: "ready",
-    extractSource: "text",
+    status: "extracting",
+    extractSource: null,
     pinned: false,
     createdAt: new Date("2026-08-02T00:00:00Z"),
   });
@@ -47,6 +60,9 @@ beforeEach(() => {
   mocks.write.mockReset();
   mocks.write.mockReturnValue(FILE_KEY);
   mocks.remove.mockReset();
+  // 后台提取完成后会 update 记录（fire-and-forget，不阻塞断言）
+  mocks.update.mockReset();
+  mocks.update.mockResolvedValue({});
 });
 
 describe("createAttachmentFromFile", () => {
@@ -62,11 +78,11 @@ describe("createAttachmentFromFile", () => {
     ).rejects.toThrow(/不支持/);
   });
 
-  it("writes file, extracts text and persists row on happy path", async () => {
+  it("writes file, persists extracting row and kicks off background extraction on happy path", async () => {
     const result = await createAttachmentFromFile("u1", "s1", fakeFile("hello.txt", "hello"));
 
     expect(mocks.write).toHaveBeenCalledWith("u1", expect.any(String), "hello.txt", expect.any(Buffer));
-    expect(mocks.extract).toHaveBeenCalledWith(path.join(process.cwd(), FILE_KEY), "hello.txt");
+    // 异步提取设计：先落库 extracting，提取结果由后台 update 补写（上传不阻塞）
     expect(mocks.create).toHaveBeenCalledWith({
       data: {
         id: expect.any(String),
@@ -76,19 +92,30 @@ describe("createAttachmentFromFile", () => {
         originalName: "hello.txt",
         mimeType: "text/plain",
         size: 5,
-        status: "ready",
-        extractSource: "text",
-        extractedText: "hello",
+        status: "extracting",
+        extractSource: null,
+        extractedText: null,
       },
     });
     expect(result).toMatchObject({
       id: "att-1",
       originalName: "hello.txt",
-      status: "ready",
-      extractSource: "text",
-      charCount: 5,
-      truncated: false,
+      status: "extracting",
       pinned: false,
+    });
+    // 后台提取应触发（fire-and-forget）：extract 已调用，且最终 update 补写提取结果
+    // （update 的 where.id 是运行时随机 UUID，此处只断言 data 载荷）
+    expect(mocks.extract).toHaveBeenCalledWith(path.join(process.cwd(), FILE_KEY), "hello.txt");
+    await vi.waitFor(() => {
+      expect(mocks.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: "ready",
+            extractSource: "text",
+            extractedText: "hello",
+          }),
+        }),
+      );
     });
   });
 
