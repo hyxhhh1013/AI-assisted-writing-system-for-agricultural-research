@@ -20,7 +20,9 @@
 | radar | 逐系列标记 |
 | stack_offset | 右侧谱线标签（Origin 惯例） |
 
-**下一步**：示意图 4 / XRD 9 / DFT 5 / 表格 1（Phase 2-4）。
+**冒烟审计（2026-08-06，19 个特化类型）**：
+- ✅ 全部 14 个 `chart_types` 模块 + flow_diagram / xrd_peakfit / xrd_scherrer / xrd_bragg（需 `crystal_system` 等配置）
+- ❌ **xrd_xps / xrd_amorphous 坏**：PyXplore 库在 Python 3.14 + numpy 2.x 下报 `only 0-dimensional arrays can be converted to Python scalars`（旧 numpy API 兼容问题）。修法：`pip install "numpy<2"` 或升级 PyXplore。**待处理**。
 
 **基座修复**：`plot_style.resolve_style` 顶层 config 字段（show_values/bar_edge 等）未落进 style 的 bug，全类型受益。
 
