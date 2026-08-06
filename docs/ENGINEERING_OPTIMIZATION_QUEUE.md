@@ -206,7 +206,7 @@
 | W3-AP-CHART-CJK | 图表中文：CSV utf-8 优先解码 + chartIndices 批量（≤6） | W3-AP-CHART-BRIDGE | 0.5d | **todo** | `plot_utils.py` / `generate-chart.ts`；重生成验证 |
 | W3-AP-CITE-GROUND | 引用语义接地：可疑 [n] 检测/告警 + soft-grounded 使用率 | W3-CITE-GATE, W3-AP-LIT-QUALITY | 2～3d | **done** | 2026-07-28；`citation-grounding` + validate/inspect |
 | W3-AP-DRAFT-COVER | 分节完整度：薄节报告 + 综述/研究期望节 + Agent 补节提示 | W3-AP-READ-BEFORE-WRITE | 1～2d | **done** | 2026-07-28；`draft-coverage` + inspect/简报 |
-| W3-AP-WQC | 写作质检轻量：AI 腔 / overclaim / 段长；warn 默认不阻断 | W3-AP-DRAFT-COVER | 1～2d | **todo** | verify_content 增强；非 skill 全文移植 |
+| W3-AP-WQC | 写作质检轻量：AI 腔 / overclaim / 段长；warn 默认不阻断 | W3-AP-DRAFT-COVER | 1～2d | **done** | 2026-08-06；`writing-quality.ts` 4 规则 + `verify_content` 增强 |
 | W3-AP-ABS-FLOW | 正文够长推双语摘要；Passport 5b 信号 | W3-ABSTRACT, W3-AP-DRAFT-COVER | 1d | **todo** | write_bilingual_abstract 路径 |
 | W3-AP-REVIEW-FLOW | 摘要后可选审查；revision-coach 剧本加固 | W3-REVIEW-2, W3-AP-ABS-FLOW | 1～2d | **todo** | 不引入五人组外审 |
 | W3-AP-LIVE-EVAL | 可选 live/录制质量冒烟（错引/节完整/摘要） | W3-AP-CITE-GROUND, W3-AP-DRAFT-COVER | 1～2d | **todo** | 扩展 eval:agent；默认仍 mock |
