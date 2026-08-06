@@ -64,9 +64,13 @@ function buildFigureSpecEnc(params: {
   return spec ? encodeChartAssetReplay(spec) : undefined;
 }
 
-function parseChartIndices(params: Record<string, unknown>): number[] {
+export function parseChartIndices(params: Record<string, unknown>): number[] {
   const out: number[] = [];
   const push = (n: unknown) => {
+    // Number(null)=0 / Number("")=0 / Number(true)=1 会被误当成图表下标，显式排除
+    if (n === null || n === undefined) return;
+    if (typeof n === "boolean") return;
+    if (typeof n === "string" && n.trim() === "") return;
     const v = Number(n);
     if (Number.isFinite(v)) out.push(Math.floor(v));
   };

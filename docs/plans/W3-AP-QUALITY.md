@@ -50,7 +50,7 @@
 |----|-----|------|------|------|
 | S0 | **W3-AP-QUALITY** | 本计划 + 队列挂载 + MASTER_PLAN Wave 3.7 | 0.5d | BEHAVIOR done |
 | S0b | **W3-AP-ENTRY-WIZARD** | 入口三档+配置进新建向导（已实现则收口文档/测） | 0.5d | — | **done** 2026-08-06：核对全链路已落地，补独立单测 + 队列登记 |
-| S0c | **W3-AP-CHART-CJK** | CSV UTF-8 优先解码 + `chartIndices` 批量；回归中文刻度 | 0.5d | CHART-BRIDGE |
+| S0c | **W3-AP-CHART-CJK** | CSV UTF-8 优先解码 + `chartIndices` 批量；回归中文刻度 | 0.5d | CHART-BRIDGE | **done** 2026-08-06：解码冒烟通过 + `parseChartIndices` 单测 8 例（含边界修复） |
 | S1 | **W3-AP-CITE-GROUND** | 引用语义接地：写后 DOI/题名/摘要对齐检查 + 错引告警/自动 remap 建议 | 2～3d | CITE-GATE, LIT-QUALITY |
 | S2 | **W3-AP-DRAFT-COVER** | 分节完整度：最短字数门禁、inspect 报告缺口、Agent 提示「补薄节」 | 1～2d | READ-BEFORE-WRITE |
 | S3 | **W3-AP-WQC** | 写作质检轻量版：AI 腔 / overclaim / 段长单调；写后 observation 或 `verify_content` 增强 | 1～2d | DRAFT-COVER |
