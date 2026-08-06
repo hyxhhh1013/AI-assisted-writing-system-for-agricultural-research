@@ -84,3 +84,6 @@ grainscript_recover.sql
 # 生成物 / 临时导出（.md 与 .py 脚本才是源）
 docs/_pdf_export_*
 禾书耕文-演示.html
+
+# bun 锁文件（项目用 npm，勿提交）
+bun.lock
