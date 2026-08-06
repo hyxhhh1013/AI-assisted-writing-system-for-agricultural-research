@@ -10,7 +10,7 @@
 
 | 项 | 状态 | 说明 |
 |----|------|------|
-| Wave 0 安全/鉴权 | ✅ | W0-5 仓库卫生仍 todo |
+| Wave 0 安全/鉴权 | ✅ | W0-5 仓库卫生 done（2026-08-06） |
 | Wave 1 Passport + Cockpit | ✅ MVP | 契约 / sync / 任务卡 / 阶段导航已落地 |
 | Wave 2 LangGraph + write tools | ✅ 产品化 MVP | GUIDE + ONESHOT + CHECKPOINT；**ENG-PR-082 done** |
 | Wave 3 学术完整性 | ✅ 基本完成 | STUDENT / ABS-UI / E2E / CITE / REVIEW-2 已落地 |
@@ -126,7 +126,7 @@ Direction → Project（PaperPassport + Cockpit）
 | ID | 工作 | 状态 |
 |----|------|------|
 | W0-1～W0-4 | WIP 拆分、SEC-01～03、本文档 | done |
-| W0-5 | 仓库卫生（tmp、migration、分支收拢） | todo |
+| W0-5 | 仓库卫生（tmp、migration、分支收拢） | done（2026-08-06：6 本地 + 4 远端已合并分支删除；stash 7 个导出 patch 备份至 `D:\project\stash-backup-20260806\` 后清空；.tmp/日志/Office 锁文件清理；migrations 13/13 完整） |
 
 ### Wave 1 — Paper Passport + Cockpit ✅ MVP
 

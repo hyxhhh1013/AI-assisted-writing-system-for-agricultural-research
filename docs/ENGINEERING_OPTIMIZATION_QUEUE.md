@@ -8,7 +8,7 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-08-06（**W3-AP-QUALITY 全子项 done**，含 ENTRY-WIZARD + CHART-CJK；剩余 W0-5 仓库卫生；见 `plans/W3-AP-QUALITY.md`）  
+> **最后更新**：2026-08-06（**全部 todo 清零**：W3-AP-QUALITY 全子项 + W0-5 仓库卫生 done）  
 > **实时 status 只看 §1 Phase 11**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
@@ -150,7 +150,7 @@
 | W2-AGENT-ONESHOT | 「写一节」闭环（检索→写→落盘） | W2-AGENT-GUIDE | 3～5d | **done** | 2026-07-24；写回刷新 + ONESHOT 提示 |
 | W2-CHECKPOINT | AgentSession DB checkpoint / 中断恢复 | W2-AGENT-ONESHOT | 2d | **done** | 2026-07-24；AgentSession + resume |
 | W1-083 | userSkeleton → Phase 2 | W1-PASSPORT | 1d | done | outline API/UI + prompt 骨架约束 |
-| W0-5 | 仓库卫生（分支收拢、tmp、误删 migration） | — | 0.5d | todo | MASTER_PLAN Wave 0 |
+| W0-5 | 仓库卫生（分支收拢、tmp、误删 migration） | — | 0.5d | done | 2026-08-06；6 本地 + 4 远端已合并分支删（含 pr-093 cherry 验证已应用）；7 个 stash 导出 patch 至 `D:\project\stash-backup-20260806\` 后清空；.tmp/日志/Office 锁清理；migrations 完整 |
 | W3-ARGUMENT | Phase 3 Argument Blueprint | W2-CHECKPOINT | 1w | **done** | 2026-07-24；契约+API+提纲侧栏+Agent tool+Passport |
 | W3-ABSTRACT | Phase 5b 双语摘要 API | W3-ARGUMENT | 2d | **done** | 2026-07-24；`/api/abstract/bilingual` + Agent tool |
 | W3-PHASE-PACK | Passport 阶段任务包 + 硬门禁 | W3-ABSTRACT | 2d | **done** | 2026-07-24；任务包契约+门禁+「完成当前阶段」 |
@@ -1028,6 +1028,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-06 | W3-AP-ORCH-OPT → P1-QUEUE → WQC → ABS-FLOW → REVIEW-FLOW → LIVE-EVAL | AI | 编排优化 P0+P1、写作质检、摘要/审查收口、P7 冒烟剧本全部完成并部署；见 checkpoint `20260806-095743` |
 | 2026-08-06 | W3-AP-ENTRY-WIZARD | AI | 收口：核对入口三档全链路已落地（entry-mode / 向导 / 前端注入 / 配置工具）；拆出 `agent-entry-mode.test.ts` 独立覆盖 12 例；移除寄生测试；队列/计划状态 done |
 | 2026-08-06 | W3-AP-CHART-CJK | AI | 收口：`plot_utils.load_dataframe` 中文解码冒烟通过（UTF-8/BOM/GBK/GB18030）；导出 `parseChartIndices` + 8 用例单测，修复 null/布尔/空串被 `Number()` 误转下标；队列/计划状态 done |
+| 2026-08-06 | W0-5 | AI | 仓库卫生：6 本地 + 4 远端已合并分支删除（eng/pr-093 用 `git cherry` 验证 4 提交均已应用进 main）；7 个 stash 导出 patch 至 `D:\project\stash-backup-20260806\` 后清空；.tmp/.gstack 日志/Office 锁文件清理；migrations 13/13 无缺失 |
 
 ---
 
