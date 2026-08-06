@@ -1,6 +1,10 @@
 import { resolveWritingDraftContext } from "@/contracts/writing";
 import { persistAgentDraft } from "@/lib/agent/project-persist";
 import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
+import {
+  createWriteProgressState,
+  translateWritingEventToProgress,
+} from "@/lib/agent/writing-progress";
 import { runAgentWriteSection } from "@/lib/agent/writing-runner";
 import {
   AGENT_WRITING_SECTIONS,
@@ -131,6 +135,8 @@ export const writeSectionTool: ToolDefinition = {
       dataClaims: project.dataClaims,
     };
 
+    const progressState = createWriteProgressState();
+
     try {
       const result = await runAgentWriteSection({
         data,
@@ -140,6 +146,12 @@ export const writeSectionTool: ToolDefinition = {
         userId: ctx.userId,
         signal: ctx.signal,
         autoFix,
+        onWritingEvent: (event) => {
+          const progress = translateWritingEventToProgress(sectionRaw, event, progressState);
+          if (progress) {
+            ctx.emitLiveEvent?.({ type: "agent/progress", label: progress.label });
+          }
+        },
       });
 
       if (!result.draft) {
