@@ -6,14 +6,17 @@
 
 | 模块 | 说明 |
 |------|------|
+| **Agent 写作助手** | 会话式智能体（工作台 `agent` Tab）：自主规划→检索→写作→核查的 LangGraph 循环；支持同一会话跟聊、文件上传与视觉理解、`write_section` 实时进度 SSE |
 | **证据驱动扩写** | 大纲任务驱动，7 步可观察管道：检索文献 → 证据整理 → AI 写作 → 审稿核查 → 主编修正 → 引用校验 → 数据核查 |
 | **多代理写作** | Writer (DeepSeek) → Verifier (独立核查) → Refiner (非流式修正) 三级流水线，每步 SSE 推送 |
 | **RAG 知识增强** | BM25 + 向量混合检索，索引实验室 PDF 文献，引用编号自动关联原文 |
 | **实验数据分析** | 上传 CSV/XLSX → 自动识别列类型 → 统计计算 → EvidenceClaim + ChartConfig 持久化 |
 | **一致性检查** | 跨章节术语、数据、逻辑、Overclaim 扫描，AI 修复后合并写入不覆盖 |
 | **引用管理** | 正文引用自动重排，真实性校验（文本重叠度检测），数据证据溯源检查 |
+| **论文全流程** | Passport 阶段管理（Phase 0-7）+ Cockpit 引导；审查 max-2 轮编排；导出前引用硬检；双语摘要 |
 | **审查中心** | 四维度论文审查（学术/论证/结构/诚信），结构化报告入库 |
 | **查重降重** | 本地库 + 跨项目 + 知识库 + 可选联网；AI 改写建议 |
+| **附件与视觉** | 上传 PDF/CSV/XLSX/TXT/DOCX 提取文本；GLM-4V 图片 / PDF 图表视觉理解；附件 pin 到项目 |
 | **多格式导出** | SCI / Nature / IEEE / GB/T 7713 / CAS 模板，支持 Word / PDF / Markdown |
 | **XRD 分析** | 峰拟合、背景扣除、晶胞参数、非晶分析、XPS 分峰 |
 | **数据绘图** | 分组柱状图、堆积图、折线图、三线表独立页面 |
@@ -23,11 +26,13 @@
 - **前端**: Next.js 16 (Turbopack) + React 19 + Tailwind CSS v4 + Shadcn UI
 - **后端**: Next.js Route Handlers + SSE Streaming
 - **数据库**: Prisma + **PostgreSQL**（本地安装本机 PostgreSQL，默认 `localhost:5433`）
-- **AI**: DeepSeek Chat（主写）+ 智谱 GLM-4（Verifier，可选）
+- **AI**: DeepSeek（Writer / 主模型）+ 智谱 GLM-4（Verifier / Planner 便宜路由）+ GLM-4V（图片视觉）
+- **Agent 编排**: LangGraph 工具循环；模型角色可独立配置（Writer / Verifier / Refiner / Planner，见 Admin 设置）
 - **RAG**: BM25 + 向量余弦混合检索 (RRF 融合)，索引文件 `data/index_*.json` + `.emb`
 - **图表**: Python (matplotlib) 子进程，`PYTHON_CMD` 环境变量
 - **类型安全**: TypeScript strict mode
-- **API**: 57 个 Route Handler（索引见 [`docs/API_INDEX.md`](docs/API_INDEX.md)）
+- **测试**: Vitest（845+ 用例）+ Playwright E2E + `npm run eval:agent` 剧本
+- **API**: 105 个 Route Handler（索引见 [`docs/API_INDEX.md`](docs/API_INDEX.md)）
 
 ## 开发规范（AI / 协作）
 
@@ -44,6 +49,8 @@
 改 API 路由后：`npm run docs:api-index`。
 
 ## 快速开始
+
+> **乐迪启动**：在本仓库对话中直接说「乐迪启动」，AI 会按下面 1-6 步自动把项目在本地搭起来并启动。
 
 ### 1. 安装依赖
 
@@ -117,7 +124,7 @@ npm run dev
 ## 写作管道架构
 
 ```
-点击扩写
+点击扩写 / Agent write_section
   → 检索文献 (RAG)
   → 证据整理 (EvidencePack)
   → AI 写作 (DeepSeek 流式)
@@ -127,6 +134,8 @@ npm run dev
 ```
 
 实现拆分见 `src/app/api/writing/`（`run-pipeline.ts` + `pipeline/*`）。每一步通过 SSE `pipeline_step` 等事件推送进度。
+
+Agent 会话内调用 `write_section` 时，管道阶段进度（生成初稿·实时字数 → 自动核查 → 修正）经 `agent/progress` 实时事件推到面板，等待不静默。
 
 ## 证据驱动写作
 
@@ -140,18 +149,24 @@ npm run dev
 ```
 src/
 ├── app/api/              # Route Handlers（见 docs/API_INDEX.md）
+│   ├── agent/            # Agent 会话 SSE、附件
 │   ├── writing/          # 多代理写作管道（已拆 pipeline/）
 │   ├── projects/         # 增量 PATCH sections / references / analysis
 │   └── admin/            # 管理后台 API
-├── app/workbench/        # 科研工作台
-├── components/shared/    # 业务组件（writing-panel、review、…）
-├── hooks/
-├── lib/                  # prompts、rag、ai、…
+├── app/workbench/        # 科研工作台（含 agent Tab）
+├── components/shared/    # 业务组件（agent-panel、writing-panel、review、…）
+├── hooks/                # use-agent 等状态钩子
+├── lib/
+│   ├── agent/            # LangGraph 编排（langgraph/、tools/、core/、tool-gates）
+│   ├── prompts/          # Prompt 统一出口
+│   ├── rag.ts / ai.ts    # RAG 引擎 / AI 调用 + Key 热加载
+│   └── …
 ├── services/             # 前端 API 封装（禁止组件内 fetch）
-└── contracts/            # 共享类型（含 sse.ts）
+└── contracts/            # 共享类型（sse.ts、agent.ts 等）
+academic-paper-studio/    # Agent 引导页（独立 app 区）
 scripts/                  # index-pdfs、图表 Python、docs:api-index
 prisma/                   # PostgreSQL schema
-data/                     # RAG 索引（不入 Git 大文件时需按 DEPLOY 配置）
+data/                     # RAG 索引（不入 Git）+ data/xrd 参考数据（入 Git）
 ```
 
 ## 常用命令
@@ -162,6 +177,9 @@ npm run build            # 生产构建
 npm run analyze          # Bundle 报告（ANALYZE=true，需先 build）
 npm run check            # typecheck + test + lint
 npm run test:e2e         # Playwright 冒烟（需 DB + create-admin，见下）
+npm run eval:agent       # Agent 端到端剧本（P1-P6 断言）
+npm run eval:gates       # 产品门禁评测
+npm run create-admin     # 建管理员账号
 npm run index-docs       # 重建文献索引
 npm run docs:api-index   # 刷新 docs/API_INDEX.md 路由表
 ```
@@ -193,18 +211,15 @@ npm run docs:api-index   # 刷新 docs/API_INDEX.md 路由表
 | [docs/KERNEL.md](docs/KERNEL.md) | Next / AI / Python 技术细则 |
 | [docs/VIBECODING.md](docs/VIBECODING.md) | 单次功能开发模板 |
 | [docs/ENGINEERING_OPTIMIZATION_QUEUE.md](docs/ENGINEERING_OPTIMIZATION_QUEUE.md) | 工程 PR 接力队列 |
+| [docs/domain/agent.md](docs/domain/agent.md) | Agent 编排 / SSE 事件 / 模型角色 |
+| [docs/domain/writing-pipeline.md](docs/domain/writing-pipeline.md) | 写作管道 / 写作 SSE |
+| [DEVELOPMENT_WORKFLOW](docs/DEVELOPMENT_WORKFLOW.md) | 开发、提交、部署总规范 |
 | [ARCHITECTURE](docs/ARCHITECTURE.md) | 系统架构、ERD（历史文档，与 L2 索引互补） |
 | [DEPLOY](docs/DEPLOY.md) | 部署与 RAG 迁移 |
-| [CONVENTIONS](docs/CONVENTIONS.md) | 规范地图 |
-
-## 文档索引
-
-| 文档 | 内容 |
-|------|------|
-| [DEVELOPMENT_WORKFLOW](docs/DEVELOPMENT_WORKFLOW.md) | 开发、提交、部署总规范 |
 | [DEPLOY_VPS](docs/DEPLOY_VPS.md) | 腾讯云自动部署 |
 | [DEPLOY_SETUP_CHECKLIST](docs/DEPLOY_SETUP_CHECKLIST.md) | 第一次配部署清单 |
+| [CONVENTIONS](docs/CONVENTIONS.md) | 规范地图 |
 
 ## 许可
 
-实验室内部使用 · 2026-06
+实验室内部使用 · 2026-08
