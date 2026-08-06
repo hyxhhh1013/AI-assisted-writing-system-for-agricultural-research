@@ -79,7 +79,7 @@ export function translateWritingEventToProgress(
 |---|---|
 | `status: "writing"` | 正在撰写「{section}」· 生成初稿… |
 | `delta` | 生成初稿… 已 {累计字数} 字（**≥1000ms 节流**，累积更新 state.chars） |
-| `pipeline_step` (step=writing, done) | 初稿 {detail 字数} 字 |
+| `pipeline_step`（任意 step，running/done） | 正在撰写「{section}」· {detail 透传}（管道 detail 已是完整中文，如「初稿 2400 字」「AI 正在生成初稿...」「已修正」） |
 | `status: "verifying"` | 正在撰写「{section}」· 自动核查中… |
 | `status: "refining"` | 正在撰写「{section}」· 修正中… |
 | `bullet_done` | 要点 {i+1}/{n} 完成 |
