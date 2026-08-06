@@ -62,6 +62,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **语言**：与用户沟通用中文；代码与 commit 描述清晰即可。
 - **Commit**：`feat(scope): 简述 (ENG-PR-xxx)` 或 `refactor/fix/docs`，scope 示例：`writing`、`knowledge`、`admin`。
 
+### 对话约定（命令速记）
+
+| 用户说 | 含义 |
+|--------|------|
+| **乐迪启动** | 在本地把项目搭起来并启动：`npm install --legacy-peer-deps` → `npx prisma generate` → `npx prisma db push` → 确认 `.env`（缺则 `cp .env.example .env`，至少填 `DEEPSEEK_API_KEY`）→ `npm run dev` → 打开 `http://localhost:3000` |
+
 ---
 
 ## S2: 业务不变量（热加载）
