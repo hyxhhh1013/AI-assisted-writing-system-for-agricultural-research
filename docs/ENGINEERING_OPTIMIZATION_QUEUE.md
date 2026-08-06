@@ -1029,6 +1029,8 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-06 | W3-AP-ENTRY-WIZARD | AI | 收口：核对入口三档全链路已落地（entry-mode / 向导 / 前端注入 / 配置工具）；拆出 `agent-entry-mode.test.ts` 独立覆盖 12 例；移除寄生测试；队列/计划状态 done |
 | 2026-08-06 | W3-AP-CHART-CJK | AI | 收口：`plot_utils.load_dataframe` 中文解码冒烟通过（UTF-8/BOM/GBK/GB18030）；导出 `parseChartIndices` + 8 用例单测，修复 null/布尔/空串被 `Number()` 误转下标；队列/计划状态 done |
 | 2026-08-06 | W0-5 | AI | 仓库卫生：6 本地 + 4 远端已合并分支删除（eng/pr-093 用 `git cherry` 验证 4 提交均已应用进 main）；7 个 stash 导出 patch 至 `D:\project\stash-backup-20260806\` 后清空；.tmp/.gstack 日志/Office 锁文件清理；migrations 13/13 无缺失 |
+| 2026-08-06 | agent 修复 | AI | 会话日志排查：refine_content 片段覆盖整节（introduction 2517→111 字）修复为项目内整节权威底稿 + 过短拒写回；read_section 同章节隔离（写进展前持续拦截）；antispam 二次熔断硬停机（MAX_BREAKS_BEFORE_HARD_STOP=2）。agent 套件 348 通过，冒烟验证 P0 生效（1994→1997 未丢失）。见 `docs/domain/agent.md` |
+| 2026-08-06 | 写并发排队 | AI | `waitForWritingSlot`：写并发满时排队等待（WRITING_QUEUE_WAIT_MS=60s，轮询 3s），超时才抛友好「繁忙」提示，替代硬报错「扩写并发已满」；.env.example 补配置说明 |
 
 ---
 

@@ -12,8 +12,9 @@ import { normalizeAllCitationFormats } from "@/lib/citation";
 import { callAINonStreaming, getAgentModelConfig } from "@/lib/ai";
 import { buildRefinerPrompt, buildRefinerSystemPrompt } from "@/lib/prompts";
 import {
+  buildWritingBusyMessage,
   releaseWritingSlot,
-  tryAcquireWritingSlot,
+  waitForWritingSlot,
 } from "@/lib/writing-concurrency";
 
 export interface AgentRefineContentInput {
@@ -43,8 +44,9 @@ export async function runAgentRefineContent(
   const { keyError } = getAgentModelConfig("refiner");
   if (keyError) throw new Error(keyError);
 
-  if (!tryAcquireWritingSlot()) {
-    throw new Error("扩写并发已满，请稍后再试");
+  const slotAcquired = await waitForWritingSlot(input.signal);
+  if (!slotAcquired) {
+    throw new Error(buildWritingBusyMessage());
   }
 
   try {
@@ -169,8 +171,9 @@ function collectWritingEvents(
 export async function runAgentWriteSection(
   input: AgentWriteSectionInput & { autoFix?: boolean },
 ): Promise<AgentWriteSectionResult> {
-  if (!tryAcquireWritingSlot()) {
-    throw new Error("扩写并发已满，请稍后再试");
+  const slotAcquired = await waitForWritingSlot(input.signal);
+  if (!slotAcquired) {
+    throw new Error(buildWritingBusyMessage());
   }
 
   const events: WritingSSEEvent[] = [];
