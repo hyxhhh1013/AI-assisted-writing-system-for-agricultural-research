@@ -100,6 +100,11 @@ export async function* runAgentGraphLoop(
     antispamTracker,
   };
 
+  /** 实时 SSE 事件队列：agentNode LLM 流式 delta、工具进度透传与 graph 快照流合并用 */
+  const liveQueue = new LiveEventQueue();
+  runtime.emitLiveEvent = (e) => liveQueue.push(e);
+  context.emitLiveEvent = runtime.emitLiveEvent;
+
   let uiTranscript: AgentUiMessage[] = resumeState
     ? [] // 续跑时下面从 DB 补
     : seedUiTranscript(goal);
@@ -428,10 +433,6 @@ export async function* runAgentGraphLoop(
       configurable: { agentRuntime: runtime },
       signal: context.signal,
     });
-
-    // 真流式：agentNode LLM 逐 token 走实时通道，graph 快照事件照常
-    const liveQueue = new LiveEventQueue();
-    runtime.emitLiveEvent = (e) => liveQueue.push(e);
 
     for await (const item of mergeGraphAndLive(stream, liveQueue)) {
       if (item.type === "live") {
