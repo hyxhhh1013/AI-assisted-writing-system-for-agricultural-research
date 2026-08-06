@@ -19,7 +19,7 @@
 | 正文 | background / literature_body 有体量；introduction 偏薄；无双语摘要 |
 | 引用语义 | 曾严重错引（人工 remap）；外部 soft-grounded 利用不足 |
 | 配图 | 工具通；CSV 曾 latin-1 乱码（已修编码，待入队验证）；支持 `chartIndices` 批量 |
-| 入口 | 新建向导三档 `full` / `outline_ready` / `data_ready`（代码已有，待队列登记） |
+| 入口 | 新建向导三档 `full` / `outline_ready` / `data_ready`（代码已有，已登记 done 2026-08-06） |
 | vs skill | 工具约 Phase 0–4；质量约 **Phase 4 未完成**；5–7 有壳未形成闭环 |
 
 每周只问三句：
@@ -49,7 +49,7 @@
 | 序 | ID | 内容 | 估时 | 依赖 |
 |----|-----|------|------|------|
 | S0 | **W3-AP-QUALITY** | 本计划 + 队列挂载 + MASTER_PLAN Wave 3.7 | 0.5d | BEHAVIOR done |
-| S0b | **W3-AP-ENTRY-WIZARD** | 入口三档+配置进新建向导（已实现则收口文档/测） | 0.5d | — |
+| S0b | **W3-AP-ENTRY-WIZARD** | 入口三档+配置进新建向导（已实现则收口文档/测） | 0.5d | — | **done** 2026-08-06：核对全链路已落地，补独立单测 + 队列登记 |
 | S0c | **W3-AP-CHART-CJK** | CSV UTF-8 优先解码 + `chartIndices` 批量；回归中文刻度 | 0.5d | CHART-BRIDGE |
 | S1 | **W3-AP-CITE-GROUND** | 引用语义接地：写后 DOI/题名/摘要对齐检查 + 错引告警/自动 remap 建议 | 2～3d | CITE-GATE, LIT-QUALITY |
 | S2 | **W3-AP-DRAFT-COVER** | 分节完整度：最短字数门禁、inspect 报告缺口、Agent 提示「补薄节」 | 1～2d | READ-BEFORE-WRITE |

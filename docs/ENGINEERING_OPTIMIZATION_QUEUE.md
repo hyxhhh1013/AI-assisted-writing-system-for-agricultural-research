@@ -8,7 +8,7 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-07-28（**W3-AP-DRAFT-COVER done**；下一优先 WQC；见 `plans/W3-AP-QUALITY.md`）  
+> **最后更新**：2026-08-06（**W3-AP-QUALITY 收口完成**，子项全 done；下一优先 CHART-CJK 收口 / W0-5 仓库卫生；见 `plans/W3-AP-QUALITY.md`）  
 > **实时 status 只看 §1 Phase 11**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
@@ -201,8 +201,8 @@
 | W3-AP-CHART-XRD | Agent XRD 桥接：Scherrer/相检索/峰表 | W3-AP-CHART-BRIDGE | 0.5d | **done** | 2026-07-27；`generate_xrd_analysis` + P6 剧本 |
 | — | 任务单细节 | — | — | — | [`plans/FIG-PR-scientific-plotting.md`](./plans/FIG-PR-scientific-plotting.md) |
 | **Phase 11b — Wave 3.7 Agent 写作质量（对齐 academic-paper Phase 4→7）** |
-| **W3-AP-QUALITY** | **质量主轴：引用接地→分节完整→文风质检→摘要/审查收口** | W3-AP-BEHAVIOR | 3～5w | **todo** | 详规 [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md) |
-| W3-AP-ENTRY-WIZARD | 新建向导：入口三档 full/outline_ready/data_ready + 配置迁入 | W3-AP-CONFIG-QA | 0.5d | **todo** | 代码多已落地；收口测+文档 |
+| **W3-AP-QUALITY** | **质量主轴：引用接地→分节完整→文风质检→摘要/审查收口** | W3-AP-BEHAVIOR | 3～5w | **done** | 2026-08-06；子项全 done；详规 [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md) |
+| W3-AP-ENTRY-WIZARD | 新建向导：入口三档 full/outline_ready/data_ready + 配置迁入 | W3-AP-CONFIG-QA | 0.5d | **done** | 2026-08-06；`entry-mode.ts` + `create-project-wizard.tsx`（`create-project-dialog` 挂载）+ `agent-panel` 前缀注入 + `update_paper_config` 可调；补 `agent-entry-mode.test.ts` 独立覆盖 |
 | W3-AP-CHART-CJK | 图表中文：CSV utf-8 优先解码 + chartIndices 批量（≤6） | W3-AP-CHART-BRIDGE | 0.5d | **todo** | `plot_utils.py` / `generate-chart.ts`；重生成验证 |
 | W3-AP-CITE-GROUND | 引用语义接地：可疑 [n] 检测/告警 + soft-grounded 使用率 | W3-CITE-GATE, W3-AP-LIT-QUALITY | 2～3d | **done** | 2026-07-28；`citation-grounding` + validate/inspect |
 | W3-AP-DRAFT-COVER | 分节完整度：薄节报告 + 综述/研究期望节 + Agent 补节提示 | W3-AP-READ-BEFORE-WRITE | 1～2d | **done** | 2026-07-28；`draft-coverage` + inspect/简报 |
@@ -1025,6 +1025,8 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-07-28 | W3-AP-CHART-CJK | AI | 定位乱码=CSV latin-1；改 utf-8 优先；generate_chart 支持 chartIndices；待提交验证 |
 | 2026-07-28 | W3-AP-CITE-GROUND | AI | 语义接地：按条题录/摘要 bigram 重叠；中英脚本跳过；validate_citations + inspect；单测绿 |
 | 2026-07-28 | W3-AP-DRAFT-COVER | AI | 分节完整度：期望节阈值+alt 组；inspect/简报/快捷语；nextSectionKey |
+| 2026-08-06 | W3-AP-ORCH-OPT → P1-QUEUE → WQC → ABS-FLOW → REVIEW-FLOW → LIVE-EVAL | AI | 编排优化 P0+P1、写作质检、摘要/审查收口、P7 冒烟剧本全部完成并部署；见 checkpoint `20260806-095743` |
+| 2026-08-06 | W3-AP-ENTRY-WIZARD | AI | 收口：核对入口三档全链路已落地（entry-mode / 向导 / 前端注入 / 配置工具）；拆出 `agent-entry-mode.test.ts` 独立覆盖 12 例；移除寄生测试；队列/计划状态 done |
 
 ---
 
