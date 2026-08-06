@@ -271,7 +271,8 @@ export const generateChartTool: ToolDefinition = {
     + "②单图——先 list_plot_sources 再 generate_chart(chartIndex=N) 或 chartIndices=[0,1,2]（最多 6），也可 csvData+chartType。"
     + "期刊出图要点：①误差棒——数据列加 _sd/_se/_ci 后缀（如「产量,产量_sd」）自动渲染；"
     + "②轴标签带单位——务必传 x_label/y_label（如 y_label=\"产量 (kg/ha)\"）；"
-    + "③多系列对比——多列数据即可，图例自动出现；④选型——对比/分组→bar_grouped，趋势→line，占比→pie，热区→heatmap，森林图→forest（四列：研究,估计值,CI下限,CI上限）。"
+    + "③多系列对比——多列数据即可，图例自动出现；④选型——对比/分组→bar_grouped，趋势→line，占比→pie，热区→heatmap，森林图→forest（四列：研究,估计值,CI下限,CI上限）；"
+    + "⑤显著性——bar_grouped 对比显著时传 configJson={\"significance\":[{\"category\":0,\"series\":0,\"value\":\"**\",\"label\":\"p<0.01\"},{\"fromCategory\":0,\"toCategory\":1,\"value\":\"*\"}]}（单柱星号/跨类括号；series 缺省=该类最高柱）。"
     + "无数据不要编造数值",
   parameters: {
     type: "object",
@@ -314,7 +315,9 @@ export const generateChartTool: ToolDefinition = {
       },
       configJson: {
         type: "string",
-        description: "可选：额外 config 字段 JSON 对象字符串",
+        description:
+          "可选：额外 config 字段 JSON 对象字符串。bar_grouped 可传 significance 数组标注显著性，"
+          + "如 {\"significance\":[{\"category\":0,\"value\":\"**\"},{\"fromCategory\":0,\"toCategory\":1,\"value\":\"*\"}]}",
       },
       preset: {
         type: "string",

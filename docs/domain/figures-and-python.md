@@ -1,5 +1,13 @@
 # 图表与 Python 子进程（L3 业务）
 
+## 显著性标注（S2 逐类提质，2026-08-06 起）
+
+- `bar_grouped` 已支持 `config.significance`：数组或 JSON 字符串，条目为
+  `{"category":i,"series":j,"value":"**","label":"p<0.01"}`（单柱星号；series 缺省=该类最高柱）
+  或 `{"fromCategory":a,"toCategory":b,"value":"*"}`（跨类括号）；自动避让重叠、含误差棒上沿
+- Agent 经 `generate_chart(configJson={...})` 传入；误差棒数据列后缀 `_sd/_se/_ci` 自动渲染
+- 后续类型（line/scatter/forest 等）按图谱逐个补齐
+
 ## 注册表（唯一真相源）
 
 - `scripts/charts/registry.json` — **v2.2**，5 类（数据图 / 示意 / XRD·Jade / DFT / 表格）
