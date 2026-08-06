@@ -154,6 +154,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     abortRef.current?.abort();
     abortRef.current = null;
     setStatus("idle");
+    setProgressLabel(null);
     setPlan(null);
     setSummary(null);
     setPendingConfirm(null);
@@ -337,6 +338,7 @@ export function useAgent(options: UseAgentOptions = {}) {
           return;
         }
         toast.error(getErrorMessage(error));
+        setProgressLabel(null);
         setStatus("error");
       } finally {
         if (abortRef.current === controller) {
