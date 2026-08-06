@@ -95,6 +95,8 @@ export interface AgentWriteSectionInput {
   globalContext?: WritingGlobalContext;
   userId: string;
   signal: AbortSignal;
+  /** 管道内部进度事件实时转发（write_section 进度透传） */
+  onWritingEvent?: (event: WritingSSEEvent) => void;
 }
 
 export interface AgentWriteSectionResult {
@@ -174,6 +176,7 @@ export async function runAgentWriteSection(
   const events: WritingSSEEvent[] = [];
   const emit = (event: WritingSSEEvent) => {
     events.push(event);
+    input.onWritingEvent?.(event);
     if (event.type === "error") {
       throw new Error(event.error);
     }
