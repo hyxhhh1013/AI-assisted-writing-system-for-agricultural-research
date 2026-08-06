@@ -22,7 +22,9 @@
 
 **冒烟审计（2026-08-06，19 个特化类型）**：
 - ✅ 全部 14 个 `chart_types` 模块 + flow_diagram / xrd_peakfit / xrd_scherrer / xrd_bragg（需 `crystal_system` 等配置）
-- ❌ **xrd_xps / xrd_amorphous 坏**：PyXplore 库在 Python 3.14 + numpy 2.x 下报 `only 0-dimensional arrays can be converted to Python scalars`（旧 numpy API 兼容问题）。修法：`pip install "numpy<2"` 或升级 PyXplore。**待处理**。
+- ❌ **xrd_xps / xrd_amorphous 不可用**：PyXplore 2026.3.20 + numpy 2.x 不兼容（`only 0-dimensional arrays can be converted to Python scalars`）。
+  **已确认两条修复路都被 Python 3.14 生态卡死**：① numpy 1.x 无 py3.14 wheel；② PyXplore 新版需 mesonpy 构建后端（mesonpy 无 py3.14 发行版）。
+  **决策（2026-08-06）：接受现状**，待 PyXplore 出 py3.14 兼容版或图表环境换 py3.12 再解。
 
 **基座修复**：`plot_style.resolve_style` 顶层 config 字段（show_values/bar_edge 等）未落进 style 的 bug，全类型受益。
 
