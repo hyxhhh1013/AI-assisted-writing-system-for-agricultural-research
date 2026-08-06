@@ -1,5 +1,7 @@
 matplotlib
-numpy
+# PyXplore（XRD XPS 分峰 / 非晶拟合）依赖 numpy 1.x API；numpy 2.x 下报
+# "only 0-dimensional arrays can be converted to Python scalars"，故约束 <2
+numpy<2
 pandas
 scipy
 openpyxl
