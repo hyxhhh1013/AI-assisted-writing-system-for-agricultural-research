@@ -14,6 +14,9 @@ export const MAX_SEARCH_CALLS_PER_GOAL = 20;
 /** 连续「本应推进项目却未改指纹」的工具次数上限 */
 export const MAX_STAGNANT_TOOLS = 3;
 
+/** 同一 goal 内 antispam 停滞熔断触发次数上限：达到后硬停机（进 finalize，不再放行工具） */
+export const MAX_BREAKS_BEFORE_HARD_STOP = 2;
+
 const SEARCH_TOOLS = new Set(["search_external", "search_knowledge"]);
 
 /**
@@ -53,6 +56,8 @@ export interface AntispamTracker {
   searchCount: number;
   stagnantCount: number;
   lastFingerprint: string;
+  /** 停滞熔断已触发次数（跨工具轮累计，不随项目刷新清零）；达上限硬停机 */
+  breakCount: number;
 }
 
 export function createAntispamTracker(
@@ -62,6 +67,7 @@ export function createAntispamTracker(
     searchCount: 0,
     stagnantCount: 0,
     lastFingerprint: projectFingerprint(snap),
+    breakCount: 0,
   };
 }
 

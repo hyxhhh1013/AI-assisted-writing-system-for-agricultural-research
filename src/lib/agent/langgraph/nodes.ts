@@ -8,8 +8,15 @@ import {
   callAINonStreamingWithTools,
   callAIStreamingWithTools,
 } from "@/lib/agent/core/llm-tools";
-import { noteSearchCall, noteToolProgress } from "@/lib/agent/core/antispam";
-import { shouldRequestConfirmation } from "@/lib/agent/core/safety";
+import {
+  MAX_BREAKS_BEFORE_HARD_STOP,
+  noteSearchCall,
+  noteToolProgress,
+} from "@/lib/agent/core/antispam";
+import {
+  clearBlockedReads,
+  shouldRequestConfirmation,
+} from "@/lib/agent/core/safety";
 import {
   findTool,
   parseToolArgs,
@@ -636,6 +643,8 @@ export async function toolsNode(
       if (result.success && isProjectMutatingTool(tool.name)) {
         markAgentProjectDirty(agentContext);
         await refreshAgentProjectContext(agentContext);
+        // 项目有实际写进展：放行被隔离的读章节
+        clearBlockedReads(repeatTracker);
       }
 
       // 后置门禁链（antispam 停滞 / clarify / outline 检查点）：
@@ -660,6 +669,16 @@ export async function toolsNode(
             result: { success: false, error: postVerdict.warning },
             error: postVerdict.warning,
           });
+          // 停滞熔断多次仍无进展 → 硬停机，不再放行后续工具
+          if (antispamTracker.breakCount >= MAX_BREAKS_BEFORE_HARD_STOP) {
+            const hardMsg =
+              `已连续 ${antispamTracker.breakCount} 次触发空转熔断，本轮强制结束：`
+              + "请基于已有信息向用户总结当前进展并询问下一步，不要再调用工具。";
+            error = hardMsg;
+            events.push({ type: "agent/error", error: hardMsg });
+            finished = true;
+            break;
+          }
           break;
         }
         // checkpoint（clarify / outline 批准）

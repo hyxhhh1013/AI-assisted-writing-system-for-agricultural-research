@@ -172,4 +172,20 @@ describe("evaluatePostGates", () => {
     );
     expect(v).toEqual({ ok: true });
   });
+
+  it("antispam 停滞熔断触发时累计 breakCount（供二次熔断硬停机）", () => {
+    const tracker = createAntispamTracker(null);
+    const input = makePostInput({
+      tool: makeTool("verify_content"),
+      result: { success: true, summary: "未改动" },
+      antispamTracker: tracker,
+    });
+    let breaks = 0;
+    for (let i = 0; i < 6; i++) {
+      const v = evaluatePostGates(input);
+      if (!v.ok && v.kind === "break") breaks++;
+    }
+    expect(breaks).toBeGreaterThanOrEqual(2);
+    expect(tracker.breakCount).toBe(breaks);
+  });
 });

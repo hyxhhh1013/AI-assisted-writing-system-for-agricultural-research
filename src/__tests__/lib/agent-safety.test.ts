@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   checkRepeatCall,
+  clearBlockedReads,
   createRepeatTracker,
   COST_LIMITS,
   isAgentWriteEnabled,
@@ -51,6 +52,43 @@ describe("agent safety", () => {
       last = checkRepeatCall(tracker, "read_section", { section: "s", offset: i });
     }
     expect(last?.repeatCount).toBe(5);
+  });
+
+  it("read_section 同章节连续阻断后进入隔离：穿插其他工具仍持续阻断", () => {
+    const tracker = createRepeatTracker();
+    const p = { section: "literature_body", offset: 0 };
+    for (let i = 0; i < COST_LIMITS.maxConsecutiveSameTool; i++) {
+      expect(checkRepeatCall(tracker, "read_section", p).allowed).toBe(true);
+    }
+    const blocked = checkRepeatCall(tracker, "read_section", p);
+    expect(blocked.allowed).toBe(false);
+
+    // 隔离持久：调用其他工具后再读同章节仍被阻断（死循环防御）
+    checkRepeatCall(tracker, "read_project_asset", { asset: "outline" });
+    const again = checkRepeatCall(tracker, "read_section", p);
+    expect(again.allowed).toBe(false);
+    expect(again.warning).toMatch(/隔离/);
+  });
+
+  it("clearBlockedReads 在写进展后放行被隔离章节", () => {
+    const tracker = createRepeatTracker();
+    const p = { section: "literature_body" };
+    for (let i = 0; i <= COST_LIMITS.maxConsecutiveSameTool; i++) {
+      checkRepeatCall(tracker, "read_section", p);
+    }
+    expect(checkRepeatCall(tracker, "read_section", p).allowed).toBe(false);
+    clearBlockedReads(tracker);
+    expect(checkRepeatCall(tracker, "read_section", p).allowed).toBe(true);
+  });
+
+  it("其他章节不受隔离影响", () => {
+    const tracker = createRepeatTracker();
+    const a = { section: "introduction" };
+    for (let i = 0; i <= COST_LIMITS.maxConsecutiveSameTool; i++) {
+      checkRepeatCall(tracker, "read_section", a);
+    }
+    expect(checkRepeatCall(tracker, "read_section", a).allowed).toBe(false);
+    expect(checkRepeatCall(tracker, "read_section", { section: "background" }).allowed).toBe(true);
   });
 
   it("isAgentWriteEnabled requires AGENT_ENABLED and AGENT_WRITE_ENABLED", () => {

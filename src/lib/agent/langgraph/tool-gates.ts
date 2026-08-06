@@ -160,6 +160,7 @@ export const antispamProgressGate: PostToolGate = ({
     result.success,
   );
   if (progress.stagnant && progress.warning) {
+    antispamTracker.breakCount += 1;
     return { ok: false, kind: "break", warning: progress.warning };
   }
   return { ok: true };
