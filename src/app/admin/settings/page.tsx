@@ -321,7 +321,7 @@ export default function AdminSettingsPage() {
         <p className="text-[10px] text-[#9aa8a0] mt-1 mb-3">
           Writer / Verifier / Refiner / Planner 可分别使用 DeepSeek 或智谱；Verifier 与 Writer 用不同模型时实现真正的独立审查；Planner 默认智谱（便宜模型跑规划）。保存后立即生效。
         </p>
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {ROLE_LABELS.map(({ role, label, desc }) => (
             <div key={role} className="rounded-lg bg-[#faf9f6] px-3 py-2">
               <div className="text-xs font-medium text-[#122820]">{label}</div>
