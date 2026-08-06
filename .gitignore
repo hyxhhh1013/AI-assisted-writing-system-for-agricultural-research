@@ -51,6 +51,11 @@ prisma/dev.db
 prisma/dev.db-journal
 prisma/dev.db-shm
 prisma/dev.db-wal
+# 嵌套 dev.db（早期遗漏，2026-08-06 清理）
+prisma/prisma/dev.db
+prisma/prisma/dev.db-journal
+prisma/prisma/dev.db-shm
+prisma/prisma/dev.db-wal
 
 # python
 __pycache__/
@@ -75,3 +80,7 @@ data/attachments/
 backup_*
 .gstack/
 grainscript_recover.sql
+
+# 生成物 / 临时导出（.md 与 .py 脚本才是源）
+docs/_pdf_export_*
+禾书耕文-演示.html
