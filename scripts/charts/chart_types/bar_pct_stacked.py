@@ -1,4 +1,4 @@
-"""百分比堆积柱状图 — 各部分相对比例，自动归一化到 100%"""
+"""百分比堆积柱状图 — 各部分相对比例，自动归一化到 100%；段内百分比标注 + 顶部显著性"""
 from chart_base import ChartModule
 from plot_utils import _normalize_label
 
@@ -14,10 +14,8 @@ class PctStackedBarChart(ChartModule):
         y_label = config.get("y_label", "") or "相对比例 (%)"
 
         totals = [0.0] * len(labels)
-        normalized = []
         for ds in datasets:
             d_raw = list(ds.get("data", []))[:len(labels)]
-            normalized.append(d_raw)
             for j, v in enumerate(d_raw):
                 totals[j] += float(v or 0)
 
@@ -27,9 +25,12 @@ class PctStackedBarChart(ChartModule):
         colors = self.colors(style, len(datasets))
         bk = self.bar_kwargs(style)
 
+        show_vals = style.get("show_values") in (True, "1", "true", "yes", "on")
+        fs = max(float(style.get("font_size", 8)) - 1, 6)
+
         for i, ds in enumerate(datasets):
             c = colors[i]
-            d_raw = normalized[i]
+            d_raw = list(ds.get("data", []))[:len(labels)]
             d = [
                 (float(v or 0) / totals[j] * 100) if totals[j] > 0 else 0
                 for j, v in enumerate(d_raw)
@@ -43,13 +44,27 @@ class PctStackedBarChart(ChartModule):
                 x_pos, d, width=bar_w, bottom=btm,
                 color=c, label=lbl or None, alpha=0.92, zorder=3, **bk,
             )
+            if show_vals:
+                # 段内百分比标注：段足够高才写，防止细段文字堆叠
+                for ci, val in enumerate(d):
+                    if val < 3.5:
+                        continue
+                    seg_mid = bottom_vals[ci] + val / 2
+                    ax.text(
+                        ci, seg_mid, f"{val:.0f}%",
+                        ha="center", va="center", fontsize=fs, zorder=4,
+                    )
             bottom_vals = [bottom_vals[j] + d[j] for j in range(len(labels))]
 
         ax.set_xticks(range(len(labels)))
         ax.set_xticklabels(labels)
         ax.set_ylim(0, 100)
         self.finalize_axes(
-            ax, style, title=title, x_label=x_label, y_label=y_label,
+            ax, style, config=config, title=title, x_label=x_label, y_label=y_label,
             has_legend=len(datasets) > 1,
+        )
+        # 顶部恒为 100%，显著性标在顶部
+        self.draw_category_significance(
+            ax, {i: 100.0 for i in range(len(labels))}, config, style,
         )
         self.save(fig, output_path, style)

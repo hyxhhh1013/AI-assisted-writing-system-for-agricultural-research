@@ -168,6 +168,93 @@ class ChartModule:
     def error_kwargs(self, style: dict[str, Any]) -> dict:
         return bar_error_kw(style)
 
+    def draw_category_significance(
+        self,
+        ax,
+        cat_top: dict[int, float],
+        config: dict,
+        style: dict[str, Any],
+    ) -> None:
+        """类别级显著性标注（单类星号 + 跨类括号），供堆积柱/柱状等复用。
+
+        cat_top: {category 序号: 该类别顶部 y（含误差）}
+        config.significance 条目：
+          {"category": i, "value": "**", "label": "p<0.01"}          # 单类顶部
+          {"fromCategory": a, "toCategory": b, "value": "*"}          # 跨类括号
+        """
+        raw = config.get("significance")
+        if raw in (None, "", []):
+            return
+        sig = raw
+        if isinstance(sig, str):
+            try:
+                sig = json.loads(sig)
+            except (TypeError, ValueError):
+                return
+        if not isinstance(sig, list) or not sig:
+            return
+
+        fs = max(float(style.get("font_size", 8)) - 1, 6)
+        gap = fs * 0.18
+        # 已用 y 占位（按 x 中心区间）避免标注重叠
+        used: list[tuple[float, float, float]] = []
+
+        def next_y(x_center: float, base_y: float) -> float:
+            y = base_y
+            for (ux0, ux1, uy) in used:
+                if ux0 <= x_center <= ux1:
+                    y = max(y, uy + gap * 3)
+            return y
+
+        for item in sig:
+            if not isinstance(item, dict):
+                continue
+            value = str(item.get("value", "")).strip()
+            if not value:
+                continue
+            label = item.get("label")
+            text = value + (f" {label}" if label else "")
+
+            fc = item.get("fromCategory")
+            tc = item.get("toCategory")
+            if fc is not None and tc is not None:
+                try:
+                    fc_i, tc_i = int(fc), int(tc)
+                except (TypeError, ValueError):
+                    continue
+                if tc_i <= fc_i:
+                    continue
+                base_y = max(
+                    (cat_top.get(i, 0.0) for i in range(fc_i, tc_i + 1)), default=0.0,
+                )
+                x0, x1 = fc_i - 0.35, tc_i + 0.35
+                y = next_y((x0 + x1) / 2, base_y + gap)
+                tick = gap * 0.6
+                ax.plot(
+                    [x0, x0, x1, x1], [y, y + tick, y + tick, y],
+                    color="black", lw=0.8, clip_on=False, zorder=4,
+                )
+                ax.text(
+                    (x0 + x1) / 2, y + tick, text,
+                    ha="center", va="bottom", fontsize=fs, clip_on=False, zorder=4,
+                )
+                used.append((x0, x1, y + tick))
+                continue
+
+            ci = item.get("category")
+            try:
+                ci_i = int(ci)
+            except (TypeError, ValueError):
+                continue
+            if ci_i not in cat_top:
+                continue
+            y = next_y(float(ci_i), cat_top[ci_i] + gap)
+            ax.text(
+                float(ci_i), y, text,
+                ha="center", va="bottom", fontsize=fs, clip_on=False, zorder=4,
+            )
+            used.append((float(ci_i), float(ci_i), y + gap * 0.6))
+
 
 def load_registry(registry_path: str | None = None) -> dict:
     if registry_path is None:

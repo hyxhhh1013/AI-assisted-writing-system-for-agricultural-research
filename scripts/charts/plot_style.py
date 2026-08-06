@@ -303,7 +303,12 @@ def resolve_style(config: dict) -> dict[str, Any]:
     ):
         if key in raw and raw[key] is not None and raw[key] != "":
             base[key] = raw[key]
-        elif key in ("columns", "dpi", "fig_width", "fig_height", "export_formats") and key in config:
+        elif key in (
+            "columns", "dpi", "fig_width", "fig_height", "export_formats",
+            # 注册表顶层 config 字段（UI/Agent 直接传），需落进 style 才被各类型读取
+            "show_values", "bar_edge", "panel_label", "x_tick_rotation",
+            "y_sci_notation", "font_size", "palette", "legend_loc",
+        ) and key in config:
             if config[key] not in (None, ""):
                 base[key] = config[key]
 

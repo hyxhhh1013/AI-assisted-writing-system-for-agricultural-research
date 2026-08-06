@@ -59,7 +59,8 @@
         {"key": "x_label", "label": "X 轴标签", "type": "text"},
         {"key": "y_label", "label": "Y 轴标签", "type": "text"},
         {"key": "show_values", "label": "柱顶显示数值", "type": "boolean", "group": "chart_specific", "default": false},
-        {"key": "bar_edge", "label": "柱边框 (Nature黑边)", "type": "boolean", "group": "chart_specific", "default": true}
+        {"key": "bar_edge", "label": "柱边框 (Nature黑边)", "type": "boolean", "group": "chart_specific", "default": true},
+        {"key": "significance", "label": "显著性标注 (JSON)", "type": "text", "group": "chart_specific", "display": "advanced"}
       ]
     },
     {
@@ -73,7 +74,8 @@
       "config_fields": [
         {"key": "title", "label": "图表标题", "type": "text"},
         {"key": "x_label", "label": "X 轴标签", "type": "text"},
-        {"key": "bar_edge", "label": "柱边框 (Nature黑边)", "type": "boolean", "group": "chart_specific", "default": true}
+        {"key": "bar_edge", "label": "柱边框 (Nature黑边)", "type": "boolean", "group": "chart_specific", "default": true},
+        {"key": "significance", "label": "显著性标注 (JSON)", "type": "text", "group": "chart_specific", "display": "advanced"}
       ]
     },
     {
