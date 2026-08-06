@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
       writer: getAgentProvider("writer"),
       verifier: getAgentProvider("verifier"),
       refiner: getAgentProvider("refiner"),
+      planner: getAgentProvider("planner"),
     },
   });
 }

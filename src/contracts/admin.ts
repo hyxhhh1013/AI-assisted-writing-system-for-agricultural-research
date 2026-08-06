@@ -257,6 +257,7 @@ export interface AdminAiRoles {
   writer: AiProviderKey;
   verifier: AiProviderKey;
   refiner: AiProviderKey;
+  planner: AiProviderKey;
 }
 
 /** GET /api/admin/ai-status 响应 */

@@ -55,6 +55,7 @@ const ROLE_LABELS: { role: keyof AdminAiRoles; label: string; desc: string }[] =
   { role: "writer", label: "Writer（写作）", desc: "Agent / 写作管线主模型" },
   { role: "verifier", label: "Verifier（审查）", desc: "一致性 / 引用审查" },
   { role: "refiner", label: "Refiner（润色）", desc: "写作后润色" },
+  { role: "planner", label: "Planner（规划）", desc: "Agent 规划步骤（便宜模型优先）" },
 ];
 
 const SOURCE_LABEL: Record<string, string> = { db: "DB", env: "env", default: "默认" };
@@ -66,6 +67,7 @@ export default function AdminSettingsPage() {
     writer: "deepseek",
     verifier: "deepseek",
     refiner: "deepseek",
+    planner: "deepseek",
   });
   const [loading, setLoading] = useState(true);
 
@@ -317,7 +319,7 @@ export default function AdminSettingsPage() {
           <h3 className="text-sm font-medium text-[#122820]">Agent 角色模型映射</h3>
         </div>
         <p className="text-[10px] text-[#9aa8a0] mt-1 mb-3">
-          Writer / Verifier / Refiner 可分别使用 DeepSeek 或智谱；Verifier 与 Writer 用不同模型时实现真正的独立审查。保存后立即生效。
+          Writer / Verifier / Refiner / Planner 可分别使用 DeepSeek 或智谱；Verifier 与 Writer 用不同模型时实现真正的独立审查；Planner 默认智谱（便宜模型跑规划）。保存后立即生效。
         </p>
         <div className="grid gap-2 sm:grid-cols-3">
           {ROLE_LABELS.map(({ role, label, desc }) => (

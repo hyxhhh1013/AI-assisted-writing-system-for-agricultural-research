@@ -35,6 +35,8 @@ ${projectBriefing ? `\n【项目简报】\n${projectBriefing}` : ""}`,
       signal: context.signal,
       userId: context.userId,
       temperature: 0,
+      // 规划是短任务，走便宜模型（默认 zhipu，未配置回落 deepseek）
+      role: "planner",
     });
     const parsed = parsePlanJson(raw.content ?? "");
     if (parsed.subtasks.length > 0) return parsed;

@@ -14,6 +14,16 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
         → mergeGraphAndLive(快照事件 + 实时事件) → SSE → 前端 use-agent
 ```
 
+## 模型角色
+
+`AgentRole = writer | verifier | refiner | planner`（`src/lib/models.ts`），可在 Admin 设置页分别配置 provider（DeepSeek/智谱），存 DB `AGENT_ROLE_*` 键、启动时热加载。
+
+- **writer**：Agent 主推理循环 + 写作管道主模型（默认 DeepSeek）
+- **verifier**：一致性 / 引用审查（默认智谱，若启用）
+- **refiner**：写作后润色（默认 DeepSeek）
+- **planner**：规划步骤生成子任务列表（默认智谱，若启用；未配置回落 DeepSeek）。规划是短任务，走便宜模型省成本
+- 调用侧：`callAINonStreamingWithTools` / `callAIStreamingWithTools` 接受 `role` 参数（默认 writer），`planner.ts` 传 `role: "planner"`
+
 ## 关键文件
 
 | 文件 | 职责 |

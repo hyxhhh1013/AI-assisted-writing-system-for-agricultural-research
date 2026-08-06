@@ -22,17 +22,21 @@ describe("loadAgentRoleProviders", () => {
     await loadAgentRoleProviders();
     expect(getAgentProvider("writer")).toBe("deepseek");
     expect(getAgentProvider("refiner")).toBe("deepseek");
+    // planner 与 verifier 同款默认：zhipu 启用则 zhipu，否则 deepseek
+    expect(getAgentProvider("planner")).toBe(getAgentProvider("verifier"));
   });
 
   it("loads configured role providers from DB", async () => {
     mocks.getSetting.mockImplementation(async (key: string) => {
       if (key === AGENT_ROLE_SETTING_KEYS.writer) return "zhipu";
       if (key === AGENT_ROLE_SETTING_KEYS.verifier) return "deepseek";
+      if (key === AGENT_ROLE_SETTING_KEYS.planner) return "zhipu";
       return null;
     });
     await loadAgentRoleProviders();
     expect(getAgentProvider("writer")).toBe("zhipu");
     expect(getAgentProvider("verifier")).toBe("deepseek");
+    expect(getAgentProvider("planner")).toBe("zhipu");
   });
 
   it("ignores invalid provider values (keeps previous mapping)", async () => {
@@ -46,5 +50,6 @@ describe("loadAgentRoleProviders", () => {
     await loadAgentRoleProviders();
     expect(getAgentProvider("writer")).toBe("zhipu");
     expect(getAgentProvider("verifier")).toMatch(/^(deepseek|zhipu)$/);
+    expect(getAgentProvider("planner")).toMatch(/^(deepseek|zhipu)$/);
   });
 });

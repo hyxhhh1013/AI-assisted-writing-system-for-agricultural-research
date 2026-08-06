@@ -1,6 +1,6 @@
 import { callAI, getAgentModelConfig } from "@/lib/ai";
 import type { AIToolSchema } from "@/lib/ai";
-import type { ModelProviderKey } from "@/lib/models";
+import type { AgentRole, ModelProviderKey } from "@/lib/models";
 import type { LLMMessage, LLMWithToolsResponse, ParsedToolCall } from "@/lib/agent/types";
 import { parsePromptBasedToolCalls } from "@/lib/agent/core/prompt-tools";
 
@@ -12,12 +12,14 @@ export interface CallWithToolsOptions {
   userId?: string;
   temperature?: number;
   useNativeTools?: boolean;
+  /** 使用的 agent 模型角色；默认 writer。规划等轻任务可传 "planner" 走便宜模型 */
+  role?: AgentRole;
 }
 
 export async function callAINonStreamingWithTools(
   options: CallWithToolsOptions,
 ): Promise<LLMWithToolsResponse> {
-  const { provider } = getAgentModelConfig("writer");
+  const { provider } = getAgentModelConfig(options.role ?? "writer");
   const useNative = options.useNativeTools !== false && (options.tools?.length ?? 0) > 0;
 
   if (useNative && options.tools) {
@@ -86,7 +88,7 @@ export async function callAIStreamingWithTools(
   options: CallWithToolsOptions,
   onDelta?: (content: string) => void,
 ): Promise<LLMWithToolsResponse> {
-  const { provider } = getAgentModelConfig("writer");
+  const { provider } = getAgentModelConfig(options.role ?? "writer");
   const useNative = options.useNativeTools !== false && (options.tools?.length ?? 0) > 0;
   const messages = useNative
     ? options.messages

@@ -323,7 +323,7 @@ export async function getAiStatus(): Promise<AdminAiStatusResponse> {
   const res = await fetch("/api/admin/ai-status");
   const data = await parseJson<AdminSuccessResponse<AdminAiStatusResponse>>(res);
   return (
-    data.data ?? { providers: [], roles: { writer: "deepseek", verifier: "deepseek", refiner: "deepseek" } }
+    data.data ?? { providers: [], roles: { writer: "deepseek", verifier: "deepseek", refiner: "deepseek", planner: "deepseek" } }
   );
 }
 
