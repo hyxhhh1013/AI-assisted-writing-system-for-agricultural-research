@@ -104,6 +104,9 @@ export function assertAgentScriptTrace(
     case "P6":
       assertP6(trace, names, fails);
       break;
+    case "P7":
+      assertP7(trace, names, fails);
+      break;
     case "FILE-READ":
       assertFileRead(trace, names, fails);
       break;
@@ -449,6 +452,42 @@ function assertFileRead(
   }
 }
 
+/** P7 质量收口（Wave 3.7 LIVE-EVAL）：摘要写回 + 错引检测 + 正文节完整 */
+function assertP7(
+  trace: AgentScriptTrace,
+  names: string[],
+  fails: AgentScriptAssertionFail[],
+) {
+  void names;
+  const abstractAt = firstIndex(trace.tools, "write_bilingual_abstract");
+  const abstractStep = abstractAt >= 0 ? trace.tools[abstractAt] : null;
+  if (!abstractStep || abstractStep.success === false) {
+    pushFail(fails, "p7-abstract", "必须成功调用 write_bilingual_abstract（摘要写回）");
+  }
+  const citeAt = firstIndex(trace.tools, "validate_citations");
+  if (citeAt < 0) {
+    pushFail(fails, "p7-cite", "必须调用 validate_citations（错引检测）");
+  }
+  // 正文节完整：至少成功写过 2 个不同正文节（abstract 除外）
+  const bodySections = new Set(
+    trace.tools
+      .filter(
+        (t) =>
+          t.tool === "write_section"
+          && t.success !== false
+          && String(t.params?.section ?? "") !== "abstract",
+      )
+      .map((t) => String(t.params?.section ?? "")),
+  );
+  if (bodySections.size < 2) {
+    pushFail(
+      fails,
+      "p7-sections",
+      `正文节不足 2 节（write_section 成功 ${bodySections.size} 个不同节）`,
+    );
+  }
+}
+
 // ─── Golden / anti fixtures ─────────────────────────────────────────
 
 const HIT_A = JSON.stringify({
@@ -732,6 +771,52 @@ export const AGENT_SCRIPT_FIXTURES: {
       finalText: "已估算晶粒尺寸。",
     },
   },
+  // P7 pass — 质量收口：两节正文 + 错引检测 + 摘要写回
+  {
+    fixtureId: "P7-pass-quality-closeout",
+    expectPass: true,
+    trace: {
+      scriptId: "P7",
+      goals: ["完成整篇论文：写完方法/结果、检查引用、写双语摘要"],
+      tools: [
+        { tool: "write_section", params: { section: "methods" }, success: true },
+        { tool: "write_section", params: { section: "results" }, success: true },
+        { tool: "validate_citations", params: {}, success: true },
+        { tool: "write_bilingual_abstract", params: {}, success: true },
+      ],
+      finalText: "已完成方法/结果两节、错引检查通过、双语摘要已写回。",
+    },
+  },
+  // P7 fail — 缺摘要写回
+  {
+    fixtureId: "P7-fail-no-abstract",
+    expectPass: false,
+    trace: {
+      scriptId: "P7",
+      goals: ["完成论文收口"],
+      tools: [
+        { tool: "write_section", params: { section: "methods" }, success: true },
+        { tool: "write_section", params: { section: "results" }, success: true },
+        { tool: "validate_citations", params: {}, success: true },
+      ],
+      finalText: "已写完两节。",
+    },
+  },
+  // P7 fail — 正文节不足
+  {
+    fixtureId: "P7-fail-thin-body",
+    expectPass: false,
+    trace: {
+      scriptId: "P7",
+      goals: ["收口"],
+      tools: [
+        { tool: "write_section", params: { section: "methods" }, success: true },
+        { tool: "validate_citations", params: {}, success: true },
+        { tool: "write_bilingual_abstract", params: {}, success: true },
+      ],
+      finalText: "已写一节并摘要。",
+    },
+  },
   // FILE-READ pass — read_attachment 先行 + 最终回复引用附件名
   {
     fixtureId: "file-upload-read",
@@ -796,5 +881,5 @@ export function summarizeAgentScriptResults(results: AgentScriptCaseResult[]): {
 }
 
 export function listAgentScriptIds(): AgentScriptId[] {
-  return ["P1", "P2", "P3", "P4", "P5", "P6", "FILE-READ"];
+  return ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "FILE-READ"];
 }

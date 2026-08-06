@@ -10,6 +10,7 @@ export type AgentScriptId =
   | "P4"
   | "P5"
   | "P6"
+  | "P7"
   | "FILE-READ";
 
 /** 单次工具观测 */

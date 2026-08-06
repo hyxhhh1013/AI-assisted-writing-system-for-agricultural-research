@@ -209,7 +209,7 @@
 | W3-AP-WQC | 写作质检轻量：AI 腔 / overclaim / 段长；warn 默认不阻断 | W3-AP-DRAFT-COVER | 1～2d | **done** | 2026-08-06；`writing-quality.ts` 4 规则 + `verify_content` 增强 |
 | W3-AP-ABS-FLOW | 正文够长推双语摘要；Passport 5b 信号 | W3-ABSTRACT, W3-AP-DRAFT-COVER | 1d | **done** | 2026-08-06；`abstract_finish` 意图 + 门禁（inspect 提示此前已接 DRAFT-COVER） |
 | W3-AP-REVIEW-FLOW | 摘要后可选审查；revision-coach 剧本加固 | W3-REVIEW-2, W3-AP-ABS-FLOW | 1～2d | **done** | 2026-08-06；`review_request` 意图 + 门禁（外审粘贴→parse→apply） |
-| W3-AP-LIVE-EVAL | 可选 live/录制质量冒烟（错引/节完整/摘要） | W3-AP-CITE-GROUND, W3-AP-DRAFT-COVER | 1～2d | **todo** | 扩展 eval:agent；默认仍 mock |
+| W3-AP-LIVE-EVAL | 可选 live/录制质量冒烟（错引/节完整/摘要） | W3-AP-CITE-GROUND, W3-AP-DRAFT-COVER | 1～2d | **done** | 2026-08-06；`assertP7` + P7 剧本（摘要/错引/节完整）；默认 mock |
 | — | 质量主轴细节 | — | — | — | [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md) |
 
 
