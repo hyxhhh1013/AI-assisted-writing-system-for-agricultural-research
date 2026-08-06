@@ -1031,6 +1031,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-06 | W0-5 | AI | 仓库卫生：6 本地 + 4 远端已合并分支删除（eng/pr-093 用 `git cherry` 验证 4 提交均已应用进 main）；7 个 stash 导出 patch 至 `D:\project\stash-backup-20260806\` 后清空；.tmp/.gstack 日志/Office 锁文件清理；migrations 13/13 无缺失 |
 | 2026-08-06 | agent 修复 | AI | 会话日志排查：refine_content 片段覆盖整节（introduction 2517→111 字）修复为项目内整节权威底稿 + 过短拒写回；read_section 同章节隔离（写进展前持续拦截）；antispam 二次熔断硬停机（MAX_BREAKS_BEFORE_HARD_STOP=2）。agent 套件 348 通过，冒烟验证 P0 生效（1994→1997 未丢失）。见 `docs/domain/agent.md` |
 | 2026-08-06 | 写并发排队 | AI | `waitForWritingSlot`：写并发满时排队等待（WRITING_QUEUE_WAIT_MS=60s，轮询 3s），超时才抛友好「繁忙」提示，替代硬报错「扩写并发已满」；.env.example 补配置说明 |
+| 2026-08-06 | Agent UI 审计 | AI | 13 种 SSE 事件全渲染确认；补强 Plan 子任务列表为 `AgentPlanCard`（默认展开、状态徽标/图标、进度条、执行中高亮），替代原弱化折叠版「本轮计划 N/M」；已知未修：并行只读批次无「并行 N 个」归组标识 |
 
 ---
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, ChevronDown, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import { Bot, ChevronDown, ChevronLeft, RotateCcw } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,6 +26,7 @@ import {
 import { AgentInputBar } from "@/components/shared/agent/agent-input";
 import { AgentConfigQa } from "@/components/shared/agent/agent-config-qa";
 import { AgentCitationReportCard } from "@/components/shared/agent/agent-citation-report";
+import { AgentPlanCard } from "@/components/shared/agent/agent-plan";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getProject, patchPaperPassportConfig } from "@/services/project";
 import type { ProjectData } from "@/contracts/project";
@@ -119,7 +120,6 @@ export function AgentPanel({
   const [quickPrompts, setQuickPrompts] = useState<string[]>([]);
   const [phasePack, setPhasePack] = useState<PhaseTaskPack | null>(null);
   const [phaseGoal, setPhaseGoal] = useState<string | null>(null);
-  const [planOpen, setPlanOpen] = useState(false);
   const [reviseNote, setReviseNote] = useState("");
   const [showRevise, setShowRevise] = useState(false);
   const [clarifyNote, setClarifyNote] = useState("");
@@ -339,8 +339,6 @@ export function AgentPanel({
     [agent.status],
   );
 
-  const planDone = agent.plan?.subtasks.filter((s) => s.status === "done").length ?? 0;
-  const planTotal = agent.plan?.subtasks.length ?? 0;
   const interrupted = agent.interruptedSessions[0] ?? null;
   const liveProgress = useMemo(
     () =>
@@ -563,37 +561,8 @@ export function AgentPanel({
           ) : null}
         </AnimatePresence>
 
-        {agent.plan && planTotal > 0 ? (
-          <button
-            type="button"
-            className="mt-1.5 flex w-full items-center gap-1 text-left text-[11px] text-muted-foreground hover:text-foreground"
-            onClick={() => setPlanOpen((v) => !v)}
-          >
-            {planOpen ? (
-              <ChevronDown className="h-3 w-3" />
-            ) : (
-              <ChevronRight className="h-3 w-3" />
-            )}
-            <span>
-              本轮计划 {planDone}/{planTotal}
-            </span>
-          </button>
-        ) : null}
-        {planOpen && agent.plan ? (
-          <ol className="mt-1 space-y-0.5 pl-5 text-[11px] text-muted-foreground">
-            {agent.plan.subtasks.map((s) => (
-              <li
-                key={s.id}
-                className={cn(
-                  "break-words",
-                  s.status === "done" && "line-through opacity-60",
-                  s.status === "running" && "font-medium text-foreground",
-                )}
-              >
-                {s.title}
-              </li>
-            ))}
-          </ol>
+        {agent.plan && agent.plan.subtasks.length > 0 ? (
+          <AgentPlanCard plan={agent.plan} />
         ) : null}
       </header>
 
