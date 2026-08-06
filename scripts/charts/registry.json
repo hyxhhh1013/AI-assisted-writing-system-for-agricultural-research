@@ -669,6 +669,13 @@
           "type": "boolean",
           "group": "chart_specific",
           "default": true
+        },
+        {
+          "key": "series_labels",
+          "label": "右侧谱线标签",
+          "type": "boolean",
+          "group": "chart_specific",
+          "default": true
         }
       ]
     },

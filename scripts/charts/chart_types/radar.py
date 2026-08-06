@@ -26,6 +26,7 @@ class RadarChart(ChartModule):
         fig, ax = plt.subplots(figsize=(size, size), subplot_kw=dict(projection="polar"))
 
         colors = self.colors(style, len(datasets))
+        markers = self.markers(style, len(datasets))
         lw = max(float(style.get("axes_linewidth", 0.8)) * 2, 1.5)
         fs = max(float(style.get("font_size", 8)), 7)
 
@@ -49,7 +50,7 @@ class RadarChart(ChartModule):
             lbl = _normalize_label(ds.get("label", ""))
             ax.plot(angles_closed, closed, color=c, lw=lw, label=lbl or None)
             ax.fill(angles_closed, closed, color=c, alpha=0.08)
-            ax.scatter(angles, norm, color=c, s=fs * 2, zorder=5)
+            ax.scatter(angles, norm, color=c, s=fs * 2, marker=markers[i], zorder=5)
 
         ax.set_ylim(0, 1.05)
         ax.set_theta_zero_location("N")

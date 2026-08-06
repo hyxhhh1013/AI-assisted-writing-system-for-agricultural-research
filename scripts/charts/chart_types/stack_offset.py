@@ -32,6 +32,10 @@ class StackOffsetChart(ChartModule):
         fig, ax = self.new_figure(style)
         colors = self.colors(style, len(datasets))
         lw = max(float(style.get("axes_linewidth", 0.8)) * 1.5, 1.0)
+        fs = max(float(style.get("font_size", 8)) - 1, 6)
+        show_labels = config.get("series_labels") in (True, "true", "1", 1) or (
+            config.get("series_labels") is None and len(datasets) > 1
+        )
 
         for i, ds in enumerate(datasets):
             d = list(ds.get("data", []))[: len(labels)]
@@ -48,6 +52,12 @@ class StackOffsetChart(ChartModule):
             y_plot = y + i * offset_frac * base
             lbl = _normalize_label(ds.get("label", ""))
             ax.plot(numeric_x, y_plot, color=colors[i], linewidth=lw, label=lbl or None)
+            if show_labels and lbl:
+                # 右侧谱线标签（取谱线末端 y，贴近曲线）
+                ax.text(
+                    numeric_x[-1], y_plot[-1], f"  {lbl}",
+                    color=colors[i], fontsize=fs, va="center", ha="left", zorder=4,
+                )
 
         self.finalize_axes(
             ax,
