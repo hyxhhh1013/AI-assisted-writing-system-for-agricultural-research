@@ -49,6 +49,11 @@ vi.mock("@/lib/agent/project-persist", () => ({
   })),
 }));
 
+// check_plagiarism 会调 getAgentProjectSnapshot 取标题；CI 无 DB，需 mock
+vi.mock("@/lib/agent/project-refresh", () => ({
+  getAgentProjectSnapshot: vi.fn(async () => ({ title: "测试论文" })),
+}));
+
 vi.mock("@/lib/agent/import-reference", () => ({
   importExternalReferenceToProject: vi.fn(async () => ({
     citation: "[1] Test Paper. Journal. 2024.",

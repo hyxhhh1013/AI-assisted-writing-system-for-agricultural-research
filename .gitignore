@@ -43,7 +43,10 @@ next-env.d.ts
 /src/generated/prisma
 
 # runtime data
-/data/
+/data/*
+# 静态 XRD 参考数据（峰位表）供测试与运行时使用，需进仓库
+!/data/xrd/
+!/data/xrd/phase-reference.json
 prisma/dev.db
 prisma/dev.db-journal
 prisma/dev.db-shm
