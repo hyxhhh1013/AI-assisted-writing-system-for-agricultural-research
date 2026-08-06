@@ -27,12 +27,26 @@ import pandas as pd
 
 # 确保能导入同目录下的共享模块
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from plot_utils import load_dataframe, _normalize_label  # noqa: E402
+from font_setup import apply_cjk_font_rcparams  # noqa: E402
+from plot_utils import load_dataframe, _normalize_label
+from plot_style import resolve_style, validate_style  # noqa: E402
 
-# 中文字体支持
-# 中文字体
-plt.rcParams["font.sans-serif"] = ["Noto Sans CJK JP", "Noto Serif CJK JP", "SimHei", "Microsoft YaHei", "PingFang SC", "Heiti SC", "DejaVu Sans"]
-plt.rcParams["axes.unicode_minus"] = False
+
+def _ok_payload(output_path: str, config: dict, series_count: int = 0) -> dict:
+    payload: dict = {"status": "ok", "output": output_path}
+    try:
+        style = resolve_style(config if isinstance(config, dict) else {})
+        if series_count > 0:
+            style["_series_count"] = series_count
+        payload["styleValidation"] = validate_style(style)
+        payload["fig_width"] = style.get("fig_width")
+        payload["columns"] = style.get("columns")
+        payload["preset"] = style.get("preset")
+    except Exception:
+        pass
+    return payload  # noqa: E402
+
+apply_cjk_font_rcparams()
 
 
 def _rgba_to_mpl(rgba_str):
@@ -57,6 +71,16 @@ _CHART_TYPE_MAP = {
     "line": "line",
     "scatter": "scatter",
     "pie": "pie",
+    "heatmap": "heatmap",
+    "area": "area",
+    "forest": "forest",
+    "radar": "radar",
+    "stack_offset": "stack_offset",
+    "waterfall": "stack_offset",
+    "dft_band": "dft_band",
+    "dft_dos": "dft_dos",
+    "band": "dft_band",
+    "dos": "dft_dos",
 }
 
 # 惰性加载模块映射
@@ -144,7 +168,7 @@ def plot_chart(data_path: str, config: dict, output_path: str):
         labels = inline_data["labels"]
         datasets = inline_data["datasets"]
         _dispatch_chart(chart_type, labels, datasets, config, output_path)
-        print(json.dumps({"status": "ok", "output": output_path}))
+        print(json.dumps(_ok_payload(output_path, config, len(datasets)), ensure_ascii=False))
         return
 
     # CSV 文件模式 — 转成内联格式后统一调度
@@ -154,13 +178,38 @@ def plot_chart(data_path: str, config: dict, output_path: str):
         sys.exit(1)
 
     labels = df.iloc[:, 0].astype(str).tolist()
+    # 误差列配对：产量_sd / 产量_err → 挂到「产量」
+    error_suffixes = ("_sd", "_sem", "_se", "_err", "_std", "_ci")
+    headers = [str(c) for c in df.columns]
+    value_indices: list[int] = []
+    error_map: dict[int, int] = {}
+    for col_idx in range(1, len(headers)):
+        h = headers[col_idx]
+        lower = h.lower()
+        matched = next((s for s in error_suffixes if lower.endswith(s)), None)
+        if matched:
+            base = h[: -len(matched)]
+            base_idx = next(
+                (i for i in range(1, len(headers)) if i != col_idx and headers[i] == base),
+                None,
+            )
+            if base_idx is not None:
+                error_map[base_idx] = col_idx
+            continue
+        value_indices.append(col_idx)
+
     datasets = []
-    for col_idx in range(1, len(df.columns)):
+    for col_idx in value_indices:
         vals = pd.to_numeric(df.iloc[:, col_idx], errors="coerce").fillna(0).tolist()
-        datasets.append({"label": df.columns[col_idx], "data": vals})
+        entry: dict = {"label": headers[col_idx], "data": vals}
+        err_idx = error_map.get(col_idx)
+        if err_idx is not None:
+            errs = pd.to_numeric(df.iloc[:, err_idx], errors="coerce").fillna(0).tolist()
+            entry["errors"] = errs
+        datasets.append(entry)
 
     _dispatch_chart(chart_type, labels, datasets, config, output_path)
-    print(json.dumps({"status": "ok", "output": output_path}))
+    print(json.dumps(_ok_payload(output_path, config, len(datasets)), ensure_ascii=False))
 
 
 if __name__ == "__main__":
@@ -170,7 +219,7 @@ if __name__ == "__main__":
     parser.add_argument("--output", required=True, help="输出 PNG 路径")
     args = parser.parse_args()
 
-    with open(args.config, "r", encoding="utf-8") as f:
+    with open(args.config, "r", encoding="utf-8-sig") as f:
         cfg = json.load(f)
 
     try:

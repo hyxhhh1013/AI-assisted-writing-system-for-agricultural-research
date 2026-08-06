@@ -4,7 +4,7 @@
 
 面向农业/热化学/生物质能科研领域的 AI 辅助 SCI 论文写作平台。利用实验室自有 167 篇 PDF 文献构建私有知识库，驱动 LLM 撰写符合实验室行文风格和学术规范的论文。
 
-**一人全栈开发，132 个源文件，10 个数据模型，32 个 API 端点。**
+**一人全栈开发，200+ 个源文件，15 个数据模型，66 个 API 端点。**
 
 ## 技术栈
 
@@ -13,7 +13,7 @@
 | 框架 | Next.js 16 App Router | 同构架构——页面渲染和 API 共享一套代码，单人开发不用拆前后端 |
 | 语言 | TypeScript 5 | 类型安全，尤其在 AI 输出不确定性的场景下 |
 | 样式 | Tailwind CSS v4 + Shadcn UI | 开箱即用，不需要自己维护设计系统 |
-| 数据库 | Prisma + PostgreSQL | Docker Compose 提供本地 `db` 服务，部署环境与开发环境保持一致 |
+| 数据库 | Prisma + PostgreSQL | 本地开发连本机 PostgreSQL（默认 `localhost:5433`） |
 | 认证 | JWT (jose + bcryptjs) | 轻量，HTTP-only cookie 防 XSS |
 | AI 调用 | 自研 fetch 封装 | 绕过 LangChain 抽象层，直接调 API，可控性更高 |
 | RAG | 自研 BM25 + 向量混合检索 + RRF 融合 | 专为中文+英文学术文献检索引擎调优 |
@@ -60,7 +60,7 @@ Writer (DeepSeek) ──→ Verifier (智谱 GLM-4-Plus) ──→ Refiner (Deep
 3. Verifier 逐条比对：引用表述 vs 原文实际内容
 4. 输出：✅ 通过 / ⚠️ 归属错误 / ❌ 疑似虚构
 
-## 数据模型（10 个表）
+## 数据模型（15 个表）
 
 ```
 User ──→ Project ──→ Section (IMRaD 章节)
@@ -68,9 +68,32 @@ User ──→ Project ──→ Section (IMRaD 章节)
                  ├──→ AnalysisResult (数据分析结果)
                  ├──→ PlagiarismCheck ──→ PlagiarismMatch (查重匹配)
                  │                   └──→ RewriteSuggestion (降重建议)
+                 ├──→ ReviewCheck ──→ ReviewIssue (四维度审查)
                  └──→ ReferenceSource (引用编号→文献源映射)
 
 KnowledgeFile ──→ KnowledgeChunk (文献分块+向量)
+
+SystemSetting (Admin 加密配置)    AiUsageLog (AI 用量审计)
+```
+
+### 质量系统架构
+
+```
+QualityWorkspace（统一入口）
+├─ Tab 查重 ──→ POST /api/plagiarism/v2 (SSE) ──→ plagiarism-service.ts
+│              └── PlagiarismMatch[] → match-content-preview.tsx
+├─ Tab 降重 ──→ POST /api/plagiarism/rewrite ──→ rewrite-service.ts
+│              └── 采纳 → 写回工作台章节
+└─ Tab 审查 ──→ POST /api/review ──→ review-service.ts
+               └── 4 维度并行 → ReviewIssue[] → 单项 fix
+```
+
+### 写作蓝图系统
+
+```
+大纲页面 ──→ POST /api/outline/blueprint ──→ blueprint-workspace.tsx
+         └── WritingBlueprint (叙事规划+配图分配) → Project.writingBlueprint
+工作台 ──→ blueprint-utils.ts 恢复蓝图 → 扩写上下文
 ```
 
 ## 面试要点速查
@@ -78,7 +101,7 @@ KnowledgeFile ──→ KnowledgeChunk (文献分块+向量)
 被问到项目时按这个路径讲：
 
 1. **问题**：实验室 SCI 论文——查重难、引用管理乱、AI 写出来不符合规范
-2. **方案**：私有知识库 RAG + 多 Agent 写作管道 + 引用真实性验证
-3. **技术亮点**：混合检索（BM25+向量+RRF）、不同模型独立审查、SSE 流式管道、DOCX 多模板导出
-4. **工程能力**：TypeScript 全栈、一人交付 132 源文件、自研 RAG 引擎、12 个 AI 端点限流+认证
-5. **用户意识**：为实验室真实需求而建，不是 demo——在有人用之前暂停加新功能
+2. **方案**：私有知识库 RAG + 多 Agent 写作管道 + 引用真实性验证 + 统一质量中心
+3. **技术亮点**：混合检索（BM25+向量+RRF）、不同模型独立审查、SSE 流式管道、四维度审查系统、写作蓝图规划、DOCX 多模板导出
+4. **工程能力**：TypeScript 全栈、一人交付 200+ 源文件、自研 RAG 引擎、15 个数据模型、66 个 API
+5. **用户意识**：为实验室真实需求而建，不是 demo；质量中心三 Tab 合一减少跳转，会话持久化防丢失

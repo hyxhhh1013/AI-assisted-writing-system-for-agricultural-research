@@ -1,16 +1,42 @@
 import { fetchWithRetry } from "./fetch-with-retry";
-import { getModelConfig, ModelProviderKey, validateProviderKey } from "./models";
+import { withKeyConcurrency } from "./ai-concurrency";
+import { getModelConfig, MODEL_PROVIDERS, ModelProviderKey, validateProviderKey } from "./models";
 import { usageLog } from "./usage-log";
 export { getAgentModelConfig } from "./models";
 
+export interface AIToolSchema {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+}
+
+/** 多模态消息内容片段（OpenAI 兼容）。目前支持文本与图片 URL。 */
+export type AIChatContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
+export type AIChatMessage = {
+  role: string;
+  content: string | AIChatContentPart[];
+  tool_call_id?: string;
+  name?: string;
+};
+
 export interface AICallOptions {
   provider: ModelProviderKey;
-  messages: { role: string; content: string }[];
+  messages: AIChatMessage[];
   stream?: boolean;
   timeoutMs?: number;
   signal?: AbortSignal;
   /** 可选：调用者 userId，用于用量统计 */
   userId?: string;
+  /** Agent function calling（可选，不传则与改前行为一致） */
+  tools?: AIToolSchema[];
+  tool_choice?: "auto" | "none" | "required";
+  temperature?: number;
 }
 
 export class AIError extends Error {
@@ -32,10 +58,50 @@ export function getAIError(provider: ModelProviderKey): string | null {
 let _keyCache: Record<string, string[]> | null = null;
 let _keyCacheTime = 0;
 let _keyRoundRobin = 0; // 轮转计数器
+let _modelNameCache: Record<string, string> | null = null;
+let _modelNameCacheTime = 0;
 const KEY_CACHE_TTL = 30_000; // 30 秒
 
+/** 解析实际调用的模型名：Admin DB（DEEPSEEK_MODEL 等）> env > 代码默认 */
+export async function resolveProviderModel(
+  provider: ModelProviderKey,
+): Promise<string> {
+  const config = getModelConfig(provider);
+  const settingKey = config.modelSettingKey;
+  try {
+    if (!_modelNameCache || Date.now() - _modelNameCacheTime > KEY_CACHE_TTL) {
+      const { getSetting } = await import("./settings");
+      const next: Record<string, string> = {};
+      // 遍历所有 provider 的 modelSettingKey（去重），保证新增 provider（如 vision）的
+      // 模型名设置也能从 Admin DB 热加载，而无需手动维护硬编码列表。
+      const settingKeys = [...new Set(
+        Object.values(MODEL_PROVIDERS).map((p) => p.modelSettingKey),
+      )];
+      for (const key of settingKeys) {
+        const v = await getSetting(key);
+        if (v?.trim()) next[key] = v.trim();
+      }
+      _modelNameCache = next;
+      _modelNameCacheTime = Date.now();
+    }
+    const fromDb = _modelNameCache[settingKey];
+    if (fromDb) return fromDb;
+  } catch {
+    /* DB 失败则回退 */
+  }
+  return config.model;
+}
+
+/** 测试或 Admin 保存后可清缓存，立刻生效 */
+export function clearAiRuntimeCaches(): void {
+  _keyCache = null;
+  _keyCacheTime = 0;
+  _modelNameCache = null;
+  _modelNameCacheTime = 0;
+}
+
 /** 收集所有可用的 API Key（DB + env），支持 DEEPSEEK_API_KEY, DEEPSEEK_API_KEY_2, ... */
-async function getAllKeys(provider: ModelProviderKey): Promise<string[]> {
+export async function getAllKeys(provider: ModelProviderKey): Promise<string[]> {
   const config = getModelConfig(provider);
   const baseKey = config.apiKeyEnvVar; // e.g. "DEEPSEEK_API_KEY"
   const keys: string[] = [];
@@ -100,6 +166,7 @@ async function pickApiKey(provider: ModelProviderKey): Promise<string | undefine
 export async function callAI(options: AICallOptions): Promise<Response> {
   const config = getModelConfig(options.provider);
   const apiKey = await pickApiKey(options.provider);
+  const model = await resolveProviderModel(options.provider);
 
   const keyError = validateProviderKey(options.provider);
   if (keyError) {
@@ -111,23 +178,33 @@ export async function callAI(options: AICallOptions): Promise<Response> {
   }
 
   const timeoutMs = options.timeoutMs ?? (options.stream ? 300_000 : 30_000);
-  const response = await fetchWithRetry(
-    config.baseUrl,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+  // per-key 并发限流：每个 key 同时最多 PER_KEY_CONCURRENCY 个请求，超出的排队，
+  // 避免单 key 多用户并发时把上游打爆触发 429。仅覆盖到响应头返回；流式正文由调用方继续读。
+  const response = await withKeyConcurrency(
+    apiKey,
+    () => fetchWithRetry(
+      config.baseUrl,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: options.messages,
+          stream: options.stream ?? true,
+          ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+          ...(options.tools?.length
+            ? { tools: options.tools, tool_choice: options.tool_choice ?? "auto" }
+            : {}),
+        }),
+        signal: options.signal,
       },
-      body: JSON.stringify({
-        model: config.model,
-        messages: options.messages,
-        stream: options.stream ?? true,
-      }),
-      signal: options.signal,
-    },
-    1,             // retries: 只重试 1 次（避免叠加等待过长）
-    timeoutMs,
+      1,             // retries: 只重试 1 次（避免叠加等待过长）
+      timeoutMs,
+    ),
+    options.signal,
   );
 
   if (!response.ok) {
@@ -148,7 +225,7 @@ export async function callAI(options: AICallOptions): Promise<Response> {
       `ai:${options.provider}`,
       {
         provider: options.provider,
-        model: config.model,
+        model,
         messageCount: options.messages.length,
         stream: options.stream ?? true,
       },
@@ -210,9 +287,9 @@ export async function* streamAIResponse(
         if (trimmed.startsWith("data:") && trimmed !== "data: [DONE]") {
           try {
             const data = JSON.parse(trimmed.slice(5).trim());
-            const content = data.choices?.[0]?.delta?.content
-              || data.choices?.[0]?.delta?.reasoning_content
-              || "";
+            // 只取 delta.content：reasoning_content 是模型的思考过程（chain-of-thought），
+            // 若拼进正文会泄漏「嗯，用户是让我…」等元文字（DeepSeek 推理模型常见）
+            const content = data.choices?.[0]?.delta?.content || "";
             if (content) yield { content };
           } catch {}
         }
@@ -225,9 +302,7 @@ export async function* streamAIResponse(
       if (trimmed.startsWith("data:") && trimmed !== "data: [DONE]") {
         try {
           const data = JSON.parse(trimmed.slice(5).trim());
-          const content = data.choices?.[0]?.delta?.content
-            || data.choices?.[0]?.delta?.reasoning_content
-            || "";
+          const content = data.choices?.[0]?.delta?.content || "";
           if (content) yield { content };
         } catch {}
       }

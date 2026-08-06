@@ -52,7 +52,8 @@ module.exports = {
       instances: 1,
       exec_mode: "fork",
       autorestart: true,
-      max_memory_restart: "3000M",
+      max_memory_restart: "4000M",
+      node_args: "--max-old-space-size=3072",
       env: {
         NODE_ENV: "production",
         PORT: pick("PORT", "3000"),
@@ -67,6 +68,25 @@ module.exports = {
         RAG_EMBEDDING_API_BASE: pick("RAG_EMBEDDING_API_BASE", ""),
         RAG_EMBEDDING_MODEL: pick("RAG_EMBEDDING_MODEL", ""),
         RAG_EMBEDDINGS_URL: pick("RAG_EMBEDDINGS_URL", ""),
+        // light=仅元数据预热（默认）；full=全库；0=关闭。流式分类检索默认开，峰值≈最大单分类
+        RAG_WARMUP: pick("RAG_WARMUP", "light"),
+        RAG_STREAM_CATEGORIES: pick("RAG_STREAM_CATEGORIES", "1"),
+        RAG_CATEGORY_CACHE_MAX: pick("RAG_CATEGORY_CACHE_MAX", "2"),
+        WRITING_MAX_CONCURRENT: pick("WRITING_MAX_CONCURRENT", "2"),
+        WRITING_VERIFIER_MAX_FULL_SOURCES: pick(
+          "WRITING_VERIFIER_MAX_FULL_SOURCES",
+          "5",
+        ),
+        WRITING_DEFAULT_MODE: pick("WRITING_DEFAULT_MODE", "fast"),
+        // Wave 2 Agent（须 .env 中 AGENT_ENABLED=1；NEXT_PUBLIC_* 另需在 build 时注入）
+        AGENT_ENABLED: pick("AGENT_ENABLED", "0"),
+        AGENT_WRITE_ENABLED: pick("AGENT_WRITE_ENABLED", "0"),
+        AGENT_WRITE_AUTO_FIX: pick("AGENT_WRITE_AUTO_FIX", "1"),
+        NEXT_PUBLIC_AGENT_ENABLED: pick("NEXT_PUBLIC_AGENT_ENABLED", "0"),
+        NEXT_PUBLIC_AGENT_WRITE_ENABLED: pick(
+          "NEXT_PUBLIC_AGENT_WRITE_ENABLED",
+          "0",
+        ),
       },
     },
   ],

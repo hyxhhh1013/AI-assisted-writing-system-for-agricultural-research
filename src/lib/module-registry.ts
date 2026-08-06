@@ -5,6 +5,7 @@ import {
   BarChart3,
   BookOpen,
   FileText,
+  GraduationCap,
   Layout,
   Play,
   Radar,
@@ -37,6 +38,28 @@ export const APP_MODULES: AppModule[] = [
     order: 20,
   },
   {
+    id: "directions",
+    title: "研究方向规划",
+    description: "Socratic 预承诺、8 维度 Rubric 分析、论文路线图与 Direction→Writing 桥接",
+    href: "/directions",
+    flag: null,
+    placement: ["home"],
+    homeCategory: "core",
+    iconKey: "flask",
+    order: 25,
+  },
+  {
+    id: "academic-paper",
+    title: "写作 Agent 引导",
+    description: "选论文项目，进入工作台 Agent Tab；八阶段由 Passport 管理，本页不做假流水线",
+    href: "/academic-paper",
+    flag: null,
+    placement: ["home"],
+    homeCategory: "core",
+    iconKey: "graduation-cap",
+    order: 12,
+  },
+  {
     id: "knowledge",
     title: "文献库管理",
     description: "管理实验室私有文献，支持 PDF 查看、语义检索与 AI 划词翻译",
@@ -49,8 +72,8 @@ export const APP_MODULES: AppModule[] = [
   },
   {
     id: "plagiarism",
-    title: "论文查重与降重",
-    description: "检测论文重复率，AI 辅助降重改写，支持本地库 + 联网比对",
+    title: "论文质量中心",
+    description: "提交前一站式质量检查：多源查重、AI 降重、四维度论文审查",
     href: "/plagiarism",
     flag: "PLAGIARISM",
     placement: ["home"],
@@ -61,7 +84,7 @@ export const APP_MODULES: AppModule[] = [
   {
     id: "plot",
     title: "数据绘图",
-    description: "分组柱状图、折线图、XRD 图与 GB/T 三线表，一键生成论文配图",
+    description: "分组柱状图、折线图、XRD/XPS 光谱与 GB/T 三线表，一键生成论文配图",
     href: "/plot",
     requiresProjectId: true,
     flag: "CHART",
@@ -72,9 +95,9 @@ export const APP_MODULES: AppModule[] = [
   },
   {
     id: "xrd-lab",
-    title: "XRD 实验室",
-    description: "峰分解、背景扣除、晶胞拟合与 XPS 等材料表征分析工具",
-    href: "/xrd-lab",
+    title: "光谱分析",
+    description: "XRD 叠加、峰拟合、XPS 与 Scherrer 等（已并入科学绘图）",
+    href: "/plot?category=xrd",
     flag: "XRD",
     placement: ["home"],
     homeCategory: "tools",
@@ -115,6 +138,7 @@ export const MODULE_ICON_MAP: Record<ModuleIconKey, LucideIcon> = {
   "book-open": BookOpen,
   play: Play,
   flask: Radar,
+  "graduation-cap": GraduationCap,
 };
 
 export function listModules(options?: {

@@ -49,6 +49,17 @@
 | ADMIN-021 | 数据导出（CSV：用户/项目/用量） | ADMIN-001 | 2h | done | 2026-06-01 |
 | ADMIN-022 | AI 用量趋势图（按日/周/月 + 按用户） | ADMIN-012, ADMIN-013 | 3h | done | 2026-06-01 |
 | ADMIN-023 | P2 收尾：nav 重排 + 仪表盘首页增强 | ADMIN-020 | 1h | done | 2026-06-01 |
+| **Phase 4 — 深链与运维深化（2026-06）** |
+| ADMIN-030 | 列表筛选 URL 深链同步 | ADMIN-023 | 2h | done | 2026-06-17 |
+| ADMIN-031 | 仪表盘可点击告警（与 Health 对齐） | ADMIN-030 | 0.5h | done | 2026-06-17 |
+| ADMIN-032 | 项目页 AdminDataTable 统一 | ADMIN-030 | 2h | done | 2026-06-17 |
+| ADMIN-039 | Admin 视觉组件库 + 仪表盘/Health/Usage 升级 | ADMIN-032 | 4h | done | 2026-06-17 |
+| ADMIN-033 | 文献 indexStatus DB 冗余字段 + 服务端筛选 | ADMIN-030 | 4h | todo | — |
+| ADMIN-034 | Admin 操作审计日志（AdminAuditLog） | ADMIN-030 | 4h | todo | — |
+| ADMIN-035 | 文献重索引进度条 + 批量队列 UI | ADMIN-033 | 3h | todo | — |
+| ADMIN-036 | Usage 按功能/用户趋势 + 保留策略 | ADMIN-022 | 3h | todo | — |
+| ADMIN-037 | `/admin` 纳入 proxy 受保护路由 | ADMIN-030 | 1h | todo | — |
+| ADMIN-038 | Admin 列表 RSC 首屏 + Playwright 冒烟 | ADMIN-037 | 4h | todo | — |
 
 ### 1.1 与主队列的关系
 
@@ -542,7 +553,23 @@ Session A: ADMIN-001 → ADMIN-002 → ADMIN-003 → ADMIN-004
 Session B: ADMIN-005 → ADMIN-010 → ADMIN-011
 Session C: ADMIN-012 → ADMIN-013 → ADMIN-022
 Session D: ADMIN-020 → ADMIN-021 → ADMIN-023
+Session E（Phase 4）: ADMIN-030 → ADMIN-031 → ADMIN-032 → ADMIN-033 → ADMIN-034
+Session F: ADMIN-035 → ADMIN-036 → ADMIN-037 → ADMIN-038
 ```
+
+### 4.1 Phase 4 摘要
+
+| PR | 目标 | 核心改动 |
+|----|------|----------|
+| ADMIN-030 | 筛选/分页写入 URL，Health 深链可用 | `use-admin-url-sync.ts`，各列表 `urlSync: true` |
+| ADMIN-031 | 仪表盘告警可跳转 | `admin-dashboard-client.tsx` |
+| ADMIN-032 | 项目列表统一表格组件 | `AdminDataTable` + 排序 |
+| ADMIN-033 | 文献 indexStatus 性能 | Prisma 冗余字段或近似 SQL 筛选 |
+| ADMIN-034 | 删用户/文献/项目留痕 | `AdminAuditLog` + `/admin/audit` |
+| ADMIN-035 | 重索引可视化 | 复用 `applyReindexEvent` |
+| ADMIN-036 | 用量分析加深 | trends 按 feature/user 维度 |
+| ADMIN-037 | 路由双保险 | `proxy.ts` matcher 加 `/admin` |
+| ADMIN-038 | 质量门禁 | Playwright + 部分 RSC 首屏 |
 
 ---
 
@@ -585,4 +612,7 @@ Session D: ADMIN-020 → ADMIN-021 → ADMIN-023
 | 2026-06-01 | ADMIN-003 | AI | 项目搜索 + 删除（级联清理）+ 一键打开工作台 + CSV导出 |
 | 2026-06-01 | ADMIN-002 | AI | 用户搜索 + 删除（级联清理项目）+ 用户详情页（项目列表+AI用量） |
 | 2026-06-01 | ADMIN-001 | AI | admin contracts + admin-response 分页/搜索/统一响应格式 |
-| 2026-05-31 | — | AI | 创建本计划文档 |
+| 2026-06-17 | ADMIN-039 | AI | 视觉组件库：StatCard/BarChart/Ring/Panel + Shell 光晕背景 |
+| 2026-06-17 | ADMIN-032 | AI | 项目页 AdminDataTable + 环形进度 |
+| 2026-06-17 | ADMIN-030 | AI | use-admin-url-sync + 五类列表页 urlSync 深链 |
+| 2026-06-17 | — | AI | Phase 4 队列写入本计划（ADMIN-030～038） |

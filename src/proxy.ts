@@ -29,18 +29,25 @@ function nextWithOptionalUserId(request: NextRequest, userId: string | null): Ne
 }
 
 // 需要登录的路由
-const protectedPages = ["/workbench", "/projects"];
+const protectedPages = ["/workbench", "/projects", "/directions"];
 const protectedApis = [
   "/api/projects", "/api/writing", "/api/analysis", "/api/outline", "/api/export",
   "/api/plagiarism", "/api/chat", "/api/translate",
-  "/api/consistency", "/api/chart", "/api/flow-diagram", "/api/mol-diagram",
+  "/api/consistency", "/api/chart", "/api/flow-diagram", "/api/mol-diagram", "/api/mechanism-panel",
   "/api/save-chart", "/api/references", "/api/literature", "/api/xrd", "/api/admin",
+  "/api/review", "/api/directions", "/api/data", "/api/figures", "/api/presentation",
+  "/api/agent",
 ];
 
-// AI 端点限流
-const aiEndpoints = ["/api/writing", "/api/analysis", "/api/outline", "/api/chat", "/api/translate"];
+/** 调用 AI 的路由前缀（限流）；勿用宽泛的 /api/knowledge，避免误伤 GET 列表 */
+const aiEndpoints = [
+  "/api/writing", "/api/analysis", "/api/outline", "/api/chat", "/api/translate",
+  "/api/plagiarism", "/api/review", "/api/knowledge/analyze", "/api/consistency",
+  "/api/directions", "/api/agent",
+];
+/** Agent 多工具往返 + 会话轮询，10次/分过紧；开发更松 */
 const RL_WINDOW = 60_000;
-const RL_MAX = 10;
+const RL_MAX = process.env.NODE_ENV === "development" ? 120 : 40;
 const rlStore = new Map<string, { count: number; resetAt: number }>();
 
 function checkRateLimit(key: string): NextResponse | null {
@@ -58,6 +65,13 @@ function checkRateLimit(key: string): NextResponse | null {
     );
   }
   return null;
+}
+
+/** 是否计入 AI 限流：排除 Agent 会话只读轮询 */
+function shouldRateLimitAiPath(pathname: string, method: string): boolean {
+  if (!aiEndpoints.some((p) => pathname.startsWith(p))) return false;
+  if (method === "GET" && pathname.startsWith("/api/agent/sessions")) return false;
+  return true;
 }
 
 export async function proxy(request: NextRequest) {
@@ -85,8 +99,8 @@ export async function proxy(request: NextRequest) {
     || (pathname.startsWith("/api/knowledge") && request.method !== "GET" && !pathname.startsWith("/api/knowledge/reindex"))
     || (pathname.startsWith("/api/pdf") && request.method !== "GET");
 
-  // AI 端点限流
-  if (aiEndpoints.some((p) => pathname.startsWith(p))) {
+  // AI 端点限流（不含 Agent sessions 轮询）
+  if (shouldRateLimitAiPath(pathname, request.method)) {
     const limitKey = userId ?? request.headers.get("x-forwarded-for") ?? "anonymous";
     const rlResponse = checkRateLimit(limitKey);
     if (rlResponse) return rlResponse;
@@ -111,6 +125,7 @@ export const config = {
   matcher: [
     "/workbench/:path*",
     "/projects/:path*",
+    "/directions/:path*",
     "/api/projects/:path*",
     "/api/writing/:path*",
     "/api/analysis/:path*",
@@ -124,11 +139,18 @@ export const config = {
     "/api/chart/:path*",
     "/api/flow-diagram/:path*",
     "/api/mol-diagram/:path*",
+    "/api/mechanism-panel/:path*",
     "/api/save-chart/:path*",
     "/api/references/:path*",
     "/api/literature/:path*",
     "/api/xrd/:path*",
     "/api/pdf/:path*",
     "/api/admin/:path*",
+    "/api/review/:path*",
+    "/api/directions/:path*",
+    "/api/data/:path*",
+    "/api/figures/:path*",
+    "/api/presentation/:path*",
+    "/api/agent/:path*",
   ],
 };

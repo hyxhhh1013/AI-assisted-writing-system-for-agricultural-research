@@ -24,10 +24,15 @@ export async function GET(req: NextRequest) {
   if (params.mode) where.mode = params.mode;
   if (params.q) where.title = { contains: params.q };
 
+  const sortField = params.sortBy === "title" || params.sortBy === "template" || params.sortBy === "mode"
+    ? params.sortBy
+    : "lastUpdated";
+  const sortDir = params.sortOrder === "asc" ? "asc" : "desc";
+
   const [projects, total] = await Promise.all([
     prisma.project.findMany({
       where,
-      orderBy: { lastUpdated: "desc" },
+      orderBy: { [sortField]: sortDir },
       skip: ((params.page ?? 1) - 1) * (params.pageSize ?? 20),
       take: params.pageSize ?? 20,
       select: {

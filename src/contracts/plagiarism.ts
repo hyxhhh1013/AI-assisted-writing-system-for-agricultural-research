@@ -60,6 +60,7 @@ export interface PlagiarismHistoryItem {
 export interface PlagiarismCheckDetailRecord {
   id: string;
   title: string;
+  content?: string;
   status: string;
   maxSimilarity: number;
   overallRisk: string;

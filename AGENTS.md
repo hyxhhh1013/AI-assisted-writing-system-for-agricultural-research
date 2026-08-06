@@ -6,7 +6,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 # 禾书耕文 (GrainScript) — L1 热启动内核
 
-> 最后更新：2026-06-02  
+> 最后更新：2026-08-06  
 > 冷文档与索引见 [`docs/`](./docs/)（分层协议下文 S0）。
 
 ## S0: 文件协议（知识分层）
@@ -15,8 +15,21 @@ This version has breaking changes — APIs, conventions, and file structure may 
 |------|------|------|
 | **L1** | 热规则、铁律、检查清单 | **本文件** `AGENTS.md` |
 | **L2** | 功能 → 代码入口 | [`docs/DOMAIN_INDEX.md`](./docs/DOMAIN_INDEX.md) |
-| **L3** | 写作 / RAG / 图表 / 审查查重 | [`docs/domain/`](./docs/domain/) |
+| **L3** | 写作 / RAG / 图表 / 审查查重 / Agent | [`docs/domain/`](./docs/domain/) |
 | **L4** | API 表、DB、技术细则 | [`docs/API_INDEX.md`](./docs/API_INDEX.md)、[`docs/DATA_MODEL.md`](./docs/DATA_MODEL.md)、[`docs/KERNEL.md`](./docs/KERNEL.md) |
+
+### 🔒 文档同步铁律（无条件执行）
+
+> 只要属于**功能/修复**（而非纯拼写/格式化），提交前**必须**同步受影响文档。
+> 禁止「先功能后补文档」「等发版一起更」「文档没人看不更」。**文档滞后 = 功能未完成。**
+
+**强制流程（改动 → 提交前必须走完）：**
+
+1. 对照下方**更新表**，找出本改动命中的文档。
+2. 更新命中文档：新增/修改的 API、域、SSE 事件、DB 字段、业务规则，全部落到对应 `docs/` 摘要。
+3. 功能改动与文档改动进**同一个 commit**（不拆散，保证可追溯）。
+4. 提交前自检：若本次 `src/` 有净改动而没有任何 `docs/` 改动，必须在 commit message 显式写 `docs: 无需更新（理由）`。写不出理由 = 漏更。
+5. 命中接力队列：同步 `docs/ENGINEERING_OPTIMIZATION_QUEUE.md` 状态。
 
 **更新规则（改代码后对照）**
 
@@ -26,6 +39,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
 | 新/改 API 路由 | `API_INDEX.md` + 必要时 `validations.ts` |
 | Prisma 表/字段 | `schema.prisma` + `DATA_MODEL.md` |
 | 写作管道 / SSE | `domain/writing-pipeline.md` + `contracts/sse.ts` |
+| **Agent 编排 / 图 / 会话** | `domain/agent.md` + `contracts/agent.ts` |
+| **Agent SSE 事件（含新增类型）** | `domain/agent.md` §SSE 事件表 + `API_INDEX.md` |
 | RAG / 知识库 | `domain/rag-and-knowledge.md` + `rag-index-refactor.md` |
 | 图表 / Python | `domain/figures-and-python.md` + `registry.json` |
 | 审查 / 查重 | `domain/review-plagiarism.md` |
@@ -46,6 +61,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **维护者**：实验室单人，主要通过 Cursor / Claude 开发，**规范要让 AI 可读、可执行**。
 - **语言**：与用户沟通用中文；代码与 commit 描述清晰即可。
 - **Commit**：`feat(scope): 简述 (ENG-PR-xxx)` 或 `refactor/fix/docs`，scope 示例：`writing`、`knowledge`、`admin`。
+
+### 对话约定（命令速记）
+
+| 用户说 | 含义 |
+|--------|------|
+| **乐迪启动** | 在本地把项目搭起来并启动：`npm install --legacy-peer-deps` → `npx prisma generate` → `npx prisma db push` → 确认 `.env`（缺则 `cp .env.example .env`，至少填 `DEEPSEEK_API_KEY`）→ `npm run dev` → 打开 `http://localhost:3000` |
 
 ---
 
@@ -157,8 +178,8 @@ Admin Key：`PUT /api/admin/settings` → DB → `callAI()` 读缓存。
 - [ ] `npx tsc --noEmit` 通过
 - [ ] 相关 vitest 通过（`npx vitest run`）
 - [ ] 本地提交前：`git commit` 会跑 `tsc` + 暂存文件的 `eslint`（husky；全量 `npm run check` 仍建议在合并前手动跑）
-- [ ] 命中 S0 更新表时，已改对应 `docs/`
-- [ ] 接力 PR 完成时，已更新队列 §1 + §4
+- [ ] **文档同步铁律**：本次功能改动对应的 `docs/` 已更新，且与代码同一 commit（若确无需更新，commit message 已显式声明 `docs: 无需更新（理由）`）
+- [ ] 命中接力队列：已更新 `docs/ENGINEERING_OPTIMIZATION_QUEUE.md` §1 + §4
 
 ---
 

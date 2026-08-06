@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import prisma from "@/lib/prisma";
+import { resolveProjectRuntimePath } from "@/lib/runtime-paths";
 import type { KnowledgeBib, KnowledgeFileRecord } from "@/contracts/knowledge";
 import type { BibEntry } from "@/lib/rag";
 import {
@@ -12,11 +13,15 @@ import {
   type ApplyJournalMetricsResult,
   type JournalMetricsLookup,
 } from "@/lib/journal-metrics";
-import { resolveKnowledgeFilePath } from "@/lib/safe-path";
+import {
+  assertResolvedInsideBase,
+  assertSafePathSegment,
+  resolveKnowledgeFilePath,
+} from "@/lib/safe-path";
 
-const METADATA_PATH = path.join(process.cwd(), "data/metadata.json");
-const DATA_DIR = path.join(process.cwd(), "data");
-const ARTICLES_DIR = path.join(process.cwd(), process.env.RAG_ARTICLES_DIR || "papers");
+const METADATA_PATH = resolveProjectRuntimePath("data/metadata.json");
+const DATA_DIR = resolveProjectRuntimePath("data");
+const ARTICLES_DIR = resolveProjectRuntimePath(process.env.RAG_ARTICLES_DIR || "papers");
 
 /** 仅迁移/应急：只读 data/metadata.json，默认关闭 */
 export function isMetadataJsonFallbackEnabled(): boolean {
@@ -56,25 +61,165 @@ type KnowledgeFileRow = {
   _count?: { chunks: number };
 };
 
-/** 从磁盘 stat PDF 字节数（Prisma size 为 0 时回退） */
-export function statKnowledgeFileDiskSize(name: string, category: string): number | null {
-  try {
-    const filePath = resolveKnowledgeFilePath(ARTICLES_DIR, category, name);
-    if (!fs.existsSync(filePath)) return null;
-    return fs.statSync(filePath).size;
-  } catch {
-    return null;
+export interface KnowledgePdfDiskResolution {
+  path: string | null;
+  /** 磁盘上实际所在分类（可能与 Prisma 不一致） */
+  resolvedCategory: string | null;
+  size: number;
+}
+
+type ArticlesFileIndexEntry = {
+  path: string;
+  resolvedCategory: string;
+  size: number;
+};
+
+let articlesFileIndex: Map<string, ArticlesFileIndexEntry> | null = null;
+
+/** 单次请求内扫描 papers/ 一次，按文件名 O(1) 查找（避免每行递归遍历） */
+function buildArticlesFileIndex(): Map<string, ArticlesFileIndexEntry> {
+  const index = new Map<string, ArticlesFileIndexEntry>();
+  if (!fs.existsSync(ARTICLES_DIR)) return index;
+
+  const walk = (dir: string): void => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      try {
+        assertResolvedInsideBase(ARTICLES_DIR, full);
+      } catch {
+        continue;
+      }
+      if (index.has(entry.name)) continue;
+      index.set(entry.name, {
+        path: full,
+        resolvedCategory: categoryFromArticlesPath(full),
+        size: fs.statSync(full).size,
+      });
+    }
+  };
+
+  walk(ARTICLES_DIR);
+  return index;
+}
+
+function getArticlesFileIndex(): Map<string, ArticlesFileIndexEntry> {
+  if (!articlesFileIndex) {
+    articlesFileIndex = buildArticlesFileIndex();
   }
+  return articlesFileIndex;
+}
+
+function categoryFromArticlesPath(filePath: string): string {
+  const rel = path.relative(ARTICLES_DIR, filePath);
+  const parts = rel.split(path.sep).filter(Boolean);
+  if (parts.length <= 1) return "未分类";
+  return parts[0] ?? "未分类";
+}
+
+/** 按文件名定位 PDF：先 Prisma 分类路径，再全库递归（与 /api/pdf 一致） */
+export function resolveKnowledgePdfOnDisk(
+  name: string,
+  category: string,
+): KnowledgePdfDiskResolution {
+  try {
+    const direct = resolveKnowledgeFilePath(ARTICLES_DIR, category, name);
+    if (fs.existsSync(direct)) {
+      const size = fs.statSync(direct).size;
+      return { path: direct, resolvedCategory: category, size };
+    }
+  } catch {
+    /* 分类名非法等 */
+  }
+
+  const indexed = getArticlesFileIndex().get(name);
+  if (indexed) {
+    return {
+      path: indexed.path,
+      resolvedCategory: indexed.resolvedCategory,
+      size: indexed.size,
+    };
+  }
+
+  return { path: null, resolvedCategory: null, size: 0 };
+}
+
+const pdfDiskCache = new Map<string, KnowledgePdfDiskResolution>();
+
+/** 单次 API 请求内复用同名 PDF 的磁盘解析结果 */
+export function resolveKnowledgePdfOnDiskCached(
+  name: string,
+  category: string,
+): KnowledgePdfDiskResolution {
+  const cached = pdfDiskCache.get(name);
+  if (cached) return cached;
+  const resolved = resolveKnowledgePdfOnDisk(name, category);
+  pdfDiskCache.set(name, resolved);
+  return resolved;
+}
+
+export function clearKnowledgePdfDiskCache(): void {
+  pdfDiskCache.clear();
+  articlesFileIndex = null;
+}
+
+/** 从磁盘 stat PDF 字节数（Prisma size 为 0 或路径不一致时回退） */
+export function statKnowledgeFileDiskSize(name: string, category: string): number | null {
+  const disk = resolveKnowledgePdfOnDiskCached(name, category);
+  return disk.path && disk.size > 0 ? disk.size : null;
 }
 
 export function enrichKnowledgeRecordFromDisk(record: KnowledgeFileRecord): KnowledgeFileRecord {
-  if (record.size > 0) return record;
-  const diskSize = statKnowledgeFileDiskSize(record.name, record.category);
-  if (diskSize != null && diskSize > 0) {
-    return { ...record, size: diskSize };
+  if (record.size > 0) {
+    try {
+      const direct = resolveKnowledgeFilePath(ARTICLES_DIR, record.category, record.name);
+      if (fs.existsSync(direct)) {
+        return { ...record, hasPdfOnDisk: true };
+      }
+    } catch {
+      /* 分类名非法等，走索引查找 */
+    }
   }
-  return record;
+
+  const disk = resolveKnowledgePdfOnDiskCached(record.name, record.category);
+  const hasPdfOnDisk = disk.path != null && disk.size > 0;
+  const size = hasPdfOnDisk ? Math.max(record.size, disk.size) : record.size;
+
+  const next: KnowledgeFileRecord = {
+    ...record,
+    size,
+    hasPdfOnDisk,
+  };
+
+  if (
+    hasPdfOnDisk
+    && disk.resolvedCategory
+    && disk.resolvedCategory !== record.category
+  ) {
+    next.diskCategory = disk.resolvedCategory;
+  }
+
+  if (size > 0 && record.size <= 0) {
+    persistKnowledgeFileSizeIfMissing(record.name, record.category, size);
+  }
+
+  return next;
 }
+
+export type KnowledgeRecordOptions = {
+  /** 列表大批量拉取时可关闭，避免整库扫描 papers/ */
+  enrichDisk?: boolean;
+};
 
 /** 列表 API 发现 size=0 时异步回写 Prisma，避免每次 stat */
 export function persistKnowledgeFileSizeIfMissing(
@@ -88,7 +233,10 @@ export function persistKnowledgeFileSizeIfMissing(
     .catch(() => {});
 }
 
-export function prismaRowToKnowledgeRecord(row: KnowledgeFileRow): KnowledgeFileRecord {
+export function prismaRowToKnowledgeRecord(
+  row: KnowledgeFileRow,
+  options?: KnowledgeRecordOptions,
+): KnowledgeFileRecord {
   const prismaChunks = row._count?.chunks ?? 0;
   const chunkCount = Math.max(row.chunkCount ?? 0, prismaChunks);
   const record: KnowledgeFileRecord = {
@@ -104,6 +252,9 @@ export function prismaRowToKnowledgeRecord(row: KnowledgeFileRow): KnowledgeFile
     bibEdited: row.bibEdited,
     metrics: parseMetricsJson(row.metrics ?? null),
   };
+  if (options?.enrichDisk === false) {
+    return record;
+  }
   return enrichKnowledgeRecordFromDisk(record);
 }
 

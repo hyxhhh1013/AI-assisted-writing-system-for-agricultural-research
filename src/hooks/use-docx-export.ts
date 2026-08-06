@@ -8,6 +8,7 @@ import { formatKeywords } from "@/lib/paper-metadata";
 import { getTemplateSections } from "@/lib/template-sections";
 import { parseMarkdownBlocks, MarkdownBlock } from "@/lib/markdown-parser";
 import { formatFilenames } from "@/services/references";
+import { assessExportReadiness } from "@/lib/export-readiness";
 
 /** 清理文件名用于兜底显示 */
 function cleanRefForDocx(raw: string): string {
@@ -41,6 +42,13 @@ export function useDocxExport({ project, activeSection, editingContent, saveProj
 
     await saveProject();
     const p = mergeEditorIntoProject(project, activeSection, editingContent);
+
+    // W4-EXPORT：与 PDF 共用引用硬检；越界不可「可过稿」导出
+    const readiness = assessExportReadiness(p);
+    if (!readiness.ok) {
+      toast.error(readiness.gate.hint || "引用编号未通过硬检，暂不可导出 Word");
+      return;
+    }
 
     const template = p.template || "sci";
     const isChinese = template === "gbt7713";
@@ -282,6 +290,27 @@ export function useDocxExport({ project, activeSection, editingContent, saveProj
                 indent: isChinese ? { firstLine: config.indent } : undefined,
               }));
             })(),
+            // W4：Passport 对照语言摘要（双语）
+            ...(() => {
+              const cp = readiness.counterpartAbstract;
+              if (!cp?.text) return [];
+              const label =
+                cp.lang === "zh"
+                  ? "摘要（中文对照）："
+                  : "Abstract (English counterpart): ";
+              const stanzas = cp.text.split(/\n\n+/).map((s) => s.trim()).filter(Boolean);
+              return stanzas.map((para, i) => new Paragraph({
+                children: i === 0
+                  ? [
+                      new TextRun({ text: label, bold: true, size: config.bodySize, font: config.fontHeading }),
+                      ...parseMarkdownToRuns(para),
+                    ]
+                  : parseMarkdownToRuns(para),
+                alignment: AlignmentType.JUSTIFIED,
+                spacing: { line: config.lineSpacing, before: i === 0 ? 120 : 0, after: 200 },
+                indent: isChinese ? { firstLine: config.indent } : undefined,
+              }));
+            })(),
             // Keywords
             new Paragraph({
               children: [
@@ -314,6 +343,42 @@ export function useDocxExport({ project, activeSection, editingContent, saveProj
               const blocks = convertBlocks(content);
               return elements.concat(blocks);
             }),
+            // W4：已登记图表题注清单（正文未嵌入原图时的交稿清单）
+            ...(() => {
+              const assets = readiness.chartAssets.filter((a) => a.caption?.trim());
+              if (assets.length === 0) return [];
+              const heading = new Paragraph({
+                children: [
+                  new TextRun({
+                    text: isChinese ? "图表题注" : "Figure captions",
+                    bold: true,
+                    size: config.heading1Size,
+                    font: config.fontHeading,
+                  }),
+                ],
+                style: "Heading1",
+                spacing: { before: 600, after: 200 },
+                alignment: AlignmentType.LEFT,
+              });
+              const lines = assets.map((asset, i) => {
+                const caption = asset.caption.trim();
+                const numbered = /^(图|表|Fig\.?|Figure|Table)\s*\d+/i.test(caption)
+                  ? caption
+                  : `${isChinese ? "图" : "Fig."} ${i + 1} ${caption}`;
+                return new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: numbered,
+                      size: config.bodySize,
+                      font: config.fontMain,
+                    }),
+                  ],
+                  spacing: { after: 120 },
+                  alignment: AlignmentType.LEFT,
+                });
+              });
+              return [heading, ...lines];
+            })(),
             // References
             new Paragraph({
               children: [new TextRun({ text: isChinese ? "参考文献" : "References", bold: true, size: config.heading1Size, font: config.fontHeading })],

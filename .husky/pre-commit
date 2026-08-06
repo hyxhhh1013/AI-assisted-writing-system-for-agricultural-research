@@ -1,2 +1,4 @@
+sh scripts/doc-sync-check.sh
+
 npm run typecheck
 npx lint-staged

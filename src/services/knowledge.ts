@@ -43,8 +43,11 @@ export async function searchKnowledge(params: KnowledgeSearchParams): Promise<Kn
   if (params.page) url.append("page", String(params.page));
   if (params.pageSize) url.append("pageSize", String(params.pageSize));
   const res = await fetch(`/api/knowledge?${url.toString()}`);
-  if (!res.ok) throw new Error("知识库请求失败");
-  return res.json();
+  const data = await res.json().catch(() => ({})) as KnowledgeSearchResult & { error?: string };
+  if (!res.ok) {
+    throw new Error(data.error || (res.status === 503 ? "语义检索暂时不可用" : "知识库请求失败"));
+  }
+  return data;
 }
 
 export type ReindexKnowledgeOptions = ReindexRequest;
@@ -62,7 +65,7 @@ export async function reindexKnowledge(options?: ReindexKnowledgeOptions): Promi
   return message;
 }
 
-/** SSE 流式重建索引，实时推送进度 */
+/** SSE 流式重建索引，实时推送进度。支持断线自动重连（最多 15 次，每次等待 3 秒） */
 export async function reindexKnowledgeStream(
   onEvent: (event: ReindexProgressEvent) => void,
   signal?: AbortSignal,
@@ -74,47 +77,79 @@ export async function reindexKnowledgeStream(
       options.forceStage1 === true ||
       options.forceStage3 === true);
 
-  const res = await fetch("/api/knowledge/reindex", {
-    method: "POST",
-    headers: hasBody ? { "Content-Type": "application/json" } : undefined,
-    body: hasBody ? JSON.stringify(options) : undefined,
-    signal,
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({})) as { error?: string };
-    throw new Error(data.error || "索引请求失败");
-  }
-
-  const reader = res.body?.getReader();
-  if (!reader) throw new Error("索引响应无内容");
-
-  const decoder = new TextDecoder();
-  let buffer = "";
+  const MAX_RETRIES = 15;
+  let eventCount = 0;
   let sawComplete = false;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
+    try {
+      const headers: Record<string, string> = {};
+      if (hasBody) headers["Content-Type"] = "application/json";
+      // 断线重连时传递已收到的事件数，后端只发送新事件
+      if (eventCount > 0) headers["x-reindex-cursor"] = String(eventCount);
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed === "data: [DONE]") continue;
-      if (!trimmed.startsWith("data:")) continue;
+      const res = await fetch("/api/knowledge/reindex", {
+        method: "POST",
+        headers,
+        body: hasBody ? JSON.stringify(options) : undefined,
+        signal,
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(data.error || "索引请求失败");
+      }
 
-      const event = JSON.parse(trimmed.slice(5).trim()) as ReindexProgressEvent;
-      onEvent(event);
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("索引响应无内容");
 
-      if (event.type === "complete") sawComplete = true;
-      if (event.type === "error") throw new Error(event.message);
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        if (signal?.aborted) {
+          reader.cancel();
+          throw new DOMException("Aborted", "AbortError");
+        }
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed === "data: [DONE]") continue;
+          if (!trimmed.startsWith("data:")) continue;
+
+          const event = JSON.parse(trimmed.slice(5).trim()) as ReindexProgressEvent;
+          onEvent(event);
+          eventCount++;
+
+          if (event.type === "complete") sawComplete = true;
+          if (event.type === "error") throw new Error(event.message);
+        }
+      }
+
+      if (sawComplete) return;
+      // 流意外结束但没有 complete → 可能是后端还在跑，重试
+    } catch (err) {
+      if (signal?.aborted || (err instanceof DOMException && err.name === "AbortError")) {
+        throw new DOMException("Aborted", "AbortError");
+      }
+      // 网络错误等 → 等待后重连
+      if (attempt < MAX_RETRIES - 1 && !sawComplete) {
+        await new Promise((r) => setTimeout(r, 3000));
+        continue;
+      }
+      throw err;
     }
   }
 
   if (!sawComplete) {
-    throw new Error("索引流意外结束");
+    throw new Error("索引流意外结束（已重试多次）");
   }
 }
 

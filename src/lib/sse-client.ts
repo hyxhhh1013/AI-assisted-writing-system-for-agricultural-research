@@ -10,6 +10,13 @@ export interface SSEClientOptions {
   extractText?: (event: SSEEvent) => string | null;
 }
 
+/** 从 AI 流式 SSE 事件中提取 delta.content（兼容 choices[0].delta.content） */
+export function extractAIDeltaContent(event: SSEEvent): string | null {
+  const choices = event.choices as { delta?: { content?: string } }[] | undefined;
+  const content = choices?.[0]?.delta?.content;
+  return typeof content === "string" ? content : null;
+}
+
 /**
  * 从 Response ReadableStream 读取 SSE 事件。
  * 返回累积的完整文本。

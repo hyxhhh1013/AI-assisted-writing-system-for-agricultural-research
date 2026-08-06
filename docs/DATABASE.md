@@ -177,7 +177,7 @@ prisma.knowledgeFile.groupBy({ by: ['category'], _count: true })
 
 ## 迁移注意事项
 
-- 开发环境: `docker compose up -d db` 启动 PostgreSQL 后运行 `npx prisma db push`
+- 开发环境: 本机 PostgreSQL 运行后执行 `npx prisma db push`（默认 `localhost:5433`）
 - 生产环境: `npx prisma migrate deploy`（执行已有迁移）
 - 修改 schema 后运行 `npx prisma generate`，确保 `@prisma/client` 类型同步
-- `.env.example` 面向本地开发使用 `localhost:5432`；Docker app 容器内使用 `db:5432`
+- `.env.example` 面向本地开发使用 `localhost:5433`

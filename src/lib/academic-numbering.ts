@@ -1,11 +1,22 @@
 import { IMRAD_SECTION_NUMBER, SectionKey } from "@/lib/imrad";
+import { REVIEW_SECTION_NUMBER, isReviewSectionKey } from "@/lib/review-structure";
 
 /**
- * 论文章节 → 国标式一级章序号（用于 1.1.1 三级编号的首段）
+ * 论文章节 → 国标式一级章序号（用于 1.1.1 三级编号的首段）。
+ * 同时支持 IMRaD（研究型）和综述型章节。
  */
 export function majorNumberFromSectionId(sectionId: string): number | null {
-  const num = IMRAD_SECTION_NUMBER[sectionId as SectionKey];
-  return num != null && num > 0 ? num : null;
+  // 优先 IMRaD
+  const imradNum = IMRAD_SECTION_NUMBER[sectionId as SectionKey];
+  if (imradNum != null && imradNum > 0) return imradNum;
+
+  // 综述章节（abstract=0 不参与编号）
+  if (isReviewSectionKey(sectionId)) {
+    const reviewNum = REVIEW_SECTION_NUMBER[sectionId];
+    return reviewNum > 0 ? reviewNum : null;
+  }
+
+  return null;
 }
 
 /**

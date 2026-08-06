@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2, User, Mail, Calendar, BarChart3 } from "lucide-react";
 import Link from "next/link";
 import { getAdminUser, type AdminUserDetail } from "@/services/admin";
+import { adminTplLabel } from "@/lib/admin-labels";
 import { useGoBack } from "@/contexts/navigation-history";
 
 export default function UserDetailPage() {
@@ -22,8 +23,6 @@ export default function UserDetailPage() {
 
   if (loading) return <div className="flex items-center gap-2 text-sm text-[#6b7c72]"><Loader2 className="h-4 w-4 animate-spin" />加载中...</div>;
   if (!data) return <div className="text-sm text-red-600">用户不存在</div>;
-
-  const tplLabel: Record<string, string> = { sci: "SCI", ieee: "IEEE", gbt7713: "GB/T 7713", nature: "Nature" };
 
   return (
     <div className="space-y-6">
@@ -57,7 +56,7 @@ export default function UserDetailPage() {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-[#122820] truncate">{p.title || "未命名"}</p>
                     <p className="text-[10px] text-[#9aa8a0]">
-                      {tplLabel[p.template] || p.template} · {p.mode === "research" ? "研究" : "综述"} · {p.sectionCount}章 · {p.referenceCount}文献
+                      {adminTplLabel(p.template)} · {p.mode === "research" ? "研究" : "综述"} · {p.sectionCount}章 · {p.referenceCount}文献
                     </p>
                   </div>
                   <Link href={`/workbench?id=${p.id}`} target="_blank" className="text-[10px] text-[#1a5632] hover:underline shrink-0 ml-3">

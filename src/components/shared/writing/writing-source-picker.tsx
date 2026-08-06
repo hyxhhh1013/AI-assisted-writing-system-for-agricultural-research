@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, BookOpen, CheckCircle2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Loader2, BookOpen, CheckCircle2, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import type { RetrievePreviewHit } from "@/contracts/writing-retrieve-preview";
 
 interface WritingSourcePickerProps {
@@ -15,6 +18,8 @@ interface WritingSourcePickerProps {
   fetchedOnce: boolean;
   fetchError?: string | null;
   previewStale?: boolean;
+  /** Tailwind max-height class for the list; pass "none" for unconstrained (dialog). */
+  listMaxHeight?: string;
   onToggle: (sourceKey: string, checked: boolean) => void;
   onSelectAll: () => void;
   onDeselectAll: () => void;
@@ -30,11 +35,27 @@ export function WritingSourcePicker({
   fetchedOnce,
   fetchError,
   previewStale,
+  listMaxHeight = "max-h-64",
   onToggle,
   onSelectAll,
   onDeselectAll,
   onConfirm,
 }: WritingSourcePickerProps) {
+  const router = useRouter();
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (key: string) => {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const openReader = (sourceKey: string) => {
+    router.push(`/reader?file=${encodeURIComponent(sourceKey)}`);
+  };
   if (loading) {
     return (
       <div className="flex items-center gap-2 rounded-md border border-dashed p-3 text-xs text-muted-foreground">
@@ -77,7 +98,7 @@ export function WritingSourcePicker({
   }
 
   return (
-    <div className="space-y-2 rounded-md border bg-muted/10 p-3">
+    <div className="space-y-2">
       <div className="flex items-start justify-between gap-2">
         <div className="space-y-0.5">
           <p className="text-xs font-medium flex items-center gap-1">
@@ -100,10 +121,18 @@ export function WritingSourcePicker({
         </div>
       </div>
 
-      <ul className="max-h-48 space-y-2 overflow-y-auto custom-scrollbar pr-1">
+      <ul
+        className={cn(
+          "space-y-2 overflow-y-auto custom-scrollbar pr-1",
+          listMaxHeight !== "none" && listMaxHeight,
+        )}
+        style={listMaxHeight === "none" ? { maxHeight: "min(52vh, 480px)" } : undefined}
+      >
         {hits.map((hit) => {
           const checked = selectedSourceIds.includes(hit.sourceKey);
           const labelId = `source-${hit.sourceKey.replace(/[^\w.-]/g, "_")}`;
+          const isExpanded = expandedKeys.has(hit.sourceKey);
+          const hasMore = hit.fullText.length > hit.snippet.length;
           return (
             <li
               key={hit.sourceKey}
@@ -115,29 +144,56 @@ export function WritingSourcePicker({
                 onCheckedChange={(v) => onToggle(hit.sourceKey, v === true)}
                 className="mt-0.5"
               />
-              <label htmlFor={labelId} className="flex-1 cursor-pointer space-y-1">
-                <div className="flex flex-wrap items-center gap-1">
-                  {hit.refIndex != null && (
-                    <Badge variant="secondary" className="text-[9px] px-1 py-0">
-                      [{hit.refIndex}]
-                    </Badge>
+              <div className="flex-1 space-y-1 min-w-0">
+                <label htmlFor={labelId} className="cursor-pointer">
+                  <div className="flex flex-wrap items-center gap-1">
+                    {hit.refIndex != null && (
+                      <Badge variant="secondary" className="text-[9px] px-1 py-0">
+                        [{hit.refIndex}]
+                      </Badge>
+                    )}
+                    {hit.isNew && (
+                      <Badge variant="outline" className="text-[9px] px-1 py-0 border-primary/40 text-primary">
+                        新
+                      </Badge>
+                    )}
+                    <span className="font-medium">{hit.displayName}</span>
+                  </div>
+                  {(hit.bib?.firstAuthor || hit.bib?.year || hit.bib?.journal) && (
+                    <p className="text-[10px] text-muted-foreground">
+                      {[hit.bib?.firstAuthor, hit.bib?.year ? `(${hit.bib.year})` : "", hit.bib?.journal]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
                   )}
-                  {hit.isNew && (
-                    <Badge variant="outline" className="text-[9px] px-1 py-0 border-primary/40 text-primary">
-                      新
-                    </Badge>
+                </label>
+                <p className={cn("text-[10px] text-muted-foreground", !isExpanded && "line-clamp-2")}>
+                  {isExpanded ? hit.fullText || hit.snippet : hit.snippet}
+                </p>
+                <div className="flex items-center gap-2">
+                  {hasMore && (
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(hit.sourceKey)}
+                      className="inline-flex items-center gap-0.5 text-[10px] text-primary/70 hover:text-primary transition-colors"
+                    >
+                      {isExpanded ? (
+                        <><ChevronDown className="h-3 w-3" />收起</>
+                      ) : (
+                        <><ChevronRight className="h-3 w-3" />展开全文 ({hit.chunkCount} 片段)</>
+                      )}
+                    </button>
                   )}
-                  <span className="font-medium">{hit.displayName}</span>
+                  <button
+                    type="button"
+                    onClick={() => openReader(hit.sourceKey)}
+                    className="inline-flex items-center gap-0.5 text-[10px] text-primary/70 hover:text-primary transition-colors"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    阅读原文
+                  </button>
                 </div>
-                {(hit.bib?.firstAuthor || hit.bib?.year || hit.bib?.journal) && (
-                  <p className="text-[10px] text-muted-foreground">
-                    {[hit.bib?.firstAuthor, hit.bib?.year ? `(${hit.bib.year})` : "", hit.bib?.journal]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                )}
-                <p className="text-[10px] text-muted-foreground line-clamp-2">{hit.snippet}</p>
-              </label>
+              </div>
             </li>
           );
         })}

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BookOpen, Play, LogIn, LogOut, User } from "lucide-react";
+import { BookOpen, Play, LogIn, LogOut, User, LayoutDashboard } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { LabLogo } from "@/components/home/lab-logo";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,15 @@ export function HomeTopBar() {
                 <User className="h-4 w-4 opacity-70" />
                 <span className="hidden sm:inline">{user.name || user.email}</span>
               </span>
+              {user.role === "admin" && (
+                <Link
+                  href="/admin"
+                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-[#1a5632] bg-[#1a5632]/8 transition-colors hover:bg-[#1a5632]/14 hover:text-[#144a2a]"
+                >
+                  <LayoutDashboard className="h-4 w-4" />
+                  <span className="hidden sm:inline">进入后台</span>
+                </Link>
+              )}
               <Button
                 variant="ghost"
                 size="sm"

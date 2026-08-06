@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { HomeHero } from "@/components/home/home-hero";
 import { HomeModuleSections } from "@/components/home/home-module-sections";
+import { DirectionsOverview } from "@/components/home/directions-overview";
 import { HomeTopBar } from "@/components/home/home-top-bar";
 import { LabBackground } from "@/components/layout/lab-background";
 import { SiteFooter } from "@/components/layout/site-footer";
@@ -28,7 +29,9 @@ export default function Home() {
       <main className="relative mx-auto max-w-6xl px-4 pb-14 pt-8 sm:px-6 sm:pt-10">
         <HomeHero projects={projects} />
 
-        <div className="my-12 h-px bg-gradient-to-r from-transparent via-[#1a5632]/15 to-transparent" />
+        <DirectionsOverview />
+
+        <div className="my-10 h-px bg-gradient-to-r from-transparent via-[#1a5632]/15 to-transparent" />
 
         <HomeModuleSections recentProjectId={recentProject?.id ?? null} />
 

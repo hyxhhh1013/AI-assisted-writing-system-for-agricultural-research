@@ -8,9 +8,10 @@
 
 | 层 | 路径 |
 |----|------|
-| 页面 | `src/app/review/page.tsx` |
+| 页面 | `src/app/review/page.tsx`（重定向至质量中心审查 Tab） |
 | 组件 | `src/components/shared/review/`（`review-workspace`、`review-history-list`） |
 | API | `POST /api/review` |
+| 多轮编排 | `POST|GET /api/review/rounds`（max 2；`lib/review-rounds.ts`；Agent `run_review_rounds`） |
 | 历史 | `GET /api/review/history`、`GET /api/review/[id]` |
 | Service | `src/services/review.ts`（前端）、`review-service.ts`（后端逻辑） |
 | Admin | `GET /api/admin/reviews`、`GET /api/admin/reviews/[id]` |
@@ -20,11 +21,27 @@
 - **四维度并行**：学术规范、论证逻辑、结构、诚信（`review-academic` 等 prompt 文件）。
 - 请求经 **`validateBody(reviewSchema)`**；返回 JSON 结构化 `ReviewReport`（非 SSE）。
 - 结果持久化 **`ReviewCheck`**（`prisma/schema.prisma`），含 `overallScore` / `overallGrade`。
+- **W3-REVIEW-2**：最多 2 轮；第 2 轮注入上一轮中高严重度问题；同步 Passport `reviewRound`（`doneCount>=2` → Phase 7 done）。
 
 ### 不变量
 
 - 审查输入为项目章节快照（`sections` + `outline`），不直接改工作台正文；应用修复走其他流程。
 - 改维度或评分规则 → `lib/review-scoring.ts` + prompt 文件 + 本节。
+
+---
+
+## 引用硬检（W3-CITE-GATE）
+
+| 层 | 路径 |
+|----|------|
+| 契约 | `contracts/citation-gate.ts` |
+| 算法 | `lib/citation-gate.ts`（基于 `markOutOfBoundsCitations`） |
+| API | `GET|POST /api/citations/gate` |
+| 客户端 | `services/citations.ts` |
+| 导出 | `POST /api/export/pdf` 未过稿返回 422 `CITATION_GATE_BLOCKED` |
+| Passport | Phase 5 `done` 仅当 `citationGatePassed`；快照 `paperPassport.citationGate` |
+
+验收：越界编号无法标「可过稿」/导出 PDF。
 
 ---
 
@@ -34,13 +51,14 @@
 
 | 层 | 路径 |
 |----|------|
-| 页面 | `src/app/plagiarism/page.tsx` |
+| 页面 | `src/app/plagiarism/page.tsx` → `QualityWorkspace` |
+| 审查（兼容） | `/review` 重定向至 `/plagiarism?tab=review` |
 | API（主） | `POST /api/plagiarism/v2` — 统一 service 薄壳 |
 | 兼容 | `POST /api/plagiarism/check` |
 | 改写 | `POST /api/plagiarism/rewrite`、`PATCH` 接受/拒绝建议 |
 | 历史 | `GET /api/plagiarism/history` |
 | Service | `plagiarism-service.ts`（**唯一业务实现**） |
-| 前端 hook | `use-plagiarism-check` → `services/plagiarism.ts` |
+| 前端 hook | `use-plagiarism-check` → `services/plagiarism.ts`（SSE 调 **v2**） |
 | Admin | `GET /api/admin/plagiarism`、`GET /api/admin/plagiarism/[id]` |
 
 ### 检测层（`PlagiarismConfig`）

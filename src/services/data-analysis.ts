@@ -390,7 +390,7 @@ export function analyzeData(headers: string[], rows: string[][], fileName: strin
   }
 
   return {
-    analysis: { fileName, rowCount, columns, stats, generatedAt: Date.now() },
+    analysis: { fileName, rowCount, columns, stats, generatedAt: Date.now(), chartConfigs },
     claims,
     chartConfigs,
   };

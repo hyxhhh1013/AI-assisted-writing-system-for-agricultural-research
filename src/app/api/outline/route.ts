@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     const { data, errorResponse: ve } = await validateBody(outlineSchema, await req.json());
     if (ve) return ve;
 
-    const { title, researchDirection: rawDir, language, category, projectMode } = data;
+    const { title, researchDirection: rawDir, language, category, projectMode, userSkeleton } = data;
     const researchDirection = (rawDir?.trim() || title.trim());
 
     if (!researchDirection) {
@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
       language,
       contextText,
       projectMode: projectMode ?? "review",
+      userSkeleton,
     });
 
     const response = await callAI({

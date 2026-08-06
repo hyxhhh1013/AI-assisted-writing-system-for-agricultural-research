@@ -20,19 +20,64 @@ KnowledgeFile 1──* KnowledgeChunk
 |------|------|
 | `template` | `sci` \| `ieee` \| `gbt7713` \| `nature` |
 | `mode` | `review` \| `research`（证据包口径） |
+| `language` | `zh` \| `en`（写作/大纲/扩写输出语言，创建时选定） |
 | `citationStyle` | `gbt7714` \| `vancouver` \| `apa7` \| `ieee` |
 | `charts` | JSON 字符串，图表元数据 |
 | `dataClaims` | JSON `EvidenceClaim[]` |
 | `dataSources` | JSON `DataSourceAnalysis[]` |
 | `expandedOutlineSections` | JSON `string[]`，大纲扩写已完成任务 id（`stableHash(fullPath)`）；整章扩写时同 `sectionKey` 下子节一并标记 |
+| `writingBlueprint` | JSON `WritingBlueprint`（`src/contracts/writing-blueprint.ts`），扩写前全局叙事与配图规划 |
+| `argumentBlueprint` | JSON `ArgumentBlueprint`（`src/contracts/argument-blueprint.ts`），Phase 3 主张—证据—推理链（≠ writingBlueprint） |
+| `paperPassport` | JSON `PaperPassport`（`src/contracts/paper-passport.ts`）：8 阶段 + `config` / `literature` / `draftProgress` / `abstractSnapshot` / `reviewRound` 快照 |
+| `qualitySession` | JSON 质量中心会话快照（查重配置、审查展开状态、降重采纳记录），刷新/切项目恢复 |
+
+## Agent 会话（AgentSession · W2-CHECKPOINT）
+
+| 字段 | 说明 |
+|------|------|
+| `goal` | 用户目标原文 |
+| `status` | `running` \| `interrupted` \| `completed` \| `error` |
+| `snapshot` | JSON `AgentSessionSnapshot`（LLM `messages` / plan / iteration / toolSummaries / **`uiTranscript` 前端气泡**…） |
+| `projectId` | 可选，绑定论文项目 |
+
+中断后续跑：`POST /api/agent` `{ sessionId, resume: true }`；列表：`GET /api/agent/sessions?projectId=&status=interrupted`；聊天历史：`GET /api/agent/sessions?projectId=&history=1`（正序 + `uiTranscript`）。
 
 **保存策略（当前）**
 
 - `Section`：按 key **增量 PATCH** `/api/projects/[id]/sections/[key]`
-- `Reference`：**增量 PATCH** `/api/projects/[id]/references`（含 `replace`）
+- `Reference`：**增量 PATCH** `/api/projects/[id]/references`（含 `replace`）；`(projectId, order)` **唯一约束**（SEC-03），并发 create 走 advisory lock + P2002 重试
+- 外部导入可附带 `doi` / `title` / `abstract` / `openAccessUrl` 等元数据；有摘要时可写作 soft-grounded，并同步进方向知识库（摘要块可 BM25 检索；无 PDF 时状态为「摘要已索引」）
 - `AnalysisResult`：**增量 PATCH** `/api/projects/[id]/analysis-results`
 - `expandedOutlineSections`：随项目 **POST** `/api/projects` 写入（JSON 列）；自动保存/手动保存均走此路径
+- `writingBlueprint`：`project-writing-blueprint-db.ts` 统一读写蓝图数据
+- `argumentBlueprint`：`project-argument-blueprint-db.ts` 统一读写论证蓝图；Passport Phase 3 用 `hasArgumentBlueprint`
 - 禁止前端 `saveProject` 全量覆盖 refs/analysis（已迁移，见 ENG-PR-025b）
+
+### Agent 附件（AgentAttachment · W3-FILE-UPLOAD）
+
+上传 → 提取文本 → `read_attachment` 供给 Agent 阅读；支持 `pin` 到项目。
+
+| 字段 | 说明 |
+|------|------|
+| `userId` | String FK → User，onDelete: Cascade |
+| `sessionId` | 可选，会话级归属 |
+| `projectId` | 可选，`pin` 到项目后填写 |
+| `pinned` | 是否固定到项目（默认 `false`） |
+| `fileKey` | `data/attachments/{userId}/{id}/{safeName}` 相对路径（磁盘为唯一真相） |
+| `originalName` | 原始文件名（净化后存盘，`sanitizeAttachmentName` 去目录段/控制字符，截断 128） |
+| `mimeType` / `size` | 上传时记录的 MIME 与字节数 |
+| `status` | `extracting` \| `ready` \| `extract_failed` \| `unsupported` |
+| `extractSource` | `pdf` \| `docx` \| `csv` \| `excel` \| `text` \| `image_vision` \| `image_ocr` \| `failed` |
+| `extractedText` | `read_attachment` 返回内容；按 `MAX_ATTACHMENT_TEXT_CHARS`（500k）截断 |
+| `createdAt` / `updatedAt` | 时间戳 |
+
+索引：`(userId, sessionId)`、`(userId, projectId)`、`(status)`。
+
+**存储与上限**
+
+- 文件存 `data/attachments/{userId}/{attachmentId}/`（`ATTACHMENT_ROOT`），单附件上限 `MAX_ATTACHMENT_MB`（20MB）。
+- 前后端共享摘要类型：`src/contracts/agent-attachment.ts` `AgentAttachmentInfo`（不含全文）。
+- 读文本上限：`READ_ATTACHMENT_DEFAULT_CHARS`（3000）/ `READ_ATTACHMENT_MAX_CHARS`（8000）。
 
 ## 知识库（KnowledgeFile）
 
@@ -55,11 +100,19 @@ KnowledgeFile 1──* KnowledgeChunk
 | 模型 | 用途 |
 |------|------|
 | `ReviewCheck` | 四维度审查报告（JSON 存 `content` / 维度分） |
+| `ReviewIssue` | 单条审查问题（`dimension`、`severity`、`status`，支持 fix/dismiss） |
 | `PlagiarismCheck` | 查重会话（`status`、`maxSimilarity`、`overallRisk`） |
-| `PlagiarismMatch` | 单条匹配（`matchType`: local / web / cross） |
-| `RewriteSuggestion` | 降重建议（`strategy`、`status`） |
+| `PlagiarismMatch` | 单条匹配（`matchType`: local / web / cross / self / ai） |
+| `RewriteSuggestion` | 降重建议（`strategy`、`status`、采纳后可写回原文） |
 
 业务说明：[`domain/review-plagiarism.md`](./domain/review-plagiarism.md)。
+
+### 质量会话持久化
+
+刷新页面或切换项目时，质量中心状态通过以下机制恢复：
+- 前端 `quality-persist.ts` 序列化当前 Tab、展开状态、已采纳项到内存
+- 后端 `quality-restore.ts` 从 `ReviewCheck` / `PlagiarismCheck` 恢复历史结果
+- 蓝图工作区通过 `blueprint-utils.ts` 从 `Project.writingBlueprint` 恢复
 
 ## 系统与质量
 
@@ -70,3 +123,13 @@ KnowledgeFile 1──* KnowledgeChunk
 ## 索引（待 ENG-PR-053）
 
 队列计划为高频查询补 `@@index`；改 schema 时同步本节。
+
+## 研究方向（Direction）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `userId` | String FK → User | SEC-01：每用户私有（2026-07-06 迁移） |
+| `slug` | String @unique | URL 标识 |
+| `assets` / `analysis` / `roadmap` | Json? | 战略规划 JSONB；`assets` PATCH 走 `FOR UPDATE` 行锁（SEC-03） |
+
+迁移：`prisma/migrations/20260706100000_direction_owner/` — 存量方向挂到最早创建的 User。

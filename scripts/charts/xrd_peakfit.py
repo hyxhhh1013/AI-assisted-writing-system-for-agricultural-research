@@ -103,6 +103,47 @@ def run_background_subtraction(x, y, work_dir, params):
     return bg_intensity, bg_curve, std_dev
 
 
+def compute_peak_fwhm_deg(x, y, peak_idx):
+    """Half-maximum full width in 2θ degrees (linear interpolation)."""
+    if peak_idx <= 0 or peak_idx >= len(y) - 1:
+        return None
+    peak_height = float(y[peak_idx])
+    if peak_height <= 0:
+        return None
+    half = peak_height * 0.5
+
+    left = peak_idx
+    while left > 0 and y[left] >= half:
+        left -= 1
+    if left < peak_idx:
+        y_lo, y_hi = float(y[left]), float(y[left + 1])
+        x_lo, x_hi = float(x[left]), float(x[left + 1])
+        if y_hi == y_lo:
+            x_left = x_lo
+        else:
+            frac = (half - y_lo) / (y_hi - y_lo)
+            x_left = x_lo + frac * (x_hi - x_lo)
+    else:
+        x_left = float(x[peak_idx])
+
+    right = peak_idx
+    while right < len(y) - 1 and y[right] >= half:
+        right += 1
+    if right > peak_idx:
+        y_lo, y_hi = float(y[right - 1]), float(y[right])
+        x_lo, x_hi = float(x[right - 1]), float(x[right])
+        if y_hi == y_lo:
+            x_right = x_hi
+        else:
+            frac = (half - y_lo) / (y_hi - y_lo)
+            x_right = x_lo + frac * (x_hi - x_lo)
+    else:
+        x_right = float(x[peak_idx])
+
+    fwhm = abs(x_right - x_left)
+    return round(fwhm, 4) if fwhm > 1e-6 else None
+
+
 def find_xrd_peaks(x, y, params):
     """检测 XRD 衍射峰"""
     y_min, y_max = y.min(), y.max()
@@ -269,11 +310,15 @@ def main():
             sorted_indices = np.argsort(x[peaks])
             for idx in sorted_indices:
                 p = peaks[idx]
-                peak_list.append({
+                fwhm = compute_peak_fwhm_deg(x, signal, int(p))
+                entry = {
                     "two_theta": round(float(x[p]), 3),
                     "intensity": round(float(signal[p]), 3),
                     "relative_intensity": round(float(signal[p] / signal[peaks].max() * 100), 2),
-                })
+                }
+                if fwhm is not None:
+                    entry["fwhm"] = fwhm
+                peak_list.append(entry)
 
         result = {
             "status": "ok",

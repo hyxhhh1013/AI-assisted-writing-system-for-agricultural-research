@@ -89,7 +89,8 @@ describe("review dual-track", () => {
       "literature_body",
     );
     expect(mapToSectionForMode("研究现状与问题", "review")).toBe("background");
-    expect(mapToSectionForMode("材料与方法", "review")).toBe("introduction");
+    expect(mapToSectionForMode("材料与方法", "review")).toBe("background");
+    expect(mapToSectionForMode("结果与分析", "review")).toBe("literature_body");
   });
 
   it("workbench sections for review have 5 entries including abstract", () => {
@@ -107,6 +108,7 @@ describe("review dual-track", () => {
     const r = outlineSchema.safeParse({
       title: "x",
       projectMode: "review",
+      userSkeleton: ["摘要", "引言", "结论与展望"],
     });
     expect(r.success).toBe(true);
   });

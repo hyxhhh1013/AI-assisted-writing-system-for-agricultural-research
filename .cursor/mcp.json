@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "persistent-chat": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\20908\\.cursor-loop\\bridge.js",
+        "--workspace=d:\\project\\论文助手"
+      ],
+      "disabled": false,
+      "autoApprove": [
+        "wait_for_user_input",
+        "init_conversation",
+        "merge_conversation",
+        "select_conversation"
+      ]
+    }
+  }
+}

@@ -1,8 +1,20 @@
-import type { ConsistencyIssue, ConsistencyReport } from "@/types/consistency";
+// ==================== 核心域类型 ====================
 
-export type { ConsistencyIssue, ConsistencyReport };
+export interface ConsistencyIssue {
+  type: "terminology" | "data" | "logic" | "conclusion" | "citation" | "overclaim";
+  severity: "high" | "medium" | "low";
+  sections: string[];
+  description: string;
+  suggestion: string;
+}
 
-/** POST /api/consistency 请求体 */
+export interface ConsistencyReport {
+  passed: boolean;
+  issues: ConsistencyIssue[];
+  summary: string;
+}
+
+// ==================== API 层类型 ====================
 export interface ConsistencyCheckInput {
   title: string;
   sections: { key: string; content: string }[];

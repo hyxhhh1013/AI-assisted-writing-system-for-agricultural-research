@@ -81,8 +81,13 @@ export function clearTokenCookie(): string {
  * 获取当前登录用户（在 API Route 中调用）
  * 依赖 src/proxy.ts 注入的 request header（x-user-id）
  */
+/** 从 proxy 注入的 header 读取当前用户 ID（Route Handler 用） */
+export function getUserIdFromRequest(req: NextRequest): string | null {
+  return req.headers.get(USER_ID_HEADER);
+}
+
 export async function getCurrentUser(req: NextRequest) {
-  const userId = req.headers.get(USER_ID_HEADER);
+  const userId = getUserIdFromRequest(req);
   if (!userId) return null;
 
   const user = await prisma.user.findUnique({

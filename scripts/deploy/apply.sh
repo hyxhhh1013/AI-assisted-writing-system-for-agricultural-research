@@ -9,6 +9,10 @@ TAR_FILE="${TAR_FILE:-/home/ubuntu/deploy.tar.gz}"
 
 echo "→ 解压到 ${APP_DIR}（不覆盖 .env）"
 cd "$APP_DIR"
+# 清理旧构建产物：.next/standalone/node_modules 含 symlink/哈希目录，
+# 不删会在 tar 解包时报 "Cannot open: File exists"
+echo "→ 清理旧 .next"
+rm -rf .next
 # 排除 .env —— 服务器配置永远不被部署包覆盖
 tar -xzf "$TAR_FILE" --exclude='.env' 2>/dev/null || tar -xzf "$TAR_FILE"
 

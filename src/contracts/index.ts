@@ -18,3 +18,5 @@ export type {
   ReviewHistoryItem,
   RunReviewRequest,
 } from "./review";
+export * from "./direction";
+export * from "./direction-socratic";

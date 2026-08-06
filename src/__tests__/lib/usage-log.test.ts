@@ -16,7 +16,7 @@ describe("usageLog", () => {
   });
 
   it("records in-memory entries", () => {
-    usageLog.record("ai:deepseek", { model: "deepseek-chat", provider: "deepseek" }, "user-1");
+    usageLog.record("ai:deepseek", { model: "deepseek-v4-flash", provider: "deepseek" }, "user-1");
     usageLog.record("ai:zhipu", { model: "glm-4" }, "user-2");
 
     const stats = usageLog.stats();

@@ -12,8 +12,8 @@ import { mergeEditorIntoProject, buildPlagiarismContentFromProject } from "@/lib
 import { ensureSubsectionNumbering, majorNumberFromSectionId, maxSecondLevelInText } from "@/lib/academic-numbering";
 import { useDocxExport } from "@/hooks/use-docx-export";
 import { useReferenceReorder } from "@/hooks/use-reference-reorder";
-import { pruneUncitedReferences, collectAllCitedIndices, stripOutOfRangeCitations, remapPrunedCitations } from "@/lib/reference-reorder";
-import { normalizeAllCitationFormats } from "@/lib/citation-bounds";
+import { pruneUncitedReferences, collectAllCitedIndices, stripOutOfRangeCitations, stripEmbeddedBibliography, remapPrunedCitations, buildPreviewReferencesFromContent } from "@/lib/reference-reorder";
+import { normalizeAllCitationFormats } from "@/lib/citation";
 import { useEditorSync } from "@/hooks/use-editor-sync";
 import { useAutoSave } from "@/hooks/use-auto-save";
 import { useMarkdownExport } from "@/hooks/use-markdown-export";
@@ -28,7 +28,13 @@ import {
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
 import { projectStore } from "@/lib/store";
-import type { ProjectData } from "@/contracts/project";
+import type { ProjectData, ProjectLanguage } from "@/contracts/project";
+import {
+  parseWritingBlueprint,
+  serializeWritingBlueprint,
+  type WritingBlueprint,
+} from "@/contracts/writing-blueprint";
+import { isBlueprintStale } from "@/lib/blueprint-utils";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -42,6 +48,8 @@ import { useAiParagraph, type AiParagraphAction } from "@/hooks/use-ai-paragraph
 import type { ParagraphSelectionAction } from "@/components/shared/writing/paragraph-selection-toolbar";
 import { WorkbenchEditorArea } from "@/components/shared/workbench-editor-area";
 import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
+import { ProjectHandoffBanner } from "@/components/shared/project/project-handoff-banner";
+import { parsePaperPassport } from "@/contracts/paper-passport";
 import { getModeAccent, getStructurePanelTitle, getStructurePanelHint } from "@/lib/mode-theme";
 import { siteTheme } from "@/lib/site-theme";
 import { cn } from "@/lib/utils";
@@ -99,6 +107,11 @@ const LazyWritingPanel = dynamic(
   { ssr: false, loading: () => <TabPanelLoading /> }
 );
 
+const LazyAgentPanel = dynamic(
+  () => import("@/components/shared/agent/agent-panel").then(m => m.AgentPanel),
+  { ssr: false, loading: () => <TabPanelLoading /> }
+);
+
 const LazyReaderPanel = dynamic(
   () => import("@/components/shared/reader-panel").then(m => m.ReaderPanel),
   { ssr: false, loading: () => <TabPanelLoading /> }
@@ -113,6 +126,14 @@ const LazyXrdPanel = dynamic(
   () => import("@/components/shared/xrd-panel").then(m => m.XrdPanel),
   { ssr: false, loading: () => <TabPanelLoading /> }
 );
+
+const LazyBlueprintWorkspaceDialog = dynamic(
+  () =>
+    import("@/components/shared/blueprint/blueprint-workspace-dialog").then((m) => ({
+      default: m.BlueprintWorkspaceDialog,
+    })),
+  { ssr: false, loading: () => null },
+);
 const PDFViewer = dynamic(() => import("@/components/pdf-viewer"), {
   ssr: false,
   loading: () => (
@@ -122,9 +143,12 @@ const PDFViewer = dynamic(() => import("@/components/pdf-viewer"), {
   ),
 });
 
-export type WorkbenchTab = "structure" | "data" | "outline" | "writing" | "reader" | "plagiarism" | "xrd";
+export type WorkbenchTab = "structure" | "data" | "outline" | "writing" | "agent" | "reader" | "plagiarism" | "xrd";
+
+const AGENT_TAB_ENABLED = process.env.NEXT_PUBLIC_AGENT_ENABLED === "1";
 
 const WORKBENCH_TABS: WorkbenchTab[] = [
+  ...(AGENT_TAB_ENABLED ? (["agent"] as const) : []),
   "structure",
   "data",
   "outline",
@@ -162,7 +186,9 @@ function WorkbenchContent() {
   const [activeSection, setActiveSection] = useState("introduction");
   const [editingContent, setEditingContent] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState<WorkbenchTab>("structure");
+  const [activeTab, setActiveTab] = useState<WorkbenchTab>(
+    AGENT_TAB_ENABLED ? "agent" : "structure",
+  );
   const [isPreviewOpen, setIsPreviewOpen] = useState(true);
   const [rightPanelMode, setRightPanelMode] = useState<"preview" | "reader">("preview");
   const [editorMode, setEditorMode] = useState<"classic" | "paragraph">("paragraph");
@@ -183,6 +209,7 @@ function WorkbenchContent() {
   const [isConsistencyOpen, setIsConsistencyOpen] = useState(false);
   const [expandedOutlineSections, setExpandedOutlineSections] = useState<string[]>([]);
   const [pendingExpandTask, setPendingExpandTask] = useState<string | null>(null);
+  const [blueprintDialogOpen, setBlueprintDialogOpen] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
   // 使用 ref 存储最新值，避免 setTimeout/stale closure 中读到旧状态
   const projectRef = useRef(project);
@@ -199,6 +226,11 @@ function WorkbenchContent() {
 
   const writingMode = getProjectWritingMode(project.mode);
   const modeAccent = useMemo(() => getModeAccent(writingMode), [writingMode]);
+  const passport = useMemo(
+    () => parsePaperPassport(project.paperPassport ?? null),
+    [project.paperPassport],
+  );
+  const directionHandoff = Boolean(passport?.source?.directionSlug);
 
   const sectionContentsForRefs = useMemo(() => {
     const base: Record<string, string> = { abstract: project.abstract || "" };
@@ -209,14 +241,71 @@ function WorkbenchContent() {
   }, [project.abstract, project.sections]);
 
   const previewProject = useMemo<ProjectData>(() => {
-    return mergeEditorIntoProject(project, activeSection, editingContent);
-  }, [project, activeSection, editingContent]);
+    const base = mergeEditorIntoProject(project, activeSection, editingContent);
+    if (!aiPreview?.content?.trim()) return base;
 
-  useEffect(() => {
-    if (project.mode !== "research" && activeTab === "data") {
-      setActiveTab("structure");
+    const previewRefs = buildPreviewReferencesFromContent(
+      aiPreview.content,
+      base.references || [],
+      aiPreview.detectedRefs,
+    );
+
+    const sectionKey = aiPreview.targetSection;
+    let next: ProjectData = {
+      ...base,
+      references: previewRefs.length > 0 ? previewRefs : base.references,
+    };
+
+    if (!aiPreview.subsectionTitle && sectionKey) {
+      if (sectionKey === "abstract") {
+        next = { ...next, abstract: aiPreview.content };
+      } else {
+        next = {
+          ...next,
+          sections: { ...next.sections, [sectionKey]: aiPreview.content },
+        };
+      }
     }
-  }, [project.mode, activeTab]);
+
+    return next;
+  }, [project, activeSection, editingContent, aiPreview]);
+
+  const writingBlueprint = useMemo(
+    () => parseWritingBlueprint(project.writingBlueprint),
+    [project.writingBlueprint],
+  );
+
+  const blueprintStale = useMemo(
+    () =>
+      Boolean(
+        writingBlueprint &&
+          project.outline?.trim() &&
+          isBlueprintStale(writingBlueprint, project.outline),
+      ),
+    [writingBlueprint, project.outline],
+  );
+
+  const handleOpenBlueprintDialog = useCallback(() => {
+    if (!writingBlueprint) {
+      toast.error("请在大纲侧栏先生成写作蓝图");
+      return;
+    }
+    setBlueprintDialogOpen(true);
+  }, [writingBlueprint]);
+
+  const handleSaveWritingBlueprint = useCallback(
+    (next: WritingBlueprint) => {
+      const serialized = serializeWritingBlueprint(next);
+      setProject((prev) => {
+        const updated = { ...prev, writingBlueprint: serialized };
+        void projectStore.save(updated).then((id) => {
+          if (!id) toast.error("蓝图保存失败，请检查网络后重试");
+        });
+        return updated;
+      });
+    },
+    [],
+  );
 
   useEffect(() => {
     setEditorMode(readStoredEditorMode());
@@ -231,7 +320,15 @@ function WorkbenchContent() {
       if (!projectId) {
         const lastId = projectStore.getCurrentId();
         if (lastId) {
-          router.replace(`/workbench?id=${lastId}${searchParams.get("tab") ? `&tab=${searchParams.get("tab")}` : ""}`);
+          const tab = searchParams.get("tab");
+          const section = searchParams.get("section");
+          const meta = searchParams.get("meta");
+          const qs = new URLSearchParams();
+          qs.set("id", lastId);
+          if (tab) qs.set("tab", tab);
+          if (section) qs.set("section", section);
+          if (meta) qs.set("meta", meta);
+          router.replace(`/workbench?${qs.toString()}`);
         } else {
           router.replace("/projects");
         }
@@ -241,17 +338,8 @@ function WorkbenchContent() {
       const data = await projectStore.get(projectId);
       if (data) {
         setProject(data);
-        setEditingContent(data.sections[activeSection] || "");
         if (data.expandedOutlineSections) {
           setExpandedOutlineSections(data.expandedOutlineSections);
-        }
-
-        // 根据 URL 参数设置初始 Tab
-        const tab = searchParams.get("tab");
-        if (tab === "analysis" || tab === "evidence") {
-          setActiveTab("data");
-        } else if (isWorkbenchTab(tab)) {
-          setActiveTab(tab);
         }
       } else {
         toast.error("未找到项目数据，正在返回列表");
@@ -259,10 +347,28 @@ function WorkbenchContent() {
       }
     };
 
-    initProject();
+    void initProject();
   }, [projectId]);
 
-  // 当切换章节时同步内容
+  // URL tab / section / meta 与项目加载解耦：支持从工作坊带参跳入后切换
+  useEffect(() => {
+    if (!projectId) return;
+    const tab = searchParams.get("tab");
+    if (tab === "analysis" || tab === "evidence") {
+      setActiveTab("data");
+    } else if (isWorkbenchTab(tab)) {
+      setActiveTab(tab);
+    }
+    const section = searchParams.get("section");
+    if (section) {
+      setActiveSection(section);
+    }
+    if (searchParams.get("meta") === "1") {
+      setIsMetaDialogOpen(true);
+    }
+  }, [projectId, searchParams]);
+
+  // 当切换章节或项目内容被 Agent/导入刷新时同步编辑器
   useEffect(() => {
     if (activeSection === "abstract") {
       setEditingContent(project.abstract || "");
@@ -271,7 +377,7 @@ function WorkbenchContent() {
     } else {
       setEditingContent("");
     }
-  }, [activeSection, project.id, project.abstract]); // 增加 project.abstract 监听
+  }, [activeSection, project.id, project.abstract, project.sections]);
 
   // 核心优化：实时将编辑内容同步到 project 状态（提取至 useEditorSync）
   useEditorSync(editingContent, activeSection, setProject, projectRef);
@@ -301,6 +407,88 @@ function WorkbenchContent() {
     setActiveTab("structure");
     setAiPreview(null);
   }, []);
+
+  const handleReferencesImported = useCallback(async () => {
+    if (!projectId) return;
+    const data = await projectStore.get(projectId);
+    if (data) setProject(data);
+  }, [projectId]);
+
+  const handleAgentSectionPersisted = useCallback(
+    async (info: { sectionKey: string }) => {
+      if (!projectId) return;
+      try {
+        const data = await projectStore.get(projectId);
+        if (data) {
+          setProject(data);
+          focusEditorAfterDraft(info.sectionKey);
+          toast.success(`Agent 已写回「${info.sectionKey}」，已切换到编辑器`);
+        }
+      } catch {
+        toast.error("章节已写回，但刷新项目失败，请手动刷新页面");
+      }
+    },
+    [projectId, focusEditorAfterDraft],
+  );
+
+  const handleAgentChartPersisted = useCallback(
+    async (info: { imageUrl: string; sectionKey?: string; caption?: string }) => {
+      if (!projectId) return;
+      try {
+        const data = await projectStore.get(projectId);
+        if (data) {
+          setProject(data);
+          if (info.sectionKey) {
+            focusEditorAfterDraft(info.sectionKey);
+            toast.success(
+              info.caption
+                ? `图表「${info.caption}」已插入「${info.sectionKey}」`
+                : `图表已插入「${info.sectionKey}」`,
+            );
+          } else {
+            toast.success(
+              info.caption
+                ? `图表「${info.caption}」已登记到项目图表库`
+                : "图表已登记到项目图表库",
+            );
+          }
+        }
+      } catch {
+        toast.error("图表已生成，但刷新项目失败，请手动刷新页面");
+      }
+    },
+    [projectId, focusEditorAfterDraft],
+  );
+
+  /** Agent 任意写回（配置/大纲/蓝图/文献等）后刷新工作台项目 */
+  const handleAgentProjectMutated = useCallback(
+    async (info: { label: string; tool: string }) => {
+      if (!projectId) return;
+      // 章节/图表已有专属 toast + 跳转，避免重复提示
+      if (
+        info.tool === "write_section"
+        || info.tool === "refine_content"
+        || info.tool === "apply_revision_item"
+        || info.tool === "write_bilingual_abstract"
+        || info.tool === "generate_chart"
+        || info.tool === "generate_table"
+      ) {
+        const data = await projectStore.get(projectId);
+        if (data) setProject(data);
+        return;
+      }
+      try {
+        const data = await projectStore.get(projectId);
+        if (data) {
+          setProject(data);
+          toast.success(`Agent 已更新「${info.label}」`);
+        }
+      } catch {
+        toast.error("项目已更新，但刷新失败，请手动刷新页面");
+      }
+    },
+    [projectId],
+  );
 
   const handleApplyAiContent = (content: string, sectionId: string, subsectionTitle?: string) => {
     const currentProject = projectRef.current;
@@ -400,6 +588,7 @@ function WorkbenchContent() {
     processedContent = normalizeAllCitationFormats(processedContent);
     // 清理草稿痕迹 + 去重 + 越界引用剥离后再写入
     const refCount = currentProject.references?.length || 0;
+    processedContent = stripEmbeddedBibliography(processedContent);
     processedContent = stripOutOfRangeCitations(processedContent, refCount);
     processedContent = cleanDraftArtifacts(processedContent);
     processedContent = deduplicateParagraphs(processedContent);
@@ -433,7 +622,20 @@ function WorkbenchContent() {
     setIsPreviewOpen(true);
   };
 
-  const handleSaveMeta = async (draft: { title: string; authors: string; affiliations: string; abstract: string; keywords: string; classification: string; researchDirection: string; outline: string; template: string; referencesText: string; citationStyle?: "gbt7714" | "vancouver" | "apa7" | "ieee" }) => {
+  const handleSaveMeta = async (draft: {
+    title: string;
+    authors: string;
+    affiliations: string;
+    abstract: string;
+    keywords: string;
+    classification: string;
+    researchDirection: string;
+    outline: string;
+    template: string;
+    referencesText: string;
+    citationStyle?: "gbt7714" | "vancouver" | "apa7" | "ieee";
+    language: ProjectLanguage;
+  }) => {
     const updated: ProjectData = {
       ...project,
       title: draft.title,
@@ -445,6 +647,7 @@ function WorkbenchContent() {
       researchDirection: draft.researchDirection,
       outline: draft.outline,
       template: draft.template,
+      language: draft.language,
       citationStyle: draft.citationStyle || "gbt7714",
       references: draft.referencesText.split(/\n+/).map((ref) => ref.trim()).filter(Boolean),
     };
@@ -572,41 +775,63 @@ function WorkbenchContent() {
         setIsPreviewOpen={setIsPreviewOpen}
       />
 
-      {/* Second Left: Dynamic Panel */}
+      {/* Second Left: Dynamic Panel — Agent 加宽，便于阅读长回复 */}
       <div 
         className={cn(
           "border-r flex flex-col transition-all duration-300 ease-in-out overflow-hidden bg-white/90",
           modeAccent.borderTint,
-          isSidebarOpen ? "w-80" : "w-0",
+          isSidebarOpen
+            ? activeTab === "agent"
+              ? "w-[min(36rem,46vw)] min-w-[22rem]"
+              : activeTab === "writing"
+                ? "w-96"
+                : "w-80"
+            : "w-0",
         )}
       >
-        <div className="flex flex-col h-full w-80">
-          <header className={cn("h-14 border-b flex items-center justify-between px-4 shrink-0", modeAccent.headerTint, modeAccent.borderTint)}>
-            <div className="flex flex-col min-w-0 gap-0.5">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="font-semibold text-sm text-[#122820] truncate">
-                  {activeTab === "structure" && getStructurePanelTitle(writingMode)}
-                  {activeTab === "data" && "实验数据"}
-                  {activeTab === "outline" && "论证提纲"}
-                  {activeTab === "writing" && "章节协作向导"}
-                  {activeTab === "reader" && "文献库"}
-                  {activeTab === "plagiarism" && "论文质量检测"}
-                  {activeTab === "xrd" && "XRD 分析"}
-                </span>
-                <ProjectModeBadge mode={writingMode} />
+        <div
+          className={cn(
+            "flex h-full min-w-0 flex-col",
+            activeTab === "agent"
+              ? "w-full"
+              : activeTab === "writing"
+                ? "w-96"
+                : "w-80",
+          )}
+        >
+          {activeTab !== "agent" ? (
+          <header className={cn("border-b shrink-0 px-4 py-3", modeAccent.headerTint, modeAccent.borderTint)}>
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex flex-col min-w-0 gap-0.5 flex-1">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-semibold text-sm text-[#122820] truncate">
+                    {activeTab === "structure" && getStructurePanelTitle(writingMode)}
+                    {activeTab === "data" && "实验数据"}
+                    {activeTab === "outline" && "论证提纲"}
+                    {activeTab === "writing" && "章节协作向导"}
+                    {activeTab === "reader" && "补录文献"}
+                    {activeTab === "plagiarism" && "论文质量检测"}
+                    {activeTab === "xrd" && "XRD 分析"}
+                  </span>
+                  <ProjectModeBadge mode={writingMode} />
+                </div>
+                {activeTab === "structure" && (
+                  <span className="text-[10px] text-[#6b7c72] font-normal leading-tight line-clamp-2">
+                    {getStructurePanelHint(writingMode)}
+                  </span>
+                )}
               </div>
-              {activeTab === "structure" && (
-                <span className="text-[10px] text-[#6b7c72] font-normal leading-tight line-clamp-2">
-                  {getStructurePanelHint(writingMode)}
-                </span>
-              )}
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setIsSidebarOpen(false)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
             </div>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsSidebarOpen(false)}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
           </header>
+          ) : null}
           
-          <div className="flex-1 overflow-hidden p-4">
+          <div className={cn(
+            "flex-1 overflow-hidden",
+            activeTab === "agent" ? "p-0" : activeTab === "writing" ? "p-3" : "p-4",
+          )}>
             {activeTab === "plagiarism" && (
               <div className="h-full min-h-0 flex flex-col overflow-hidden">
                 <ErrorBoundary>
@@ -622,6 +847,12 @@ function WorkbenchContent() {
             )}
             {activeTab === "structure" && (
               <div className="h-full min-h-0 flex flex-col overflow-hidden">
+                {directionHandoff && (
+                  <ProjectHandoffBanner
+                    passport={passport}
+                    referenceCount={project.references?.length ?? 0}
+                  />
+                )}
                 <p className="shrink-0 text-[10px] text-[#6b7c72] px-1 pb-2 border-b mb-2 leading-relaxed">
                   点选章节后，中间编辑器与预览对应该段；引用重排会扫描<strong>含当前编辑区</strong>的全文。
                 </p>
@@ -654,6 +885,7 @@ function WorkbenchContent() {
                   <div className="pt-4 mt-4 border-t">
                     <ReferenceBrowser
                       projectId={projectId ?? undefined}
+                      directionSlug={passport?.source?.directionSlug}
                       references={project.references || []}
                       activeSectionContent={
                         activeSection === "abstract"
@@ -661,6 +893,7 @@ function WorkbenchContent() {
                           : project.sections[activeSection]
                       }
                       allContents={sectionContentsForRefs}
+                      onGoImport={() => setActiveTab("reader")}
                     />
                   </div>
 
@@ -684,24 +917,39 @@ function WorkbenchContent() {
                 </div>
               </div>
             )}
-            {/* 所有面板保持挂载，切换不销毁状态 */}
-            {activeTab === "data" && projectId && (
-              <div className="h-full min-h-0 flex flex-col overflow-hidden">
+            {/* 面板保持挂载，切换 tab 仅隐藏，避免提纲/写作状态丢失 */}
+            <div
+              className={cn(
+                "h-full min-h-0 flex flex-col overflow-hidden",
+                activeTab !== "data" && "hidden",
+              )}
+            >
+              {projectId && (
                 <ErrorBoundary>
                   <LazyDataPanel
                     projectId={projectId}
                     project={project}
-                    onSave={(updates) => setProject(prev => ({ ...prev, ...updates }))}
+                    onSave={(updates) => {
+                      setProject((prev) => ({ ...prev, ...updates }));
+                      if (updates.sections && updates.sections[activeSection] !== undefined) {
+                        setEditingContent(updates.sections[activeSection] ?? "");
+                      }
+                    }}
                     onOpenProjectSettings={() => setIsMetaDialogOpen(true)}
                     onInsertClaim={(claimText) => {
                       handleApplyAiContent(`${editingContent}\n\n${claimText}\n\n`, activeSection);
                     }}
                   />
                 </ErrorBoundary>
-              </div>
-            )}
-            {activeTab === "outline" && projectId && (
-              <div className="h-full min-h-0 flex flex-col overflow-hidden">
+              )}
+            </div>
+            <div
+              className={cn(
+                "h-full min-h-0 flex flex-col overflow-hidden",
+                activeTab !== "outline" && "hidden",
+              )}
+            >
+              {projectId && (
                 <ErrorBoundary>
                   <LazyOutlinePanel
                     projectId={projectId}
@@ -712,20 +960,27 @@ function WorkbenchContent() {
                       setActiveTab("writing");
                     }}
                     onSave={(updates) => {
-                      setProject(prev => {
+                      setProject((prev) => {
                         const next = { ...prev, ...updates };
-                        projectStore.save(next).catch(() => {});
+                        void projectStore.save(next).then((id) => {
+                          if (!id) toast.error("保存失败，请检查网络后重试");
+                        });
                         return next;
                       });
                     }}
                     onTabChange={setActiveTab}
+                    onOpenBlueprint={handleOpenBlueprintDialog}
                   />
                 </ErrorBoundary>
-              </div>
-            )}
-            {/* Writing tab: 切换时通过 sessionStorage 自动恢复写作状态 */}
-            {activeTab === "writing" && projectId && (
-              <div className="h-full min-h-0 flex flex-col overflow-hidden">
+              )}
+            </div>
+            <div
+              className={cn(
+                "h-full min-h-0 flex flex-col overflow-hidden",
+                activeTab !== "writing" && "hidden",
+              )}
+            >
+              {projectId && (
                 <ErrorBoundary>
                   <LazyWritingPanel
                     projectId={projectId}
@@ -742,12 +997,32 @@ function WorkbenchContent() {
                     onUpdateProject={handleUpdateProject}
                   />
                 </ErrorBoundary>
-              </div>
-            )}
+              )}
+            </div>
+            <div
+              className={cn(
+                "h-full min-h-0 flex flex-col overflow-hidden",
+                activeTab !== "agent" && "hidden",
+              )}
+            >
+              <ErrorBoundary>
+                <LazyAgentPanel
+                  projectId={projectId ?? undefined}
+                  onSectionPersisted={(info) => void handleAgentSectionPersisted(info)}
+                  onChartPersisted={(info) => void handleAgentChartPersisted(info)}
+                  onProjectMutated={(info) => void handleAgentProjectMutated(info)}
+                  onCollapse={() => setIsSidebarOpen(false)}
+                />
+              </ErrorBoundary>
+            </div>
             {activeTab === "reader" && (
               <div className="h-full min-h-0 flex flex-col overflow-hidden">
                 <ErrorBoundary>
-                  <LazyReaderPanel onOpenFile={handleOpenFile} />
+                  <LazyReaderPanel
+                    projectId={projectId ?? undefined}
+                    onOpenFile={handleOpenFile}
+                    onReferencesUpdated={() => void handleReferencesImported()}
+                  />
                 </ErrorBoundary>
               </div>
             )}
@@ -782,7 +1057,8 @@ function WorkbenchContent() {
       )}
 
       {/* Main Area: Editor + Preview */}
-      <ResizablePanelGroup orientation="horizontal" className="flex-1">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
         <ResizablePanel defaultSize={60} minSize={30}>
           <WorkbenchEditorArea
             project={previewProject}
@@ -859,7 +1135,7 @@ function WorkbenchContent() {
                       ) : (
                         <div className="h-full flex flex-col items-center justify-center text-muted-foreground italic p-8 text-center">
                           <Search className="h-12 w-12 mb-4 opacity-10" />
-                          <p>在左侧文献库中选择一篇文献进行阅读</p>
+                          <p>在左侧补录文献中选择一篇 PDF 进行阅读</p>
                         </div>
                       )}
                     </div>
@@ -870,6 +1146,19 @@ function WorkbenchContent() {
           </>
         )}
       </ResizablePanelGroup>
+      </div>
+
+      {projectId && (
+        <LazyBlueprintWorkspaceDialog
+          open={blueprintDialogOpen}
+          onOpenChange={setBlueprintDialogOpen}
+          blueprint={writingBlueprint}
+          project={project}
+          projectId={projectId}
+          isStale={blueprintStale}
+          onSave={handleSaveWritingBlueprint}
+        />
+      )}
 
       {/* Meta Settings Dialog */}
       <WorkbenchMetaDialog

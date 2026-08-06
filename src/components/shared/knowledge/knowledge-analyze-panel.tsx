@@ -15,6 +15,7 @@ import { AlertTriangle, BookOpen, Copy, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import type { AnalyzeMode } from "@/contracts/knowledge-analyze";
 import { useKnowledgeAnalyze } from "@/hooks/use-knowledge-analyze";
+import { AiResultDisclaimer } from "@/components/shared/ai-result-disclaimer";
 
 interface KnowledgeAnalyzePanelProps {
   filename: string;
@@ -129,6 +130,7 @@ export function KnowledgeAnalyzePanel({ filename, parseWarning }: KnowledgeAnaly
         )}
         {(text || isAnalyzing) && (
           <div className="space-y-2 animate-in fade-in">
+            <AiResultDisclaimer compact />
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-muted-foreground">
                 {meta?.mode === "full"

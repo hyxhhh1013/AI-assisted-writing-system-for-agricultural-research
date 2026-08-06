@@ -6,6 +6,7 @@ import {
   normalizeWritingBullets,
 } from "@/contracts/writing";
 import type { PreparedWritingContext, WritingPipelineEmit } from "../types";
+import { finalizeAndEmitCitations } from "./finalize";
 
 const tick = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -80,21 +81,22 @@ ${otherBullets || "（无）"}${context?.trim() ? `\n\n【补充说明】\n${con
   }
 
   const trimmed = bulletDraft.trim();
+  const finalized = finalizeAndEmitCitations(trimmed, prepared, emit);
   emit({
     type: "pipeline_step",
     step: "writing",
     status: "done",
-    detail: `要点 ${idx + 1} 完成（${trimmed.length} 字）`,
+    detail: `要点 ${idx + 1} 完成（${finalized.text.length} 字）`,
   });
   emit({
     type: "bullet_done",
     bulletIndex: idx,
-    content: trimmed,
+    content: finalized.text,
     bulletCount: normalizedBullets.length,
   });
   await tick(60);
 
-  return { initialDraft: trimmed, finalDraft: trimmed };
+  return { initialDraft: finalized.text, finalDraft: finalized.text };
 }
 
 export async function runWriterPhase(

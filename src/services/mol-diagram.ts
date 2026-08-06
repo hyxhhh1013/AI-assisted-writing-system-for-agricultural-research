@@ -3,6 +3,9 @@
 export interface MolDiagramResponse {
   imageBase64: string;
   imageUrl: string;
+  svgUrl?: string;
+  pdfUrl?: string;
+  preset?: string;
 }
 
 export interface MolAtom {
@@ -65,6 +68,8 @@ export interface FlowNode {
   id: string;
   label: string;
   shape?: "box" | "oval" | "diamond";
+  role?: "process" | "decision" | "start_end" | "callout";
+  color?: string;
 }
 
 export interface FlowEdge {
@@ -73,12 +78,27 @@ export interface FlowEdge {
   label?: string;
 }
 
+export type FlowPreset = "nature" | "agr_journal" | "print_bw";
+
 export interface FlowConfig {
   title?: string;
   direction?: "vertical" | "horizontal";
   nodes: FlowNode[];
   edges: FlowEdge[];
+  /** @deprecated 使用 columns；保留兼容旧调用 */
   cols?: number;
+  /** 栏宽：1=单栏，2=双栏（对齐 plotstyle / Nature 刊规） */
+  columns?: number;
+  /** journal=白底细线（默认）；vivid=浅色强调 */
+  look?: "journal" | "vivid";
+  /** ortho | polyline | spline */
+  splines?: string;
+  colors?: Record<string, string>;
+  default_color?: string;
+  renderer?: "matplotlib" | "graphviz";
+  preset?: FlowPreset;
+  export_formats?: string | string[];
+  panel_label?: string;
 }
 
 export async function renderFlowChart(
@@ -88,7 +108,12 @@ export async function renderFlowChart(
   const res = await fetch("/api/flow-diagram", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(config),
+    body: JSON.stringify({
+      renderer: "graphviz",
+      preset: "nature",
+      export_formats: "png,svg,pdf",
+      ...config,
+    }),
     signal,
   });
   const json = await res.json();

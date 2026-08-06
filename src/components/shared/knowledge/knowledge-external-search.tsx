@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Copy, ExternalLink, Loader2, Search, BookMarked } from "lucide-react";
 import type { ExternalLiteratureHit } from "@/contracts/literature";
 import { formatExternalLiteratureHit } from "@/lib/external-literature-format";
+import { cn } from "@/lib/utils";
 import { importExternalReference, searchLiterature } from "@/services/external-literature";
 import { listProjects, type ProjectListItem } from "@/services/project";
 
@@ -29,11 +30,13 @@ const SOURCE_LABELS: Record<ExternalLiteratureHit["source"], string> = {
 function HitCard({
   hit,
   projectId,
+  directionSlug,
   onImported,
 }: {
   hit: ExternalLiteratureHit;
   projectId: string;
-  onImported: (message: string) => void;
+  directionSlug?: string;
+  onImported: (message: string, imported?: boolean) => void;
 }) {
   const [importing, setImporting] = useState(false);
   const citation = formatExternalLiteratureHit(hit);
@@ -45,6 +48,19 @@ function HitCard({
   };
 
   const handleImport = async () => {
+    if (directionSlug) {
+      setImporting(true);
+      try {
+        const { importExternalToCorpus } = await import("@/services/direction-literature");
+        await importExternalToCorpus(directionSlug, hit, "supporting");
+        onImported("已加入方向文献 corpus", true);
+      } catch (e) {
+        onImported(e instanceof Error ? e.message : "导入失败", false);
+      } finally {
+        setImporting(false);
+      }
+      return;
+    }
     if (!projectId) {
       onImported("请先选择项目");
       return;
@@ -52,9 +68,9 @@ function HitCard({
     setImporting(true);
     try {
       await importExternalReference(projectId, hit);
-      onImported("已加入项目参考文献");
+      onImported("已加入项目参考文献", true);
     } catch (e) {
-      onImported(e instanceof Error ? e.message : "导入失败");
+      onImported(e instanceof Error ? e.message : "导入失败", false);
     } finally {
       setImporting(false);
     }
@@ -116,17 +132,35 @@ function HitCard({
   );
 }
 
-export function KnowledgeExternalSearch() {
+export function KnowledgeExternalSearch({
+  fixedProjectId,
+  directionSlug,
+  compact = false,
+  onReferenceImported,
+  onCorpusImported,
+}: {
+  /** 工作台内嵌：锁定当前项目，隐藏项目下拉 */
+  fixedProjectId?: string;
+  /** Direction 资产盘点：加入文献 corpus */
+  directionSlug?: string;
+  compact?: boolean;
+  onReferenceImported?: () => void;
+  onCorpusImported?: () => void;
+} = {}) {
   const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [hits, setHits] = useState<ExternalLiteratureHit[]>([]);
   const [searched, setSearched] = useState(false);
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
-  const [projectId, setProjectId] = useState("");
+  const [projectId, setProjectId] = useState(fixedProjectId ?? "");
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
+    if (directionSlug || fixedProjectId) {
+      if (fixedProjectId) setProjectId(fixedProjectId);
+      return;
+    }
     void listProjects().then((list) => {
       setProjects(list);
       const fromUrl = searchParams.get("projectId");
@@ -136,12 +170,16 @@ export function KnowledgeExternalSearch() {
         setProjectId(list[0].id);
       }
     });
-  }, [searchParams]);
+  }, [searchParams, fixedProjectId, directionSlug]);
 
-  const showToast = useCallback((message: string) => {
+  const showToast = useCallback((message: string, imported?: boolean) => {
     setToast(message);
     window.setTimeout(() => setToast(null), 3000);
-  }, []);
+    if (imported) {
+      if (directionSlug) onCorpusImported?.();
+      else onReferenceImported?.();
+    }
+  }, [onReferenceImported, onCorpusImported, directionSlug]);
 
   const handleSearch = async () => {
     const q = query.trim();
@@ -164,15 +202,17 @@ export function KnowledgeExternalSearch() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        聚合 OpenAlex、Semantic Scholar、CrossRef、PubMed。结果可加入项目参考文献（无需入库 RAG）。
-      </p>
+      {!compact && (
+        <p className="text-sm text-muted-foreground">
+          聚合 OpenAlex、Semantic Scholar、CrossRef、PubMed。结果可加入项目参考文献（无需入库 RAG）。
+        </p>
+      )}
 
-      <div className="flex flex-col gap-3 md:flex-row md:items-center">
+      <div className={cn("flex flex-col gap-3", !compact && "md:flex-row md:items-center")}>
         <div className="relative flex-1 flex gap-2">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            className="pl-9"
+            className={cn("pl-9", compact && "h-8 text-xs")}
             placeholder="关键词或 DOI，如 10.1016/j.soilbio.2020.108123"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -180,33 +220,35 @@ export function KnowledgeExternalSearch() {
               if (e.key === "Enter") void handleSearch();
             }}
           />
-          <Button onClick={() => void handleSearch()} disabled={loading}>
+          <Button size={compact ? "sm" : "default"} onClick={() => void handleSearch()} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "检索"}
           </Button>
         </div>
 
-        <div className="w-full md:w-64">
-          <Select
-            value={projectId}
-            onValueChange={(value) => {
-              if (value) setProjectId(value);
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="选择目标项目" />
-            </SelectTrigger>
-            <SelectContent>
-              {projects.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {!fixedProjectId && !directionSlug && (
+          <div className="w-full md:w-64">
+            <Select
+              value={projectId}
+              onValueChange={(value) => {
+                if (value) setProjectId(value);
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="选择目标项目" />
+              </SelectTrigger>
+              <SelectContent>
+                {projects.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
-      {projects.length === 0 && (
+      {!fixedProjectId && !directionSlug && projects.length === 0 && (
         <p className="text-sm text-amber-700">登录后创建项目，即可将外部文献加入参考文献。</p>
       )}
 
@@ -229,7 +271,13 @@ export function KnowledgeExternalSearch() {
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">共 {hits.length} 条（已按 DOI/标题去重）</p>
           {hits.map((hit) => (
-            <HitCard key={hit.id} hit={hit} projectId={projectId} onImported={showToast} />
+            <HitCard
+              key={hit.id}
+              hit={hit}
+              projectId={projectId}
+              directionSlug={directionSlug}
+              onImported={showToast}
+            />
           ))}
         </div>
       )}

@@ -1,0 +1,175 @@
+import { describe, expect, it } from "vitest";
+import { createRepeatTracker } from "@/lib/agent/core/safety";
+import { createAntispamTracker } from "@/lib/agent/core/antispam";
+import {
+  evaluatePostGates,
+  evaluatePreGates,
+  repeatGate,
+} from "@/lib/agent/langgraph/tool-gates";
+import type {
+  PostGateInput,
+  PreGateInput,
+} from "@/lib/agent/langgraph/tool-gates";
+import type { AgentGraphStateType } from "@/lib/agent/langgraph/state";
+import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
+
+function makeTool(name: string, safety: ToolDefinition["safety"] = "read"): ToolDefinition {
+  return {
+    name,
+    description: name,
+    parameters: { type: "object", properties: {}, required: [] },
+    safety,
+    execute: async () => ({ success: true as const }),
+  };
+}
+
+function makeCtx(): AgentContext {
+  return {
+    userId: "u1",
+    projectId: "p1",
+    signal: new AbortController().signal,
+    budget: { maxIterations: 32, currentIteration: 0, maxToolCalls: 64, toolCallCount: 0 },
+  };
+}
+
+function makeState(overrides: Partial<AgentGraphStateType> = {}): AgentGraphStateType {
+  return { goal: "写引言", approvedCheckpointKinds: [], ...overrides } as AgentGraphStateType;
+}
+
+function makePreInput(overrides: Partial<PreGateInput> = {}): PreGateInput {
+  return {
+    tool: makeTool("list_references"),
+    params: {},
+    state: makeState(),
+    agentContext: makeCtx(),
+    repeatTracker: createRepeatTracker(),
+    antispamTracker: createAntispamTracker(null),
+    recentObservations: [],
+    ...overrides,
+  };
+}
+
+function makePostInput(overrides: Partial<PostGateInput> = {}): PostGateInput {
+  return {
+    tool: makeTool("write_section", "write"),
+    result: { success: true, summary: "完成" },
+    state: makeState(),
+    agentContext: makeCtx(),
+    antispamTracker: createAntispamTracker(null),
+    ...overrides,
+  };
+}
+
+describe("evaluatePreGates", () => {
+  it("正常只读工具全链放行", () => {
+    expect(evaluatePreGates(makePreInput())).toEqual({ ok: true });
+  });
+
+  it("重复软工具（read_section）→ soft 裁决", () => {
+    // 预置重复状态：read_section 已连调 3 次（maxConsecutiveSameTool=3），下次命中 → 4 次
+    const tracker = createRepeatTracker();
+    tracker.lastTool = "read_section";
+    tracker.lastArgsKey = JSON.stringify({ section: "introduction" });
+    tracker.repeatCount = 3;
+    const v = evaluatePreGates(
+      makePreInput({
+        tool: makeTool("read_section"),
+        params: { section: "introduction" },
+        repeatTracker: tracker,
+      }),
+    );
+    // read_section 是软工具且 4 次 ≤ 软停上限 8 → soft
+    expect(v).toMatchObject({ ok: false, kind: "soft" });
+  });
+
+  it("非软工具重复 → hard 裁决（致命）", () => {
+    const tracker = createRepeatTracker();
+    tracker.lastTool = "write_section";
+    tracker.lastArgsKey = JSON.stringify({ section: "introduction" });
+    tracker.repeatCount = 3;
+    const v = repeatGate(
+      makePreInput({
+        tool: makeTool("write_section", "write"),
+        params: { section: "introduction" },
+        repeatTracker: tracker,
+      }),
+    );
+    // write_section 非软工具 → 直接硬停
+    expect(v).toMatchObject({ ok: false, kind: "hard" });
+  });
+
+  it("检索超配额搜索 → soft 裁决", () => {
+    const tracker = createAntispamTracker(null);
+    tracker.searchCount = 20; // MAX_SEARCH_CALLS_PER_GOAL=20
+    const v = evaluatePreGates(
+      makePreInput({
+        tool: makeTool("search_knowledge"),
+        params: { query: "q" },
+        antispamTracker: tracker,
+      }),
+    );
+    expect(v).toMatchObject({ ok: false, kind: "soft" });
+  });
+
+  it("配额失败短路，不落到意图门禁", () => {
+    const tracker = createAntispamTracker(null);
+    tracker.searchCount = 20;
+    const v = evaluatePreGates(
+      makePreInput({
+        tool: makeTool("search_knowledge"),
+        params: { query: "q" },
+        antispamTracker: tracker,
+      }),
+    );
+    // 命中的是配额（soft），而非意图门禁（reject）
+    expect(v).toMatchObject({ ok: false, kind: "soft" });
+  });
+});
+
+describe("evaluatePostGates", () => {
+  it("正常结果 → ok", () => {
+    expect(evaluatePostGates(makePostInput())).toEqual({ ok: true });
+  });
+
+  it("ask_user 返回 needClarification → clarify checkpoint", () => {
+    const v = evaluatePostGates(
+      makePostInput({
+        tool: makeTool("ask_user"),
+        result: { success: true, data: { needClarification: true, question: "哪部分？" } },
+      }),
+    );
+    expect(v).toMatchObject({ ok: false, kind: "checkpoint" });
+    if (!v.ok && v.kind === "checkpoint") {
+      expect(v.checkpoint.kind).toBe("clarify");
+      // clarify 检查点不更新 plan 焦点（原行为），updateFocus 必须缺省
+      expect(v.updateFocus).toBeUndefined();
+    }
+  });
+
+  it("全文目标下未批准的 generate_outline → outline checkpoint", () => {
+    const v = evaluatePostGates(
+      makePostInput({
+        tool: makeTool("generate_outline"),
+        state: makeState({ goal: "整篇论文从零开始写" }),
+        result: { success: true, summary: "大纲已生成", data: { persisted: true, preview: "1. 引言" } },
+      }),
+    );
+    expect(v).toMatchObject({ ok: false, kind: "checkpoint" });
+    if (!v.ok && v.kind === "checkpoint") {
+      expect(v.checkpoint.kind).toBe("outline_approve");
+      // outline 批准需同步 plan 焦点
+      expect(v.updateFocus).toBe(true);
+    }
+  });
+
+  it("已批准过 outline → 放行", () => {
+    const v = evaluatePostGates(
+      makePostInput({
+        tool: makeTool("generate_outline"),
+        state: makeState({ goal: "整篇论文从零开始写", approvedCheckpointKinds: ["outline_approve"] }),
+        result: { success: true, data: { persisted: true } },
+      }),
+    );
+    expect(v).toEqual({ ok: true });
+  });
+});

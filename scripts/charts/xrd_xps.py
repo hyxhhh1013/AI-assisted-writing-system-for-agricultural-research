@@ -59,6 +59,14 @@ def run_xps_analysis(data_path, config, output_path):
     bg_params = config.get("bg_params", {})
     iter_max = config.get("iter_max", 500)
 
+    be_shift = float(config.get("be_shift", 0) or 0)
+    be_cal = config.get("be_calibration")
+    if isinstance(be_cal, dict):
+        ref_be = be_cal.get("reference_be")
+        meas_be = be_cal.get("measured_be")
+        if ref_be is not None and meas_be is not None:
+            be_shift = float(ref_be) - float(meas_be)
+
     # PyXplore SLCoupling 按 (元素名, 量子数) 分组做自旋轨道耦合。
     # s 轨道 (1s, 2s, 3s) 的 j 值只有一种 (l+s = 0.5)，无法形成二重态对 →
     # 每个 s 轨道峰给唯一元素名，阻止被分入同一耦合组。
@@ -139,6 +147,10 @@ def run_xps_analysis(data_path, config, output_path):
     if be[0] < be[-1]:
         be = be[::-1]
         intensity = intensity[::-1]
+
+    if abs(be_shift) > 1e-9:
+        be = be + be_shift
+        sys.stderr.write(f"[XPS] BE calibration shift: {be_shift:+.4f} eV\n")
 
     xps_df = pd.DataFrame({"BE": be, "Intensity": intensity})
 
@@ -349,6 +361,7 @@ def run_xps_analysis(data_path, config, output_path):
         "rsquare": rsq_val,
         "iterations": i_ter,
         "exit_flag": flag,
+        "be_shift": be_shift if abs(be_shift) > 1e-9 else None,
     }
 
 

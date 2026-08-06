@@ -5,6 +5,10 @@ export interface SSEDeltaEvent { type: "delta"; content: string }
 export interface SSEStatusEvent { type: "status"; status: "retrieving" | "building_context" | "writing" | "verifying" | "refining" | "checking_citations" | "generating_figures" | "completed" }
 export interface SSEPipelineStepEvent { type: "pipeline_step"; step: string; status: "pending" | "running" | "done" | "error"; detail?: string }
 export interface SSEVerificationEvent { type: "verification"; verification: string }
+export interface SSEReviewReportEvent {
+  type: "review_report";
+  report: import("@/contracts/writing-verification").VerificationReport;
+}
 export interface SSEReferencesEvent { type: "references"; references: string[]; refMapping?: Record<string, number> }
 export interface SSECitationWarningsEvent { type: "citation_warnings"; warnings: { num: number; overlap: number; context: string }[] }
 export interface SSEDataClaimWarningsEvent { type: "data_claim_warnings"; warnings: { claimId: string; claimText: string; found: boolean; citedCorrectly: boolean; issue?: string }[] }
@@ -25,6 +29,7 @@ export type WritingSSEEvent =
   | SSEStatusEvent
   | SSEPipelineStepEvent
   | SSEVerificationEvent
+  | SSEReviewReportEvent
   | SSEReferencesEvent
   | SSECitationWarningsEvent
   | SSEDataClaimWarningsEvent
@@ -42,6 +47,7 @@ export function isDeltaEvent(e: unknown): e is SSEDeltaEvent { return (e as SSEE
 export function isStatusEvent(e: unknown): e is SSEStatusEvent { return (e as SSEEvent).type === "status"; }
 export function isPipelineStepEvent(e: unknown): e is SSEPipelineStepEvent { return (e as SSEEvent).type === "pipeline_step"; }
 export function isVerificationEvent(e: unknown): e is SSEVerificationEvent { return (e as SSEEvent).type === "verification"; }
+export function isReviewReportEvent(e: unknown): e is SSEReviewReportEvent { return (e as SSEEvent).type === "review_report"; }
 export function isReferencesEvent(e: unknown): e is SSEReferencesEvent { return (e as SSEEvent).type === "references"; }
 export function isCitationWarningsEvent(e: unknown): e is SSECitationWarningsEvent { return (e as SSEEvent).type === "citation_warnings"; }
 export function isDataClaimWarningsEvent(e: unknown): e is SSEDataClaimWarningsEvent { return (e as SSEEvent).type === "data_claim_warnings"; }

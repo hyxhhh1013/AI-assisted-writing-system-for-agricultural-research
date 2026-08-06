@@ -1,9 +1,10 @@
 @AGENTS.md
 
-## 快速指针
+## 文档索引
 
 | 用途 | 文档 |
 |------|------|
+| **整体规划（Wave 0–4）** | [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) |
 | 实现功能模板 | [`docs/VIBECODING.md`](docs/VIBECODING.md) |
 | 功能在哪改 | [`docs/DOMAIN_INDEX.md`](docs/DOMAIN_INDEX.md) |
 | API 一览 | [`docs/API_INDEX.md`](docs/API_INDEX.md) |

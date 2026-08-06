@@ -1,11 +1,7 @@
 import { logger } from "@/lib/logger";
 import { getErrorMessage } from "@/lib/error-utils";
-import {
-  SafePathError,
-  assertResolvedInsideBase,
-  assertSafePathSegment,
-  resolveInsideBaseDir,
-} from "@/lib/safe-path";
+import { SafePathError, assertSafePathSegment } from "@/lib/safe-path";
+import { resolveKnowledgePdfOnDisk } from "@/lib/knowledge-metadata";
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
@@ -15,27 +11,11 @@ const ARTICLES_DIR = path.join(
   process.env.RAG_ARTICLES_DIR || "papers",
 );
 
-function findFileInDir(dir: string, targetName: string): string | null {
-  assertSafePathSegment(targetName, "文件名");
-  if (!fs.existsSync(dir)) return null;
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      const found = findFileInDir(path.join(dir, entry.name), targetName);
-      if (found) return found;
-    } else if (entry.name === targetName) {
-      const full = path.join(dir, entry.name);
-      assertResolvedInsideBase(ARTICLES_DIR, full);
-      return full;
-    }
-  }
-  return null;
-}
-
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const filename = searchParams.get("file");
+    const categoryHint = searchParams.get("category") || "未分类";
 
     logger.info("PDF Request for:", filename);
 
@@ -45,20 +25,20 @@ export async function GET(req: NextRequest) {
 
     assertSafePathSegment(filename, "文件名");
 
-    // 递归搜索所有子目录（文件可能存储在 ARTICLES_DIR 或子目录中）
-    let filePath = resolveInsideBaseDir(ARTICLES_DIR, filename);
-    if (!fs.existsSync(filePath)) {
-      const found = findFileInDir(ARTICLES_DIR, filename);
-      if (found) {
-        filePath = found;
-      }
-    }
-    logger.info("Resolved path:", filePath);
+    const disk = resolveKnowledgePdfOnDisk(filename, categoryHint);
+    const filePath = disk.path;
 
-    if (!fs.existsSync(filePath)) {
-      logger.error("File not found at:", filePath);
-      return NextResponse.json({ error: "File not found" }, { status: 404 });
+    if (!filePath || !fs.existsSync(filePath)) {
+      logger.error(`File not found for: ${filename} categoryHint: ${categoryHint}`);
+      return NextResponse.json(
+        {
+          error: `未找到 PDF：${filename}。若为书目导入占位，请先上传 PDF；若已上传，请检查分类是否与磁盘目录一致`,
+        },
+        { status: 404 },
+      );
     }
+
+    logger.info("Resolved path:", filePath);
 
     const fileBuffer = fs.readFileSync(filePath);
 

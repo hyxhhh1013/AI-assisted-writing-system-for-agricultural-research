@@ -81,3 +81,13 @@ export function getOutlineTabTooltip(mode: ProjectWritingMode | undefined): stri
     ? "论证提纲：AI 生成目录树（与左侧 IMRaD 并列，非同一套）"
     : "论证提纲：AI 生成综述目录树（与左侧章节并列，非同一套）";
 }
+
+export function getDataPanelTitle(mode: ProjectWritingMode | undefined): string {
+  return mode === "research" ? "实验数据" : "图表资产";
+}
+
+export function getDataTabTooltip(mode: ProjectWritingMode | undefined): string {
+  return mode === "research"
+    ? "实验数据：上传 CSV/Excel、证据提取、推荐图表与已登记资产"
+    : "图表资产：查看已插入配图、打开科学绘图页（无需实验数据）";
+}

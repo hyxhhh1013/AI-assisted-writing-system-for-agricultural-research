@@ -41,8 +41,20 @@ export async function exportProjectToPdf(project: ProjectData): Promise<PdfExpor
   });
 
   if (!response.ok) {
-    const errorText = await response.text().catch(() => "");
-    throw new Error(errorText || "PDF 服务端导出失败");
+    const raw = await response.text().catch(() => "");
+    try {
+      const parsed = JSON.parse(raw) as { error?: string; code?: string };
+      if (parsed.error) {
+        throw new Error(parsed.error);
+      }
+    } catch (err) {
+      if (err instanceof SyntaxError) {
+        // not JSON
+      } else if (err instanceof Error) {
+        throw err;
+      }
+    }
+    throw new Error(raw || "PDF 服务端导出失败");
   }
 
   const fallback = `${project.title || "paper"}.pdf`;

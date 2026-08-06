@@ -117,8 +117,16 @@ describe("outline API — input validation", () => {
     expect(r.success).toBe(false);
   });
 
-  it("accepts minimal valid input", () => {
+  it("requires userSkeleton with at least 3 entries", () => {
     const r = outlineSchema.safeParse({ title: "test" });
+    expect(r.success).toBe(false);
+  });
+
+  it("accepts minimal valid input", () => {
+    const r = outlineSchema.safeParse({
+      title: "test",
+      userSkeleton: ["摘要", "引言", "结论"],
+    });
     expect(r.success).toBe(true);
     if (r.success) {
       expect(r.data.language).toBe("zh");

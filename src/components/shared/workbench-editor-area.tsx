@@ -18,8 +18,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { EditorImageGallery } from "@/components/shared/editor-image-gallery";
+import { WritingFigureEditLinks } from "@/components/shared/writing/writing-figure-edit-links";
 import { PipelineTimeline } from "@/components/shared/pipeline-timeline";
-import { MarkdownContent } from "@/components/shared/previews/shared";
+import { MarkdownContent, ReferencesSection } from "@/components/shared/previews/shared";
 import type { PipelineStep } from "@/hooks/use-writing-stream";
 import type { ProjectData } from "@/contracts/project";
 import { getTemplateSections } from "@/lib/template-sections";
@@ -27,6 +28,7 @@ import { getModeAccent } from "@/lib/mode-theme";
 import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
 import { siteTheme } from "@/lib/site-theme";
 import { getProjectWritingMode } from "@/lib/section-registry";
+import { buildPreviewReferencesFromContent } from "@/lib/reference-reorder";
 import dynamic from "next/dynamic";
 import type { ParagraphSelectionAction } from "@/components/shared/writing/paragraph-selection-toolbar";
 
@@ -211,9 +213,16 @@ export function WorkbenchEditorArea({
   const sectionMeta = templateDefs.find(s => s.key === activeSection);
   const sectionLabel = sectionMeta?.label || activeSection;
   const sectionPlaceholder = sectionMeta ? `${sectionMeta.label}内容…` : "";
+  const previewReferencesChinese =
+    writingMode === "review" || project.template === "gbt7713" || project.template === "cas";
 
   // AI 预览模式 — 扩写时中间编辑器显示输出内容
   if (aiPreview) {
+    const aiPreviewReferences = buildPreviewReferencesFromContent(
+      aiPreview.content,
+      project.references || [],
+      aiPreview.detectedRefs,
+    );
     return (
       <div className={cn("flex flex-col h-full relative", siteTheme.bgSoft)}>
         <header className={cn("h-12 border-b flex items-center justify-between px-4 shrink-0", accent.headerTint, accent.borderTint)}>
@@ -246,6 +255,12 @@ export function WorkbenchEditorArea({
 
             {/* 警告摘要 — 填充剩余空间 */}
             <div className="flex-1 overflow-y-auto min-h-0 space-y-2">
+              <WritingFigureEditLinks
+                projectId={projectId}
+                text={aiPreview.content}
+                compact
+              />
+
               {aiPreview.verification && (
                 <details className="text-[10px]" open>
                   <summary className="font-bold text-amber-700 cursor-pointer sticky top-0 bg-card py-1">审稿核查</summary>
@@ -294,7 +309,8 @@ export function WorkbenchEditorArea({
             <div className="max-w-3xl mx-auto min-h-full">
               {aiPreview.content ? (
                 <div className="prose prose-sm max-w-none text-sm leading-relaxed">
-                  <MarkdownContent content={aiPreview.content} />
+                  <MarkdownContent content={aiPreview.content} refCount={aiPreviewReferences.length || project.references?.length} />
+                  <ReferencesSection references={aiPreviewReferences.length > 0 ? aiPreviewReferences : undefined} isChinese={previewReferencesChinese} />
                 </div>
               ) : (
                 <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -341,6 +357,11 @@ export function WorkbenchEditorArea({
           "max-w-4xl mx-auto min-h-full flex flex-col",
           editorMode === "classic" ? "bg-white rounded-2xl shadow-xl border border-[#1a5632]/10 overflow-hidden" : ""
         )}>
+          {projectId && (
+            <div className="px-6 pt-4 md:px-10">
+              <WritingFigureEditLinks projectId={projectId} text={editingContent} compact />
+            </div>
+          )}
           {editorMode === "classic" ? (
             <>
               <Textarea

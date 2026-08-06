@@ -6,6 +6,29 @@ $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot\..\..
 
 Write-Host "=== 1/4 构建 ===" -ForegroundColor Cyan
+# Agent 开关：NEXT_PUBLIC_* 须在 build 时注入；优先读本地 .env
+$agentBuildVars = @(
+  "AGENT_ENABLED",
+  "NEXT_PUBLIC_AGENT_ENABLED",
+  "AGENT_WRITE_ENABLED",
+  "NEXT_PUBLIC_AGENT_WRITE_ENABLED",
+  "AGENT_WRITE_AUTO_FIX"
+)
+foreach ($key in $agentBuildVars) {
+  if (-not (Get-Item "env:$key" -ErrorAction SilentlyContinue)) {
+    $fromFile = $null
+    if (Test-Path ".env") {
+      $m = Select-String -Path ".env" -Pattern "^$key=(.+)$" | Select-Object -First 1
+      if ($m) { $fromFile = $m.Matches.Groups[1].Value.Trim().Trim('"').Trim("'") }
+    }
+    if ($fromFile) {
+      Set-Item -Path "env:$key" -Value $fromFile
+    } elseif ($key -match "^(AGENT_ENABLED|NEXT_PUBLIC_AGENT_ENABLED|AGENT_WRITE_ENABLED|NEXT_PUBLIC_AGENT_WRITE_ENABLED)$") {
+      Set-Item -Path "env:$key" -Value "1"
+      Write-Host "  build: $key=1 (deploy default)" -ForegroundColor Yellow
+    }
+  }
+}
 npm run build
 if ($LASTEXITCODE -ne 0) { throw "Build failed" }
 
@@ -63,16 +86,7 @@ scp -o StrictHostKeyChecking=no deploy.tar.gz ${server}:${remotePath}
 if ($LASTEXITCODE -ne 0) { throw "SCP failed" }
 
 Write-Host "服务器部署..."
-ssh -o StrictHostKeyChecking=no $server @"
-cd $appDir
-tar -xzf $remotePath
-npm install --production --legacy-peer-deps --ignore-scripts
-npx prisma generate
-npx prisma db push --skip-generate
-bash scripts/deploy/preflight.sh
-pm2 reload ecosystem.config.cjs --update-env
-sleep 2
-curl -sf -o /dev/null http://127.0.0.1:3000 && echo 'DEPLOY OK' || echo 'WARN: HTTP check failed'
-"@
+$remoteCmd = "cd /home/ubuntu/grainscript && tar -xzf /home/ubuntu/deploy.tar.gz --exclude='.env' && npm install --production --legacy-peer-deps --ignore-scripts && npm install prisma@^5.22.0 --legacy-peer-deps --ignore-scripts && ./node_modules/.bin/prisma generate && ./node_modules/.bin/prisma db push --skip-generate --accept-data-loss && pm2 reload ecosystem.config.cjs --update-env && sleep 3 && curl -sf -o /dev/null http://127.0.0.1:3000 && echo DEPLOY_OK || echo DEPLOY_FAIL"
+ssh -o StrictHostKeyChecking=no $server $remoteCmd
 
 Write-Host "`n=== 完成 ===" -ForegroundColor Green

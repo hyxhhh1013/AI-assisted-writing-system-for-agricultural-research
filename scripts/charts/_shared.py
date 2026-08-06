@@ -1,14 +1,7 @@
 """图表脚本共享工具 — 中文字体 + Unicode 上下标归一化"""
-import matplotlib.pyplot as plt
+from font_setup import apply_cjk_font_rcparams
 
-# 中文字体 — 优先系统可用字体，跨平台兼容
-plt.rcParams["font.sans-serif"] = [
-    "Noto Sans CJK JP", "Noto Serif CJK JP",     # Linux
-    "SimHei", "Microsoft YaHei",                   # Windows
-    "PingFang SC", "Heiti SC",                     # macOS
-    "DejaVu Sans",
-]
-plt.rcParams["axes.unicode_minus"] = False
+apply_cjk_font_rcparams()
 
 # Unicode 上下标 → ASCII（SimHei 对 Unicode 上标覆盖不全）
 _SUP_MAP = str.maketrans({

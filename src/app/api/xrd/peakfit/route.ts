@@ -16,6 +16,7 @@ const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
 // conda pyxplore 环境 Python 路径
 import { PYTHON_CMD } from "@/services/xrd-runner";
 import { parseOptionalJsonConfig } from "@/lib/api-validate";
+import { resolveXrdUploadExt } from "@/lib/xrd-file-ext";
 
 if (!fs.existsSync(CHARTS_DIR)) {
   fs.mkdirSync(CHARTS_DIR, { recursive: true });
@@ -56,13 +57,7 @@ export async function POST(req: NextRequest) {
     const tmpDir = path.join(process.cwd(), ".tmp", randomUUID());
     fs.mkdirSync(tmpDir, { recursive: true });
 
-    const originalName = dataFile.name.toLowerCase();
-    const ext = originalName.endsWith(".xlsx") ? ".xlsx"
-      : originalName.endsWith(".xls") ? ".xls"
-      : originalName.endsWith(".csv") ? ".csv"
-      : originalName.endsWith(".tsv") ? ".tsv"
-      : originalName.endsWith(".txt") ? ".txt"
-      : ".csv";
+    const ext = resolveXrdUploadExt(dataFile.name);
     const dataPath = path.join(tmpDir, `data${ext}`);
     const buffer = Buffer.from(await dataFile.arrayBuffer());
     fs.writeFileSync(dataPath, buffer);

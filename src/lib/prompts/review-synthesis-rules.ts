@@ -48,9 +48,11 @@ export function buildReviewVerifierChecklist(): string {
 2. 是否仅为文献罗列、缺乏综合与对比？
 3. Overclaim：首次、证明、最优、填补空白 → 标记并建议替换
 
-【输出格式】：
-- 全部通过 → "PASS：引用有据、无照搬、数据已归因、符合综述体例"
-- 有问题 → 逐条：编号/位置、错误类型、原文片段、修正建议（改写示例优先）`;
+【输出格式 — 必须只输出一个 JSON 对象，不要 markdown 围栏】：
+{"passed":true|false,"summary":"一句话总结","issues":[{"id":"v1","type":"overclaim|citation_error|citation_fake|results_discussion_mix|data_claim_mismatch|terminology|vague_expression|verbatim_copy|data_attribution|other","severity":"high|medium|low","originalText":"问题原文片段","suggestion":"如何改写","evidence":"可选依据"}]}
+- 全部通过：passed=true 且 issues=[]
+- type 必须取上述枚举之一；找不到精确类型时用 other
+- originalText / suggestion 必填；不要输出 JSON 以外的文字`;
 }
 
 export function buildResearchVerifierChecklist(): string {
@@ -58,17 +60,16 @@ export function buildResearchVerifierChecklist(): string {
 一、引用核实（每个 [n]）：
 1. 定位：在文献原文中找到 [n] 号文献
 2. 比对：段落中引用 [n] 的结论/数据/观点，原文中是否有明确对应的语句
-3. 判定：完全匹配 → 通过；核心观点不对应 → 标记「归属错误」；原文找不到该信息 → 标记「疑似虚构」
+3. 判定：完全匹配 → 通过；核心观点不对应 → 标记 citation_error；原文找不到该信息 → citation_fake
 
 二、Overclaim 检查：
-扫描段落中是否出现：首次、证明、最优、最好、前所未有、填补空白
-如有 → 标记并建议替换
+扫描段落中是否出现：首次、证明、最优、最好、前所未有、填补空白 → type=overclaim
 
 三、句式检查：
-- 如果这是 Results 段落，检查是否混入了 Discussion 句式（"可能反映""或许由于""提示"）
-- 如果混入 → 标记"Results 中混入 Discussion 句式"
+- Results 段落混入 Discussion 句式（"可能反映""或许由于""提示"）→ results_discussion_mix
 
-【输出格式】：
-- 全部通过 → 输出"PASS：逐条核实通过，所有引用均有原文依据，无 overclaim，句式合规"
-- 有问题 → 逐条列出：编号、错误类型、引用句原文、实际内容、修正建议`;
+【输出格式 — 必须只输出一个 JSON 对象，不要 markdown 围栏】：
+{"passed":true|false,"summary":"一句话总结","issues":[{"id":"v1","type":"overclaim|citation_error|citation_fake|results_discussion_mix|data_claim_mismatch|terminology|vague_expression|verbatim_copy|data_attribution|other","severity":"high|medium|low","originalText":"问题原文片段","suggestion":"如何改写","evidence":"可选依据"}]}
+- 全部通过：passed=true 且 issues=[]
+- 不要输出 JSON 以外的文字`;
 }

@@ -19,7 +19,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@academic-paper-studio": ["./academic-paper-studio/index.ts"],
+      "@academic-paper-studio/*": ["./academic-paper-studio/*"]
     }
   },
   "include": [

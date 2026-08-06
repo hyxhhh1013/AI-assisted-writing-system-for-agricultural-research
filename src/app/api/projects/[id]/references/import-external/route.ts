@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { validateBody } from "@/lib/api-validate";
 import { importExternalReferenceSchema } from "@/lib/validations";
-import { applyReferencePatchOps } from "@/lib/project-references";
-import { formatExternalLiteratureHit } from "@/lib/external-literature-format";
+import { importExternalReferenceToProject } from "@/lib/agent/import-reference";
+import { findReferenceRowsLite } from "@/lib/reference-rows";
 import type { ImportExternalReferenceResponse } from "@/contracts/literature";
 import { logger } from "@/lib/logger";
 
-/** POST /api/projects/:id/references/import-external — 外部文献加入参考文献 */
+/** POST /api/projects/:id/references/import-external — 外部文献加入参考文献 + 知识库摘要 */
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -23,38 +23,42 @@ export async function POST(
     );
     if (ve) return ve;
 
-    const owned = await prisma.project.findFirst({
-      where: { id: projectId, userId },
-      select: { id: true },
-    });
-    if (!owned) return NextResponse.json({ error: "项目未找到" }, { status: 404 });
-
-    const citation = formatExternalLiteratureHit(data.hit);
-
-    await prisma.$transaction(async (tx) => {
-      await applyReferencePatchOps(tx, projectId, [
-        { op: "create", content: citation, index: data.index },
-      ]);
-    });
-
-    await prisma.project.update({
-      where: { id: projectId },
-      data: { lastUpdated: new Date() },
-    });
+    const result = await importExternalReferenceToProject(
+      userId,
+      projectId,
+      data.hit,
+      data.index,
+    );
 
     const rows = await prisma.reference.findMany({
       where: { projectId },
       orderBy: { order: "asc" },
       select: { id: true, content: true, order: true },
     });
+    const lite = await findReferenceRowsLite(projectId, userId);
+    const byOrder = new Map(lite.map((r) => [r.order, r]));
 
     const body: ImportExternalReferenceResponse = {
-      references: rows,
-      citation,
+      references: rows.map((r) => {
+        const meta = byOrder.get(r.order);
+        return {
+          id: r.id,
+          content: r.content,
+          order: r.order,
+          doi: meta?.doi ?? null,
+          title: meta?.title ?? null,
+          abstract: meta?.abstract ?? null,
+          openAccessUrl: meta?.openAccessUrl ?? null,
+          externalId: null,
+          externalSource: meta?.externalSource ?? null,
+        };
+      }),
+      citation: result.citation,
     };
     return NextResponse.json(body);
   } catch (error) {
     logger.error("Import external reference error:", error);
-    return NextResponse.json({ error: "导入失败" }, { status: 500 });
+    const message = error instanceof Error ? error.message : "导入失败";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

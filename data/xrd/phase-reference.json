@@ -1,0 +1,127 @@
+{
+  "wavelength_angstrom": 1.5406,
+  "phases": [
+    {
+      "id": "quartz",
+      "name": "Quartz",
+      "formula": "SiO₂",
+      "peaks": [
+        { "two_theta": 20.85, "hkl": "100", "relative": 22 },
+        { "two_theta": 26.64, "hkl": "101", "relative": 100 },
+        { "two_theta": 36.55, "hkl": "110", "relative": 12 },
+        { "two_theta": 39.46, "hkl": "111", "relative": 8 },
+        { "two_theta": 42.44, "hkl": "200", "relative": 9 },
+        { "two_theta": 45.79, "hkl": "201", "relative": 7 },
+        { "two_theta": 50.14, "hkl": "112", "relative": 13 }
+      ]
+    },
+    {
+      "id": "calcite",
+      "name": "Calcite",
+      "formula": "CaCO₃",
+      "peaks": [
+        { "two_theta": 23.08, "hkl": "012", "relative": 18 },
+        { "two_theta": 29.41, "hkl": "104", "relative": 100 },
+        { "two_theta": 31.48, "hkl": "006", "relative": 8 },
+        { "two_theta": 35.96, "hkl": "110", "relative": 12 },
+        { "two_theta": 39.40, "hkl": "113", "relative": 10 },
+        { "two_theta": 43.15, "hkl": "202", "relative": 14 },
+        { "two_theta": 47.51, "hkl": "018", "relative": 9 }
+      ]
+    },
+    {
+      "id": "hematite",
+      "name": "Hematite",
+      "formula": "Fe₂O₃",
+      "peaks": [
+        { "two_theta": 24.14, "hkl": "012", "relative": 30 },
+        { "two_theta": 33.15, "hkl": "104", "relative": 100 },
+        { "two_theta": 35.61, "hkl": "110", "relative": 70 },
+        { "two_theta": 40.85, "hkl": "113", "relative": 18 },
+        { "two_theta": 49.48, "hkl": "024", "relative": 40 },
+        { "two_theta": 54.09, "hkl": "116", "relative": 25 }
+      ]
+    },
+    {
+      "id": "anatase",
+      "name": "Anatase",
+      "formula": "TiO₂",
+      "peaks": [
+        { "two_theta": 25.28, "hkl": "101", "relative": 100 },
+        { "two_theta": 37.80, "hkl": "004", "relative": 20 },
+        { "two_theta": 48.05, "hkl": "200", "relative": 30 },
+        { "two_theta": 53.89, "hkl": "105", "relative": 20 },
+        { "two_theta": 55.06, "hkl": "211", "relative": 18 }
+      ]
+    },
+    {
+      "id": "rutile",
+      "name": "Rutile",
+      "formula": "TiO₂",
+      "peaks": [
+        { "two_theta": 27.45, "hkl": "110", "relative": 100 },
+        { "two_theta": 36.09, "hkl": "101", "relative": 50 },
+        { "two_theta": 41.23, "hkl": "111", "relative": 8 },
+        { "two_theta": 54.32, "hkl": "211", "relative": 35 },
+        { "two_theta": 56.64, "hkl": "220", "relative": 20 }
+      ]
+    },
+    {
+      "id": "zno",
+      "name": "Zinc oxide",
+      "formula": "ZnO",
+      "peaks": [
+        { "two_theta": 31.77, "hkl": "100", "relative": 57 },
+        { "two_theta": 34.42, "hkl": "002", "relative": 44 },
+        { "two_theta": 36.25, "hkl": "101", "relative": 100 },
+        { "two_theta": 47.54, "hkl": "102", "relative": 23 },
+        { "two_theta": 56.60, "hkl": "110", "relative": 32 },
+        { "two_theta": 62.86, "hkl": "103", "relative": 29 }
+      ]
+    },
+    {
+      "id": "kaolinite",
+      "name": "Kaolinite",
+      "formula": "Al₂Si₂O₅(OH)₄",
+      "peaks": [
+        { "two_theta": 12.40, "hkl": "001", "relative": 100 },
+        { "two_theta": 24.90, "hkl": "002", "relative": 45 },
+        { "two_theta": 34.98, "hkl": "130", "relative": 35 },
+        { "two_theta": 38.40, "hkl": "111", "relative": 20 },
+        { "two_theta": 45.48, "hkl": "131", "relative": 15 }
+      ]
+    },
+    {
+      "id": "illite",
+      "name": "Illite",
+      "formula": "KAl₂(Si₃Al)O₁₀(OH)₂",
+      "peaks": [
+        { "two_theta": 8.80, "hkl": "001", "relative": 100 },
+        { "two_theta": 17.70, "hkl": "002", "relative": 30 },
+        { "two_theta": 26.60, "hkl": "111", "relative": 25 },
+        { "two_theta": 35.20, "hkl": "131", "relative": 18 }
+      ]
+    },
+    {
+      "id": "graphite",
+      "name": "Graphite",
+      "formula": "C",
+      "peaks": [
+        { "two_theta": 26.50, "hkl": "002", "relative": 100 },
+        { "two_theta": 42.40, "hkl": "100", "relative": 8 },
+        { "two_theta": 54.70, "hkl": "004", "relative": 15 }
+      ]
+    },
+    {
+      "id": "muscovite",
+      "name": "Muscovite",
+      "formula": "KAl₂(Si₃Al)O₁₀(OH)₂",
+      "peaks": [
+        { "two_theta": 8.85, "hkl": "001", "relative": 100 },
+        { "two_theta": 17.80, "hkl": "002", "relative": 35 },
+        { "two_theta": 26.55, "hkl": "111", "relative": 28 },
+        { "two_theta": 45.30, "hkl": "131", "relative": 22 }
+      ]
+    }
+  ]
+}

@@ -6,11 +6,11 @@
 
 | `mode` | 行为 |
 |--------|------|
-| `full`（默认） | Writer → Verifier → Refiner → 引用/数据校验 |
+| `full`（默认） | Writer → **结构化 Verifier** → 选择性 Refiner → 引用/数据校验 |
 | `fast` | 仅 Writer |
 | `expand_bullet` | 单条要点 Writer（096c）；SSE `bullet_done` |
-| `audit_only` | 仅 Verifier 报告流 |
-| `fix_only` | 按 `verificationFeedback` Refiner 流式修正 |
+| `audit_only` | 仅 Verifier；SSE `verification` + 终态 `review_report` |
+| `fix_only` | 按 `verificationFeedback` / `selectedIssueIds` Refiner 流式修正 |
 
 ## UI 流程（ENG-PR-081）
 
@@ -56,7 +56,8 @@ route.ts               SSE 外壳
 | `status` | retrieving / writing / verifying / refining / completed |
 | `pipeline_step` | 步骤进度条 |
 | `delta` | Writer/Refiner 正文增量 |
-| `verification` | Verifier 报告增量 |
+| `verification` | Verifier 报告增量（兼容；内容可为 JSON 流） |
+| `review_report` | ENG-PR-082 结构化终态（`VerificationReport`） |
 | `corrected_text` | 替换全文（引用修正后） |
 | `clear_result` | Refiner 前清空 UI |
 | `references` | 新引用文献列表 + refMapping |
@@ -69,11 +70,19 @@ route.ts               SSE 外壳
 
 - 引用编号必须在 RAG 返回的 `[1]…[N]` 范围内；越界会被 strip + 警告。
 - **正文引用格式**：仅半角方括号 `[1]`、`[2,3]`、`[1-3]`。禁止 `【16】`、`［16］`、`[文献16]` 等变体（Prompt 与后处理均约束）。
-- **引用归一化**：`src/lib/citation-bounds.ts` 的 `normalizeAllCitationFormats`（含角括号 `【n】` → `[n]`）在 Refiner、预览、应用到章节时执行；测试见 `src/__tests__/lib/citation-bounds.test.ts`。
+- **禁止章节内嵌文献表**：章节正文末尾不得输出「参考文献 / References」列表（由 `stripEmbeddedBibliography` 剥离）；文献表只在项目侧栏维护。
+- **引用归一化**：`src/lib/citation.ts` 的 `normalizeAllCitationFormats`（含角括号 `【n】` → `[n]`、转义 `\[n\]` → `[n]`）在 Refiner、预览、应用到章节时执行；测试见 `src/__tests__/lib/citation-bounds.test.ts`。
 - 综述模式章节 Prompt：`src/lib/prompts/review-writing.ts`；综述引用规则：`review-synthesis-rules.ts`。
 - Verifier 检查 overclaim、Results/Discussion 混淆，不只查引用真假。
 - Prompt 已注入 nature-polishing 原则（见 `prompts.ts` 注释）。
 - 农业场景：GB/T 7713 与 SCI 双轨、`domain.ts` 术语适配。
+- **大纲骨架**：综述默认含「研究现状与问题」；生成后按骨架纠偏一级标题，禁止误出「材料与方法」（`outline-skeleton.ts`）。
+- **摘要**：建议正文完成后再写；注入 `sectionBodies` 全文；跳过 RAG；禁止文内 `[n]`（落库前 `stripInlineCitations`）。
+- **RAG scope**：分类范围 = 已有参考文献 ∪ 用户勾选文献；范围空命中自动扩全库（`writing-context.ts`）。
+- **主题过滤**：检索后按题名/方向主题词过滤跑题片段（`filterChunksByTopicRelevance`）；已有参考文献 pin 保留。
+- **引用白名单**：有 RAG 全文的 grounded 编号可深度引用；**有摘要的外部导入**为 soft-grounded（可概括引用，禁止编造精确数据）；`grounded=[]` 时剥离全部 `[n]`。
+- **外部导入双写**：确认导入 → 项目 `Reference`（含摘要元数据）+ 方向/「外部摘要」知识库（有摘要则追加 index chunk，无 PDF 不阻塞）。
+- **定稿重排**：`finalizeAndEmitCitations` 将正文引用紧凑为 `[1]…[K]` 并与 SSE `references` 对齐；前端 `mergeSectionReferencesIntoProject` 合并进项目全局表。
 
 ## 前端
 

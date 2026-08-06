@@ -14,7 +14,7 @@
 | 应用目录 | `/home/ubuntu/grainscript/` |
 | 数据库 | PostgreSQL Docker（`grainscript-db`，映射 **127.0.0.1:5432**） |
 | 进程管理 | PM2（`grainscript`，**1 实例 fork**，见 `ecosystem.config.cjs`） |
-| 域名 | aifascience.site（Nginx → localhost:3000） |
+| 域名 | **ai4science.hyxhhh.site**（主站）；aifascience.site / www 同反代 → localhost:3000 |
 | GitHub | `hyxhhh1013/AI-assisted-writing-system-for-agricultural-research` |
 
 ## 部署方式

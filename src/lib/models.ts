@@ -3,16 +3,33 @@ export interface ModelProvider {
   model: string;
   baseUrl: string;
   apiKeyEnvVar: string;
+  /** Admin / DB 热加载用的模型名设置键 */
+  modelSettingKey: string;
   getApiKey: () => string | undefined;
   enabled: boolean;
 }
 
+/** DeepSeek 当前可用模型（chat/reasoner 已退役） */
+export const DEEPSEEK_MODEL_OPTIONS = [
+  "deepseek-v4-flash",
+  "deepseek-v4-pro",
+] as const;
+
+export const ZHIPU_MODEL_OPTIONS = [
+  "glm-4-plus",
+  "glm-4-flash",
+  "glm-4",
+  "glm-4-air",
+] as const;
+
 export const MODEL_PROVIDERS = {
   deepseek: {
     name: "DeepSeek",
-    model: "deepseek-chat",
+    // 2026-07-24 起 deepseek-chat / deepseek-reasoner 已退役，仅支持 v4-flash / v4-pro
+    model: process.env.DEEPSEEK_MODEL || "deepseek-v4-flash",
     baseUrl: "https://api.deepseek.com/chat/completions",
     apiKeyEnvVar: "DEEPSEEK_API_KEY",
+    modelSettingKey: "DEEPSEEK_MODEL",
     getApiKey: () => process.env.DEEPSEEK_API_KEY,
     enabled: true,
   },
@@ -21,6 +38,16 @@ export const MODEL_PROVIDERS = {
     model: process.env.ZHIPU_MODEL || "glm-4-plus",
     baseUrl: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
     apiKeyEnvVar: "ZHIPU_API_KEY",
+    modelSettingKey: "ZHIPU_MODEL",
+    getApiKey: () => process.env.ZHIPU_API_KEY,
+    enabled: !!process.env.ZHIPU_API_KEY,
+  },
+  vision: {
+    name: "智谱视觉",
+    model: process.env.ZHIPU_VISION_MODEL || "glm-4v",
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+    apiKeyEnvVar: "ZHIPU_API_KEY",
+    modelSettingKey: "ZHIPU_VISION_MODEL",
     getApiKey: () => process.env.ZHIPU_API_KEY,
     enabled: !!process.env.ZHIPU_API_KEY,
   },
@@ -46,26 +73,59 @@ export function getModelConfig(provider: ModelProviderKey): ModelProvider {
 export function validateProviderKey(provider: ModelProviderKey): string | null {
   const config = getModelConfig(provider);
   const key = config.getApiKey();
-  if (!key || key.includes("your_")) {
-    return `${config.name} API Key 未正确配置，请在 .env.local 中填写 ${config.apiKeyEnvVar}`;
+  // 只拦明显的占位符；env 未配置 key 不在此报错——key 可能已在 Admin DB 配置，
+  // 实际调用时 getAllKeys 会从 DB 兜底；真正无 key 由 callAI 抛「API Key 未配置」。
+  if (key?.includes("your_")) {
+    return `${config.name} API Key 未正确配置（占位符未替换），请在 .env.local 填写 ${config.apiKeyEnvVar}`;
   }
   return null;
 }
 
 // ==================== Agent 角色模型映射 ====================
-// 可独立配置 Writer / Verifier / Refiner 使用不同模型提供者
-// 当 Verifier 使用与 Writer 不同的模型时，实现真正的独立验证
+// Writer / Verifier / Refiner / Planner 可独立配置使用不同模型提供者
+// 当 Verifier 使用与 Writer 不同的模型时，实现真正的独立验证。
+// Planner 走便宜模型（默认 zhipu）：规划是短任务，无需全价大模型。
+// 默认值硬编码；Admin 保存 AGENT_ROLE_* 设置后由 loadAgentRoleProviders() 刷新内存缓存，
+// 保持 getAgentProvider 同步——全库有 27+ 处同步调用，不能改成 async。
 
-export type AgentRole = "writer" | "verifier" | "refiner";
+export type AgentRole = "writer" | "verifier" | "refiner" | "planner";
 
-export const AGENT_MODELS: Record<AgentRole, ModelProviderKey> = {
-  writer: "deepseek",
-  verifier: MODEL_PROVIDERS.zhipu.enabled ? "zhipu" : "deepseek",
-  refiner: "deepseek",
+/** 角色→provider 设置的存储键（值: "deepseek" | "zhipu"） */
+export const AGENT_ROLE_SETTING_KEYS: Record<AgentRole, string> = {
+  writer: "AGENT_ROLE_WRITER",
+  verifier: "AGENT_ROLE_VERIFIER",
+  refiner: "AGENT_ROLE_REFINER",
+  planner: "AGENT_ROLE_PLANNER",
 };
 
+function defaultAgentRoleProviders(): Record<AgentRole, ModelProviderKey> {
+  return {
+    writer: "deepseek",
+    verifier: MODEL_PROVIDERS.zhipu.enabled ? "zhipu" : "deepseek",
+    refiner: "deepseek",
+    planner: MODEL_PROVIDERS.zhipu.enabled ? "zhipu" : "deepseek",
+  };
+}
+
+let agentRoleProviders: Record<AgentRole, ModelProviderKey> = defaultAgentRoleProviders();
+
+/** 从 DB 设置加载角色→provider 映射（应用启动时 + Admin 保存设置后调用） */
+export async function loadAgentRoleProviders(): Promise<void> {
+  try {
+    const { getSetting } = await import("./settings");
+    const next: Record<AgentRole, ModelProviderKey> = { ...agentRoleProviders };
+    for (const role of ["writer", "verifier", "refiner", "planner"] as const) {
+      const v = await getSetting(AGENT_ROLE_SETTING_KEYS[role]);
+      if (v === "deepseek" || v === "zhipu") next[role] = v;
+    }
+    agentRoleProviders = next;
+  } catch {
+    /* DB 读取失败则保持当前映射 */
+  }
+}
+
 export function getAgentProvider(role: AgentRole): ModelProviderKey {
-  return AGENT_MODELS[role];
+  return agentRoleProviders[role];
 }
 
 /** 获取某 agent 角色的模型配置，含 key 有效性检查 */

@@ -10,7 +10,7 @@ import path from "path";
 
 import { BodySectionKey } from "@/lib/imrad";
 import { stripOutOfRangeCitations } from "@/lib/reference-reorder";
-import { markOutOfBoundsCitations } from "@/lib/citation-bounds";
+import { markOutOfBoundsCitations } from "@/lib/citation";
 import { cleanMarkdownArtifacts } from "@/lib/utils";
 import { getTemplateSections, type TemplateSectionDef } from "@/lib/template-sections";
 

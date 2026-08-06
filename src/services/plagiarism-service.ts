@@ -63,6 +63,7 @@ export const DEFAULT_CONFIG: PlagiarismConfig = {
 
 export interface CheckInput {
   projectId?: string;
+  userId?: string;
   title: string;
   content: string;
   webSearch?: boolean;
@@ -240,14 +241,18 @@ async function detectSelfDuplication(
   return matches;
 }
 
-/** 检测 2：跨项目比对 */
+/** 检测 2：跨项目比对（仅同一用户的其他项目） */
 async function detectCrossProject(
   paragraphs: { text: string; offset: number }[],
   excludeProjectId: string | undefined,
+  userId: string | undefined,
   threshold: number
 ): Promise<PlagiarismMatchResult[]> {
   const otherSections = await prisma.section.findMany({
-    where: excludeProjectId ? { projectId: { not: excludeProjectId } } : {},
+    where: {
+      ...(excludeProjectId ? { projectId: { not: excludeProjectId } } : {}),
+      ...(userId ? { project: { userId } } : {}),
+    },
     select: { content: true, project: { select: { title: true } } },
     take: 300,
   });
@@ -627,7 +632,7 @@ export async function runPlagiarismCheck(
     if (config.crossProject) {
       progress("cross_project", "正在跨项目比对...");
       localTasks.push(
-        detectCrossProject(paragraphs, input.projectId, config.thresholds.cross)
+        detectCrossProject(paragraphs, input.projectId, input.userId, config.thresholds.cross)
       );
     }
 

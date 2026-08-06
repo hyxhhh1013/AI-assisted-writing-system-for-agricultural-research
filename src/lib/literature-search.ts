@@ -1,6 +1,9 @@
 import type { ExternalLiteratureHit, LiteratureSource } from "@/contracts/literature";
+import { expandRagQueries } from "@/lib/rag-query-expand";
 
-const TIMEOUT_MS = 8_000;
+const TIMEOUT_MS = 12_000;
+/** 单源软超时：慢源（如 S2 限流）不拖垮整轮；硬超时仍由 fetch AbortSignal 兜底 */
+const SOURCE_SOFT_MS = 3_000;
 const SOURCE_PRIORITY: Record<LiteratureSource, number> = {
   openalex: 4,
   "semantic-scholar": 3,
@@ -13,6 +16,24 @@ function fetchWithTimeout(url: string, ms = TIMEOUT_MS): Promise<Response | null
     headers: { "User-Agent": "GrainScript/1.0 (literature-search)" },
     signal: AbortSignal.timeout(ms),
   }).catch(() => null);
+}
+
+async function withSoftTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  fallback: T,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallback), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 /** 从用户输入提取 DOI（含 doi.org URL） */
@@ -150,6 +171,23 @@ async function searchCrossRef(query: string, limit: number): Promise<ExternalLit
 
 // ── OpenAlex ──────────────────────────────────────────────────────────────────
 
+/** OpenAlex 摘要为倒排索引，需还原为纯文本（导出供单测） */
+export function reconstructOpenAlexAbstract(
+  inverted: unknown,
+): string | undefined {
+  if (!inverted || typeof inverted !== "object") return undefined;
+  const words: { pos: number; word: string }[] = [];
+  for (const [word, positions] of Object.entries(inverted as Record<string, unknown>)) {
+    if (!Array.isArray(positions)) continue;
+    for (const pos of positions) {
+      if (typeof pos === "number") words.push({ pos, word });
+    }
+  }
+  if (words.length === 0) return undefined;
+  words.sort((a, b) => a.pos - b.pos);
+  return words.map((w) => w.word).join(" ").trim() || undefined;
+}
+
 function openAlexWorkToHit(work: Record<string, unknown>, fallbackId: string): ExternalLiteratureHit {
   const authorships = (work.authorships as { author?: { display_name?: string } }[] | undefined) ?? [];
   const authors = authorships
@@ -178,6 +216,10 @@ function openAlexWorkToHit(work: Record<string, unknown>, fallbackId: string): E
 
   const oaUrl = openAccess?.oa_url;
   const openAlexId = typeof work.id === "string" ? work.id.split("/").pop() ?? fallbackId : fallbackId;
+  const abstract =
+    typeof work.abstract === "string"
+      ? work.abstract
+      : reconstructOpenAlexAbstract(work.abstract_inverted_index);
 
   return {
     id: doi ? `doi:${doi}` : `openalex:${openAlexId}`,
@@ -190,6 +232,7 @@ function openAlexWorkToHit(work: Record<string, unknown>, fallbackId: string): E
     pages,
     doi,
     url: typeof work.id === "string" ? work.id : doi ? `https://doi.org/${doi}` : undefined,
+    abstract,
     citedByCount: typeof work.cited_by_count === "number" ? work.cited_by_count : undefined,
     openAccessUrl: typeof oaUrl === "string" ? oaUrl : undefined,
     isOpenAccess: openAccess?.is_oa === true,
@@ -287,40 +330,265 @@ async function searchPubMed(query: string, limit: number): Promise<ExternalLiter
   return hits;
 }
 
+export type ExternalSearchOptions = {
+  limit?: number;
+  /**
+   * full：四源；fast：先 OpenAlex+S2，不够再补 CrossRef/PubMed（默认，Agent/UI 更快）
+   */
+  mode?: "fast" | "full";
+};
+
+const EMPTY_SOURCE_COUNTS: Record<string, number> = {
+  openalex: 0,
+  "semantic-scholar": 0,
+  crossref: 0,
+  pubmed: 0,
+};
+
+function bumpCounts(
+  counts: Record<string, number>,
+  batches: Partial<Record<LiteratureSource, ExternalLiteratureHit[]>>,
+): void {
+  for (const [src, hits] of Object.entries(batches)) {
+    counts[src] = (counts[src] ?? 0) + (hits?.length ?? 0);
+  }
+}
+
+/** 对多个 query 变体并行打指定源（单源软超时，避免慢源拖垮） */
+async function searchVariantsOnSources(
+  variants: string[],
+  perSource: number,
+  sources: readonly LiteratureSource[],
+): Promise<{
+  hits: ExternalLiteratureHit[];
+  sourceCounts: Record<string, number>;
+}> {
+  const sourceCounts = { ...EMPTY_SOURCE_COUNTS };
+
+  const buckets = await Promise.all(
+    variants.map(async (q) => {
+      const tasks: Promise<{ src: LiteratureSource; hits: ExternalLiteratureHit[] }>[] = [];
+      if (sources.includes("openalex")) {
+        tasks.push(
+          withSoftTimeout(
+            searchOpenAlex(q, perSource).then((hits) => ({
+              src: "openalex" as const,
+              hits,
+            })),
+            SOURCE_SOFT_MS,
+            { src: "openalex" as const, hits: [] as ExternalLiteratureHit[] },
+          ).catch(() => ({ src: "openalex" as const, hits: [] as ExternalLiteratureHit[] })),
+        );
+      }
+      if (sources.includes("semantic-scholar")) {
+        tasks.push(
+          withSoftTimeout(
+            searchSemanticScholar(q, perSource).then((hits) => ({
+              src: "semantic-scholar" as const,
+              hits,
+            })),
+            SOURCE_SOFT_MS,
+            { src: "semantic-scholar" as const, hits: [] as ExternalLiteratureHit[] },
+          ).catch(() => ({
+            src: "semantic-scholar" as const,
+            hits: [] as ExternalLiteratureHit[],
+          })),
+        );
+      }
+      if (sources.includes("crossref")) {
+        tasks.push(
+          withSoftTimeout(
+            searchCrossRef(q, perSource).then((hits) => ({
+              src: "crossref" as const,
+              hits,
+            })),
+            SOURCE_SOFT_MS,
+            { src: "crossref" as const, hits: [] as ExternalLiteratureHit[] },
+          ).catch(() => ({ src: "crossref" as const, hits: [] as ExternalLiteratureHit[] })),
+        );
+      }
+      if (sources.includes("pubmed")) {
+        tasks.push(
+          withSoftTimeout(
+            searchPubMed(q, perSource).then((hits) => ({
+              src: "pubmed" as const,
+              hits,
+            })),
+            SOURCE_SOFT_MS,
+            { src: "pubmed" as const, hits: [] as ExternalLiteratureHit[] },
+          ).catch(() => ({ src: "pubmed" as const, hits: [] as ExternalLiteratureHit[] })),
+        );
+      }
+      return Promise.all(tasks);
+    }),
+  );
+
+  const all: ExternalLiteratureHit[] = [];
+  for (const wave of buckets) {
+    const batch: Partial<Record<LiteratureSource, ExternalLiteratureHit[]>> = {};
+    for (const { src, hits } of wave) {
+      batch[src] = hits;
+      all.push(...hits);
+    }
+    bumpCounts(sourceCounts, batch);
+  }
+  return { hits: all, sourceCounts };
+}
+
+async function searchKeywordLiterature(
+  query: string,
+  limit: number,
+  mode: "fast" | "full",
+): Promise<{
+  hits: ExternalLiteratureHit[];
+  variants: string[];
+  sourceCounts: Record<string, number>;
+}> {
+  const variants = buildExternalQueryVariants(query);
+  const perSource = Math.max(5, Math.ceil(limit / Math.max(1, variants.length)));
+
+  if (mode === "full") {
+    const wave = await searchVariantsOnSources(variants, perSource, [
+      "openalex",
+      "semantic-scholar",
+      "crossref",
+      "pubmed",
+    ]);
+    return {
+      hits: mergeHits(wave.hits).slice(0, limit),
+      variants,
+      sourceCounts: wave.sourceCounts,
+    };
+  }
+
+  // fast：先主源（变体全部并行），不够再补次源
+  const primary = await searchVariantsOnSources(variants, perSource, [
+    "openalex",
+    "semantic-scholar",
+  ]);
+  let merged = mergeHits(primary.hits);
+  const sourceCounts = { ...primary.sourceCounts };
+
+  if (merged.length < limit) {
+    const secondary = await searchVariantsOnSources(variants, perSource, [
+      "crossref",
+      "pubmed",
+    ]);
+    sourceCounts.crossref += secondary.sourceCounts.crossref;
+    sourceCounts.pubmed += secondary.sourceCounts.pubmed;
+    merged = mergeHits([...primary.hits, ...secondary.hits]);
+  }
+
+  return {
+    hits: merged.slice(0, limit),
+    variants,
+    sourceCounts,
+  };
+}
+
+async function resolveDoiHits(
+  doi: string,
+  limit: number,
+): Promise<ExternalLiteratureHit[]> {
+  const [oa, cr] = await Promise.all([
+    fetchOpenAlexByDoi(doi).catch(() => null),
+    searchCrossRef(doi, 3).catch(() => [] as ExternalLiteratureHit[]),
+  ]);
+  const hits: ExternalLiteratureHit[] = [];
+  if (oa) hits.push(oa);
+  hits.push(...cr.filter((h) => h.doi?.toLowerCase() === doi.toLowerCase()));
+  if (hits.length === 0) {
+    const crFallback =
+      cr.length > 0 ? cr : await searchCrossRef(`doi:${doi}`, 2).catch(() => []);
+    hits.push(...crFallback);
+  }
+  return mergeHits(hits).slice(0, limit);
+}
+
 /** 聚合外部文献检索（OpenAlex + Semantic Scholar + CrossRef + PubMed） */
 export async function searchExternalLiterature(
   rawQuery: string,
-  options?: { limit?: number },
+  options?: ExternalSearchOptions,
 ): Promise<ExternalLiteratureHit[]> {
-  const limit = Math.min(Math.max(options?.limit ?? 10, 1), 20);
+  const limit = Math.min(Math.max(options?.limit ?? 10, 1), 25);
+  const mode = options?.mode ?? "fast";
   const query = rawQuery.replace(/[\s\n\r]+/g, " ").trim().slice(0, 300);
   if (query.length < 2) return [];
 
   const doi = parseDoiFromQuery(query);
-  if (doi) {
-    const [oa, cr] = await Promise.all([
-      fetchOpenAlexByDoi(doi).catch(() => null),
-      searchCrossRef(doi, 3).catch(() => [] as ExternalLiteratureHit[]),
-    ]);
-    const hits: ExternalLiteratureHit[] = [];
-    if (oa) hits.push(oa);
-    hits.push(...cr.filter((h) => h.doi?.toLowerCase() === doi.toLowerCase()));
-    if (hits.length === 0) {
-      const crFallback = cr.length > 0 ? cr : await searchCrossRef(`doi:${doi}`, 2).catch(() => []);
-      hits.push(...crFallback);
-    }
-    return mergeHits(hits).slice(0, limit);
+  if (doi) return resolveDoiHits(doi, limit);
+
+  const { hits } = await searchKeywordLiterature(query, limit, mode);
+  return hits;
+}
+
+/** 供 Agent 诊断：各源是否返回（变体并行，不再串行） */
+export async function searchExternalLiteratureWithStats(
+  rawQuery: string,
+  options?: ExternalSearchOptions,
+): Promise<{
+  hits: ExternalLiteratureHit[];
+  variants: string[];
+  sourceCounts: Record<string, number>;
+}> {
+  const limit = Math.min(Math.max(options?.limit ?? 10, 1), 25);
+  const mode = options?.mode ?? "fast";
+  const query = rawQuery.replace(/[\s\n\r]+/g, " ").trim().slice(0, 300);
+  if (query.length < 2) {
+    return { hits: [], variants: [], sourceCounts: { ...EMPTY_SOURCE_COUNTS } };
   }
 
-  const perSource = Math.max(3, Math.ceil(limit / 2));
-  const [openalex, semantic, crossref, pubmed] = await Promise.all([
-    searchOpenAlex(query, perSource).catch(() => [] as ExternalLiteratureHit[]),
-    searchSemanticScholar(query, perSource).catch(() => [] as ExternalLiteratureHit[]),
-    searchCrossRef(query, perSource).catch(() => [] as ExternalLiteratureHit[]),
-    searchPubMed(query, perSource).catch(() => [] as ExternalLiteratureHit[]),
-  ]);
+  const doi = parseDoiFromQuery(query);
+  if (doi) {
+    const hits = await resolveDoiHits(doi, limit);
+    return {
+      hits,
+      variants: [query],
+      sourceCounts: {
+        ...EMPTY_SOURCE_COUNTS,
+        openalex: hits.filter((h) => h.source === "openalex").length,
+        crossref: hits.filter((h) => h.source === "crossref").length,
+      },
+    };
+  }
 
-  return mergeHits([...openalex, ...semantic, ...crossref, ...pubmed]).slice(0, limit);
+  return searchKeywordLiterature(query, limit, mode);
+}
+
+/**
+ * 中文检索补英文同义。有英文变体时只走英文（最多 2 路），跳过中文垫底——
+ * OpenAlex 中文常跑偏，且多一路变体≈多等一整轮网络。
+ */
+function buildExternalQueryVariants(query: string): string[] {
+  if (!/[一-龥]/.test(query)) return [query];
+
+  const enFirst: string[] = [];
+
+  for (const v of expandRagQueries(query)) {
+    if (/[a-zA-Z]{3,}/.test(v) && !enFirst.includes(v) && v !== query) {
+      enFirst.push(v);
+    }
+  }
+
+  const fallbacks: Array<[RegExp, string]> = [
+    [/生物炭/, "biochar"],
+    [/热解|裂解/, "pyrolysis"],
+    [/土壤/, "soil"],
+    [/控释|缓释/, "controlled release fertilizer"],
+    [/烟草|烤烟/, "tobacco"],
+    [/茶|绿茶/, "tea aroma"],
+  ];
+  const enParts: string[] = [];
+  for (const [re, en] of fallbacks) {
+    if (re.test(query)) enParts.push(en);
+  }
+  if (enParts.length > 0) {
+    const enQ = enParts.join(" ");
+    if (!enFirst.includes(enQ)) enFirst.unshift(enQ);
+  }
+
+  if (enFirst.length > 0) return enFirst.slice(0, 2);
+  return [query];
 }
 
 export function literatureSourcesQueried(): LiteratureSource[] {

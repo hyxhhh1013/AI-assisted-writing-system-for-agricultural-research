@@ -18,6 +18,8 @@ export interface PeakInfo {
   two_theta: number;
   intensity: number;
   relative_intensity: number;
+  /** 半高全宽 (°2θ)，峰拟合脚本由半高宽法估算 */
+  fwhm?: number | null;
 }
 
 export interface BgParams {
@@ -268,6 +270,13 @@ export interface XpsData {
   rsquare: number | null;
   iterations: number;
   exit_flag: number;
+  /** C 1s 等 BE 校准施加的偏移 (eV) */
+  be_shift?: number | null;
+}
+
+export interface XpsBeCalibration {
+  reference_be: number;
+  measured_be: number;
 }
 
 export interface XpsConfig {
@@ -277,6 +286,10 @@ export interface XpsConfig {
   energy_range?: [number, number] | null;
   bg_params?: BgParams;
   iter_max?: number;
+  /** 直接 BE 偏移 (eV)，正数向高 BE 移动 */
+  be_shift?: number;
+  /** C 1s = 284.8 eV 等校准：shift = reference - measured */
+  be_calibration?: XpsBeCalibration;
 }
 
 export async function runXpsAnalysis(
@@ -290,5 +303,136 @@ export async function runXpsAnalysis(
   const res = await fetch("/api/xrd/xps", { method: "POST", body: fd, signal });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "XPS 分析失败");
+  return json;
+}
+
+// ===== 多谱叠加 =====
+
+export interface XrdStackConfig {
+  title?: string;
+  x_label?: string;
+  y_label?: string;
+  offset?: number;
+  normalize?: boolean;
+}
+
+export interface XrdStackData {
+  n_spectra: number;
+  labels: string[];
+  normalize: boolean;
+  offset: number;
+}
+
+export async function runXrdStack(
+  dataFiles: File[],
+  config: XrdStackConfig,
+  labels?: string[],
+  signal?: AbortSignal,
+): Promise<XrdApiResponse<XrdStackData>> {
+  const fd = new FormData();
+  for (const f of dataFiles) {
+    fd.append("dataFiles", f);
+  }
+  fd.append("config", JSON.stringify(config));
+  if (labels && labels.length > 0) {
+    fd.append("labels", JSON.stringify(labels));
+  }
+  const res = await fetch("/api/xrd/stack", { method: "POST", body: fd, signal });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "多谱叠加失败");
+  return json;
+}
+
+// ===== Scherrer =====
+
+export interface ScherrerPeakInput {
+  two_theta: number;
+  fwhm: number;
+  label?: string;
+}
+
+export interface ScherrerConfig {
+  peaks: ScherrerPeakInput[];
+  wavelength?: number;
+  shape_factor?: number;
+  fwhm_unit?: "degree" | "radian";
+  title?: string;
+}
+
+export interface ScherrerPeakResult {
+  label: string;
+  two_theta: number;
+  fwhm: number;
+  size_nm: number;
+}
+
+export interface ScherrerData {
+  wavelength: number;
+  shape_factor: number;
+  fwhm_unit: string;
+  peaks: ScherrerPeakResult[];
+  mean_size_nm: number;
+  n_peaks: number;
+}
+
+export async function runScherrer(
+  config: ScherrerConfig,
+  signal?: AbortSignal,
+): Promise<XrdApiResponse<ScherrerData>> {
+  const res = await fetch("/api/xrd/scherrer", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+    signal,
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Scherrer 计算失败");
+  return json;
+}
+
+// ===== 相检索 =====
+
+export interface PhaseMatchPeak {
+  hkl: string;
+  two_theta_ref: number;
+  two_theta_exp: number;
+  delta: number;
+}
+
+export interface PhaseMatchItem {
+  phase_id: string;
+  name: string;
+  formula: string;
+  score: number;
+  matched_count: number;
+  ref_peak_count: number;
+  matched_peaks: PhaseMatchPeak[];
+}
+
+export interface PhaseSearchData {
+  n_input_peaks: number;
+  n_matches: number;
+  matches: PhaseMatchItem[];
+}
+
+export interface PhaseSearchConfig {
+  peaks: Pick<PeakInfo, "two_theta" | "intensity" | "relative_intensity">[];
+  tolerance_deg?: number;
+  top_k?: number;
+  min_score?: number;
+}
+
+export async function runPhaseSearch(
+  config: PhaseSearchConfig,
+  signal?: AbortSignal,
+): Promise<{ data: PhaseSearchData }> {
+  const res = await fetch("/api/xrd/phase-search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+    signal,
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "相检索失败");
   return json;
 }

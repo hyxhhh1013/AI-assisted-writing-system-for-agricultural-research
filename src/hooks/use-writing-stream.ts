@@ -7,10 +7,12 @@ import { postWritingStream } from "@/services/writing";
 import { getErrorMessage } from "@/lib/error-utils";
 import {
   isDeltaEvent, isStatusEvent, isPipelineStepEvent, isVerificationEvent,
+  isReviewReportEvent,
   isReferencesEvent, isCitationWarningsEvent, isDataClaimWarningsEvent,
   isCorrectedTextEvent, isClearResultEvent, isErrorEvent, isInfoEvent, isBulletDoneEvent,
   type SSEEvent,
 } from "@/contracts/sse";
+import { formatVerificationIssuesForRefiner } from "@/contracts/writing-verification";
 
 export interface PipelineStep {
   key: string;
@@ -177,6 +179,12 @@ export function useWritingStream(): UseWritingStreamReturn {
             } else if (isVerificationEvent(event)) {
               verificationRef.current += event.verification;
               setVerificationFeedback(verificationRef.current);
+            } else if (isReviewReportEvent(event)) {
+              const readable = event.report.passed
+                ? event.report.summary
+                : formatVerificationIssuesForRefiner(event.report);
+              verificationRef.current = readable;
+              setVerificationFeedback(readable);
             } else if (isCorrectedTextEvent(event)) {
               resultRef.current = event.text;
               setResult(event.text);
@@ -185,8 +193,8 @@ export function useWritingStream(): UseWritingStreamReturn {
               setResult("");
             } else if (isReferencesEvent(event)) {
               if (event.references.length > 0) {
-                refsRef.current = Array.from(new Set([...refsRef.current, ...event.references]));
-                setDetectedRefs(refsRef.current);
+                refsRef.current = event.references;
+                setDetectedRefs(event.references);
               }
               if (event.refMapping) {
                 refMappingRef.current = { ...refMappingRef.current, ...event.refMapping };

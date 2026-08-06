@@ -8,7 +8,8 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-06-13（096a～c done；081 done；093 done）
+> **最后更新**：2026-07-28（**W3-AP-DRAFT-COVER done**；下一优先 WQC；见 `plans/W3-AP-QUALITY.md`）  
+> **实时 status 只看 §1 Phase 11**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
 
@@ -100,17 +101,17 @@
 | **ENG-PR-096b** | **要点列表 + `bullets[]` 契约** | 096a | 1d | done | 2026-06-13；`WritingBulletList` + schema |
 | **ENG-PR-096c** | **`expand_bullet` 逐条扩写 + 合并** | 096b | 2d | done | 2026-06-13；`bullet_done` SSE + `use-writing-bullet-expand` |
 | **ENG-PR-096d** | **工作台默认段落模式 + 选区助手** | 096c | 1～2d | **done** | **P1**；`paragraph-editor` / `use-ai-paragraph` 为主路径 |
-| ENG-PR-082 | Verifier 结构化 + 选择性 Refiner | **096c** | 2d | todo | **P2 辅助**；整节写完后可选核查，非主轴 |
-| ENG-PR-083 | 大纲骨架化 `userSkeleton` | — | 1d | todo | 与 096b 同源；可并行 |
-| ENG-PR-084 | 入口重构：`/writing` 废弃 + 选区 AI | **096d** | 2d | todo | §八；与 096d 合并规划 |
-| ENG-PR-085 | 分析页 AI 免责标注 | — | 2h | todo | §九 |
-| ENG-PR-086 | 编辑器对话面板（Phase C） | ENG-PR-084 | 2～4w | todo | backlog；§十 |
+| ENG-PR-082 | Verifier 结构化 + 选择性 Refiner | **096c** | 2d | **done** | 2026-07-24；`review_report` + Agent auto-fix |
+| ENG-PR-083 | 大纲骨架化 `userSkeleton` | — | 1d | **done** | 归档→W1-083；outline API/UI + prompt |
+| ~~ENG-PR-084~~ | ~~入口重构~~ | — | — | **cancelled** | 归档→Phase 11；由 Cockpit 取代；`/writing` 已重定向 |
+| ENG-PR-085 | 分析页 AI 免责标注 | — | 2h | **done** | 2026-07-24；`AiResultDisclaimer` → data/knowledge/analysis |
+| ~~ENG-PR-086~~ | ~~编辑器对话面板~~ | — | — | **cancelled** | 归档→Phase 11；由 Agent Tab 取代 |
 | **Phase 7 — 文献库书目增强 + 外部文献发现** |
 | ENG-PR-090 | 文献库列表：期刊/DOI 列 + 筛选 + 契约扩展 | ENG-PR-027 | 1～2d | done | 列表列/筛选/ISSN 弹窗/响应式卡片 |
 | ENG-PR-091 | 期刊指标 enrichment（CSV/Excel IF/分区 + OpenAlex） | ENG-PR-090 | 2～3d | done | §三；`metrics` + 中英文列别名；IF 年份角标；导入批次 UI 待二期 |
 | ENG-PR-092 | 外部文献检索 Tab + 加入参考文献 | — | 3～5d | done | §四；`eng/pr-092-external-literature-search` |
 | ENG-PR-093 | RIS / BibTeX 批量导入 | ENG-PR-090 | 2d | done | 2026-06-12；`import-bibliography` + 向导 + Crossref |
-| ENG-PR-094 | OA 全文自动入库 | ENG-PR-092, 093 | 1～2w | todo | backlog P3；§六 |
+| ENG-PR-094 | OA 全文自动入库 | ENG-PR-092, 093 | 1～2w | done | MVP：导入时若有 openAccessUrl 则下载到 papers/ 并增量索引；`ENABLE_OA_AUTO_IMPORT=0` 可关 |
 | **Phase 8 — RAG 运行时性能（库变大后卡顿/内存）** |
 | RAG-PR-006 | 两阶段检索：BM25 候选 → 候选集向量精排 | RAG-PR-002 | 1d | done | 2026-06-13；向量 O(全库)→O(候选)；去 ~770MB JS 向量内存 |
 | RAG-PR-007 | Query Embedding LRU 缓存（`(model,query)→向量`） | RAG-PR-006 | 0.5h | done | 2026-06-13；上限 256 |
@@ -118,8 +119,99 @@
 | RAG-PR-009 | warmup 真预加载 + `RAG_WARMUP`/`RAG_PERF_LOG` 开关 | RAG-PR-008 | 0.5h | done | 2026-06-13；冷启动移出首检索 |
 | RAG-PR-010 | `.emb` 按需 pread（去常驻内存） | RAG-PR-006 | 0.5d | done | 2026-06-13；`EmbeddingStore` 文件句柄 + `readSync`；省 ~885MB |
 | RAG-PR-011 | 扩写范围检索（按已选文献分类 scope） | RAG-PR-010 | 0.5d | done | 2026-06-13；`search({categories})` + `deriveScopeCategories`；无引用回退全库 |
+| RAG-PR-012 | 召回提升：同义词扩展 + 多 query RRF + 弱 BM25 全池向量 | RAG-PR-011 | 0.5d | done | 2026-07-27；`rag-query-expand.ts` |
+| RAG-PR-013 | 索引 n-gram 对齐 + 题名加权 + 条件 multi-query | RAG-PR-012 | 0.5d | done | 2026-07-27；倒排 bigram + metadata boost |
+| **Phase 9 — 研究方向战略规划（ENG-PR-100 系列）** |
+| ENG-PR-100 | 方向基础模块：Direction 表 + CRUD + 页面框架（33 files） | — | 3d | done | 2026-07-04；`d18a7e3` |
+| ENG-PR-110 | Socratic Mentor 预承诺（P0） | 100 | 2d | done | 2026-07-04；`314dd02` / `509a9a3` / `52823df` |
+| ENG-PR-111 | 分析报告可视化：雷达图+柱状图+证据表+矛盾面板（P0） | 100 | 3d | done | 2026-07-04；`66b3d75` |
+| ENG-PR-112 | Blueprint 扩展 + 写作桥接对齐（P1） | 100 | 1d | done | 2026-07-04；`be78112` |
+| ENG-PR-113 | NL 资产解析：自然语言→结构化 ExperimentAsset（P1） | 100 | 1d | done | 2026-07-04；`2ac88f5` |
+| ENG-PR-114 | 甘特图路线图可视化（P1） | 100 | 1d | done | 2026-07-04；`4ddc02e` |
+| ENG-PR-115 | 实验方案生成：D6 缺口→ExperimentPlan（P1） | 100 | 2d | done | 2026-07-04；`e23549c` |
+| ENG-PR-116 | 项目申报辅助：方向全景→基金申请书（P1） | 100 | 2d | done | 2026-07-04；`353791a` |
+| ENG-PR-117 | 双角色架构：PI + Researcher 权限分离（P2） | 100 | 1d | done | 2026-07-04；`42abad6` |
+| ENG-PR-118 | Material Passport 版本追踪（P2） | 100 | 1d | done | 2026-07-04；`064479b` |
+| ENG-PR-119 | Style Calibration 方向校准（P2） | 100 | 1d | done | 2026-07-04；`cc9ab9e` |
+| ENG-PR-120 | 反模式检测接入审查板块 | 100 | 1d | done | 2026-07-04；`a35bbc8` |
+| **Phase 10 — Direction→Writing 文献桥接（ENG-PR-200 Bug 1 + ENG-PR-210）** |
+| ENG-PR-200a | 综述 mapping fallback 修复（mapToSectionForMode + majorNumberFromSectionId） | — | 0.5d | done | 2026-07-05 |
+| ENG-PR-210a | Direction→Writing 桥接：contract + bridge 函数 + paper-brief API + references 注入 | 100 | 1d | done | 2026-07-05 |
+| ENG-PR-210b | Blueprint 上下文注入：direction 字段不再被 zod strip，到达 AI prompt | 210a | 0.5d | done | 2026-07-05 |
+| **Phase 11 — Wave 0–4 整体规划（见 MASTER_PLAN.md）** |
+| W0-SEC-01 | Direction `userId` + owner 作用域 + 迁移 | — | 0.5d | done | Wave 0；`8c73ca1` |
+| W0-SEC-02 | 未鉴权 AI 路由补齐 + 限流覆盖 | SEC-01 | 0.5d | done | Wave 0；`d586a77` |
+| W0-SEC-03 | JSONB PATCH 竞态 + Reference.order 唯一 | SEC-02 | 1d | done | Wave 0 |
+| W0-WIP-A | quality/citation/chart 审计清理 PR | — | 1d | done | Wave 0；`0da9d3e`+`4b83ac0` |
+| W0-WIP-B | Agent Phase A + direction bridge commit | SEC-01 | 1d | done | Wave 0；`e5a02c4`+`00d08b8` |
+| W1-PASSPORT | PaperPassport 契约 + Cockpit UI | W0-* | 2w | done | MVP：配置+任务卡+快照+导航 |
+| W2-LANGGRAPH | LangGraph + write tools | W1 | 2w | **done*** | *编排与工具已接；缺 AgentSession checkpoint（另项） |
+| W2-AGENT-GUIDE | `/academic-paper`→Agent 引导页 + `?tab=agent` | W2-LANGGRAPH | 0.5d | **done** | 2026-07-24；AgentGuidePage |
+| W2-AGENT-ONESHOT | 「写一节」闭环（检索→写→落盘） | W2-AGENT-GUIDE | 3～5d | **done** | 2026-07-24；写回刷新 + ONESHOT 提示 |
+| W2-CHECKPOINT | AgentSession DB checkpoint / 中断恢复 | W2-AGENT-ONESHOT | 2d | **done** | 2026-07-24；AgentSession + resume |
+| W1-083 | userSkeleton → Phase 2 | W1-PASSPORT | 1d | done | outline API/UI + prompt 骨架约束 |
+| W0-5 | 仓库卫生（分支收拢、tmp、误删 migration） | — | 0.5d | todo | MASTER_PLAN Wave 0 |
+| W3-ARGUMENT | Phase 3 Argument Blueprint | W2-CHECKPOINT | 1w | **done** | 2026-07-24；契约+API+提纲侧栏+Agent tool+Passport |
+| W3-ABSTRACT | Phase 5b 双语摘要 API | W3-ARGUMENT | 2d | **done** | 2026-07-24；`/api/abstract/bilingual` + Agent tool |
+| W3-PHASE-PACK | Passport 阶段任务包 + 硬门禁 | W3-ABSTRACT | 2d | **done** | 2026-07-24；任务包契约+门禁+「完成当前阶段」 |
+| W3-PHASE-UI | 「完成当前阶段」学生按钮 | W3-PHASE-PACK | 1d | **done** | Agent 面板 + Cockpit 任务包目标/Agent 导航 |
+| W3-REVIEW-2 | 审查 max-2 轮编排 | W3-PHASE-PACK | 3d | **done** | 2026-07-24；`/api/review/rounds` + Agent `run_review_rounds` + UI |
+| W3-CITE-GATE | 导出前引用硬检 | W3-REVIEW-2 | 1d | **done** | 2026-07-24；`/api/citations/gate` + PDF 422 + Passport Phase 5 |
+| W3-E2E-EVAL | 任务包/管道 eval 门禁 | W3-CITE-GATE | 2d | **done** | 2026-07-24；`npm run eval:gates` + pipeline EVAL_STRICT |
+| W3-AP-AUTONOMY | Agent 对齐 academic-paper：多上下文 + 自补大纲/蓝图 + 自主门禁 | W3-E2E-EVAL | 1d | **done** | 2026-07-24；generate_outline / generate_writing_blueprint |
+| W3-AP-PLAN-DRIVE | Plan 子任务真驱动执行环 | W3-AP-AUTONOMY | 1d | **done** | 2026-07-24；plan-progress + agent 续跑 |
+| W3-AP-CHECKPOINTS | academic-paper 铁律检查点（大纲批准等） | W3-AP-PLAN-DRIVE | 1d | **done** | 2026-07-24；outline/config checkpoint + 面板批准 |
+| W3-AP-AGENTIC | 对话式智能体：inspect/read + 思考提示 + 弱强制续跑 | W3-AP-CHECKPOINTS | 1d | **done** | 2026-07-24；取消全自动 Conductor |
+| W3-AP-MULTI-TURN | 同一会话跟聊 sessionId+goal；uiTranscript 续写 | W3-AP-AGENTIC | 0.5d | **done** | 2026-07-25；followUp + 新对话 |
+| W3-AP-CHART-BRIDGE | Agent 配图打通：figureSpecEnc+插章节+缩略图+工作台刷新 | W3-AP-MULTI-TURN | 0.5d | **done** | 2026-07-25 |
+| W3-AP-CONFIG-UI | Phase0 检查点嵌入 PaperConfigPanel + 统一 onProjectMutated 刷新 | W3-AP-CHART-BRIDGE | 0.5d | **done** | 2026-07-25 |
+| W3-AP-LIT-BRIDGE | 文献闭环：search_external hitJson → 确认卡 → import_reference 写回刷新 | W3-AP-CONFIG-UI | 0.5d | **done** | 2026-07-25 |
+| **W3-AP-BEHAVIOR** | **行为主轴：剧本验收→压空转→先读后写（暂停扩工具）** | W3-AP-LIT-BRIDGE | 2～3w | **done** | 2026-07-26；手测 P0～P3 绿；均 tool≈3.5；见 BEHAVIOR §7 |
+| W3-AP-EVAL-SCRIPTS | 固化 P1～P5 剧本 + `eval:agent` 断言 | W3-AP-BEHAVIOR | 1d | **done** | 2026-07-25；`src/lib/eval/agent-scripts.ts` + `npm run eval:agent` |
+| W3-AP-ANTISPAM | 无进展熔断 + 检索/读窗口配额 | W3-AP-EVAL-SCRIPTS | 1～2d | **done** | 2026-07-25；`core/antispam` + toolsNode |
+| W3-AP-READ-BEFORE-WRITE | write/refine 先读后写硬门禁 | W3-AP-ANTISPAM | 1d | **done** | 2026-07-25；intro/discussion + toolsNode |
+| W3-AP-LIT-QUALITY | 文献相关度分+why；低相关无依据拒导 | W3-AP-READ-BEFORE-WRITE | 0.5d | **done** | 2026-07-25；`literature-relevance` |
+| W3-AP-CONFIG-QA | Phase0 配置改为一问一答（非整表） | W3-AP-CONFIG-UI | 0.5d | **done** | 2026-07-25；`AgentConfigQa` |
+| W3-AP-WORK-MEMORY | 会话工作记忆：主张/决策/待办 + update_work_memory | W3-AP-LIT-QUALITY | 1d | **done** | 2026-07-25；落盘 session snapshot |
+| W3-AP-ORCH-OPT | Agent 编排优化：快照单飞缓存 + 前缀稳定 + 只读并行 + 会话并发互斥 | W3-AP-WORK-MEMORY | 1w | **done** | 2026-08-06；`project-refresh` / `parallel-tools` / `tryAcquireAgentSession`；已部署 |
+| W3-AP-WRITE-PROGRESS | write_section 进度透传（fast/full 阶段+实时字数） | W3-AP-ORCH-OPT | 0.5d | **done** | 2026-08-06；`agent/progress` SSE + `writing-progress` + 前端 `progressLabel` |
+| W3-AP-P1-QUEUE | P1 三项全部完成：write_section 进度 + planner 便宜模型路由 + toolsNode 门禁中间件化 | W3-AP-WRITE-PROGRESS | — | **done** | 2026-08-06；`agent/progress` SSE、`AGENT_ROLE_PLANNER`、`tool-gates.ts` |
+| ~~W3-AP-CONDUCTOR~~ | ~~八阶段全自动 Conductor~~ | — | — | **cancelled** | 与「边聊边做」定位冲突 |
+| ~~ENG-PR-084~~ | ~~入口废弃~~ | — | — | cancelled | Cockpit；`/writing`→workbench |
+| ~~ENG-PR-086~~ | ~~编辑器对话面板~~ | — | — | cancelled | Agent Tab |
+| ENG-PR-082 | Verifier 结构化 | W2 | 2d | **done** | 2026-07-24；writing-verification + auto-fix |
+| W3-AUTO-FIX | Agent 写后自动核查修正 | ENG-PR-082 | 0.5d | **done** | `AGENT_WRITE_AUTO_FIX` 默认开 |
+| ENG-PR-085 | 工作台 data 免责标注 | — | 2h | **done** | 2026-07-24；`ai-result-disclaimer.tsx` |
+| ENG-PR-094 | OA 全文入库 | — | 1-2w | done | 导入链路已接 OA 下载 + 增量 index |
+| W4-EXPORT | DOCX/PDF 导出就绪 + 双语/题注 | W3-CITE-GATE | 1d | **done** | 2026-07-24；`export-readiness` + docx |
+| **Phase 12 — 科研作图靠拢 Jade / Origin / DFT（FIG-PR）** |
+| FIG-PR-001 | XRD 多谱 offset 叠加 | — | 0.5d | **done** | 2026-07-25；`/api/xrd/stack` + StackCard |
+| FIG-PR-002 | Scherrer 晶粒尺寸 | — | 0.5d | **done** | 2026-07-25；`/api/xrd/scherrer` + ScherrerCard |
+| FIG-PR-003 | 仪器格式导入（.xy/.xyd/.ras/ASCII .raw） | 001 | 1d | **done** | 2026-07-25；`instrument_io.py` |
+| FIG-PR-010 | 折线双 Y + 线性拟合 | — | 0.5d | **done** | 2026-07-25；`line.py` dual_y / trendline |
+| FIG-PR-011 | Offset 堆叠谱 `stack_offset` | — | 0.5d | **done** | 2026-07-25；Origin 瀑布谱 |
+| FIG-PR-012 | CSV 误差列后端配对 | 010 | 0.5d | **done** | 2026-07-25；`plot_generic.py` |
+| FIG-PR-020 | registry 新增 `dft` 分类 | — | 0.5d | **done** | 2026-07-25；registry v2.2 |
+| FIG-PR-021 | 能带结构 `dft_band` | 020 | 0.5d | **done** | 2026-07-25 |
+| FIG-PR-022 | DOS/PDOS `dft_dos` | 020 | 0.5d | **done** | 2026-07-25 |
+| FIG-PR-023 | VASP DOSCAR/EIGENVAL 解析 | 021,022 | 2d | **done** | 2026-07-25；`/api/dft/vasp` |
+| FIG-PR-024 | PROCAR 轨道投影能带 | 023 | 2d | **done** | 2026-07-27；`kind=procar` + `dft_procar` fat bands |
+| FIG-PR-025 | 峰拟合 FWHM + Scherrer 工作流自动填 | 001,002 | 1d | **done** | 2026-07-27；`compute_peak_fwhm_deg` + workflow |
+| FIG-PR-026 | XRD 相检索 MVP（内置参考库 + 工作流） | 001 | 1d | **done** | 2026-07-27；`/api/xrd/phase-search` + workflow 相检索 |
+| W3-AP-CHART-XRD | Agent XRD 桥接：Scherrer/相检索/峰表 | W3-AP-CHART-BRIDGE | 0.5d | **done** | 2026-07-27；`generate_xrd_analysis` + P6 剧本 |
+| — | 任务单细节 | — | — | — | [`plans/FIG-PR-scientific-plotting.md`](./plans/FIG-PR-scientific-plotting.md) |
+| **Phase 11b — Wave 3.7 Agent 写作质量（对齐 academic-paper Phase 4→7）** |
+| **W3-AP-QUALITY** | **质量主轴：引用接地→分节完整→文风质检→摘要/审查收口** | W3-AP-BEHAVIOR | 3～5w | **todo** | 详规 [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md) |
+| W3-AP-ENTRY-WIZARD | 新建向导：入口三档 full/outline_ready/data_ready + 配置迁入 | W3-AP-CONFIG-QA | 0.5d | **todo** | 代码多已落地；收口测+文档 |
+| W3-AP-CHART-CJK | 图表中文：CSV utf-8 优先解码 + chartIndices 批量（≤6） | W3-AP-CHART-BRIDGE | 0.5d | **todo** | `plot_utils.py` / `generate-chart.ts`；重生成验证 |
+| W3-AP-CITE-GROUND | 引用语义接地：可疑 [n] 检测/告警 + soft-grounded 使用率 | W3-CITE-GATE, W3-AP-LIT-QUALITY | 2～3d | **done** | 2026-07-28；`citation-grounding` + validate/inspect |
+| W3-AP-DRAFT-COVER | 分节完整度：薄节报告 + 综述/研究期望节 + Agent 补节提示 | W3-AP-READ-BEFORE-WRITE | 1～2d | **done** | 2026-07-28；`draft-coverage` + inspect/简报 |
+| W3-AP-WQC | 写作质检轻量：AI 腔 / overclaim / 段长；warn 默认不阻断 | W3-AP-DRAFT-COVER | 1～2d | **todo** | verify_content 增强；非 skill 全文移植 |
+| W3-AP-ABS-FLOW | 正文够长推双语摘要；Passport 5b 信号 | W3-ABSTRACT, W3-AP-DRAFT-COVER | 1d | **todo** | write_bilingual_abstract 路径 |
+| W3-AP-REVIEW-FLOW | 摘要后可选审查；revision-coach 剧本加固 | W3-REVIEW-2, W3-AP-ABS-FLOW | 1～2d | **todo** | 不引入五人组外审 |
+| W3-AP-LIVE-EVAL | 可选 live/录制质量冒烟（错引/节完整/摘要） | W3-AP-CITE-GROUND, W3-AP-DRAFT-COVER | 1～2d | **todo** | 扩展 eval:agent；默认仍 mock |
+| — | 质量主轴细节 | — | — | — | [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md) |
 
-### 1.1 与既有队列的关系
 
 | 来源 | 本队列处理方式 |
 |------|----------------|
@@ -128,7 +220,7 @@
 | `rag-index-refactor.md` | RAG-PR-001～005 原样纳入 §1；细节见该文 §3 |
 | `CLAUDE.md` p1-1～p3-5 | 映射见 §8 |
 | `docs/plans/ENG-PR-080-human-in-the-loop.md` | ENG-PR-087～086 + **096a～d** 任务单以该文 §0～§十六 为准；**096 为产品主轴**；合并时同步 §1 Phase 6 |
-| `docs/plans/ENG-PR-090-knowledge-enrichment.md` | ENG-PR-090～094 任务单以该文 §0～§十 为准；**090 先于 091**；合并时同步 §1 Phase 7 |
+| `docs/plans/W3-AP-QUALITY.md` | Wave 3.7 质量主轴任务单；合并时同步 §1 Phase 11b |
 
 ### 1.2 已完成（勿重复开 PR）
 
@@ -880,28 +972,77 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-06-12 | ENG-PR-093 | AI | RIS/BibTeX 导入 + 091 脚本/Admin 增强 + reindex 后台续跑 |
 | 2026-06-13 | ENG-PR-096a, 096b, 096c | AI | 协作扩写 MVP：retrieve-preview + bullets[] + expand_bullet；`isWritingDraftReady` 条数门槛 |
 | 2026-06-13 | RAG-PR-006～011 | AI | 新增 Phase 8 RAG 运行时性能：两阶段检索 + embedding LRU + 协作式构建/合并/并发去重 + warmup 预加载 + `.emb` 按需 pread + 扩写按分类 scope；`npm run check` 绿（库变大后卡顿/内存优化） |
+| 2026-07-04 | ENG-PR-100, 110～120 | AI | 新增 Phase 9 研究方向战略规划：方向 CRUD + Socratic 预承诺 + 8 维度 Rubric 分析 + 报告可视化（recharts 雷达图/柱状图/证据表/矛盾面板）+ Blueprint 扩展 + NL 资产解析 + 甘特图路线图 + 实验方案生成 + 项目申报辅助 + 双角色 + Material Passport + Style Calibration；反模式检测接入审查板块；15 commits，全部 tsc + lint 通过 |
+| 2026-07-05 | ENG-PR-200a, 210a~c | AI | 综述 mapping fallback 修复 + Direction→Writing 文献桥接全链路（contract + bridge 函数 + paper-brief API + references 注入 + Blueprint 上下文不再被 zod strip + 综述模式强制文献确认）；~400 行新增，零破坏；`npm run check` 绿，相关 69 测试通过 |
+| 2026-07-06 | MASTER_PLAN v2 + W0-SEC-01 | AI | 新增 `docs/MASTER_PLAN.md` 整体规划；Direction 加 userId + `direction-auth.ts` + 全 routes owner 作用域 + 迁移 SQL |
+| 2026-07-06 | W0-WIP + SEC-02 | AI | 6 commits：W0-WIP-A citation/chart 清理；SEC-01 `8c73ca1`；ENG-PR-210 bridge；ENG-PR-200 Agent Phase A；SEC-02 proxy 鉴权/限流 + `proxy-sec02.test.ts` |
+| 2026-07-06 | W0-SEC-03 | AI | Reference `(projectId,order)` 唯一 + dedup 脚本；Direction/Project charts `FOR UPDATE` 事务；projects POST 去全量 refs 覆盖 + `$transaction` |
+| 2026-07-06 | W1-PASSPORT (phase sync) | AI | `paper-passport-progress.ts` 8 阶段重算；`POST .../paper-passport/sync`；GET/POST project + refs PATCH 触发 sync；Cockpit「下一步」提示；路线图建项后 sync |
+| 2026-07-06 | W1-PASSPORT + W1-083 | AI | Cockpit 阶段点击导航+任务卡；Directions 入 module-registry；ENG-PR-083 userSkeleton（outline API/UI/prompt） |
+| 2026-07-06 | W1-PASSPORT MVP done | AI | 任务卡点击跳转；passport 进度快照；Phase0 PATCH；人控/Agent 切换；Cockpit 侧栏集成 |
+| 2026-07-14 | docs-cleanup | AI | MASTER_PLAN §0 真相表；Phase 6↔11 状态同步；`/writing` `/analysis`→workbench；标 W2-CHECKPOINT / W3-ARGUMENT |
+| 2026-07-24 | W2-AGENT-GUIDE | AI | `/academic-paper`→AgentGuidePage；MASTER_PLAN 收拢；ONESHOT→CHECKPOINT→W3；禁平行流水线 |
+| 2026-07-24 | W2-AGENT-ONESHOT | AI | 写回后刷新编辑器；ONESHOT 提示词/快捷语；NEXT_PUBLIC_AGENT_WRITE_ENABLED |
+| 2026-07-24 | W2-CHECKPOINT | AI | AgentSession 表；中断落盘；resume API；面板「继续」 |
+| 2026-07-24 | W3-ARGUMENT | AI | ArgumentBlueprint 契约/API/提纲侧栏/Agent tool；Passport Phase 3 |
+| 2026-07-24 | W3-ABSTRACT | AI | 双语摘要 API + Agent tool；Passport abstractSnapshot 存 zh/en；阶段门禁 |
+| 2026-07-24 | W3-PHASE-PACK | AI | 阶段任务包契约；Passport 硬门禁；Agent「完成当前阶段」 |
+| 2026-07-24 | ENG-PR-082 | AI | Verifier JSON 结构化 + SSE review_report；fix_only 可选 issue |
+| 2026-07-24 | W3-AUTO-FIX | AI | Agent write 默认 full 核查修正（AGENT_WRITE_AUTO_FIX） |
+| 2026-07-24 | W3-REVIEW-2 | AI | 审查 max-2 轮编排 API/Agent/UI + Passport reviewRound |
+| 2026-07-24 | W3-CITE-GATE | AI | 引用硬检 gate API + PDF 拦截 + Phase 5 done 条件 |
+| 2026-07-24 | W3-E2E-EVAL | AI | `eval:gates` 固定样例门禁 + pipeline EVAL_STRICT |
+| 2026-07-24 | ENG-PR-085 | AI | 工作台 data / 知识库精读 AI 结果免责横幅 |
+| 2026-07-24 | W4-EXPORT | AI | DOCX/PDF 共用导出硬检；双语对照摘要 + 图表题注清单 |
+| 2026-07-24 | W3-AP-AUTONOMY | AI | Agent 对齐 academic-paper：generate_outline/writing_blueprint；证据记忆；前置自补门禁；预算加大 |
+| 2026-07-24 | W3-AP-PLAN | AI | 整体规划 docs/plans/W3-AP-agent-academic-paper-orchestration.md；开干 S1 Plan 真驱动 |
+| 2026-07-24 | W3-AP-PLAN-DRIVE | AI | Plan 子任务真驱动 + 续跑；面板状态展示 |
+| 2026-07-24 | W3-AP-CHECKPOINTS | AI | config/outline 检查点 SSE；resume+decision；面板批准/需修改 + confirm 卡片 |
+| 2026-07-24 | W3-AP-AGENTIC | AI | 定位改为对话智能体；inspect_project/read_section；弱化强制续跑；取消 CONDUCTOR |
+| 2026-07-25 | W3-AP-MULTI-TURN | AI | 同一 sessionId 跟聊；followUp 状态；面板「新对话」；历史挂最近会话 |
+| 2026-07-25 | W3-AP-CHART-BRIDGE | AI | generate_chart：figureSpecEnc、插章节、气泡缩略图、工作台 charts 刷新 |
+| 2026-07-25 | W3-AP-CONFIG-UI | AI | config_confirm 嵌入 PaperConfigPanel；project-mutated 统一刷新工作台 |
+| 2026-07-25 | W3-AP-LIT-BRIDGE | AI | search_external+hitJson；import 确认中断；确认卡预览；写回刷新 |
+| 2026-07-25 | W3-AP-BEHAVIOR | AI | 主轴转向行为可靠；剧本 P1～P5 + 执行序写入 `plans/W3-AP-BEHAVIOR.md` |
+| 2026-07-25 | W3-AP-EVAL-SCRIPTS | AI | 轨迹断言器 + P1～P5 正/反例；`npm run eval:agent` |
+| 2026-07-25 | W3-AP-ANTISPAM | AI | 检索配额≤3；连续无进展熔断；search_external 纳入 repeat 软拦截 |
+| 2026-07-25 | W3-AP-READ-BEFORE-WRITE | AI | introduction/discussion 写前须 inspect/read/list；硬门禁 |
+| 2026-07-25 | W3-AP-LIT-QUALITY | AI | search 按相关度排序；import 需 why；低相关拒导；确认卡展示理由 |
+| 2026-07-25 | W3-AP-CONFIG-QA | AI | Phase0 检查点改为一问一答 AgentConfigQa |
+| 2026-07-25 | W3-AP-WORK-MEMORY | AI | workMemory 落盘；update_work_memory 工具；简报注入 |
+| 2026-07-26 | W3-AP-BEHAVIOR | AI | 收口启动：eval:agent + 门禁单测绿；手测清单写入 BEHAVIOR §7；CONFIG-QA 空壳/续跑修复 |
+| 2026-07-26 | W3-AP-BEHAVIOR | AI | 实机手测 P0✅ P1✅ P2✅ P3✅；修 P3 断言取末次成功写回；BEHAVIOR→done |
+| 2026-07-25 | FIG-PR-001～022 | AI | Phase 12 科研作图：Jade 多谱/Scherrer、Origin 双 Y/offset 谱、DFT 能带/DOS；registry v2.2；计划见 `plans/FIG-PR-scientific-plotting.md` |
+| 2026-07-25 | FIG-PR-003, 023 | AI | 仪器 `.xy/.ras` 解析 + VASP DOSCAR/EIGENVAL→`/api/dft/vasp` + VaspCard；fixtures 冒烟通过 |
+| 2026-07-27 | FIG-PR-024 | AI | PROCAR 轨道投影 fat bands：`parse_procar` + `dft_procar` + VaspCard 第三模式；fixture 冒烟通过 |
+| 2026-07-27 | FIG-MECH | AI | 期刊机理图一期～三期：flow Graphviz 预设+SVG/PDF、FlowCard 模板、Mermaid 入 /plot、mechanism_panel 多栏合成、draft_mechanism_figure |
+| 2026-07-27 | FIG-MECH-CANVAS | AI | 轻量 SVG 拖拽画布 `flow-canvas`：拖节点/点连线/边标签；接入 FlowCard + MechanismPanel；无 @xyflow |
+| 2026-07-27 | FIG-OSS-PORT | AI | 对照 SciencePlots/plotstyle/Kroki：ieee/acs/elsevier/agr_cn 预设、色盲+biomass 色板、标记循环、灰度校验、Mermaid/DOT 互通、生物质热解模板 |
+| 2026-07-27 | FIG-PR-026 | AI | 相检索 MVP：`data/xrd/phase-reference.json` + `matchXrdPhases` + workflow 按钮 |
+| 2026-07-27 | RAG-PR-012 | AI | 召回：同义词扩展 + 多 query RRF + 弱 BM25 全池向量 + 分类提示 |
+| 2026-07-27 | RAG-PR-013 | AI | 倒排 CJK n-gram 对齐、题名加权、轻量重排、multi-query 默认 auto |
+| 2026-07-28 | W3-AP-QUALITY | AI | 质量主轴挂载：对照 academic-paper 缺口规划；`plans/W3-AP-QUALITY.md`；队列 Phase 11b |
+| 2026-07-28 | W3-AP-CHART-CJK | AI | 定位乱码=CSV latin-1；改 utf-8 优先；generate_chart 支持 chartIndices；待提交验证 |
+| 2026-07-28 | W3-AP-CITE-GROUND | AI | 语义接地：按条题录/摘要 bigram 重叠；中英脚本跳过；validate_citations + inspect；单测绿 |
+| 2026-07-28 | W3-AP-DRAFT-COVER | AI | 分节完整度：期望节阈值+alt 组；inspect/简报/快捷语；nextSectionKey |
 
 ---
 
 ## 5. 推荐执行顺序（给「下一次 AI」）
 
-**若仓库状态未知，永远从 Phase 0 开始。**
+**当前主轴（2026-07-28）**：**W3-AP-QUALITY** — Agent 写作质量（引用接地 → 分节完整 → 文风质检 → 摘要/审查收口）。  
+详规：[`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md)。  
+行为主轴已收口：[`plans/W3-AP-BEHAVIOR.md`](./plans/W3-AP-BEHAVIOR.md)。
 
-| 会话 | PR 序列 | 说明 |
-|------|---------|------|
-| Session 0 | 001 + 003 + 004 并行；002 独立 | 认证与构建可发布 |
-| Session 1 | RAG-PR-001 → 002 → 003；004 并行 | 文献对话不卡死 |
-| Session 2 | ENG-PR-020 → 023 → 024 | 服务层 + 校验 |
-| Session 3 | ENG-PR-025 → 026 → **025b** → 027 → 028 | 增量 API + 前端接线 + 去双写 |
-| Session 4 | ENG-PR-030 → 031 | 写作管道可维护 |
-| Session 5 | ENG-PR-021 → 022 → 032 → 033 | fetch 清零 + 页面拆 |
-| Session 6 | ENG-PR-040 → 041 → 042 → 043 | 运维可观测 |
-| Session 7 | ENG-PR-050 → 051 → 052 → 053 → 054 | 质量与测试 |
-| Session 8 | ENG-PR-060、061、062 | 可选增强 |
-| Session 9+ | 087/080/081 done → **096a → 096b → 096c**（MVP）→ 096d；083 与 096b 并行；082/084/085/086 辅助 | 详见 [`plans/ENG-PR-080-human-in-the-loop.md`](./plans/ENG-PR-080-human-in-the-loop.md) |
-| Session 10+ | **090** → 091 ∥ 092 → 093 → 094（评估） | 详见 [`plans/ENG-PR-090-knowledge-enrichment.md`](./plans/ENG-PR-090-knowledge-enrichment.md) |
+| 优先级 | ID | 说明 |
+|--------|-----|------|
+| **P0** | **W3-AP-WQC** | AI 腔 / overclaim 轻量质检（DRAFT-COVER 已 done） |
+| P0b | W3-AP-CHART-CJK / ENTRY-WIZARD | 收口已写代码：中文图 + 入口向导测 |
+| P1 | W3-AP-ABS-FLOW → REVIEW-FLOW | 摘要与可选审查收口 |
+| P2 | W3-AP-LIVE-EVAL / W0-5 | 质量冒烟；仓库卫生可穿插 |
 
-**若只能做一个 PR**：**ENG-PR-096a**（检索预览 + 文献勾选；协作扩写 MVP 第一步）。081 管道已就绪；082 整节审查非当前主轴。
+**若只能做一个产品 PR**：先做 **WQC**（文风质检）。  
+**明确不做本波**：全自动 Conductor、plan 苏格拉底、五人组外审、LaTeX/disclosure、Generator–Evaluator 纸盲合同。
 
 ---
 

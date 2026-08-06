@@ -3,6 +3,12 @@ import { collectCitationFirstAppearance } from "@/lib/reference-reorder";
 import { callAI, getAgentModelConfig, streamAIResponse } from "@/lib/ai";
 import { buildVerifierSystemPrompt, buildVerifierPrompt } from "@/lib/prompts";
 import { getActiveWritingCount, getWritingMaxConcurrent } from "@/lib/writing-concurrency";
+import {
+  formatVerificationIssuesForRefiner,
+  hasActionableVerificationIssues,
+  parseVerificationReport,
+  type VerificationReport,
+} from "@/contracts/writing-verification";
 import type { PreparedWritingContext, WritingPipelineEmit } from "../types";
 
 function resolveVerifierMaxFullSources(): number {
@@ -23,6 +29,7 @@ function resolveVerifierMaxFullSources(): number {
 export interface VerifierPhaseResult {
   verificationReport: string;
   failedVerificationIssues: boolean;
+  structuredReport: VerificationReport;
 }
 
 export async function runVerifierPhase(
@@ -126,17 +133,27 @@ export async function runVerifierPhase(
     emit({ type: "verification", verification: verificationReport });
   }
 
-  const failedVerificationIssues =
-    Boolean(verificationReport) &&
-    !verificationReport.trim().toUpperCase().startsWith("PASS") &&
-    verificationReport.length > 20;
+  const structuredReport = parseVerificationReport(verificationReport);
+  emit({ type: "review_report", report: structuredReport });
+
+  const failedVerificationIssues = hasActionableVerificationIssues(structuredReport);
+
+  const feedbackForRefine = failedVerificationIssues
+    ? formatVerificationIssuesForRefiner(structuredReport)
+    : structuredReport.summary;
 
   emit({
     type: "pipeline_step",
     step: "verifying",
     status: "done",
-    detail: failedVerificationIssues ? "发现问题" : "核查通过",
+    detail: failedVerificationIssues
+      ? `发现问题 ${structuredReport.issues.length} 条`
+      : "核查通过",
   });
 
-  return { verificationReport, failedVerificationIssues };
+  return {
+    verificationReport: feedbackForRefine || verificationReport,
+    failedVerificationIssues,
+    structuredReport,
+  };
 }

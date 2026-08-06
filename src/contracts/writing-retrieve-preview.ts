@@ -16,6 +16,8 @@ export interface RetrievePreviewHit {
   refIndex: number | null;
   isNew: boolean;
   snippet: string;
+  /** 该来源所有 chunk 拼接的完整文本（最多 3000 字），用于展开阅读 */
+  fullText: string;
   chunkCount: number;
   category: string;
   bib?: RetrievePreviewBib;
@@ -28,6 +30,8 @@ export interface RetrievePreviewRequest {
   bullets?: string[];
   language?: "zh" | "en";
   existingReferences?: string[];
+  /** 用户勾选的来源；参与分类 scope（与已有参考文献取并集） */
+  selectedSourceIds?: string[];
   researchDirection?: string;
   retrievalMode?: "precise" | "balanced" | "extensive";
   projectMode?: "review" | "research";

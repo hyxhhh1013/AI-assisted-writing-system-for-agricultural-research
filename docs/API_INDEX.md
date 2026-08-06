@@ -13,7 +13,7 @@
 <!-- API_INDEX:AUTO:START -->
 ## 路由表（自动生成）
 
-> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-06-06 08:35:24**（共 **61** 个 route 文件，validateBody **26**，SSE **9**，requireAdmin **14**）。
+> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-08-06 03:24:51**（共 **105** 个 route 文件，validateBody **48**，SSE **11**，requireAdmin **23**）。
 
 图例：zod = 使用 validateBody；SSE = 含 text/event-stream / ReadableStream；admin = 含 requireAdmin。
 
@@ -32,7 +32,10 @@
 |------|------|-----|-----|-------|
 | GET, POST, PATCH, DELETE | `/api/projects` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/analysis-results` | ✓ | — | — |
+| PATCH | `/api/projects/[id]/charts` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/meta` | ✓ | — | — |
+| PATCH | `/api/projects/[id]/paper-passport` | ✓ | — | — |
+| POST | `/api/projects/[id]/paper-passport/sync` | — | — | — |
 | PATCH | `/api/projects/[id]/references` | ✓ | — | — |
 | POST | `/api/projects/[id]/references/import-external` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/sections/[key]` | ✓ | — | — |
@@ -49,6 +52,8 @@
 | 方法 | 路径 | zod | SSE | admin |
 |------|------|-----|-----|-------|
 | POST | `/api/outline` | ✓ | ✓ | — |
+| POST | `/api/outline/argument-blueprint` | ✓ | — | — |
+| POST | `/api/outline/blueprint` | ✓ | — | — |
 
 ### 文献对话
 
@@ -92,6 +97,7 @@
 | POST | `/api/review` | ✓ | — | — |
 | GET | `/api/review/[id]` | — | — | — |
 | GET | `/api/review/history` | — | — | — |
+| POST, GET | `/api/review/rounds` | ✓ | — | — |
 
 ### 查重
 
@@ -139,7 +145,10 @@
 | POST | `/api/xrd/amorphous` | — | — | — |
 | POST | `/api/xrd/bragg` | ✓ | — | — |
 | POST | `/api/xrd/peakfit` | — | — | — |
+| POST | `/api/xrd/phase-search` | ✓ | — | — |
+| POST | `/api/xrd/scherrer` | ✓ | — | — |
 | POST | `/api/xrd/simulate` | — | — | — |
+| POST | `/api/xrd/stack` | — | — | — |
 | POST | `/api/xrd/unitcell` | — | — | — |
 | POST | `/api/xrd/xps` | — | — | — |
 
@@ -183,7 +192,15 @@
 
 | 方法 | 路径 | zod | SSE | admin |
 |------|------|-----|-----|-------|
+| GET | `/api/admin/agent-sessions` | — | — | ✓ |
+| GET, PATCH | `/api/admin/agent-sessions/[id]` | — | — | ✓ |
+| GET | `/api/admin/agent-sessions/stats` | — | — | ✓ |
+| GET | `/api/admin/ai-status` | — | — | ✓ |
+| POST | `/api/admin/ai-test` | ✓ | — | ✓ |
+| GET | `/api/admin/directions` | — | — | ✓ |
+| GET, PATCH | `/api/admin/directions/[id]` | — | — | ✓ |
 | GET | `/api/admin/health` | — | — | ✓ |
+| GET | `/api/admin/insights` | — | — | ✓ |
 | POST | `/api/admin/journal-metrics` | — | — | ✓ |
 | GET, DELETE, POST | `/api/admin/knowledge` | ✓ | — | ✓ |
 | GET | `/api/admin/plagiarism` | — | — | ✓ |
@@ -195,6 +212,7 @@
 | GET, PUT, DELETE | `/api/admin/settings` | ✓ | — | ✓ |
 | GET | `/api/admin/stats` | — | — | ✓ |
 | GET | `/api/admin/usage` | — | — | ✓ |
+| GET | `/api/admin/usage/trends` | — | — | ✓ |
 | GET, PATCH, DELETE | `/api/admin/users` | ✓ | — | ✓ |
 | GET | `/api/admin/users/[id]` | — | — | ✓ |
 
@@ -202,7 +220,32 @@
 
 | 方法 | 路径 | zod | SSE | admin |
 |------|------|-----|-----|-------|
+| POST | `/api/abstract/bilingual` | ✓ | — | — |
+| POST | `/api/agent` | ✓ | ✓ | — |
+| POST | `/api/agent/attachments` | — | — | — |
+| GET, DELETE | `/api/agent/attachments/[id]` | — | — | — |
+| POST | `/api/agent/attachments/[id]/pin` | — | — | — |
+| GET | `/api/agent/sessions` | — | — | — |
+| GET, POST | `/api/citations/gate` | ✓ | — | — |
+| POST | `/api/dft/vasp` | — | — | — |
+| GET, POST | `/api/directions` | ✓ | — | — |
+| GET, PUT, DELETE | `/api/directions/[slug]` | ✓ | — | — |
+| POST | `/api/directions/[slug]/analyze` | ✓ | ✓ | — |
+| PATCH | `/api/directions/[slug]/assets` | ✓ | — | — |
+| POST | `/api/directions/[slug]/evaluation-contract` | ✓ | — | — |
+| POST | `/api/directions/[slug]/experiment-plan` | — | — | — |
+| POST | `/api/directions/[slug]/grant-proposal` | ✓ | — | — |
+| PATCH | `/api/directions/[slug]/literature-corpus` | ✓ | — | — |
+| POST | `/api/directions/[slug]/literature-corpus/import-external` | ✓ | — | — |
+| POST | `/api/directions/[slug]/literature-corpus/import-knowledge` | ✓ | — | — |
+| GET | `/api/directions/[slug]/paper-brief` | — | — | — |
+| POST | `/api/directions/[slug]/parse-asset` | — | — | — |
+| PATCH, POST | `/api/directions/[slug]/roadmap` | ✓ | — | — |
+| GET | `/api/directions/[slug]/scan` | — | — | — |
+| GET | `/api/directions/summary` | — | — | — |
 | POST | `/api/literature/search` | ✓ | — | — |
+| POST | `/api/mechanism-panel` | — | — | — |
+| GET | `/api/presentation/stats` | — | — | — |
 <!-- API_INDEX:AUTO:END -->
 
 ## 人工备注（不随脚本覆盖）
@@ -215,6 +258,10 @@
 ### 写作 SSE 事件类型
 
 见 [`domain/writing-pipeline.md`](./domain/writing-pipeline.md) 与 `src/contracts/sse.ts`。
+
+### Agent SSE 事件类型（`/api/agent`）
+
+事件契约与说明见 [`domain/agent.md`](./domain/agent.md) §SSE 事件表，权威源 `src/contracts/agent.ts`（含 `agent/progress` 等实时事件；实时事件 live-only 不持久化）。
 
 ### 知识库重建索引 SSE
 

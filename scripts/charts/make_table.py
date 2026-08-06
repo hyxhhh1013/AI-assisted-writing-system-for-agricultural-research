@@ -31,6 +31,15 @@ import sys
 from typing import Any
 
 
+def _safe_float(v: Any, default: float = 0.0) -> float:
+    """数值容错：字符串/缺失转浮点失败时用默认值，避免 KeyError/ValueError 崩脚本。"""
+    try:
+        f = float(v)
+        return f if f == f else default  # NaN → default
+    except (TypeError, ValueError):
+        return default
+
+
 def _assign_superscript_letters(
     groups: list[dict],
     posthoc: list[dict],
@@ -44,7 +53,8 @@ def _assign_superscript_letters(
     - 字母从 'a' 开始，尽量用最少字母覆盖所有差异模式
     """
     n = len(groups)
-    labels = [g["label"] for g in groups]
+    # 容错：缺 label / mean 时用占位，避免 KeyError 崩脚本
+    labels = [g.get("label", f"组{i + 1}") for i, g in enumerate(groups)]
 
     # 构建两两比较矩阵：sig[i][j] = True 表示 i 和 j 显著不同
     sig = [[False] * n for _ in range(n)]
@@ -58,8 +68,16 @@ def _assign_superscript_letters(
         return None
 
     for ph in posthoc:
-        pair = ph["pair"]
-        p_val = ph["p"]
+        if not isinstance(ph, dict):
+            continue
+        pair = ph.get("pair")
+        p_val = ph.get("p")
+        if not pair or not isinstance(pair, (list, tuple)) or len(pair) < 2:
+            continue
+        try:
+            p_val = float(p_val)
+        except (TypeError, ValueError):
+            continue
         i = _match_label(pair[0])
         j = _match_label(pair[1])
         if i is None or j is None:
@@ -69,7 +87,7 @@ def _assign_superscript_letters(
 
     # 按均值降序排列（高产在前），维护原始索引映射
     indexed = sorted(
-        [(i, groups[i]["mean"]) for i in range(n)],
+        [(i, groups[i].get("mean", 0)) for i in range(n)],
         key=lambda x: -x[1],
     )
     order = [i for i, _ in indexed]
@@ -138,10 +156,10 @@ def _build_stats_text(
 
     # ANOVA
     if anova:
-        f_val = anova["F"]
-        df1 = anova["df1"]
-        df2 = anova["df2"]
-        p_val = anova["p"]
+        f_val = _safe_float(anova.get("F"))
+        df1 = _safe_float(anova.get("df1"))
+        df2 = _safe_float(anova.get("df2"))
+        p_val = _safe_float(anova.get("p"), 1.0)
         p_str = _format_p(p_val)
         parts.append(
             f"单因素方差分析显示，处理间{column_header}差异"
@@ -294,6 +312,31 @@ def make_table(config_path: str, output_dir: str):
     if not groups:
         print(json.dumps({"status": "error", "message": "groups 为空"}))
         sys.exit(1)
+
+    # 容错归一化：缺 label/mean/sd/n 补默认，非法 posthoc / anova 丢弃或兜底
+    groups = [
+        {
+            "label": str(g.get("label", f"组{i + 1}")),
+            "n": g.get("n", ""),
+            "mean": _safe_float(g.get("mean")),
+            "sd": _safe_float(g.get("sd")),
+        }
+        for i, g in enumerate(groups)
+        if isinstance(g, dict)
+    ]
+    if not groups:
+        print(json.dumps({"status": "error", "message": "groups 缺少有效分组"}))
+        sys.exit(1)
+    posthoc = [
+        ph
+        for ph in posthoc
+        if isinstance(ph, dict)
+        and isinstance(ph.get("pair"), (list, tuple))
+        and len(ph.get("pair", [])) >= 2
+        and isinstance(ph.get("p"), (int, float))
+    ]
+    if anova is not None and not isinstance(anova, dict):
+        anova = None
 
     # 分配字母
     letters = _assign_superscript_letters(groups, posthoc, alpha)

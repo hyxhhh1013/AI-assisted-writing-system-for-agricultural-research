@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { renderProjectPdf } from "@/services/server-pdf";
 import type { ProjectData } from "@/contracts/project";
 import { getErrorMessage } from "@/lib/error-utils";
+import { assessExportReadiness } from "@/lib/export-readiness";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,11 +26,31 @@ const isProjectData = (value: unknown): value is ProjectData => {
   );
 };
 
+/** 仅允许环境变量显式开启调试绕过，禁止公开 ?force=1 */
+function allowExportGateBypass(): boolean {
+  return process.env.EXPORT_FORCE_BYPASS === "1";
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body: unknown = await req.json();
     if (!isProjectData(body)) {
       return new Response("PDF 导出请求缺少有效论文数据", { status: 400 });
+    }
+
+    if (!allowExportGateBypass()) {
+      const readiness = assessExportReadiness(body);
+      if (!readiness.ok) {
+        return Response.json(
+          {
+            success: false,
+            error: readiness.gate.hint,
+            gate: readiness.gate,
+            code: "CITATION_GATE_BLOCKED",
+          },
+          { status: 422 },
+        );
+      }
     }
 
     const pdf = await renderProjectPdf(body);
