@@ -50,6 +50,8 @@ class ForestChart(ChartModule):
         y = np.arange(n)[::-1]
         ms = max(float(style.get("font_size", 8)) * 1.2, 6)
         lw = max(float(style.get("axes_linewidth", 0.8)), 1.0)
+        fs = max(float(style.get("font_size", 8)) - 1, 6)
+        show_values = style.get("show_values") in (True, "1", "true", "yes", "on")
 
         for yi, est, lo, hi, color in zip(y, estimates, ci_low, ci_high, colors):
             ax.plot([lo, hi], [yi, yi], color=color, lw=lw, zorder=3)
@@ -58,6 +60,19 @@ class ForestChart(ChartModule):
         ax.axvline(ref, color="#767676", linestyle="--", linewidth=1.0, alpha=0.85, zorder=2)
         ax.set_yticks(y)
         ax.set_yticklabels(study_labels)
+        # 右侧数值标注：est [lo, hi]（森林图惯例）
+        if show_values:
+            xmax = max(ci_high)
+            xmin = min(ci_low)
+            span = (xmax - xmin) or 1.0
+            fmt = ".2f" if max(abs(xmax), abs(xmin)) < 100 else ".1f"
+            ax.set_xlim(xmin - span * 0.15, xmax + span * 0.45)
+            for yi, est, lo, hi in zip(y, estimates, ci_low, ci_high):
+                ax.text(
+                    xmax + span * 0.05, yi,
+                    f"{est:{fmt}} [{lo:{fmt}}, {hi:{fmt}}]",
+                    ha="left", va="center", fontsize=fs, color="#4a4a4a",
+                )
         ax.set_xlabel(_normalize_label(x_label), labelpad=6)
         if title:
             ax.set_title(_normalize_label(title), fontweight="bold", pad=10)
