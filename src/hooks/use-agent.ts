@@ -314,6 +314,7 @@ export function useAgent(options: UseAgentOptions = {}) {
       setLastPersisted(null);
       setPendingConfirm(null);
       setPendingCheckpoint(null);
+      setProgressLabel(null);
       setStatus("planning");
 
       try {
