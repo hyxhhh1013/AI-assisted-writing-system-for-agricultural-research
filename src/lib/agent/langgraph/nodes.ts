@@ -8,17 +8,8 @@ import {
   callAINonStreamingWithTools,
   callAIStreamingWithTools,
 } from "@/lib/agent/core/llm-tools";
-import {
-  checkSearchQuota,
-  noteSearchCall,
-  noteToolProgress,
-} from "@/lib/agent/core/antispam";
-import {
-  checkRepeatCall,
-  shouldRequestConfirmation,
-} from "@/lib/agent/core/safety";
-import { checkAgentToolPhaseGate } from "@/lib/agent/core/phase-gates";
-import { checkReadBeforeWrite } from "@/lib/agent/core/read-before-write";
+import { noteSearchCall, noteToolProgress } from "@/lib/agent/core/antispam";
+import { shouldRequestConfirmation } from "@/lib/agent/core/safety";
 import {
   findTool,
   parseToolArgs,
@@ -32,11 +23,8 @@ import {
   planHasPendingWork,
 } from "@/lib/agent/core/plan-progress";
 import {
-  buildClarifyCheckpoint,
   buildConfigCheckpoint,
-  buildOutlineCheckpoint,
   shouldPauseForConfigConfirm,
-  shouldPauseForOutlineApprove,
 } from "@/lib/agent/core/checkpoints";
 import { buildToolConfirmMessage } from "@/lib/agent/confirm-message";
 import { isConfirmGranted } from "@/lib/agent/core/confirm-grant";
@@ -45,10 +33,6 @@ import {
   isWriteToolNeedingPrereqs,
 } from "@/lib/agent/core/ensure-write-prereqs";
 import {
-  checkCitationCheckGate,
-  checkCitationSideTripGate,
-  checkDiagnoseInspectGate,
-  checkDraftSearchGate,
   isAcademicPaperPipelineGoal,
   isCitationApplyGoal,
   isCitationCheckGoal,
@@ -80,6 +64,13 @@ import {
   allParallelSafe,
   runParallelReads,
 } from "@/lib/agent/langgraph/parallel-tools";
+import {
+  evaluatePhaseGate,
+  evaluatePostGates,
+  evaluatePreGates,
+  type PostGateInput,
+  type PreGateInput,
+} from "@/lib/agent/langgraph/tool-gates";
 
 export async function planNode(
   state: AgentGraphStateType,
@@ -448,74 +439,40 @@ export async function toolsNode(
     }
 
     let params = parseToolArgs(toolCall.args);
-    const repeat = checkRepeatCall(repeatTracker, tool.name, params);
-    if (!repeat.allowed) {
-      const isSoftTool =
-        tool.name === "read_section"
-        || tool.name === "search_knowledge"
-        || tool.name === "search_external";
-      // 软警告有上限：连续重复超过此数仍硬停，防止「读同一章节换窗口」类死循环
-      const SOFT_REPEAT_CAP = 8;
-      const hardStop = !isSoftTool || (repeat.repeatCount ?? 0) > SOFT_REPEAT_CAP;
-      if (!hardStop) {
-        const soft = repeat.warning ?? "请停止重复调用，改换策略或直接回复用户";
-        newSummaries.push(`[${tool.name}] ${soft}`);
+    // 前置门禁链（重复 / 检索配额 / 意图+先读后写）：
+    // soft → 记 observation 继续下一个工具；reject → 记失败继续；hard → agent/error 停本轮
+    const gateInput: PreGateInput = {
+      tool,
+      params,
+      state,
+      agentContext,
+      repeatTracker,
+      antispamTracker,
+      recentObservations: [...state.observations, ...newObservations],
+    };
+    const gateVerdict = evaluatePreGates(gateInput);
+    if (!gateVerdict.ok) {
+      if (gateVerdict.kind === "hard") {
+        error = gateVerdict.error;
+        events.push({ type: "agent/error", error });
+        finished = true;
+        break;
+      }
+      if (gateVerdict.kind === "soft") {
+        newSummaries.push(`[${tool.name}] ${gateVerdict.error}`);
         newMessages.push({
           role: "user",
-          content: `Tool result (${tool.name}):\n${soft}`,
+          content: `Tool result (${tool.name}):\n${gateVerdict.error}`,
         });
         events.push({
           type: "agent/observation",
           tool: tool.name,
-          result: { success: false, error: soft },
-          error: soft,
+          result: { success: false, error: gateVerdict.error },
+          error: gateVerdict.error,
         });
         continue;
       }
-      error = repeat.warning ?? "重复调用";
-      events.push({ type: "agent/error", error });
-      finished = true;
-      break;
-    }
-
-    const searchQuota = checkSearchQuota(antispamTracker, tool.name);
-    if (!searchQuota.allowed) {
-      const soft = searchQuota.warning ?? "检索次数已达上限";
-      newSummaries.push(`[${tool.name}] ${soft}`);
-      newMessages.push({
-        role: "user",
-        content: `Tool result (${tool.name}):\n${soft}`,
-      });
-      events.push({
-        type: "agent/observation",
-        tool: tool.name,
-        result: { success: false, error: soft },
-        error: soft,
-      });
-      continue;
-    }
-
-    // agent/action 在门禁全部通过后再发，避免被拒的 search/写节污染时间线
-    const recentObs = [...state.observations, ...newObservations];
-    // 意图门禁 + 先读后写：任一不过 → 拒绝本轮工具调用（记录失败，让模型改道）。
-    // 这些门禁在自动补蓝图之前，避免未读上下文就烧 LLM 生成蓝图。
-    const prePrereqGates: Array<() => { ok: boolean; error?: string }> = [
-      () => checkDiagnoseInspectGate(state.goal, tool.name, recentObs),
-      () => checkDraftSearchGate(state.goal, tool.name, recentObs),
-      () => checkCitationCheckGate(state.goal, tool.name, recentObs),
-      () => checkCitationSideTripGate(state.goal, tool.name, recentObs),
-      () => checkReadBeforeWrite(tool.name, params, recentObs),
-    ];
-    let gateReject: string | null = null;
-    for (const gate of prePrereqGates) {
-      const r = gate();
-      if (!r.ok) {
-        gateReject = r.error ?? "门禁未通过";
-        break;
-      }
-    }
-    if (gateReject) {
-      rejectGate(tool.name, gateReject);
+      rejectGate(tool.name, gateVerdict.error);
       continue;
     }
 
@@ -591,13 +548,10 @@ export async function toolsNode(
       }
     }
 
-    const phaseGate = checkAgentToolPhaseGate(
-      tool.name,
-      params,
-      agentContext.projectSnapshot,
-    );
-    if (!phaseGate.ok) {
-      rejectGate(tool.name, phaseGate.error);
+    // 阶段门禁在写前置补齐之后执行（原顺序）：与当前项目阶段不匹配 → 拒绝
+    const phaseVerdict = evaluatePhaseGate(gateInput);
+    if (!phaseVerdict.ok) {
+      rejectGate(tool.name, phaseVerdict.error);
       continue;
     }
 
@@ -684,70 +638,35 @@ export async function toolsNode(
         await refreshAgentProjectContext(agentContext);
       }
 
-      const progress = noteToolProgress(
+      // 后置门禁链（antispam 停滞 / clarify / outline 检查点）：
+      // break → 记 observation 停本轮；checkpoint → 暂停等用户（outline 时同步 plan 焦点）
+      const postVerdict = evaluatePostGates({
+        tool,
+        result,
+        state,
+        agentContext,
         antispamTracker,
-        tool.name,
-        agentContext.projectSnapshot,
-        result.success,
-      );
-      if (progress.stagnant && progress.warning) {
-        newSummaries.push(`[antispam] ${progress.warning}`);
-        newMessages.push({
-          role: "user",
-          content: `Tool result (antispam):\n${progress.warning}`,
-        });
-        events.push({
-          type: "agent/observation",
-          tool: tool.name,
-          result: { success: false, error: progress.warning },
-          error: progress.warning,
-        });
-        break;
-      }
-
-      // ask_user：通用澄清检查点——暂停等用户回答（指令模糊/缺信息/有风险时）
-      const clarifyData = (result.data ?? null) as { needClarification?: boolean; question?: string } | null;
-      if (result.success && clarifyData?.needClarification && clarifyData.question) {
-        const checkpoint = buildClarifyCheckpoint(clarifyData.question);
+      });
+      if (!postVerdict.ok) {
+        if (postVerdict.kind === "break") {
+          newSummaries.push(`[antispam] ${postVerdict.warning}`);
+          newMessages.push({
+            role: "user",
+            content: `Tool result (antispam):\n${postVerdict.warning}`,
+          });
+          events.push({
+            type: "agent/observation",
+            tool: tool.name,
+            result: { success: false, error: postVerdict.warning },
+            error: postVerdict.warning,
+          });
+          break;
+        }
+        // checkpoint（clarify / outline 批准）
+        const checkpoint = postVerdict.checkpoint;
         events.push({ type: "agent/checkpoint", checkpoint });
         events.push({ type: "agent/status", status: "awaiting_checkpoint" });
-        return {
-          pendingToolCalls: [],
-          toolCallCount,
-          toolSummaries: newSummaries,
-          observations: newObservations,
-          messages: newMessages,
-          events,
-          plan,
-          ...(reflectReset ? { reflectCount: 0 } : {}),
-          awaitingCheckpoint: checkpoint,
-          finished: true,
-        };
-      }
-
-      if (
-        shouldPauseForOutlineApprove({
-          goal: state.goal,
-          toolName: tool.name,
-          toolSuccess: result.success,
-          persisted: Boolean(
-            result.data
-            && typeof result.data === "object"
-            && (result.data as { persisted?: unknown }).persisted !== false,
-          ),
-          approvedKinds: state.approvedCheckpointKinds ?? [],
-        })
-      ) {
-        const preview =
-          typeof result.data === "object"
-          && result.data
-          && "preview" in result.data
-            ? String((result.data as { preview?: unknown }).preview ?? "")
-            : result.summary ?? "";
-        const checkpoint = buildOutlineCheckpoint(preview);
-        events.push({ type: "agent/checkpoint", checkpoint });
-        events.push({ type: "agent/status", status: "awaiting_checkpoint" });
-        if (plan) {
+        if (postVerdict.updateFocus && plan) {
           const focus = getFocusSubtask(plan);
           plan = { ...plan, focusSubtaskId: focus?.id ?? null };
           events.push({ type: "agent/plan", plan });
