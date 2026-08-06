@@ -534,6 +534,20 @@
           "label": "格内标注数值",
           "type": "boolean",
           "default": true
+        },
+        {
+          "key": "diverging",
+          "label": "发散配色（相关矩阵，0 居中）",
+          "type": "boolean",
+          "group": "chart_specific",
+          "default": false
+        },
+        {
+          "key": "annotate_format",
+          "label": "数值格式 (2f/2g)",
+          "type": "text",
+          "group": "chart_specific",
+          "default": "2g"
         }
       ]
     },

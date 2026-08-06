@@ -15,8 +15,10 @@ class HeatmapChart(ChartModule):
         title = config.get("title", "")
         x_label = config.get("x_label", "")
         y_label = config.get("y_label", "")
-        cmap = str(config.get("cmap") or "YlGnBu")
+        diverging = config.get("diverging") in (True, "true", "1", 1)
+        cmap = str(config.get("cmap") or ("RdBu_r" if diverging else "YlGnBu"))
         annotate = config.get("heatmap_annotate") in (True, "true", "1", 1)
+        annotate_format = str(config.get("annotate_format") or ("2g" if not diverging else "2f"))
 
         if not datasets:
             raise ValueError("热力图需要至少一列数值")
@@ -39,7 +41,12 @@ class HeatmapChart(ChartModule):
         fig_w = max(w, w * aspect * 0.85)
         fig, ax = plt.subplots(figsize=(fig_w, h))
 
-        im = ax.imshow(matrix_np, cmap=cmap, aspect="auto")
+        norm = None
+        if diverging:
+            # 发散色：以 0 为中心，vmin/vmax 取绝对值最大，保证 0 是中性色
+            vmax = float(np.max(np.abs(matrix_np))) or 1.0
+            norm = mpl.colors.Normalize(vmin=-vmax, vmax=vmax)
+        im = ax.imshow(matrix_np, cmap=cmap, aspect="auto", norm=norm)
         cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
         fs = max(float(style.get("font_size", 8)) - 1, 6)
         cbar.ax.tick_params(labelsize=fs)
@@ -52,13 +59,21 @@ class HeatmapChart(ChartModule):
         ax.set_yticklabels(y_labels, fontsize=fs)
 
         if annotate:
-            norm = mpl.colors.Normalize(vmin=matrix_np.min(), vmax=matrix_np.max())
+            ann_norm = norm or mpl.colors.Normalize(
+                vmin=matrix_np.min(), vmax=matrix_np.max(),
+            )
             cm_obj = plt.get_cmap(cmap)
             for (i, j), val in np.ndenumerate(matrix_np):
-                r, g, b, _ = cm_obj(norm(val))
+                r, g, b, _ = cm_obj(ann_norm(val))
                 lum = 0.299 * r + 0.587 * g + 0.114 * b
                 color = "white" if lum < 0.5 else "black"
-                ax.text(j, i, f"{val:.2g}", ha="center", va="center", fontsize=fs, color=color)
+                ax.text(j, i, f"{val:.{annotate_format}}", ha="center", va="center", fontsize=fs, color=color)
+
+        # 单元格间白色网格线（期刊热力图惯例）
+        ax.set_xticks(np.arange(-0.5, len(x_labels), 1), minor=True)
+        ax.set_yticks(np.arange(-0.5, len(y_labels), 1), minor=True)
+        ax.grid(which="minor", color="white", linewidth=1.2)
+        ax.tick_params(which="minor", length=0)
 
         ax.set_frame_on(True)
         for spine in ax.spines.values():
