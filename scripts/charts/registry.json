@@ -2,30 +2,238 @@
   "version": "2.2",
   "description": "禾书耕文 — 科学图形统一注册表。加新图形类型只需在此文件加一条记录。靠拢 Jade/Origin/DFT 课题组作图。",
   "categories": [
-    {"id": "chart", "name": "数据图表", "icon": "BarChart3", "order": 1},
-    {"id": "diagram", "name": "示意图", "icon": "Workflow", "order": 2},
-    {"id": "xrd", "name": "XRD / Jade", "icon": "Radar", "order": 3},
-    {"id": "dft", "name": "DFT 计算", "icon": "Atom", "order": 4},
-    {"id": "table", "name": "表格", "icon": "Table2", "order": 5}
+    {
+      "id": "chart",
+      "name": "数据图表",
+      "icon": "BarChart3",
+      "order": 1
+    },
+    {
+      "id": "diagram",
+      "name": "示意图",
+      "icon": "Workflow",
+      "order": 2
+    },
+    {
+      "id": "xrd",
+      "name": "XRD / Jade",
+      "icon": "Radar",
+      "order": 3
+    },
+    {
+      "id": "dft",
+      "name": "DFT 计算",
+      "icon": "Atom",
+      "order": 4
+    },
+    {
+      "id": "table",
+      "name": "表格",
+      "icon": "Table2",
+      "order": 5
+    }
   ],
   "global_style_fields": [
-    {"key": "preset", "label": "期刊风格", "type": "select", "group": "style", "display": "visible", "default": "nature", "options": ["nature", "agr_journal", "agr_cn", "ieee", "acs", "elsevier", "print_bw", "slide"]},
-    {"key": "columns", "label": "栏宽", "type": "select", "group": "style", "display": "visible", "default": "1", "options": ["1", "2"]},
-    {"key": "dpi", "label": "导出清晰度", "type": "select", "group": "style", "display": "visible", "default": "300", "options": ["300", "600", "1200"]},
-    {"key": "export_formats", "label": "导出格式", "type": "select", "group": "style", "display": "visible", "default": "png,svg,pdf", "options": ["png,svg,pdf", "png,svg,pdf,tiff", "png,svg", "png"]},
-    {"key": "palette", "label": "配色覆盖", "type": "select", "group": "style", "display": "advanced", "default": "", "options": ["", "nature", "agr", "biomass", "bright", "tol", "muted", "high_vis", "pastel", "print_bw"]},
-    {"key": "use_markers", "label": "系列标记（灰度可辨）", "type": "boolean", "group": "style", "display": "advanced", "default": false},
-    {"key": "fig_width", "label": "图片宽度 (inch，空则按栏宽)", "type": "number", "group": "style", "display": "advanced", "default": 3.5, "min": 2, "max": 14, "step": 0.05},
-    {"key": "fig_height", "label": "图片高度 (inch)", "type": "number", "group": "style", "display": "advanced", "default": 2.6, "min": 2, "max": 10, "step": 0.1},
-    {"key": "font_size", "label": "字号 (pt)", "type": "number", "group": "style", "display": "advanced", "default": 7, "min": 5, "max": 18, "step": 1},
-    {"key": "title_font_size", "label": "标题字号 (pt)", "type": "number", "group": "style", "display": "advanced", "default": 8, "min": 6, "max": 24, "step": 1},
-    {"key": "axes_linewidth", "label": "坐标轴线粗细", "type": "number", "group": "style", "display": "advanced", "default": 0.8, "min": 0.5, "max": 3, "step": 0.1},
-    {"key": "x_tick_rotation", "label": "X轴标签旋转角度 (°)", "type": "number", "group": "style", "display": "advanced", "default": 0, "min": 0, "max": 90, "step": 5},
-    {"key": "y_sci_notation", "label": "Y轴科学计数法", "type": "boolean", "group": "style", "display": "advanced", "default": false},
-    {"key": "legend_loc", "label": "图例位置", "type": "select", "group": "style", "display": "advanced", "default": "best", "options": ["best", "upper right", "upper left", "lower right", "lower left", "center left", "center right"]},
-    {"key": "legend_frame", "label": "图例边框", "type": "boolean", "group": "style", "display": "advanced", "default": false},
-    {"key": "show_grid", "label": "显示网格", "type": "boolean", "group": "style", "display": "advanced", "default": false},
-    {"key": "panel_label", "label": "子图编号 (a/b/c)", "type": "text", "group": "style", "display": "advanced", "default": ""}
+    {
+      "key": "preset",
+      "label": "期刊风格",
+      "type": "select",
+      "group": "style",
+      "display": "visible",
+      "default": "nature",
+      "options": [
+        "nature",
+        "agr_journal",
+        "agr_cn",
+        "ieee",
+        "acs",
+        "elsevier",
+        "print_bw",
+        "slide"
+      ]
+    },
+    {
+      "key": "columns",
+      "label": "栏宽",
+      "type": "select",
+      "group": "style",
+      "display": "visible",
+      "default": "1",
+      "options": [
+        "1",
+        "2"
+      ]
+    },
+    {
+      "key": "dpi",
+      "label": "导出清晰度",
+      "type": "select",
+      "group": "style",
+      "display": "visible",
+      "default": "300",
+      "options": [
+        "300",
+        "600",
+        "1200"
+      ]
+    },
+    {
+      "key": "export_formats",
+      "label": "导出格式",
+      "type": "select",
+      "group": "style",
+      "display": "visible",
+      "default": "png,svg,pdf",
+      "options": [
+        "png,svg,pdf",
+        "png,svg,pdf,tiff",
+        "png,svg",
+        "png"
+      ]
+    },
+    {
+      "key": "palette",
+      "label": "配色覆盖",
+      "type": "select",
+      "group": "style",
+      "display": "advanced",
+      "default": "",
+      "options": [
+        "",
+        "nature",
+        "agr",
+        "biomass",
+        "bright",
+        "tol",
+        "muted",
+        "high_vis",
+        "pastel",
+        "print_bw"
+      ]
+    },
+    {
+      "key": "use_markers",
+      "label": "系列标记（灰度可辨）",
+      "type": "boolean",
+      "group": "style",
+      "display": "advanced",
+      "default": false
+    },
+    {
+      "key": "fig_width",
+      "label": "图片宽度 (inch，空则按栏宽)",
+      "type": "number",
+      "group": "style",
+      "display": "advanced",
+      "default": 3.5,
+      "min": 2,
+      "max": 14,
+      "step": 0.05
+    },
+    {
+      "key": "fig_height",
+      "label": "图片高度 (inch)",
+      "type": "number",
+      "group": "style",
+      "display": "advanced",
+      "default": 2.6,
+      "min": 2,
+      "max": 10,
+      "step": 0.1
+    },
+    {
+      "key": "font_size",
+      "label": "字号 (pt)",
+      "type": "number",
+      "group": "style",
+      "display": "advanced",
+      "default": 7,
+      "min": 5,
+      "max": 18,
+      "step": 1
+    },
+    {
+      "key": "title_font_size",
+      "label": "标题字号 (pt)",
+      "type": "number",
+      "group": "style",
+      "display": "advanced",
+      "default": 8,
+      "min": 6,
+      "max": 24,
+      "step": 1
+    },
+    {
+      "key": "axes_linewidth",
+      "label": "坐标轴线粗细",
+      "type": "number",
+      "group": "style",
+      "display": "advanced",
+      "default": 0.8,
+      "min": 0.5,
+      "max": 3,
+      "step": 0.1
+    },
+    {
+      "key": "x_tick_rotation",
+      "label": "X轴标签旋转角度 (°)",
+      "type": "number",
+      "group": "style",
+      "display": "advanced",
+      "default": 0,
+      "min": 0,
+      "max": 90,
+      "step": 5
+    },
+    {
+      "key": "y_sci_notation",
+      "label": "Y轴科学计数法",
+      "type": "boolean",
+      "group": "style",
+      "display": "advanced",
+      "default": false
+    },
+    {
+      "key": "legend_loc",
+      "label": "图例位置",
+      "type": "select",
+      "group": "style",
+      "display": "advanced",
+      "default": "best",
+      "options": [
+        "best",
+        "upper right",
+        "upper left",
+        "lower right",
+        "lower left",
+        "center left",
+        "center right"
+      ]
+    },
+    {
+      "key": "legend_frame",
+      "label": "图例边框",
+      "type": "boolean",
+      "group": "style",
+      "display": "advanced",
+      "default": false
+    },
+    {
+      "key": "show_grid",
+      "label": "显示网格",
+      "type": "boolean",
+      "group": "style",
+      "display": "advanced",
+      "default": false
+    },
+    {
+      "key": "panel_label",
+      "label": "子图编号 (a/b/c)",
+      "type": "text",
+      "group": "style",
+      "display": "advanced",
+      "default": ""
+    }
   ],
   "figures": [
     {
@@ -37,13 +245,48 @@
       "input_type": "tabular",
       "example": "温度,N₂产率,CO₂产率\n500,44,44\n600,35,32\n700,30,30",
       "config_fields": [
-        {"key": "title", "label": "图表标题", "type": "text"},
-        {"key": "x_label", "label": "X 轴标签", "type": "text"},
-        {"key": "y_label", "label": "Y 轴标签", "type": "text"},
-        {"key": "y_log_scale", "label": "Y 轴对数刻度", "type": "boolean", "default": false},
-        {"key": "show_values", "label": "柱顶显示数值", "type": "boolean", "group": "chart_specific", "default": false},
-        {"key": "bar_edge", "label": "柱边框 (Nature黑边)", "type": "boolean", "group": "chart_specific", "default": true},
-        {"key": "significance", "label": "显著性标注 (JSON，如 [{\"category\":0,\"value\":\"**\"}])", "type": "text", "group": "chart_specific", "display": "advanced"}
+        {
+          "key": "title",
+          "label": "图表标题",
+          "type": "text"
+        },
+        {
+          "key": "x_label",
+          "label": "X 轴标签",
+          "type": "text"
+        },
+        {
+          "key": "y_label",
+          "label": "Y 轴标签",
+          "type": "text"
+        },
+        {
+          "key": "y_log_scale",
+          "label": "Y 轴对数刻度",
+          "type": "boolean",
+          "default": false
+        },
+        {
+          "key": "show_values",
+          "label": "柱顶显示数值",
+          "type": "boolean",
+          "group": "chart_specific",
+          "default": false
+        },
+        {
+          "key": "bar_edge",
+          "label": "柱边框 (Nature黑边)",
+          "type": "boolean",
+          "group": "chart_specific",
+          "default": true
+        },
+        {
+          "key": "significance",
+          "label": "显著性标注 (JSON，如 [{\"category\":0,\"value\":\"**\"}])",
+          "type": "text",
+          "group": "chart_specific",
+          "display": "advanced"
+        }
       ]
     },
     {
@@ -55,12 +298,42 @@
       "input_type": "tabular",
       "example": "样品,组分A,组分B,组分C\nS1,20,30,50\nS2,25,35,40",
       "config_fields": [
-        {"key": "title", "label": "图表标题", "type": "text"},
-        {"key": "x_label", "label": "X 轴标签", "type": "text"},
-        {"key": "y_label", "label": "Y 轴标签", "type": "text"},
-        {"key": "show_values", "label": "柱顶显示数值", "type": "boolean", "group": "chart_specific", "default": false},
-        {"key": "bar_edge", "label": "柱边框 (Nature黑边)", "type": "boolean", "group": "chart_specific", "default": true},
-        {"key": "significance", "label": "显著性标注 (JSON)", "type": "text", "group": "chart_specific", "display": "advanced"}
+        {
+          "key": "title",
+          "label": "图表标题",
+          "type": "text"
+        },
+        {
+          "key": "x_label",
+          "label": "X 轴标签",
+          "type": "text"
+        },
+        {
+          "key": "y_label",
+          "label": "Y 轴标签",
+          "type": "text"
+        },
+        {
+          "key": "show_values",
+          "label": "柱顶显示数值",
+          "type": "boolean",
+          "group": "chart_specific",
+          "default": false
+        },
+        {
+          "key": "bar_edge",
+          "label": "柱边框 (Nature黑边)",
+          "type": "boolean",
+          "group": "chart_specific",
+          "default": true
+        },
+        {
+          "key": "significance",
+          "label": "显著性标注 (JSON)",
+          "type": "text",
+          "group": "chart_specific",
+          "display": "advanced"
+        }
       ]
     },
     {
@@ -72,10 +345,30 @@
       "input_type": "tabular",
       "example": "条件,Pyridinic-N,Pyrrolic-N,Quaternary-N\n300N₂,35,40,25\n500N₂,25,35,40",
       "config_fields": [
-        {"key": "title", "label": "图表标题", "type": "text"},
-        {"key": "x_label", "label": "X 轴标签", "type": "text"},
-        {"key": "bar_edge", "label": "柱边框 (Nature黑边)", "type": "boolean", "group": "chart_specific", "default": true},
-        {"key": "significance", "label": "显著性标注 (JSON)", "type": "text", "group": "chart_specific", "display": "advanced"}
+        {
+          "key": "title",
+          "label": "图表标题",
+          "type": "text"
+        },
+        {
+          "key": "x_label",
+          "label": "X 轴标签",
+          "type": "text"
+        },
+        {
+          "key": "bar_edge",
+          "label": "柱边框 (Nature黑边)",
+          "type": "boolean",
+          "group": "chart_specific",
+          "default": true
+        },
+        {
+          "key": "significance",
+          "label": "显著性标注 (JSON)",
+          "type": "text",
+          "group": "chart_specific",
+          "display": "advanced"
+        }
       ]
     },
     {
@@ -87,13 +380,54 @@
       "input_type": "tabular",
       "example": "时间,处理A,处理B,对照\n0,10,10,10\n7,15,12,11\n14,22,16,12",
       "config_fields": [
-        {"key": "title", "label": "图表标题", "type": "text"},
-        {"key": "x_label", "label": "X 轴标签", "type": "text"},
-        {"key": "y_label", "label": "Y 轴标签", "type": "text"},
-        {"key": "show_shadow", "label": "误差阴影带", "type": "boolean", "default": false},
-        {"key": "dual_y", "label": "双 Y 轴（末列右轴）", "type": "boolean", "group": "chart_specific", "default": false},
-        {"key": "y2_label", "label": "右 Y 轴标签", "type": "text", "group": "chart_specific"},
-        {"key": "show_trendline", "label": "线性拟合线", "type": "boolean", "group": "chart_specific", "default": false}
+        {
+          "key": "title",
+          "label": "图表标题",
+          "type": "text"
+        },
+        {
+          "key": "x_label",
+          "label": "X 轴标签",
+          "type": "text"
+        },
+        {
+          "key": "y_label",
+          "label": "Y 轴标签",
+          "type": "text"
+        },
+        {
+          "key": "show_shadow",
+          "label": "误差阴影带",
+          "type": "boolean",
+          "default": false
+        },
+        {
+          "key": "dual_y",
+          "label": "双 Y 轴（末列右轴）",
+          "type": "boolean",
+          "group": "chart_specific",
+          "default": false
+        },
+        {
+          "key": "y2_label",
+          "label": "右 Y 轴标签",
+          "type": "text",
+          "group": "chart_specific"
+        },
+        {
+          "key": "show_trendline",
+          "label": "线性拟合线",
+          "type": "boolean",
+          "group": "chart_specific",
+          "default": false
+        },
+        {
+          "key": "significance",
+          "label": "显著性标注 (JSON)",
+          "type": "text",
+          "group": "chart_specific",
+          "display": "advanced"
+        }
       ]
     },
     {
@@ -105,10 +439,27 @@
       "input_type": "tabular",
       "example": "温度,产率\n25,45\n30,52\n35,58\n40,55\n45,48",
       "config_fields": [
-        {"key": "title", "label": "图表标题", "type": "text"},
-        {"key": "x_label", "label": "X 轴标签", "type": "text"},
-        {"key": "y_label", "label": "Y 轴标签", "type": "text"},
-        {"key": "show_trendline", "label": "线性趋势线", "type": "boolean", "default": false}
+        {
+          "key": "title",
+          "label": "图表标题",
+          "type": "text"
+        },
+        {
+          "key": "x_label",
+          "label": "X 轴标签",
+          "type": "text"
+        },
+        {
+          "key": "y_label",
+          "label": "Y 轴标签",
+          "type": "text"
+        },
+        {
+          "key": "show_trendline",
+          "label": "线性趋势线",
+          "type": "boolean",
+          "default": false
+        }
       ]
     },
     {
@@ -120,7 +471,11 @@
       "input_type": "tabular",
       "example": "组分,比例\n生物炭,35\n生物油,30\n热解气,35",
       "config_fields": [
-        {"key": "title", "label": "图表标题", "type": "text"}
+        {
+          "key": "title",
+          "label": "图表标题",
+          "type": "text"
+        }
       ]
     },
     {
@@ -132,11 +487,40 @@
       "input_type": "tabular",
       "example": "指标,处理A,处理B,处理C\n叶绿素,0.82,0.65,0.71\n株高,0.45,0.88,0.62\n产量,0.55,0.72,0.91",
       "config_fields": [
-        {"key": "title", "label": "图表标题", "type": "text"},
-        {"key": "x_label", "label": "X 轴标签", "type": "text"},
-        {"key": "y_label", "label": "色标标签", "type": "text"},
-        {"key": "cmap", "label": "配色", "type": "select", "default": "YlGnBu", "options": ["YlGnBu", "magma", "viridis", "RdYlGn", "coolwarm"]},
-        {"key": "heatmap_annotate", "label": "格内标注数值", "type": "boolean", "default": true}
+        {
+          "key": "title",
+          "label": "图表标题",
+          "type": "text"
+        },
+        {
+          "key": "x_label",
+          "label": "X 轴标签",
+          "type": "text"
+        },
+        {
+          "key": "y_label",
+          "label": "色标标签",
+          "type": "text"
+        },
+        {
+          "key": "cmap",
+          "label": "配色",
+          "type": "select",
+          "default": "YlGnBu",
+          "options": [
+            "YlGnBu",
+            "magma",
+            "viridis",
+            "RdYlGn",
+            "coolwarm"
+          ]
+        },
+        {
+          "key": "heatmap_annotate",
+          "label": "格内标注数值",
+          "type": "boolean",
+          "default": true
+        }
       ]
     },
     {
@@ -148,10 +532,27 @@
       "input_type": "tabular",
       "example": "年份,生物炭,生物油,热解气\n2020,10,8,5\n2021,18,12,9\n2022,25,15,12\n2023,32,18,15",
       "config_fields": [
-        {"key": "title", "label": "图表标题", "type": "text"},
-        {"key": "x_label", "label": "X 轴标签", "type": "text"},
-        {"key": "y_label", "label": "Y 轴标签", "type": "text"},
-        {"key": "area_stacked", "label": "堆叠面积", "type": "boolean", "default": true}
+        {
+          "key": "title",
+          "label": "图表标题",
+          "type": "text"
+        },
+        {
+          "key": "x_label",
+          "label": "X 轴标签",
+          "type": "text"
+        },
+        {
+          "key": "y_label",
+          "label": "Y 轴标签",
+          "type": "text"
+        },
+        {
+          "key": "area_stacked",
+          "label": "堆叠面积",
+          "type": "boolean",
+          "default": true
+        }
       ]
     },
     {
@@ -163,9 +564,23 @@
       "input_type": "tabular",
       "example": "研究,估计值,CI下限,CI上限\n试验A,0.65,0.42,0.88\n试验B,0.48,0.22,0.74\n试验C,0.72,0.55,0.89",
       "config_fields": [
-        {"key": "title", "label": "图表标题", "type": "text"},
-        {"key": "x_label", "label": "X 轴标签", "type": "text", "default": "效应量"},
-        {"key": "forest_ref", "label": "参考线 (无效线)", "type": "number", "default": 0}
+        {
+          "key": "title",
+          "label": "图表标题",
+          "type": "text"
+        },
+        {
+          "key": "x_label",
+          "label": "X 轴标签",
+          "type": "text",
+          "default": "效应量"
+        },
+        {
+          "key": "forest_ref",
+          "label": "参考线 (无效线)",
+          "type": "number",
+          "default": 0
+        }
       ]
     },
     {
@@ -177,7 +592,11 @@
       "input_type": "tabular",
       "example": "指标,品种A,品种B,品种C\n产量,85,72,90\n抗病性,70,88,65\n品质,78,80,82\n耐旱性,60,75,68",
       "config_fields": [
-        {"key": "title", "label": "图表标题", "type": "text"}
+        {
+          "key": "title",
+          "label": "图表标题",
+          "type": "text"
+        }
       ]
     },
     {
@@ -189,11 +608,40 @@
       "input_type": "tabular",
       "example": "2theta,SampleA,SampleB,SampleC\n10,120,80,60\n20,400,350,300\n30,180,220,150\n40,90,110,95",
       "config_fields": [
-        {"key": "title", "label": "图表标题", "type": "text"},
-        {"key": "x_label", "label": "X 轴标签", "type": "text", "default": "2θ (degree)"},
-        {"key": "y_label", "label": "Y 轴标签", "type": "text", "default": "Intensity (a.u.)"},
-        {"key": "offset", "label": "垂直偏移比例", "type": "number", "group": "chart_specific", "default": 0.2, "min": 0, "max": 2, "step": 0.05},
-        {"key": "normalize", "label": "归一化后叠加", "type": "boolean", "group": "chart_specific", "default": true}
+        {
+          "key": "title",
+          "label": "图表标题",
+          "type": "text"
+        },
+        {
+          "key": "x_label",
+          "label": "X 轴标签",
+          "type": "text",
+          "default": "2θ (degree)"
+        },
+        {
+          "key": "y_label",
+          "label": "Y 轴标签",
+          "type": "text",
+          "default": "Intensity (a.u.)"
+        },
+        {
+          "key": "offset",
+          "label": "垂直偏移比例",
+          "type": "number",
+          "group": "chart_specific",
+          "default": 0.2,
+          "min": 0,
+          "max": 2,
+          "step": 0.05
+        },
+        {
+          "key": "normalize",
+          "label": "归一化后叠加",
+          "type": "boolean",
+          "group": "chart_specific",
+          "default": true
+        }
       ]
     },
     {
@@ -205,10 +653,36 @@
       "input_type": "json",
       "example": "{\"title\":\"Experimental workflow\",\"preset\":\"nature\",\"nodes\":[{\"id\":\"1\",\"label\":\"Feedstock\",\"role\":\"start_end\"},{\"id\":\"2\",\"label\":\"Reaction\",\"role\":\"process\"},{\"id\":\"3\",\"label\":\"Product\",\"role\":\"start_end\"}],\"edges\":[{\"from\":\"1\",\"to\":\"2\",\"label\":\"T,P\"},{\"from\":\"2\",\"to\":\"3\"}]}",
       "config_fields": [
-        {"key": "title", "label": "图标题", "type": "text"},
-        {"key": "direction", "label": "方向", "type": "select", "options": ["vertical", "horizontal"]},
-        {"key": "preset", "label": "期刊预设", "type": "select", "default": "nature", "options": ["nature", "agr_journal", "print_bw"]},
-        {"key": "panel_label", "label": "子图编号 a/b/c", "type": "text"}
+        {
+          "key": "title",
+          "label": "图标题",
+          "type": "text"
+        },
+        {
+          "key": "direction",
+          "label": "方向",
+          "type": "select",
+          "options": [
+            "vertical",
+            "horizontal"
+          ]
+        },
+        {
+          "key": "preset",
+          "label": "期刊预设",
+          "type": "select",
+          "default": "nature",
+          "options": [
+            "nature",
+            "agr_journal",
+            "print_bw"
+          ]
+        },
+        {
+          "key": "panel_label",
+          "label": "子图编号 a/b/c",
+          "type": "text"
+        }
       ]
     },
     {
@@ -220,7 +694,11 @@
       "input_type": "json",
       "example": "{\"mermaid\":\"graph TD\\n  A[原料] --> B[反应]\"}",
       "config_fields": [
-        {"key": "mermaid", "label": "Mermaid 定义", "type": "text"}
+        {
+          "key": "mermaid",
+          "label": "Mermaid 定义",
+          "type": "text"
+        }
       ]
     },
     {
@@ -231,8 +709,22 @@
       "endpoint": "/api/mechanism-panel",
       "input_type": "form",
       "config_fields": [
-        {"key": "title", "label": "总标题", "type": "text"},
-        {"key": "preset", "label": "期刊预设", "type": "select", "default": "nature", "options": ["nature", "agr_journal", "print_bw"]}
+        {
+          "key": "title",
+          "label": "总标题",
+          "type": "text"
+        },
+        {
+          "key": "preset",
+          "label": "期刊预设",
+          "type": "select",
+          "default": "nature",
+          "options": [
+            "nature",
+            "agr_journal",
+            "print_bw"
+          ]
+        }
       ]
     },
     {
@@ -244,8 +736,16 @@
       "input_type": "json",
       "example": "{\"smiles\":\"CC(=O)OC1=CC=CC=C1C(=O)O\",\"label\":\"阿司匹林\"}",
       "config_fields": [
-        {"key": "smiles", "label": "SMILES 表达式", "type": "text"},
-        {"key": "label", "label": "分子名称", "type": "text"}
+        {
+          "key": "smiles",
+          "label": "SMILES 表达式",
+          "type": "text"
+        },
+        {
+          "key": "label",
+          "label": "分子名称",
+          "type": "text"
+        }
       ]
     },
     {
@@ -256,7 +756,11 @@
       "endpoint": "/api/xrd/peakfit",
       "input_type": "form",
       "config_fields": [
-        {"key": "title", "label": "图标题", "type": "text"}
+        {
+          "key": "title",
+          "label": "图标题",
+          "type": "text"
+        }
       ]
     },
     {
@@ -268,7 +772,11 @@
       "input_type": "json",
       "example": "{\"a\":5.4,\"b\":5.4,\"c\":5.4,\"alpha\":90,\"beta\":90,\"gamma\":90}",
       "config_fields": [
-        {"key": "title", "label": "图标题", "type": "text"}
+        {
+          "key": "title",
+          "label": "图标题",
+          "type": "text"
+        }
       ]
     },
     {
@@ -279,7 +787,11 @@
       "endpoint": "/api/xrd/amorphous",
       "input_type": "form",
       "config_fields": [
-        {"key": "title", "label": "图标题", "type": "text"}
+        {
+          "key": "title",
+          "label": "图标题",
+          "type": "text"
+        }
       ]
     },
     {
@@ -291,7 +803,11 @@
       "input_type": "json",
       "example": "{\"wavelength\":1.5406,\"two_theta\":[20,30,40]}",
       "config_fields": [
-        {"key": "wavelength", "label": "波长 (Å)", "type": "text"}
+        {
+          "key": "wavelength",
+          "label": "波长 (Å)",
+          "type": "text"
+        }
       ]
     },
     {
@@ -302,7 +818,11 @@
       "endpoint": "/api/xrd/simulate",
       "input_type": "json",
       "config_fields": [
-        {"key": "title", "label": "图标题", "type": "text"}
+        {
+          "key": "title",
+          "label": "图标题",
+          "type": "text"
+        }
       ]
     },
     {
@@ -313,7 +833,11 @@
       "endpoint": "/api/xrd/xps",
       "input_type": "form",
       "config_fields": [
-        {"key": "title", "label": "图标题", "type": "text"}
+        {
+          "key": "title",
+          "label": "图标题",
+          "type": "text"
+        }
       ]
     },
     {
@@ -324,7 +848,11 @@
       "endpoint": "/api/xrd/stack",
       "input_type": "form",
       "config_fields": [
-        {"key": "title", "label": "样品名称", "type": "text"}
+        {
+          "key": "title",
+          "label": "样品名称",
+          "type": "text"
+        }
       ]
     },
     {
@@ -335,9 +863,23 @@
       "endpoint": "/api/xrd/stack",
       "input_type": "form",
       "config_fields": [
-        {"key": "title", "label": "图标题", "type": "text"},
-        {"key": "offset", "label": "偏移比例", "type": "number", "default": 0.15},
-        {"key": "normalize", "label": "归一化", "type": "boolean", "default": true}
+        {
+          "key": "title",
+          "label": "图标题",
+          "type": "text"
+        },
+        {
+          "key": "offset",
+          "label": "偏移比例",
+          "type": "number",
+          "default": 0.15
+        },
+        {
+          "key": "normalize",
+          "label": "归一化",
+          "type": "boolean",
+          "default": true
+        }
       ]
     },
     {
@@ -349,9 +891,23 @@
       "input_type": "json",
       "example": "{\"wavelength\":1.5406,\"shape_factor\":0.9,\"peaks\":[{\"two_theta\":28.4,\"fwhm\":0.25,\"label\":\"(111)\"}]}",
       "config_fields": [
-        {"key": "title", "label": "图标题", "type": "text"},
-        {"key": "wavelength", "label": "波长 (Å)", "type": "text", "default": "1.5406"},
-        {"key": "shape_factor", "label": "形状因子 K", "type": "text", "default": "0.9"}
+        {
+          "key": "title",
+          "label": "图标题",
+          "type": "text"
+        },
+        {
+          "key": "wavelength",
+          "label": "波长 (Å)",
+          "type": "text",
+          "default": "1.5406"
+        },
+        {
+          "key": "shape_factor",
+          "label": "形状因子 K",
+          "type": "text",
+          "default": "0.9"
+        }
       ]
     },
     {
@@ -363,10 +919,28 @@
       "input_type": "tabular",
       "example": "k,band1,band2,band3\n0.0,-1.2,-0.8,1.5\n0.25,-1.0,-0.5,1.8\n0.5,-0.9,-0.3,2.0\n0.75,-1.1,-0.6,1.7\n1.0,-1.2,-0.8,1.5",
       "config_fields": [
-        {"key": "title", "label": "图表标题", "type": "text"},
-        {"key": "y_label", "label": "能量轴标签", "type": "text", "default": "Energy (eV)"},
-        {"key": "fermi_energy", "label": "费米能级 (eV，可选)", "type": "text"},
-        {"key": "symmetry_points", "label": "高对称点 Γ:0,X:0.5,M:0.75,Γ:1.0", "type": "text", "default": "Γ:0,X:0.5,M:0.75,Γ:1.0"}
+        {
+          "key": "title",
+          "label": "图表标题",
+          "type": "text"
+        },
+        {
+          "key": "y_label",
+          "label": "能量轴标签",
+          "type": "text",
+          "default": "Energy (eV)"
+        },
+        {
+          "key": "fermi_energy",
+          "label": "费米能级 (eV，可选)",
+          "type": "text"
+        },
+        {
+          "key": "symmetry_points",
+          "label": "高对称点 Γ:0,X:0.5,M:0.75,Γ:1.0",
+          "type": "text",
+          "default": "Γ:0,X:0.5,M:0.75,Γ:1.0"
+        }
       ]
     },
     {
@@ -378,12 +952,44 @@
       "input_type": "tabular",
       "example": "Energy,Total,s,p,d\n-5,0.1,0.05,0.03,0.02\n-2,0.8,0.2,0.4,0.2\n0,1.5,0.3,0.7,0.5\n2,0.6,0.1,0.3,0.2\n5,0.2,0.05,0.1,0.05",
       "config_fields": [
-        {"key": "title", "label": "图表标题", "type": "text"},
-        {"key": "x_label", "label": "DOS 轴标签", "type": "text", "default": "DOS (states/eV)"},
-        {"key": "y_label", "label": "能量轴标签", "type": "text", "default": "Energy (eV)"},
-        {"key": "fermi_energy", "label": "费米能级 (eV，可选)", "type": "text"},
-        {"key": "orientation", "label": "坐标取向", "type": "select", "default": "vertical", "options": ["vertical", "horizontal"]},
-        {"key": "fill", "label": "填充面积", "type": "boolean", "default": true}
+        {
+          "key": "title",
+          "label": "图表标题",
+          "type": "text"
+        },
+        {
+          "key": "x_label",
+          "label": "DOS 轴标签",
+          "type": "text",
+          "default": "DOS (states/eV)"
+        },
+        {
+          "key": "y_label",
+          "label": "能量轴标签",
+          "type": "text",
+          "default": "Energy (eV)"
+        },
+        {
+          "key": "fermi_energy",
+          "label": "费米能级 (eV，可选)",
+          "type": "text"
+        },
+        {
+          "key": "orientation",
+          "label": "坐标取向",
+          "type": "select",
+          "default": "vertical",
+          "options": [
+            "vertical",
+            "horizontal"
+          ]
+        },
+        {
+          "key": "fill",
+          "label": "填充面积",
+          "type": "boolean",
+          "default": true
+        }
       ]
     },
     {
@@ -394,7 +1000,11 @@
       "endpoint": "/api/dft/vasp",
       "input_type": "form",
       "config_fields": [
-        {"key": "title", "label": "图标题", "type": "text"}
+        {
+          "key": "title",
+          "label": "图标题",
+          "type": "text"
+        }
       ]
     },
     {
@@ -405,8 +1015,17 @@
       "endpoint": "/api/dft/vasp",
       "input_type": "form",
       "config_fields": [
-        {"key": "title", "label": "图标题", "type": "text"},
-        {"key": "symmetry_points", "label": "高对称点", "type": "text", "default": "Γ:0,X:0.5,M:0.75,Γ:1.0"}
+        {
+          "key": "title",
+          "label": "图标题",
+          "type": "text"
+        },
+        {
+          "key": "symmetry_points",
+          "label": "高对称点",
+          "type": "text",
+          "default": "Γ:0,X:0.5,M:0.75,Γ:1.0"
+        }
       ]
     },
     {
@@ -417,11 +1036,34 @@
       "endpoint": "/api/dft/vasp",
       "input_type": "form",
       "config_fields": [
-        {"key": "title", "label": "图标题", "type": "text"},
-        {"key": "symmetry_points", "label": "高对称点", "type": "text", "default": "Γ:0,X:0.5,M:0.75,Γ:1.0"},
-        {"key": "project_orbitals", "label": "投影轨道", "type": "text", "default": "s,p,d"},
-        {"key": "ion_indices", "label": "离子序号（可选，逗号分隔）", "type": "text"},
-        {"key": "fat_scale", "label": "散点缩放", "type": "number", "default": 80}
+        {
+          "key": "title",
+          "label": "图标题",
+          "type": "text"
+        },
+        {
+          "key": "symmetry_points",
+          "label": "高对称点",
+          "type": "text",
+          "default": "Γ:0,X:0.5,M:0.75,Γ:1.0"
+        },
+        {
+          "key": "project_orbitals",
+          "label": "投影轨道",
+          "type": "text",
+          "default": "s,p,d"
+        },
+        {
+          "key": "ion_indices",
+          "label": "离子序号（可选，逗号分隔）",
+          "type": "text"
+        },
+        {
+          "key": "fat_scale",
+          "label": "散点缩放",
+          "type": "number",
+          "default": 80
+        }
       ]
     },
     {
@@ -433,7 +1075,11 @@
       "input_type": "json",
       "example": "{\"groups\":[{\"label\":\"处理A\",\"n\":30,\"mean\":12.3,\"sd\":1.2},{\"label\":\"处理B\",\"n\":30,\"mean\":15.7,\"sd\":0.9}],\"anova\":{\"F\":8.43,\"df1\":2,\"df2\":87,\"p\":0.0004},\"posthoc\":[{\"pair\":[\"A\",\"B\"],\"p\":0.023}]}",
       "config_fields": [
-        {"key": "title", "label": "表标题", "type": "text"}
+        {
+          "key": "title",
+          "label": "表标题",
+          "type": "text"
+        }
       ]
     }
   ]
