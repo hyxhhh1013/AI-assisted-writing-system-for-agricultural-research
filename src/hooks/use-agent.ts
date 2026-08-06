@@ -47,6 +47,8 @@ export function useAgent(options: UseAgentOptions = {}) {
   const [historyLoaded, setHistoryLoaded] = useState(false);
   /** 真流式：agent 回复正在逐 token 到达的增量文本 */
   const [streamingText, setStreamingText] = useState("");
+  /** 长工具（write_section）执行期间的实时进度文案 */
+  const [progressLabel, setProgressLabel] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   const onPersistedRef = useRef(options.onSectionPersisted);
@@ -137,6 +139,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     setStatus("idle");
     setMessages([]);
     setStreamingText("");
+    setProgressLabel(null);
     setPlan(null);
     setSummary(null);
     setPendingConfirm(null);
@@ -170,6 +173,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     abortRef.current?.abort();
     abortRef.current = null;
     setStreamingText("");
+    setProgressLabel(null);
     setStatus("cancelled");
     void refreshInterrupted();
   }, [refreshInterrupted]);
@@ -209,10 +213,14 @@ export function useAgent(options: UseAgentOptions = {}) {
         setStreamingText("");
         break;
       case "agent/action":
+        setProgressLabel(null);
         setMessages((prev) => [
           ...prev,
           { kind: "action", tool: event.tool, params: event.params },
         ]);
+        break;
+      case "agent/progress":
+        setProgressLabel(event.label);
         break;
       case "agent/observation": {
         const data = event.result?.data;
@@ -268,6 +276,7 @@ export function useAgent(options: UseAgentOptions = {}) {
         break;
       case "agent/complete":
         setStreamingText("");
+        setProgressLabel(null);
         setSummary(event.summary);
         setMessages((prev) => [...prev, { kind: "summary", summary: event.summary }]);
         setPendingCheckpoint(null);
@@ -276,6 +285,7 @@ export function useAgent(options: UseAgentOptions = {}) {
         break;
       case "agent/error":
         setStreamingText("");
+        setProgressLabel(null);
         toast.error(event.error);
         setStatus("error");
         void refreshInterrupted();
@@ -439,6 +449,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     status,
     messages,
     streamingText,
+    progressLabel,
     plan,
     summary,
     pendingConfirm,

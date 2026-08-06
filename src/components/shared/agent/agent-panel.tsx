@@ -351,6 +351,8 @@ export function AgentPanel({
       }),
     [agent.status, agent.isRunning, agent.messages],
   );
+  /** 有实时进度文案（写节进度）时优先展示，否则回退静态工作指示 */
+  const displayProgress = agent.progressLabel ?? liveProgress;
 
   /** 预计算每条消息的渲染标志，避免渲染循环内 O(n²) 扫描 */
   const msgFlags = useMemo(() => {
@@ -758,9 +760,9 @@ export function AgentPanel({
             </MessageEnter>
           ) : null}
 
-          {liveProgress ? (
+          {displayProgress ? (
             <MessageEnter animate>
-              <AgentWorkingIndicator label={liveProgress} />
+              <AgentWorkingIndicator label={displayProgress} />
             </MessageEnter>
           ) : null}
         </div>
