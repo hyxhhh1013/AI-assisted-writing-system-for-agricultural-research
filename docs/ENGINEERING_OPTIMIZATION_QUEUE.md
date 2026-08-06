@@ -175,7 +175,7 @@
 | W3-AP-WORK-MEMORY | 会话工作记忆：主张/决策/待办 + update_work_memory | W3-AP-LIT-QUALITY | 1d | **done** | 2026-07-25；落盘 session snapshot |
 | W3-AP-ORCH-OPT | Agent 编排优化：快照单飞缓存 + 前缀稳定 + 只读并行 + 会话并发互斥 | W3-AP-WORK-MEMORY | 1w | **done** | 2026-08-06；`project-refresh` / `parallel-tools` / `tryAcquireAgentSession`；已部署 |
 | W3-AP-WRITE-PROGRESS | write_section 进度透传（fast/full 阶段+实时字数） | W3-AP-ORCH-OPT | 0.5d | **done** | 2026-08-06；`agent/progress` SSE + `writing-progress` + 前端 `progressLabel` |
-| W3-AP-P1-QUEUE | P1：write_section 进度 + planner 便宜模型路由 均已完成；剩 toolsNode 门禁中间件化 | W3-AP-WRITE-PROGRESS | — | **todo** | 2026-08-06；planner 默认 zhipu（`AGENT_ROLE_PLANNER`）；剩余：toolsNode gate 抽中间件 |
+| W3-AP-P1-QUEUE | P1 三项全部完成：write_section 进度 + planner 便宜模型路由 + toolsNode 门禁中间件化 | W3-AP-WRITE-PROGRESS | — | **done** | 2026-08-06；`agent/progress` SSE、`AGENT_ROLE_PLANNER`、`tool-gates.ts` |
 | ~~W3-AP-CONDUCTOR~~ | ~~八阶段全自动 Conductor~~ | — | — | **cancelled** | 与「边聊边做」定位冲突 |
 | ~~ENG-PR-084~~ | ~~入口废弃~~ | — | — | cancelled | Cockpit；`/writing`→workbench |
 | ~~ENG-PR-086~~ | ~~编辑器对话面板~~ | — | — | cancelled | Agent Tab |
