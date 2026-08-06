@@ -45,6 +45,8 @@ export interface AgentContext {
   projectDirty?: boolean;
   /** 本会话工作记忆（主张/决策/待办） */
   workMemory?: import("@/lib/agent/work-memory").AgentWorkMemory | null;
+  /** 工具执行期间可选的实时事件通道（write_section 进度透传用；未接图循环时缺省为 undefined） */
+  emitLiveEvent?: (event: AgentSSEEvent) => void;
   budget: {
     maxIterations: number;
     currentIteration: number;
