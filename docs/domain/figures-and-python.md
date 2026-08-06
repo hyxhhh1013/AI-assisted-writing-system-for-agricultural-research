@@ -1,12 +1,21 @@
 # 图表与 Python 子进程（L3 业务）
 
-## 显著性标注（S2 逐类提质，2026-08-06 起）
+## S2 逐类提质（2026-08-06 起）
 
-- `bar_grouped` 已支持 `config.significance`：数组或 JSON 字符串，条目为
-  `{"category":i,"series":j,"value":"**","label":"p<0.01"}`（单柱星号；series 缺省=该类最高柱）
-  或 `{"fromCategory":a,"toCategory":b,"value":"*"}`（跨类括号）；自动避让重叠、含误差棒上沿
-- Agent 经 `generate_chart(configJson={...})` 传入；误差棒数据列后缀 `_sd/_se/_ci` 自动渲染
-- 后续类型（line/scatter/forest 等）按图谱逐个补齐
+**通用**：`config.significance` 标注显著性（星号/括号，自动避让、含误差上沿）；误差棒数据列后缀 `_sd/_se/_ci` 自动渲染；agent 经 `generate_chart(configJson={...})` 传入。
+
+**进度（数据图 6/11）**：
+
+| 类型 | 已加 |
+|------|------|
+| bar_grouped | 显著性（单柱星号/跨类括号）+ 误差棒 + 数值 |
+| bar_stacked | 顶部总误差棒 + 显著性 + 总数标注 |
+| bar_pct_stacked | 段内百分比 + 顶部显著性 |
+| line | 显著性点标 + x 区间括号（+已有误差棒/阴影带/拟合/双Y） |
+| scatter | 线性拟合 R² 角注 + 多系列标记 |
+| pie | 环形(donut) + 图例模式（多扇区） |
+
+**基座修复**：`plot_style.resolve_style` 顶层 config 字段（show_values/bar_edge 等）未落进 style 的 bug，全类型受益。
 
 ## 注册表（唯一真相源）
 
