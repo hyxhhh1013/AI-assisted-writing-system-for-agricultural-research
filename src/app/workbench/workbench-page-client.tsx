@@ -112,6 +112,14 @@ const LazyAgentPanel = dynamic(
   { ssr: false, loading: () => <TabPanelLoading /> }
 );
 
+const QualityClosurePanel = dynamic(
+  () =>
+    import("@/components/shared/agent/quality-closure-panel").then(
+      (m) => m.QualityClosurePanel,
+    ),
+  { ssr: false, loading: () => <TabPanelLoading /> }
+);
+
 const LazyReaderPanel = dynamic(
   () => import("@/components/shared/reader-panel").then(m => m.ReaderPanel),
   { ssr: false, loading: () => <TabPanelLoading /> }
@@ -1005,6 +1013,14 @@ function WorkbenchContent() {
                 activeTab !== "agent" && "hidden",
               )}
             >
+              <div className="shrink-0 px-2 pt-2">
+                <QualityClosurePanel
+                  projectId={projectId ?? undefined}
+                  sections={project.sections}
+                  mode={project.mode}
+                  language={project.language}
+                />
+              </div>
               <ErrorBoundary>
                 <LazyAgentPanel
                   projectId={projectId ?? undefined}
