@@ -5,10 +5,12 @@ import {
   checkCitationSideTripGate,
   checkDiagnoseInspectGate,
   checkDraftSearchGate,
+  checkReviewRequestGate,
   citationCheckReportReady,
   hasCitationRefineSuccess,
   isAcademicPaperPipelineGoal,
   isAbstractFinishGoal,
+  isReviewRequestGoal,
   isCitationApplyGoal,
   isCitationCheckGoal,
   isDiagnoseStyleGoal,
@@ -294,6 +296,33 @@ describe("intent continuation pickers", () => {
     // 已成功写过摘要 → 意图完成，不再 nudge
     expect(
       pickIntentNudge(ctx({ goal, observations: [ok("write_bilingual_abstract")] })),
+    ).toBeNull();
+  });
+
+  it("review_request: 审查/审稿目标识别（与综述写作、收口摘要区分）", () => {
+    expect(isReviewRequestGoal("帮我审查一下这篇论文")).toBe(true);
+    expect(isReviewRequestGoal("按审稿意见修改")).toBe(true);
+    expect(isReviewRequestGoal("写一篇生物炭综述")).toBe(false);
+    expect(isReviewRequestGoal("帮我收口写摘要")).toBe(false);
+  });
+
+  it("review_request gate: 放行审查/解析工具、拦截写正文与检索", () => {
+    const goal = "帮我审查这篇论文";
+    expect(checkReviewRequestGate(goal, "run_review_rounds", []).ok).toBe(true);
+    expect(checkReviewRequestGate(goal, "parse_revision_comments", []).ok).toBe(true);
+    expect(checkReviewRequestGate(goal, "read_section", []).ok).toBe(true);
+    const blocked = checkReviewRequestGate(goal, "write_section", []);
+    expect(blocked.ok).toBe(false);
+    expect(checkReviewRequestGate(goal, "search_knowledge", []).ok).toBe(false);
+  });
+
+  it("review_request: 未出审查报告时 nudge；已审查后不再 nudge", () => {
+    const goal = "帮我审查这篇论文";
+    const nudge = pickIntentNudge(ctx({ goal }));
+    expect(nudge).toContain("run_review_rounds");
+    // 已成功产出审查 → 意图完成
+    expect(
+      pickIntentNudge(ctx({ goal, observations: [ok("run_review_rounds")] })),
     ).toBeNull();
   });
 });

@@ -87,6 +87,20 @@ export function isAbstractFinishGoal(goal: string): boolean {
   );
 }
 
+/**
+ * 审查 / 审稿 目标（含粘贴的外审意见）：路由到 run_review_rounds / review_content，
+ * 有外审意见则 parse_revision_comments → apply_revision_item。
+ * 与多步流程、收口摘要、引用核查互斥；注意与「综述(review 模式)写作」区分。
+ */
+export function isReviewRequestGoal(goal: string): boolean {
+  if (isAcademicPaperPipelineGoal(goal)) return false;
+  if (isAbstractFinishGoal(goal)) return false;
+  if (isCitationCheckGoal(goal)) return false;
+  return /审查|审稿|外审|审阅|审一下|审一遍|修改意见|审稿意见|帮我(看看|审)|review\s*rounds|run_review/i.test(
+    goal,
+  );
+}
+
 export type ApPipelineStep =
   | "citation_check"
   | "citation_fix"
@@ -487,6 +501,14 @@ const ABSTRACT_FINISH_BLOCKED_TOOLS = new Set([
   "import_reference",
 ]);
 
+/** 审查/审稿阶段禁止的旁路工具（重写正文 / 检索导入与审查互斥） */
+const REVIEW_REQUEST_BLOCKED_TOOLS = new Set([
+  "write_section",
+  "search_external",
+  "search_knowledge",
+  "import_reference",
+]);
+
 /**
  * 收口/定稿门禁：目标是写摘要时，放行 write_bilingual_abstract 与读工具，
  * 拦截检索/导入等旁路，防止 Agent 在摘要阶段空转。
@@ -503,6 +525,27 @@ export function checkAbstractFinishGate(
       ok: false,
       error:
         "本轮是收口/摘要：请勿检索或导入文献，专注 write_bilingual_abstract 写回 abstract（中英双语）。",
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * 审查/审稿门禁：目标是审查时，放行审查/解析/应用工具与读工具，
+ * 拦截写正文与检索导入旁路。
+ */
+export function checkReviewRequestGate(
+  goal: string,
+  toolName: string,
+  observations: readonly ToolObservation[],
+): GoalIntentGateResult {
+  if (!isReviewRequestGoal(goal)) return { ok: true };
+  if (REVIEW_REQUEST_BLOCKED_TOOLS.has(toolName)) {
+    return {
+      ok: false,
+      error:
+        "本轮是审查/审稿：请调用 run_review_rounds 或 review_content 出四维报告；"
+        + "若粘贴了外审意见，先 parse_revision_comments 再 apply_revision_item。不要重写正文或检索导入。",
     };
   }
   return { ok: true };
@@ -529,7 +572,8 @@ export function buildIntentStopAskUser(opts: {
     | "pipeline_fix"
     | "pipeline_abstract"
     | "pipeline_review"
-    | "abstract_finish";
+    | "abstract_finish"
+    | "review_request";
   refTotal: number;
   importTarget: number;
   importCount: number;
@@ -544,7 +588,7 @@ export function buildIntentStopAskUser(opts: {
       "\n\n——\n双语摘要尚未写回。请说「写摘要」或「write_bilingual_abstract」。"
     );
   }
-  if (opts.kind === "pipeline_review") {
+  if (opts.kind === "pipeline_review" || opts.kind === "review_request") {
     return (
       "\n\n——\n审查尚未运行。请说「运行审查」或「run_review_rounds / review_content」。"
     );
@@ -644,6 +688,7 @@ export type IntentKind =
   | "pipeline_check"
   | "citation_apply"
   | "abstract_finish"
+  | "review_request"
   | "literature"
   | "draft"
   | "review_write"
@@ -712,6 +757,18 @@ const INTENT_CLOSURES: Record<IntentKind, IntentClosureEntry> = {
       + "不要再去检索或逐条 read_reference；正文不足时先说明还差哪些节。",
     stopAsk: (ctx) =>
       buildIntentStopAskUser({ kind: "abstract_finish", ...stopAskOpts(ctx) }),
+  },
+  review_request: {
+    kind: "review_request",
+    isIncomplete: (ctx) =>
+      isReviewRequestGoal(ctx.goal)
+      && !hasSuccessfulReview(ctx.observations),
+    nudge: () =>
+      "【系统】本轮是审查/审稿：调用 run_review_rounds（Phase 7 轮次）或 review_content 产出四维报告。"
+      + "若粘贴了外审意见，先 parse_revision_comments 解析，再 apply_revision_item 逐条修改写回。"
+      + "不要重写正文或检索导入。",
+    stopAsk: (ctx) =>
+      buildIntentStopAskUser({ kind: "review_request", ...stopAskOpts(ctx) }),
   },
   pipeline_review: {
     kind: "pipeline_review",
@@ -805,6 +862,7 @@ const NUDGE_ORDER: IntentKind[] = [
   "pipeline_check",
   "citation_apply",
   "abstract_finish",
+  "review_request",
   "literature",
   "draft",
   "review_write",
@@ -822,6 +880,7 @@ const STOP_ORDER: IntentKind[] = [
   "pipeline_fix",
   "pipeline_abstract",
   "abstract_finish",
+  "review_request",
   "pipeline_review",
   "citation_apply",
   "citation",
