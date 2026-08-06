@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+### Wave 3 学术对齐（2026-07-14 ~ 2026-08-06）
+
+**Agent 写作助手（学术论文对齐）**
+- 完整 Agent 工作台：inspect/read 多上下文、自动生成大纲/写作蓝图、自主门禁、Plan 子任务驱动执行环、同一会话跟聊、会话工作记忆
+- 行为主轴打磨：剧本验收、先读后写硬门禁、无进展熔断、检索/读窗口配额
+- 写节全链路：自反思循环、结构化观察、自动核查修正（Verifier/Refiner）、引用语义接地、分节完整度、机制图/多面板复合图、真实 token 流式、上下文压缩
+- 澄清与确认：`ask_user` 结构化意图确认、S2 铁律检查点（大纲批准/配置确认）、写操作确认卡（文献导入等）
+- 附件支持（W3-FILE-UPLOAD）：AgentAttachment 模型 + 上传/删除/pin 到项目；pdf/csv/xlsx/txt/docx 文本提取；GLM-4V 图片/PDF 图表视觉理解；异步提取 + 对话框上传 UI
+- 编排优化（P0）：项目快照单飞缓存、system prompt 前缀稳定（命中模型前缀缓存）、只读工具批次并行、会话级并发互斥（防图双跑）
+- 进度透传（P1）：`write_section` 阶段 + 实时字数 SSE（`agent/progress`），写节 1-3 分钟不再静默
+
+**审查 / 门禁 / 导出**
+- 审查 max-2 轮编排 + Critical 导出门禁 + 数据免责标注
+- 导出前引用硬检（`/api/citations/gate`，PDF 422 拦截）+ 双语摘要（Phase 5b）
+- Passport Phase 3-7 对齐 academic-paper；Argument Blueprint 注入扩写上下文
+
+**文献 / 知识库**
+- reference evidence 元数据 + OA PDF 摄取 + Agent 文献导入可靠性
+
+**Admin 监控**
+- Dashboard agent/direction 活动面板、会话深析 + 转写回放、用量洞察（top goals/工具/失败模式）、模型配置 + 每 key 并发监控
+
+**工程 / 部署**
+- GitHub Actions 部署 workflow（云端构建 + scp + VPS apply）
+- `.gitattributes` 强制 `.sh` LF（避免 CRLF 带上 VPS）；vitest forks 池规避 worker 崩溃
+- 文档同步铁律 + pre-commit 告警钩子（`src/` 有改动而 `docs/` 未改时提醒）
+
 ### 质量中心（2026-06-15 ~ 2026-06-17）
 - **统一质量工作台** `QualityWorkspace`：查重 / 降重 / 审查三 Tab 合一（`src/components/shared/quality/quality-workspace.tsx`）
 - **审查内联**：审查结果嵌入质量中心，`review-tab.tsx` 支持四维度展开与单项修复
