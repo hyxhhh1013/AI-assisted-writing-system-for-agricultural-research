@@ -18,7 +18,7 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 
 | 文件 | 职责 |
 |------|------|
-| `src/lib/agent/index.ts` | `runAgentLoop` 入口（包装 runAgentGraphLoop） |
+| `src/lib/agent/index.ts` | `runAgentLoop` 公共出口（re-export；实际包装在 `core/agent-loop.ts`） |
 | `src/lib/agent/langgraph/run-graph.ts` | 图循环：状态初始化、`LiveEventQueue`、实时/快照合并、落库 |
 | `src/lib/agent/langgraph/nodes.ts` | `toolsNode` 工具执行 + 门禁 + 并行快路径；`agentNode` LLM 调用 |
 | `src/lib/agent/langgraph/parallel-tools.ts` | 只读工具批量并行（`PARALLEL_READ_TOOLS` 白名单） |
@@ -74,6 +74,6 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done)
 
 ## 常用命令
 
-- Agent 端到端剧本：`npm run eval:agent`（`lib/eval/agent-scripts`，P1~P5 断言）
+- Agent 端到端剧本：`npm run eval:agent`（`src/lib/eval/agent-scripts.ts`，P1~P6 + FILE-READ 断言）
 - 全量测试：`npx vitest run`（Agent 相关测试在 `src/__tests__/lib/agent-*.test.ts`、`src/__tests__/api/agent-*.test.ts`）
 - 测试注意：Agent 接口用 `x-user-id` header 会 401（proxy 需 session cookie）；测试方式是 JWT_SECRET 签 token 作 cookie，或用真实域名登录。

@@ -259,6 +259,10 @@
 
 见 [`domain/writing-pipeline.md`](./domain/writing-pipeline.md) 与 `src/contracts/sse.ts`。
 
+### Agent SSE 事件类型（`/api/agent`）
+
+事件契约与说明见 [`domain/agent.md`](./domain/agent.md) §SSE 事件表，权威源 `src/contracts/agent.ts`（含 `agent/progress` 等实时事件；实时事件 live-only 不持久化）。
+
 ### 知识库重建索引 SSE
 
 - `POST /api/knowledge/reindex`：spawn `node scripts/index-pdfs.mjs --progress`；请求体见 `reindexRequestSchema`（`files?`, `forceStage1?`, `forceStage3?`）。

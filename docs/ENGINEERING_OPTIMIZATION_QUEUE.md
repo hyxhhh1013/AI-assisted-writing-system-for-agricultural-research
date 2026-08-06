@@ -167,7 +167,7 @@
 | W3-AP-CONFIG-UI | Phase0 检查点嵌入 PaperConfigPanel + 统一 onProjectMutated 刷新 | W3-AP-CHART-BRIDGE | 0.5d | **done** | 2026-07-25 |
 | W3-AP-LIT-BRIDGE | 文献闭环：search_external hitJson → 确认卡 → import_reference 写回刷新 | W3-AP-CONFIG-UI | 0.5d | **done** | 2026-07-25 |
 | **W3-AP-BEHAVIOR** | **行为主轴：剧本验收→压空转→先读后写（暂停扩工具）** | W3-AP-LIT-BRIDGE | 2～3w | **done** | 2026-07-26；手测 P0～P3 绿；均 tool≈3.5；见 BEHAVIOR §7 |
-| W3-AP-EVAL-SCRIPTS | 固化 P1～P5 剧本 + `eval:agent` 断言 | W3-AP-BEHAVIOR | 1d | **done** | 2026-07-25；`lib/eval/agent-scripts` + `npm run eval:agent` |
+| W3-AP-EVAL-SCRIPTS | 固化 P1～P5 剧本 + `eval:agent` 断言 | W3-AP-BEHAVIOR | 1d | **done** | 2026-07-25；`src/lib/eval/agent-scripts.ts` + `npm run eval:agent` |
 | W3-AP-ANTISPAM | 无进展熔断 + 检索/读窗口配额 | W3-AP-EVAL-SCRIPTS | 1～2d | **done** | 2026-07-25；`core/antispam` + toolsNode |
 | W3-AP-READ-BEFORE-WRITE | write/refine 先读后写硬门禁 | W3-AP-ANTISPAM | 1d | **done** | 2026-07-25；intro/discussion + toolsNode |
 | W3-AP-LIT-QUALITY | 文献相关度分+why；低相关无依据拒导 | W3-AP-READ-BEFORE-WRITE | 0.5d | **done** | 2026-07-25；`literature-relevance` |
