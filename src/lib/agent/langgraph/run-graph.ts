@@ -633,8 +633,13 @@ export async function* mergeGraphAndLive(
       if (r.kind === "graph") {
         gPending = null;
         if (r.value.done) {
-          // graph 结束：排空剩余实时事件后结束
+          // graph 结束：先消费竞态 loser 已取出的实时事件（queue.next 有 shift 副作用），再排空剩余后结束
           queue.close();
+          if (lPending) {
+            const l = await lPending;
+            lPending = null;
+            if (!l.value.done) yield { type: "live", event: l.value.value };
+          }
           for (;;) {
             const l = await queue.next();
             if (l.done) break;
