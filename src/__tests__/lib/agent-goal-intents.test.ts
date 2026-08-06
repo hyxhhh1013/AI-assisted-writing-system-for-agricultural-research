@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  checkAbstractFinishGate,
   checkCitationCheckGate,
   checkCitationSideTripGate,
   checkDiagnoseInspectGate,
@@ -7,6 +8,7 @@ import {
   citationCheckReportReady,
   hasCitationRefineSuccess,
   isAcademicPaperPipelineGoal,
+  isAbstractFinishGoal,
   isCitationApplyGoal,
   isCitationCheckGoal,
   isDiagnoseStyleGoal,
@@ -263,5 +265,35 @@ describe("intent continuation pickers", () => {
     });
     expect(pickIntentNudge(c)).toContain("refine_content");
     expect(pickIntentStopAsk(c)).toContain("本轮已导入");
+  });
+
+  it("abstract_finish: 收口/定稿目标识别", () => {
+    expect(isAbstractFinishGoal("帮我收口，写双语摘要")).toBe(true);
+    expect(isAbstractFinishGoal("把摘要补一下")).toBe(true);
+    expect(isAbstractFinishGoal("引用核查一下")).toBe(false);
+    expect(
+      isAbstractFinishGoal("按 academic-paper 流程继续：起草→引用检查→双语摘要→审查"),
+    ).toBe(false);
+  });
+
+  it("abstract_finish gate: 放行摘要工具、拦截检索/导入", () => {
+    const goal = "帮我收口写摘要";
+    expect(
+      checkAbstractFinishGate(goal, "write_bilingual_abstract", []).ok,
+    ).toBe(true);
+    expect(checkAbstractFinishGate(goal, "read_section", []).ok).toBe(true);
+    const blocked = checkAbstractFinishGate(goal, "search_knowledge", []);
+    expect(blocked.ok).toBe(false);
+    const blockedImport = checkAbstractFinishGate(goal, "import_reference", []);
+    expect(blockedImport.ok).toBe(false);
+  });
+
+  it("abstract_finish: 未写摘要时 nudge 到 write_bilingual_abstract；已写后不再 nudge", () => {
+    const goal = "帮我收口写摘要";
+    expect(pickIntentNudge(ctx({ goal }))).toContain("write_bilingual_abstract");
+    // 已成功写过摘要 → 意图完成，不再 nudge
+    expect(
+      pickIntentNudge(ctx({ goal, observations: [ok("write_bilingual_abstract")] })),
+    ).toBeNull();
   });
 });

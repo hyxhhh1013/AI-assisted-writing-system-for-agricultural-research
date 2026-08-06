@@ -15,6 +15,7 @@ import { checkRepeatCall } from "@/lib/agent/core/safety";
 import { checkAgentToolPhaseGate } from "@/lib/agent/core/phase-gates";
 import { checkReadBeforeWrite } from "@/lib/agent/core/read-before-write";
 import {
+  checkAbstractFinishGate,
   checkCitationCheckGate,
   checkCitationSideTripGate,
   checkDiagnoseInspectGate,
@@ -78,13 +79,14 @@ export const searchQuotaGate: PreToolGate = ({ tool, antispamTracker }) => {
     : { ok: false, kind: "soft", error: quota.warning ?? "检索次数已达上限" };
 };
 
-/** 意图门禁组：诊断 inspect / 草稿检索 / 引用核查 / 引用绕行 / 先读后写 */
+/** 意图门禁组：诊断 inspect / 草稿检索 / 引用核查 / 引用绕行 / 收口摘要 / 先读后写 */
 export const intentGate: PreToolGate = ({ state, tool, params, recentObservations }) => {
   const gates: Array<() => { ok: boolean; error?: string }> = [
     () => checkDiagnoseInspectGate(state.goal, tool.name, recentObservations),
     () => checkDraftSearchGate(state.goal, tool.name, recentObservations),
     () => checkCitationCheckGate(state.goal, tool.name, recentObservations),
     () => checkCitationSideTripGate(state.goal, tool.name, recentObservations),
+    () => checkAbstractFinishGate(state.goal, tool.name, recentObservations),
     () => checkReadBeforeWrite(tool.name, params, recentObservations),
   ];
   for (const gate of gates) {

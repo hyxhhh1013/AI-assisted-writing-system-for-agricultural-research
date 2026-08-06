@@ -75,6 +75,18 @@ export function isAcademicPaperPipelineGoal(goal: string): boolean {
   );
 }
 
+/**
+ * 收口 / 定稿 / 摘要 目标：正文够长时默认路由到 write_bilingual_abstract。
+ * 与多步流程、引用核查互斥（各自有独立路由）。
+ */
+export function isAbstractFinishGoal(goal: string): boolean {
+  if (isAcademicPaperPipelineGoal(goal)) return false;
+  if (isCitationCheckGoal(goal)) return false;
+  return /收口|定稿|写摘要|写个摘要|双语摘要|补摘要|完成摘要|摘要收尾|摘要.{0,8}(?:补|写|完成)|(?:补|写|完成).{0,4}摘要|abstract(?!.*审查)/i.test(
+    goal,
+  );
+}
+
 export type ApPipelineStep =
   | "citation_check"
   | "citation_fix"
@@ -468,6 +480,34 @@ export function checkCitationCheckGate(
   return { ok: true };
 }
 
+/** 收口/摘要阶段禁止的旁路工具（检索/导入与摘要写作互斥） */
+const ABSTRACT_FINISH_BLOCKED_TOOLS = new Set([
+  "search_external",
+  "search_knowledge",
+  "import_reference",
+]);
+
+/**
+ * 收口/定稿门禁：目标是写摘要时，放行 write_bilingual_abstract 与读工具，
+ * 拦截检索/导入等旁路，防止 Agent 在摘要阶段空转。
+ */
+export function checkAbstractFinishGate(
+  goal: string,
+  toolName: string,
+  observations: readonly ToolObservation[],
+): GoalIntentGateResult {
+  if (!isAbstractFinishGoal(goal)) return { ok: true };
+  if (toolName === "write_bilingual_abstract") return { ok: true };
+  if (ABSTRACT_FINISH_BLOCKED_TOOLS.has(toolName)) {
+    return {
+      ok: false,
+      error:
+        "本轮是收口/摘要：请勿检索或导入文献，专注 write_bilingual_abstract 写回 abstract（中英双语）。",
+    };
+  }
+  return { ok: true };
+}
+
 /** 写综述前文献不足时的提醒 */
 export function reviewRefsShortageNudge(refCount: number, target = 30): string | null {
   if (refCount >= target) return null;
@@ -488,7 +528,8 @@ export function buildIntentStopAskUser(opts: {
     | "citation_apply"
     | "pipeline_fix"
     | "pipeline_abstract"
-    | "pipeline_review";
+    | "pipeline_review"
+    | "abstract_finish";
   refTotal: number;
   importTarget: number;
   importCount: number;
@@ -498,7 +539,7 @@ export function buildIntentStopAskUser(opts: {
       "\n\n——\n引用修正尚未写回。请说「继续修正引用」或直接让 Agent 对 literature_body 执行 refine_content。"
     );
   }
-  if (opts.kind === "pipeline_abstract") {
+  if (opts.kind === "pipeline_abstract" || opts.kind === "abstract_finish") {
     return (
       "\n\n——\n双语摘要尚未写回。请说「写摘要」或「write_bilingual_abstract」。"
     );
@@ -602,6 +643,7 @@ export type IntentKind =
   | "pipeline_review"
   | "pipeline_check"
   | "citation_apply"
+  | "abstract_finish"
   | "literature"
   | "draft"
   | "review_write"
@@ -659,6 +701,17 @@ const INTENT_CLOSURES: Record<IntentKind, IntentClosureEntry> = {
       "【系统】academic-paper 流程·双语摘要：引用已修正，请立刻 write_bilingual_abstract 写回 abstract。",
     stopAsk: (ctx) =>
       buildIntentStopAskUser({ kind: "pipeline_abstract", ...stopAskOpts(ctx) }),
+  },
+  abstract_finish: {
+    kind: "abstract_finish",
+    isIncomplete: (ctx) =>
+      isAbstractFinishGoal(ctx.goal)
+      && !hasSuccessfulAbstractWrite(ctx.observations),
+    nudge: () =>
+      "【系统】本轮是收口/摘要：调用 write_bilingual_abstract 写回 abstract（中英双语）。"
+      + "不要再去检索或逐条 read_reference；正文不足时先说明还差哪些节。",
+    stopAsk: (ctx) =>
+      buildIntentStopAskUser({ kind: "abstract_finish", ...stopAskOpts(ctx) }),
   },
   pipeline_review: {
     kind: "pipeline_review",
@@ -751,6 +804,7 @@ const NUDGE_ORDER: IntentKind[] = [
   "pipeline_review",
   "pipeline_check",
   "citation_apply",
+  "abstract_finish",
   "literature",
   "draft",
   "review_write",
@@ -767,6 +821,7 @@ const STOP_ORDER: IntentKind[] = [
   "review_write",
   "pipeline_fix",
   "pipeline_abstract",
+  "abstract_finish",
   "pipeline_review",
   "citation_apply",
   "citation",
