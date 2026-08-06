@@ -475,6 +475,20 @@
           "key": "title",
           "label": "图表标题",
           "type": "text"
+        },
+        {
+          "key": "donut",
+          "label": "环形图 (Donut)",
+          "type": "boolean",
+          "group": "chart_specific",
+          "default": false
+        },
+        {
+          "key": "show_legend",
+          "label": "图例模式（多扇区标签更清晰）",
+          "type": "boolean",
+          "group": "chart_specific",
+          "default": false
         }
       ]
     },
