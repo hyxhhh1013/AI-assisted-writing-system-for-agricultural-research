@@ -4,7 +4,7 @@
 
 **通用**：`config.significance` 标注显著性（星号/括号，自动避让、含误差上沿）；误差棒数据列后缀 `_sd/_se/_ci` 自动渲染；agent 经 `generate_chart(configJson={...})` 传入。
 
-**进度（数据图 6/11）**：
+**进度（数据图 11/11 ✅ 全部完成）**：
 
 | 类型 | 已加 |
 |------|------|
@@ -14,6 +14,13 @@
 | line | 显著性点标 + x 区间括号（+已有误差棒/阴影带/拟合/双Y） |
 | scatter | 线性拟合 R² 角注 + 多系列标记 |
 | pie | 环形(donut) + 图例模式（多扇区） |
+| heatmap | 发散配色（相关矩阵 0 居中）+ 标注格式 + 单元格网格线 |
+| area | 顶线误差带（show_shadow）+ 标记 |
+| forest | 右侧估计值标注（est [lo, hi]） |
+| radar | 逐系列标记 |
+| stack_offset | 右侧谱线标签（Origin 惯例） |
+
+**下一步**：示意图 4 / XRD 9 / DFT 5 / 表格 1（Phase 2-4）。
 
 **基座修复**：`plot_style.resolve_style` 顶层 config 字段（show_values/bar_edge 等）未落进 style 的 bug，全类型受益。
 
