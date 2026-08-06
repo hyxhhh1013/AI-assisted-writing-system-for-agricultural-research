@@ -141,6 +141,8 @@ describe("evaluatePostGates", () => {
     expect(v).toMatchObject({ ok: false, kind: "checkpoint" });
     if (!v.ok && v.kind === "checkpoint") {
       expect(v.checkpoint.kind).toBe("clarify");
+      // clarify 检查点不更新 plan 焦点（原行为），updateFocus 必须缺省
+      expect(v.updateFocus).toBeUndefined();
     }
   });
 
@@ -155,6 +157,8 @@ describe("evaluatePostGates", () => {
     expect(v).toMatchObject({ ok: false, kind: "checkpoint" });
     if (!v.ok && v.kind === "checkpoint") {
       expect(v.checkpoint.kind).toBe("outline_approve");
+      // outline 批准需同步 plan 焦点
+      expect(v.updateFocus).toBe(true);
     }
   });
 
