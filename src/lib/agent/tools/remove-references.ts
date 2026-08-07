@@ -1,5 +1,4 @@
 import prisma from "@/lib/prisma";
-import { applyReferencePatchOps } from "@/lib/project-references";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 
 /**
@@ -56,30 +55,42 @@ export const removeReferencesTool: ToolDefinition = {
         const refs = await tx.reference.findMany({
           where: { projectId: ctx.projectId! },
           orderBy: { order: "asc" },
-          select: { id: true, order: true },
         });
-        const byIndex = new Map(refs.map((r) => [r.order + 1, r]));
-        const toDelete = unique.filter((i) => byIndex.has(i));
-        if (toDelete.length === 0) {
+        const deletedSet = new Set(unique);
+        const kept = refs.filter((r) => !deletedSet.has(r.order + 1));
+        const toDeleteCount = refs.length - kept.length;
+        if (toDeleteCount === 0) {
           return { deleted: 0 };
         }
 
-        // 删除引用 + 自动重排后续 order
-        const deleteOps = toDelete.map((i) => ({
-          op: "delete" as const,
-          id: byIndex.get(i)!.id,
-        }));
-        await applyReferencePatchOps(tx, ctx.projectId!, deleteOps);
+        // 删全部 + 重建保留下来的行（重排 order、保留元数据）。
+        // 不用 applyReferencePatchOps 的逐条 delete+decrement：批量删除相邻引用会撞 @@unique([projectId, order])
+        await tx.reference.deleteMany({ where: { projectId: ctx.projectId! } });
+        for (let i = 0; i < kept.length; i++) {
+          const r = kept[i]!;
+          await tx.reference.create({
+            data: {
+              projectId: ctx.projectId!,
+              content: r.content,
+              order: i,
+              doi: r.doi ?? undefined,
+              title: r.title ?? undefined,
+              abstract: r.abstract ?? undefined,
+              openAccessUrl: r.openAccessUrl ?? undefined,
+              externalId: r.externalId ?? undefined,
+              externalSource: r.externalSource ?? undefined,
+            },
+          });
+        }
 
         // 清理/重排 ReferenceSource 分类映射（refIndex 1 基，与 [n] 对齐）
-        const deletedSet = new Set(toDelete);
         const sources = await tx.referenceSource.findMany({
           where: { projectId: ctx.projectId! },
         });
         await tx.referenceSource.deleteMany({ where: { projectId: ctx.projectId! } });
         for (const s of sources) {
           if (deletedSet.has(s.refIndex)) continue;
-          const shift = toDelete.filter((d) => d < s.refIndex).length;
+          const shift = [...deletedSet].filter((d) => d < s.refIndex).length;
           await tx.referenceSource.create({
             data: {
               projectId: ctx.projectId!,
@@ -95,7 +106,7 @@ export const removeReferencesTool: ToolDefinition = {
           where: { id: ctx.projectId! },
           data: { lastUpdated: new Date() },
         });
-        return { deleted: toDelete.length };
+        return { deleted: toDeleteCount };
       });
 
       const remaining = await prisma.reference.count({
