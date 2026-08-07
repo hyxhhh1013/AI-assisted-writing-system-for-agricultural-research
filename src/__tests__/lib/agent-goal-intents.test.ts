@@ -6,6 +6,7 @@ import {
   checkDiagnoseInspectGate,
   checkDraftSearchGate,
   checkReviewRequestGate,
+  checkClassificationRetrieveGate,
   citationCheckReportReady,
   hasCitationRefineSuccess,
   isAcademicPaperPipelineGoal,
@@ -374,5 +375,41 @@ describe("文献分类编码意图", () => {
     expect(nudge).toContain("list_references");
     expect(nudge).toContain("save_reference_classification");
     expect(nudge).toContain("禁止用多次");
+  });
+});
+
+describe("checkClassificationRetrieveGate（分类编码防反复检索）", () => {
+  const cls = "先做文献分类编码";
+  it("list_references ≥2 次且未保存 → 拦下", () => {
+    const g = checkClassificationRetrieveGate(cls, "list_references", [
+      ok("list_references"),
+      ok("list_references"),
+    ]);
+    expect(g.ok).toBe(false);
+    expect(g.error).toMatch(/save_reference_classification/);
+  });
+
+  it("第 1 次 list_references 放行", () => {
+    expect(
+      checkClassificationRetrieveGate(cls, "list_references", [ok("list_references")]).ok,
+    ).toBe(true);
+  });
+
+  it("已保存分类后不再拦 list_references", () => {
+    const g = checkClassificationRetrieveGate(cls, "list_references", [
+      ok("list_references"),
+      ok("list_references"),
+      ok("save_reference_classification"),
+    ]);
+    expect(g.ok).toBe(true);
+  });
+
+  it("非分类目标不受影响", () => {
+    expect(
+      checkClassificationRetrieveGate("写引言", "list_references", [
+        ok("list_references"),
+        ok("list_references"),
+      ]).ok,
+    ).toBe(true);
   });
 });

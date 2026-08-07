@@ -18,6 +18,7 @@ import {
   checkAbstractFinishGate,
   checkCitationCheckGate,
   checkCitationSideTripGate,
+  checkClassificationRetrieveGate,
   checkDiagnoseInspectGate,
   checkDraftSearchGate,
   checkReviewRequestGate,
@@ -91,6 +92,7 @@ export const intentGate: PreToolGate = ({ state, tool, params, recentObservation
     () => checkCitationSideTripGate(state.goal, tool.name, recentObservations),
     () => checkAbstractFinishGate(state.goal, tool.name, recentObservations),
     () => checkReviewRequestGate(state.goal, tool.name, recentObservations),
+    () => checkClassificationRetrieveGate(state.goal, tool.name, recentObservations),
     () => checkReadBeforeWrite(tool.name, params, recentObservations),
   ];
   for (const gate of gates) {

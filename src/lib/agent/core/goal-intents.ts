@@ -68,6 +68,31 @@ export function isReferenceClassificationGoal(goal: string): boolean {
   return /分类编码|文献分类|给文献分类|文献.*分类|分类.*文献|打标签|文献打标|给文献分|分\S*类/.test(goal);
 }
 
+/**
+ * 分类编码目标下：禁止反复 list_references 关键词检索来"分类"。
+ * list_references ≥2 次且尚未 save_reference_classification 成功 → 拦下，逼一次工具提交。
+ */
+export function checkClassificationRetrieveGate(
+  goal: string,
+  toolName: string,
+  observations: readonly ToolObservation[],
+): { ok: boolean; error?: string } {
+  if (!isReferenceClassificationGoal(goal)) return { ok: true };
+  if (toolName !== "list_references") return { ok: true };
+  if (hasSuccessfulTool(observations, "save_reference_classification")) return { ok: true };
+  const listCount = countSuccessfulTool(observations, "list_references");
+  if (listCount >= 2) {
+    return {
+      ok: false,
+      error:
+        "本轮是文献分类编码：已调用过 list_references，请直接调用 save_reference_classification"
+        + "一次性提交全部分类（refIndex 1 基 → sourceName/category），不要再反复关键词检索。"
+        + "分类参考大纲/蓝图主题（如 热解 / 烟草 / 生物油 / 合成气 / 碳材料），sourceName 填知识库源文件名。",
+    };
+  }
+  return { ok: true };
+}
+
 /** 综述 / literature review（文献体量要求更高） */
 export function isReviewWritingGoal(goal: string): boolean {
   return /综述|literature\s*review|literature_body|系统综述|文献综述/i.test(goal);
