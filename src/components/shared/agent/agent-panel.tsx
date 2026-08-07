@@ -355,6 +355,30 @@ export function AgentPanel({
     }
   }, [agent.pendingConfirm]);
 
+  /** 「看看蓝图」→ open_blueprint_workspace 成功 observation → 打开蓝图工作台 */
+  const lastBlueprintOpenIdx = useRef(-1);
+  useEffect(() => {
+    if (!onOpenBlueprint) return;
+    let lastIdx = -1;
+    for (let i = agent.messages.length - 1; i >= 0; i--) {
+      const m = agent.messages[i];
+      if (m.kind === "observation" && m.tool === "open_blueprint_workspace") {
+        lastIdx = i;
+        break;
+      }
+    }
+    const msg = lastIdx >= 0 ? agent.messages[lastIdx] : undefined;
+    if (
+      msg
+      && msg.kind === "observation"
+      && lastIdx !== lastBlueprintOpenIdx.current
+      && !msg.error
+    ) {
+      lastBlueprintOpenIdx.current = lastIdx;
+      onOpenBlueprint();
+    }
+  }, [agent.messages, onOpenBlueprint]);
+
   const statusHint = useMemo(
     () => STATUS_LABEL[agent.status] ?? agent.status,
     [agent.status],
@@ -413,14 +437,18 @@ export function AgentPanel({
   }, [agent.messages, agent.isRunning]);
 
   /** import_reference 确认卡批量选择 */
-  const confirmImportItems = Array.isArray(agent.pendingConfirm?.params?.importItems)
-    ? (agent.pendingConfirm.params.importItems as Array<{
-        title?: string;
-        year?: number;
-        journal?: string;
-        doi?: string;
-      }>)
-    : [];
+  const confirmImportItems = useMemo(
+    () =>
+      Array.isArray(agent.pendingConfirm?.params?.importItems)
+        ? (agent.pendingConfirm.params.importItems as Array<{
+            title?: string;
+            year?: number;
+            journal?: string;
+            doi?: string;
+          }>)
+        : [],
+    [agent.pendingConfirm],
+  );
   const isImportBatchConfirm =
     agent.pendingConfirm?.tool === "import_reference" && confirmImportItems.length > 0;
   const importSelectedCount = isImportBatchConfirm ? (importSelection?.size ?? 0) : 0;

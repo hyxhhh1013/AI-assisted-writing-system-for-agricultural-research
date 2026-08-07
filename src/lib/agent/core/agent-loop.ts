@@ -42,6 +42,7 @@ import { readProjectAssetTool } from "@/lib/agent/tools/read-project-asset";
 import { readSectionTool } from "@/lib/agent/tools/read-section";
 import { updatePaperConfigTool } from "@/lib/agent/tools/update-paper-config";
 import { updateWorkMemoryTool } from "@/lib/agent/tools/update-work-memory";
+import { openBlueprintWorkspaceTool } from "@/lib/agent/tools/open-blueprint-workspace";
 import type { AgentContext, AgentLoopOptions, ToolDefinition } from "@/lib/agent/types";
 
 /** LangGraph ReAct 编排（W2-LANGGRAPH） */
@@ -82,6 +83,7 @@ export function createReadOnlyTools(): ToolDefinition[] {
     recallRecentWorkTool,
     updateWorkMemoryTool,
     readProjectAssetTool,
+    openBlueprintWorkspaceTool,
     readSectionTool,
     listReferencesTool,
     readReferenceTool,

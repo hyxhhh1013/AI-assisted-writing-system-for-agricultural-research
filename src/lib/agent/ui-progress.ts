@@ -5,6 +5,7 @@
 const TOOL_LABELS: Record<string, string> = {
   inspect_project: "查看项目状态",
   read_project_asset: "读取项目资产",
+  open_blueprint_workspace: "打开蓝图工作台",
   read_section: "读取章节",
   list_references: "列出参考文献",
   list_plot_sources: "查看可配图数据",
@@ -127,6 +128,8 @@ export function formatToolWorkingLine(
       return "正在检索外部文献…";
     case "import_reference":
       return "准备导入文献…";
+    case "open_blueprint_workspace":
+      return "正在打开蓝图工作台…";
     case "generate_outline":
       return "正在生成大纲…";
     case "generate_writing_blueprint":
