@@ -75,5 +75,7 @@ describe("formatToolObservationForLlm — write 工具 evidence", () => {
     expect(out.length).toBeGreaterThan(2800);
     expect(out.length).toBeLessThanOrEqual(7500 + 200);
     expect(out.endsWith("…")).toBe(true);
+    // 深切片回归守卫：旧代码 JSON 2800 截断时，3000 字符的正文切片不存在 → 断言失败
+    expect(out).toContain(draft.slice(0, 3000));
   });
 });

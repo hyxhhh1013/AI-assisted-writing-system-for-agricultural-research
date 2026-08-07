@@ -58,8 +58,10 @@ function formatEvidence(toolName: string, data: unknown): string {
     return truncate(`${meta}\n\n${body}`, MAX_SECTION_EVIDENCE_CHARS);
   }
 
+  // write_bilingual_abstract 暂不返回 draft（data 为 { zhChars, enChars, persisted }），未纳入；
+  // 若后续需看双语摘要文本，应先在工具 data 里加 text 字段。
   if (
-    (toolName === "write_section" || toolName === "refine_content" || toolName === "write_bilingual_abstract")
+    (toolName === "write_section" || toolName === "refine_content")
     && typeof data === "object"
     && data !== null
     && "draft" in data
@@ -77,7 +79,11 @@ function formatEvidence(toolName: string, data: unknown): string {
       row.charCount != null ? `字数≈${row.charCount}` : null,
       row.pipelineMode ? `mode=${row.pipelineMode}` : null,
       row.issueCount != null ? `issues=${row.issueCount}` : null,
-      row.persisted != null ? "persisted=true(已写回项目，可用 read_section 复核)" : "persisted=false",
+      row.persisted === false
+        ? "persisted=false"
+        : row.persisted != null
+          ? "persisted=true(已写回项目，可用 read_section 复核)"
+          : "persisted=false",
     ]
       .filter(Boolean)
       .join(" | ");
