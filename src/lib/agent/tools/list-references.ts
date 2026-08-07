@@ -1,6 +1,7 @@
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import { isSoftGroundable } from "@/lib/reference-evidence";
 import { findReferenceRowsLite } from "@/lib/reference-rows";
+import prisma from "@/lib/prisma";
 
 /**
  * 列出当前项目参考文献（Phase 1 文献策略 / 引用检查前自取上下文）。
@@ -36,6 +37,27 @@ export const listReferencesTool: ToolDefinition = {
 
     const refs = await findReferenceRowsLite(ctx.projectId, ctx.userId);
 
+    // 引用-分类映射（ReferenceSource：refIndex(1基) → sourceName/category），
+    // 让 Agent 在写作时能看到「分类编码」结果并据此引用/组织
+    const sourceMap = new Map<
+      number,
+      { sourceName: string; category: string }
+    >();
+    try {
+      const sources = await prisma.referenceSource.findMany({
+        where: { projectId: ctx.projectId },
+        select: { refIndex: true, sourceName: true, category: true },
+      });
+      for (const s of sources) {
+        sourceMap.set(s.refIndex, {
+          sourceName: s.sourceName || "",
+          category: s.category || "",
+        });
+      }
+    } catch {
+      /* 映射读取失败不阻断列表 */
+    }
+
     const query = String(params.query ?? "").trim().toLowerCase();
     const limit = Math.min(Math.max(Number(params.limit) || 40, 1), 80);
     const onlyWithAbstract =
@@ -47,12 +69,15 @@ export const listReferencesTool: ToolDefinition = {
     let rows = refs.map((r) => {
       const text = (r.content ?? "").replace(/\s+/g, " ").trim();
       const hasAbstract = isSoftGroundable(r.abstract);
+      const src = sourceMap.get(r.order + 1);
       return {
         index: r.order + 1,
         text,
         title: r.title,
         doi: r.doi,
         hasAbstract,
+        category: src?.category || undefined,
+        sourceName: src?.sourceName || undefined,
       };
     });
 
@@ -77,6 +102,8 @@ export const listReferencesTool: ToolDefinition = {
       title: r.title,
       doi: r.doi,
       hasAbstract: r.hasAbstract,
+      category: r.category,
+      sourceName: r.sourceName,
     }));
 
     return {
