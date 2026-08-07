@@ -28,6 +28,21 @@ echo "→ Prisma Generate（生成 Debian 引擎）"
 echo "→ Prisma DB Push"
 ./node_modules/.bin/prisma db push --skip-generate
 
+echo "→ Turbopack Prisma 客户端 hash 符号链接"
+# Turbopack 把 @prisma/client external 成 @prisma/client-<hash>，prisma generate 不生成该模块
+# → 符号链接指向生成的 .prisma/client，否则 standalone 启动报 "Cannot find module '@prisma/client-<hash>'"
+PRISMA_HASH="$(grep -hoE '@prisma/client-[a-f0-9]+' .next/server/chunks/*.js 2>/dev/null | sort -u | head -1 | cut -d/ -f2)"
+if [ -n "$PRISMA_HASH" ]; then
+  if [ ! -e "node_modules/@prisma/$PRISMA_HASH" ]; then
+    ln -sfn "../.prisma/client" "node_modules/@prisma/$PRISMA_HASH"
+    echo "→ 已创建 node_modules/@prisma/$PRISMA_HASH → .prisma/client"
+  else
+    echo "→ $PRISMA_HASH 已存在，跳过"
+  fi
+else
+  echo "→ 构建产物中未命中 @prisma/client-<hash>，跳过"
+fi
+
 echo "→ 部署前自检"
 chmod +x scripts/deploy/preflight.sh 2>/dev/null || true
 bash scripts/deploy/preflight.sh
