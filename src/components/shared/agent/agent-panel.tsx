@@ -95,6 +95,14 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: "已取消",
 };
 
+/** 外部文献来源徽标 */
+const IMPORT_SOURCE_LABELS: Record<string, string> = {
+  openalex: "OpenAlex",
+  "semantic-scholar": "S2",
+  crossref: "CrossRef",
+  pubmed: "PubMed",
+};
+
 const WRITE_PUBLIC = isAgentWritePublicEnabled();
 
 /** 观察-only 卡片的稳定空 params，避免每次渲染新建对象破坏 memo */
@@ -445,6 +453,9 @@ export function AgentPanel({
             year?: number;
             journal?: string;
             doi?: string;
+            citedByCount?: number;
+            source?: string;
+            isOpenAccess?: boolean;
           }>)
         : [],
     [agent.pendingConfirm],
@@ -1170,6 +1181,25 @@ export function AgentPanel({
                           <p className="text-[9px] text-[#6b7c72] truncate">
                             {[item.year, item.journal, item.doi].filter(Boolean).join(" · ")}
                           </p>
+                          {(item.citedByCount != null || item.source || item.isOpenAccess) && (
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                              {item.citedByCount != null && (
+                                <span className="rounded bg-muted px-1 py-px text-[8px] leading-none text-muted-foreground">
+                                  被引 {item.citedByCount}
+                                </span>
+                              )}
+                              {item.source && IMPORT_SOURCE_LABELS[item.source] && (
+                                <span className="rounded bg-[#6366f1]/10 px-1 py-px text-[8px] leading-none text-[#6366f1]">
+                                  {IMPORT_SOURCE_LABELS[item.source]}
+                                </span>
+                              )}
+                              {item.isOpenAccess && (
+                                <span className="rounded bg-emerald-600/10 px-1 py-px text-[8px] leading-none text-emerald-700">
+                                  OA
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </label>
                     );
