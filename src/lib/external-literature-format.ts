@@ -17,8 +17,12 @@ export function formatExternalLiteratureHit(hit: {
   pages?: string;
   doi?: string;
 }): string {
-  const firstAuthor = hit.authors[0]?.trim() || "佚名";
-  const author = firstAuthor + (hit.authors.length > 1 ? " 等" : "");
+  // GB/T 7714-2015：3 位以内全部列出；4 位及以上列前 3 位后加 ", 等"
+  const authors = hit.authors.map((a) => a.trim()).filter(Boolean);
+  const author =
+    authors.length === 0
+      ? "佚名"
+      : authors.slice(0, 3).join(", ") + (authors.length > 3 ? ", 等" : "");
   const title = hit.title.trim();
   const journal = hit.journal?.trim() ?? "";
   const year = hit.year;

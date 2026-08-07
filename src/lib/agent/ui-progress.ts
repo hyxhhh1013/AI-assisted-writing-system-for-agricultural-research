@@ -173,6 +173,13 @@ export function formatToolParamHint(
       return q ? (q.length > 28 ? `${q.slice(0, 28)}…` : q) : null;
     }
     case "import_reference": {
+      // 优先显示真实批量数：确认卡勾选（selectedIndices）> 候选列表（importItems）> 模型入参
+      if (Array.isArray(params.selectedIndices) && params.selectedIndices.length > 0) {
+        return `${params.selectedIndices.length} 篇`;
+      }
+      if (Array.isArray(params.importItems) && params.importItems.length > 0) {
+        return `${params.importItems.length} 篇`;
+      }
       const hits = params.hitsJson ?? params.hitJson;
       if (typeof hits === "string") {
         try {

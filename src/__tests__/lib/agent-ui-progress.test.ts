@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatToolParamHint,
   formatToolWorkingLine,
   humanizeToolNotice,
   isSoftToolNotice,
@@ -41,5 +42,44 @@ describe("agent ui-progress", () => {
         messages: [{ kind: "user", text: "写引言" }],
       }),
     ).toMatch(/思考/);
+  });
+
+  describe("formatToolParamHint(import_reference)", () => {
+    it("prefers selectedIndices count (实际批量) over model hitJson", () => {
+      expect(
+        formatToolParamHint("import_reference", {
+          selectedIndices: [0, 1, 2],
+          hitJson: JSON.stringify({ id: "doi:1", title: "A", authors: [], source: "openalex" }),
+        }),
+      ).toBe("3 篇");
+    });
+
+    it("falls back to importItems candidate count", () => {
+      expect(
+        formatToolParamHint("import_reference", {
+          importItems: [{ id: "doi:1" }, { id: "doi:2" }],
+        }),
+      ).toBe("2 篇");
+    });
+
+    it("shows 1 篇 for single hitJson", () => {
+      expect(
+        formatToolParamHint("import_reference", {
+          hitJson: JSON.stringify({ id: "doi:1", title: "A", authors: [], source: "openalex" }),
+        }),
+      ).toBe("1 篇");
+    });
+
+    it("shows N 篇 for hitsJson array", () => {
+      expect(
+        formatToolParamHint("import_reference", {
+          hitsJson: JSON.stringify([{ id: "doi:1" }, { id: "doi:2" }]),
+        }),
+      ).toBe("2 篇");
+    });
+
+    it("returns null when nothing to count", () => {
+      expect(formatToolParamHint("import_reference", {})).toBeNull();
+    });
   });
 });

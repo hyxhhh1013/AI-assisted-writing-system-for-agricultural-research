@@ -106,6 +106,24 @@ describe("resolveImportReferenceCandidates", () => {
     expect(items.map((h) => h.id)).toEqual(["doi:2", "doi:1"]);
   });
 
+  it("模型传单篇 hitJson 时，确认卡仍列出 store 全部候选（收集到的很多）", async () => {
+    // 复现生产：search_external 收集 5 篇 → 模型单篇 hitJson 调用 import_reference
+    storeLastAgentSearch(ctx.userId, [
+      hit("doi:1", "A"),
+      hit("doi:2", "B"),
+      hit("doi:3", "C"),
+      hit("doi:4", "D"),
+      hit("doi:5", "E"),
+    ]);
+    const items = await resolveImportReferenceCandidates(
+      { hitJson: JSON.stringify(hit("doi:9", "模型另传的一篇")) },
+      ctx,
+    );
+    expect(items.length).toBeGreaterThan(1);
+    expect(items.map((h) => h.id)).toContain("doi:9");
+    expect(items.map((h) => h.id)).toContain("doi:1");
+  });
+
   it("returns empty when no requested hits and no store", async () => {
     const items = await resolveImportReferenceCandidates({ hitJson: "not-json" }, ctx);
     expect(items).toEqual([]);
