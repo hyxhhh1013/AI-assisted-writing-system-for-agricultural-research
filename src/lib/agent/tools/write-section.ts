@@ -149,7 +149,7 @@ export const writeSectionTool: ToolDefinition = {
         onWritingEvent: (event) => {
           const progress = translateWritingEventToProgress(sectionRaw, event, progressState);
           if (progress) {
-            ctx.emitLiveEvent?.({ type: "agent/progress", label: progress.label });
+            ctx.emitLiveEvent?.({ type: "agent/progress", ...progress });
           }
         },
       });
