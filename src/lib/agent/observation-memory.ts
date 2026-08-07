@@ -58,6 +58,33 @@ function formatEvidence(toolName: string, data: unknown): string {
     return truncate(`${meta}\n\n${body}`, MAX_SECTION_EVIDENCE_CHARS);
   }
 
+  if (
+    (toolName === "write_section" || toolName === "refine_content" || toolName === "write_bilingual_abstract")
+    && typeof data === "object"
+    && data !== null
+    && "draft" in data
+  ) {
+    const row = data as {
+      section?: string;
+      draft?: string;
+      charCount?: number;
+      issueCount?: number;
+      pipelineMode?: string;
+      persisted?: unknown;
+    };
+    const meta = [
+      `target=${row.section ?? "?"}`,
+      row.charCount != null ? `字数≈${row.charCount}` : null,
+      row.pipelineMode ? `mode=${row.pipelineMode}` : null,
+      row.issueCount != null ? `issues=${row.issueCount}` : null,
+      row.persisted != null ? "persisted=true(已写回项目，可用 read_section 复核)" : "persisted=false",
+    ]
+      .filter(Boolean)
+      .join(" | ");
+    const body = String(row.draft ?? "");
+    return truncate(`${meta}\n\n${body}`, MAX_SECTION_EVIDENCE_CHARS);
+  }
+
   if (typeof data === "object" && data !== null && "items" in data && "markdown" in data) {
     const payload = data as {
       items?: unknown;
