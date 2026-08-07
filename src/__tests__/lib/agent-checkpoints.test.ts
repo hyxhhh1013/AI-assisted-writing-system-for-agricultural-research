@@ -6,6 +6,7 @@ import {
   shouldPauseForBlueprintApprove,
   decisionMessage,
 } from "@/lib/agent/core/checkpoints";
+import { applyEntryModeToGoal } from "@/lib/agent/entry-mode";
 
 describe("agent checkpoints", () => {
   it("detects academic-paper full goals", () => {
@@ -108,5 +109,19 @@ describe("agent checkpoints", () => {
   it("builds blueprint decision messages", () => {
     expect(decisionMessage("blueprint_approve", "approve")).toContain("已批准写作蓝图");
     expect(decisionMessage("blueprint_approve", "revise", "加图表")).toContain("加图表");
+  });
+
+  it("entryMode=full 前缀 goal 触发蓝图确认", () => {
+    const goal = applyEntryModeToGoal("看看蓝图", "full");
+    expect(isApFullStyleGoal(goal)).toBe(true);
+    expect(
+      shouldPauseForBlueprintApprove({
+        goal,
+        toolName: "generate_writing_blueprint",
+        toolSuccess: true,
+        persisted: true,
+        approvedKinds: [],
+      }),
+    ).toBe(true);
   });
 });

@@ -366,7 +366,24 @@ export function AgentPanel({
     [agent.status, agent.isRunning, agent.messages],
   );
   /** 写状态卡激活时用常驻卡，否则回退通用工作指示器（写进度职责已移交） */
-  const displayProgress = agent.writeStatus ? null : liveProgress;
+  const displayProgress = useMemo(() => {
+    if (agent.writeStatus) return null;
+    if (!liveProgress) return null;
+    // 思考/规划期间没有流式内容时，附上 plan 的下一步子任务，让「正在做什么」具体可读
+    if (
+      (agent.status === "thinking"
+        || agent.status === "planning"
+        || agent.status === "executing")
+      && agent.plan?.subtasks?.length
+    ) {
+      const focus =
+        agent.plan.subtasks.find((s) => s.id === agent.plan?.focusSubtaskId)
+        ?? agent.plan.subtasks.find((s) => s.status === "running")
+        ?? agent.plan.subtasks.find((s) => s.status === "pending");
+      if (focus?.title) return `${liveProgress} · ${focus.title}`;
+    }
+    return liveProgress;
+  }, [liveProgress, agent.writeStatus, agent.status, agent.plan]);
 
   /** 预计算每条消息的渲染标志，避免渲染循环内 O(n²) 扫描 */
   const msgFlags = useMemo(() => {
