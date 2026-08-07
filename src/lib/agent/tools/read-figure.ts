@@ -2,17 +2,27 @@ import fs from "node:fs";
 import path from "node:path";
 import type { ProjectChartAsset } from "@/contracts/figure";
 import { parseProjectCharts } from "@/contracts/figure";
-import { describeImageBuffer } from "@/lib/agent/attachments/describe-image";
+import { describeImage } from "@/lib/agent/attachments/describe-image";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import prisma from "@/lib/prisma";
 
 /** 生成图存放目录（与 chart-runner / mechanism-runner 一致） */
 const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
 
+/** 生成图文件名白名单：UUID + 允许的扩展名（对齐 project-charts.ts 的 SAFE 模式） */
+const SAFE_CHART_FILENAME_RE = /^[0-9a-f-]{8,}\.(png|svg|pdf)$/i;
+
 function imageUrlToFilePath(imageUrl: string): string | null {
   // /api/charts/<uuid>.png → data/charts/<uuid>.png
   const m = /^\/api\/charts\/([^/?#]+)$/.exec(imageUrl.trim());
-  return m ? path.join(CHARTS_DIR, m[1]) : null;
+  if (!m) return null;
+  const filename = m[1];
+  // 拒绝 ..\、..、空文件名等路径穿越：文件名必须是 UUID 形态 + 允许的扩展名
+  if (!SAFE_CHART_FILENAME_RE.test(filename)) return null;
+  const filePath = path.resolve(CHARTS_DIR, filename);
+  const base = path.resolve(CHARTS_DIR) + path.sep;
+  if (!filePath.startsWith(base)) return null; // 双保险：必须落在 CHARTS_DIR 内
+  return filePath;
 }
 
 /**
@@ -52,8 +62,11 @@ export const readFigureTool: ToolDefinition = {
       where: { id: ctx.projectId, userId: ctx.userId },
       select: { charts: true },
     });
+    if (!project) {
+      return { success: false, error: "项目不存在或无权访问" };
+    }
     // Project.charts 为 JSON 字符串；顺带兼容直接返回数组的场景
-    const chartsRaw = project?.charts;
+    const chartsRaw = project.charts;
     const charts = Array.isArray(chartsRaw)
       ? (chartsRaw as ProjectChartAsset[])
       : parseProjectCharts(chartsRaw);
@@ -85,8 +98,8 @@ export const readFigureTool: ToolDefinition = {
         error: `图文件不存在（${asset.imageUrl}）。若刚生成，稍后重试；或检查 data/charts 目录`,
       };
     }
-    const mime = asset.imageUrl.endsWith(".svg") ? "image/svg+xml" : "image/png";
-    const description = await describeImageBuffer(fs.readFileSync(filePath), mime);
+    // describeImage 内含 8MB 大小守卫 + mimeOf + try/catch
+    const description = await describeImage(filePath);
 
     if (description.status !== "ready" || !description.text) {
       return {
