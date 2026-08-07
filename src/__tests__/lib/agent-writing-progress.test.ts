@@ -22,6 +22,10 @@ describe("translateWritingEventToProgress（结构化）", () => {
     expect(translateWritingEventToProgress("results", { type: "status", status: "refining" }, createWriteProgressState())!.stage).toBe("refining");
   });
 
+  it("status checking_citations → verifying", () => {
+    expect(translateWritingEventToProgress("x", { type: "status", status: "checking_citations" }, createWriteProgressState())!.stage).toBe("verifying");
+  });
+
   it("info 事件累积进 info[]（修 C3）", () => {
     const state = createWriteProgressState();
     const r = translateWritingEventToProgress("x", { type: "info", info: "已扩大全库检索" }, state);
@@ -29,6 +33,12 @@ describe("translateWritingEventToProgress（结构化）", () => {
     // 去重
     translateWritingEventToProgress("x", { type: "info", info: "已扩大全库检索" }, state);
     expect(state.info).toHaveLength(1);
+  });
+
+  it("info 保持当前 stage", () => {
+    const state = createWriteProgressState();
+    translateWritingEventToProgress("x", { type: "status", status: "verifying" }, state);
+    expect(translateWritingEventToProgress("x", { type: "info", info: "使用 DeepSeek 独立验证" }, state)!.stage).toBe("verifying");
   });
 
   it("verification_progress → 已核查 n/N 条引用", () => {
@@ -79,6 +89,10 @@ describe("translateWritingEventToProgress（结构化）", () => {
 
   it("pipeline_step detail 透传", () => {
     expect(translateWritingEventToProgress("introduction", { type: "pipeline_step", step: "verifying", status: "running", detail: "加载引用原文 2/5…" }, createWriteProgressState())!.detail).toBe("加载引用原文 2/5…");
+  });
+
+  it("pipeline_step refining → stage refining", () => {
+    expect(translateWritingEventToProgress("x", { type: "pipeline_step", step: "refining", status: "done", detail: "已修正 3 处" }, createWriteProgressState())!.stage).toBe("refining");
   });
 
   it("references / review_report 不转发", () => {

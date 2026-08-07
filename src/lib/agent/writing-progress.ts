@@ -59,16 +59,15 @@ export function translateWritingEventToProgress(
 
   switch (event.type) {
     case "status": {
-      state.stage = mapStatusStage(event.status);
       switch (event.status) {
-        case "retrieving": return out("retrieving", "检索文献中…");
-        case "writing": return out("writing", "生成初稿…");
-        case "verifying": return out("verifying", "自动核查中…");
-        case "refining": return out("refining", "修正中…");
-        case "completed": return out("completed", "完成");
-        case "building_context": return out("writing", "整理上下文…");
-        case "checking_citations": return out("verifying", "检查引用…");
-        default: return null;
+        case "retrieving": state.stage = "retrieving"; return out("retrieving", "检索文献中…");
+        case "writing": state.stage = "writing"; return out("writing", "生成初稿…");
+        case "verifying": state.stage = "verifying"; return out("verifying", "自动核查中…");
+        case "refining": state.stage = "refining"; return out("refining", "修正中…");
+        case "completed": state.stage = "completed"; return out("completed", "完成");
+        case "building_context": state.stage = "writing"; return out("writing", "整理上下文…");
+        case "checking_citations": state.stage = "verifying"; return out("verifying", "检查引用…");
+        default: return null; // 非转发状态（generating_figures 等）不改 state.stage
       }
     }
     case "delta": {
@@ -118,15 +117,5 @@ export function translateWritingEventToProgress(
     }
     default:
       return null;
-  }
-}
-
-function mapStatusStage(status: string): WritingStage {
-  switch (status) {
-    case "retrieving": return "retrieving";
-    case "verifying": return "verifying";
-    case "refining": return "refining";
-    case "completed": return "completed";
-    default: return "writing";
   }
 }
