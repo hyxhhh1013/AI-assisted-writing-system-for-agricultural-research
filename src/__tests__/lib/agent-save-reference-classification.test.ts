@@ -2,12 +2,21 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { saveReferenceClassificationTool } from "@/lib/agent/tools/save-reference-classification";
 import type { AgentContext } from "@/lib/agent/types";
 
-const upsertMock = vi.fn(async (..._args: unknown[]) => ({}));
+const upsertMock = vi.fn(async () => ({})) as unknown as (
+  ...args: unknown[]
+) => Promise<unknown>;
+const findRefMock = vi.fn(async () => ({
+  title: "兜底标题",
+  content: "[1] 题录",
+})) as unknown as (...args: unknown[]) => Promise<unknown>;
 
 vi.mock("@/lib/prisma", () => ({
   default: {
     referenceSource: {
       upsert: (...args: unknown[]) => upsertMock(...args),
+    },
+    reference: {
+      findFirst: (...args: unknown[]) => findRefMock(...args),
     },
   },
 }));
@@ -71,13 +80,23 @@ describe("save_reference_classification", () => {
     expect(r.error).toMatch(/refIndex/);
   });
 
-  it("rejects missing sourceName", async () => {
+  it("sourceName 可省略：用对应引用题录兜底", async () => {
     const r = await saveReferenceClassificationTool.execute(
-      { classifications: [{ refIndex: 1, category: "x" }] },
+      { classifications: [{ refIndex: 1, category: "热解" }] },
       ctx,
     );
-    expect(r.success).toBe(false);
-    expect(r.error).toMatch(/sourceName/);
+    expect(r.success).toBe(true);
+    expect(findRefMock).toHaveBeenCalled();
+    // upsert 用兜底题录作为 sourceName
+    const calls = (
+      upsertMock as unknown as { mock: { calls: Array<Array<unknown>> } }
+    ).mock.calls;
+    const call = calls[0]?.[0] as {
+      update?: { sourceName?: string };
+      create?: { sourceName?: string };
+    };
+    const sourceName = call?.update?.sourceName ?? call?.create?.sourceName;
+    expect(sourceName).toBe("兜底标题");
   });
 
   it("requires projectId", async () => {

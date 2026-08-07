@@ -78,17 +78,28 @@ export function checkClassificationRetrieveGate(
   observations: readonly ToolObservation[],
 ): { ok: boolean; error?: string } {
   if (!isReferenceClassificationGoal(goal)) return { ok: true };
-  if (toolName !== "list_references") return { ok: true };
+  if (toolName === "save_reference_classification") return { ok: true };
   if (hasSuccessfulTool(observations, "save_reference_classification")) return { ok: true };
-  const listCount = countSuccessfulTool(observations, "list_references");
-  if (listCount >= 2) {
+  // 分类模式禁止逐个读文献：list_references 已返回题录/来源/已有分类，足够按编号分类
+  if (toolName === "read_reference") {
     return {
       ok: false,
       error:
-        "本轮是文献分类编码：已调用过 list_references，请直接调用 save_reference_classification"
-        + "一次性提交全部分类（refIndex 1 基 → sourceName/category），不要再反复关键词检索。"
-        + "分类参考大纲/蓝图主题（如 热解 / 烟草 / 生物油 / 合成气 / 碳材料），sourceName 填知识库源文件名。",
+        "本轮是文献分类编码：禁止逐个 read_reference 读文献。list_references 已返回全部题录与来源，"
+        + "直接调用 save_reference_classification 按编号一次性提交分类即可。",
     };
+  }
+  if (toolName === "list_references") {
+    const listCount = countSuccessfulTool(observations, "list_references");
+    if (listCount >= 1) {
+      return {
+        ok: false,
+        error:
+          "本轮是文献分类编码：已调用过 list_references，请直接调用 save_reference_classification"
+          + "一次性提交全部分类（refIndex 1 基 → category，sourceName 可省略），不要再反复检索。"
+          + "分类参考大纲/蓝图主题（如 热解 / 烟草 / 生物油 / 合成气 / 碳材料）。",
+      };
+    }
   }
   return { ok: true };
 }

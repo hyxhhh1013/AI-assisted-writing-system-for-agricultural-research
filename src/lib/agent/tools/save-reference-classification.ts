@@ -57,8 +57,8 @@ export const saveReferenceClassificationTool: ToolDefinition = {
         return { success: false, error: `classifications[${i}].refIndex 必须为正整数（1 起）` };
       }
       const sourceName = String((c as { sourceName?: unknown }).sourceName ?? "").trim();
-      if (!sourceName) {
-        return { success: false, error: `classifications[${i}].sourceName 不能为空` };
+      if (!sourceName && !(c as { category?: unknown }).category?.toString().trim()) {
+        return { success: false, error: `classifications[${i}] 至少提供 category 或 sourceName` };
       }
       cleaned.push({
         refIndex,
@@ -72,19 +72,29 @@ export const saveReferenceClassificationTool: ToolDefinition = {
 
     try {
       for (const m of cleaned) {
+        // sourceName 可省略：用对应引用的题录/标题兜底
+        let sourceName = m.sourceName;
+        if (!sourceName) {
+          const ref = await prisma.reference.findFirst({
+            where: { projectId: ctx.projectId, order: m.refIndex - 1 },
+            select: { title: true, content: true },
+          });
+          sourceName = (ref?.title?.trim() || ref?.content?.trim() || `[${m.refIndex}]`)
+            .slice(0, 200);
+        }
         await prisma.referenceSource.upsert({
           where: {
             projectId_refIndex: { projectId: ctx.projectId, refIndex: m.refIndex },
           },
           update: {
-            sourceName: m.sourceName,
+            sourceName,
             category: m.category,
             citation: m.citation || undefined,
           },
           create: {
             projectId: ctx.projectId,
             refIndex: m.refIndex,
-            sourceName: m.sourceName,
+            sourceName,
             category: m.category,
             citation: m.citation || "",
           },

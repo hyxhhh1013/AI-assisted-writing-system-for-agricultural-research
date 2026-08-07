@@ -380,24 +380,22 @@ describe("文献分类编码意图", () => {
 
 describe("checkClassificationRetrieveGate（分类编码防反复检索）", () => {
   const cls = "先做文献分类编码";
-  it("list_references ≥2 次且未保存 → 拦下", () => {
+  it("list_references ≥1 次且未保存 → 拦下", () => {
     const g = checkClassificationRetrieveGate(cls, "list_references", [
-      ok("list_references"),
       ok("list_references"),
     ]);
     expect(g.ok).toBe(false);
     expect(g.error).toMatch(/save_reference_classification/);
   });
 
-  it("第 1 次 list_references 放行", () => {
-    expect(
-      checkClassificationRetrieveGate(cls, "list_references", [ok("list_references")]).ok,
-    ).toBe(true);
+  it("read_reference 在分类模式被拦（禁止逐个读文献）", () => {
+    const g = checkClassificationRetrieveGate(cls, "read_reference", []);
+    expect(g.ok).toBe(false);
+    expect(g.error).toMatch(/禁止逐个/);
   });
 
-  it("已保存分类后不再拦 list_references", () => {
+  it("已保存分类后放行 list_references", () => {
     const g = checkClassificationRetrieveGate(cls, "list_references", [
-      ok("list_references"),
       ok("list_references"),
       ok("save_reference_classification"),
     ]);
