@@ -139,9 +139,11 @@ export const writeBilingualAbstractTool: ToolDefinition = {
     return {
       success: true,
       data: {
+        section: "abstract",
         zhChars: bilingual.zh.replace(/\s+/g, "").length,
         enChars: bilingual.en.replace(/\s+/g, "").length,
         persisted: persist,
+        draft: `中文摘要：\n${bilingual.zh}\n\n英文摘要：\n${bilingual.en}`,
       },
       summary: persist
         ? `已生成并写回双语摘要（中文约 ${bilingual.zh.replace(/\s+/g, "").length} 字）`

@@ -64,6 +64,23 @@ describe("formatToolObservationForLlm — write 工具 evidence", () => {
     expect(out).toContain("persisted=false");
   });
 
+  it("write_bilingual_abstract 结果含双语摘要正文", () => {
+    const out = formatToolObservationForLlm("write_bilingual_abstract", {
+      success: true,
+      summary: "已生成并写回双语摘要（中文约 5 字）",
+      data: {
+        section: "abstract",
+        zhChars: 5,
+        enChars: 6,
+        persisted: true,
+        draft: "中文摘要：\n摘要正文\n\n英文摘要：\nAbstract text",
+      },
+    });
+    expect(out).toContain("target=abstract");
+    expect(out).toContain("摘要正文");
+    expect(out).toContain("Abstract text");
+  });
+
   it("长正文截断到 7500 而非 2800", () => {
     const draft = "长".repeat(9000); // 9000 字
     const out = formatToolObservationForLlm("write_section", {

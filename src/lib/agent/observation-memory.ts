@@ -58,10 +58,8 @@ function formatEvidence(toolName: string, data: unknown): string {
     return truncate(`${meta}\n\n${body}`, MAX_SECTION_EVIDENCE_CHARS);
   }
 
-  // write_bilingual_abstract 暂不返回 draft（data 为 { zhChars, enChars, persisted }），未纳入；
-  // 若后续需看双语摘要文本，应先在工具 data 里加 text 字段。
   if (
-    (toolName === "write_section" || toolName === "refine_content")
+    (toolName === "write_section" || toolName === "refine_content" || toolName === "write_bilingual_abstract")
     && typeof data === "object"
     && data !== null
     && "draft" in data
