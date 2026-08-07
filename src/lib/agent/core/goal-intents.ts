@@ -63,6 +63,11 @@ export function isLiteratureHuntGoal(goal: string): boolean {
   );
 }
 
+/** 明确要求对引用文献做分类编码 / 打标签 */
+export function isReferenceClassificationGoal(goal: string): boolean {
+  return /分类编码|文献分类|给文献分类|文献.*分类|分类.*文献|打标签|文献打标|给文献分|分\S*类/.test(goal);
+}
+
 /** 综述 / literature review（文献体量要求更高） */
 export function isReviewWritingGoal(goal: string): boolean {
   return /综述|literature\s*review|literature_body|系统综述|文献综述/i.test(goal);
@@ -334,6 +339,17 @@ export function literatureHuntNudge(goal = ""): string {
     + `默认目标约 ${n} 篇。效率优先：单次 limit=20～25，用 1～2 个宽泛英文 query 即可，不要碎成很多次小搜；`
     + "立刻 import_reference(hitIndices=data.suggestedHitIndices, query, why≥8字) 分批导入（单次最多约 15 篇，hitIndices 最省 token 不截断；也可 hitsJson），不够再换一个同义 query 补一轮。"
     + "禁止只导几篇就停。命中离题则说明；禁止改题；禁止编造 hitJson。"
+  );
+}
+
+/** 文献分类编码任务开场提示 */
+export function referenceClassificationNudge(): string {
+  return (
+    "【系统】本轮是文献分类编码：先 list_references 一次拿到全量文献（含编号与来源），"
+    + "再一次性调用 save_reference_classification 提交全部分类（refIndex 1 基 → sourceName/category）。"
+    + "禁止用多次 list_references 关键词检索来『分类』（既不落库又低效）；"
+    + "分类可参考蓝图/大纲的主题（如 热解 / 烟草 / 生物油 / 合成气 / 碳材料 等），sourceName 填知识库源文件名，外部导入无 PDF 用标题或 DOI 标识。"
+    + "完成后用中文汇报各类别覆盖的文献编号。"
   );
 }
 
@@ -657,6 +673,9 @@ export function mergeFollowUpGoalHint(
   if (isCitationCheckGoal(goal)) {
     return citationCheckNudge();
   }
+  if (isReferenceClassificationGoal(goal)) {
+    return referenceClassificationNudge();
+  }
   return null;
 }
 
@@ -670,6 +689,9 @@ export function mergeGoalWithIntentHint(goal: string): string {
   }
   if (isCitationCheckGoal(goal)) {
     return `${goal}\n\n${citationCheckNudge()}`;
+  }
+  if (isReferenceClassificationGoal(goal)) {
+    return `${goal}\n\n${referenceClassificationNudge()}`;
   }
   if (isLiteratureHuntGoal(goal)) {
     return `${goal}\n\n${literatureHuntNudge(goal)}`;

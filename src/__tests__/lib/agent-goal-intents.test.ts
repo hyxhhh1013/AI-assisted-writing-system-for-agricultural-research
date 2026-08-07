@@ -16,6 +16,8 @@ import {
   isDiagnoseStyleGoal,
   isReviewWritingGoal,
   isSectionDraftGoal,
+  isReferenceClassificationGoal,
+  referenceClassificationNudge,
   parseLiteratureImportTarget,
   pickIntentNudge,
   pickIntentStopAsk,
@@ -356,5 +358,21 @@ describe("intent continuation pickers", () => {
     expect(
       pickIntentNudge(ctx({ goal, observations: [ok("run_review_rounds")] })),
     ).toBeNull();
+  });
+});
+
+describe("文献分类编码意图", () => {
+  it("识别分类编码类目标", () => {
+    expect(isReferenceClassificationGoal("先做文献分类编码")).toBe(true);
+    expect(isReferenceClassificationGoal("给这些文献分个类")).toBe(true);
+    expect(isReferenceClassificationGoal("写引言")).toBe(false);
+    expect(isReferenceClassificationGoal("帮我检索文献")).toBe(false);
+  });
+
+  it("nudge 引导一次 list_references + save_reference_classification，禁止多次检索", () => {
+    const nudge = referenceClassificationNudge();
+    expect(nudge).toContain("list_references");
+    expect(nudge).toContain("save_reference_classification");
+    expect(nudge).toContain("禁止用多次");
   });
 });
