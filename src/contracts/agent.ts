@@ -16,7 +16,8 @@ export type WritingStage =
   | "verifying"
   | "refining"
   | "completed"
-  | "error";
+  | "error"
+  | "importing";
 
 export interface AgentSubTask {
   id: string;
@@ -60,7 +61,7 @@ export interface AgentConfirmRequest {
 }
 
 /** academic-paper 铁律检查点（S2）+ 通用澄清（ask_user） */
-export type AgentCheckpointKind = "config_confirm" | "outline_approve" | "clarify";
+export type AgentCheckpointKind = "config_confirm" | "outline_approve" | "blueprint_approve" | "clarify";
 
 export interface AgentCheckpointRequest {
   id: string;
@@ -93,6 +94,9 @@ export type AgentSSEEvent =
       elapsedMs?: number;
       info?: string[];
       warnings?: string[];
+      /** 导入等批量进度：已处理 / 总数 */
+      done?: number;
+      total?: number;
     }
   | { type: "agent/action"; tool: string; params: Record<string, unknown> }
   | {

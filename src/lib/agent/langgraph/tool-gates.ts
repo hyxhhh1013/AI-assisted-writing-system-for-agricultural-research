@@ -23,8 +23,10 @@ import {
   checkReviewRequestGate,
 } from "@/lib/agent/core/goal-intents";
 import {
+  buildBlueprintCheckpoint,
   buildClarifyCheckpoint,
   buildOutlineCheckpoint,
+  shouldPauseForBlueprintApprove,
   shouldPauseForOutlineApprove,
 } from "@/lib/agent/core/checkpoints";
 import type { AgentGraphStateType } from "./state";
@@ -204,11 +206,38 @@ export const outlineApproveGate: PostToolGate = ({ tool, result, state }) => {
   return { ok: false, kind: "checkpoint", checkpoint: buildOutlineCheckpoint(preview), updateFocus: true };
 };
 
+/** 蓝图批准检查点：生成写作/论证蓝图且未批准过 → 暂停等用户 */
+export const blueprintApproveGate: PostToolGate = ({ tool, result, state }) => {
+  if (
+    !shouldPauseForBlueprintApprove({
+      goal: state.goal,
+      toolName: tool.name,
+      toolSuccess: result.success,
+      persisted: Boolean(
+        result.data
+        && typeof result.data === "object"
+        && (result.data as { persisted?: unknown }).persisted !== false,
+      ),
+      approvedKinds: state.approvedCheckpointKinds ?? [],
+    })
+  ) {
+    return { ok: true };
+  }
+  const preview =
+    typeof result.data === "object"
+    && result.data
+    && "preview" in result.data
+      ? String((result.data as { preview?: unknown }).preview ?? "")
+      : result.summary ?? "";
+  return { ok: false, kind: "checkpoint", checkpoint: buildBlueprintCheckpoint(preview), updateFocus: true };
+};
+
 /** 后置门禁链（工具执行后，按序短路） */
 export const POST_GATES: PostToolGate[] = [
   antispamProgressGate,
   clarifyCheckpointGate,
   outlineApproveGate,
+  blueprintApproveGate,
 ];
 
 export function evaluatePostGates(input: PostGateInput): PostToolVerdict {

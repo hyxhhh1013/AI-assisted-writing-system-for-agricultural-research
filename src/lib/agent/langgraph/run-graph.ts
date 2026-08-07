@@ -194,7 +194,9 @@ export async function* runAgentGraphLoop(
         pendingCheckpointKind
         ?? (checkpointDecision.checkpointId.includes("config")
           ? "config_confirm"
-          : "outline_approve");
+          : checkpointDecision.checkpointId.includes("blueprint")
+            ? "blueprint_approve"
+            : "outline_approve");
       uiTranscript = [
         ...uiTranscript,
         {

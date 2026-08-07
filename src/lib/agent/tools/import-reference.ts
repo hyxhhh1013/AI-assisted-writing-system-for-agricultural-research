@@ -32,6 +32,20 @@ function parseSelectedIndices(raw: unknown): number[] {
   return [...new Set(out)];
 }
 
+/** 批量导入进度 → agent/progress 实时事件（前端渲染动画进度卡） */
+function importProgressEmitter(ctx: AgentContext) {
+  return (done: number, total: number, title: string) => {
+    ctx.emitLiveEvent?.({
+      type: "agent/progress",
+      label: `正在导入文献 ${done}/${total}`,
+      stage: "importing",
+      detail: title,
+      done,
+      total,
+    });
+  };
+}
+
 /**
  * Agent 手写 hitsJson 常缺 id / 写错 source。
  * - id：优先 doi:xxx
@@ -256,6 +270,7 @@ export const importReferenceTool: ToolDefinition = {
           ctx.projectId,
           picked,
           { directionSlug: ctx.directionSlug },
+          importProgressEmitter(ctx),
         );
         const kbParts: string[] = [];
         if (result.knowledgeWithPdf && result.knowledgeWithPdf > 0) {
@@ -482,6 +497,7 @@ export const importReferenceTool: ToolDefinition = {
         ctx.projectId,
         accepted.map((x) => x.hit),
         { directionSlug: ctx.directionSlug },
+        importProgressEmitter(ctx),
       );
       const kbParts: string[] = [];
       if (result.knowledgeWithPdf && result.knowledgeWithPdf > 0) {

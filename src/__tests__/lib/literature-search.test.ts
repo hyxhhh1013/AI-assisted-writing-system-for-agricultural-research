@@ -30,7 +30,7 @@ describe("formatExternalLiteratureHit", () => {
       pages: "1-10",
       doi: "10.1016/example",
     });
-    expect(line).toContain("Zhang L 等.");
+    expect(line).toContain("Zhang L, Wang M.");
     expect(line).toContain("[J].");
     expect(line).toContain("DOI: 10.1016/example");
   });

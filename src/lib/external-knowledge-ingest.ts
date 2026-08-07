@@ -460,6 +460,7 @@ export async function ingestExternalHitToKnowledge(
 export async function ingestExternalHitsToKnowledge(
   hits: ExternalLiteratureHit[],
   opts: Omit<ExternalKnowledgeIngestOptions, "hit">,
+  onProgress?: (done: number, total: number, title: string) => void,
 ): Promise<{
   results: ExternalKnowledgeIngestResult[];
   created: number;
@@ -475,9 +476,11 @@ export async function ingestExternalHitsToKnowledge(
   let needReload = false;
   const reindexFiles: string[] = [];
 
-  for (const hit of hits) {
+  for (let i = 0; i < hits.length; i++) {
+    const hit = hits[i]!;
     const { indexMutated, reindexFile, ...r } = await ingestOne(hit, opts);
     results.push(r);
+    onProgress?.(i + 1, hits.length, hit.title?.trim().slice(0, 80) || "未命名文献");
     if (r.created) created += 1;
     if (r.updated) updated += 1;
     if (r.mode === "abstract") withAbstract += 1;

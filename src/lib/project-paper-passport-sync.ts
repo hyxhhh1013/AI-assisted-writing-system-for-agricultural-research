@@ -210,7 +210,9 @@ export async function ensureProjectPaperPassport(
     }
 
     return recomputeAndPersistPassport(projectId, project, passport);
-  } catch {
+  } catch (error) {
+    // 不吞错：暴露真实原因，避免上层误报「项目无 PaperPassport」
+    console.error("[passport-sync] ensureProjectPaperPassport failed:", error);
     return null;
   }
 }

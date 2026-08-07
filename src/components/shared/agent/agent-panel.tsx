@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, ChevronDown, ChevronLeft, RotateCcw } from "lucide-react";
+import { Bot, ChevronDown, ChevronLeft, Loader2, RotateCcw } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -400,6 +400,10 @@ export function AgentPanel({
   const isImportBatchConfirm =
     agent.pendingConfirm?.tool === "import_reference" && confirmImportItems.length > 0;
   const importSelectedCount = isImportBatchConfirm ? (importSelection?.size ?? 0) : 0;
+  const importProgressPct =
+    agent.importProgress && agent.importProgress.total > 0
+      ? Math.min(100, Math.round((agent.importProgress.done / agent.importProgress.total) * 100))
+      : null;
 
   const toggleImportItem = useCallback((idx: number, checked: boolean) => {
     setImportSelection((prev) => {
@@ -815,6 +819,52 @@ export function AgentPanel({
 
       {/* 人在环：贴在输入上方，滑入而非硬切 */}
       <AnimatePresence initial={false}>
+        {/* 批量导入进度（确认后不再干等，实时动画反馈） */}
+        {agent.importProgress && !agent.writeStatus ? (
+          <motion.div
+            key="import-progress"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            transition={{ duration: 0.32, ease: easeOut }}
+            className="shrink-0 border-t border-[#1a5632]/15 bg-[#f0f4f1] px-3 py-2.5"
+          >
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[#1a5632]" />
+              <span className="min-w-0 truncate text-xs font-medium text-[#122820]">
+                {agent.importProgress.label}
+              </span>
+              {importProgressPct != null ? (
+                <span className="shrink-0 text-[10px] tabular-nums text-[#3d4f46]/70">
+                  {importProgressPct}%
+                </span>
+              ) : null}
+            </div>
+            {importProgressPct != null ? (
+              <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[#1a5632]/10">
+                <motion.div
+                  className="h-full rounded-full bg-gradient-to-r from-[#1a5632] to-[#3d9a5f]"
+                  animate={{ width: `${importProgressPct}%` }}
+                  transition={{ duration: 0.4, ease: "easeOut" }}
+                />
+              </div>
+            ) : (
+              <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[#1a5632]/10">
+                <motion.div
+                  className="h-full w-1/3 rounded-full bg-gradient-to-r from-transparent via-[#1a5632]/40 to-transparent"
+                  animate={{ x: ["-100%", "300%"] }}
+                  transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
+                />
+              </div>
+            )}
+            {agent.importProgress.title ? (
+              <p className="mt-1 animate-pulse truncate text-[10px] text-[#3d4f46]/80">
+                {agent.importProgress.title}
+              </p>
+            ) : null}
+          </motion.div>
+        ) : null}
+
         {agent.pendingCheckpoint && !agent.isRunning ? (
           <motion.div
             key="checkpoint"

@@ -140,6 +140,8 @@ export async function importExternalReferencesToProject(
   projectId: string,
   hits: ExternalLiteratureHit[],
   bridge?: ImportKnowledgeBridgeOptions,
+  /** 进度回调（done/total/title），供 agent/progress 实时反馈 */
+  onProgress?: (done: number, total: number, title: string) => void,
 ): Promise<ImportAgentReferencesBatchResult> {
   const owned = await prisma.project.findFirst({
     where: { id: projectId, userId },
@@ -176,6 +178,7 @@ export async function importExternalReferencesToProject(
     const citation = citations[i]!;
     const meta = hitToReferenceMeta(hit);
     await createReferenceWithEvidence(projectId, citation, meta);
+    onProgress?.(i + 1, acceptedHits.length, hit.title?.trim().slice(0, 80) || "未命名文献");
   }
 
   if (acceptedHits.length > 0) {
@@ -200,10 +203,14 @@ export async function importExternalReferencesToProject(
         projectId,
         bridge?.researchDirection,
       );
-      const k = await ingestExternalHitsToKnowledge(acceptedHits, {
-        directionSlug: bridge?.directionSlug,
-        researchDirection,
-      });
+      const k = await ingestExternalHitsToKnowledge(
+        acceptedHits,
+        {
+          directionSlug: bridge?.directionSlug,
+          researchDirection,
+        },
+        onProgress,
+      );
       knowledgeCreated = k.created;
       knowledgeWithAbstract = k.withAbstract;
       knowledgeWithPdf = k.withPdf;

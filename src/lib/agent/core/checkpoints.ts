@@ -41,6 +41,38 @@ export function buildOutlineCheckpoint(preview: string): AgentCheckpointRequest 
   };
 }
 
+/** 生成写作蓝图 / 论证蓝图后 → 用户确认（仅在从零/整篇类目标，批准后同轮不再重复） */
+export function shouldPauseForBlueprintApprove(input: {
+  goal: string;
+  toolName: string;
+  toolSuccess: boolean;
+  persisted?: boolean;
+  approvedKinds: readonly AgentCheckpointKind[];
+}): boolean {
+  if (!input.toolSuccess) return false;
+  if (
+    input.toolName !== "generate_writing_blueprint"
+    && input.toolName !== "build_argument_blueprint"
+  ) {
+    return false;
+  }
+  if (input.persisted === false) return false;
+  if (input.approvedKinds.includes("blueprint_approve")) return false;
+  return isApFullStyleGoal(input.goal);
+}
+
+export function buildBlueprintCheckpoint(preview: string): AgentCheckpointRequest {
+  const trimmed = preview.trim();
+  return {
+    id: `cp_blueprint_${Date.now()}`,
+    kind: "blueprint_approve",
+    title: "一起确认写作蓝图",
+    message:
+      "写作/论证蓝图已生成（分节要点、引用与图表计划）。过目后点「批准」，我就按蓝图往下推进；要改就点「需修改」并告诉我怎么调整。",
+    preview: trimmed.slice(0, 2000) + (trimmed.length > 2000 ? "…" : ""),
+  };
+}
+
 export function buildConfigCheckpoint(): AgentCheckpointRequest {
   return {
     id: `cp_config_${Date.now()}`,
@@ -76,6 +108,12 @@ export function decisionMessage(
       return "【检查点】用户已批准大纲。请用中文简短确认，并询问下一步：生成写作蓝图 / 论证蓝图 / 写某一节？不要擅自写完整篇。";
     }
     return `【检查点】用户要求修改大纲。${note?.trim() ? `意见：${note.trim()}。` : ""}请先沟通或重新 generate_outline，改完后再请用户确认。`;
+  }
+  if (kind === "blueprint_approve") {
+    if (decision === "approve") {
+      return "【检查点】用户已批准写作蓝图。请严格按蓝图继续推进（生成论证蓝图 / 写某一节），不要擅自偏离蓝图结构。";
+    }
+    return `【检查点】用户要求修改写作蓝图。${note?.trim() ? `意见：${note.trim()}。` : ""}请先沟通或重新生成蓝图，改完再请用户确认。`;
   }
   if (decision === "approve") {
     return note?.trim()

@@ -55,6 +55,13 @@ export function useAgent(options: UseAgentOptions = {}) {
   const [streamingText, setStreamingText] = useState("");
   /** 常驻写状态卡：write_section 执行期间的阶段/字数/耗时/提示 */
   const [writeStatus, setWriteStatus] = useState<WriteStatus | null>(null);
+  /** import_reference 批量导入进度（agent/progress stage=importing） */
+  const [importProgress, setImportProgress] = useState<{
+    done: number;
+    total: number;
+    title: string;
+    label: string;
+  } | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   const onPersistedRef = useRef(options.onSectionPersisted);
@@ -125,6 +132,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     abortRef.current = null;
     setStatus("idle");
     setWriteStatus(null);
+    setImportProgress(null);
     setPlan(null);
     setSummary(null);
     setPendingConfirm(null);
@@ -147,6 +155,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     setMessages([]);
     setStreamingText("");
     setWriteStatus(null);
+    setImportProgress(null);
     setPlan(null);
     setSummary(null);
     setPendingConfirm(null);
@@ -166,6 +175,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     setPendingCheckpoint(null);
     setLastPersisted(null);
     setWriteStatus(null);
+    setImportProgress(null);
     setSessionId(null);
     setHistoryLoaded(true);
     setMessages((prev) => {
@@ -182,6 +192,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     abortRef.current = null;
     setStreamingText("");
     setWriteStatus(null);
+    setImportProgress(null);
     setStatus("cancelled");
     void refreshInterrupted();
   }, [refreshInterrupted]);
@@ -231,6 +242,15 @@ export function useAgent(options: UseAgentOptions = {}) {
         ]);
         break;
       case "agent/progress":
+        if (event.stage === "importing") {
+          setImportProgress({
+            done: event.done ?? 0,
+            total: event.total ?? 0,
+            title: event.detail ?? "",
+            label: event.label,
+          });
+          break;
+        }
         setWriteStatus((prev) => (prev ? mergeProgressIntoWriteStatus(prev, event) : prev));
         break;
       case "agent/observation": {
@@ -252,6 +272,7 @@ export function useAgent(options: UseAgentOptions = {}) {
             ...(data != null && event.tool === "validate_citations" ? { data } : {}),
           },
         ]);
+        if (event.tool === "import_reference") setImportProgress(null);
         if (event.tool === "write_section") {
           setWriteStatus((prev) => {
             if (!prev) return prev;
@@ -304,6 +325,8 @@ export function useAgent(options: UseAgentOptions = {}) {
       case "agent/complete":
         setStreamingText("");
         setWriteStatus(null);
+    setImportProgress(null);
+        setImportProgress(null);
         setSummary(event.summary);
         setMessages((prev) => [...prev, { kind: "summary", summary: event.summary }]);
         setPendingCheckpoint(null);
@@ -313,6 +336,8 @@ export function useAgent(options: UseAgentOptions = {}) {
       case "agent/error":
         setStreamingText("");
         setWriteStatus(null);
+    setImportProgress(null);
+        setImportProgress(null);
         toast.error(event.error);
         setStatus("error");
         void refreshInterrupted();
@@ -340,6 +365,7 @@ export function useAgent(options: UseAgentOptions = {}) {
       setPendingConfirm(null);
       setPendingCheckpoint(null);
       setWriteStatus(null);
+      setImportProgress(null);
       setStatus("planning");
 
       try {
@@ -365,6 +391,7 @@ export function useAgent(options: UseAgentOptions = {}) {
         }
         toast.error(getErrorMessage(error));
         setWriteStatus(null);
+        setImportProgress(null);
         setStatus("error");
       } finally {
         if (abortRef.current === controller) {
@@ -482,6 +509,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     messages,
     streamingText,
     writeStatus,
+    importProgress,
     plan,
     summary,
     pendingConfirm,

@@ -167,6 +167,7 @@ describe("importReferenceTool selectedIndices batch path", () => {
       ctx.projectId,
       [hit("doi:1", "A"), hit("doi:2", "B")],
       expect.anything(),
+      expect.anything(),
     );
     expect(result.data).toMatchObject({ batch: true, imported: 2 });
   });
@@ -186,6 +187,7 @@ describe("importReferenceTool selectedIndices batch path", () => {
       ctx.userId,
       ctx.projectId,
       [hit("doi:2", "B")],
+      expect.anything(),
       expect.anything(),
     );
   });
@@ -219,6 +221,44 @@ describe("importReferenceTool selectedIndices batch path", () => {
       ctx.projectId,
       [hit("doi:1", "A")],
       expect.anything(),
+      expect.anything(),
     );
+  });
+
+  it("emits agent/progress per paper while batch importing", async () => {
+    const { importExternalReferencesToProject } = await import("@/lib/agent/import-reference");
+    vi.mocked(importExternalReferencesToProject).mockImplementationOnce(
+      async (_u, _p, _h, _b, onProgress) => {
+        onProgress?.(1, 2, "第一篇");
+        onProgress?.(2, 2, "第二篇");
+        return {
+          imported: 2,
+          skippedDuplicate: 0,
+          citations: ["a", "b"],
+          referenceCount: 2,
+          withAbstract: 0,
+        };
+      },
+    );
+    const emitted: unknown[] = [];
+    const ctxWithEmit = {
+      ...ctx,
+      emitLiveEvent: (e: unknown) => emitted.push(e),
+    };
+    const result = await importReferenceTool.execute(
+      {
+        importItems: [hit("doi:1", "A"), hit("doi:2", "B")],
+        selectedIndices: [0, 1],
+        userConfirmed: true,
+      },
+      ctxWithEmit as AgentContext,
+    );
+    expect(result.success).toBe(true);
+    const progress = emitted.filter(
+      (e) => (e as { type?: string }).type === "agent/progress",
+    );
+    expect(progress.length).toBe(2);
+    expect(progress[0]).toMatchObject({ stage: "importing", done: 1, total: 2 });
+    expect(progress[1]).toMatchObject({ stage: "importing", done: 2, total: 2, detail: "第二篇" });
   });
 });
