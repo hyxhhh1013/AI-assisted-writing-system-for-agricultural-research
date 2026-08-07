@@ -50,7 +50,7 @@ import {
   sumImportedCount,
   type IntentClosureContext,
 } from "@/lib/agent/core/goal-intents";
-import { enrichImportReferenceParams } from "@/lib/agent/literature-relevance";
+import { buildImportReferenceConfirmParams } from "@/lib/agent/import-confirm";
 import { analyzeReflection, MAX_REFLECT_ROUNDS } from "@/lib/agent/core/reflect";
 import { compactAgentMessages } from "@/lib/agent/core/context-compact";
 import { MAX_INTENT_CONTINUES } from "@/lib/agent/langgraph/state";
@@ -570,7 +570,7 @@ export async function toolsNode(
       if (!granted) {
         const confirmParams =
           tool.name === "import_reference"
-            ? enrichImportReferenceParams(params)
+            ? await buildImportReferenceConfirmParams(params, agentContext)
             : params;
         const { message, preview } = buildToolConfirmMessage(tool.name, confirmParams);
         const confirmReq = {

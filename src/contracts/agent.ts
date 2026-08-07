@@ -138,6 +138,8 @@ export interface AgentRequest {
     tool: string;
     params: Record<string, unknown>;
     approved: boolean;
+    /** import_reference 确认卡勾选的候选项索引（0 起，指向 params.importItems） */
+    selectedIndices?: number[];
   };
   /** 本消息携带的附件 id（上传后从 /api/agent/attachments 获得） */
   attachmentIds?: string[];

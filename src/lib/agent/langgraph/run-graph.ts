@@ -267,11 +267,20 @@ export async function* runAgentGraphLoop(
     const trustedParams = {
       ...pendingConfirm.params,
       userConfirmed: true,
+      // import_reference 确认卡勾选（前端回传；无勾选时不注入）
+      ...(Array.isArray(confirmDecision.selectedIndices)
+        && confirmDecision.selectedIndices.length > 0
+        ? { selectedIndices: confirmDecision.selectedIndices }
+        : {}),
     };
+    // importItems 可能含大段摘要：只供 execute 用，不塞进 action 事件 / uiTranscript，避免快照膨胀
+    const displayParams: Record<string, unknown> = Object.fromEntries(
+      Object.entries(trustedParams).filter(([k]) => k !== "importItems"),
+    );
     const actionEvent: AgentSSEEvent = {
       type: "agent/action",
       tool: tool.name,
-      params: trustedParams,
+      params: displayParams,
     };
     yield actionEvent;
     uiTranscript = appendUiFromAgentEvent(uiTranscript, actionEvent);

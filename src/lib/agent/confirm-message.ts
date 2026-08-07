@@ -11,6 +11,28 @@ export function buildToolConfirmMessage(
 ): { message: string; preview?: string } {
   if (toolName === "import_reference") {
     params = enrichImportReferenceParams(params);
+    // 确认卡已注入候选列表（importItems）：按候选数提示批量
+    if (Array.isArray(params.importItems) && params.importItems.length > 0) {
+      const items = params.importItems as Array<{
+        title?: string;
+        year?: number;
+        doi?: string;
+        journal?: string;
+      }>;
+      const n = items.length;
+      const titles = items
+        .slice(0, 3)
+        .map((x) => String(x.title ?? "").slice(0, 40))
+        .filter(Boolean);
+      const why = String(params.why ?? "").trim();
+      return {
+        message:
+          `确认批量导入 ${n} 篇文献到项目参考文献？`
+          + (titles.length ? `\n含：${titles.join("；")}${n > 3 ? "…" : ""}` : "")
+          + (why.length >= 8 ? `\n理由：${why.slice(0, 120)}` : ""),
+        preview: titles.join("\n"),
+      };
+    }
     if (params.hitsJson || params.hitJsons) {
       try {
         const raw = params.hitsJson ?? params.hitJsons;

@@ -74,6 +74,8 @@ export interface AgentLoopOptions {
     tool: string;
     params: Record<string, unknown>;
     approved: boolean;
+    /** import_reference 确认卡勾选的候选项索引（0 起，指向 params.importItems） */
+    selectedIndices?: number[];
   };
   /** 附件清单（首条 user 消息注入用；非 resume 时生效） */
   attachmentManifest?: string;

@@ -171,6 +171,7 @@
 | W3-AP-ANTISPAM | 无进展熔断 + 检索/读窗口配额 | W3-AP-EVAL-SCRIPTS | 1～2d | **done** | 2026-07-25；`core/antispam` + toolsNode |
 | W3-AP-READ-BEFORE-WRITE | write/refine 先读后写硬门禁 | W3-AP-ANTISPAM | 1d | **done** | 2026-07-25；intro/discussion + toolsNode |
 | W3-AP-LIT-QUALITY | 文献相关度分+why；低相关无依据拒导 | W3-AP-READ-BEFORE-WRITE | 0.5d | **done** | 2026-07-25；`literature-relevance` |
+| W3-AP-LIT-BATCH | import_reference 确认卡批量勾选导入（候选列表 importItems + selectedIndices；确认后跳过相关度门禁） | W3-AP-LIT-BRIDGE | 0.5d | **done** | 2026-08-07；`import-confirm.ts` + `agent-panel` checkbox + `run-graph` 重放 selectedIndices |
 | W3-AP-CONFIG-QA | Phase0 配置改为一问一答（非整表） | W3-AP-CONFIG-UI | 0.5d | **done** | 2026-07-25；`AgentConfigQa` |
 | W3-AP-WORK-MEMORY | 会话工作记忆：主张/决策/待办 + update_work_memory | W3-AP-LIT-QUALITY | 1d | **done** | 2026-07-25；落盘 session snapshot |
 | W3-AP-ORCH-OPT | Agent 编排优化：快照单飞缓存 + 前缀稳定 + 只读并行 + 会话并发互斥 | W3-AP-WORK-MEMORY | 1w | **done** | 2026-08-06；`project-refresh` / `parallel-tools` / `tryAcquireAgentSession`；已部署 |

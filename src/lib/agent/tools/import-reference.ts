@@ -21,6 +21,17 @@ function parseUserConfirmed(raw: unknown): boolean {
   return raw === true || raw === "true" || raw === 1 || raw === "1";
 }
 
+/** 确认卡勾选索引（0 起，指向 params.importItems） */
+function parseSelectedIndices(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [];
+  const out: number[] = [];
+  for (const v of raw) {
+    const n = Number(v);
+    if (Number.isInteger(n) && n >= 0) out.push(n);
+  }
+  return [...new Set(out)];
+}
+
 /**
  * Agent 手写 hitsJson 常缺 id / 写错 source。
  * - id：优先 doi:xxx
@@ -216,6 +227,74 @@ export const importReferenceTool: ToolDefinition = {
   async execute(params, ctx: AgentContext) {
     if (!ctx.projectId) {
       return { success: false, error: "import_reference 需要关联 projectId" };
+    }
+
+    // ── 确认卡勾选批量导入：用户已在确认卡勾选并批准 ──
+    // selectedIndices + importItems 均由服务端注入（见 import-confirm.ts），
+    // 用户亲眼确认过 → 跳过相关度门禁，直接按勾选批量落库。
+    const selectedIndices = parseSelectedIndices(params.selectedIndices);
+    const importItems = Array.isArray(params.importItems) ? params.importItems : [];
+    if (importItems.length > 0) {
+      if (selectedIndices.length === 0) {
+        return { success: false, error: "未勾选任何文献，已取消导入" };
+      }
+      const picked: ExternalLiteratureHit[] = [];
+      for (const idx of selectedIndices) {
+        const item = idx < importItems.length ? importItems[idx] : undefined;
+        if (!item || typeof item !== "object") continue;
+        const parsed = externalLiteratureHitSchema.safeParse(
+          coerceExternalHitCandidate(item),
+        );
+        if (parsed.success) picked.push(parsed.data);
+      }
+      if (picked.length === 0) {
+        return { success: false, error: "未勾选任何可导入的文献" };
+      }
+      try {
+        const result = await importExternalReferencesToProject(
+          ctx.userId,
+          ctx.projectId,
+          picked,
+          { directionSlug: ctx.directionSlug },
+        );
+        const kbParts: string[] = [];
+        if (result.knowledgeWithPdf && result.knowledgeWithPdf > 0) {
+          kbParts.push(`OA PDF ${result.knowledgeWithPdf} 篇`);
+        }
+        if (result.knowledgeWithAbstract && result.knowledgeWithAbstract > 0) {
+          kbParts.push(`摘要可检索 ${result.knowledgeWithAbstract} 篇`);
+        }
+        if (
+          kbParts.length === 0
+          && result.knowledgeCreated
+          && result.knowledgeCreated > 0
+        ) {
+          kbParts.push(`书目登记 ${result.knowledgeCreated} 篇`);
+        }
+        const kbHint = kbParts.length > 0 ? `；知识库${kbParts.join("，")}` : "";
+        return {
+          success: true,
+          data: {
+            persisted: true,
+            batch: true,
+            imported: result.imported,
+            skippedDuplicate: result.skippedDuplicate,
+            referenceCount: result.referenceCount,
+            withAbstract: result.withAbstract,
+            knowledgeCreated: result.knowledgeCreated,
+            knowledgeWithAbstract: result.knowledgeWithAbstract,
+            knowledgeWithPdf: result.knowledgeWithPdf,
+            why: String(params.why ?? "").trim() || "勾选导入",
+          },
+          summary:
+            `已按勾选导入 ${result.imported} 篇`
+            + (result.skippedDuplicate ? `（跳过重复 ${result.skippedDuplicate}）` : "")
+            + `；参考文献共 ${result.referenceCount} 条${kbHint}`,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { success: false, error: message };
+      }
     }
 
     const query = String(params.query ?? "").trim();

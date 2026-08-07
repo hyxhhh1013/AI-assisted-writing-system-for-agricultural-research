@@ -4,6 +4,7 @@ import { Bot, ChevronDown, ChevronLeft, RotateCcw } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { useAgent } from "@/hooks/use-agent";
 import type { AgentChartPersistedInfo } from "@/lib/agent/chart-persisted";
@@ -129,6 +130,8 @@ export function AgentPanel({
   const [manualConfigQa, setManualConfigQa] = useState(false);
   /** 用户点了「稍后再说」后隐藏自动弹出，点「填写论文信息」可再开 */
   const [configQaDismissed, setConfigQaDismissed] = useState(false);
+  /** import_reference 确认卡：勾选的候选项索引（null=无候选列表） */
+  const [importSelection, setImportSelection] = useState<Set<number> | null>(null);
 
   const projectTitle = project?.title ?? null;
   const paperConfig = useMemo(
@@ -335,6 +338,16 @@ export function AgentPanel({
     if (atBottom) el.scrollTop = el.scrollHeight;
   }, [agent.messages, agent.status, agent.streamingText, agent.pendingCheckpoint, agent.pendingConfirm, atBottom]);
 
+  /** import_reference 确认卡候选变化时重置勾选：默认全选 */
+  useEffect(() => {
+    const items = agent.pendingConfirm?.params?.importItems;
+    if (Array.isArray(items)) {
+      setImportSelection(new Set(items.map((_, i) => i)));
+    } else {
+      setImportSelection(null);
+    }
+  }, [agent.pendingConfirm]);
+
   const statusHint = useMemo(
     () => STATUS_LABEL[agent.status] ?? agent.status,
     [agent.status],
@@ -374,6 +387,42 @@ export function AgentPanel({
     }
     return { latestThoughtIdx, latestActionIdx, obsForAction };
   }, [agent.messages, agent.isRunning]);
+
+  /** import_reference 确认卡批量选择 */
+  const confirmImportItems = Array.isArray(agent.pendingConfirm?.params?.importItems)
+    ? (agent.pendingConfirm.params.importItems as Array<{
+        title?: string;
+        year?: number;
+        journal?: string;
+        doi?: string;
+      }>)
+    : [];
+  const isImportBatchConfirm =
+    agent.pendingConfirm?.tool === "import_reference" && confirmImportItems.length > 0;
+  const importSelectedCount = isImportBatchConfirm ? (importSelection?.size ?? 0) : 0;
+
+  const toggleImportItem = useCallback((idx: number, checked: boolean) => {
+    setImportSelection((prev) => {
+      const next = new Set(prev ?? []);
+      if (checked) next.add(idx);
+      else next.delete(idx);
+      return next;
+    });
+  }, []);
+
+  const setAllImport = useCallback(
+    (checked: boolean) => {
+      if (!checked) {
+        setImportSelection(new Set());
+        return;
+      }
+      const items = agent.pendingConfirm?.params?.importItems;
+      if (Array.isArray(items)) {
+        setImportSelection(new Set(items.map((_, i) => i)));
+      }
+    },
+    [agent.pendingConfirm],
+  );
 
   return (
     <div className={cn("flex h-full min-h-0 flex-col bg-[#fafaf8]", className)}>
@@ -904,14 +953,74 @@ export function AgentPanel({
                 {agent.pendingConfirm.preview}
               </pre>
             ) : null}
+            {isImportBatchConfirm ? (
+              <div className="mt-2">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] text-[#3d4f46]/80">
+                    已收集 {confirmImportItems.length} 篇，已选 {importSelectedCount} 篇
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="text-[10px] text-[#1a5632] hover:underline"
+                      onClick={() => setAllImport(true)}
+                    >
+                      全选
+                    </button>
+                    <button
+                      type="button"
+                      className="text-[10px] text-[#3d4f46]/70 hover:underline"
+                      onClick={() => setAllImport(false)}
+                    >
+                      全不选
+                    </button>
+                  </div>
+                </div>
+                <div className="max-h-40 overflow-y-auto rounded-md border border-border/50 bg-white/90">
+                  {confirmImportItems.map((item, i) => {
+                    const checked = importSelection?.has(i) ?? false;
+                    return (
+                      <label
+                        key={i}
+                        className="flex items-start gap-2 border-b border-border/40 px-2 py-1.5 last:border-0 cursor-pointer hover:bg-muted/40"
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(v) => toggleImportItem(i, v === true)}
+                          className="mt-0.5"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] leading-snug break-words text-[#122820]">
+                            {item.title || "(无标题)"}
+                          </p>
+                          <p className="text-[9px] text-[#6b7c72] truncate">
+                            {[item.year, item.journal, item.doi].filter(Boolean).join(" · ")}
+                          </p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
             <div className="mt-2 flex gap-2">
               <Button
                 type="button"
                 size="sm"
                 className="h-8 flex-1 text-xs"
-                onClick={() => void agent.resolveConfirm(true)}
+                disabled={isImportBatchConfirm && importSelectedCount === 0}
+                onClick={() =>
+                  void agent.resolveConfirm(
+                    true,
+                    isImportBatchConfirm ? [...(importSelection ?? [])] : undefined,
+                  )
+                }
               >
-                {agent.pendingConfirm.tool === "import_reference" ? "确认导入" : "确认"}
+                {isImportBatchConfirm
+                  ? `确认导入 ${importSelectedCount} 篇`
+                  : agent.pendingConfirm.tool === "import_reference"
+                    ? "确认导入"
+                    : "确认"}
               </Button>
               <Button
                 type="button"

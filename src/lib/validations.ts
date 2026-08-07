@@ -1008,6 +1008,7 @@ export const agentSchema = z
         tool: z.string().min(1),
         params: z.record(z.string(), z.unknown()),
         approved: z.boolean(),
+        selectedIndices: z.array(z.number().int().min(0)).max(50).optional(),
       })
       .optional(),
     attachmentIds: z.array(z.string().min(1)).max(20).optional(),

@@ -87,6 +87,20 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 
 `tryAcquireAgentSession` 用 Postgres `updateMany` 原子抢占（仅 `status ∈ fromStatuses` 时置 running）。resume（interrupted/error）与跟聊（completed/interrupted/error）路径都走原子抢占；冲突 → HTTP 409「会话仍在执行中」，防止同一会话并发跑图、快照互相覆盖。`reclaimStaleRunningSessions` 回收进程退出遗留的僵尸 running。
 
+## import_reference 确认批量选择（2026-08-07）
+
+**问题**：Agent 自动收集到多篇文献后，确认卡原来只按模型传入的单篇 `hitJson` 弹一次「确认导入一篇」，导致「收集到很多、确认导入却一次一篇」。
+
+**方案**：确认卡升级为「候选列表 + 勾选」，把「导入哪些」从模型行为中解耦：
+
+- 确认生成（`nodes.ts` → `lib/agent/import-confirm.ts`）：`buildImportReferenceConfirmParams` 在 `enrichImportReferenceParams` 之上注入 `params.importItems` = 候选文献数组（`resolveImportReferenceCandidates` = 模型请求的 hits（`hitIndices`→last-search / `hitsJson` / `hitJson` / `doi`）∪ 最近一次检索全部命中，按 id/doi 去重，≤25）。
+- `agent/confirm` 事件携带含 `importItems` 的 params，随快照持久化进 DB `awaitingConfirm`。
+- 前端确认卡（`agent-panel.tsx`）：`importItems` 存在时渲染 checkbox 列表（默认全选）+ 全选/全不选 + 「确认导入 N 篇」。
+- 用户批准：`use-agent.ts resolveConfirm(true, selectedIndices)` 回传 `confirmDecision.selectedIndices`（0 起索引数组）；`run-graph.ts` 把 `selectedIndices` 并入 `trustedParams` 重放。
+- 工具执行（`tools/import-reference.ts`）：有 `selectedIndices` + `importItems` 时按勾选调 `importExternalReferencesToProject` 批量落库（自带 DOI/题录去重 + 批量入知识库），**跳过相关度门禁**（用户已亲眼确认）；未勾选任何 → 报「未勾选任何文献」。
+
+**契约**：`AgentRequest.confirmDecision.selectedIndices?: number[]`（`contracts/agent.ts` + `validations.ts`，`z.array(z.number().int().min(0)).max(50).optional()`）；`lib/agent/types.ts` 同源。旧客户端/旧快照无 `importItems` 时行为不变（仍走原单篇/批量确认）。
+
 ## 引用核查 / 引用修正意图门禁（2026-08-07 修正）
 
 `goal-intents.ts` 负责把用户 goal + 会话 observations 解析成「引用核查/修正」意图，并驱动 `checkCitationSideTripGate` 拦截检索、导入、写摘要、**写其它章节**等旁路。判定的关键信号是 `validate_citations` 的成功记录——但该工具同时被两条路径触发：**用户主动要求引用核查**，以及 **`reflect.ts` 写完章节后的例行动作自查**。旧实现只看「是否成功跑过 validate」就判定进入引用修正模式，导致：

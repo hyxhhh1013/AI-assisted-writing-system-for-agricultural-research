@@ -439,7 +439,7 @@ export function useAgent(options: UseAgentOptions = {}) {
   );
 
   const resolveConfirm = useCallback(
-    async (approved: boolean) => {
+    async (approved: boolean, selectedIndices?: number[]) => {
       if (!sessionId || !pendingConfirm) {
         toast.error("没有待确认的操作");
         return;
@@ -459,6 +459,9 @@ export function useAgent(options: UseAgentOptions = {}) {
             tool: pendingConfirm.tool,
             params: pendingConfirm.params,
             approved: true,
+            ...(selectedIndices && selectedIndices.length > 0
+              ? { selectedIndices }
+              : {}),
           },
         },
         `确认执行：${pendingConfirm.tool}`,
