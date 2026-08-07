@@ -86,12 +86,12 @@ export const AgentThought = memo(function AgentThought({
         {open ? (
           <div className="min-w-0 flex-1">
             {streaming ? (
-              <p className="min-w-0 whitespace-pre-wrap break-words leading-[1.65] text-[13.5px] text-foreground/90">
+              <p className="min-w-0 whitespace-pre-wrap break-words text-[12px] leading-relaxed text-foreground/60">
                 {text}
-                <span className="ml-0.5 inline-block h-[1.05em] w-[2px] translate-y-[0.15em] animate-pulse rounded-full bg-primary/70" />
+                <span className="ml-0.5 inline-block h-[1.05em] w-[2px] translate-y-[0.15em] animate-pulse rounded-full bg-primary/60" />
               </p>
             ) : (
-              <AgentMarkdown content={text} />
+              <AgentMarkdown content={text} className="text-[12px] leading-relaxed text-foreground/60" />
             )}
           </div>
         ) : (

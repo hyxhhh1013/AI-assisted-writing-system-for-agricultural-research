@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, CheckCircle2, ChevronDown, ChevronLeft, Circle, Loader2, RotateCcw } from "lucide-react";
+import { Bot, CheckCircle2, ChevronDown, ChevronLeft, Circle, FileText, Loader2, RotateCcw } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -79,6 +79,8 @@ interface AgentPanelProps {
   onProjectMutated?: (info: AgentProjectMutatedInfo) => void;
   /** 工作台侧栏收起 */
   onCollapse?: () => void;
+  /** 打开蓝图工作台（blueprint_approve 检查点时查看/编辑完整蓝图） */
+  onOpenBlueprint?: () => void;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -109,6 +111,7 @@ export function AgentPanel({
   onChartPersisted,
   onProjectMutated,
   onCollapse,
+  onOpenBlueprint,
 }: AgentPanelProps) {
   const agent = useAgent({
     projectId,
@@ -148,6 +151,8 @@ export function AgentPanel({
     agent.pendingCheckpoint?.kind === "config_confirm";
   const isClarifyCheckpoint =
     agent.pendingCheckpoint?.kind === "clarify";
+  const isBlueprintCheckpoint =
+    agent.pendingCheckpoint?.kind === "blueprint_approve";
   /** 仅手动展开或检查点时出完整表单；缺配置时先给轻量邀请，避免一进 Tab 整块砸脸 */
   const showConfigQa =
     Boolean(projectId) && (isConfigCheckpoint || manualConfigQa);
@@ -990,6 +995,20 @@ export function AgentPanel({
                   <pre className="mt-2 max-h-24 overflow-y-auto whitespace-pre-wrap rounded-md border border-border/50 bg-white/90 p-2 text-[10px] text-[#3d4f46]">
                     {agent.pendingCheckpoint.preview}
                   </pre>
+                ) : null}
+                {isBlueprintCheckpoint && onOpenBlueprint ? (
+                  <div className="mt-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 w-full text-xs"
+                      onClick={onOpenBlueprint}
+                    >
+                      <FileText className="mr-1.5 h-3.5 w-3.5" />
+                      打开蓝图工作台（查看 / 编辑）
+                    </Button>
+                  </div>
                 ) : null}
                 {showRevise ? (
                   <div className="mt-2 space-y-2">

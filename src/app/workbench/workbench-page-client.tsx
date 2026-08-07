@@ -1028,6 +1028,7 @@ function WorkbenchContent() {
                   onChartPersisted={(info) => void handleAgentChartPersisted(info)}
                   onProjectMutated={(info) => void handleAgentProjectMutated(info)}
                   onCollapse={() => setIsSidebarOpen(false)}
+                  onOpenBlueprint={() => void handleOpenBlueprintDialog()}
                 />
               </ErrorBoundary>
             </div>
