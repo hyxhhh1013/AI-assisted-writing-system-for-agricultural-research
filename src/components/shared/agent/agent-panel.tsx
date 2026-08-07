@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, ChevronDown, ChevronLeft, Loader2, RotateCcw } from "lucide-react";
+import { Bot, CheckCircle2, ChevronDown, ChevronLeft, Circle, Loader2, RotateCcw } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -132,6 +132,8 @@ export function AgentPanel({
   const [configQaDismissed, setConfigQaDismissed] = useState(false);
   /** import_reference 确认卡：勾选的候选项索引（null=无候选列表） */
   const [importSelection, setImportSelection] = useState<Set<number> | null>(null);
+  /** 确认导入时的候选标题快照（进度卡渲染逐篇状态用；渲染受 importProgress 门控） */
+  const [importItemsSnapshot, setImportItemsSnapshot] = useState<string[]>([]);
 
   const projectTitle = project?.title ?? null;
   const paperConfig = useMemo(
@@ -427,6 +429,19 @@ export function AgentPanel({
     },
     [agent.pendingConfirm],
   );
+
+  /** 确认导入：记住候选标题列表（进度卡渲染逐篇状态），再触发批量导入 */
+  const handleConfirmImport = useCallback(() => {
+    if (isImportBatchConfirm) {
+      setImportItemsSnapshot(
+        confirmImportItems.map((x) => x.title || "(无标题)"),
+      );
+    }
+    void agent.resolveConfirm(
+      true,
+      isImportBatchConfirm ? [...(importSelection ?? [])] : undefined,
+    );
+  }, [isImportBatchConfirm, confirmImportItems, importSelection, agent]);
 
   return (
     <div className={cn("flex h-full min-h-0 flex-col bg-[#fafaf8]", className)}>
@@ -857,7 +872,39 @@ export function AgentPanel({
                 />
               </div>
             )}
-            {agent.importProgress.title ? (
+            {importItemsSnapshot.length > 0 ? (
+              <div className="mt-2 max-h-36 space-y-1 overflow-y-auto pr-1">
+                {importItemsSnapshot.map((title, i) => {
+                  const done = agent.importProgress?.done ?? 0;
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-center gap-1.5 text-[10px]"
+                    >
+                      {i < done ? (
+                        <CheckCircle2 className="h-3 w-3 shrink-0 text-green-600" />
+                      ) : i === done ? (
+                        <Loader2 className="h-3 w-3 shrink-0 animate-spin text-[#1a5632]" />
+                      ) : (
+                        <Circle className="h-3 w-3 shrink-0 text-[#3d4f46]/25" />
+                      )}
+                      <span
+                        className={
+                          "min-w-0 truncate " +
+                          (i < done
+                            ? "text-muted-foreground/60 line-through"
+                            : i === done
+                              ? "font-medium text-[#1a5632]"
+                              : "text-[#3d4f46]/60")
+                        }
+                      >
+                        {title}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : agent.importProgress.title ? (
               <p className="mt-1 animate-pulse truncate text-[10px] text-[#3d4f46]/80">
                 {agent.importProgress.title}
               </p>
@@ -1059,12 +1106,7 @@ export function AgentPanel({
                 size="sm"
                 className="h-8 flex-1 text-xs"
                 disabled={isImportBatchConfirm && importSelectedCount === 0}
-                onClick={() =>
-                  void agent.resolveConfirm(
-                    true,
-                    isImportBatchConfirm ? [...(importSelection ?? [])] : undefined,
-                  )
-                }
+                onClick={() => void handleConfirmImport()}
               >
                 {isImportBatchConfirm
                   ? `确认导入 ${importSelectedCount} 篇`

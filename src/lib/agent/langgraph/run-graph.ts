@@ -2,6 +2,7 @@ import type {
   AgentCheckpointDecision,
   AgentConfirmRequest,
   AgentSSEEvent,
+  AgentToolResult,
 } from "@/contracts/agent";
 import type { AgentUiMessage } from "@/contracts/agent-session";
 import { buildPriorConversationMessages } from "@/lib/agent/conversation-continuity";
@@ -287,12 +288,34 @@ export async function* runAgentGraphLoop(
     yield actionEvent;
     uiTranscript = appendUiFromAgentEvent(uiTranscript, actionEvent);
 
-    let result;
-    try {
-      result = await tool.execute(trustedParams, context);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      result = { success: false as const, error: message };
+    // 工具执行可能耗时（批量导入等）：实时排空 liveQueue，进度事件即时推送。
+    // 否则 emitLiveEvent 积压在队列，要等 execute 结束、graph 启动后才一次性倒出 → 前端只见「进行中」。
+    const executeTask = tool.execute(trustedParams, context);
+    const executePromise = Promise.resolve(executeTask).then(
+      (r) => ({ kind: "result" as const, result: r }),
+      (err: unknown) => ({
+        kind: "result" as const,
+        result: {
+          success: false as const,
+          error: err instanceof Error ? err.message : String(err),
+        },
+      }),
+    );
+    let result: AgentToolResult;
+    for (;;) {
+      const liveNext = liveQueue
+        .next()
+        .then((v) => ({ kind: "live" as const, value: v }));
+      const raced = await Promise.race([executePromise, liveNext]);
+      if (raced.kind === "result") {
+        result = raced.result;
+        // 丢弃执行期残留的陈旧进度事件，避免观察之后又冒出来
+        liveQueue.clear();
+        break;
+      }
+      if (!raced.value.done) {
+        yield raced.value.value;
+      }
     }
 
     const obsEvent: AgentSSEEvent = {
@@ -608,6 +631,11 @@ export class LiveEventQueue {
     for (const waiter of this.waiters.splice(0)) {
       waiter({ done: true, value: undefined as never });
     }
+  }
+
+  /** 丢弃已缓冲但未消费的实时事件（确认续跑执行结束后的陈旧进度等） */
+  clear(): void {
+    this.items = [];
   }
 
   next(): Promise<IteratorResult<AgentSSEEvent>> {
