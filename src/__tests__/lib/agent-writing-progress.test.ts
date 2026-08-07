@@ -54,6 +54,13 @@ describe("translateWritingEventToProgress（结构化）", () => {
     expect(r!.detail).toContain("已输出 5 字");
   });
 
+  it("见 verification_progress 后 verification 兜底不再发射", () => {
+    const state = createWriteProgressState();
+    translateWritingEventToProgress("x", { type: "verification_progress", checked: 3, total: 15 }, state);
+    const r = translateWritingEventToProgress("x", { type: "verification", verification: "abc" }, state);
+    expect(r).toBeNull();
+  });
+
   it("corrected_text / clear_result → refining（修 L3）", () => {
     expect(translateWritingEventToProgress("x", { type: "corrected_text", text: "..." }, createWriteProgressState())!.stage).toBe("refining");
     expect(translateWritingEventToProgress("x", { type: "clear_result" }, createWriteProgressState())!.stage).toBe("refining");
@@ -93,6 +100,10 @@ describe("translateWritingEventToProgress（结构化）", () => {
 
   it("pipeline_step refining → stage refining", () => {
     expect(translateWritingEventToProgress("x", { type: "pipeline_step", step: "refining", status: "done", detail: "已修正 3 处" }, createWriteProgressState())!.stage).toBe("refining");
+  });
+
+  it("pipeline_step checking_citations → verifying", () => {
+    expect(translateWritingEventToProgress("x", { type: "pipeline_step", step: "checking_citations", status: "running", detail: "正在校验引用真实性..." }, createWriteProgressState())!.stage).toBe("verifying");
   });
 
   it("references / review_report 不转发", () => {

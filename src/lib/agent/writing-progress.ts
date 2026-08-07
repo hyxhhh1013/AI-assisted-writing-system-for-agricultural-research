@@ -11,6 +11,8 @@ export interface WriteProgressState {
   lastDeltaEmitAt: number;
   startedAt: number;
   verificationChars: number;
+  /** 是否已见 verification_progress 主信号（此时 verification 字符兜底不再发射，避免覆盖主信号） */
+  seenMarkerProgress: boolean;
   info: string[];
   warnings: string[];
   stage: WritingStage;
@@ -22,6 +24,7 @@ export function createWriteProgressState(): WriteProgressState {
     lastDeltaEmitAt: 0,
     startedAt: 0,
     verificationChars: 0,
+    seenMarkerProgress: false,
     info: [],
     warnings: [],
     stage: "writing",
@@ -83,15 +86,18 @@ export function translateWritingEventToProgress(
     }
     case "pipeline_step": {
       if (!event.detail) return null;
-      state.stage = event.step === "verifying" ? "verifying" : event.step === "refining" ? "refining" : state.stage;
+      const next = mapPipelineStepStage(event.step);
+      if (next) state.stage = next;
       return out(state.stage, event.detail);
     }
     case "verification": {
+      if (state.seenMarkerProgress) return null;
       state.verificationChars += event.verification.length;
       state.stage = "verifying";
       return out("verifying", `已输出 ${state.verificationChars} 字`);
     }
     case "verification_progress": {
+      state.seenMarkerProgress = true;
       state.stage = "verifying";
       return out("verifying", `已核查 ${event.checked}/${event.total} 条引用`);
     }
@@ -117,5 +123,19 @@ export function translateWritingEventToProgress(
     }
     default:
       return null;
+  }
+}
+
+/** pipeline_step → 阶段映射；返回 null 表示保持当前 stage */
+function mapPipelineStepStage(step: string): WritingStage | null {
+  switch (step) {
+    case "verifying":
+    case "checking_citations":
+    case "checking_data":
+      return "verifying";
+    case "refining":
+      return "refining";
+    default:
+      return null; // 保持当前 stage
   }
 }
