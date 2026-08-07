@@ -27,6 +27,7 @@ import { AgentInputBar } from "@/components/shared/agent/agent-input";
 import { AgentConfigQa } from "@/components/shared/agent/agent-config-qa";
 import { AgentCitationReportCard } from "@/components/shared/agent/agent-citation-report";
 import { AgentPlanCard } from "@/components/shared/agent/agent-plan";
+import { WritingStatusCard } from "@/components/shared/agent/writing-status-card";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getProject, patchPaperPassportConfig } from "@/services/project";
 import type { ProjectData } from "@/contracts/project";
@@ -349,8 +350,8 @@ export function AgentPanel({
       }),
     [agent.status, agent.isRunning, agent.messages],
   );
-  /** 有实时进度文案（写节进度）时优先展示，否则回退静态工作指示 */
-  const displayProgress = agent.progressLabel ?? liveProgress;
+  /** 写状态卡激活时用常驻卡，否则回退通用工作指示器（写进度职责已移交） */
+  const displayProgress = agent.writeStatus ? null : liveProgress;
 
   /** 预计算每条消息的渲染标志，避免渲染循环内 O(n²) 扫描 */
   const msgFlags = useMemo(() => {
@@ -573,6 +574,21 @@ export function AgentPanel({
         className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-4 py-4"
       >
         <div className="mx-auto flex w-full min-w-0 max-w-none flex-col gap-2.5">
+          {agent.writeStatus ? (
+            <div className="sticky top-2 z-10">
+              <WritingStatusCard
+                status={agent.writeStatus}
+                onRetry={
+                  agent.writeStatus.stage === "error"
+                    ? () => {
+                        const goal = lastUserGoal;
+                        if (goal) void agent.sendGoal(goal);
+                      }
+                    : undefined
+                }
+              />
+            </div>
+          ) : null}
           {agent.messages.length === 0 && (
             <div className="rounded-xl border border-dashed border-border/60 bg-white/70 px-5 py-8 text-sm text-muted-foreground">
               {!projectId ? (
