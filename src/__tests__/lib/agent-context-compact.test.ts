@@ -137,4 +137,34 @@ describe("compactAgentMessages", () => {
     expect(readMsg?.content).toContain("【证据摘录·截断】");
     expect(readMsg?.content).not.toContain("旧证据内容".repeat(600));
   });
+
+  it("只有最近一条 write 观察豁免，更早的 write 观察照旧降级", () => {
+    const draft = "引言正文".repeat(600); // 2400 CJK 字，远超 1500 token 阈值
+    const write1 = `Tool result (write_section): 第一次写\n[write_section] 第一次写\n【证据摘录】\ntarget=results\n\n${draft}`;
+    const write2 = `Tool result (write_section): 第二次写\n[write_section] 第二次写\n【证据摘录】\ntarget=introduction\n\n${"新正文".repeat(800)}`;
+    const messages: LLMMessage[] = [
+      { role: "user", content: "目标" },
+      { role: "assistant", content: "思考" },
+      { role: "user", content: write1 },
+      { role: "assistant", content: "再想" },
+    ];
+    // 11 条 < MIN_COMPACT_MESSAGES=32：塞超长 read 观察把总量推过 24000 token，强制触发压缩
+    for (let i = 0; i < 3; i++) {
+      messages.push(bigObs("read_section", `旧读${i}`, 7000));
+      messages.push({ role: "assistant", content: "ok" });
+    }
+    messages.push({ role: "user", content: write2 }); // 最近一条 write 观察
+
+    const out = compactAgentMessages(messages);
+    // 压缩确实发生（token 预算触发，返回新数组而非原引用）
+    expect(out).not.toBe(messages);
+    // 最新 write2 保留完整新正文（未降级）
+    const write2Msg = out.find((m) => m.content.includes("第二次写"));
+    expect(write2Msg?.content).toContain("新正文".repeat(800).slice(0, 500));
+    // 更早的 write1 被降级：含截断标记，且 summary 行 `[write_section] 第一次写` 仍可定位
+    const write1Msg = out.find(
+      (m) => m.content.includes("【证据摘录·截断】") && m.content.includes("第一次写"),
+    );
+    expect(write1Msg).toBeTruthy();
+  });
 });
