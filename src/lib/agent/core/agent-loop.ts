@@ -44,6 +44,7 @@ import { updatePaperConfigTool } from "@/lib/agent/tools/update-paper-config";
 import { updateWorkMemoryTool } from "@/lib/agent/tools/update-work-memory";
 import { openBlueprintWorkspaceTool } from "@/lib/agent/tools/open-blueprint-workspace";
 import { saveReferenceClassificationTool } from "@/lib/agent/tools/save-reference-classification";
+import { removeReferencesTool } from "@/lib/agent/tools/remove-references";
 import type { AgentContext, AgentLoopOptions, ToolDefinition } from "@/lib/agent/types";
 
 /** LangGraph ReAct 编排（W2-LANGGRAPH） */
@@ -125,6 +126,7 @@ export function createAgentTools(): ToolDefinition[] {
       buildArgumentBlueprintTool,
       writeBilingualAbstractTool,
       saveReferenceClassificationTool,
+      removeReferencesTool,
     );
   }
   return tools;

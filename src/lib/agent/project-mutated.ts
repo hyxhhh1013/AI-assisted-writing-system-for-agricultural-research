@@ -17,6 +17,7 @@ export const PROJECT_MUTATING_TOOLS = [
   "generate_table",
   "draft_mechanism_figure",
   "save_reference_classification",
+  "remove_references",
 ] as const;
 
 export type ProjectMutatingTool = (typeof PROJECT_MUTATING_TOOLS)[number];
@@ -46,6 +47,7 @@ const TOOL_LABELS: Record<string, string> = {
   generate_table: "三线表",
   draft_mechanism_figure: "机理图",
   save_reference_classification: "文献分类",
+  remove_references: "删除文献",
 };
 
 export function isProjectMutatingTool(tool: string): tool is ProjectMutatingTool {

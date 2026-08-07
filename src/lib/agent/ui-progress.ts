@@ -24,6 +24,7 @@ const TOOL_LABELS: Record<string, string> = {
   check_plagiarism: "查重",
   import_reference: "导入文献",
   save_reference_classification: "文献分类",
+  remove_references: "删除文献",
   generate_chart: "生成图表",
   generate_xrd_analysis: "XRD 分析",
   update_paper_config: "更新论文配置",
@@ -131,6 +132,8 @@ export function formatToolWorkingLine(
       return "准备导入文献…";
     case "save_reference_classification":
       return "正在保存文献分类…";
+    case "remove_references":
+      return "正在删除不相关文献…";
     case "open_blueprint_workspace":
       return "正在打开蓝图工作台…";
     case "generate_outline":
