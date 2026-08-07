@@ -12,6 +12,12 @@ export const MAX_CONTEXT_TOKENS = 24_000;
 const MAX_KEEP_SINGLE_TOKENS = 1_500;
 /** 降级时保留的证据片段长度（摘要行之后） */
 const KEEP_DEGRADE_EVIDENCE_CHARS = 600;
+/** write 工具观察前缀：最近一条不降级（agent 正在写/改的章节需见完整正文） */
+const WRITE_OBS_PREFIXES = [
+  "Tool result (write_section)",
+  "Tool result (refine_content)",
+  "Tool result (write_bilingual_abstract)",
+];
 
 /**
  * 粗略 token 估算：CJK 每字符 ≈1 token，其余每 4 字符 ≈1 token。
@@ -110,9 +116,14 @@ export function compactAgentMessages(messages: LLMMessage[]): LLMMessage[] {
     });
   }
 
-  // keep 窗口内单条超长的工具观察：降级为摘要+证据片段
-  const trimmedKeep = keep.map((m) =>
-    m.content.startsWith("Tool result") && estimateTokens(m.content) > MAX_KEEP_SINGLE_TOKENS
+  // keep 窗口内最近一条 write 观察不降级（其余超长观察降级为摘要+片段）
+  const lastWriteIdx = keep.findLastIndex((m) =>
+    WRITE_OBS_PREFIXES.some((p) => m.content.startsWith(p)),
+  );
+  const trimmedKeep = keep.map((m, i) =>
+    m.content.startsWith("Tool result")
+    && estimateTokens(m.content) > MAX_KEEP_SINGLE_TOKENS
+    && i !== lastWriteIdx
       ? { ...m, content: degradeToolObservation(m.content) }
       : m,
   );

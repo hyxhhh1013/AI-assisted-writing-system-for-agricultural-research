@@ -106,4 +106,35 @@ describe("compactAgentMessages", () => {
     const longest = Math.max(...out.map((m) => m.content.length));
     expect(longest).toBeLessThan(3000);
   });
+
+  it("keep 窗口内最近一条 write 观察不降级（其余超长观察照旧降级）", () => {
+    const draft = "引言正文".repeat(600); // 2400 CJK 字，远超 1500 token 阈值
+    const writeObs = `Tool result (write_section): 已生成并写回 introduction\n【证据摘录】\ntarget=introduction | 字数≈1800\n\n${draft}`;
+    const oldObs = `Tool result (read_section): 已读取 introduction\n【证据摘录】\ntarget=introduction\n\n${"旧证据内容".repeat(600)}`;
+    const messages: LLMMessage[] = [
+      { role: "user", content: "目标" },
+      { role: "assistant", content: "思考" },
+      { role: "user", content: oldObs },
+      { role: "assistant", content: "再想" },
+    ];
+    // 11 条 < MIN_COMPACT_MESSAGES=32：塞若干超长 read 观察把总量推过 24000 token，强制触发压缩
+    for (let i = 0; i < 3; i++) {
+      messages.push(bigObs("read_section", `旧读${i}`, 7000));
+      messages.push({ role: "assistant", content: "ok" });
+    }
+    messages.push({ role: "user", content: writeObs }); // 最近一条 write 观察
+
+    const out = compactAgentMessages(messages);
+    // 压缩确实发生（token 预算触发，返回新数组而非原引用）
+    expect(out).not.toBe(messages);
+    // write 观察保留完整 draft（agent 正在写/改的章节需见完整正文）
+    const writeMsg = out.find((m) => m.content.startsWith("Tool result (write_section)"));
+    // 降级后的 read 观察丢失 "Tool result" 前缀，用唯一证据子串定位
+    const readMsg = out.find((m) => m.content.includes("旧证据内容"));
+    expect(writeMsg?.content).toContain(draft);
+    expect(writeMsg?.content).toContain("【证据摘录】");
+    // 旧 read_section 观察被降级：含截断标记，不含完整旧证据
+    expect(readMsg?.content).toContain("【证据摘录·截断】");
+    expect(readMsg?.content).not.toContain("旧证据内容".repeat(600));
+  });
 });
