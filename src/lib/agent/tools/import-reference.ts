@@ -4,6 +4,8 @@ import {
   importExternalReferencesToProject,
 } from "@/lib/agent/import-reference";
 import {
+  MIN_IMPORT_CITEDBY,
+  isCitedByAcceptable,
   isRelevanceAcceptable,
   parseWhyParam,
   scoreLiteratureRelevance,
@@ -368,6 +370,16 @@ export const importReferenceTool: ToolDefinition = {
             data: { relevanceScore: rel.score, autoWhy: rel.why },
           };
         }
+        // 被引数下限（MIN_IMPORT_CITEDBY>0 时生效）；需 why 说明才放行
+        if (!isCitedByAcceptable(one.citedByCount, whyOk || doiLookup)) {
+          return {
+            success: false,
+            error:
+              `被引数过低（被引 ${one.citedByCount ?? "未知"}，低于阈值 ${MIN_IMPORT_CITEDBY}）。`
+              + `请换一篇更有影响力的文献，或提供 why（≥8字）说明该文献对本课题的特殊价值。`,
+            data: { relevanceScore: rel.score, citedBy: one.citedByCount },
+          };
+        }
         if (!userConfirmed) {
           const citation = formatExternalLiteratureHit(one);
           const reason = whyOk ? why : rel.why;
@@ -446,19 +458,34 @@ export const importReferenceTool: ToolDefinition = {
       return { hit: h, rel };
     });
     const accepted = scored.filter(
-      (x) => isRelevanceAcceptable(x.rel.score, { hasWhy: whyOk, doiLookup: false }),
+      (x) =>
+        isRelevanceAcceptable(x.rel.score, { hasWhy: whyOk, doiLookup: false })
+        && isCitedByAcceptable(x.hit.citedByCount, whyOk),
     );
     if (accepted.length === 0) {
       return {
         success: false,
         error:
-          `批量 ${hits.length} 篇相关度均偏低。请提供 why（≥8字）说明共性理由，或只选高相关条目。`,
+          `批量 ${hits.length} 篇相关度或影响力均不达标`
+          + (MIN_IMPORT_CITEDBY > 0 ? `（被引需 ≥ ${MIN_IMPORT_CITEDBY}）` : "")
+          + `。请提供 why（≥8字）说明共性理由，或只选高相关/高被引条目。`,
         data: {
           scores: scored.map((x) => ({
             title: x.hit.title.slice(0, 60),
             score: x.rel.score,
+            citedBy: x.hit.citedByCount ?? null,
           })),
         },
+      };
+    }
+    // 若阈值过滤掉了部分条目，提示用户（非阻断）
+    if (MIN_IMPORT_CITEDBY > 0 && accepted.length < scored.length) {
+      return {
+        success: false,
+        error:
+          `有 ${scored.length - accepted.length} 篇因被引数低于 ${MIN_IMPORT_CITEDBY} 被过滤。`
+          + `请提供 why（≥8字）说明这些文献的特殊价值后再导入，或只选达标条目。`,
+        data: { filteredLowCited: scored.length - accepted.length },
       };
     }
 

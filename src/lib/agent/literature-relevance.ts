@@ -7,6 +7,17 @@ import { expandRagQueries } from "@/lib/rag-query-expand";
 /** 低于此分且无 DOI 精确命中时，劝阻 / 拒绝导入 */
 export const MIN_IMPORT_RELEVANCE = 0.12;
 
+/** 被引数下限（0=关闭；设置后低于此值的文献需 why 说明才可导入） */
+export const MIN_IMPORT_CITEDBY = Number(process.env.MIN_IMPORT_CITEDBY || 0);
+
+/** 被引数是否可接受：阈值关闭 / 有 why / 未知被引 → 放行；否则需 ≥ 阈值 */
+export function isCitedByAcceptable(citedBy: number | undefined, hasWhy = false): boolean {
+  if (MIN_IMPORT_CITEDBY <= 0) return true;
+  if (hasWhy) return true;
+  if (citedBy == null) return true;
+  return citedBy >= MIN_IMPORT_CITEDBY;
+}
+
 const STOP = new Set([
   "the", "a", "an", "of", "and", "or", "in", "on", "for", "to", "with",
   "的", "与", "和", "及", "对", "中", "研究", "分析", "基于", "关于",

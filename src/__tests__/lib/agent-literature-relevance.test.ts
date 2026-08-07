@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   MIN_IMPORT_RELEVANCE,
+  MIN_IMPORT_CITEDBY,
   enrichImportReferenceParams,
+  isCitedByAcceptable,
   isRelevanceAcceptable,
   scoreLiteratureRelevance,
 } from "@/lib/agent/literature-relevance";
@@ -63,5 +65,14 @@ describe("literature relevance", () => {
       why: "与生物炭改良土壤综述直接相关，拟作对比",
     });
     expect(String(enriched.why)).toMatch(/生物炭/);
+  });
+});
+
+describe("isCitedByAcceptable (被引数下限)", () => {
+  it("阈值关闭（0）时始终放行", () => {
+    expect(MIN_IMPORT_CITEDBY).toBe(0);
+    expect(isCitedByAcceptable(0, false)).toBe(true);
+    expect(isCitedByAcceptable(undefined, false)).toBe(true);
+    expect(isCitedByAcceptable(500, false)).toBe(true);
   });
 });

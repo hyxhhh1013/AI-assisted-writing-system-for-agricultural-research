@@ -113,6 +113,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **文献分类编码持久化（2026-08-07）**：新增写工具 `save_reference_classification`（`tools/save-reference-classification.ts`），把「文献分类编码」结果批量 upsert 到 `ReferenceSource`（refIndex 1 基 → sourceName/category/citation），与前端「引用-文献映射」同一张表。`list_references` 输出附带 `category`/`sourceName`，写作时 Agent 能看到分类。属 `PROJECT_MUTATING_TOOLS`，保存后工作台刷新。之前 Agent 只能靠多次关键词检索在对话里"分类"、结果不落库，现已闭环。
 - **删除不相关文献（2026-08-07）**：新增写工具 `remove_references`（`tools/remove-references.ts`），按引用编号（1 基 [n]）删除不相关/误导入文献，自动重排后续编号，并同步清理/重排 `ReferenceSource` 分类映射。若正文已引用被删编号，工具说明要求随后 `validate_citations` 检查越界引用。
 - **确认卡质量信号（2026-08-07）**：import_reference 确认卡候选列表每项显示质量徽标：被引数、来源（OpenAlex/S2/CrossRef/PubMed）、OA 标，便于用户确认导入前判断文献质量。
+- **被引数下限（2026-08-07）**：`MIN_IMPORT_CITEDBY`（env，默认 0=关闭）。设置后单篇/批量导入时被引数低于阈值的文献需 `why`（≥8字）说明才可导入，批量会自动过滤低被引条目。
 
 ## 引用核查 / 引用修正意图门禁（2026-08-07 修正）
 
