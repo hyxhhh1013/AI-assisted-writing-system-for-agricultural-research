@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { BookOpen, FlaskConical, Loader2, ChevronRight, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,14 +28,12 @@ import {
 } from "@/contracts/writing-mode";
 import type { ProjectLanguage } from "@/contracts/project";
 import type { AgentEntryModeId } from "@/contracts/paper-passport";
-import { ProjectReferenceImportPanel } from "@/components/shared/project/project-reference-import-panel";
 import {
   buildConfigFromWizard,
   createProjectWithHandoff,
 } from "@/services/project-handoff";
-import { syncPaperPassport, getProject } from "@/services/project";
-import { MIN_REVIEW_HANDOFF_ENTRIES } from "@/contracts/direction-literature";
 import { AGENT_ENTRY_MODES } from "@/lib/agent/entry-mode";
+import { DIALOG_FORM } from "@/components/ui/dialog-sizes";
 import { toast } from "sonner";
 
 const WORD_COUNT_PRESETS = [
@@ -58,7 +56,7 @@ interface CreateProjectWizardProps {
   onCreated: (projectId: string) => void;
 }
 
-type WizardStep = 1 | 2 | 3;
+type WizardStep = 1 | 2;
 
 export function CreateProjectWizard({
   open,
@@ -67,8 +65,6 @@ export function CreateProjectWizard({
 }: CreateProjectWizardProps) {
   const [step, setStep] = useState<WizardStep>(1);
   const [busy, setBusy] = useState(false);
-  const [projectId, setProjectId] = useState<string | null>(null);
-  const [refCount, setRefCount] = useState(0);
 
   const [mode, setMode] = useState<ProjectWritingMode>("review");
   const [language, setLanguage] = useState<ProjectLanguage>("zh");
@@ -81,8 +77,6 @@ export function CreateProjectWizard({
 
   const reset = () => {
     setStep(1);
-    setProjectId(null);
-    setRefCount(0);
     setMode("review");
     setLanguage("zh");
     setTitle("");
@@ -99,7 +93,7 @@ export function CreateProjectWizard({
 
   const paperTitle = title.trim() || getDefaultProjectTitle(mode);
 
-  const handleStep2Next = async () => {
+  const handleCreate = async () => {
     setBusy(true);
     try {
       const config = buildConfigFromWizard(
@@ -112,21 +106,14 @@ export function CreateProjectWizard({
         entryMode ?? undefined,
       );
 
-      if (mode === "research") {
-        const { projectId: id } = await createProjectWithHandoff({ config, references: [] });
-        toast.success("项目已创建");
-        handleOpenChange(false);
-        onCreated(id);
-        return;
-      }
-
+      // 创建即进工作台：文献不再强制在向导里导入，随时可在工作台「文献」栏补充
       const { projectId: id } = await createProjectWithHandoff({
         config,
         references: [],
-        allowEmptyReferences: true,
       });
-      setProjectId(id);
-      setStep(3);
+      toast.success("项目已创建，文献可随时在工作台导入");
+      handleOpenChange(false);
+      onCreated(id);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "创建失败");
     } finally {
@@ -134,51 +121,16 @@ export function CreateProjectWizard({
     }
   };
 
-  const refreshRefCount = async () => {
-    if (!projectId) return;
-    const p = await getProject(projectId);
-    setRefCount(p?.references?.length ?? 0);
-  };
-
-  useEffect(() => {
-    if (step === 3 && projectId) {
-      void refreshRefCount();
-    }
-  }, [step, projectId]);
-
-  const handleFinish = async () => {
-    if (!projectId) return;
-    if (mode === "review" && refCount < MIN_REVIEW_HANDOFF_ENTRIES) {
-      toast.error(`综述至少导入 ${MIN_REVIEW_HANDOFF_ENTRIES} 篇参考文献`);
-      return;
-    }
-    setBusy(true);
-    try {
-      await syncPaperPassport(projectId);
-      toast.success("备料完成，进入写作工作台");
-      handleOpenChange(false);
-      onCreated(projectId);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "完成失败");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const stepLabels =
-    mode === "review"
-      ? ["类型", "配置与入口", "导入文献"]
-      : ["类型", "配置与入口"];
+  const stepLabels = ["类型", "配置与入口"];
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
+      <DialogContent className={cn(DIALOG_FORM, "flex flex-col max-h-[90vh]")}>
         <DialogHeader>
           <DialogTitle>新建论文项目</DialogTitle>
           <DialogDescription>
-            一次填完基础配置与写作入口
-            {mode === "review" ? "，并可导入参考文献" : ""}
-            ，进入工作台后 Agent 按入口推进（对齐 academic-paper）。
+            一次填完基础配置与写作入口，进入工作台后 Agent 按入口推进；
+            参考文献可随时在工作台「文献」栏导入
           </DialogDescription>
           <div className="flex gap-1 pt-1">
             {stepLabels.map((label, i) => (
@@ -320,29 +272,11 @@ export function CreateProjectWizard({
               </div>
             </div>
           )}
-
-          {step === 3 && projectId && (
-            <div className="space-y-2 min-h-[280px]">
-              <p className="text-[10px] text-[#6366f1] font-medium">
-                导入参考文献（已 {refCount} 篇，综述至少 {MIN_REVIEW_HANDOFF_ENTRIES} 篇）
-              </p>
-              <ProjectReferenceImportPanel
-                projectId={projectId}
-                onImported={() => void refreshRefCount()}
-                className="max-h-[min(420px,55vh)]"
-              />
-            </div>
-          )}
         </div>
 
         <DialogFooter className="gap-2 shrink-0">
-          {step > 1 && step < 3 && (
+          {step > 1 && (
             <Button variant="outline" size="sm" disabled={busy} onClick={() => setStep((step - 1) as WizardStep)}>
-              <ChevronLeft className="h-3.5 w-3.5 mr-1" /> 上一步
-            </Button>
-          )}
-          {step === 3 && (
-            <Button variant="outline" size="sm" disabled={busy} onClick={() => setStep(2)}>
               <ChevronLeft className="h-3.5 w-3.5 mr-1" /> 上一步
             </Button>
           )}
@@ -355,15 +289,9 @@ export function CreateProjectWizard({
             </Button>
           )}
           {step === 2 && (
-            <Button size="sm" disabled={busy} onClick={() => void handleStep2Next()}>
+            <Button size="sm" disabled={busy} onClick={() => void handleCreate()}>
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-              {mode === "review" ? "下一步：导入文献" : "创建并进入工作台"}
-            </Button>
-          )}
-          {step === 3 && (
-            <Button size="sm" disabled={busy} onClick={() => void handleFinish()}>
-              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-              完成备料，进入工作台
+              创建并进入工作台
             </Button>
           )}
         </DialogFooter>

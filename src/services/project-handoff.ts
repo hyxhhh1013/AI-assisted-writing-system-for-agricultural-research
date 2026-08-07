@@ -7,31 +7,20 @@ import {
   type PaperConfigRecord,
 } from "@/contracts/paper-passport";
 import { patchReferences, syncPaperPassport } from "@/services/project";
-import { MIN_REVIEW_HANDOFF_ENTRIES } from "@/contracts/direction-literature";
-import type { ProjectWritingMode } from "@/contracts/writing-mode";
 
 export interface CreateProjectHandoffInput {
   config: PaperConfigRecord;
   references?: string[];
-  /** 向导第 3 步前创建空项目（综述稍后再导入文献） */
-  allowEmptyReferences?: boolean;
 }
 
+/**
+ * 创建项目并做初始备料（同步 paper passport）。
+ * 不再强制参考文献：0 篇也可创建，Agent 在工作台 phase 1 检索/导入文献。
+ */
 export async function createProjectWithHandoff(
   input: CreateProjectHandoffInput,
 ): Promise<{ projectId: string }> {
-  const { config, references = [], allowEmptyReferences = false } = input;
-  const mode: ProjectWritingMode = config.paperType;
-
-  if (
-    mode === "review"
-    && !allowEmptyReferences
-    && references.length < MIN_REVIEW_HANDOFF_ENTRIES
-  ) {
-    throw new Error(
-      `综述项目至少需要 ${MIN_REVIEW_HANDOFF_ENTRIES} 篇参考文献，当前 ${references.length} 篇`,
-    );
-  }
+  const { config, references = [] } = input;
 
   const paperPassport = serializePaperPassport(
     createInitialPaperPassport(config),
