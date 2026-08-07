@@ -31,7 +31,9 @@ export function mergeProgressIntoWriteStatus(
   payload: WriteProgressPayload,
 ): WriteStatus {
   const next: WriteStatus = { ...status, info: [...status.info], warnings: [...status.warnings] };
-  if (payload.stage) next.stage = payload.stage;
+  if (payload.stage && status.stage !== "completed" && status.stage !== "error") {
+    next.stage = payload.stage;
+  }
   if (payload.detail !== undefined) next.detail = payload.detail;
   if (typeof payload.chars === "number") next.chars = payload.chars;
   if (typeof payload.elapsedMs === "number") next.elapsedMs = payload.elapsedMs;

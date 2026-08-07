@@ -63,4 +63,10 @@ describe("write-status 纯逻辑", () => {
     expect(s.stage).toBe("error");
     expect(s.error).toBe("AI 调用失败");
   });
+
+  it("merge 不覆盖终态（completed 后 stray progress 不回滚）", () => {
+    const s = finalizeWriteStatus(initWriteStatus("引言"), { success: true, charCount: 100, issueCount: 0, pipelineMode: "full" });
+    const r = mergeProgressIntoWriteStatus(s, { label: "x", stage: "writing", detail: "生成初稿…" });
+    expect(r.stage).toBe("completed");
+  });
 });

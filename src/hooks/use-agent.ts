@@ -350,6 +350,7 @@ export function useAgent(options: UseAgentOptions = {}) {
       setPendingConfirm(null);
       setPendingCheckpoint(null);
       setProgressLabel(null);
+      setWriteStatus(null);
       setStatus("planning");
 
       try {
@@ -375,6 +376,7 @@ export function useAgent(options: UseAgentOptions = {}) {
         }
         toast.error(getErrorMessage(error));
         setProgressLabel(null);
+        setWriteStatus(null);
         setStatus("error");
       } finally {
         if (abortRef.current === controller) {
