@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { WritingStatusCard } from "@/components/shared/agent/writing-status-card";
 import type { WriteStatus } from "@/lib/agent/write-status";
+
+afterEach(cleanup);
 
 const base = (over: Partial<WriteStatus> = {}): WriteStatus => ({
   section: "引言",
@@ -39,11 +41,29 @@ describe("WritingStatusCard", () => {
     expect(onRetry).toHaveBeenCalledOnce();
   });
 
-  it("fast 模式裁剪：未出现过的阶段不渲染", () => {
-    // 只经过 writing→completed，visited 不含 retrieving/verifying/refining
-    const { container } = render(<WritingStatusCard status={base({ stage: "completed", detail: "完成", done: { chars: 1450, issueCount: 0, passed: true } })} />);
+  it("fast 模式裁剪：只显示出现过的阶段", () => {
+    const { container, rerender } = render(<WritingStatusCard status={base({ stage: "writing" })} />);
+    rerender(<WritingStatusCard status={base({ stage: "completed", detail: "完成", done: { chars: 1450, issueCount: 0, passed: true } })} />);
+    expect(container.textContent).toContain("初稿");
+    expect(container.textContent).toContain("完成");
     expect(container.textContent).not.toContain("核查");
     expect(container.textContent).not.toContain("检索");
     expect(container.textContent).not.toContain("修正");
+  });
+
+  it("warnings 提示条渲染", () => {
+    render(<WritingStatusCard status={base({ warnings: ["数据声明未核实：abc"] })} />);
+    expect(screen.getByText("数据声明未核实：abc")).toBeTruthy();
+  });
+
+  it("完成态展开核查报告（verification）", () => {
+    render(<WritingStatusCard status={base({ stage: "completed", done: { chars: 100, issueCount: 0, passed: true, verification: "细节报告" } })} />);
+    fireEvent.click(screen.getByText(/已写回 引言/));
+    expect(screen.getByText("细节报告")).toBeTruthy();
+  });
+
+  it("无 onRetry 时错误态不渲染重试按钮", () => {
+    render(<WritingStatusCard status={base({ stage: "error", error: "失败" })} />);
+    expect(screen.queryByRole("button", { name: /重试/ })).toBeNull();
   });
 });

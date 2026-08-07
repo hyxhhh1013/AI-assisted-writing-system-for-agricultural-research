@@ -38,6 +38,7 @@ export function WritingStatusCard({
 }) {
   const [tick, setTick] = useState(0);
   const [showReport, setShowReport] = useState(false);
+  // 卡片在 writeStatus 为 null 时由父组件卸载，ref 随之重置；若未来同实例连续写不同章节需加 reset
   const visitedRef = useRef(new Set<string>());
   if (status.stage) visitedRef.current.add(status.stage);
   const visited = visitedRef.current;
@@ -48,6 +49,11 @@ export function WritingStatusCard({
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
   }, [running]);
+
+  // 服务端新 elapsedMs 到达时归零本地 tick（避免双计）
+  useEffect(() => {
+    setTick(0);
+  }, [status.elapsedMs]);
 
   const elapsed = status.elapsedMs + tick * 1000;
   const steps = STAGE_ORDER.filter((s) => visited.has(s.key));
@@ -72,7 +78,7 @@ export function WritingStatusCard({
       {/* 标题行：章节 + 统计 */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="text-[13px] font-semibold text-[#122820]">{title}</span>
-        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1 text-[11px] text-muted-foreground" aria-hidden>
           <Clock className="h-3 w-3" />
           {fmtDuration(elapsed)}
         </span>
