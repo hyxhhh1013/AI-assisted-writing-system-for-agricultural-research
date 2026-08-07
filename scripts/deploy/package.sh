@@ -14,7 +14,10 @@ echo "=== 2/3 打包 ==="
 rm -rf deploy-pkg deploy.tar.gz
 mkdir -p deploy-pkg
 
-cp -a .next/standalone/. deploy-pkg/
+# 高效打包：tar 管道复制 standalone 并排除 node_modules（~692M），
+# 避免「先 cp 后 rm」复制大目录卡死（坑见 docs/DEPLOY.md §四#3）
+tar -C .next/standalone --exclude=node_modules --exclude=papers --exclude=data -cf - . \
+  | tar -C deploy-pkg -xf -
 
 for d in papers node_modules data deploy-pkg; do
   rm -rf "deploy-pkg/$d"

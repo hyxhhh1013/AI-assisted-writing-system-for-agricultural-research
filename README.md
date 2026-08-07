@@ -215,9 +215,7 @@ npm run docs:api-index   # 刷新 docs/API_INDEX.md 路由表
 | [docs/domain/writing-pipeline.md](docs/domain/writing-pipeline.md) | 写作管道 / 写作 SSE |
 | [DEVELOPMENT_WORKFLOW](docs/DEVELOPMENT_WORKFLOW.md) | 开发、提交、部署总规范 |
 | [ARCHITECTURE](docs/ARCHITECTURE.md) | 系统架构、ERD（历史文档，与 L2 索引互补） |
-| [DEPLOY](docs/DEPLOY.md) | 部署与 RAG 迁移 |
-| [DEPLOY_VPS](docs/DEPLOY_VPS.md) | 腾讯云自动部署 |
-| [DEPLOY_SETUP_CHECKLIST](docs/DEPLOY_SETUP_CHECKLIST.md) | 第一次配部署清单 |
+| [DEPLOY](docs/DEPLOY.md) | **唯一部署方案**（本地 build → scp → apply.sh）+ 踩坑清单 / RAG 迁移 |
 | [CONVENTIONS](docs/CONVENTIONS.md) | 规范地图 |
 
 ## 许可

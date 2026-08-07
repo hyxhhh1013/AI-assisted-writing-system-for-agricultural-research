@@ -1,5 +1,6 @@
-# GrainScript 本地打包脚本（Windows 备用；日常请 git push main 触发 CI）
-# 用法: powershell -File scripts/deploy/package.ps1
+# GrainScript 本地打包脚本（Windows 备用，已弃用）
+# 唯一方案：bash scripts/deploy/package.sh（Git Bash / CI；内部用 tar-pipe 排除 node_modules，避免复制卡死）
+# 用法: powershell -File scripts/deploy/package.ps1（仅当无法用 bash 时）
 # 产出: deploy.tar.gz (上传到服务器后执行 scripts/deploy/apply.sh)
 
 $ErrorActionPreference = "Stop"

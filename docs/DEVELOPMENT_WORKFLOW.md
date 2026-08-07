@@ -1,7 +1,7 @@
 # 开发、提交与部署规范
 
 > 面向「不写代码、主要通过 AI 改项目」的使用方式。  
-> 详细部署步骤见 [DEPLOY_VPS.md](./DEPLOY_VPS.md)，配置清单见 [DEPLOY_SETUP_CHECKLIST.md](./DEPLOY_SETUP_CHECKLIST.md)。
+> 部署唯一方案见 [DEPLOY.md](./DEPLOY.md)（本地 build → scp → apply.sh，含全部踩坑清单）。
 
 ---
 
@@ -13,9 +13,7 @@
 | [AGENTS.md](../AGENTS.md) | AI 协作铁律、目录职责、技术栈 |
 | [CODE_MAP.md](./CODE_MAP.md) | 改某个功能该动哪些文件 |
 | [WORKFLOWS.md](./WORKFLOWS.md) | 写作 / RAG / 图表三条主流程 |
-| [DEPLOY.md](./DEPLOY.md) | 实验室本机 Docker（`docker compose build`） |
-| [DEPLOY_VPS.md](./DEPLOY_VPS.md) | 腾讯云 VPS 自动部署（推 main 即发布） |
-| [DEPLOY_SETUP_CHECKLIST.md](./DEPLOY_SETUP_CHECKLIST.md) | 第一次配部署时逐项打勾 |
+| [DEPLOY.md](./DEPLOY.md) | **唯一部署方案**（本地 build → scp → apply.sh）+ 踩坑清单 |
 
 ---
 
@@ -159,15 +157,17 @@ git push origin main
 
 ---
 
-## 6. 两种部署方式对比
+## 6. 部署方式（唯一）
 
-| | 实验室本机 | 腾讯云 VPS（推荐线上） |
-|--|-----------|------------------------|
-| 文档 | [DEPLOY.md](./DEPLOY.md) | [DEPLOY_VPS.md](./DEPLOY_VPS.md) |
-| 触发 | 手动 `docker compose up -d --build` | `git push origin main` |
-| 构建位置 | 本机 / 服务器本地 build | **VPS 上** docker build（零镜像仓库费） |
-| 数据库 | SQLite（`.env` 默认） | PostgreSQL（`docker-compose.prod.yml`） |
-| 适用 | 局域网试用、调试 Docker | 公网访问、免手搓 rebuild |
+| | 生产 VPS（唯一方案） |
+|--|---------------------|
+| 文档 | [DEPLOY.md](./DEPLOY.md) |
+| 流程 | 本地 `npm run build` → `package.sh` 打包 → scp → 服务器 `apply.sh`（nohup） |
+| 数据库 | PostgreSQL Docker（`grainscript-db`，`127.0.0.1:5432`） |
+| 进程 | PM2 `grainscript`（1 fork，`node server.js`） |
+| 已废弃 | ~~git push 自动部署~~、~~Docker VPS 构建~~、~~pm2-up.sh~~（勿再用） |
+
+完整步骤 + 踩坑清单见 [DEPLOY.md](./DEPLOY.md)。
 
 ---
 
@@ -204,8 +204,8 @@ VPS 上 docker compose build + up（不拉镜像仓库，零额外费用）
 
 | # | 事项 | 怎么做 | 存到哪里 |
 |---|------|--------|----------|
-| 1 | **SSH 私钥** | 本机 `cursor.pem` | GitHub Secret：`DEPLOY_SSH_KEY` |
-| 2 | **VPS 上的 `.env`** | SSH 登录服务器，`nano /opt/grainscript/.env` | 仅存在于 VPS，不进 Git |
+| 1 | **SSH 私钥** | 本机 `E:\Edownload\cursor.pem` | 仅本机（scp/ssh 用），**不必**存 GitHub |
+| 2 | **VPS 上的 `.env`** | SSH 登录，`nano /home/ubuntu/grainscript/.env` | 仅存在于 VPS，不进 Git |
 | 3 | **`JWT_SECRET`** | 随机字符串（见下方命令） | VPS 的 `.env` |
 | 4 | **`DEEPSEEK_API_KEY`** | DeepSeek 控制台申请 | VPS 的 `.env`（本地 `.env` 也要有） |
 
@@ -215,71 +215,65 @@ VPS 上 docker compose build + up（不拉镜像仓库，零额外费用）
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-写入 GitHub Secret（私钥示例，路径改成你的 `.pem`）：
-
-```powershell
-gh secret set DEPLOY_SSH_KEY < E:\Edownload\cursor.pem
-```
-
 验证 SSH 私钥能否登录 VPS：
 
 ```powershell
-ssh -i C:\path\to\your-key.pem ubuntu@159.75.106.21
+ssh -i E:\Edownload\cursor.pem ubuntu@159.75.106.21
 ```
 
-### 8.2 已替你配好的 GitHub Secrets
+### 8.2 部署所需（唯一方案）
 
-| Secret | 值 |
-|--------|-----|
-| `DEPLOY_HOST` | `159.75.106.21` |
-| `DEPLOY_USER` | `ubuntu` |
-| `DEPLOY_PATH` | `/opt/grainscript` |
+本地 scp 方案**不依赖 GitHub Actions / Secrets**。只需：
+
+| 项 | 值 |
+|----|-----|
+| 本机私钥 | `E:\Edownload\cursor.pem` |
+| 服务器 | `ubuntu@159.75.106.21`，应用目录 `/home/ubuntu/grainscript` |
+| 部署脚本 | `scripts/deploy/package.sh`（打包）、`scripts/deploy/apply.sh`（服务器解压+依赖+prisma+pm2） |
 
 ### 8.3 VPS 上一次性初始化
 
-用腾讯云网页终端或密码 SSH 登录后，见 [DEPLOY_SETUP_CHECKLIST.md](./DEPLOY_SETUP_CHECKLIST.md) 中的 bootstrap 命令。
-
-完成后在 VPS 上：
+用网页终端或密码 SSH 登录后，确认 `/home/ubuntu/grainscript/.env` 已配置（首次部署时由 apply.sh 解压出应用目录，`.env` 需手动建）：
 
 ```bash
-nano /opt/grainscript/.env
-# 填 JWT_SECRET、DEEPSEEK_API_KEY
+nano /home/ubuntu/grainscript/.env
+# 填 JWT_SECRET、DEEPSEEK_API_KEY、DATABASE_URL（127.0.0.1:5432）、RAG_ARTICLES_DIR
 ```
+
+完整变量见 [DEPLOY.md](./DEPLOY.md) §五。
 
 腾讯云安全组放行：**22**（SSH）、**3000**（HTTP，或以后改 Nginx 80/443）。
 
-### 8.4 还需要在 Git 里完成的（可让 AI 帮你 commit + PR）
+### 8.4 上线需要做的（可让 AI 帮你）
 
-1. 把 `.github/workflows/deploy.yml`、`docker-compose.prod.yml`、`scripts/deploy/`、部署文档 **提交并 merge 到 `main`**
-2. Push 后打开 GitHub → **Actions** → 看 `Deploy to VPS` 是否成功
-3. 浏览器访问 `http://159.75.106.21:3000`
+1. 按 `AGENTS.md` 提交代码（功能与 `docs/` 同 commit）
+2. 按 [DEPLOY.md](./DEPLOY.md) 唯一流程部署：`npm run build` → `package.sh` 打包 → scp → `apply.sh`（nohup）→ 轮询日志
+3. 浏览器访问 `https://ai4science.hyxhhh.site` 冒烟测试
+
+> 已废弃：`.github/workflows/deploy.yml`（`workflow_dispatch` 手动触发，本地 scp 已覆盖）、`docker-compose.prod.yml`（已移除）。
 
 ### 8.5 你**不需要**交给 AI 的东西
 
 - SSH **私钥**、服务器**密码**、API Key 全文  
 - 若曾在聊天里发过密码 → 请到腾讯云**立即改密**
 
-公钥可以公开；私钥和 Token 只用 `gh secret set` 或 VPS 本地编辑。
+私钥只在本地 `E:\Edownload\cursor.pem` 用（scp/ssh），不必存进 GitHub。
 
 ---
 
 ## 9. 日常发布 Checklist
 
-每次要上线新功能：
+每次要上线新功能，按 [DEPLOY.md](./DEPLOY.md) 唯一流程：
 
-- [ ] 本地 `npm run check` 通过  
-- [ ] 功能分支已 merge 到 `main`  
-- [ ] GitHub Actions `Deploy to VPS` 绿色成功  
-- [ ] 打开 `http://159.75.106.21:3000` 冒烟测试（登录 → 打开项目 → 试一次 AI 写作）  
+- [ ] 本地 `npm run check` 通过（tsc + vitest + eslint）
+- [ ] 功能与对应 `docs/` **同一个 commit**
+- [ ] `npm run build` 成功，记下 `.next/BUILD_ID`
+- [ ] `bash scripts/deploy/package.sh` 打包，`tar -tzf deploy.tar.gz | grep -c '\.next/BUILD_ID'` 非 0
+- [ ] scp 上传 → ssh nohup `apply.sh` → 轮询 `/tmp/grainscript-deploy.log` 见 `PREFLIGHT PASSED` + HTTP 检查
+- [ ] `curl localhost:3000` 200、`cat .next/BUILD_ID` 与本地一致、grep 新功能字符串命中
+- [ ] 打开 `https://ai4science.hyxhhh.site` 冒烟（登录 → 打开项目 → Agent 扩写/收集文献 → 图表）
 
-Actions 失败时：
-
-1. 看 Actions 日志是 **SSH 失败** 还是 **VPS build 失败 / 超时**
-2. Build 失败 → SSH 进 VPS 手动 `bash scripts/deploy/vps-up.sh` 看完整日志
-3. SSH 失败 → 检查 Secret、安全组 22、VPS `authorized_keys`
-4. OOM / Killed → 给 VPS 加 swap 或升配内存
-
-紧急手动部署（Actions 挂了）见 [DEPLOY_VPS.md](./DEPLOY_VPS.md) 第四节。
+部署失败（HTTP 500 / 启动报错）时：看 `pm2 logs grainscript --lines 40`，对照 [DEPLOY.md](./DEPLOY.md) §四 踩坑清单（最常见：Turbopack Prisma hash 断裂、打包漏 `.next`、SSH 限流）。
 
 ---
 
@@ -287,15 +281,12 @@ Actions 失败时：
 
 | 数据 | 位置 |
 |------|------|
-| 知识库索引 | VPS `/opt/grainscript/data/` |
-| 图表输出 | VPS `/opt/grainscript/public/charts/` |
-| PostgreSQL | Docker volume `pgdata` |
+| 知识库索引 | VPS `/home/ubuntu/grainscript/data/` |
+| 文献 PDF | VPS `/home/ubuntu/grainscript/papers/` |
+| 图表输出 | VPS `/home/ubuntu/grainscript/public/charts/` |
+| PostgreSQL | Docker volume `pgdata`（`grainscript-db`） |
 
-备份数据库：
-
-```bash
-docker compose -f docker-compose.prod.yml exec db pg_dump -U grainscript grainscript > backup.sql
-```
+用 `scripts/backup.sh`（日备 `.env`+sql.gz，周备 `papers/`），详见 [DEPLOY.md](./DEPLOY.md) §七。
 
 ---
 
@@ -311,7 +302,7 @@ docker compose -f docker-compose.prod.yml exec db pg_dump -U grainscript grainsc
 
 **部署：**
 
-> 帮我把部署相关文件单独 commit，并说明 merge 到 main 前我还缺哪些 Secret。
+> 按 docs/DEPLOY.md 唯一流程部署（本地 build → 打包 → scp → apply.sh），先跑 npm run check。
 
 ---
 
