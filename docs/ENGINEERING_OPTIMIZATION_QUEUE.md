@@ -1034,6 +1034,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-06 | Agent UI 审计 | AI | 13 种 SSE 事件全渲染确认；补强 Plan 子任务列表为 `AgentPlanCard`（默认展开、状态徽标/图标、进度条、执行中高亮），替代原弱化折叠版「本轮计划 N/M」；已知未修：并行只读批次无「并行 N 个」归组标识 |
 | 2026-08-07 | P2 门禁错位 | AI | 写完自查（reflectNode 推 validate_citations）通过的干净报告不再把会话顶进「引用修正」意图/阶段：`isCitationApplyGoal` 与 `resolveApPipelineStep` 改为要求最近一次 validate 报告确有待修问题（复用 `reflect.ts` 导出 `validateIssueCount`）。修复跟聊「好/继续」误判拒写 + AP 流程起草中 write_section 被 side-trip 门禁误拦；新增 2 用例，全量 896 通过。见 `docs/domain/agent.md` |
 | 2026-08-07 | 并发排队埋点 | AI | `writing-concurrency.ts` 加内存排队观测（`getWritingQueueStats`：排队次数/总等待 ms/超时次数，进程内累计，1e6 封顶）；`/api/admin/stats` 增 `writingQueue` 字段 + Admin 仪表盘「扩写排队观测」卡。用于量化并发 3 收益（排队/超时是否下降）；新增 4 用例，全量 900 通过 |
+| 2026-08-07 | 新建向导精简 | AI | 新建项目向导 3 步→2 步：取消 review 模式强制 ≥1 篇文献门禁（0 篇也能完成创建，Agent 工作台 phase1 检索/导入文献）；移除向导第 3 步导入文献面板（工作台「文献」栏已有全高面板）；向导 Dialog 从 max-w-lg 升级 DIALOG_FORM（max-w-xl md:max-w-2xl）；`createProjectWithHandoff` 去掉 allowEmptyReferences 分支与 review 抛错。全量 948 通过 |
 
 ---
 
