@@ -379,6 +379,7 @@ export function buildVerifierSystemPrompt(
 2. 标记疑似照搬、数据归属错误、未标注来源的数据
 3. 检查是否符合综述体例（非 IMRaD 试验报告）
 4. 检查 overclaim 并建议替换
+核查过程请边核查边输出进度行：每个 [n] 核查完成后输出一行 \`〔进度 n/N〕\`（N 为全文引用总数）。
 必须指出哪个编号、什么问题、如何改写。${jsonRule}`;
   }
   return role === "audit"
@@ -391,6 +392,7 @@ export function buildVerifierSystemPrompt(
 1. 逐条核实每个 [n] 引用是否在原文中有确切依据——纠正引用偏差，但不无故删除引用
 2. 检查是否存在 overclaim 措辞并建议替换
 3. 检查 Results/Discussion 句式是否混淆
+核查过程请边核查边输出进度行：每个 [n] 核查完成后输出一行 \`〔进度 n/N〕\`（N 为全文引用总数）。
 必须具体指出哪个编号、什么问题、如何修正。${jsonRule}`;
 }
 

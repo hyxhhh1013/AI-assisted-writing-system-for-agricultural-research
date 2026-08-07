@@ -11,6 +11,24 @@ import {
 } from "@/contracts/writing-verification";
 import type { PreparedWritingContext, WritingPipelineEmit } from "../types";
 
+/** verifier 流式进度标记：〔进度 n/N〕 */
+const PROGRESS_MARKER_RE = /〔进度\s*(\d+)\s*\/\s*(\d+)\s*〕/;
+const PROGRESS_MARKER_GLOBAL = /〔进度\s*(\d+)\s*\/\s*(\d+)\s*〕/g;
+
+/** 从流内容提取进度标记；无则 null */
+export function extractVerificationProgress(
+  content: string,
+): { checked: number; total: number } | null {
+  const m = PROGRESS_MARKER_RE.exec(content);
+  if (!m) return null;
+  return { checked: Number(m[1]), total: Number(m[2]) };
+}
+
+/** 从报告文本移除进度标记（防止污染 verificationReport） */
+export function stripProgressMarkers(content: string): string {
+  return content.replace(PROGRESS_MARKER_GLOBAL, "");
+}
+
 function resolveVerifierMaxFullSources(): number {
   const raw = process.env.WRITING_VERIFIER_MAX_FULL_SOURCES;
   if (raw !== undefined && raw.trim() !== "") {
@@ -123,6 +141,11 @@ export async function runVerifierPhase(
       for await (const chunk of streamAIResponse(verifierResponse, signal, 180_000)) {
         if (chunk.content) {
           verificationReport += chunk.content;
+          const marker = extractVerificationProgress(chunk.content);
+          if (marker) {
+            emit({ type: "verification_progress", checked: marker.checked, total: marker.total });
+          }
+          verificationReport = stripProgressMarkers(verificationReport);
           emit({ type: "verification", verification: chunk.content });
         }
       }
