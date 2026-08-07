@@ -23,7 +23,7 @@ import {
   FileText, Layout, BookOpen,
   CheckCircle2, ChevronLeft, ChevronRight,
   Eye, FileSearch, Settings2,
-  BarChart3, Search, Radar
+  BarChart3, Search, Radar, Map as MapIcon
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
@@ -295,7 +295,8 @@ function WorkbenchContent() {
 
   const handleOpenBlueprintDialog = useCallback(() => {
     if (!writingBlueprint) {
-      toast.error("请在大纲侧栏先生成写作蓝图");
+      toast.info("请先生成写作蓝图");
+      setActiveTab("structure");
       return;
     }
     setBlueprintDialogOpen(true);
@@ -829,9 +830,21 @@ function WorkbenchContent() {
                   </span>
                 )}
               </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setIsSidebarOpen(false)}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
+              <div className="flex shrink-0 items-center gap-0.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  title="写作蓝图（查看 / 编辑）"
+                  onClick={() => void handleOpenBlueprintDialog()}
+                >
+                  <MapIcon className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsSidebarOpen(false)}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </header>
           ) : null}

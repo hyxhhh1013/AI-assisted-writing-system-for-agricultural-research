@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, CheckCircle2, ChevronDown, ChevronLeft, Circle, FileText, Loader2, RotateCcw } from "lucide-react";
+import { Bot, CheckCircle2, ChevronDown, ChevronLeft, Circle, FileText, Loader2, Map as MapIcon, RotateCcw } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -523,6 +523,19 @@ export function AgentPanel({
             )}
           </span>
           <div className="ml-auto flex items-center gap-0.5">
+            {onOpenBlueprint ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-[11px]"
+                title="写作蓝图（查看 / 编辑）"
+                onClick={onOpenBlueprint}
+              >
+                <MapIcon className="mr-1 h-3.5 w-3.5" />
+                蓝图
+              </Button>
+            ) : null}
             {interrupted && !agent.isRunning ? (
               <Button
                 type="button"

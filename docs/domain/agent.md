@@ -109,6 +109,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **查看/编辑完整蓝图（2026-08-07）**：`blueprint_approve` 检查点卡额外显示「打开蓝图工作台（查看 / 编辑）」按钮（`agent-panel` 新增 `onOpenBlueprint` 回调，由 workbench 接 `handleOpenBlueprintDialog` 打开既有 `BlueprintWorkspaceDialog`）。`generate_writing_blueprint` 属 `PROJECT_MUTATING_TOOLS`，生成后工作台自动刷新 `writingBlueprint`，确保按钮打开的是最新蓝图。
 - **对话里「看看蓝图」调出工作台（2026-08-07）**：新增只读工具 `open_blueprint_workspace`（`tools/open-blueprint-workspace.ts`）。Agent 识别到用户想看/编辑写作蓝图时调用它；前端 `agent-panel` 收到该工具的成功 observation 后自动 `onOpenBlueprint()` 打开工作台。蓝图未生成时工具报错，Agent 应先生成蓝图。
 - **工作台随内容自适应（2026-08-07）**：蓝图 schema 新增可选 `projectMode`/`language`（生成时用项目兜底填充）；工作台按顶层章节把 `sectionGuides` 树形分组（`" > "` 层级，顶层可折叠）、按论文类型显示徽标与配图提示（综述→概念图/对比表，研究→方法流程图/结果数据图）、空区块（前置条件/配图/章节导览/写作顺序）自动隐藏。分组纯函数 `groupSectionGuides` 在 `lib/blueprint-utils.ts`。
+- **蓝图常驻入口（2026-08-07）**：工作台侧栏头（非 Agent Tab）与 Agent 面板头均新增「蓝图」按钮（Map 图标），随时可打开蓝图工作台；无蓝图时点击自动切到「章节结构」侧栏引导生成。
 
 ## 引用核查 / 引用修正意图门禁（2026-08-07 修正）
 
