@@ -192,7 +192,7 @@ npm run rag:convert-index
 | PM2 | **单实例 fork**（`ecosystem.config.cjs` 已配置 `instances: 1`）；勿开 cluster，避免双份 RAG 热数据 |
 | 内存 | `max_memory_restart: 4000M`，`--max-old-space-size=3072`；预留 ~2GB 给 PostgreSQL + OS |
 | RAG | 默认 `RAG_WARMUP=light` + 全库流式分类检索，避免启动即占满堆 |
-| 扩写并发 | `.env` 设置 `WRITING_MAX_CONCURRENT`（代码默认 2；实验室生产 2026-08-07 起调为 3）；并发写满时排队等待（`WRITING_QUEUE_WAIT_MS` 默认 60s），超时才返回友好「繁忙」提示 |
+| 扩写并发 | `.env` 设置 `WRITING_MAX_CONCURRENT`（代码默认 2；实验室生产 2026-08-07 起调为 3）；并发写满时排队等待（`WRITING_QUEUE_WAIT_MS` 默认 60s），超时才返回友好「繁忙」提示。**收益观测**：Admin 仪表盘「扩写排队观测」卡显示进程内累计排队次数/平均等待/超时次数（`/api/admin/stats` 的 `writingQueue` 字段）；调高并发后看排队与超时是否下降 |
 | 默认模式 | `WRITING_DEFAULT_MODE=fast`；UI 默认「快速预览」，深度核查需用户确认 |
 | Verifier | `WRITING_VERIFIER_MAX_FULL_SOURCES=5`；高负载自动降为 2；设为 `0` 可跳过全文加载 |
 

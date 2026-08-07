@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getAiUsageDashboard } from "@/services/admin-usage";
+import { getWritingQueueStats } from "@/lib/writing-concurrency";
 
 export async function GET(req: NextRequest) {
   const { error } = await requireAdmin(req);
@@ -109,5 +110,7 @@ export async function GET(req: NextRequest) {
       name: d.name, slug: d.slug, status: d.status, time: d.updatedAt.toISOString(),
     })),
     aiUsage,
+    // 扩写管道并发排队观测（内存累计，进程内实时；用于量化「提高并发上限」收益）
+    writingQueue: getWritingQueueStats(),
   });
 }

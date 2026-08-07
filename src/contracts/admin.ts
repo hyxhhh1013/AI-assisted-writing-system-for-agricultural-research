@@ -91,6 +91,13 @@ export interface AdminStats {
     byFeature: Record<string, number>;
     topUsers: { userId: string; userName?: string; count: number }[];
   };
+  /** 扩写管道并发排队观测（内存累计，进程内实时） */
+  writingQueue?: {
+    waitCount: number;
+    waitMs: number;
+    timeoutCount: number;
+    maxConcurrent: number;
+  };
 }
 
 export interface AdminHealthData {

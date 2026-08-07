@@ -90,6 +90,17 @@ export default function AdminDashboard() {
     ? `AI 调用：总计 ${stats.aiUsage.totalCalls} · 今日 ${stats.aiUsage.todayCount} · 本周 ${stats.aiUsage.weekCount}`
     : undefined;
 
+  // 扩写并发排队观测（进程内累计；用于量化「提高并发上限」收益）
+  const wq = stats.writingQueue;
+  const writingQueueItems = wq
+    ? [
+        { label: "并发上限", value: wq.maxConcurrent, hint: "WRITING_MAX_CONCURRENT" },
+        { label: "排队次数", value: wq.waitCount, hint: "并发已满时等待的请求数" },
+        { label: "平均等待", value: wq.waitCount > 0 ? `${Math.round(wq.waitMs / wq.waitCount)}ms` : "—", hint: wq.waitCount > 0 ? `总等待 ${wq.waitMs}ms` : "本轮无排队" },
+        { label: "超时次数", value: wq.timeoutCount, hint: "排队超时返回「繁忙」的请求数" },
+      ]
+    : [];
+
   const featureItems = stats.aiUsage
     ? Object.entries(stats.aiUsage.byFeature)
         .sort(([, a], [, b]) => b - a)
@@ -277,6 +288,15 @@ export default function AdminDashboard() {
               <AdminCompactList items={recentDirItems} />
               <Link href="/admin/directions" className="mt-3 inline-flex items-center gap-1 text-xs text-[#1a5632] hover:underline">
                 管理方向 <ArrowRight className="h-3 w-3" />
+              </Link>
+            </AdminPanel>
+          )}
+
+          {writingQueueItems.length > 0 && (
+            <AdminPanel title="扩写排队观测" subtitle="并发 3 收益量化（进程内累计）">
+              <AdminCompactList items={writingQueueItems} />
+              <Link href="/admin/usage" className="mt-3 inline-flex items-center gap-1 text-xs text-[#1a5632] hover:underline">
+                用量详情 <ArrowRight className="h-3 w-3" />
               </Link>
             </AdminPanel>
           )}

@@ -1032,6 +1032,8 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-06 | agent 修复 | AI | 会话日志排查：refine_content 片段覆盖整节（introduction 2517→111 字）修复为项目内整节权威底稿 + 过短拒写回；read_section 同章节隔离（写进展前持续拦截）；antispam 二次熔断硬停机（MAX_BREAKS_BEFORE_HARD_STOP=2）。agent 套件 348 通过，冒烟验证 P0 生效（1994→1997 未丢失）。见 `docs/domain/agent.md` |
 | 2026-08-06 | 写并发排队 | AI | `waitForWritingSlot`：写并发满时排队等待（WRITING_QUEUE_WAIT_MS=60s，轮询 3s），超时才抛友好「繁忙」提示，替代硬报错「扩写并发已满」；.env.example 补配置说明 |
 | 2026-08-06 | Agent UI 审计 | AI | 13 种 SSE 事件全渲染确认；补强 Plan 子任务列表为 `AgentPlanCard`（默认展开、状态徽标/图标、进度条、执行中高亮），替代原弱化折叠版「本轮计划 N/M」；已知未修：并行只读批次无「并行 N 个」归组标识 |
+| 2026-08-07 | P2 门禁错位 | AI | 写完自查（reflectNode 推 validate_citations）通过的干净报告不再把会话顶进「引用修正」意图/阶段：`isCitationApplyGoal` 与 `resolveApPipelineStep` 改为要求最近一次 validate 报告确有待修问题（复用 `reflect.ts` 导出 `validateIssueCount`）。修复跟聊「好/继续」误判拒写 + AP 流程起草中 write_section 被 side-trip 门禁误拦；新增 2 用例，全量 896 通过。见 `docs/domain/agent.md` |
+| 2026-08-07 | 并发排队埋点 | AI | `writing-concurrency.ts` 加内存排队观测（`getWritingQueueStats`：排队次数/总等待 ms/超时次数，进程内累计，1e6 封顶）；`/api/admin/stats` 增 `writingQueue` 字段 + Admin 仪表盘「扩写排队观测」卡。用于量化并发 3 收益（排队/超时是否下降）；新增 4 用例，全量 900 通过 |
 
 ---
 

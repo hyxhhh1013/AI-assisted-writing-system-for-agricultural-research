@@ -7,6 +7,7 @@ import {
   waitForWritingSlot,
   buildWritingBusyMessage,
   resetWritingConcurrencyForTests,
+  getWritingQueueStats,
 } from "@/lib/writing-concurrency";
 
 describe("writing-concurrency", () => {
@@ -76,5 +77,49 @@ describe("writing-concurrency", () => {
     resetWritingConcurrencyForTests(2, 50);
     expect(buildWritingBusyMessage()).toMatch(/2 个/);
     expect(buildWritingBusyMessage()).toMatch(/排队/);
+  });
+
+  it("直接取得槽位不记排队统计", () => {
+    resetWritingConcurrencyForTests(2, 200);
+    expect(tryAcquireWritingSlot()).toBe(true);
+    const stats = getWritingQueueStats();
+    expect(stats.waitCount).toBe(0);
+    expect(stats.timeoutCount).toBe(0);
+    expect(stats.waitMs).toBe(0);
+  });
+
+  it("排队等待获得槽位记入 waitCount 与 waitMs", async () => {
+    resetWritingConcurrencyForTests(1, 500);
+    tryAcquireWritingSlot();
+    const waitPromise = waitForWritingSlot();
+    // 让等待循环先跑一拍，确保进入轮询后释放
+    await new Promise((r) => setTimeout(r, 30));
+    releaseWritingSlot();
+    await expect(waitPromise).resolves.toBe(true);
+    const stats = getWritingQueueStats();
+    expect(stats.waitCount).toBe(1);
+    expect(stats.timeoutCount).toBe(0);
+    expect(stats.waitMs).toBeGreaterThan(0);
+  });
+
+  it("排队超时记入 timeoutCount（不计 waitMs）", async () => {
+    resetWritingConcurrencyForTests(1, 50);
+    tryAcquireWritingSlot();
+    await expect(waitForWritingSlot()).resolves.toBe(false);
+    const stats = getWritingQueueStats();
+    expect(stats.waitCount).toBe(1);
+    expect(stats.timeoutCount).toBe(1);
+    expect(stats.waitMs).toBe(0);
+  });
+
+  it("reset 清零排队统计", () => {
+    resetWritingConcurrencyForTests(1, 50);
+    tryAcquireWritingSlot();
+    void waitForWritingSlot();
+    resetWritingConcurrencyForTests(2);
+    const stats = getWritingQueueStats();
+    expect(stats.waitCount).toBe(0);
+    expect(stats.timeoutCount).toBe(0);
+    expect(stats.waitMs).toBe(0);
   });
 });

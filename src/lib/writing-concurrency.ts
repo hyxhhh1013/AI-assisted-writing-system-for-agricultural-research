@@ -4,6 +4,10 @@
  *
  * 2026-08-06：并发已满时不再硬报错，改为排队等待（waitForWritingSlot），
  * 超时后才抛友好提示，避免多人使用时「扩写并发已满」直接吓退用户。
+ *
+ * 2026-08-07：增加轻量排队观测（getWritingQueueStats）——排队次数 / 排队总毫秒 /
+ * 超时次数，供 Admin 面板量化「提高并发上限」的收益（并发 3 上线后观察排队是否缓解）。
+ * 纯内存环形累计，进程重启即清零；不做持久化，避免观测引入 DB 依赖。
  */
 
 import { setTimeout as sleep } from "node:timers/promises";
@@ -12,6 +16,8 @@ const DEFAULT_MAX = 2;
 /** 排队等待写槽的最长时长 */
 const DEFAULT_QUEUE_WAIT_MS = 60_000;
 const POLL_INTERVAL_MS = 3_000;
+/** 排队观测计数的保护上限（防内存无限增长；达到后停止累计） */
+const MAX_QUEUE_STATS_ROLLOVER = 1_000_000;
 
 function parseMaxConcurrent(): number {
   const raw = process.env.WRITING_MAX_CONCURRENT;
@@ -33,6 +39,11 @@ let activeCount = 0;
 let maxConcurrent = parseMaxConcurrent();
 let queueWaitMs = parseQueueWaitMs();
 
+/** 排队观测：waitCount=排队次数（含超时），waitMs=实际排队总毫秒，timeoutCount=排队后超时次数 */
+let queueWaitCount = 0;
+let queueWaitMsTotal = 0;
+let queueTimeoutCount = 0;
+
 export function getWritingMaxConcurrent(): number {
   return maxConcurrent;
 }
@@ -43,6 +54,21 @@ export function getActiveWritingCount(): number {
 
 export function isWritingUnderLoad(): boolean {
   return activeCount >= maxConcurrent;
+}
+
+/** 排队观测快照（Admin 面板读取；进程内累计） */
+export function getWritingQueueStats(): {
+  waitCount: number;
+  waitMs: number;
+  timeoutCount: number;
+  maxConcurrent: number;
+} {
+  return {
+    waitCount: queueWaitCount,
+    waitMs: queueWaitMsTotal,
+    timeoutCount: queueTimeoutCount,
+    maxConcurrent,
+  };
 }
 
 /** 占用一个扩写槽位；已满时返回 false */
@@ -59,16 +85,27 @@ export function releaseWritingSlot(): void {
 /**
  * 排队等待写槽：并发已满时轮询等待，成功占用返回 true。
  * 超过 WRITING_QUEUE_WAIT_MS 或 signal 中断返回 false（调用方给友好提示）。
+ * 进入过排队（首次获取失败）就计入观测；直接取得槽位不计数。
  */
 export async function waitForWritingSlot(
   signal?: AbortSignal,
 ): Promise<boolean> {
   if (tryAcquireWritingSlot()) return true;
-  const deadline = Date.now() + queueWaitMs;
+  const startedAt = Date.now();
+  queueWaitCount += 1;
+  const deadline = startedAt + queueWaitMs;
   while (Date.now() < deadline) {
     if (signal?.aborted) return false;
     await sleep(Math.min(POLL_INTERVAL_MS, Math.max(0, deadline - Date.now())));
-    if (tryAcquireWritingSlot()) return true;
+    if (tryAcquireWritingSlot()) {
+      if (queueWaitCount <= MAX_QUEUE_STATS_ROLLOVER) {
+        queueWaitMsTotal += Date.now() - startedAt;
+      }
+      return true;
+    }
+  }
+  if (queueWaitCount <= MAX_QUEUE_STATS_ROLLOVER) {
+    queueTimeoutCount += 1;
   }
   return false;
 }
@@ -87,6 +124,9 @@ export function resetWritingConcurrencyForTests(
   nextQueueWaitMs?: number,
 ): void {
   activeCount = 0;
+  queueWaitCount = 0;
+  queueWaitMsTotal = 0;
+  queueTimeoutCount = 0;
   if (nextMax !== undefined) {
     maxConcurrent = nextMax;
   } else {
