@@ -3,6 +3,7 @@
  */
 
 import type { ToolObservation } from "@/lib/agent/types";
+import { validateIssueCount } from "@/lib/agent/core/reflect";
 
 export type GoalIntentGateResult =
   | { ok: true }
@@ -121,6 +122,18 @@ function hasSuccessfulReview(observations: readonly ToolObservation[]): boolean 
   );
 }
 
+/** 最近一次成功 validate_citations 是否发现问题（硬检未过或语义可疑） */
+function lastValidateHasIssues(
+  observations: readonly ToolObservation[],
+): boolean {
+  for (let i = observations.length - 1; i >= 0; i--) {
+    const o = observations[i];
+    if (o.tool !== "validate_citations" || !o.success) continue;
+    return validateIssueCount(o) > 0;
+  }
+  return false;
+}
+
 /** 解析 academic-paper 流程当前应执行的子步骤 */
 export function resolveApPipelineStep(
   goal: string,
@@ -128,7 +141,11 @@ export function resolveApPipelineStep(
 ): ApPipelineStep | null {
   if (!isAcademicPaperPipelineGoal(goal)) return null;
   if (!citationCheckReportReady(observations)) return "citation_check";
-  if (!hasCitationRefineSuccess(observations)) return "citation_fix";
+  // 仅当 validate 报告确实发现待修问题才进「引用修正」；写完自查的干净报告（0 问题）
+  // 不应把起草中的会话顶到修正阶段（否则后续 write_section 会被 side-trip 门禁误拦）。
+  if (lastValidateHasIssues(observations) && !hasCitationRefineSuccess(observations)) {
+    return "citation_fix";
+  }
   if (!hasSuccessfulAbstractWrite(observations)) return "abstract";
   if (!hasSuccessfulReview(observations)) return "review";
   return null;
@@ -159,12 +176,15 @@ export function citationCheckReportReady(observations: readonly ToolObservation[
 const CITATION_APPLY_SHORT =
   /^(好|好的|可以|行|开始|执行|确认|同意|继续|按方案|就这样)[。!！?？\s]*$/;
 
-/** 用户已确认应用引用修正（须已有 validate_citations 报告） */
+/** 用户已确认应用引用修正（须已有 validate_citations 报告且确实发现问题） */
 export function isCitationApplyGoal(
   goal: string,
   observations: readonly ToolObservation[],
 ): boolean {
   if (!citationCheckReportReady(observations)) return false;
+  // 写完自查的干净报告（0 问题）不算「待修正」：跟聊「好/继续」只是泛认可，
+  // 不应被解释为「同意执行引用修正」（否则 checkCitationSideTripGate 会误拦 write_section）。
+  if (!lastValidateHasIssues(observations)) return false;
   const g = goal.trim();
   if (CITATION_APPLY_SHORT.test(g)) return true;
   return /执行.*修正|按.*方案.*改|开始.*refine|应用.*修正|修正.*引用|改引|refine_content/i.test(

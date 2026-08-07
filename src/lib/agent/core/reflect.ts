@@ -62,7 +62,7 @@ function sectionOf(o: ToolObservation): string | undefined {
 }
 
 /** 一次成功 validate_citations 的问题数（硬检未过算至少 1；否则看语义可疑数） */
-function validateIssueCount(o: ToolObservation): number {
+export function validateIssueCount(o: ToolObservation): number {
   const d = o.data as {
     exportReady?: unknown;
     phase5Passed?: unknown;

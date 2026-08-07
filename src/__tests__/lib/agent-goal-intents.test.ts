@@ -74,7 +74,7 @@ describe("goal-intents", () => {
 
   it("resolves pipeline steps after validate and refine", () => {
     const goal = "按 academic-paper 流程继续：起草→引用检查→双语摘要→审查";
-    const afterValidate = [ok("validate_citations")];
+    const afterValidate = [ok("validate_citations", { exportReady: false })];
     expect(resolveApPipelineStep(goal, afterValidate)).toBe("citation_fix");
     const blocked = checkCitationSideTripGate(
       goal,
@@ -95,7 +95,7 @@ describe("goal-intents", () => {
   it("review step completes with either run_review_rounds or review_content", () => {
     const goal = "按 academic-paper 流程继续：起草→引用检查→双语摘要→审查";
     const beforeReview = [
-      ok("validate_citations"),
+      ok("validate_citations", { exportReady: false }),
       ok("refine_content", { persisted: true }),
       ok("write_bilingual_abstract"),
     ];
@@ -108,12 +108,44 @@ describe("goal-intents", () => {
     ).toBeNull();
   });
 
-  it("detects citation apply after validate report", () => {
-    const observations = [ok("validate_citations")];
+  it("detects citation apply after validate report with issues", () => {
+    const observations = [ok("validate_citations", { exportReady: false })];
     expect(isCitationApplyGoal("好", observations)).toBe(true);
     expect(isCitationApplyGoal("好", [])).toBe(false);
     expect(shouldSkipPlanner("好", observations)).toBe(true);
     expect(citationCheckReportReady(observations)).toBe(true);
+  });
+
+  it("自查通过后（0 问题）不再误判为引用修正：跟聊「好/继续」放行 write_section", () => {
+    // 上一轮写完自查 validate_citations 通过（0 问题）——只是 reflectNode 例行动作，非用户引用核查请求
+    const cleanValidate = [
+      ok("write_section", { persisted: true, section: "introduction" }),
+      ok("validate_citations", {
+        exportReady: true,
+        phase5Passed: true,
+        grounding: { suspiciousCount: 0 },
+      }),
+    ];
+    expect(isCitationApplyGoal("继续", cleanValidate)).toBe(false);
+    expect(isCitationApplyGoal("好", cleanValidate)).toBe(false);
+    expect(
+      checkCitationSideTripGate("继续", "write_section", cleanValidate).ok,
+    ).toBe(true);
+  });
+
+  it("自查通过后（0 问题）不把 AP 流程顶到引用修正阶段：起草 write_section 放行", () => {
+    const goal = "按 academic-paper 流程继续：起草→引用检查→双语摘要→审查";
+    const cleanValidate = [
+      ok("validate_citations", {
+        exportReady: true,
+        phase5Passed: true,
+        grounding: { suspiciousCount: 0 },
+      }),
+    ];
+    expect(resolveApPipelineStep(goal, cleanValidate)).not.toBe("citation_fix");
+    expect(
+      checkCitationSideTripGate(goal, "write_section", cleanValidate).ok,
+    ).toBe(true);
   });
 
   it("blocks side trips during citation check", () => {
@@ -129,7 +161,7 @@ describe("goal-intents", () => {
   });
 
   it("blocks side trips during citation apply until refine", () => {
-    const observations = [ok("validate_citations")];
+    const observations = [ok("validate_citations", { exportReady: false })];
     const blocked = checkCitationSideTripGate("好", "import_reference", observations);
     expect(blocked.ok).toBe(false);
     const afterRefine = [
@@ -221,8 +253,8 @@ describe("intent continuation pickers", () => {
     expect(pickIntentStopAsk(ctx())).toBeNull();
   });
 
-  it("nudges academic-paper citation_fix step after validate", () => {
-    const observations = [ok("validate_citations")];
+  it("nudges academic-paper citation_fix step after validate with issues", () => {
+    const observations = [ok("validate_citations", { exportReady: false })];
     expect(pickIntentNudge(ctx({ goal: AP_GOAL, observations }))).toContain(
       "refine_content",
     );
@@ -257,7 +289,7 @@ describe("intent continuation pickers", () => {
     // 同一组合 goal：引用修正未写回（pipeline_fix）+ 文献未足（literature）同时成立。
     // NUDGE_ORDER 先 AP 流程 → nudge 应提 refine_content；
     // STOP_ORDER 先文献 → stopAsk 应优先问文献体量。
-    const observations = [ok("validate_citations")];
+    const observations = [ok("validate_citations", { exportReady: false })];
     const c = ctx({
       goal: "按 academic-paper 流程继续：起草→引用检查→双语摘要→审查，并检索导入 5 篇文献",
       observations,
