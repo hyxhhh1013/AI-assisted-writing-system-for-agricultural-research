@@ -16,6 +16,7 @@ import { getFullTextTool } from "@/lib/agent/tools/get-full-text";
 import { askUserTool } from "@/lib/agent/tools/ask-user";
 import { importReferenceTool } from "@/lib/agent/tools/import-reference";
 import { listPlotSourcesTool } from "@/lib/agent/tools/list-plot-sources";
+import { readFigureTool } from "@/lib/agent/tools/read-figure";
 import { listReferencesTool } from "@/lib/agent/tools/list-references";
 import { readReferenceTool } from "@/lib/agent/tools/read-reference";
 import { parseRevisionCommentsTool } from "@/lib/agent/tools/parse-revision-comments";
@@ -85,6 +86,7 @@ export function createReadOnlyTools(): ToolDefinition[] {
     listReferencesTool,
     readReferenceTool,
     listPlotSourcesTool,
+    readFigureTool,
     searchKnowledgeTool,
     searchExternalTool,
     getFullTextTool,
