@@ -92,6 +92,33 @@ describe("writeSectionTool 进度透传", () => {
     expect(labels[0]).toContain("引言");
   });
 
+  it("发射结构化 agent/progress（带 stage + chars，锁死透传链路）", async () => {
+    const ctx = makeCtx();
+    await writeSectionTool.execute(
+      { section: "introduction", context: "扩写引言", pipelineMode: "full" },
+      ctx,
+    );
+
+    const emitter = vi.mocked(ctx.emitLiveEvent!);
+    const progressEvents = emitter.mock.calls
+      .map(([e]) => e)
+      .filter((e) => e.type === "agent/progress");
+    expect(progressEvents.length).toBeGreaterThan(0);
+
+    // 每条 agent/progress 都应带结构化字段（而不只是 label）
+    for (const evt of progressEvents) {
+      expect((evt as { stage?: string }).stage).toBeTruthy();
+      expect(typeof (evt as { chars?: number }).chars).toBe("number");
+    }
+
+    // delta 500 字后 chars 累计到 500，锁定发射的是完整负载而非仅 label
+    const deltaEvent = progressEvents.find(
+      (e) => (e as { chars?: number }).chars === 500,
+    );
+    expect(deltaEvent).toBeDefined();
+    expect((deltaEvent as { stage?: string }).stage).toBe("writing");
+  });
+
   it("ctx.emitLiveEvent 缺省时行为与现状一致（不抛错）", async () => {
     const ctx = makeCtx();
     delete ctx.emitLiveEvent;
