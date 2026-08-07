@@ -38,8 +38,14 @@ export function WritingStatusCard({
 }) {
   const [tick, setTick] = useState(0);
   const [showReport, setShowReport] = useState(false);
-  // 卡片在 writeStatus 为 null 时由父组件卸载，ref 随之重置；若未来同实例连续写不同章节需加 reset
+  // 卡片在 writeStatus 为 null 时由父组件卸载，ref 随之重置；
+  // 同实例连续写不同章节时按 section 重置 visited，避免上一个章节的阶段残留
   const visitedRef = useRef(new Set<string>());
+  const sectionRef = useRef(status.section);
+  if (sectionRef.current !== status.section) {
+    sectionRef.current = status.section;
+    visitedRef.current = new Set<string>();
+  }
   if (status.stage) visitedRef.current.add(status.stage);
   const visited = visitedRef.current;
 

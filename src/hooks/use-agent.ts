@@ -53,8 +53,6 @@ export function useAgent(options: UseAgentOptions = {}) {
   const [historyLoaded, setHistoryLoaded] = useState(false);
   /** 真流式：agent 回复正在逐 token 到达的增量文本 */
   const [streamingText, setStreamingText] = useState("");
-  /** 长工具（write_section）执行期间的实时进度文案 */
-  const [progressLabel, setProgressLabel] = useState<string | null>(null);
   /** 常驻写状态卡：write_section 执行期间的阶段/字数/耗时/提示 */
   const [writeStatus, setWriteStatus] = useState<WriteStatus | null>(null);
 
@@ -126,7 +124,6 @@ export function useAgent(options: UseAgentOptions = {}) {
     abortRef.current?.abort();
     abortRef.current = null;
     setStatus("idle");
-    setProgressLabel(null);
     setWriteStatus(null);
     setPlan(null);
     setSummary(null);
@@ -149,7 +146,6 @@ export function useAgent(options: UseAgentOptions = {}) {
     setStatus("idle");
     setMessages([]);
     setStreamingText("");
-    setProgressLabel(null);
     setWriteStatus(null);
     setPlan(null);
     setSummary(null);
@@ -164,7 +160,6 @@ export function useAgent(options: UseAgentOptions = {}) {
     abortRef.current?.abort();
     abortRef.current = null;
     setStatus("idle");
-    setProgressLabel(null);
     setPlan(null);
     setSummary(null);
     setPendingConfirm(null);
@@ -186,7 +181,6 @@ export function useAgent(options: UseAgentOptions = {}) {
     abortRef.current?.abort();
     abortRef.current = null;
     setStreamingText("");
-    setProgressLabel(null);
     setWriteStatus(null);
     setStatus("cancelled");
     void refreshInterrupted();
@@ -227,7 +221,6 @@ export function useAgent(options: UseAgentOptions = {}) {
         setStreamingText("");
         break;
       case "agent/action":
-        setProgressLabel(null);
         if (event.tool === "write_section") {
           const section = String(event.params?.section ?? "章节");
           setWriteStatus(initWriteStatus(section));
@@ -238,7 +231,6 @@ export function useAgent(options: UseAgentOptions = {}) {
         ]);
         break;
       case "agent/progress":
-        setProgressLabel(event.label);
         setWriteStatus((prev) => (prev ? mergeProgressIntoWriteStatus(prev, event) : prev));
         break;
       case "agent/observation": {
@@ -311,7 +303,6 @@ export function useAgent(options: UseAgentOptions = {}) {
         break;
       case "agent/complete":
         setStreamingText("");
-        setProgressLabel(null);
         setWriteStatus(null);
         setSummary(event.summary);
         setMessages((prev) => [...prev, { kind: "summary", summary: event.summary }]);
@@ -321,7 +312,6 @@ export function useAgent(options: UseAgentOptions = {}) {
         break;
       case "agent/error":
         setStreamingText("");
-        setProgressLabel(null);
         setWriteStatus(null);
         toast.error(event.error);
         setStatus("error");
@@ -349,7 +339,6 @@ export function useAgent(options: UseAgentOptions = {}) {
       setLastPersisted(null);
       setPendingConfirm(null);
       setPendingCheckpoint(null);
-      setProgressLabel(null);
       setWriteStatus(null);
       setStatus("planning");
 
@@ -375,7 +364,6 @@ export function useAgent(options: UseAgentOptions = {}) {
           return;
         }
         toast.error(getErrorMessage(error));
-        setProgressLabel(null);
         setWriteStatus(null);
         setStatus("error");
       } finally {
@@ -490,7 +478,6 @@ export function useAgent(options: UseAgentOptions = {}) {
     status,
     messages,
     streamingText,
-    progressLabel,
     writeStatus,
     plan,
     summary,

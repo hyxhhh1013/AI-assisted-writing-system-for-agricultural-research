@@ -1,6 +1,6 @@
 # Agent 编排（写作助手）
 
-> L3 域文档 · 更新：2026-08-06
+> L3 域文档 · 更新：2026-08-07
 > 契约唯一权威源：`src/contracts/agent.ts`（SSE 事件）、`src/contracts/agent-session.ts`（会话消息）。
 
 ## 概览
@@ -54,7 +54,7 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 | `agent/thought_delta` | LLM 回复逐 token 增量 | **实时**（不持久化） |
 | `agent/action` | 工具被调用（params） | 快照 |
 | `agent/observation` | 工具结果（result/error） | 快照 |
-| `agent/progress` | **长工具执行期实时进度文案**（服务端拼好含章节名，`label` 直接显示） | **实时**（不持久化） |
+| `agent/progress` | **长工具执行期实时进度**（`label` 兼容 + 结构化 `stage`/`detail`/`chars`/`elapsedMs`/`info`/`warnings`） | **实时**（不持久化） |
 | `agent/confirm` | 写操作需用户确认（import_reference 等） | 快照 |
 | `agent/checkpoint` | S2 检查点（config_confirm / outline_approve / clarify） | 快照 |
 | `agent/complete` | 完成摘要 `AgentSummary` | 快照 |
@@ -63,23 +63,24 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 
 **实时 vs 快照**：快照事件随 graph 状态逐次产出并持久化进 `uiTranscript`；实时事件（`thought_delta`、`progress`）经 `LiveEventQueue` 即时推送，**不持久化、不进 uiTranscript、续跑不回放**。合并逻辑 `mergeGraphAndLive` 保证实时事件不被阻塞、graph 结束时排空缓冲。
 
-## write_section 进度透传链路（2026-08-06 新增）
+## write_section 进度透传链路（2026-08-06 新增；2026-08-07 结构化扩展）
 
 Agent 调 `write_section`（fast/full 双模式）时，写作管道内部本已发射 `status`/`pipeline_step`/`delta` 等进度事件，但原被 `writing-runner.ts` 收进本地数组丢弃，用户等待 1-3 分钟只见静态「正在撰写…」。
 
 链路：
 
 ```text
-runWritingPipeline emit(status/pipeline_step/delta/bullet_done)
+runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_progress/verification)
   → runAgentWriteSection.onWritingEvent（writing-runner.ts）
   → translateWritingEventToProgress（writing-progress.ts，delta 1000ms 节流累计字数）
-  → ctx.emitLiveEvent({ type:"agent/progress", label })
-  → LiveEventQueue → mergeGraphAndLive → SSE → use-agent setProgressLabel
-  → agent-panel 工作指示器（progressLabel ?? resolveLiveProgress 回退）
+  → ctx.emitLiveEvent({ type:"agent/progress", label, stage, detail, chars, elapsedMs, info, warnings })
+  → LiveEventQueue → mergeGraphAndLive → SSE → use-agent 写状态卡
+  → agent-panel 消息区顶部 sticky 写状态卡（WritingStatusCard）
 ```
 
-- 事件契约：`{ type: "agent/progress"; label: string }`，label 服务端拼好（`正在撰写「引言」· 生成初稿… 已 860 字`）。
-- 前端 `progressLabel` 在 `agent/action` 换工具、`agent/complete`、`agent/error`、`cancel`/`reset`、切项目、`runStream` 起始时清空，防残留。
+- **agent/progress 结构化字段（2026-08-07）**：负载在 `label` 基础上新增全可选结构化字段：`stage`（`WritingStage`：retrieving/writing/verifying/refining/completed/error）、`detail`（当前阶段细节文案）、`chars`（已生成字数）、`elapsedMs`（本次写节耗时）、`info`（提示行，写入 `WriteStatus.info`）、`warnings`（警告行，写入 `WriteStatus.warnings`）。`label` 保留兼容：旧服务器只发 label、或旧前端只读 label 均可用，服务端仍拼好含章节名（`正在撰写「引言」· 生成初稿… 已 860 字`）。
+- **verification_progress 事件（2026-08-07）**：`{ type: "verification_progress"; checked: number; total: number }`，来自 Verifier 逐条引用核查进度。模型流式输出 `〔进度 n/N〕` 标记，verifier 用 `findVerificationProgressMarkers` 解析、`stripProgressMarkers` 剥离后发射（`src/app/api/writing/pipeline/verifier.ts`）；writing-progress 翻译为 `已核查 n/N 条引用`（stage=verifying）。模型未吐标记时，前端回退到 `verification` 事件按字符数兜底（`已输出 N 字`）；主信号（verification_progress）出现后，字符兜底不再发射，避免覆盖主信号（`seenMarkerProgress`）。
+- **WritingStatusCard 生命周期（2026-08-07）**：`agent/action`（tool=write_section）→ `initWriteStatus(section)` 初始化；`agent/progress` → `mergeProgressIntoWriteStatus` 合并（info/warnings 去重、elapsedMs 覆盖、终态保护：completed/error 后不再改 stage）；`agent/observation`（write_section）→ `finalizeWriteStatus` 定稿（成功 → completed + done 摘要，失败 → error + error 文案）；`agent/complete` / `agent/error` / `cancel` / `reset` / `startNewChat` / 切换项目（useEffect projectId 变化）→ 清空 `writeStatus`。卡片渲染在 agent-panel 消息区顶部（`sticky top-4 z-10`），写进度职责从 AgentWorkingIndicator 移交（`agent.writeStatus` 激活时不再渲染通用工作指示器）。
 - `ctx.emitLiveEvent` 为可选字段；图循环在 `runAgentGraphLoop` 初始化时从 `runtime.emitLiveEvent` 注入（`run-graph.ts`）。
 
 ## 会话并发互斥

@@ -575,15 +575,12 @@ export function AgentPanel({
       >
         <div className="mx-auto flex w-full min-w-0 max-w-none flex-col gap-2.5">
           {agent.writeStatus ? (
-            <div className="sticky top-2 z-10">
+            <div className="sticky top-4 z-10">
               <WritingStatusCard
                 status={agent.writeStatus}
                 onRetry={
-                  agent.writeStatus.stage === "error"
-                    ? () => {
-                        const goal = lastUserGoal;
-                        if (goal) void agent.sendGoal(goal);
-                      }
+                  agent.writeStatus.stage === "error" && lastUserGoal
+                    ? () => void agent.sendGoal(lastUserGoal)
                     : undefined
                 }
               />
