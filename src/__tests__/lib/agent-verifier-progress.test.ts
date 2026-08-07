@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   findVerificationProgressMarkers,
   stripProgressMarkers,
+  computeCleanEmission,
 } from "@/app/api/writing/pipeline/verifier";
 
 describe("verifier 进度标记解析", () => {
@@ -23,5 +24,14 @@ describe("verifier 进度标记解析", () => {
 
   it("strip 移除所有标记", () => {
     expect(stripProgressMarkers("〔进度 1/15〕\n〔进度 2/15〕\n{json}")).toBe("\n\n{json}");
+  });
+
+  it("computeCleanEmission 暂存未完成标记尾部", () => {
+    expect(computeCleanEmission("...text 〔进度 1/", 0)).toEqual({ delta: "...text ", nextEmitted: 8 });
+    expect(computeCleanEmission("...text more", 8)).toEqual({ delta: "more", nextEmitted: 12 });
+  });
+
+  it("computeCleanEmission 完整标记已剥离，正常发射", () => {
+    expect(computeCleanEmission("text more", 0)).toEqual({ delta: "text more", nextEmitted: 9 });
   });
 });

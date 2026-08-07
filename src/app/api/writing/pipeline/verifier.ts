@@ -30,6 +30,23 @@ export function stripProgressMarkers(content: string): string {
   return content.replace(PROGRESS_MARKER_GLOBAL, "");
 }
 
+/**
+ * 计算累积剥离后报告的可发射增量。
+ * 若报告尾部有未完成的 `〔进度` 前缀，则暂存不发射（等补全后 strip 掉）。
+ */
+export function computeCleanEmission(
+  strippedReport: string,
+  lastEmitted: number,
+): { delta: string; nextEmitted: number } {
+  const tail = strippedReport.match(/(〔进度\s*[\d\s/]*)$/);
+  const holdLen = tail ? tail[1].length : 0;
+  const cleanEnd = strippedReport.length - holdLen;
+  return {
+    delta: strippedReport.slice(lastEmitted, cleanEnd),
+    nextEmitted: cleanEnd,
+  };
+}
+
 function resolveVerifierMaxFullSources(): number {
   const raw = process.env.WRITING_VERIFIER_MAX_FULL_SOURCES;
   if (raw !== undefined && raw.trim() !== "") {
@@ -139,6 +156,7 @@ export async function runVerifierPhase(
     });
 
     let lastChecked = -1;
+    let cleanEmitted = 0;
     if (verifierResponse.ok && verifierResponse.body) {
       for await (const chunk of streamAIResponse(verifierResponse, signal, 180_000)) {
         if (chunk.content) {
@@ -150,7 +168,9 @@ export async function runVerifierPhase(
             }
           }
           verificationReport = stripProgressMarkers(verificationReport);
-          emit({ type: "verification", verification: stripProgressMarkers(chunk.content) });
+          const { delta, nextEmitted } = computeCleanEmission(verificationReport, cleanEmitted);
+          cleanEmitted = nextEmitted;
+          if (delta) emit({ type: "verification", verification: delta });
         }
       }
     }
