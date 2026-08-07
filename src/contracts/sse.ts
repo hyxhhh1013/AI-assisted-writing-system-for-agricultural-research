@@ -23,6 +23,12 @@ export interface SSEBulletDoneEvent {
   bulletCount: number;
 }
 
+export interface SSEVerificationProgressEvent {
+  type: "verification_progress";
+  checked: number;
+  total: number;
+}
+
 /** 写作 SSE 事件联合类型 */
 export type WritingSSEEvent =
   | SSEDeltaEvent
@@ -37,7 +43,8 @@ export type WritingSSEEvent =
   | SSEClearResultEvent
   | SSEErrorEvent
   | SSEInfoEvent
-  | SSEBulletDoneEvent;
+  | SSEBulletDoneEvent
+  | SSEVerificationProgressEvent;
 
 /** 通用 SSE 事件（unknown shape） */
 export type SSEEvent = Record<string, unknown>;
@@ -56,3 +63,4 @@ export function isClearResultEvent(e: unknown): e is SSEClearResultEvent { retur
 export function isErrorEvent(e: unknown): e is SSEErrorEvent { return (e as SSEEvent).type === "error"; }
 export function isInfoEvent(e: unknown): e is SSEInfoEvent { return (e as SSEEvent).type === "info"; }
 export function isBulletDoneEvent(e: unknown): e is SSEBulletDoneEvent { return (e as SSEEvent).type === "bullet_done"; }
+export function isVerificationProgressEvent(e: unknown): e is SSEVerificationProgressEvent { return (e as SSEEvent).type === "verification_progress"; }

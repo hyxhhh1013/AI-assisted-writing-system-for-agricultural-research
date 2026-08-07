@@ -10,6 +10,14 @@ export type AgentStatus =
   | "error"
   | "cancelled";
 
+export type WritingStage =
+  | "retrieving"
+  | "writing"
+  | "verifying"
+  | "refining"
+  | "completed"
+  | "error";
+
 export interface AgentSubTask {
   id: string;
   title: string;
@@ -75,8 +83,17 @@ export type AgentSSEEvent =
   | { type: "agent/thought"; content: string | null }
   /** 真流式：agent 回复的逐 token 增量（前端累积进当前思考气泡） */
   | { type: "agent/thought_delta"; content: string }
-  /** 写节等长工具执行期间的实时进度文案（服务端拼好，含章节名；live-only 不持久化） */
-  | { type: "agent/progress"; label: string }
+  /** 写节等长工具执行期间的实时进度（服务端拼好，含章节名；live-only 不持久化）。新字段全可选，兼容旧服务器只发 label。 */
+  | {
+      type: "agent/progress";
+      label: string;
+      stage?: WritingStage;
+      detail?: string;
+      chars?: number;
+      elapsedMs?: number;
+      info?: string[];
+      warnings?: string[];
+    }
   | { type: "agent/action"; tool: string; params: Record<string, unknown> }
   | {
       type: "agent/observation";
