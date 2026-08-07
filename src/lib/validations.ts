@@ -252,6 +252,8 @@ export const writingBlueprintPayloadSchema = z.object({
   sectionGuides: z.array(sectionGuideSchema).min(1),
   writingOrder: z.array(z.string()),
   prerequisites: z.array(z.string()),
+  projectMode: z.enum(["review", "research"]).optional(),
+  language: z.enum(["zh", "en"]).optional(),
   outlineHash: z.string().optional(),
   generatedAt: z.number().optional(),
 });

@@ -70,6 +70,8 @@ ${chartCatalog.map((c) => `- [${c.index}] ${c.title}${c.variable ? `（${c.varia
 【JSON 结构】
 {
   "version": 1,
+  "projectMode": "${isResearch ? "research" : "review"}",
+  "language": "${lang}",
   "narrativeSummary": "...",
   "thesis": "...",
   "estimatedWordCount": { "min": 8000, "max": 10000 },

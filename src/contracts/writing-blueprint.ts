@@ -54,6 +54,10 @@ export interface WritingBlueprint {
   sectionGuides: SectionGuide[];
   writingOrder: string[];
   prerequisites: string[];
+  /** 论文类型（研究/综述），UI 据此切换显示区块与提示 */
+  projectMode?: "research" | "review";
+  /** 写作语言 */
+  language?: "zh" | "en";
   /** 生成时对应的大纲指纹，用于检测大纲变更后蓝图过期 */
   outlineHash?: string;
   generatedAt: number;

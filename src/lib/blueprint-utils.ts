@@ -11,6 +11,33 @@ import {
   collectChartConfigsFromSources,
 } from "@/contracts/figure";
 
+export interface GuideGroup {
+  top: string;
+  nested: SectionGuide[];
+  topLevel: SectionGuide[];
+}
+
+/**
+ * 章节导览按顶层章节分组（sectionPath 用 " > " 表示层级，如「研究进展综述 > 生物油定向提质」）。
+ * - topLevel：该顶层章节自身的指导（无 " > " 层级）
+ * - nested：该顶层章节下的子节指导
+ */
+export function groupSectionGuides(guides: SectionGuide[]): GuideGroup[] {
+  const map = new Map<string, GuideGroup>();
+  for (const g of guides) {
+    const [top, ...rest] = g.sectionPath
+      .split(">")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const key = top || g.sectionPath;
+    if (!map.has(key)) map.set(key, { top: key, nested: [], topLevel: [] });
+    const group = map.get(key)!;
+    if (rest.length > 0) group.nested.push(g);
+    else group.topLevel.push(g);
+  }
+  return [...map.values()];
+}
+
 /** 大纲文本指纹（大纲变更后用于标记蓝图过期） */
 export function computeOutlineHash(outline: string): string {
   const normalized = outline.replace(/\r\n/g, "\n").trim();

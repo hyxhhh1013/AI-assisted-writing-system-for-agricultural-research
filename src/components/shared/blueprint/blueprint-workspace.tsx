@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronUp, Save } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,6 +30,7 @@ import {
   blueprintFigureToPlotHref,
   buildBlueprintChartCatalog,
   figureTypeLabel,
+  groupSectionGuides,
 } from "@/lib/blueprint-utils";
 
 const FIGURE_TYPES: FigurePlanType[] = [
@@ -75,6 +76,25 @@ export function BlueprintWorkspace({
     () => buildBlueprintChartCatalog(parseDataSources(project)),
     [project],
   );
+
+  /** 论文类型（优先蓝图自带的 projectMode，其次项目 mode） */
+  const paperMode: "research" | "review" =
+    draft?.projectMode ?? (project.mode === "research" ? "research" : "review");
+
+  /** 章节导览按顶层章节分组（sectionPath 用 " > " 表示层级，如「研究进展综述 > 生物油定向提质」） */
+  const guideGroups = useMemo(
+    () => groupSectionGuides(draft?.sectionGuides ?? []),
+    [draft],
+  );
+
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = (key: string) =>
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   if (!draft) return null;
 
@@ -139,6 +159,42 @@ export function BlueprintWorkspace({
     });
   };
 
+  /** 单个章节指导卡片（分组后复用） */
+  const renderGuideCard = (guide: SectionGuide) => (
+    <div
+      key={guide.sectionPath}
+      className="rounded-md border p-3 space-y-2 bg-background"
+    >
+      <Input
+        className="h-8 text-xs font-medium"
+        value={guide.sectionPath}
+        onChange={(e) =>
+          updateGuide(guide.sectionPath, { sectionPath: e.target.value })
+        }
+      />
+      <Textarea
+        className="min-h-[56px] text-xs text-muted-foreground"
+        value={guide.purpose}
+        onChange={(e) =>
+          updateGuide(guide.sectionPath, { purpose: e.target.value })
+        }
+      />
+      <Textarea
+        className="min-h-[64px] text-[11px] font-mono"
+        placeholder="要点，每行一条"
+        value={guide.keyPoints.join("\n")}
+        onChange={(e) =>
+          updateGuide(guide.sectionPath, {
+            keyPoints: e.target.value
+              .split("\n")
+              .map((s) => s.trim())
+              .filter(Boolean),
+          })
+        }
+      />
+    </div>
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex h-11 shrink-0 items-center gap-3 border-b bg-muted/20 px-4">
@@ -147,6 +203,9 @@ export function BlueprintWorkspace({
             大纲已变更，建议在大纲侧栏刷新蓝图
           </span>
         )}
+        <span className="rounded-md border border-[#1a5632]/20 bg-[#1a5632]/8 px-2 py-1 text-[10px] font-medium text-[#1a5632]">
+          {paperMode === "research" ? "研究论文" : "文献综述"}
+        </span>
         <div className="min-w-0 flex-1" />
         <Button
           size="sm"
@@ -213,29 +272,39 @@ export function BlueprintWorkspace({
               />
               字
             </span>
-            <span>
-              配图：{figurePlan.totalMin}–{figurePlan.totalMax} 张（明细 {figurePlan.items.length} 项）
-            </span>
+            {figurePlan.items.length > 0 && (
+              <span>
+                配图：{figurePlan.totalMin}–{figurePlan.totalMax} 张（明细 {figurePlan.items.length} 项）
+              </span>
+            )}
           </div>
+          <p className="text-[10px] text-muted-foreground/70">
+            {paperMode === "research"
+              ? "研究论文：流程图集中在「材料与方法」，数据图/XRD 集中在「结果与分析」，引言/结论 0–1 张示意。"
+              : "文献综述：以概念框架图、对比表、趋势综合图为主，不安排本试验数据图。"}
+          </p>
 
-          <div className="space-y-1.5">
-            <SectionHeading>前置条件</SectionHeading>
-            <Textarea
-              className="min-h-[64px] text-xs font-mono"
-              placeholder="每行一条"
-              value={draft.prerequisites.join("\n")}
-              onChange={(e) =>
-                updateDraft((p) => ({
-                  ...p,
-                  prerequisites: e.target.value
-                    .split("\n")
-                    .map((s) => s.trim())
-                    .filter(Boolean),
-                }))
-              }
-            />
-          </div>
+          {draft.prerequisites.length > 0 && (
+            <div className="space-y-1.5">
+              <SectionHeading>前置条件</SectionHeading>
+              <Textarea
+                className="min-h-[64px] text-xs font-mono"
+                placeholder="每行一条"
+                value={draft.prerequisites.join("\n")}
+                onChange={(e) =>
+                  updateDraft((p) => ({
+                    ...p,
+                    prerequisites: e.target.value
+                      .split("\n")
+                      .map((s) => s.trim())
+                      .filter(Boolean),
+                  }))
+                }
+              />
+            </div>
+          )}
 
+          {figurePlan.items.length > 0 && (
           <div className="space-y-2">
             <SectionHeading>配图规划</SectionHeading>
             <div className="rounded-md border overflow-x-auto">
@@ -381,46 +450,46 @@ export function BlueprintWorkspace({
               </table>
             </div>
           </div>
+          )}
 
+          {draft.sectionGuides.length > 0 && (
           <div className="space-y-2">
             <SectionHeading>章节导览</SectionHeading>
             <div className="space-y-3">
-              {draft.sectionGuides.map((guide) => (
-                <div
-                  key={guide.sectionPath}
-                  className="rounded-md border p-3 space-y-2 bg-background"
-                >
-                  <Input
-                    className="h-8 text-xs font-medium"
-                    value={guide.sectionPath}
-                    onChange={(e) =>
-                      updateGuide(guide.sectionPath, { sectionPath: e.target.value })
-                    }
-                  />
-                  <Textarea
-                    className="min-h-[56px] text-xs text-muted-foreground"
-                    value={guide.purpose}
-                    onChange={(e) =>
-                      updateGuide(guide.sectionPath, { purpose: e.target.value })
-                    }
-                  />
-                  <Textarea
-                    className="min-h-[64px] text-[11px] font-mono"
-                    placeholder="要点，每行一条"
-                    value={guide.keyPoints.join("\n")}
-                    onChange={(e) =>
-                      updateGuide(guide.sectionPath, {
-                        keyPoints: e.target.value
-                          .split("\n")
-                          .map((s) => s.trim())
-                          .filter(Boolean),
-                      })
-                    }
-                  />
-                </div>
-              ))}
+              {guideGroups.map((group) => {
+                if (group.nested.length === 0) {
+                  return group.topLevel.map((g) => renderGuideCard(g));
+                }
+                const open = openGroups.has(group.top);
+                return (
+                  <div key={group.top} className="overflow-hidden rounded-md border">
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group.top)}
+                      className="flex w-full items-center gap-2 bg-muted/30 px-3 py-2 text-left hover:bg-muted/50"
+                    >
+                      {open ? (
+                        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      )}
+                      <span className="text-xs font-semibold">{group.top}</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {group.nested.length} 个子节
+                      </span>
+                    </button>
+                    {open && (
+                      <div className="space-y-2 border-t p-2 pl-4">
+                        {group.topLevel.map((g) => renderGuideCard(g))}
+                        {group.nested.map((g) => renderGuideCard(g))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
+          )}
 
           {draft.writingOrder.length > 0 && (
             <div className="space-y-2 pb-2">

@@ -121,6 +121,10 @@ export const generateWritingBlueprintTool: ToolDefinition = {
     const blueprint: WritingBlueprint = {
       ...checked.data,
       version: 1,
+      projectMode:
+        checked.data.projectMode
+        ?? (project.mode === "research" ? "research" : "review"),
+      language: checked.data.language ?? project.language,
       outlineHash: computeOutlineHash(project.outline),
       generatedAt: Date.now(),
       figurePlan: {
