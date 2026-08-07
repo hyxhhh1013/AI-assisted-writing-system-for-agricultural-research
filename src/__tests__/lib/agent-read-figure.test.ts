@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { readFigureTool } from "@/lib/agent/tools/read-figure";
+import { clearVisionCacheForTest, readFigureTool } from "@/lib/agent/tools/read-figure";
 
 // mock describeImage（不真调视觉 API；读文件/大小守卫在其内部）
 const mDescribe = vi.hoisted(() => ({
@@ -15,9 +15,10 @@ const mPrisma = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/prisma", () => ({ default: mPrisma }));
 
-// mock fs（仅 existsSync 文件存在性检查；读文件已移到 describeImage 内部）
+// mock fs（existsSync 文件存在性检查；statSync 供 read-figure 的视觉缓存 key 使用）
 const mFs = vi.hoisted(() => ({
   existsSync: vi.fn(),
+  statSync: vi.fn(),
 }));
 vi.mock("node:fs", () => ({ default: mFs, ...mFs }));
 
@@ -40,8 +41,10 @@ const asset = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearVisionCacheForTest(); // 清模块级视觉缓存，保证用例间隔离
   mPrisma.project.findFirst.mockResolvedValue({ charts: [asset] });
   mFs.existsSync.mockReturnValue(true);
+  mFs.statSync.mockReturnValue({ mtimeMs: 100, size: 200 });
   mDescribe.describeImage.mockResolvedValue({
     status: "ready",
     text: "这是一张柱状图，X 轴为处理组，Y 轴为产量，趋势上升",
@@ -119,5 +122,23 @@ describe("readFigureTool", () => {
     const rNan = await readFigureTool.execute({ sectionKey: "results", index: NaN }, ctx);
     expect(rNan.success).toBe(true);
     expect((rNan.data as { caption?: string }).caption).toBe("图B");
+  });
+
+  it("相同文件重复读命中缓存（describeImage 只调一次）", async () => {
+    mFs.statSync.mockReturnValue({ mtimeMs: 100, size: 200 });
+    const r1 = await readFigureTool.execute({ sectionKey: "results" }, ctx);
+    expect(r1.success).toBe(true);
+    const r2 = await readFigureTool.execute({ sectionKey: "results" }, ctx);
+    expect(r2.success).toBe(true);
+    expect(mDescribe.describeImage).toHaveBeenCalledTimes(1); // 第二次命中缓存
+  });
+
+  it("文件变化（mtime 不同）时缓存失效", async () => {
+    mFs.statSync.mockReturnValueOnce({ mtimeMs: 100, size: 200 });
+    mFs.statSync.mockReturnValueOnce({ mtimeMs: 200, size: 200 });
+    mFs.statSync.mockReturnValue({ mtimeMs: 200, size: 200 });
+    await readFigureTool.execute({ sectionKey: "results" }, ctx);
+    await readFigureTool.execute({ sectionKey: "results" }, ctx);
+    expect(mDescribe.describeImage).toHaveBeenCalledTimes(2); // mtime 变 → miss
   });
 });

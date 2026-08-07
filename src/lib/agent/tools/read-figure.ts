@@ -9,6 +9,52 @@ import prisma from "@/lib/prisma";
 /** 生成图存放目录（与 chart-runner / mechanism-runner 一致） */
 const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
 
+/** 视觉描述缓存上限（进程内，防内存膨胀） */
+const VISION_CACHE_MAX = 32;
+/** 视觉描述缓存：key = 文件路径 + mtime + size（图重新生成时自动失效） */
+const visionCache = new Map<string, { text: string; source: string }>();
+
+function fileCacheKey(filePath: string): string {
+  try {
+    const st = fs.statSync(filePath);
+    return `${filePath}:${st.mtimeMs}:${st.size}`;
+  } catch {
+    return ""; // stat 失败 → 不缓存
+  }
+}
+
+/**
+ * 计算并缓存一张图的视觉描述：命中缓存直接返回；未命中则调 describeImage（GLM-4V）并写缓存。
+ * 缓存 key 含 mtime + size，图重新生成（新文件）时自动失效。
+ * describeImage 失败（非 ready）时抛错，由调用方转为可读错误。
+ */
+export async function getOrComputeVisionDescription(
+  filePath: string,
+): Promise<{ text: string; source: string }> {
+  const cacheKey = fileCacheKey(filePath);
+  const hit = cacheKey ? visionCache.get(cacheKey) : undefined;
+  if (hit) return hit;
+
+  const description = await describeImage(filePath);
+  if (description.status !== "ready" || !description.text) {
+    throw new Error(`视觉模型未能理解该图：${description.error ?? "未知原因"}`);
+  }
+  const result = { text: description.text, source: description.source };
+  if (cacheKey) {
+    if (visionCache.size >= VISION_CACHE_MAX) {
+      const firstKey = visionCache.keys().next().value;
+      if (firstKey) visionCache.delete(firstKey);
+    }
+    visionCache.set(cacheKey, result);
+  }
+  return result;
+}
+
+/** 仅供测试：清空视觉描述缓存 */
+export function clearVisionCacheForTest(): void {
+  visionCache.clear();
+}
+
 /** 生成图文件名白名单：UUID + 允许的扩展名（对齐 project-charts.ts 的 SAFE 模式） */
 const SAFE_CHART_FILENAME_RE = /^[0-9a-f-]{8,}\.(png|svg|pdf)$/i;
 
@@ -98,21 +144,19 @@ export const readFigureTool: ToolDefinition = {
         error: `图文件不存在（${asset.imageUrl}）。若刚生成，稍后重试；或检查 data/charts 目录`,
       };
     }
-    // describeImage 内含 8MB 大小守卫 + mimeOf + try/catch
-    const description = await describeImage(filePath);
-
-    if (description.status !== "ready" || !description.text) {
-      return {
-        success: false,
-        error: `视觉模型未能理解该图：${description.error ?? "未知原因"}`,
-      };
+    // 视觉描述带进程内缓存（mtime+size 失效）；describeImage 内含 8MB 大小守卫 + mimeOf + try/catch
+    let vision: { text: string; source: string };
+    try {
+      vision = await getOrComputeVisionDescription(filePath);
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
 
     return {
       success: true,
       summary: `已回看 ${sectionKey} 的图（${asset.figureId ?? "?"}）：${asset.caption ?? ""}`,
       data: {
-        description: description.text,
+        description: vision.text,
         caption: asset.caption ?? "",
         figureId: asset.figureId ?? "",
         sectionKey,
