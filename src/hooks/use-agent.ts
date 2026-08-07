@@ -19,6 +19,12 @@ import {
 } from "@/lib/agent/project-mutated";
 import { extractSectionPersisted, type AgentSectionPersistedInfo } from "@/lib/agent/section-persisted";
 import { mergeSessionTranscripts } from "@/lib/agent/ui-transcript";
+import {
+  initWriteStatus,
+  mergeProgressIntoWriteStatus,
+  finalizeWriteStatus,
+  type WriteStatus,
+} from "@/lib/agent/write-status";
 import { listAgentSessions, loadAgentChatHistory, postAgentStream } from "@/services/agent";
 import { getErrorMessage } from "@/lib/error-utils";
 
@@ -49,6 +55,8 @@ export function useAgent(options: UseAgentOptions = {}) {
   const [streamingText, setStreamingText] = useState("");
   /** 长工具（write_section）执行期间的实时进度文案 */
   const [progressLabel, setProgressLabel] = useState<string | null>(null);
+  /** 常驻写状态卡：write_section 执行期间的阶段/字数/耗时/提示 */
+  const [writeStatus, setWriteStatus] = useState<WriteStatus | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   const onPersistedRef = useRef(options.onSectionPersisted);
@@ -119,6 +127,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     abortRef.current = null;
     setStatus("idle");
     setProgressLabel(null);
+    setWriteStatus(null);
     setPlan(null);
     setSummary(null);
     setPendingConfirm(null);
@@ -141,6 +150,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     setMessages([]);
     setStreamingText("");
     setProgressLabel(null);
+    setWriteStatus(null);
     setPlan(null);
     setSummary(null);
     setPendingConfirm(null);
@@ -160,6 +170,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     setPendingConfirm(null);
     setPendingCheckpoint(null);
     setLastPersisted(null);
+    setWriteStatus(null);
     setSessionId(null);
     setHistoryLoaded(true);
     setMessages((prev) => {
@@ -176,6 +187,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     abortRef.current = null;
     setStreamingText("");
     setProgressLabel(null);
+    setWriteStatus(null);
     setStatus("cancelled");
     void refreshInterrupted();
   }, [refreshInterrupted]);
@@ -216,6 +228,10 @@ export function useAgent(options: UseAgentOptions = {}) {
         break;
       case "agent/action":
         setProgressLabel(null);
+        if (event.tool === "write_section") {
+          const section = String(event.params?.section ?? "章节");
+          setWriteStatus(initWriteStatus(section));
+        }
         setMessages((prev) => [
           ...prev,
           { kind: "action", tool: event.tool, params: event.params },
@@ -223,6 +239,7 @@ export function useAgent(options: UseAgentOptions = {}) {
         break;
       case "agent/progress":
         setProgressLabel(event.label);
+        setWriteStatus((prev) => (prev ? mergeProgressIntoWriteStatus(prev, event) : prev));
         break;
       case "agent/observation": {
         const data = event.result?.data;
@@ -243,6 +260,22 @@ export function useAgent(options: UseAgentOptions = {}) {
             ...(data != null && event.tool === "validate_citations" ? { data } : {}),
           },
         ]);
+        if (event.tool === "write_section") {
+          setWriteStatus((prev) => {
+            if (!prev) return prev;
+            const data = event.result?.data as
+              | { charCount?: number; issueCount?: number; pipelineMode?: string; verification?: string }
+              | undefined;
+            return finalizeWriteStatus(prev, {
+              success: Boolean(event.result?.success) && !event.error,
+              charCount: data?.charCount,
+              issueCount: data?.issueCount,
+              pipelineMode: data?.pipelineMode,
+              verification: data?.verification,
+              error: event.error ?? event.result?.error,
+            });
+          });
+        }
         const persisted = extractSectionPersisted(event.tool, event.result);
         if (persisted) {
           setLastPersisted(persisted);
@@ -279,6 +312,7 @@ export function useAgent(options: UseAgentOptions = {}) {
       case "agent/complete":
         setStreamingText("");
         setProgressLabel(null);
+        setWriteStatus(null);
         setSummary(event.summary);
         setMessages((prev) => [...prev, { kind: "summary", summary: event.summary }]);
         setPendingCheckpoint(null);
@@ -288,6 +322,7 @@ export function useAgent(options: UseAgentOptions = {}) {
       case "agent/error":
         setStreamingText("");
         setProgressLabel(null);
+        setWriteStatus(null);
         toast.error(event.error);
         setStatus("error");
         void refreshInterrupted();
@@ -454,6 +489,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     messages,
     streamingText,
     progressLabel,
+    writeStatus,
     plan,
     summary,
     pendingConfirm,
