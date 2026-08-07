@@ -23,6 +23,9 @@ describe("write-status 纯逻辑", () => {
     s = mergeProgressIntoWriteStatus(s, { label: "x", stage: "writing", detail: "生成初稿… 已 3 字", chars: 3, elapsedMs: 400 });
     s = mergeProgressIntoWriteStatus(s, { label: "x", info: ["已扩大全库检索"] });
     s = mergeProgressIntoWriteStatus(s, { label: "x", info: ["已扩大全库检索"] });
+    s = mergeProgressIntoWriteStatus(s, { label: "x", warnings: ["数据声明未核实：abc"] });
+    s = mergeProgressIntoWriteStatus(s, { label: "x", warnings: ["数据声明未核实：abc"] });
+    expect(s.warnings).toHaveLength(1);
     expect(s).toMatchObject({ stage: "writing", chars: 3, info: ["已扩大全库检索"] });
     expect(s.info).toHaveLength(1);
   });
@@ -37,6 +40,22 @@ describe("write-status 纯逻辑", () => {
     });
     expect(s.stage).toBe("completed");
     expect(s.done).toEqual({ chars: 1450, issueCount: 0, passed: true, verification: "核查通过" });
+  });
+
+  it("finalize 成功但 full 有修正意见 → passed=false", () => {
+    const s = finalizeWriteStatus(initWriteStatus("引言"), {
+      success: true,
+      charCount: 1450,
+      issueCount: 3,
+      pipelineMode: "full",
+    });
+    expect(s.stage).toBe("completed");
+    expect(s.done).toEqual({ chars: 1450, issueCount: 3, passed: false });
+  });
+
+  it("finalize 失败且无 error 传参 → 默认文案", () => {
+    const s = finalizeWriteStatus(initWriteStatus("引言"), { success: false });
+    expect(s.error).toBe("写章节失败");
   });
 
   it("finalize 失败 → stage=error + error 信息", () => {
