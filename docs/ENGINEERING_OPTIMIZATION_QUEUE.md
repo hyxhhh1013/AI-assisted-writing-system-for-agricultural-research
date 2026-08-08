@@ -216,7 +216,7 @@
 | W3-AP-ANTISPAM-FP | antispam 指纹增强：refNums 检测「字数不变但引用变化」的实质写操作 | W3-AP-ANTISPAM | 0.5d | **done** | 2026-08-08；全量 1007 通过；见 §4 会话日志 |
 | W3-AP-PREREQ-CHECKPOINT | 自动补齐插入批准检查点：ap-full 目标逐步补齐 + outline/blueprint 逐步批准 | W3-AP-AUTONOMY | 1d | **done** | 2026-08-08；`ensureNextWritePrerequisite` + `buildPrereqCheckpoint`；全量 1012 通过 |
 | W3-AP-WRITE-DISCIPLINE | 写章节缺文献照常写：prompt 纪律 + 跟聊意图恢复 + 收尾兜底 | W3-AP-QUALITY | 0.5d | **done** | 2026-08-08；`isSectionDraftGoal` 增强 + `mergeFollowUpGoalHint` 补分支 + 收尾 execWords 兜底；全量 1014 通过 |
-| W3-AP-ATTACH-UX | 附件提取时序提示 + 写作进度可见性 + extract_failed 自动重试 | W3-AP-WRITE-DISCIPLINE | 0.5d | **done** | 2026-08-08；manifest/read_attachment 提示「提取中稍后重试」+ WritingStatusCard 0 字显示「等待 AI 输出」+ `retryAttachmentExtraction` 失败自动重试；全量 1020 通过 |
+| W3-AP-ATTACH-UX | 附件提取时序提示 + 写作进度可见性 + extract_failed 自动重试 + xlsx Turbopack 兼容 | W3-AP-WRITE-DISCIPLINE | 0.5d | **done** | 2026-08-08；manifest/read_attachment 提示「提取中稍后重试」+ WritingStatusCard 0 字显示「等待 AI 输出」+ `retryAttachmentExtraction` + xlsx 改 `fs.readFileSync`→`XLSX.read`；全量 1020 通过 |
 
 
 | 来源 | 本队列处理方式 |
@@ -1047,6 +1047,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-08 | 写章节纪律 | AI | 用户反馈：Agent 写子节时因蓝图要求引用的文献（ZnCl₂/黏土）库内缺失，反复 search_knowledge/list_references 找不存在的文献，卡住无下一步。①prompt 加「写章节缺文献照常写，勿反复检索」；②`isSectionDraftGoal` 增强（goal 失真时用 observations 判断）+ `mergeFollowUpGoalHint` 补分支 + `checkDraftSearchGate` 传 observations——修复跟聊 goal 被「A」等简短回复覆盖导致写纪律丢失；③收尾兜底 `execWords || isSectionDraftGoal` 提示落地写并给下一步。新增 2 用例，全量 1014 通过 |
 | 2026-08-08 | 附件时序 + 进度可见性 | AI | 用户反馈：①上传 xlsx 附件后「生成初稿 0 字」——根因非解析 bug（xlsx 提取测试通过），而是提取后台异步（extracting）期间 Agent 立即 read_attachment 读不到。修复：manifest/read_attachment 对 extracting 提示「正在后台提取，稍后重试，勿反复立即重读」。②生成初稿 0 字停留：WritingStatusCard 0 字时显示「等待 AI 输出首段（通常数秒）」+ spinner，替代误导的「已 0 字」。新增 4 用例（xlsx 提取 ×2 + 0 字显示 ×2），全量 1018 通过 |
 | 2026-08-08 | 附件提取失败自动重试 | AI | 用户反馈「还是显示未能解析」——查 DB 确认真实 xlsx 附件是 extract_failed（提取代码/文件本身正常，瞬时失败）。修复：`retryAttachmentExtraction`（文件仍在则重新提取），`read_attachment` 遇 extract_failed 自动重试一次，成功后返回内容；仍失败提示「可重新上传或稍后再读」。已对真实失败附件验证：重试后变 ready。新增 2 用例，全量 1020 通过 |
+| 2026-08-08 | xlsx Turbopack 兼容 | AI | 用户反馈「还是解析不了」——真实上传复现 extract_failed，加诊断发现 `fs.statSync` 成功但 `XLSX.readFile` 报「Cannot access file」（文件存在）。根因：SheetJS `_fs` 在 Turbopack 下为 undefined（模块加载时 `require('fs')` 捕获失败），`XLSX.readFile` 无法读文件；vitest Node 环境正常所以测试一直通过。修复：`fs.readFileSync` 读 buffer → `XLSX.read(buf)`。实测上传 → ready，旧失败附件重试 → ready。保留 `[attachment] extract not ready` 错误日志 |
 
 ---
 

@@ -76,7 +76,10 @@ export async function extractAttachmentText(
       return { status: "ready", ...truncateTo(text || "(空表格)"), source: "csv" };
     }
     if (ext === "xlsx" || ext === "xls") {
-      const wb = XLSX.readFile(filePath);
+      // 用 fs 读 buffer 再 XLSX.read()：绕开 SheetJS 内部 `_fs`（Turbopack 下 require('fs')
+      // 可能为 undefined，导致 XLSX.readFile 报 "Cannot access file"，即使文件存在）
+      const buf = fs.readFileSync(filePath);
+      const wb = XLSX.read(buf);
       const parts: string[] = [];
       for (const sheetName of wb.SheetNames.slice(0, 5)) {
         const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheetName], { header: 1 });

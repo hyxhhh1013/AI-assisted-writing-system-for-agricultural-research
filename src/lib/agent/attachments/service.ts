@@ -106,6 +106,15 @@ export async function runAttachmentExtraction(
       resolveProjectRuntimePath(fileKey),
       originalName,
     );
+    if (result.status !== "ready" && result.error) {
+      console.error(
+        "[attachment] extract not ready",
+        attachmentId,
+        originalName,
+        result.status,
+        result.error,
+      );
+    }
     await prisma.agentAttachment.update({
       where: { id: attachmentId },
       data: {
@@ -121,6 +130,20 @@ export async function runAttachmentExtraction(
     return result.status === "ready";
   } catch (error) {
     // 提取失败标记 extract_failed（附件仍保留，用户可删/重传/重试）
+    const reason =
+      error instanceof Error
+        ? `${error.name}: ${error.message}\n${error.stack?.slice(0, 500)}`
+        : String(error);
+    console.error("[attachment] extract failed", attachmentId, originalName, reason);
+    // 调试：把失败原因写盘，便于定位 fire-and-forget 提取失败根因
+    try {
+      const fs = await import("fs");
+      fs.appendFileSync(
+        "D:/project/论文助手/attachment-extract-errors.log",
+        `[${new Date().toISOString()}] ${attachmentId} ${originalName}\n${reason}\n\n`,
+        "utf8",
+      );
+    } catch { /* ignore */ }
     await prisma.agentAttachment
       .update({
         where: { id: attachmentId },
