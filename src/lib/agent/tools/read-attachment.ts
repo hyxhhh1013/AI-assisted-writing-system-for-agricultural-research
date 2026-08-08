@@ -43,7 +43,13 @@ export const readAttachmentTool: ToolDefinition = {
     }
 
     if (row.status === "extracting") {
-      return { success: false, error: "附件仍在提取中，请稍后重试" };
+      return {
+        success: false,
+        error:
+          "附件仍在后台提取中（可能需几秒到十几秒，xlsx/excel 大表或 PDF 更慢）。"
+          + "请先做其它准备步骤（如读大纲/蓝图/现有章节），过一会儿再调用 read_attachment 重试；"
+          + "不要反复立即重读同一附件。",
+      };
     }
     if (row.status !== "ready" || !row.extractedText) {
       return { success: false, error: "附件未能提取内容，仅可查看文件名/预览" };

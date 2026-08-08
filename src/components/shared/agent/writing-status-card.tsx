@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Check, Clock, RotateCcw } from "lucide-react";
+import { AlertTriangle, Check, Clock, Loader2, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import type { WriteStatus } from "@/lib/agent/write-status";
@@ -88,7 +88,14 @@ export function WritingStatusCard({
           <Clock className="h-3 w-3" />
           {fmtDuration(elapsed)}
         </span>
-        <span className="text-[11px] text-muted-foreground">已 {status.chars} 字</span>
+        {status.chars > 0 ? (
+          <span className="text-[11px] text-muted-foreground">已 {status.chars} 字</span>
+        ) : status.stage === "writing" ? (
+          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Loader2 className="h-3 w-3 animate-spin text-[#1a5632]" />
+            等待 AI 输出首段（通常数秒）
+          </span>
+        ) : null}
         {status.stage === "completed" && status.done ? (
           <span className="ml-auto flex items-center gap-1 text-[11px] font-medium text-[#1a5632]">
             <Check className="h-3 w-3" />

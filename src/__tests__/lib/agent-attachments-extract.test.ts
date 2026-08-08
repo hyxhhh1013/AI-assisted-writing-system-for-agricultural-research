@@ -2,11 +2,26 @@ import { describe, expect, it } from "vitest";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import * as XLSX from "xlsx";
 import { extractAttachmentText } from "@/lib/agent/attachments/extract";
 
 function tmpFile(name: string, content: Buffer | string): string {
   const p = path.join(os.tmpdir(), `att-extract-${Date.now()}-${name}`);
   fs.writeFileSync(p, content);
+  return p;
+}
+
+function makeXlsxFile(name: string): string {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([
+    ["处理", "温度(°C)", "产率(%)"],
+    ["A", 450, 32.5],
+    ["B", 500, 41.2],
+    ["C", 550, 38.7],
+  ]);
+  XLSX.utils.book_append_sheet(wb, ws, "结果");
+  const p = path.join(os.tmpdir(), `att-extract-${Date.now()}-${name}`);
+  XLSX.writeFile(wb, p);
   return p;
 }
 
@@ -29,6 +44,27 @@ describe("extractAttachmentText", () => {
   it("marks unsupported extensions", async () => {
     const r = await extractAttachmentText(tmpFile("x.exe", "MZ"), "x.exe");
     expect(r.status).toBe("unsupported");
+  });
+
+  it("extracts xlsx to markdown table", async () => {
+    const r = await extractAttachmentText(makeXlsxFile("data.xlsx"), "data.xlsx");
+    expect(r.status).toBe("ready");
+    expect(r.source).toBe("excel");
+    expect(r.text).toContain("结果");
+    expect(r.text).toContain("处理");
+    expect(r.text).toContain("温度");
+    expect(r.text).toContain("产率");
+  });
+
+  it("handles empty xlsx gracefully", async () => {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([]);
+    XLSX.utils.book_append_sheet(wb, ws, "空");
+    const p = path.join(os.tmpdir(), `att-extract-${Date.now()}-empty.xlsx`);
+    XLSX.writeFile(wb, p);
+    const r = await extractAttachmentText(p, "empty.xlsx");
+    expect(r.status).toBe("ready");
+    expect(r.text).toBeTruthy();
   });
 
   it("truncates over-long text and marks truncated", async () => {

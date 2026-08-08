@@ -23,6 +23,18 @@ describe("WritingStatusCard", () => {
     expect(screen.getByText(/已 1200 字/)).toBeTruthy();
   });
 
+  it("生成初稿且 0 字时显示等待 AI 提示（而非误导的「已 0 字」）", () => {
+    render(<WritingStatusCard status={base({ chars: 0 })} />);
+    expect(screen.getByText(/等待 AI 输出首段/)).toBeTruthy();
+    expect(screen.queryByText(/已 0 字/)).toBeNull();
+  });
+
+  it("非 writing 阶段且 0 字时不显示误导性字数", () => {
+    render(<WritingStatusCard status={base({ stage: "retrieving", chars: 0 })} />);
+    expect(screen.queryByText(/已 0 字/)).toBeNull();
+    expect(screen.queryByText(/等待 AI/)).toBeNull();
+  });
+
   it("info 提示条渲染", () => {
     render(<WritingStatusCard status={base({ info: ["已扩大全库检索"] })} />);
     expect(screen.getByText("已扩大全库检索")).toBeTruthy();
