@@ -213,6 +213,7 @@
 | W3-AP-LIVE-EVAL | 可选 live/录制质量冒烟（错引/节完整/摘要） | W3-AP-CITE-GROUND, W3-AP-DRAFT-COVER | 1～2d | **done** | 2026-08-06；`assertP7` + P7 剧本（摘要/错引/节完整）；默认 mock |
 | — | 质量主轴细节 | — | — | — | [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md) |
 | W3-AP-WRITE-UX | Agent 写作体验：action 实时化 + 移除写后跳转 + 移动端窄屏 + 蓝图顺序注入简报 | W3-AP-QUALITY | 1d | **done** | 2026-08-08；全量 1005 通过；见 §4 会话日志 |
+| W3-AP-ANTISPAM-FP | antispam 指纹增强：refNums 检测「字数不变但引用变化」的实质写操作 | W3-AP-ANTISPAM | 0.5d | **done** | 2026-08-08；全量 1007 通过；见 §4 会话日志 |
 
 
 | 来源 | 本队列处理方式 |
@@ -1038,6 +1039,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-07 | 并发排队埋点 | AI | `writing-concurrency.ts` 加内存排队观测（`getWritingQueueStats`：排队次数/总等待 ms/超时次数，进程内累计，1e6 封顶）；`/api/admin/stats` 增 `writingQueue` 字段 + Admin 仪表盘「扩写排队观测」卡。用于量化并发 3 收益（排队/超时是否下降）；新增 4 用例，全量 900 通过 |
 | 2026-08-07 | 新建向导精简 | AI | 新建项目向导 3 步→2 步：取消 review 模式强制 ≥1 篇文献门禁（0 篇也能完成创建，Agent 工作台 phase1 检索/导入文献）；移除向导第 3 步导入文献面板（工作台「文献」栏已有全高面板）；向导 Dialog 从 max-w-lg 升级 DIALOG_FORM（max-w-xl md:max-w-2xl）；`createProjectWithHandoff` 去掉 allowEmptyReferences 分支与 review 抛错。全量 948 通过 |
 | 2026-08-08 | Agent 写作体验 | AI | ①`agent/action` 实时化：不需确认工具（write_section 等）execute 前经 `emitLiveEvent` 实时推前端，运行中即时显示工具卡（原随快照滞后 30-60s）；需确认工具保持原路径；run-graph live 分支 append uiTranscript 保历史完整。②移除 Agent 写回后强制 `focusEditorAfterDraft` 跳转（保留 toast 反馈），修复「写完无反馈 + 跳综述页」。③工作台移动端：<1024px 自动隐藏图标栏/侧栏/预览，只留编辑器全宽（`isMobileLayout` + matchMedia）。④蓝图写作顺序注入 Agent 简报：`loadAgentProject` 提取 `blueprintWritingOrder`/`blueprintSectionGuides`，简报显示「建议写作顺序（蓝图）」+「各节写作要点」，修复「蓝图顺序与实际写作顺序不一致」。⑤引用修正收敛：validate_citations summary 分级引导（硬错必修/软可疑可接受）+ system prompt 收敛规则，修复「改引打地鼠循环不收尾、没下一步」。全量 1005 通过。已提交 |
+| 2026-08-08 | antispam 指纹增强 | AI | `projectFingerprint` 原只用 section 字符数总和，refine_content 改引（如 [7]→[4]）字数不变时指纹不变 → 误报「连续 3 次无进展」。新增 `AgentSectionFill.refNums`（去重排序引用编号签名，`extractRefNumsSignature`），fingerprint 纳入 refs 维度，能检测「字数不变但引用变化」的实质写操作。新增 2 用例，全量 1007 通过。已验证真实项目提取正确 |
 
 ---
 

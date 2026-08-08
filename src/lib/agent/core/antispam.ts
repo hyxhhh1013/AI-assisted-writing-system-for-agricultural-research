@@ -74,10 +74,16 @@ export function createAntispamTracker(
 export function projectFingerprint(snap: AgentProjectSnapshot | null | undefined): string {
   if (!snap) return "none";
   const chars = (snap.sectionFills ?? []).reduce((a, s) => a + (s.chars || 0), 0);
+  // 引用编号签名：refine_content 改引（如 [7]→[4]）字数不变但引用变化，靠它检测到实质进展
+  const refs = (snap.sectionFills ?? [])
+    .filter((s) => s.refNums)
+    .map((s) => `${s.key}:${s.refNums}`)
+    .join("|");
   return [
     snap.outline?.length ?? 0,
     snap.references?.length ?? 0,
     chars,
+    refs,
     snap.hasWritingBlueprint ? 1 : 0,
     snap.hasArgumentBlueprint ? 1 : 0,
     snap.hasPaperConfig ? 1 : 0,

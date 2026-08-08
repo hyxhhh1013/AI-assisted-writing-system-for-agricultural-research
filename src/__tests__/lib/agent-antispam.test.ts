@@ -39,6 +39,35 @@ describe("agent antispam", () => {
     expect(a).not.toBe(c);
   });
 
+  it("fingerprint changes when citation numbers change despite same char count", () => {
+    // refine_content 改引 [7]→[4]：chars 相同但 refNums 不同 → 指纹应变
+    const before = snap({
+      sectionFills: [
+        { key: "introduction", chars: 100, refNums: "7,20" },
+      ],
+    });
+    const after = snap({
+      sectionFills: [
+        { key: "introduction", chars: 100, refNums: "4,20" },
+      ],
+    });
+    expect(projectFingerprint(before)).not.toBe(projectFingerprint(after));
+  });
+
+  it("refine_content that changes citations does not stagnate", () => {
+    const before = snap({
+      sectionFills: [{ key: "introduction", chars: 100, refNums: "7,20" }],
+    });
+    const tracker = createAntispamTracker(before);
+    // refine_content 成功 + 指纹变化（refNums 7→4）→ 重置，不 stagnant
+    const after = snap({
+      sectionFills: [{ key: "introduction", chars: 100, refNums: "4,20" }],
+    });
+    const r = noteToolProgress(tracker, "refine_content", after, true);
+    expect(r.stagnant).toBe(false);
+    expect(tracker.stagnantCount).toBe(0);
+  });
+
   it("enforces search quota across search_external and search_knowledge", () => {
     const tracker = createAntispamTracker(snap());
     for (let i = 0; i < MAX_SEARCH_CALLS_PER_GOAL; i++) {

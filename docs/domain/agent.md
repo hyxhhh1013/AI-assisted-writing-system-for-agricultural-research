@@ -137,6 +137,8 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 
 **antispam 硬停机（P1b）**：停滞熔断（`MAX_STAGNANT_TOOLS`=3）触发累计 `breakCount`；同 goal 内达 `MAX_BREAKS_BEFORE_HARD_STOP`=2 次即硬停机（`finished=true` 进 finalize），不再放行工具，避免循环烧光 32 迭代/64 工具预算。
 
+**antispam 指纹增强（2026-08-08）**：`projectFingerprint` 原来只用 section 字符数总和，refine_content 改引（如 [7]→[4]）字数不变时指纹不变 → 误报「无进展」。现在 `AgentSectionFill` 增加 `refNums`（该 section 去重排序的引用编号签名，`extractRefNumsSignature` 从正文提取），fingerprint 纳入 refs 维度，能检测「字数不变但引用变化」的实质写操作。
+
 ## 常用命令
 
 - Agent 端到端剧本：`npm run eval:agent`（`src/lib/eval/agent-scripts.ts`，P1~P6 + FILE-READ 断言）

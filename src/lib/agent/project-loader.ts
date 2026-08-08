@@ -10,6 +10,8 @@ export interface AgentSectionFill {
   chars: number;
   /** 正文摘录，供 Agent 上下文（非全量） */
   preview?: string;
+  /** 该 section 引用的编号签名（去重排序的 [n] 列表），供 antispam 指纹检测内容实质变化 */
+  refNums?: string;
 }
 
 export interface AgentProjectSnapshot {
@@ -115,6 +117,7 @@ export async function loadAgentProject(
       key: s.key,
       chars: content.replace(/\s+/g, "").length,
       preview: content.trim() ? content.trim().slice(0, 280) : undefined,
+      refNums: extractRefNumsSignature(content),
     };
   });
   // 摘要存于 Project.abstract 列（不在 sections 表），单独纳入统计，
@@ -124,6 +127,7 @@ export async function loadAgentProject(
     key: "abstract",
     chars: abstractText.replace(/\s+/g, "").length,
     preview: abstractText ? abstractText.slice(0, 280) : undefined,
+    refNums: extractRefNumsSignature(abstractText),
   });
 
   let writingBlueprintSummary: string | null = null;
@@ -207,4 +211,18 @@ export async function loadAgentProject(
     hasPaperConfig,
     agentEntryMode,
   };
+}
+
+/** 提取正文中的引用编号签名（去重排序），供 antispam 指纹检测「字数不变但引用变化」的写操作 */
+export function extractRefNumsSignature(content: string): string {
+  if (!content) return "";
+  const nums = new Set<number>();
+  const regex = /\[(\d+)\]/g;
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(content)) !== null) {
+    nums.add(parseInt(m[1], 10));
+  }
+  return Array.from(nums)
+    .sort((a, b) => a - b)
+    .join(",");
 }
