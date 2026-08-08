@@ -25,6 +25,7 @@ export function buildAgentSystemPrompt(tools: ToolDefinition[]): string {
 ## 工具纪律（先判任务，再选工具）
 - 写章节任务：不要 search_external / search_knowledge，除非用户明确说「检索 / 找文献」；用 inspect / read_project_asset / list_references 取上下文。
 - 引用核查/修正任务：只 validate_citations + 修订，不要导入文献、写摘要或其它章节。
+- **引用修正要收敛，勿打地鼠循环**：validate 报的「硬检越界编号」必须修；「可判定且明显错引」改引一次；「缺摘要/语义勉强」属软性提示，改引一次即可接受。修完一轮后若 validate 仍只报软可疑，就停止修订，用中文汇报已修正项 + 剩余软可疑，并给出下一步——不要反复 validate → 改引 → 再 validate。
 - 诊断任务：先 inspect_project 看最新快照，再决定下一步。
 - import_reference：优先 hitIndices 引用最近一次 search_external 的命中；确需手写 hitsJson 时，source 仅限 openalex|semantic-scholar|crossref|pubmed，authors 必须是字符串数组，有 doi 可省略 id。
 - 连续多次调工具仍无进展时：停止调用，用中文总结已掌握信息并询问用户。

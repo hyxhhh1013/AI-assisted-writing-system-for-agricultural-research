@@ -99,15 +99,22 @@ export const validateCitationsTool: ToolDefinition = {
 
     let summary: string;
     if (blocked) {
-      summary = `引用硬检未通过：${gate.hint}`;
+      summary = `引用硬检未通过：${gate.hint}【必须修正越界编号后才能继续，请直接改引或删引】`;
     } else if (!gate.passed) {
       summary = `可导出，但 Phase 5 未完成：${gate.hint}`;
     } else if (grounding.suspiciousCount > 0) {
-      summary = `硬检通过，但有 ${grounding.suspiciousCount} 处语义可疑引用：${grounding.hint}${softHint}`;
+      // 软可疑（语义勉强/缺摘要无法判定）≠ 必须修的硬错引：
+      // 明确给 Agent 收敛出口，避免「改一处→重验→又报另一处」的无限打地鼠循环。
+      // 可判定且确实错引的才改；缺摘要/语义勉强可接受或改引一次，不要反复重验。
+      summary =
+        `硬检通过，${grounding.suspiciousCount} 处语义可疑引用（${grounding.hint}${softHint}）。`
+        + `判断：优先修正【可判定且明显错引】的编号（改引或删引）；`
+        + `【缺摘要/语义勉强】属软性提示，可接受或改引一次，不要反复 validate 重验——`
+        + `修完这轮即可向用户汇报并给出下一步`;
     } else if (overlapIssues.length > 0) {
       summary = `硬检通过，语义接地未见明显错引；全池重叠低 ${overlapIssues.length} 处可人工核对${softHint}`;
     } else {
-      summary = `引用检查通过（硬检 OK，语义接地 OK，${checks.length || gate.citationCount} 处引用）${softHint}`;
+      summary = `引用检查通过（硬检 OK，语义接地 OK，${checks.length || gate.citationCount} 处引用）${softHint}。引用已符合要求，无需再改，请向用户汇报并给出下一步`;
     }
 
     return {
