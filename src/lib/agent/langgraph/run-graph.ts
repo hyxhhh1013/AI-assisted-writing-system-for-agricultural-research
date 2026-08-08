@@ -470,7 +470,9 @@ export async function* runAgentGraphLoop(
 
     for await (const item of mergeGraphAndLive(stream, liveQueue)) {
       if (item.type === "live") {
-        // 实时 token delta：直接推给前端（不持久化，不进 uiTranscript）
+        // 实时事件：直接推给前端；action 等需进 uiTranscript（快照/历史气泡），
+        // thought_delta / progress 等 appendUiFromAgentEvent 走 default 忽略，不污染快照
+        uiTranscript = appendUiFromAgentEvent(uiTranscript, item.event);
         yield item.event;
         continue;
       }

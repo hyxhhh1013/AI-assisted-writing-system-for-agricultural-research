@@ -562,7 +562,14 @@ export async function toolsNode(
       continue;
     }
 
-    events.push({ type: "agent/action", tool: tool.name, params });
+    // 不需确认的工具：action 走实时通道，长时工具（write_section 等）执行期间前端即时显示工具卡，
+    // 而不是等节点结束、graph 快照 emit 才收到（那会滞后 30-60s）。
+    // 需确认工具保留 events.push：确认前 action 随快照 emit；用户确认后由 run-graph 确认路径直接 yield。
+    if (shouldRequestConfirmation(tool)) {
+      events.push({ type: "agent/action", tool: tool.name, params });
+    } else {
+      runtime.emitLiveEvent?.({ type: "agent/action", tool: tool.name, params });
+    }
 
     // 忽略模型自带的 userConfirmed；仅服务端 grantedConfirm 可放行
     if (shouldRequestConfirmation(tool)) {

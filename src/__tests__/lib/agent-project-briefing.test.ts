@@ -21,6 +21,11 @@ const sample: AgentProjectSnapshot = {
   dataClaims: [],
   currentPhase: 4,
   hasWritingBlueprint: true,
+  blueprintWritingOrder: ["研究现状与问题", "引言", "结论与展望", "摘要"],
+  blueprintSectionGuides: [
+    { path: "引言", purpose: "建立研究背景与核心命题" },
+    { path: "研究现状与问题", purpose: "梳理基础共识与现存瓶颈" },
+  ],
   hasArgumentBlueprint: false,
   sectionFills: [
     { key: "introduction", chars: 1200 },
@@ -42,6 +47,20 @@ describe("agent project briefing", () => {
     expect(text).toContain("实验室范围");
     expect(text).toContain("热化学");
     expect(text).toContain("烟草");
+  });
+
+  it("injects blueprint writing order and section guides", () => {
+    const text = formatAgentProjectBriefing(sample);
+    expect(text).toContain("建议写作顺序（蓝图）：1. 研究现状与问题 → 2. 引言 → 3. 结论与展望 → 4. 摘要");
+    expect(text).toContain("各节写作要点（蓝图）");
+    expect(text).toContain("- 引言：建立研究背景与核心命题");
+  });
+
+  it("omits blueprint order block when no writingOrder", () => {
+    const noOrder = { ...sample, blueprintWritingOrder: undefined, blueprintSectionGuides: undefined };
+    const text = formatAgentProjectBriefing(noOrder);
+    expect(text).not.toContain("建议写作顺序");
+    expect(text).not.toContain("各节写作要点");
   });
 
   it("briefing 经独立 user 消息注入，system prompt 前缀稳定", () => {

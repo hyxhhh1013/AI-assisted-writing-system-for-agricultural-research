@@ -32,6 +32,10 @@ export interface AgentProjectSnapshot {
   sectionFills: AgentSectionFill[];
   /** 写作蓝图短摘要（thesis / 词数） */
   writingBlueprintSummary?: string | null;
+  /** 写作蓝图建议写作顺序（sectionPath 数组，注入 Agent 简报引导写作顺序） */
+  blueprintWritingOrder?: string[];
+  /** 写作蓝图各节引导（path + purpose，注入简报供 Agent 按节推进） */
+  blueprintSectionGuides?: { path: string; purpose: string }[];
   /** 论证蓝图短摘要 */
   argumentBlueprintSummary?: string | null;
   /** Passport 是否已有 config 记录 */
@@ -123,11 +127,15 @@ export async function loadAgentProject(
   });
 
   let writingBlueprintSummary: string | null = null;
+  let blueprintWritingOrder: string[] | undefined;
+  let blueprintSectionGuides: { path: string; purpose: string }[] | undefined;
   if (writingBlueprint?.trim()) {
     try {
       const bp = JSON.parse(writingBlueprint) as {
         thesis?: string;
         estimatedWordCount?: { min?: number; max?: number };
+        writingOrder?: unknown;
+        sectionGuides?: unknown;
       };
       const words =
         bp.estimatedWordCount?.min != null && bp.estimatedWordCount?.max != null
@@ -136,6 +144,20 @@ export async function loadAgentProject(
       writingBlueprintSummary = [bp.thesis?.slice(0, 200), words]
         .filter(Boolean)
         .join("；") || "（已有写作蓝图）";
+      if (Array.isArray(bp.writingOrder)) {
+        blueprintWritingOrder = bp.writingOrder.filter((s) => typeof s === "string");
+      }
+      if (Array.isArray(bp.sectionGuides)) {
+        blueprintSectionGuides = bp.sectionGuides
+          .filter(
+            (g): g is { sectionPath: string; purpose: string } =>
+              !!g
+              && typeof g === "object"
+              && typeof (g as { sectionPath?: unknown }).sectionPath === "string"
+              && typeof (g as { purpose?: unknown }).purpose === "string",
+          )
+          .map((g) => ({ path: g.sectionPath, purpose: g.purpose.slice(0, 160) }));
+      }
     } catch {
       writingBlueprintSummary = "（已有写作蓝图）";
     }
@@ -179,6 +201,8 @@ export async function loadAgentProject(
     hasArgumentBlueprint: Boolean(project.argumentBlueprint?.trim()),
     sectionFills,
     writingBlueprintSummary,
+    blueprintWritingOrder,
+    blueprintSectionGuides,
     argumentBlueprintSummary,
     hasPaperConfig,
     agentEntryMode,

@@ -193,6 +193,8 @@ function WorkbenchContent() {
   const [project, setProject] = useState<ProjectData>(projectStore.getDefault());
   const [activeSection, setActiveSection] = useState("introduction");
   const [editingContent, setEditingContent] = useState("");
+  /** 窄屏（< lg，含手机/平板竖屏）：自动收起侧栏与图标栏，只留编辑器 */
+  const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<WorkbenchTab>(
     AGENT_TAB_ENABLED ? "agent" : "structure",
@@ -226,6 +228,20 @@ function WorkbenchContent() {
   editingContentRef.current = editingContent;
   const activeSectionRef = useRef(activeSection);
   activeSectionRef.current = activeSection;
+
+  // 窄屏（手机/平板竖屏，< lg 1024px）：自动收起侧栏与图标栏、关闭预览，只留编辑器。
+  // 用 matchMedia 监听，宽屏恢复时展开；避免移动端三栏横排把编辑器挤没。
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const apply = () => {
+      setIsMobileLayout(mq.matches);
+      setIsSidebarOpen(!mq.matches);
+      setIsPreviewOpen(!mq.matches);
+    };
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
 
   const structureSections = useMemo(
     () => buildWorkbenchSectionsForMode(project.mode ?? "review", "zh"),
@@ -430,14 +446,15 @@ function WorkbenchContent() {
         const data = await projectStore.get(projectId);
         if (data) {
           setProject(data);
-          focusEditorAfterDraft(info.sectionKey);
-          toast.success(`Agent 已写回「${info.sectionKey}」，已切换到编辑器`);
+          // 不强制跳转编辑器：保留用户当前视图（Agent 面板/读者页），仅提示已写回，
+          // 避免每次写作都把用户从完成反馈里拽到综述章节页
+          toast.success(`Agent 已写回「${info.sectionKey}」`);
         }
       } catch {
         toast.error("章节已写回，但刷新项目失败，请手动刷新页面");
       }
     },
-    [projectId, focusEditorAfterDraft],
+    [projectId],
   );
 
   const handleAgentChartPersisted = useCallback(
@@ -775,14 +792,17 @@ function WorkbenchContent() {
   return (
     <ErrorBoundary>
     <div className={cn("flex h-screen overflow-hidden relative", siteTheme.bgSoft)}>
-      <WorkbenchTabSwitcher
-        activeTab={activeTab} setActiveTab={setActiveTab}
-        isWritingGenerating={isWritingGenerating}
-        handleSave={handleSave} projectId={projectId}
-        projectMode={project.mode ?? "review"}
-        setRightPanelMode={setRightPanelMode}
-        setIsPreviewOpen={setIsPreviewOpen}
-      />
+      {/* 窄屏隐藏左侧图标栏：移动端只留编辑器，避免 56px 图标栏 + 侧栏把编辑区挤没 */}
+      {!isMobileLayout && (
+        <WorkbenchTabSwitcher
+          activeTab={activeTab} setActiveTab={setActiveTab}
+          isWritingGenerating={isWritingGenerating}
+          handleSave={handleSave} projectId={projectId}
+          projectMode={project.mode ?? "review"}
+          setRightPanelMode={setRightPanelMode}
+          setIsPreviewOpen={setIsPreviewOpen}
+        />
+      )}
 
       {/* Second Left: Dynamic Panel — Agent 加宽，便于阅读长回复 */}
       <div 
@@ -1076,10 +1096,13 @@ function WorkbenchContent() {
       </div>
 
       {!isSidebarOpen && (
-        <Button 
-          variant="secondary" 
-          size="icon" 
-          className="absolute left-14 top-1/2 -translate-y-1/2 rounded-l-none border shadow-md z-50 h-10 w-6 p-0"
+        <Button
+          variant="secondary"
+          size="icon"
+          className={cn(
+            "absolute top-1/2 -translate-y-1/2 rounded-l-none border shadow-md z-50 h-10 w-6 p-0",
+            isMobileLayout ? "left-0" : "left-14",
+          )}
           onClick={() => setIsSidebarOpen(true)}
         >
           <ChevronRight className="h-4 w-4" />

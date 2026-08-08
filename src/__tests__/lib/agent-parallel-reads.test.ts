@@ -49,6 +49,7 @@ function makeRuntime(tools: ToolDefinition[], ctx: AgentContext): AgentGraphRunt
     tools,
     repeatTracker: createRepeatTracker(),
     antispamTracker: createAntispamTracker(null),
+    emitLiveEvent: () => {},
   };
 }
 
@@ -208,9 +209,18 @@ describe("toolsNode 集成（并行快路径接入）", () => {
     expect((out.observations ?? []).map((o) => o.data)).toEqual([{ text: "ref A" }, { text: "ref B" }]);
   });
 
-  it("混入非白名单只读工具时经 toolsNode 走串行路径（A,O,A,O 事件序）", async () => {
+  it("混入非白名单只读工具时经 toolsNode 走串行路径（action 实时 emit，observation 入 events）", async () => {
     const ctx = makeCtx();
-    const runtime = makeRuntime([readTool("read_reference"), readTool("check_consistency")], ctx);
+    const live: { tool: string }[] = [];
+    const runtime: AgentGraphRuntime = {
+      agentContext: ctx,
+      tools: [readTool("read_reference"), readTool("check_consistency")],
+      repeatTracker: createRepeatTracker(),
+      antispamTracker: createAntispamTracker(null),
+      emitLiveEvent: (e) => {
+        if (e.type === "agent/action") live.push({ tool: e.tool });
+      },
+    };
     const config = { configurable: { agentRuntime: runtime } } as unknown as LangGraphRunnableConfig;
     const state = baseState({
       pendingToolCalls: [
@@ -219,9 +229,11 @@ describe("toolsNode 集成（并行快路径接入）", () => {
       ],
     });
     const out = await toolsNode(state, config);
+    // 串行路径：action 改走实时通道（emitLiveEvent），observation 仍入 events（快照 emit）
+    expect(live.map((e) => e.tool)).toEqual(["read_reference", "check_consistency"]);
     const seq = (out.events ?? [])
-      .filter((e) => e.type === "agent/action" || e.type === "agent/observation")
+      .filter((e) => e.type === "agent/observation")
       .map((e) => e.type);
-    expect(seq).toEqual(["agent/action", "agent/observation", "agent/action", "agent/observation"]);
+    expect(seq).toEqual(["agent/observation", "agent/observation"]);
   });
 });

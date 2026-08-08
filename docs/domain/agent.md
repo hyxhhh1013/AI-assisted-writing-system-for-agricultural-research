@@ -52,7 +52,7 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 | `agent/plan` | Plan 子任务列表 + 焦点 | 快照 |
 | `agent/thought` | 完整思考（终） | 快照 |
 | `agent/thought_delta` | LLM 回复逐 token 增量 | **实时**（不持久化） |
-| `agent/action` | 工具被调用（params） | 快照 |
+| `agent/action` | 工具被调用（params）。不需确认的工具经 `emitLiveEvent` **实时**推送（长工具如 `write_section` 执行期间前端即时显示工具卡）；需确认工具仍走快照（确认路径直接 yield） | 实时（不需确认）/ 快照（需确认） |
 | `agent/observation` | 工具结果（result/error） | 快照 |
 | `agent/progress` | **长工具执行期实时进度**（`label` 兼容 + 结构化 `stage`/`detail`/`chars`/`elapsedMs`/`info`/`warnings`） | **实时**（不持久化） |
 | `agent/confirm` | 写操作需用户确认（import_reference 等） | 快照 |
@@ -61,7 +61,9 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 | `agent/error` | 错误 | 快照 |
 | `agent/session` | 会话 id + 状态（running/interrupted/completed/error） | 快照 |
 
-**实时 vs 快照**：快照事件随 graph 状态逐次产出并持久化进 `uiTranscript`；实时事件（`thought_delta`、`progress`）经 `LiveEventQueue` 即时推送，**不持久化、不进 uiTranscript、续跑不回放**。合并逻辑 `mergeGraphAndLive` 保证实时事件不被阻塞、graph 结束时排空缓冲。
+**实时 vs 快照**：快照事件随 graph 状态逐次产出并持久化进 `uiTranscript`；实时事件（`thought_delta`、`progress`、不需确认的 `agent/action`）经 `LiveEventQueue` 即时推送。`thought_delta`、`progress` **不持久化、不进 uiTranscript、续跑不回放**；`agent/action` 会 append 进 `uiTranscript`（`run-graph.ts` live 分支），保证快照/历史气泡完整。合并逻辑 `mergeGraphAndLive` 保证实时事件不被阻塞、graph 结束时排空缓冲。
+
+- **agent/action 实时化（2026-08-08）**：原来 `agent/action` 由 `toolsNode` push 进 `state.events`，要等整个节点执行完（`write_section` 可达 30-60s）随 graph 快照 emit，运行中前端只见「思考中」看不到工具卡。改为不需确认的工具在 execute 前经 `runtime.emitLiveEvent` 实时推送（`nodes.ts`），前端立即显示「进行中」工具卡；`agent/observation` 仍随快照 emit，前端按 action→observation 配对展示结果。需确认工具（`import_reference` 等）保持原路径：确认前快照 emit，确认后 `run-graph.ts` 确认路径直接 yield。
 
 ## write_section 进度透传链路（2026-08-06 新增；2026-08-07 结构化扩展）
 
@@ -109,6 +111,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **查看/编辑完整蓝图（2026-08-07）**：`blueprint_approve` 检查点卡额外显示「打开蓝图工作台（查看 / 编辑）」按钮（`agent-panel` 新增 `onOpenBlueprint` 回调，由 workbench 接 `handleOpenBlueprintDialog` 打开既有 `BlueprintWorkspaceDialog`）。`generate_writing_blueprint` 属 `PROJECT_MUTATING_TOOLS`，生成后工作台自动刷新 `writingBlueprint`，确保按钮打开的是最新蓝图。
 - **对话里「看看蓝图」调出工作台（2026-08-07）**：新增只读工具 `open_blueprint_workspace`（`tools/open-blueprint-workspace.ts`）。Agent 识别到用户想看/编辑写作蓝图时调用它；前端 `agent-panel` 收到该工具的成功 observation 后自动 `onOpenBlueprint()` 打开工作台。蓝图未生成时工具报错，Agent 应先生成蓝图。
 - **工作台随内容自适应（2026-08-07）**：蓝图 schema 新增可选 `projectMode`/`language`（生成时用项目兜底填充）；工作台按顶层章节把 `sectionGuides` 树形分组（`" > "` 层级，顶层可折叠）、按论文类型显示徽标与配图提示（综述→概念图/对比表，研究→方法流程图/结果数据图）、空区块（前置条件/配图/章节导览/写作顺序）自动隐藏。分组纯函数 `groupSectionGuides` 在 `lib/blueprint-utils.ts`。
+- **蓝图顺序注入 Agent 简报（2026-08-08）**：修复「蓝图建议写作顺序与实际写作顺序不一致」——此前 `project-briefing` 只给 LLM「写作蓝图：有 + thesis 摘要」，`writingOrder` 与 `sectionGuides` 未进 Agent 决策输入，Agent 靠直觉/大纲顺序写。现在 `loadAgentProject` 额外提取 `blueprintWritingOrder`/`blueprintSectionGuides`（`project-loader.ts`），简报注入「建议写作顺序（蓝图）：1. x → 2. y → …」+「各节写作要点（蓝图）」区块（`project-briefing.ts`）。Agent 写作前即可见蓝图建议顺序并按序推进。
 - **蓝图常驻入口（2026-08-07）**：工作台侧栏头（非 Agent Tab）与 Agent 面板头均新增「蓝图」按钮（Map 图标），随时可打开蓝图工作台；无蓝图时点击自动切到「章节结构」侧栏引导生成。
 - **文献分类编码持久化（2026-08-07）**：新增写工具 `save_reference_classification`（`tools/save-reference-classification.ts`），把「文献分类编码」结果批量 upsert 到 `ReferenceSource`（refIndex 1 基 → sourceName/category/citation），与前端「引用-文献映射」同一张表。`list_references` 输出附带 `category`/`sourceName`，写作时 Agent 能看到分类。属 `PROJECT_MUTATING_TOOLS`，保存后工作台刷新。之前 Agent 只能靠多次关键词检索在对话里"分类"、结果不落库，现已闭环。
 - **删除不相关文献（2026-08-07）**：新增写工具 `remove_references`（`tools/remove-references.ts`），按引用编号（1 基 [n]）删除不相关/误导入文献，自动重排后续编号，并同步清理/重排 `ReferenceSource` 分类映射。若正文已引用被删编号，工具说明要求随后 `validate_citations` 检查越界引用。

@@ -104,6 +104,20 @@ export function formatAgentProjectBriefing(
     `写作蓝图：${project.hasWritingBlueprint ? "有" : "无"}${
       project.writingBlueprintSummary ? ` — ${project.writingBlueprintSummary}` : ""
     }`,
+    ...(project.blueprintWritingOrder?.length
+      ? [
+          `建议写作顺序（蓝图）：${project.blueprintWritingOrder
+            .map((p, i) => `${i + 1}. ${p}`)
+            .join(" → ")}`,
+        ]
+      : []),
+    ...(project.blueprintSectionGuides?.length
+      ? [
+          `各节写作要点（蓝图）：\n${project.blueprintSectionGuides
+            .map((g) => `- ${g.path}：${g.purpose}`)
+            .join("\n")}`,
+        ]
+      : []),
     `论证蓝图：${project.hasArgumentBlueprint ? "有" : "无"}${
       project.argumentBlueprintSummary ? ` — ${project.argumentBlueprintSummary}` : ""
     }`,

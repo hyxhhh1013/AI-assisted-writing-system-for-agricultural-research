@@ -28,6 +28,8 @@
 | `reader` | 补录参考文献 |
 | `plagiarism` | 查重侧栏（精简）；完整质量中心见 `/plagiarism` |
 
+> **移动端响应式（2026-08-08）**：窄屏（< 1024px，手机/平板竖屏）下自动隐藏左侧图标栏（`WorkbenchTabSwitcher`）与动态侧栏、关闭预览，只留编辑器全宽（`workbench-page-client.tsx` 的 `isMobileLayout` + `matchMedia`）。宽屏恢复三栏。侧栏收起的展开浮钮窄屏贴左边缘（`left-0`），宽屏贴图标栏（`left-14`）。
+
 ## AI 写作
 
 | 功能 | 页面 | API | 核心代码 |
