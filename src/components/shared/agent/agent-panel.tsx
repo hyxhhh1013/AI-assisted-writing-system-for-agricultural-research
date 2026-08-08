@@ -351,7 +351,7 @@ export function AgentPanel({
     const el = scrollRef.current;
     if (!el) return;
     if (atBottom) el.scrollTop = el.scrollHeight;
-  }, [agent.messages, agent.status, agent.streamingText, agent.pendingCheckpoint, agent.pendingConfirm, atBottom]);
+  }, [agent.messages, agent.status, agent.streamingText, agent.pendingCheckpoint, agent.pendingConfirm, agent.writeStatus, atBottom]);
 
   /** import_reference 确认卡候选变化时重置勾选：默认全选 */
   useEffect(() => {
@@ -716,18 +716,6 @@ export function AgentPanel({
         className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-4 py-4"
       >
         <div className="mx-auto flex w-full min-w-0 max-w-none flex-col gap-2.5">
-          {agent.writeStatus ? (
-            <div className="sticky top-4 z-10">
-              <WritingStatusCard
-                status={agent.writeStatus}
-                onRetry={
-                  agent.writeStatus.stage === "error" && lastUserGoal
-                    ? () => void agent.sendGoal(lastUserGoal)
-                    : undefined
-                }
-              />
-            </div>
-          ) : null}
           {agent.messages.length === 0 && (
             <div className="rounded-xl border border-dashed border-border/60 bg-white/70 px-5 py-8 text-sm text-muted-foreground">
               {!projectId ? (
@@ -884,7 +872,18 @@ export function AgentPanel({
             </MessageEnter>
           ) : null}
 
-          {displayProgress ? (
+          {agent.writeStatus ? (
+            <MessageEnter animate>
+              <WritingStatusCard
+                status={agent.writeStatus}
+                onRetry={
+                  agent.writeStatus.stage === "error" && lastUserGoal
+                    ? () => void agent.sendGoal(lastUserGoal)
+                    : undefined
+                }
+              />
+            </MessageEnter>
+          ) : displayProgress ? (
             <MessageEnter animate>
               <AgentWorkingIndicator label={displayProgress} />
             </MessageEnter>
