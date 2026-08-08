@@ -1,5 +1,6 @@
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import prisma from "@/lib/prisma";
+import { retryAttachmentExtraction } from "@/lib/agent/attachments/service";
 import { READ_ATTACHMENT_DEFAULT_CHARS, READ_ATTACHMENT_MAX_CHARS } from "@/lib/agent/attachments/constants";
 
 /**
@@ -50,6 +51,37 @@ export const readAttachmentTool: ToolDefinition = {
           + "请先做其它准备步骤（如读大纲/蓝图/现有章节），过一会儿再调用 read_attachment 重试；"
           + "不要反复立即重读同一附件。",
       };
+    }
+    if (row.status === "extract_failed" || row.status === "unsupported") {
+      // 提取失败/不支持：unsupported 不重试（类型本就不可解析）；extract_failed 若文件仍在则自动重试一次
+      if (row.status === "extract_failed") {
+        const retried = await retryAttachmentExtraction(
+          row.id,
+          row.userId,
+          row.fileKey,
+          row.originalName,
+        );
+        if (retried) {
+          const updated = await prisma.agentAttachment.findFirst({
+            where: { id: row.id, userId: row.userId },
+          });
+          if (updated?.extractedText) {
+            // 用重试成功的内容继续走正常读取路径
+            row.status = "ready";
+            row.extractedText = updated.extractedText;
+            row.extractSource = updated.extractSource;
+          }
+        }
+      }
+      if (row.status !== "ready" || !row.extractedText) {
+        return {
+          success: false,
+          error:
+            row.status === "unsupported"
+              ? "该文件类型不支持提取内容，仅可查看文件名/预览"
+              : "附件提取失败（可能瞬时的网络/解析问题），已自动重试一次仍失败；可重新上传或稍后再次读取。",
+        };
+      }
     }
     if (row.status !== "ready" || !row.extractedText) {
       return { success: false, error: "附件未能提取内容，仅可查看文件名/预览" };

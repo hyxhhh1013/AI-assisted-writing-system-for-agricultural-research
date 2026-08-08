@@ -91,6 +91,16 @@ async function extractAttachmentInBackground(
   fileKey: string,
   originalName: string,
 ): Promise<void> {
+  await runAttachmentExtraction(attachmentId, userId, fileKey, originalName);
+}
+
+/** 执行提取并落库；成功返回 true，失败标记 extract_failed 并返回 false。供上传后台 / 失败重试共用。 */
+export async function runAttachmentExtraction(
+  attachmentId: string,
+  userId: string,
+  fileKey: string,
+  originalName: string,
+): Promise<boolean> {
   try {
     const result = await extractAttachmentText(
       resolveProjectRuntimePath(fileKey),
@@ -108,15 +118,33 @@ async function extractAttachmentInBackground(
         extractedText: sanitizeTextForDb(result.text ?? null),
       },
     });
-  } catch {
-    // 提取失败标记 extract_failed（附件仍保留，用户可删/重传）
+    return result.status === "ready";
+  } catch (error) {
+    // 提取失败标记 extract_failed（附件仍保留，用户可删/重传/重试）
     await prisma.agentAttachment
       .update({
         where: { id: attachmentId },
         data: { status: "extract_failed", extractSource: "failed" },
       })
       .catch(() => {});
+    return false;
   }
+}
+
+/** 提取失败后重试：文件仍在则重新提取，成功返回 true。供 read_attachment 遇 extract_failed 自动重试。 */
+export async function retryAttachmentExtraction(
+  attachmentId: string,
+  userId: string,
+  fileKey: string,
+  originalName: string,
+): Promise<boolean> {
+  try {
+    // 文件不存在/不可读直接失败（避免反复重试）
+    readAttachmentFile(userId, attachmentId);
+  } catch {
+    return false;
+  }
+  return runAttachmentExtraction(attachmentId, userId, fileKey, originalName);
 }
 
 export async function pinAttachment(

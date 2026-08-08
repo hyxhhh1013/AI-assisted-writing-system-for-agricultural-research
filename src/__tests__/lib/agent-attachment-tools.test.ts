@@ -5,6 +5,11 @@ import prisma from "@/lib/prisma";
 import type { AgentContext } from "@/lib/agent/types";
 
 vi.mock("@/lib/prisma", () => ({ default: { agentAttachment: { findFirst: vi.fn(), findMany: vi.fn() } } }));
+vi.mock("@/lib/agent/attachments/service", () => ({
+  retryAttachmentExtraction: vi.fn(),
+}));
+import { retryAttachmentExtraction } from "@/lib/agent/attachments/service";
+const mockRetry = retryAttachmentExtraction as unknown as ReturnType<typeof vi.fn>;
 
 function ctx(userId = "u1", sessionId = "s1"): AgentContext {
   return {
@@ -65,6 +70,34 @@ describe("readAttachmentTool", () => {
     const r = await readAttachmentTool.execute({ fileId: "a1" }, ctx());
     expect(r.success).toBe(false);
     expect(r.error).toMatch(/提取中/);
+  });
+
+  it("auto-retries extract_failed attachment; retry failure returns friendly error", async () => {
+    mockFindFirst.mockResolvedValue({
+      id: "a1", userId: "u1", sessionId: "s1", projectId: null, pinned: false,
+      status: "extract_failed", originalName: "d.xlsx", fileKey: "att/a1/d.xlsx", extractedText: null,
+    });
+    mockRetry.mockResolvedValue(false);
+    const r = await readAttachmentTool.execute({ fileId: "a1" }, ctx());
+    expect(mockRetry).toHaveBeenCalledWith("a1", "u1", "att/a1/d.xlsx", "d.xlsx");
+    expect(r.success).toBe(false);
+    expect(r.error).toMatch(/提取失败/);
+  });
+
+  it("returns content after successful auto-retry", async () => {
+    mockFindFirst
+      .mockResolvedValueOnce({
+        id: "a1", userId: "u1", sessionId: "s1", projectId: null, pinned: false,
+        status: "extract_failed", originalName: "d.xlsx", fileKey: "att/a1/d.xlsx", extractedText: null,
+      })
+      .mockResolvedValueOnce({
+        id: "a1", userId: "u1", sessionId: "s1", projectId: null, pinned: false,
+        status: "ready", originalName: "d.xlsx", fileKey: "att/a1/d.xlsx", extractedText: "表格内容",
+      });
+    mockRetry.mockResolvedValue(true);
+    const r = await readAttachmentTool.execute({ fileId: "a1" }, ctx());
+    expect(r.success).toBe(true);
+    expect((r.data as { text: string }).text).toBe("表格内容");
   });
 
   it("coerces string numeric params and honors offset=0 over tail", async () => {
