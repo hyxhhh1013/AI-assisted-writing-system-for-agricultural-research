@@ -1054,6 +1054,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | P1 | W3-AP-ABS-FLOW → REVIEW-FLOW | 摘要与可选审查收口 |
 | P2 | W3-AP-LIVE-EVAL / W0-5 | 质量冒烟；仓库卫生可穿插 |
 | P3 | W3-AP-WRITE-NO-RAG | write_section 检索优化（已诊断，待实施）：项目已有可引用文献摘要（referenceEvidence）时跳过知识库 RAG 检索，直接用项目文献摘要写作；无文献时才检索。实测：有 52 条文献+摘要时检索耗时 0.6s 且引入 8 条项目外新来源，跳过可避免引用混乱 + 进度误导 |
+| P3b | W3-AP-WRITE-RESUME | write_section 断点续写/去重（已诊断，待实施）：write_section 执行中 SSE 断开 → 会话 interrupted，但 snapshot 保留未完成 pendingToolCalls，resume 会重跑 write_section 重复消耗 AI + 可能重复写回。需设计：resume 时检测该章节是否已有生成内容/是否已写回，避免重复。相关：`agent stream error {}` 空对象错误（诊断日志已加 route.ts `stream-error-detail`） |
 
 **若只能做一个产品 PR**：先做 **WQC**（文风质检）。  
 **明确不做本波**：全自动 Conductor、plan 苏格拉底、五人组外审、LaTeX/disclosure、Generator–Evaluator 纸盲合同。

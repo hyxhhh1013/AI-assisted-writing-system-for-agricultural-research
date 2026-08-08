@@ -263,6 +263,14 @@ export async function POST(req: NextRequest) {
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();
         } catch (error: unknown) {
+          // 【诊断】打印 error 完整结构，定位 {} 空对象来源
+          const diag =
+            error instanceof Error
+              ? { type: "Error", name: error.name, message: error.message, stack: error.stack?.slice(0, 500) }
+              : typeof error === "object" && error !== null
+                ? { type: typeof error, json: JSON.stringify(error).slice(0, 500) }
+                : { type: typeof error, value: String(error) };
+          console.error("[api/agent] stream-error-detail", JSON.stringify(diag));
           log.fail("agent stream error", error);
           controller.enqueue(
             encoder.encode(
