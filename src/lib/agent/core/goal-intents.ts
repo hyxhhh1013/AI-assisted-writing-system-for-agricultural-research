@@ -284,16 +284,26 @@ export function parseLiteratureImportTarget(goal: string): number {
 }
 
 /** 起草某一节（引言/讨论/综述等），非检索任务 */
-export function isSectionDraftGoal(goal: string): boolean {
+export function isSectionDraftGoal(
+  goal: string,
+  observations?: readonly ToolObservation[],
+): boolean {
   if (isLiteratureHuntGoal(goal)) return false;
   if (isAcademicPaperPipelineGoal(goal)) return false;
-  return (
+  const goalHit =
     /写引言|写讨论|写方法|写结果|写结论|写综述|起草|扩写.*节|write\s*(the\s*)?(introduction|discussion|review)/i.test(
       goal,
     )
     || (/写/.test(goal)
-      && /引言|讨论|方法|结果|结论|综述|introduction|discussion|literature/i.test(goal))
-  );
+      && /引言|讨论|方法|结果|结论|综述|introduction|discussion|literature/i.test(goal));
+  if (goalHit) return true;
+  // 跟聊 goal 可能失真（用户简短回复覆盖）；用 observations 推断是否在写章节流程。
+  // 可靠信号：本会话已成功 write_section（正在写/续写），或刚 read_section 读章节准备写。
+  if (observations?.length) {
+    if (hasSuccessfulTool(observations, "write_section")) return true;
+    if (hasSuccessfulTool(observations, "read_section")) return true;
+  }
+  return false;
 }
 
 function hasSuccessfulInspect(observations: readonly ToolObservation[]): boolean {
@@ -327,9 +337,9 @@ export function checkDiagnoseInspectGate(
 export function checkDraftSearchGate(
   goal: string,
   toolName: string,
-  _observations: readonly ToolObservation[],
+  observations: readonly ToolObservation[],
 ): GoalIntentGateResult {
-  if (!isSectionDraftGoal(goal)) return { ok: true };
+  if (!isSectionDraftGoal(goal, observations)) return { ok: true };
   if (isReviewWritingGoal(goal)) return { ok: true };
   if (toolName !== "search_external" && toolName !== "search_knowledge") {
     return { ok: true };
@@ -711,6 +721,9 @@ export function mergeFollowUpGoalHint(
   }
   if (isReferenceClassificationGoal(goal)) {
     return referenceClassificationNudge();
+  }
+  if (isSectionDraftGoal(goal, observations)) {
+    return draftGoalNudge(goal);
   }
   return null;
 }

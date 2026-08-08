@@ -48,6 +48,7 @@ import {
   isAcademicPaperPipelineGoal,
   isCitationApplyGoal,
   isCitationCheckGoal,
+  isSectionDraftGoal,
   parseLiteratureImportTarget,
   pickIntentNudge,
   pickIntentStopAsk,
@@ -355,13 +356,14 @@ export async function agentNode(
       );
       if (
         !hint
-        && execWords.test(state.goal)
+        && (execWords.test(state.goal) || isSectionDraftGoal(state.goal, observations))
         && observations.length > 0
         && !landedWrite
       ) {
         hint =
-          "\n\n——\n这是需要实际改动的任务，但你还没落地任何修改。"
-          + "若指令有歧义或需要确认修改范围，请调用 ask_user 向用户确认；否则请直接执行你要做的修改。";
+          "\n\n——\n这是需要实际改动的任务（写章节/改内容），但你还没落地任何修改。"
+          + "若指令有歧义或需要确认修改范围，请调用 ask_user 向用户确认；否则请直接用 write_section / refine_content 落地写，"
+          + "并给出下一步。";
       }
       if (hint) {
         if (updates.finalThought) {

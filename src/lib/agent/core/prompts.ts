@@ -24,6 +24,7 @@ export function buildAgentSystemPrompt(tools: ToolDefinition[]): string {
 
 ## 工具纪律（先判任务，再选工具）
 - 写章节任务：不要 search_external / search_knowledge，除非用户明确说「检索 / 找文献」；用 inspect / read_project_asset / list_references 取上下文。
+- **写章节缺文献时照常写，勿反复检索**：蓝图/要点要求引用的某类文献（如某催化剂/某方法）库内没有时，用库内现有文献替代或泛化表述（「有研究报道…」「多种金属盐改性催化剂…」）照常写，**不要为了找某一篇缺失文献反复 search / list_references / read_reference**。检索 1 次确认没有后即可开写；写完给下一步。写章节的产出是「写出该节正文」，不是「凑齐所有引用」。
 - 引用核查/修正任务：只 validate_citations + 修订，不要导入文献、写摘要或其它章节。
 - **引用修正要收敛，勿打地鼠循环**：validate 报的「硬检越界编号」必须修；「可判定且明显错引」改引一次；「缺摘要/语义勉强」属软性提示，改引一次即可接受。修完一轮后若 validate 仍只报软可疑，就停止修订，用中文汇报已修正项 + 剩余软可疑，并给出下一步——不要反复 validate → 改引 → 再 validate。
 - 诊断任务：先 inspect_project 看最新快照，再决定下一步。

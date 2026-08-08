@@ -215,6 +215,7 @@
 | W3-AP-WRITE-UX | Agent 写作体验：action 实时化 + 移除写后跳转 + 移动端窄屏 + 蓝图顺序注入简报 | W3-AP-QUALITY | 1d | **done** | 2026-08-08；全量 1005 通过；见 §4 会话日志 |
 | W3-AP-ANTISPAM-FP | antispam 指纹增强：refNums 检测「字数不变但引用变化」的实质写操作 | W3-AP-ANTISPAM | 0.5d | **done** | 2026-08-08；全量 1007 通过；见 §4 会话日志 |
 | W3-AP-PREREQ-CHECKPOINT | 自动补齐插入批准检查点：ap-full 目标逐步补齐 + outline/blueprint 逐步批准 | W3-AP-AUTONOMY | 1d | **done** | 2026-08-08；`ensureNextWritePrerequisite` + `buildPrereqCheckpoint`；全量 1012 通过 |
+| W3-AP-WRITE-DISCIPLINE | 写章节缺文献照常写：prompt 纪律 + 跟聊意图恢复 + 收尾兜底 | W3-AP-QUALITY | 0.5d | **done** | 2026-08-08；`isSectionDraftGoal` 增强 + `mergeFollowUpGoalHint` 补分支 + 收尾 execWords 兜底；全量 1014 通过 |
 
 
 | 来源 | 本队列处理方式 |
@@ -1042,6 +1043,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-08 | Agent 写作体验 | AI | ①`agent/action` 实时化：不需确认工具（write_section 等）execute 前经 `emitLiveEvent` 实时推前端，运行中即时显示工具卡（原随快照滞后 30-60s）；需确认工具保持原路径；run-graph live 分支 append uiTranscript 保历史完整。②移除 Agent 写回后强制 `focusEditorAfterDraft` 跳转（保留 toast 反馈），修复「写完无反馈 + 跳综述页」。③工作台移动端：<1024px 自动隐藏图标栏/侧栏/预览，只留编辑器全宽（`isMobileLayout` + matchMedia）。④蓝图写作顺序注入 Agent 简报：`loadAgentProject` 提取 `blueprintWritingOrder`/`blueprintSectionGuides`，简报显示「建议写作顺序（蓝图）」+「各节写作要点」，修复「蓝图顺序与实际写作顺序不一致」。⑤引用修正收敛：validate_citations summary 分级引导（硬错必修/软可疑可接受）+ system prompt 收敛规则，修复「改引打地鼠循环不收尾、没下一步」。全量 1005 通过。已提交 |
 | 2026-08-08 | antispam 指纹增强 | AI | `projectFingerprint` 原只用 section 字符数总和，refine_content 改引（如 [7]→[4]）字数不变时指纹不变 → 误报「连续 3 次无进展」。新增 `AgentSectionFill.refNums`（去重排序引用编号签名，`extractRefNumsSignature`），fingerprint 纳入 refs 维度，能检测「字数不变但引用变化」的实质写操作。新增 2 用例，全量 1007 通过。已验证真实项目提取正确 |
 | 2026-08-08 | 自动补齐批准检查点 | AI | `ensureWritePrerequisites` 自动补齐生成大纲/蓝图时绕过 `outlineApproveGate`/`blueprintApproveGate`，ap-full 目标用户看不到批准弹窗。拆出 `ensureNextWritePrerequisite`（一次补一个），`toolsNode` 逐步补齐 + `buildPrereqCheckpoint` 每步检查批准，命中即暂停等用户确认，resume 继续。普通目标保持一次补完。新增 5 用例，全量 1012 通过。另：诊断日志捕获 `agent stream error {}` 根因 = `Controller is already closed`（SSE 竞态，待修） |
+| 2026-08-08 | 写章节纪律 | AI | 用户反馈：Agent 写子节时因蓝图要求引用的文献（ZnCl₂/黏土）库内缺失，反复 search_knowledge/list_references 找不存在的文献，卡住无下一步。①prompt 加「写章节缺文献照常写，勿反复检索」；②`isSectionDraftGoal` 增强（goal 失真时用 observations 判断）+ `mergeFollowUpGoalHint` 补分支 + `checkDraftSearchGate` 传 observations——修复跟聊 goal 被「A」等简短回复覆盖导致写纪律丢失；③收尾兜底 `execWords || isSectionDraftGoal` 提示落地写并给下一步。新增 2 用例，全量 1014 通过 |
 
 ---
 

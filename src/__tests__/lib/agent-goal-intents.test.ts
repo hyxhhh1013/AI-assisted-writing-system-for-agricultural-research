@@ -43,6 +43,23 @@ describe("goal-intents", () => {
     expect(isReviewWritingGoal("写一篇生物炭综述")).toBe(true);
   });
 
+  it("treats follow-up with write_section observation as draft even when goal is terse", () => {
+    // 跟聊 goal 失真（用户简短回复「A」）但本会话已成功 write_section → 仍是写章节流程
+    expect(isSectionDraftGoal("A", [{ tool: "write_section", success: true }])).toBe(true);
+    expect(isSectionDraftGoal("继续", [{ tool: "read_section", success: true }])).toBe(true);
+    // 无写/读章节观察 → 不算写章节
+    expect(isSectionDraftGoal("A", [{ tool: "search_knowledge", success: true }])).toBe(false);
+  });
+
+  it("blocks search during draft follow-up when write_section observed", () => {
+    const obs = [
+      { tool: "read_project_asset", success: true },
+      { tool: "write_section", success: true },
+    ];
+    const r = checkDraftSearchGate("A", "search_knowledge", obs);
+    expect(r.ok).toBe(false);
+  });
+
   it("parses literature import target count", () => {
     expect(parseLiteratureImportTarget("检索并导入文献")).toBe(15);
     expect(parseLiteratureImportTarget("写生物炭土壤改良综述")).toBe(30);

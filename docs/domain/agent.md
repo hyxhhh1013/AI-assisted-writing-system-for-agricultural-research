@@ -129,6 +129,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 **修正（2026-08-07）**：进入「引用修正」意图/阶段必须满足**最近一次 validate 报告确实发现待修问题**（硬检未过 `exportReady/phase5Passed`，或语义可疑 `grounding.suspiciousCount > 0`；判定复用 `reflect.ts` 导出的 `validateIssueCount`）。写完自查的干净报告（0 问题）不再把会话顶进修正模式，后续 `write_section` 正常放行。覆盖链路：跟聊短确认、AP 流程 `citation_fix` 阶段、并行只读批门禁（`parallel-tools.ts` 同源）。
 
 - **引用修正收敛（2026-08-08）**：修复「Agent 陷入 validate→改引→再 validate 打地鼠循环，不收尾、没下一步」——`validate_citations` 的 summary 按硬错/软可疑分级引导（硬检越界必须修；可判定且明显错引改引一次；缺摘要/语义勉强属软性可接受，**不要反复重验**），并在通过时明确「引用已符合要求，请汇报并给下一步」；`buildAgentSystemPrompt` 增加「引用修正要收敛，勿打地鼠循环」规则。双保险让 Agent 在改引循环里能停下并给出下一步计划。
+- **写章节缺文献照常写（2026-08-08）**：修复「Agent 写子节时因蓝图要求引用的某类文献（如 ZnCl₂/黏土催化剂）库内缺失，反复 search_knowledge/list_references 找不存在的文献，迟迟不落地写、卡住无下一步」。①`buildAgentSystemPrompt` 增加「写章节缺文献时用现有文献替代或泛化表述照常写，检索 1 次确认没有后即可开写」纪律；②`isSectionDraftGoal` 增强：goal 失真（跟聊简短回复覆盖）时，用 observations 判断（有 write_section/read_section 观察即视为写章节流程），`mergeFollowUpGoalHint` 补 `isSectionDraftGoal` 分支（跟 fresh 路径一致），`checkDraftSearchGate` 传 observations——修复跟聊时写章节纪律丢失、Agent 可随意 search 的断点；③agentNode 收尾兜底：`execWords.test(goal) || isSectionDraftGoal(goal, observations)` 才提示「落地写并给下一步」，不再因 goal 失真而跳过。
 
 ## 循环防护与写回保护（2026-08-06 修复）
 
