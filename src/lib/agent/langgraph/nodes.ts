@@ -1,4 +1,4 @@
-import type { AgentSSEEvent } from "@/contracts/agent";
+import type { AgentCheckpointRequest, AgentSSEEvent } from "@/contracts/agent";
 import {
   buildAgentBriefingMessage,
   buildAgentSystemPrompt,
@@ -30,14 +30,19 @@ import {
   planHasPendingWork,
 } from "@/lib/agent/core/plan-progress";
 import {
+  buildBlueprintCheckpoint,
   buildConfigCheckpoint,
+  buildOutlineCheckpoint,
+  shouldPauseForBlueprintApprove,
   shouldPauseForConfigConfirm,
+  shouldPauseForOutlineApprove,
 } from "@/lib/agent/core/checkpoints";
 import { buildToolConfirmMessage } from "@/lib/agent/confirm-message";
 import { isConfirmGranted } from "@/lib/agent/core/confirm-grant";
 import {
-  ensureWritePrerequisites,
+  ensureNextWritePrerequisite,
   isWriteToolNeedingPrereqs,
+  type WritePrereqStep,
 } from "@/lib/agent/core/ensure-write-prereqs";
 import {
   isAcademicPaperPipelineGoal,
@@ -387,6 +392,48 @@ export async function agentNode(
   return updates;
 }
 
+/**
+ * 自动补齐的前置 step 是否命中批准检查点（ap-full 目标 + outline/blueprint 未批准）。
+ * 返回检查点请求；未命中返回 null。preview 从 step.result.data.preview 或 summary 构建。
+ */
+export function buildPrereqCheckpoint(
+  state: AgentGraphStateType,
+  step: { tool: WritePrereqStep; result: { success: boolean; data?: unknown; summary?: string; error?: string } },
+): AgentCheckpointRequest | null {
+  if (!step.result.success) return null;
+  const approvedKinds = state.approvedCheckpointKinds ?? [];
+  const data = step.result.data as { preview?: unknown } | null | undefined;
+  const preview =
+    typeof data?.preview === "string" && data.preview
+      ? data.preview
+      : step.result.summary ?? "";
+  if (
+    step.tool === "generate_outline"
+    && shouldPauseForOutlineApprove({
+      goal: state.goal,
+      toolName: "generate_outline",
+      toolSuccess: true,
+      persisted: true,
+      approvedKinds,
+    })
+  ) {
+    return buildOutlineCheckpoint(preview);
+  }
+  if (
+    (step.tool === "generate_writing_blueprint" || step.tool === "build_argument_blueprint")
+    && shouldPauseForBlueprintApprove({
+      goal: state.goal,
+      toolName: step.tool,
+      toolSuccess: true,
+      persisted: true,
+      approvedKinds,
+    })
+  ) {
+    return buildBlueprintCheckpoint(preview);
+  }
+  return null;
+}
+
 export async function toolsNode(
   state: AgentGraphStateType,
   config: LangGraphRunnableConfig,
@@ -429,7 +476,8 @@ export async function toolsNode(
     plan = advancePlanAfterTool(plan, toolName, false);
   };
 
-  for (const toolCall of state.pendingToolCalls) {
+  for (let tcIdx = 0; tcIdx < state.pendingToolCalls.length; tcIdx++) {
+    const toolCall = state.pendingToolCalls[tcIdx];
     if (agentContext.budget.toolCallCount >= agentContext.budget.maxToolCalls) {
       error = `单次任务最多调用 ${agentContext.budget.maxToolCalls} 次工具`;
       events.push({ type: "agent/error", error });
@@ -483,74 +531,109 @@ export async function toolsNode(
       continue;
     }
 
-    // 写节前自动补大纲/蓝图，避免 LLM 多轮「被拒 → 再调 generate_*」
+    // 写节前自动补大纲/蓝图，避免 LLM 多轮「被拒 → 再调 generate_*」。
+    // ap-full 目标（写整篇）逐步补齐 + 逐步批准：每补一个 outline/blueprint 暂停让用户确认；
+    // 普通目标一次补完（ensureNextWritePrerequisite 循环直至前置齐）。
     if (isWriteToolNeedingPrereqs(tool.name)) {
-      const ensured = await ensureWritePrerequisites(
-        agentContext,
-        tools,
-        () => {
-          markAgentProjectDirty(agentContext);
-          return refreshAgentProjectContext(agentContext);
-        },
-      );
-      toolCallCount = agentContext.budget.toolCallCount;
-      for (const step of ensured.steps) {
-        events.push({
-          type: "agent/action",
-          tool: step.tool,
-          params: { persistToProject: true, autoPrereq: true },
-        });
-        const stepLine = step.result.success
-          ? `[${step.tool}] ${step.result.summary ?? "自动补齐完成"}`
-          : `[${step.tool}] 失败: ${step.result.error ?? "未知错误"}`;
-        newSummaries.push(stepLine);
-        newMessages.push({
-          role: "user",
-          content: formatToolObservationForLlm(step.tool, step.result),
-        });
-        events.push({
-          type: "agent/observation",
-          tool: step.tool,
-          result: step.result,
-          error: step.result.success ? undefined : step.result.error,
-        });
-        newObservations.push({
-          tool: step.tool,
-          success: step.result.success,
-          error: step.result.error,
-          data: step.result.data,
-        });
-        plan = advancePlanAfterTool(plan, step.tool, step.result.success);
-        noteToolProgress(
-          antispamTracker,
-          step.tool,
-          agentContext.projectSnapshot,
-          step.result.success,
+      // 逐步补齐；每步生成后若命中批准检查点则暂停，resume 后继续补下一个 / 执行写工具
+      const prereqRan: string[] = [];
+      let prereqErr: string | null = null;
+      let prereqPaused = false;
+
+      while (!prereqPaused) {
+        const ensured = await ensureNextWritePrerequisite(
+          agentContext,
+          tools,
+          () => {
+            markAgentProjectDirty(agentContext);
+            return refreshAgentProjectContext(agentContext);
+          },
         );
+        toolCallCount = agentContext.budget.toolCallCount;
+
+        for (const step of ensured.steps) {
+          events.push({
+            type: "agent/action",
+            tool: step.tool,
+            params: { persistToProject: true, autoPrereq: true },
+          });
+          const stepLine = step.result.success
+            ? `[${step.tool}] ${step.result.summary ?? "自动补齐完成"}`
+            : `[${step.tool}] 失败: ${step.result.error ?? "未知错误"}`;
+          newSummaries.push(stepLine);
+          newMessages.push({
+            role: "user",
+            content: formatToolObservationForLlm(step.tool, step.result),
+          });
+          events.push({
+            type: "agent/observation",
+            tool: step.tool,
+            result: step.result,
+            error: step.result.success ? undefined : step.result.error,
+          });
+          newObservations.push({
+            tool: step.tool,
+            success: step.result.success,
+            error: step.result.error,
+            data: step.result.data,
+          });
+          plan = advancePlanAfterTool(plan, step.tool, step.result.success);
+          noteToolProgress(
+            antispamTracker,
+            step.tool,
+            agentContext.projectSnapshot,
+            step.result.success,
+          );
+          if (step.result.success) prereqRan.push(step.tool);
+
+          // 命中批准检查点（ap-full 目标 + outline/blueprint 未批准）→ 暂停等用户
+          const cp = buildPrereqCheckpoint(state, step);
+          if (cp) {
+            prereqPaused = true;
+            events.push({ type: "agent/checkpoint", checkpoint: cp });
+            events.push({ type: "agent/status", status: "awaiting_checkpoint" });
+            return {
+              // 保留当前 toolCall（write_section 等）及剩余待处理调用，resume 后重跑
+              pendingToolCalls: state.pendingToolCalls.slice(tcIdx),
+              toolCallCount,
+              toolSummaries: newSummaries,
+              observations: newObservations,
+              messages: newMessages,
+              events,
+              plan,
+              awaitingCheckpoint: cp,
+              finished: true,
+            };
+          }
+        }
+
+        if (!ensured.ok) {
+          prereqErr = ensured.error ?? "自动补齐写作前置失败，请先生成大纲与蓝图";
+          break;
+        }
+        if (ensured.ran.length === 0) break; // 前置已齐
       }
-      if (!ensured.ok) {
-        const err =
-          ensured.error
-          ?? "自动补齐写作前置失败，请先生成大纲与蓝图";
-        newSummaries.push(`[${tool.name}] 失败: ${err}`);
+
+      if (prereqErr) {
+        newSummaries.push(`[${tool.name}] 失败: ${prereqErr}`);
         newMessages.push({
           role: "user",
-          content: `Tool result (${tool.name}):\n${err}`,
+          content: `Tool result (${tool.name}):\n${prereqErr}`,
         });
         events.push({
           type: "agent/observation",
           tool: tool.name,
-          result: { success: false, error: err },
-          error: err,
+          result: { success: false, error: prereqErr },
+          error: prereqErr,
         });
         plan = advancePlanAfterTool(plan, tool.name, false);
         continue;
       }
-      if (ensured.ran.length > 0) {
+      if (prereqRan.length > 0) {
         newMessages.push({
           role: "user",
           content:
-            `【系统】已自动补齐写作前置（${ensured.ran.join(" → ")}），继续执行 ${tool.name}。`,
+            `【系统】已自动补齐写作前置（${prereqRan.join(" → ")}），继续执行 ${tool.name}。`,
         });
       }
     }
