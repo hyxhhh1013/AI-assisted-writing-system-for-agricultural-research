@@ -1,9 +1,15 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Loader2, Wrench } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, Loader2, Pencil, Wrench } from "lucide-react";
+import Link from "next/link";
 import { memo, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { FigureReviseForm } from "@/components/shared/agent/figure-revise-form";
+import type { FigureReviseFormValue, FigureReviseTarget } from "@/contracts/figure-revise";
+import { withReplaceImageUrlParam } from "@/lib/agent/figure-dock";
+import { formatFigurePlacementHint } from "@/lib/agent/figure-revise";
 import { splitExecSummary } from "@/lib/agent/split-exec-summary";
 import {
   formatToolParamHint,
@@ -147,6 +153,17 @@ interface AgentActionProps {
   summary?: string;
   error?: string;
   imageUrl?: string;
+  /** /plot 深链：在绘图页精修 */
+  plotHref?: string;
+  /** 就地改图旧 URL */
+  replaceImageUrl?: string;
+  sectionKey?: string;
+  insertMode?: string;
+  sectionLabel?: string;
+  /** 「按意见改」→ 结构化表单提交 */
+  onReviseFigure?: (target: FigureReviseTarget, form: FigureReviseFormValue) => void;
+  /** 跳到正文对应章节（节末落盘时可核对） */
+  onJumpToSection?: (sectionKey: string) => void;
   /** 尚无 observation：进行中 */
   pending?: boolean;
 }
@@ -158,10 +175,23 @@ export const AgentActionCard = memo(function AgentActionCard({
   summary,
   error,
   imageUrl,
+  plotHref,
+  replaceImageUrl,
+  sectionKey,
+  insertMode,
+  sectionLabel,
+  onReviseFigure,
+  onJumpToSection,
   pending = false,
 }: AgentActionProps) {
   const soft = isSoftToolNotice(error);
-  const [open, setOpen] = useState(Boolean(imageUrl) && !error && !soft);
+  const isFigureCard =
+    Boolean(imageUrl)
+    && (tool === "draft_mechanism_figure" || tool === "generate_chart");
+  const [open, setOpen] = useState(
+    (Boolean(imageUrl) || isFigureCard) && !error && !soft,
+  );
+  const [revising, setRevising] = useState(false);
   const label = toolDisplayName(tool);
   const hint = formatToolParamHint(tool, params);
   const displayDetail = error
@@ -170,7 +200,8 @@ export const AgentActionCard = memo(function AgentActionCard({
       : error
     : summary;
   const hasRawParams = Object.keys(params).length > 0;
-  const hasDetail = hasRawParams || Boolean(error) || Boolean(imageUrl);
+  const hasDetail =
+    hasRawParams || Boolean(error) || Boolean(imageUrl) || Boolean(plotHref);
 
   return (
     <div
@@ -245,6 +276,112 @@ export const AgentActionCard = memo(function AgentActionCard({
               alt={summary || label}
               className="max-h-48 w-auto max-w-full rounded-md border border-border/40 bg-white object-contain"
             />
+          ) : null}
+          {isFigureCard ? (
+            <div className="space-y-1.5 pt-0.5">
+              <p className="text-[10px] leading-snug text-muted-foreground">
+                {formatFigurePlacementHint({
+                  sectionKey:
+                    sectionKey
+                    || (typeof params.sectionKey === "string" ? params.sectionKey : undefined),
+                  insertMode,
+                  sectionLabel,
+                })}
+              </p>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {(() => {
+                  const href = imageUrl
+                    ? withReplaceImageUrlParam(plotHref ?? "/plot", imageUrl)
+                    : plotHref;
+                  if (!href) return null;
+                  return (
+                    <Link
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={cn(
+                        buttonVariants({ variant: "outline", size: "sm" }),
+                        "h-7 gap-1 px-2 text-[11px]",
+                      )}
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      在绘图页精修
+                    </Link>
+                  );
+                })()}
+                {onReviseFigure && imageUrl && !revising ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="h-7 gap-1 px-2 text-[11px]"
+                    onClick={() => setRevising(true)}
+                  >
+                    <Pencil className="h-3 w-3" />
+                    按意见改
+                  </Button>
+                ) : null}
+                {sectionKey && onJumpToSection ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-[11px]"
+                    onClick={() => onJumpToSection(sectionKey)}
+                  >
+                    查看正文位置
+                  </Button>
+                ) : null}
+              </div>
+              {revising && onReviseFigure && imageUrl ? (
+                <FigureReviseForm
+                  target={{
+                    imageUrl,
+                    replaceImageUrl: replaceImageUrl ?? imageUrl,
+                    title:
+                      typeof params.title === "string"
+                        ? params.title
+                        : typeof params.caption === "string"
+                          ? params.caption
+                          : undefined,
+                    sectionKey:
+                      sectionKey
+                      || (typeof params.sectionKey === "string"
+                        ? params.sectionKey
+                        : undefined),
+                    insertMode,
+                    plotHref,
+                  }}
+                  onCancel={() => setRevising(false)}
+                  onSubmit={(form) => {
+                    onReviseFigure(
+                      {
+                        imageUrl,
+                        replaceImageUrl: replaceImageUrl ?? imageUrl,
+                        title:
+                          typeof params.title === "string"
+                            ? params.title
+                            : typeof params.caption === "string"
+                              ? params.caption
+                              : undefined,
+                        sectionKey:
+                          sectionKey
+                          || (typeof params.sectionKey === "string"
+                            ? params.sectionKey
+                            : undefined),
+                        insertMode,
+                        plotHref,
+                      },
+                      form,
+                    );
+                    setRevising(false);
+                  }}
+                />
+              ) : null}
+              <span className="text-[10px] text-muted-foreground">
+                Agent 出的是可编辑草稿；小改用表单，重精修进绘图页
+              </span>
+            </div>
           ) : null}
           {error && soft ? (
             <p className="text-[#3d4f46]">{humanizeToolNotice(error)}</p>

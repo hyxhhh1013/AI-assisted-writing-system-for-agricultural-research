@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -200,12 +201,19 @@ function WorkbenchEditorToolbar({
 export function WorkbenchEditorArea({
   project, activeSection, editingContent, editorMode, rightPanelMode,
   onContentChange, onEditorModeChange, onRightPanelModeChange,
-  onOpenMetaDialog, onConsistencyCheck, onReorderReferences,
+  onOpenMetaDialog: _onOpenMetaDialog, onConsistencyCheck, onReorderReferences,
   onExportDoc, onExportMarkdown, onExportPDF,
   onExpandParagraph, onAuditParagraph, onFixParagraph, onSelectionAction,
   onApplyAiOutput, onCancelAiOutput, onCleanReferences, aiPreview,
   projectId,
 }: WorkbenchEditorAreaProps) {
+  const [cursorOffset, setCursorOffset] = useState<number | null>(null);
+  const captureCursor = useCallback(
+    (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+      setCursorOffset(e.currentTarget.selectionStart ?? null);
+    },
+    [],
+  );
   const writingMode = getProjectWritingMode(project.mode);
   const accent = getModeAccent(writingMode);
   // 模板驱动的 section 元数据（label + placeholder）
@@ -368,9 +376,19 @@ export function WorkbenchEditorArea({
                 className="flex-1 border-none focus-visible:ring-0 resize-none p-10 md:p-16 text-lg leading-relaxed font-serif bg-transparent"
                 placeholder={sectionPlaceholder}
                 value={editingContent}
-                onChange={e => onContentChange(e.target.value)}
+                onChange={(e) => {
+                  onContentChange(e.target.value);
+                  setCursorOffset(e.target.selectionStart ?? null);
+                }}
+                onSelect={captureCursor}
+                onClick={captureCursor}
+                onKeyUp={captureCursor}
               />
-              <EditorImageGallery content={editingContent} onChange={onContentChange} />
+              <EditorImageGallery
+                content={editingContent}
+                onChange={onContentChange}
+                cursorOffset={cursorOffset}
+              />
             </>
           ) : (
             <>
@@ -385,7 +403,11 @@ export function WorkbenchEditorArea({
                 projectId={projectId || "default"}
                 activeSection={activeSection}
               />
-              <EditorImageGallery content={editingContent} onChange={onContentChange} />
+              <EditorImageGallery
+                content={editingContent}
+                onChange={onContentChange}
+                cursorOffset={null}
+              />
             </>
           )}
         </div>
