@@ -5,7 +5,7 @@
 > **关联文档**：
 > - 主队列 [`docs/UI_COMPLETION_QUEUE.md`](./UI_COMPLETION_QUEUE.md)（队列协议 §0 全适用）
 > - Prisma schema [`prisma/schema.prisma`](../prisma/schema.prisma)（12 个模型）
-> **最后更新**：2026-06-01
+> **最后更新**：2026-08-09
 
 ---
 
@@ -60,6 +60,14 @@
 | ADMIN-036 | Usage 按功能/用户趋势 + 保留策略 | ADMIN-022 | 3h | todo | — |
 | ADMIN-037 | `/admin` 纳入 proxy 受保护路由 | ADMIN-030 | 1h | todo | — |
 | ADMIN-038 | Admin 列表 RSC 首屏 + Playwright 冒烟 | ADMIN-037 | 4h | todo | — |
+| **Phase 5 — 新功能对齐（2026-08）** |
+| ADMIN-040 | 设置页运行时开关：OA 入库 / 写并发 / Agent auto-fix | ADMIN-023 | 3h | done | 2026-08-09 |
+| ADMIN-041 | 全局搜索扩展：研究方向 + Agent 会话 | ADMIN-005 | 2h | done | 2026-08-09 |
+| ADMIN-042 | 健康面板：AI Key / Agent 错误 / 期刊指标覆盖 / PDF 漂移告警 | ADMIN-031 | 3h | done | 2026-08-09 |
+| ADMIN-043 | 期刊指标导入批次历史 + 覆盖率看板 | ADMIN-004 | 3h | done | 2026-08-09 |
+| ADMIN-044 | Insights 意图词补齐（方向/蓝图/桥接/申报） | — | 1h | done | 2026-08-09 |
+| ADMIN-045 | DOMAIN_INDEX / 文档与已上线 Admin 页对齐 | — | 0.5h | done | 2026-08-09 |
+| ADMIN-046 | 用户角色与 Direction PI 语义澄清（admin≠PI 可选） | ADMIN-002 | 1～2d | todo | — |
 
 ### 1.1 与主队列的关系
 
@@ -555,6 +563,8 @@ Session C: ADMIN-012 → ADMIN-013 → ADMIN-022
 Session D: ADMIN-020 → ADMIN-021 → ADMIN-023
 Session E（Phase 4）: ADMIN-030 → ADMIN-031 → ADMIN-032 → ADMIN-033 → ADMIN-034
 Session F: ADMIN-035 → ADMIN-036 → ADMIN-037 → ADMIN-038
+Session G（Phase 5）: ADMIN-045 → ADMIN-040 → ADMIN-041 → ADMIN-042 → ADMIN-043 → ADMIN-044
+（ADMIN-046 角色模型另开，可并行调研）
 ```
 
 ### 4.1 Phase 4 摘要
@@ -570,6 +580,18 @@ Session F: ADMIN-035 → ADMIN-036 → ADMIN-037 → ADMIN-038
 | ADMIN-036 | 用量分析加深 | trends 按 feature/user 维度 |
 | ADMIN-037 | 路由双保险 | `proxy.ts` matcher 加 `/admin` |
 | ADMIN-038 | 质量门禁 | Playwright + 部分 RSC 首屏 |
+
+### 4.2 Phase 5 摘要（新功能对齐）
+
+| PR | 目标 | 核心改动 |
+|----|------|----------|
+| ADMIN-040 | 运维开关进设置页 | `ENABLE_OA_AUTO_IMPORT` / `WRITING_MAX_CONCURRENT` / `AGENT_WRITE_AUTO_FIX` UI + 热加载 |
+| ADMIN-041 | Ctrl+K 覆盖新实体 | `search` API + `admin-global-search` 增加 directions / agent-sessions |
+| ADMIN-042 | Health 跟上新业务 | AI Key 状态、Agent error 突增、期刊覆盖、PDF 漂移告警 |
+| ADMIN-043 | 期刊指标二期 | `JOURNAL_METRICS_LAST_IMPORT` + GET API + 文献页/健康页展示；覆盖率在 Health |
+| ADMIN-044 | Insights 词表 | 补「方向 / 蓝图 / 桥接 / 申报」等意图 |
+| ADMIN-045 | 文档对齐 | `DOMAIN_INDEX` Admin 表补全已上线页 |
+| ADMIN-046 | PI 角色 | 评估独立 `pi` role vs 继续用 admin |
 
 ---
 
@@ -616,3 +638,10 @@ Session F: ADMIN-035 → ADMIN-036 → ADMIN-037 → ADMIN-038
 | 2026-06-17 | ADMIN-032 | AI | 项目页 AdminDataTable + 环形进度 |
 | 2026-06-17 | ADMIN-030 | AI | use-admin-url-sync + 五类列表页 urlSync 深链 |
 | 2026-06-17 | — | AI | Phase 4 队列写入本计划（ADMIN-030～038） |
+| 2026-08-09 | — | AI | Phase 5 队列写入（ADMIN-040～046）；开工 040/041/045；同步修写作蓝图 language 校验失败 |
+| 2026-08-09 | ADMIN-040 | AI | 设置页运行时开关 + WRITING_MAX 热加载 + OA/auto-fix 读 SystemSetting |
+| 2026-08-09 | ADMIN-041 | AI | search API/UI 增加 directions + agentSessions |
+| 2026-08-09 | ADMIN-045 | AI | DOMAIN_INDEX Admin 表补全方向/会话/洞察/期刊指标 |
+| 2026-08-09 | ADMIN-042 | AI | health API 扩 AI/Agent/期刊/PDF；`buildAdminHealthAlerts` 仪表盘共用 |
+| 2026-08-09 | ADMIN-043 | AI | 导入摘要落 SystemSetting；GET journal-metrics；文献页展示最近导入 |
+| 2026-08-09 | ADMIN-044 | AI | Insights INTENT_WORDS 补方向/蓝图/桥接/申报等 |

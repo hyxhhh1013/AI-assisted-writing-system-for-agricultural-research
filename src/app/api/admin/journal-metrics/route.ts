@@ -1,6 +1,52 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { applyJournalMetricsFromUpload } from "@/lib/knowledge-metadata";
+import { getSetting, setSetting } from "@/lib/settings";
+import { success } from "@/lib/admin-response";
+import type { AdminJournalMetricsLastImport } from "@/contracts/admin";
+
+function parseLastImport(raw: string | null): AdminJournalMetricsLastImport | null {
+  if (!raw?.trim()) return null;
+  try {
+    const o = JSON.parse(raw) as AdminJournalMetricsLastImport;
+    if (typeof o.at !== "string" || typeof o.filename !== "string") return null;
+    return o;
+  } catch {
+    return null;
+  }
+}
+
+/** GET — 最近一次导入摘要（ADMIN-043） */
+export async function GET(req: NextRequest) {
+  const { error } = await requireAdmin(req);
+  if (error) return error;
+  const lastImport = parseLastImport(await getSetting("JOURNAL_METRICS_LAST_IMPORT"));
+  return success({ lastImport });
+}
+
+async function persistLastImport(input: {
+  dryRun: boolean;
+  filename: string;
+  updated: number;
+  matched: number;
+  totalFiles: number;
+  matchRate: number;
+}): Promise<void> {
+  if (input.dryRun) return;
+  const payload: AdminJournalMetricsLastImport = {
+    at: new Date().toISOString(),
+    filename: input.filename,
+    updated: input.updated,
+    matched: input.matched,
+    totalFiles: input.totalFiles,
+    matchRate: input.matchRate,
+  };
+  try {
+    await setSetting("JOURNAL_METRICS_LAST_IMPORT", JSON.stringify(payload));
+  } catch {
+    /* 导入结果仍返回；摘要落库失败不阻断 */
+  }
+}
 
 function isSpreadsheet(name: string): boolean {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
@@ -40,6 +86,15 @@ export async function POST(req: NextRequest) {
         ? Math.round((result.matched / result.totalFiles) * 100)
         : 0;
 
+      await persistLastImport({
+        dryRun,
+        filename: file.name,
+        updated: result.updated,
+        matched: result.matched,
+        totalFiles: result.totalFiles,
+        matchRate: rate,
+      });
+
       return NextResponse.json({
         ok: true,
         dryRun,
@@ -60,6 +115,15 @@ export async function POST(req: NextRequest) {
     const rate = result.totalFiles > 0
       ? Math.round((result.matched / result.totalFiles) * 100)
       : 0;
+
+    await persistLastImport({
+      dryRun,
+      filename: "upload.csv",
+      updated: result.updated,
+      matched: result.matched,
+      totalFiles: result.totalFiles,
+      matchRate: rate,
+    });
 
     return NextResponse.json({
       ok: true,

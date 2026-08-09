@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -9,10 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Trash2, RefreshCw, Upload } from "lucide-react";
 import { toast } from "sonner";
-import type { AdminListParams } from "@/contracts/admin";
+import type { AdminJournalMetricsLastImport, AdminListParams } from "@/contracts/admin";
 import {
   bulkDeleteAdminKnowledge,
   deleteAdminKnowledge,
+  getAdminJournalMetricsLastImport,
   importAdminJournalMetrics,
   listAdminKnowledge,
   type AdminKnowledgeFile,
@@ -47,7 +48,16 @@ export default function AdminKnowledgePage() {
   const [metricsImporting, setMetricsImporting] = useState(false);
   const [pendingMetricsFile, setPendingMetricsFile] = useState<File | null>(null);
   const [metricsDryRun, setMetricsDryRun] = useState(false);
+  const [lastMetricsImport, setLastMetricsImport] = useState<AdminJournalMetricsLastImport | null>(null);
   const reindexAbortRef = useRef<AbortController | null>(null);
+
+  const refreshLastMetricsImport = useCallback(() => {
+    void getAdminJournalMetricsLastImport().then(setLastMetricsImport).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    refreshLastMetricsImport();
+  }, [refreshLastMetricsImport]);
 
   const listFilters = useMemo(
     () => ({
@@ -156,6 +166,7 @@ export default function AdminKnowledgePage() {
         result.updated !== undefined ? `更新 ${result.updated}` : null,
       ].filter(Boolean);
       toast.success(parts.join(" · ") || (metricsDryRun ? "试运行完成" : "指标已导入"));
+      if (!metricsDryRun) refreshLastMetricsImport();
     } catch {
       toast.error("导入失败");
     } finally {
@@ -191,6 +202,17 @@ export default function AdminKnowledgePage() {
         <p className="text-xs text-[#6b7c72]">
           直接上传课题组 Excel 即可；列名支持中英文（如 issn/刊号、journal/刊名、影响因子、分区）。优先 ISSN 匹配，否则刊名。
         </p>
+        {lastMetricsImport && (
+          <p className="text-[11px] text-[#9aa8a0]">
+            最近导入：{lastMetricsImport.filename} · 更新 {lastMetricsImport.updated} 篇 · 命中率{" "}
+            {lastMetricsImport.matchRate}% ·{" "}
+            {new Date(lastMetricsImport.at).toLocaleString("zh-CN")}
+            {" · "}
+            <Link href="/admin/health" className="text-[#1a5632] hover:underline">
+              健康面板覆盖率
+            </Link>
+          </p>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <Input
             type="file"

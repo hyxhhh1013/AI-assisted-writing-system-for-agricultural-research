@@ -85,11 +85,31 @@ export default function AdminSettingsPage() {
   const [savingRoles, setSavingRoles] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
+  /** ADMIN-040 运行时开关（明文 SystemSetting） */
+  const [oaAutoImport, setOaAutoImport] = useState(true);
+  const [writingMaxConcurrent, setWritingMaxConcurrentUi] = useState("2");
+  const [agentWriteAutoFix, setAgentWriteAutoFix] = useState(true);
+  const [savingRuntime, setSavingRuntime] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     const [s, st] = await Promise.allSettled([listAdminSettings(), getAiStatus()]);
-    if (s.status === "fulfilled") setSettings(s.value);
-    else toast.error("加载设置失败");
+    if (s.status === "fulfilled") {
+      setSettings(s.value);
+      const map = new Map(s.value.map((x) => [x.key, x.maskedValue]));
+      const oa = map.get("ENABLE_OA_AUTO_IMPORT");
+      if (oa && oa !== "****") {
+        setOaAutoImport(!(oa === "0" || oa === "false" || oa === "off" || oa === "no"));
+      }
+      const conc = map.get("WRITING_MAX_CONCURRENT");
+      if (conc && conc !== "****" && /^\d+$/.test(conc)) {
+        setWritingMaxConcurrentUi(conc);
+      }
+      const af = map.get("AGENT_WRITE_AUTO_FIX");
+      if (af && af !== "****") {
+        setAgentWriteAutoFix(!(af === "0" || af === "false" || af === "off" || af === "no"));
+      }
+    } else toast.error("加载设置失败");
     if (st.status === "fulfilled") {
       setAiStatus(st.value);
       setRoles(st.value.roles);
@@ -198,6 +218,35 @@ export default function AdminSettingsPage() {
       toast.error(e instanceof Error ? e.message : "保存失败");
     } finally {
       setSavingRoles(false);
+    }
+  };
+
+  const handleSaveRuntime = async () => {
+    const n = Number.parseInt(writingMaxConcurrent, 10);
+    if (!Number.isFinite(n) || n < 1 || n > 32) {
+      toast.error("写并发上限请填 1–32 的整数");
+      return;
+    }
+    setSavingRuntime(true);
+    try {
+      const pairs: [string, string][] = [
+        ["ENABLE_OA_AUTO_IMPORT", oaAutoImport ? "1" : "0"],
+        ["WRITING_MAX_CONCURRENT", String(n)],
+        ["AGENT_WRITE_AUTO_FIX", agentWriteAutoFix ? "1" : "0"],
+      ];
+      for (const [key, value] of pairs) {
+        const d = await saveAdminSetting(key, value);
+        if (!d.ok) {
+          toast.error(d.error || `保存 ${key} 失败`);
+          return;
+        }
+      }
+      toast.success("运行时开关已保存（写并发立即生效）");
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "保存失败");
+    } finally {
+      setSavingRuntime(false);
     }
   };
 
@@ -310,6 +359,59 @@ export default function AdminSettingsPage() {
             </div>
           );
         })}
+      </div>
+
+      {/* ==================== 运行时开关（ADMIN-040） ==================== */}
+      <div className="rounded-xl border border-[#1a5632]/10 bg-white p-4">
+        <div className="flex items-center gap-2">
+          <Zap className="h-4 w-4 text-[#1a5632]" />
+          <h3 className="text-sm font-medium text-[#122820]">运行时开关</h3>
+        </div>
+        <p className="text-[10px] text-[#9aa8a0] mt-1 mb-3">
+          存入 SystemSetting，热加载（无需改 .env）。环境变量若显式设置则仍优先于此处。
+        </p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="flex items-start gap-2 rounded-lg bg-[#faf9f6] px-3 py-2 text-xs">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={oaAutoImport}
+              onChange={(e) => setOaAutoImport(e.target.checked)}
+            />
+            <span>
+              <span className="font-medium text-[#122820]">OA 全文自动入库</span>
+              <span className="block text-[9px] text-[#9aa8a0]">ENABLE_OA_AUTO_IMPORT</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 rounded-lg bg-[#faf9f6] px-3 py-2 text-xs">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={agentWriteAutoFix}
+              onChange={(e) => setAgentWriteAutoFix(e.target.checked)}
+            />
+            <span>
+              <span className="font-medium text-[#122820]">Agent 写后自动核查修正</span>
+              <span className="block text-[9px] text-[#9aa8a0]">AGENT_WRITE_AUTO_FIX</span>
+            </span>
+          </label>
+          <div className="rounded-lg bg-[#faf9f6] px-3 py-2 text-xs">
+            <div className="font-medium text-[#122820]">扩写并发上限</div>
+            <div className="text-[9px] text-[#9aa8a0] mb-1">WRITING_MAX_CONCURRENT（1–32）</div>
+            <Input
+              className="h-8 font-mono text-xs"
+              value={writingMaxConcurrent}
+              onChange={(e) => setWritingMaxConcurrentUi(e.target.value)}
+              inputMode="numeric"
+            />
+          </div>
+        </div>
+        <div className="mt-3">
+          <Button size="sm" className="gap-1" onClick={() => void handleSaveRuntime()} disabled={savingRuntime}>
+            {savingRuntime ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            保存开关
+          </Button>
+        </div>
       </div>
 
       {/* ==================== Agent 角色模型映射 ==================== */}

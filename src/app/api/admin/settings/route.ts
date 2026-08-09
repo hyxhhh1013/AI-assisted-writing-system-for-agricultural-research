@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
-import { success, badRequest } from "@/lib/admin-response";
+import { success } from "@/lib/admin-response";
 import { clearAiRuntimeCaches } from "@/lib/ai";
 import { loadAgentRoleProviders } from "@/lib/models";
 import { getAllSettings, getSetting, setSetting, deleteSetting, initDefaultSettings } from "@/lib/settings";
+import { setWritingMaxConcurrent } from "@/lib/writing-concurrency";
 import { validateBody } from "@/lib/api-validate";
 import { adminSettingDeleteSchema, adminSettingPutSchema } from "@/lib/validations";
 import { getErrorMessage } from "@/lib/error-utils";
+
+function applyRuntimeSettingSideEffects(key: string, value: string): void {
+  if (key === "WRITING_MAX_CONCURRENT") {
+    const n = Number.parseInt(value, 10);
+    if (Number.isFinite(n) && n >= 1) setWritingMaxConcurrent(n);
+  }
+}
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +53,7 @@ export async function PUT(req: NextRequest) {
     const { key, value } = data;
 
     await setSetting(key, value);
+    applyRuntimeSettingSideEffects(key, value);
     clearAiRuntimeCaches();
     await loadAgentRoleProviders();
     return success(undefined, `已保存 ${key}（已立即刷新 AI 缓存）`);

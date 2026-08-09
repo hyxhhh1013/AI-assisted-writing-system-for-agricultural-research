@@ -156,7 +156,7 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 
 | 操作 | 说明 |
 |------|------|
-| Admin 上传表 | `/admin/knowledge` → `POST /api/admin/journal-metrics`（**CSV / Excel**，列名中英文均可） |
+| Admin 上传表 | `/admin/knowledge` → `POST /api/admin/journal-metrics`（**CSV / Excel**，列名中英文均可）；成功后写 `JOURNAL_METRICS_LAST_IMPORT`；`GET` 可读最近导入；覆盖率见 `/admin/health` |
 | CLI 导入 | `node scripts/import-journal-metrics.mjs [path] [--dry-run]` |
 | OpenAlex 篇级 | `node scripts/enrich-knowledge-openalex.mjs [--all]` → `citedByCount`、ISSN、OA |
 | OpenAlex 刊级 | `node scripts/enrich-journal-openalex-sources.mjs [--all]` → `oa2yrCitedness`、`hIndex` |

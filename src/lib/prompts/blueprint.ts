@@ -19,7 +19,9 @@ export function buildBlueprintPrompt(params: {
   const { title, researchDirection, outline, language, projectMode, chartCatalog, motivationFromGap, targetJournal, pendingExperiments } = params;
   const domainExpertise = buildDomainExpertise(researchDirection);
   const isResearch = projectMode === "research";
-  const lang = language === "en" ? "English" : "Chinese";
+  const langLabel = language === "en" ? "English" : "Chinese";
+  /** schema 只接受 zh | en；勿把 Chinese/English 写进 JSON 示例（曾导致「结构无效」） */
+  const langCode = language === "en" ? "en" : "zh";
 
   // Direction 战略上下文（仅当有值时才注入）
   const directionContext = [
@@ -65,20 +67,26 @@ ${chartCatalog.map((c) => `- [${c.index}] ${c.title}${c.variable ? `（${c.varia
 
 【输出要求】
 - 仅输出一个 JSON 对象，不要 markdown 代码块，不要其他文字。
-- 输出语言字段内容用 ${lang}。
-- figurePlan.items 至少 ${isResearch ? 3 : 2} 项，sectionGuides 至少 3 项。
+- 叙述字段（narrativeSummary / thesis / purpose 等）用 ${langLabel} 撰写。
+- JSON 字段 language 必须是 "${langCode}"（只能是 zh 或 en，禁止 Chinese/English/中文/英文）。
+- projectMode 必须是 "${isResearch ? "research" : "review"}"（禁止写中文）。
+- dataSource 只能是 experiment | literature | synthesis；type 只能是 flow|chart|xrd|table|schematic|other。
+- keyPoints 必须是字符串数组（不要写成单个字符串）。
+- figurePlan.items 至少 ${isResearch ? 3 : 2} 项，sectionGuides 至少 3 项；每项须含 id/sectionPath/purpose/suggestedCaption/priority。
+- estimatedWordCount 必须是对象 { "min": number, "max": number }，不要写成单个数字或 "8000-10000" 字符串。
 
-【JSON 结构】
-{
+【JSON 结构（字段名与枚举值请原样遵守）】
+${isResearch
+    ? `{
   "version": 1,
-  "projectMode": "${isResearch ? "research" : "review"}",
-  "language": "${lang}",
+  "projectMode": "research",
+  "language": "${langCode}",
   "narrativeSummary": "...",
   "thesis": "...",
   "estimatedWordCount": { "min": 8000, "max": 10000 },
   "figurePlan": {
-    "totalMin": 5,
-    "totalMax": 7,
+    "totalMin": 3,
+    "totalMax": 5,
     "items": [
       {
         "id": "fig-1",
@@ -96,14 +104,16 @@ ${chartCatalog.map((c) => `- [${c.index}] ${c.title}${c.variable ? `（${c.varia
         "purpose": "各处理产量对比",
         "suggestedCaption": "图2 各处理产量对比",
         "priority": "required",
-        "dataSource": "experiment",
-        "dataBinding": {
-          "kind": "chartConfig",
-          "chartConfigIndex": 0,
-          "sourceFileName": "试验数据.xlsx",
-          "variable": "产量",
-          "chartTitle": "各处理产量对比"
-        }
+        "dataSource": "experiment"
+      },
+      {
+        "id": "fig-3",
+        "sectionPath": "结果与分析 > 机理",
+        "type": "schematic",
+        "purpose": "机理示意",
+        "suggestedCaption": "图3 作用机理示意",
+        "priority": "optional",
+        "dataSource": "synthesis"
       }
     ]
   },
@@ -111,20 +121,87 @@ ${chartCatalog.map((c) => `- [${c.index}] ${c.title}${c.variable ? `（${c.varia
     {
       "sectionPath": "引言",
       "purpose": "...",
-      "keyPoints": ["...", "..."],
+      "keyPoints": ["研究背景", "科学问题"],
       "estimatedParagraphs": 4,
-      "claim": "本节要立住的主张…",
-      "evidenceHint": "需引用的文献主题/数据…",
-      "warrant": "证据如何支撑主张…",
-      "rebuttal": { "objection": "可能的质疑…", "response": "回应策略…" }
+      "claim": "本节主张…",
+      "evidenceHint": "需引用的文献主题…",
+      "warrant": "证据如何支撑主张…"
+    },
+    {
+      "sectionPath": "材料与方法",
+      "purpose": "...",
+      "keyPoints": ["试验设计", "测定方法"]
+    },
+    {
+      "sectionPath": "结果与分析",
+      "purpose": "...",
+      "keyPoints": ["主要结果", "与文献对照"]
     }
   ],
   "writingOrder": ["材料与方法", "结果与分析", "引言", "结论"],
-  "prerequisites": ["..."],
+  "prerequisites": ["备齐试验数据"],
   "researchQuestion": "可选",
-  "argumentGaps": ["可选：尚缺的数据或文献"],
+  "argumentGaps": [],
   "generatedAt": 0
-}
+}`
+    : `{
+  "version": 1,
+  "projectMode": "review",
+  "language": "${langCode}",
+  "narrativeSummary": "...",
+  "thesis": "...",
+  "estimatedWordCount": { "min": 8000, "max": 12000 },
+  "figurePlan": {
+    "totalMin": 2,
+    "totalMax": 4,
+    "items": [
+      {
+        "id": "fig-1",
+        "sectionPath": "引言",
+        "type": "schematic",
+        "purpose": "综述框架示意",
+        "suggestedCaption": "图1 综述逻辑框架",
+        "priority": "required",
+        "dataSource": "synthesis"
+      },
+      {
+        "id": "fig-2",
+        "sectionPath": "研究进展综述",
+        "type": "table",
+        "purpose": "关键研究对比",
+        "suggestedCaption": "表1 主要研究对比",
+        "priority": "optional",
+        "dataSource": "literature"
+      }
+    ]
+  },
+  "sectionGuides": [
+    {
+      "sectionPath": "引言",
+      "purpose": "...",
+      "keyPoints": ["背景与意义", "综述范围"],
+      "estimatedParagraphs": 3,
+      "claim": "本节主张…",
+      "evidenceHint": "需覆盖的文献主题…",
+      "warrant": "为何这些文献支撑该主张…"
+    },
+    {
+      "sectionPath": "研究现状与问题",
+      "purpose": "...",
+      "keyPoints": ["已有共识", "争议与缺口"]
+    },
+    {
+      "sectionPath": "研究进展综述",
+      "purpose": "...",
+      "keyPoints": ["主题一", "主题二"]
+    }
+  ],
+  "writingOrder": ["研究现状与问题", "研究进展综述", "引言", "结论与展望"],
+  "prerequisites": ["确认综述范围与核心文献"],
+  "researchQuestion": "可选",
+  "argumentGaps": [],
+  "generatedAt": 0
+}`}
 
 【论文题目】${title}
 【研究方向】${researchDirection}

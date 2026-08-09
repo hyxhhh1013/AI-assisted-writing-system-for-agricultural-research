@@ -38,6 +38,24 @@ function parseQueueWaitMs(): number {
 let activeCount = 0;
 let maxConcurrent = parseMaxConcurrent();
 let queueWaitMs = parseQueueWaitMs();
+/** 进程启动后是否已从 SystemSetting 叠加过并发上限 */
+let settingsHydrated = false;
+
+async function hydrateMaxFromSettingsOnce(): Promise<void> {
+  if (settingsHydrated) return;
+  settingsHydrated = true;
+  try {
+    const { getSetting } = await import("@/lib/settings");
+    const v = (await getSetting("WRITING_MAX_CONCURRENT"))?.trim();
+    if (!v) return;
+    const n = Number.parseInt(v, 10);
+    if (Number.isFinite(n) && n >= 1) {
+      maxConcurrent = Math.min(32, Math.floor(n));
+    }
+  } catch {
+    /* ignore */
+  }
+}
 
 /** 排队观测：waitCount=排队次数（含超时），waitMs=实际排队总毫秒，timeoutCount=排队后超时次数 */
 let queueWaitCount = 0;
@@ -46,6 +64,12 @@ let queueTimeoutCount = 0;
 
 export function getWritingMaxConcurrent(): number {
   return maxConcurrent;
+}
+
+/** Admin 保存 WRITING_MAX_CONCURRENT 后立即生效（进程内） */
+export function setWritingMaxConcurrent(next: number): void {
+  if (!Number.isFinite(next) || next < 1) return;
+  maxConcurrent = Math.min(32, Math.floor(next));
 }
 
 export function getActiveWritingCount(): number {
@@ -90,6 +114,7 @@ export function releaseWritingSlot(): void {
 export async function waitForWritingSlot(
   signal?: AbortSignal,
 ): Promise<boolean> {
+  await hydrateMaxFromSettingsOnce();
   if (tryAcquireWritingSlot()) return true;
   const startedAt = Date.now();
   queueWaitCount += 1;
@@ -127,6 +152,7 @@ export function resetWritingConcurrencyForTests(
   queueWaitCount = 0;
   queueWaitMsTotal = 0;
   queueTimeoutCount = 0;
+  settingsHydrated = true; // 测试跳过 DB hydrate，避免污染 mock
   if (nextMax !== undefined) {
     maxConcurrent = nextMax;
   } else {

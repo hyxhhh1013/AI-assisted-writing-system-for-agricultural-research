@@ -110,8 +110,20 @@ export interface AgentWriteSectionResult {
   pipelineMode: "fast" | "full";
 }
 
-function isAgentWriteAutoFixEnabled(): boolean {
-  return process.env.AGENT_WRITE_AUTO_FIX !== "0";
+/** env 优先；否则读 Admin SystemSetting；默认开启 */
+async function isAgentWriteAutoFixEnabled(): Promise<boolean> {
+  const env = process.env.AGENT_WRITE_AUTO_FIX?.trim().toLowerCase();
+  if (env === "0" || env === "false" || env === "off" || env === "no") return false;
+  if (env === "1" || env === "true" || env === "on" || env === "yes") return true;
+  try {
+    const { getSetting } = await import("@/lib/settings");
+    const v = (await getSetting("AGENT_WRITE_AUTO_FIX"))?.trim().toLowerCase();
+    if (v === "0" || v === "false" || v === "off" || v === "no") return false;
+    if (v === "1" || v === "true" || v === "on" || v === "yes") return true;
+  } catch {
+    /* ignore */
+  }
+  return true;
 }
 
 function collectWritingEvents(
@@ -192,7 +204,7 @@ export async function runAgentWriteSection(
   const autoFix =
     input.autoFix !== undefined
       ? input.autoFix
-      : isAgentWriteAutoFixEnabled();
+      : await isAgentWriteAutoFixEnabled();
   const pipelineMode =
     input.data.mode === "full" || autoFix ? "full" : "fast";
 

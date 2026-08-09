@@ -10,12 +10,18 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, User, FileText, Database } from "lucide-react";
+import { Loader2, Search, User, FileText, Database, Compass, Bot } from "lucide-react";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { searchAdmin } from "@/services/admin";
 import type { AdminSearchResponse } from "@/contracts/admin";
 
-const EMPTY: AdminSearchResponse = { users: [], projects: [], knowledge: [] };
+const EMPTY: AdminSearchResponse = {
+  users: [],
+  projects: [],
+  knowledge: [],
+  directions: [],
+  agentSessions: [],
+};
 
 export function AdminGlobalSearch() {
   const router = useRouter();
@@ -60,7 +66,12 @@ export function AdminGlobalSearch() {
   }, [router]);
 
   const hasResults =
-    results.users.length + results.projects.length + results.knowledge.length > 0;
+    results.users.length
+    + results.projects.length
+    + results.knowledge.length
+    + (results.directions?.length ?? 0)
+    + (results.agentSessions?.length ?? 0)
+    > 0;
 
   return (
     <>
@@ -82,7 +93,7 @@ export function AdminGlobalSearch() {
           <div className="px-4 pb-3">
             <Input
               autoFocus
-              placeholder="搜索用户、项目、文献..."
+              placeholder="搜索用户、项目、文献、方向、Agent…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
               className="h-9"
@@ -128,6 +139,26 @@ export function AdminGlobalSearch() {
                     />
                   ))}
                 </SearchGroup>
+                <SearchGroup title="研究方向" icon={Compass}>
+                  {(results.directions ?? []).map((d) => (
+                    <SearchRow
+                      key={d.id}
+                      label={d.label}
+                      sub={d.status}
+                      onClick={() => navigate(`/admin/directions?q=${encodeURIComponent(d.slug)}`)}
+                    />
+                  ))}
+                </SearchGroup>
+                <SearchGroup title="Agent 会话" icon={Bot}>
+                  {(results.agentSessions ?? []).map((s) => (
+                    <SearchRow
+                      key={s.id}
+                      label={s.label}
+                      sub={s.status}
+                      onClick={() => navigate(`/admin/agent-sessions?q=${encodeURIComponent(s.id)}`)}
+                    />
+                  ))}
+                </SearchGroup>
               </div>
             )}
           </div>
@@ -146,6 +177,7 @@ function SearchGroup({
   icon: typeof User;
   children: ReactNode;
 }) {
+  if (!children || (Array.isArray(children) && children.length === 0)) return null;
   return (
     <div>
       <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium uppercase text-[#9aa8a0]">

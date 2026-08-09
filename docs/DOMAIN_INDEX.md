@@ -112,16 +112,19 @@
 | 功能 | 页面 | API | 核心代码 |
 |------|------|-----|----------|
 | 后台布局（RSC 鉴权） | `admin/layout.tsx`, `admin-shell.tsx` | — | `lib/admin-auth-page.ts` |
-| 全局搜索 | `admin-global-search.tsx` | `GET /api/admin/search` | Ctrl+K |
+| 全局搜索 | `admin-global-search.tsx` | `GET /api/admin/search` | Ctrl+K（用户/项目/文献/方向/Agent 会话） |
 | 仪表盘 | `admin/page.tsx` | `GET /api/admin/stats` | `admin-dashboard-client.tsx` |
 | 用户/项目 | `admin/users`, `projects` | `/api/admin/users`, `projects` | `admin-data-table.tsx`, `use-admin-list.ts` |
-| 文献运维 | `admin/knowledge` | `GET/POST/DELETE /api/admin/knowledge` | 索引状态、SSE 重索引 |
+| 文献运维 | `admin/knowledge` | `GET/POST/DELETE /api/admin/knowledge`；`POST .../journal-metrics` | 索引状态、SSE 重索引、期刊 IF/分区导入 |
+| 研究方向 | `admin/directions` | `/api/admin/directions` | 归档/详情（资产·文献·路线图） |
 | 审查/查重记录 | `admin/reviews`, `plagiarism` | `/api/admin/reviews`, `plagiarism` | `admin-record-project-links.tsx` |
 | 使用统计 | `admin/usage` | `GET /api/admin/usage`, `usage/trends` | `services/admin-usage.ts` |
-| 系统健康 | `admin/health` | `GET /api/admin/health` | 可点击告警 |
-| 设置/Key+模型 | `admin/settings` | `PUT /api/admin/settings` | `lib/settings.ts` + `resolveProviderModel`（`DEEPSEEK_MODEL`/`ZHIPU_MODEL` 热加载） |
+| Agent 会话 | `admin/agent-sessions` | `/api/admin/agent-sessions` | 回放 / 中断 / 统计 |
+| 使用洞察 | `admin/insights` | `GET /api/admin/insights` | 意图词 / 工具榜 / 失败模式 |
+| 系统健康 | `admin/health` | `GET /api/admin/health` | AI Key / Agent 错误 / 期刊 IF 覆盖 / PDF 漂移告警（`admin-health-alerts`） |
+| 设置/Key+模型+开关 | `admin/settings` | `PUT /api/admin/settings` | `lib/settings.ts`；`AGENT_ROLE_*`；OA/写并发/auto-fix |
 
-详见 [`ADMIN_ENHANCEMENT_PLAN.md`](./ADMIN_ENHANCEMENT_PLAN.md)。
+详见 [`ADMIN_ENHANCEMENT_PLAN.md`](./ADMIN_ENHANCEMENT_PLAN.md)（Phase 5：ADMIN-040～046）。
 
 ## 研究方向战略规划
 

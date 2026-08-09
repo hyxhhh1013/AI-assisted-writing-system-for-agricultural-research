@@ -2,6 +2,10 @@ import type { WritingBlueprint } from "@/contracts/writing-blueprint";
 import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import { callAI, getAgentModelConfig } from "@/lib/ai";
+import {
+  coerceWritingBlueprintPayload,
+  formatBlueprintValidationError,
+} from "@/lib/blueprint-coerce";
 import { computeOutlineHash } from "@/lib/blueprint-utils";
 import { buildBlueprintPrompt } from "@/lib/prompts/blueprint";
 import { syncProjectPaperPassport } from "@/lib/project-paper-passport-sync";
@@ -108,9 +112,14 @@ export const generateWritingBlueprintTool: ToolDefinition = {
       };
     }
 
-    const checked = writingBlueprintPayloadSchema.safeParse(parsed);
+    const checked = writingBlueprintPayloadSchema.safeParse(
+      coerceWritingBlueprintPayload(parsed),
+    );
     if (!checked.success) {
-      return { success: false, error: "写作蓝图结构无效" };
+      return {
+        success: false,
+        error: formatBlueprintValidationError(checked.error.issues),
+      };
     }
 
     const totalMin = Math.max(checked.data.figurePlan.totalMin, 0);

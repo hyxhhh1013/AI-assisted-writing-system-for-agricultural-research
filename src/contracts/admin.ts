@@ -100,11 +100,57 @@ export interface AdminStats {
   };
 }
 
+export interface AdminHealthAiProvider {
+  provider: string;
+  name: string;
+  keyCount: number;
+  model: string;
+}
+
 export interface AdminHealthData {
   db: { connected: boolean; provider: string; sizeBytes: number };
-  knowledge: { fileCount: number; chunkCount: number; uncategorizedCount: number };
+  knowledge: {
+    fileCount: number;
+    chunkCount: number;
+    uncategorizedCount: number;
+    /** PDF 磁盘抽样（最多 200 篇） */
+    diskSampleSize: number;
+    metadataOnlyInSample: number;
+    pdfMissingInSample: number;
+    categoryDriftInSample: number;
+  };
   index: { indexFiles: string[]; totalSizeBytes: number };
   server: { uptime: number; nodeVersion: string; platform: string; memoryMB: number };
+  /** AI Key / 模型可用性（ADMIN-042） */
+  ai: {
+    providers: AdminHealthAiProvider[];
+    missingKeyProviders: string[];
+  };
+  /** Agent 会话健康 */
+  agent: {
+    totalSessions: number;
+    errorSessions: number;
+    errorSessions24h: number;
+    runningSessions: number;
+  };
+  /** 期刊 IF/分区覆盖 */
+  journalMetrics: {
+    fileCount: number;
+    withAnyMetrics: number;
+    withImpactFactor: number;
+    coveragePct: number;
+    lastImport: AdminJournalMetricsLastImport | null;
+  };
+}
+
+/** 最近一次期刊指标导入摘要（SystemSetting JOURNAL_METRICS_LAST_IMPORT） */
+export interface AdminJournalMetricsLastImport {
+  at: string;
+  filename: string;
+  updated: number;
+  matched: number;
+  totalFiles: number;
+  matchRate: number;
 }
 
 export interface AdminUsageStats {
@@ -233,10 +279,29 @@ export interface AdminSearchKnowledge {
   type: "knowledge";
 }
 
+export interface AdminSearchDirection {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  label: string;
+  type: "direction";
+}
+
+export interface AdminSearchAgentSession {
+  id: string;
+  goal: string;
+  status: string;
+  label: string;
+  type: "agent_session";
+}
+
 export interface AdminSearchResponse {
   users: AdminSearchUser[];
   projects: AdminSearchProject[];
   knowledge: AdminSearchKnowledge[];
+  directions: AdminSearchDirection[];
+  agentSessions: AdminSearchAgentSession[];
 }
 
 export interface AdminSettingRecord {

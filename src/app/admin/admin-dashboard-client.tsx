@@ -10,6 +10,7 @@ import {
 import { toast } from "sonner";
 import { getAdminStats, getAdminHealth, type AdminStats } from "@/services/admin";
 import type { AdminHealthData } from "@/contracts/admin";
+import { buildAdminHealthAlerts } from "@/lib/admin-health-alerts";
 import { adminModeLabel, adminTplLabel } from "@/lib/admin-labels";
 import { AdminHeroBand } from "@/components/admin/admin-hero-band";
 import { AdminPanel, AdminCompactList } from "@/components/admin/admin-panel";
@@ -59,20 +60,7 @@ export default function AdminDashboard() {
   }
   if (!stats) return <div className="py-20 text-center text-sm text-[#6b7c72]">加载失败</div>;
 
-  const alerts: { message: string; href: string; label: string }[] = [];
-  if (health && !health.db.connected) {
-    alerts.push({ message: "数据库连接异常", href: "/admin/settings", label: "检查配置" });
-  }
-  if (health && health.knowledge.uncategorizedCount > 0) {
-    alerts.push({
-      message: `${health.knowledge.uncategorizedCount} 篇文献未分类`,
-      href: "/admin/knowledge?category=未分类",
-      label: "去整理",
-    });
-  }
-  if (health && health.index.indexFiles.length === 0) {
-    alerts.push({ message: "RAG 索引文件缺失", href: "/admin/knowledge", label: "重建索引" });
-  }
+  const alerts = health ? buildAdminHealthAlerts(health) : [];
 
   const projectTrend = stats.projectTrend.map((d) => ({
     label: d.date.slice(5),

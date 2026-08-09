@@ -11,6 +11,7 @@ import type {
   AdminDirectionRecord,
   AdminHealthData,
   AdminInsights,
+  AdminJournalMetricsLastImport,
   AdminKnowledgeFile,
   AdminKnowledgeListResponse,
   AdminListParams,
@@ -41,6 +42,7 @@ export type {
   AdminDirectionRecord,
   AdminInsights,
   AdminHealthData,
+  AdminJournalMetricsLastImport,
   AdminKnowledgeFile,
   AdminKnowledgeListResponse,
   AdminPlagiarismDetail,
@@ -125,7 +127,13 @@ export async function getAdminUsageTrends(range: "30d" | "12w" = "30d"): Promise
 export async function searchAdmin(q: string): Promise<AdminSearchResponse> {
   const res = await fetch(`/api/admin/search?q=${encodeURIComponent(q)}`);
   const data = await parseJson<AdminSuccessResponse<AdminSearchResponse>>(res);
-  return data.data ?? { users: [], projects: [], knowledge: [] };
+  return data.data ?? {
+    users: [],
+    projects: [],
+    knowledge: [],
+    directions: [],
+    agentSessions: [],
+  };
 }
 
 /** GET /api/admin/users */
@@ -254,6 +262,13 @@ export interface JournalMetricsImportResult {
   matchRate?: number;
   dryRun?: boolean;
   error?: string;
+}
+
+/** GET /api/admin/journal-metrics — 最近一次导入摘要 */
+export async function getAdminJournalMetricsLastImport(): Promise<AdminJournalMetricsLastImport | null> {
+  const res = await fetch("/api/admin/journal-metrics");
+  const data = await parseJson<AdminSuccessResponse<{ lastImport: AdminJournalMetricsLastImport | null }>>(res);
+  return data.success ? (data.data?.lastImport ?? null) : null;
 }
 
 /** POST /api/admin/journal-metrics — 上传 CSV/Excel 导入期刊 IF/分区 */

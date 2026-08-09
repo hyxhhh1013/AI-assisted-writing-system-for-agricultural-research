@@ -7,6 +7,10 @@ import { blueprintSchema, writingBlueprintPayloadSchema } from "@/lib/validation
 import { getErrorMessage } from "@/lib/error-utils";
 import type { WritingBlueprint } from "@/contracts/writing-blueprint";
 import {
+  coerceWritingBlueprintPayload,
+  formatBlueprintValidationError,
+} from "@/lib/blueprint-coerce";
+import {
   computeOutlineHash,
   enrichBlueprintChartBindingsFromCatalog,
   type BlueprintChartCatalogEntry,
@@ -116,11 +120,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const validated = writingBlueprintPayloadSchema.safeParse(parsed);
+    const coerced = coerceWritingBlueprintPayload(parsed);
+    const validated = writingBlueprintPayloadSchema.safeParse(coerced);
     if (!validated.success) {
       logger.error("Blueprint validation error:", validated.error.flatten());
       return NextResponse.json(
-        { error: "蓝图结构不完整，请重试" },
+        {
+          error: formatBlueprintValidationError(validated.error.issues),
+        },
         { status: 502 },
       );
     }
