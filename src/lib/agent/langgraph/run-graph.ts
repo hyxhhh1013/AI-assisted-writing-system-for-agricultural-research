@@ -48,6 +48,7 @@ import {
   seedUiTranscript,
 } from "@/lib/agent/ui-transcript";
 import type { AgentLoopOptions } from "@/lib/agent/types";
+import { ensurePendingWriteFromActive } from "@/lib/agent/write-resume";
 
 export async function* runAgentGraphLoop(
   options: AgentLoopOptions,
@@ -105,6 +106,31 @@ export async function* runAgentGraphLoop(
   const liveQueue = new LiveEventQueue();
   runtime.emitLiveEvent = (e) => liveQueue.push(e);
   context.emitLiveEvent = runtime.emitLiveEvent;
+
+  /** 串行化落库（含 write_section activeWrite 补丁，防与 graph persist 互抢） */
+  let persistChain: Promise<void> = Promise.resolve();
+
+  context.patchActiveWrite = async (activeWrite) => {
+    context.activeWrite = activeWrite;
+    if (!sessionId) return;
+    const op = async () => {
+      try {
+        const existing = await getAgentSessionForUser(sessionId, context.userId);
+        if (!existing?.snapshot) return;
+        await saveAgentSessionSnapshot(
+          sessionId,
+          { ...existing.snapshot, activeWrite },
+          existing.status === "completed" || existing.status === "error"
+            ? undefined
+            : "running",
+        );
+      } catch {
+        /* ignore */
+      }
+    };
+    persistChain = persistChain.then(op, op);
+    await persistChain;
+  };
 
   let uiTranscript: AgentUiMessage[] = resumeState
     ? [] // 续跑时下面从 DB 补
@@ -186,6 +212,22 @@ export async function* runAgentGraphLoop(
             block,
           );
         }
+      }
+      // write_section 断点：跟聊清掉；续跑则恢复并补回 pending
+      if (followUp) {
+        context.activeWrite = null;
+        if (existing?.snapshot?.activeWrite) {
+          void context.patchActiveWrite?.(null);
+        }
+      } else {
+        context.activeWrite = existing?.snapshot?.activeWrite ?? null;
+        initialState = {
+          ...initialState,
+          pendingToolCalls: ensurePendingWriteFromActive(
+            initialState.pendingToolCalls,
+            context.activeWrite,
+          ),
+        };
       }
     } catch {
       uiTranscript = seedUiTranscript(goal);
@@ -384,8 +426,6 @@ export async function* runAgentGraphLoop(
   let lastEventCount = 0;
   let lastPersistedAt = 0;
   let latestState: AgentGraphStateType | null = null;
-  /** 串行化落库，避免 void running 覆盖后到的 interrupted（丢掉 awaitingConfirm） */
-  let persistChain: Promise<void> = Promise.resolve();
 
   const persist = (
     state: AgentGraphStateType,
@@ -402,7 +442,13 @@ export async function* runAgentGraphLoop(
       try {
         await saveAgentSessionSnapshot(
           sessionId,
-          graphStateToSnapshot(state, uiTranscript, context.workMemory, options.attachmentIds),
+          graphStateToSnapshot(
+            state,
+            uiTranscript,
+            context.workMemory,
+            options.attachmentIds,
+            context.activeWrite ?? null,
+          ),
           status,
           errorMessage,
         );
@@ -594,10 +640,17 @@ function applyCheckpointDecision(
 ): Partial<AgentGraphStateType> {
   const kind =
     kindHint
-    ?? (decision.checkpointId.includes("config") ? "config_confirm" : "outline_approve");
+    ?? (decision.checkpointId.includes("config")
+      ? "config_confirm"
+      : decision.checkpointId.includes("blueprint")
+        ? "blueprint_approve"
+        : decision.checkpointId.includes("clarify")
+          ? "clarify"
+          : "outline_approve");
   const prev = state.approvedCheckpointKinds ?? [];
+  // clarify 不写入 approvedKinds（可反复提问）；其余批准类检查点记入防重复暂停
   const approved =
-    decision.decision === "approve"
+    decision.decision === "approve" && kind !== "clarify"
       ? Array.from(new Set([...prev, kind]))
       : prev;
   return {

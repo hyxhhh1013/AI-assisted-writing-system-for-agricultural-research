@@ -30,6 +30,7 @@ import {
   shouldPauseForBlueprintApprove,
   shouldPauseForOutlineApprove,
 } from "@/lib/agent/core/checkpoints";
+import { checkFigureReplaceRequired } from "@/lib/agent/figure-loop";
 import type { AgentGraphStateType } from "./state";
 import type { AntispamTracker } from "@/lib/agent/core/antispam";
 import type { RepeatTracker } from "@/lib/agent/core/safety";
@@ -83,6 +84,16 @@ export const searchQuotaGate: PreToolGate = ({ tool, antispamTracker }) => {
     : { ok: false, kind: "soft", error: quota.warning ?? "检索次数已达上限" };
 };
 
+/** 质检失败后必须带 replaceImageUrl 再出图（防叠图盲画） */
+export const figureReplaceGate: PreToolGate = ({ tool, params, recentObservations }) => {
+  const r = checkFigureReplaceRequired({
+    toolName: tool.name,
+    params,
+    observations: recentObservations,
+  });
+  return r.ok ? { ok: true } : { ok: false, kind: "reject", error: r.error };
+};
+
 /** 意图门禁组：诊断 inspect / 草稿检索 / 引用核查 / 引用绕行 / 收口摘要 / 审查审稿 / 先读后写 */
 export const intentGate: PreToolGate = ({ state, tool, params, recentObservations }) => {
   const gates: Array<() => { ok: boolean; error?: string }> = [
@@ -103,7 +114,12 @@ export const intentGate: PreToolGate = ({ state, tool, params, recentObservation
 };
 
 /** 前置门禁链（在写前置自动补齐之前，按序短路） */
-export const PRE_GATES: PreToolGate[] = [repeatGate, searchQuotaGate, intentGate];
+export const PRE_GATES: PreToolGate[] = [
+  repeatGate,
+  searchQuotaGate,
+  figureReplaceGate,
+  intentGate,
+];
 
 export function evaluatePreGates(input: PreGateInput): GateVerdict {
   for (const gate of PRE_GATES) {

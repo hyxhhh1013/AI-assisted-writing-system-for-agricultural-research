@@ -243,6 +243,41 @@ export async function POST(req: NextRequest) {
         }
         // followUp：预算从 0 起算（buildFollowUpInitialState 已重置）
 
+        // 客户端断开 / cancel 会先关掉 controller；此后 enqueue/close 会抛
+        // TypeError: Controller is already closed。按 writing SSE 同款软关闭，勿记成 agent 失败。
+        let streamClosed = false;
+        const isControllerClosedError = (error: unknown): boolean =>
+          error instanceof TypeError
+          && /already closed|Invalid state/i.test(error.message);
+
+        const emitRaw = (chunk: string): boolean => {
+          if (streamClosed || req.signal.aborted) return false;
+          try {
+            controller.enqueue(encoder.encode(chunk));
+            return true;
+          } catch (error: unknown) {
+            streamClosed = true;
+            if (!isControllerClosedError(error) && !req.signal.aborted) {
+              log.warn("agent sse enqueue failed", {
+                error: getErrorMessage(error),
+              });
+            }
+            return false;
+          }
+        };
+
+        const finishStream = () => {
+          if (streamClosed) return;
+          try {
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            controller.close();
+          } catch {
+            /* already closed */
+          } finally {
+            streamClosed = true;
+          }
+        };
+
         try {
           for await (const event of runAgentLoop({
             goal,
@@ -257,30 +292,23 @@ export async function POST(req: NextRequest) {
             attachmentManifest,
             attachmentIds,
           })) {
-            if (req.signal.aborted) break;
-            controller.enqueue(encoder.encode(sseEncode(event)));
+            if (req.signal.aborted || streamClosed) break;
+            if (!emitRaw(sseEncode(event))) break;
           }
-          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-          controller.close();
+          finishStream();
         } catch (error: unknown) {
-          // 【诊断】打印 error 完整结构，定位 {} 空对象来源
-          const diag =
-            error instanceof Error
-              ? { type: "Error", name: error.name, message: error.message, stack: error.stack?.slice(0, 500) }
-              : typeof error === "object" && error !== null
-                ? { type: typeof error, json: JSON.stringify(error).slice(0, 500) }
-                : { type: typeof error, value: String(error) };
-          console.error("[api/agent] stream-error-detail", JSON.stringify(diag));
+          if (isControllerClosedError(error) || req.signal.aborted) {
+            finishStream();
+            return;
+          }
           log.fail("agent stream error", error);
-          controller.enqueue(
-            encoder.encode(
-              sseEncode({
-                type: "agent/error",
-                error: getErrorMessage(error),
-              }),
-            ),
+          emitRaw(
+            sseEncode({
+              type: "agent/error",
+              error: getErrorMessage(error),
+            }),
           );
-          controller.close();
+          finishStream();
         }
       },
     });

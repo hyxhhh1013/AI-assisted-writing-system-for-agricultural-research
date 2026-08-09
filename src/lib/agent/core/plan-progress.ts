@@ -17,6 +17,9 @@ const TOOL_TITLE_HINTS: Record<string, string[]> = {
   review_content: ["审查", "review"],
   verify_content: ["核查", "verify"],
   generate_chart: ["图表", "chart", "配图", "画图", "做图"],
+  draft_mechanism_figure: ["机理", "示意图", "流程图", "mechanism", "framework"],
+  remove_figure: ["删图", "删除图", "去掉图", "remove figure"],
+  read_figure: ["识图", "回看", "看图", "质检图"],
   generate_xrd_analysis: ["XRD", "xrd", "Scherrer", "晶粒", "衍射", "峰表"],
   list_plot_sources: ["图表", "chart", "配图", "数据源"],
   list_references: ["文献", "参考", "reference"],
@@ -28,7 +31,7 @@ const TOOL_TITLE_HINTS: Record<string, string[]> = {
   export_manuscript_markdown: ["导出", "markdown", "手稿", "打包"],
   recall_recent_work: ["上次", "继续", "记忆", "回顾"],
   analyze_direction: ["方向", "direction"],
-  get_full_text: ["全文", "full"],
+  read_full_text: ["全文", "full"],
 };
 
 export function getFocusSubtask(plan: AgentPlan | null | undefined): AgentSubTask | null {

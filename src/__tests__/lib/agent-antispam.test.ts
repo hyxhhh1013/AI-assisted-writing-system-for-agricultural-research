@@ -128,4 +128,33 @@ describe("agent antispam", () => {
     expect(progressed.stagnant).toBe(false);
     expect(tracker.stagnantCount).toBe(0);
   });
+
+  it("fingerprint changes when referenceClassificationSig changes", () => {
+    const a = projectFingerprint(snap());
+    const b = projectFingerprint(
+      snap({ referenceClassificationSig: "1:热解|2:烟草" }),
+    );
+    expect(a).not.toBe(b);
+  });
+
+  it("save_reference_classification / generate_chart 成功不清空转（指纹盲区）", () => {
+    const base = snap();
+    const tracker = createAntispamTracker(base);
+    noteToolProgress(tracker, "verify_content", base, true);
+    noteToolProgress(tracker, "verify_content", base, true);
+    const r = noteToolProgress(tracker, "save_reference_classification", base, true);
+    expect(r.stagnant).toBe(false);
+    expect(tracker.stagnantCount).toBe(0);
+    const chart = noteToolProgress(tracker, "generate_chart", base, true);
+    expect(chart.stagnant).toBe(false);
+  });
+
+  it("read_full_text 不计空转（工具名对齐）", () => {
+    const base = snap();
+    const tracker = createAntispamTracker(base);
+    for (let i = 0; i < MAX_STAGNANT_TOOLS + 2; i++) {
+      expect(noteToolProgress(tracker, "read_full_text", base, true).stagnant).toBe(false);
+    }
+    expect(tracker.stagnantCount).toBe(0);
+  });
 });

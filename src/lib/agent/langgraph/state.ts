@@ -9,6 +9,7 @@ import type {
 import { COST_LIMITS } from "@/lib/agent/core/safety";
 import { planHasPendingWork } from "@/lib/agent/core/plan-progress";
 import { analyzeReflection, MAX_REFLECT_ROUNDS } from "@/lib/agent/core/reflect";
+import { lastFigureQaNeedsReplace } from "@/lib/agent/figure-loop";
 import type { LLMMessage, ParsedToolCall, ToolObservation } from "@/lib/agent/types";
 
 export const AgentGraphState = Annotation.Root({
@@ -148,6 +149,13 @@ export function routeAfterAgent(state: AgentGraphStateType): AgentGraphRoute {
       toolSummaries: state.toolSummaries,
       maxIterations: COST_LIMITS.maxIterations,
     })
+  ) {
+    return "agent";
+  }
+  // 图质检未通过：即使 finished / 续跑计数耗尽，仍回 agent（安全阀=maxIterations）
+  if (
+    lastFigureQaNeedsReplace(state.observations)
+    && state.iteration < COST_LIMITS.maxIterations
   ) {
     return "agent";
   }

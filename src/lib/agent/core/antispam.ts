@@ -31,7 +31,7 @@ export const CONTEXT_READ_TOOLS = new Set([
   "read_reference",
   "list_plot_sources",
   "recall_recent_work",
-  "get_full_text",
+  "read_full_text",
   "update_work_memory",
 ]);
 
@@ -48,8 +48,26 @@ export const PROGRESS_TOOLS = new Set([
   "import_reference",
   "generate_chart",
   "generate_xrd_analysis",
+  "generate_table",
+  "draft_mechanism_figure",
+  "remove_figure",
+  "save_reference_classification",
+  "remove_references",
   "validate_citations",
   "run_review_rounds",
+]);
+
+/**
+ * 成功即算进展、但 fingerprint 可能捕不到的工具（分类映射 / 图表产物不在
+ * sectionFills·refs 指纹里）。避免分类/出图后被误判空转。
+ */
+export const FINGERPRINT_BLIND_PROGRESS_TOOLS = new Set([
+  "save_reference_classification",
+  "generate_chart",
+  "generate_xrd_analysis",
+  "generate_table",
+  "draft_mechanism_figure",
+  "remove_figure",
 ]);
 
 export interface AntispamTracker {
@@ -84,6 +102,7 @@ export function projectFingerprint(snap: AgentProjectSnapshot | null | undefined
     snap.references?.length ?? 0,
     chars,
     refs,
+    snap.referenceClassificationSig ?? "",
     snap.hasWritingBlueprint ? 1 : 0,
     snap.hasArgumentBlueprint ? 1 : 0,
     snap.hasPaperConfig ? 1 : 0,
@@ -138,6 +157,13 @@ export function noteToolProgress(
       tracker.lastFingerprint = next;
       tracker.stagnantCount = 0;
     }
+    return { stagnant: false };
+  }
+
+  // 分类/图表等：成功即清空转（指纹可能捕不到产物）
+  if (FINGERPRINT_BLIND_PROGRESS_TOOLS.has(toolName)) {
+    if (changed) tracker.lastFingerprint = next;
+    tracker.stagnantCount = 0;
     return { stagnant: false };
   }
 

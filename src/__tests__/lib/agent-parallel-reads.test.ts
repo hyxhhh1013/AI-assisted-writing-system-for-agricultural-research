@@ -111,6 +111,55 @@ describe("allParallelSafe", () => {
   });
 });
 
+describe("并行路径意图门禁（与串行同源）", () => {
+  it("分类目标下批内第二次 list_references 被拒", async () => {
+    const ctx = makeCtx();
+    const runtime = makeRuntime([readTool("list_references")], ctx);
+    const out = await runParallelReads(
+      baseState({
+        goal: "请做文献分类编码",
+        pendingToolCalls: [
+          call("1", "list_references", {}),
+          call("2", "list_references", {}),
+        ],
+      }),
+      runtime,
+    );
+    // 第一次放行执行；第二次门禁拒绝（不入批）
+    expect(ctx.budget.toolCallCount).toBe(1);
+    expect((out.observations ?? []).filter((o) => o.success)).toHaveLength(1);
+    expect((out.toolSummaries ?? []).some((s) => s.includes("分类编码"))).toBe(true);
+  });
+
+  it("摘要收口目标下并行 search_external 被拒", async () => {
+    const ctx = makeCtx();
+    const runtime = makeRuntime(
+      [readTool("search_external"), readTool("list_references")],
+      ctx,
+    );
+    const out = await runParallelReads(
+      baseState({
+        goal: "帮我收口写摘要",
+        pendingToolCalls: [
+          call("1", "search_external", { query: "biochar" }),
+          call("2", "list_references", {}),
+        ],
+      }),
+      runtime,
+    );
+    // 门禁拒绝走 events/toolSummaries，不入成功 observations
+    const searchObs = (out.events ?? []).filter(
+      (e) => e.type === "agent/observation" && e.tool === "search_external",
+    );
+    expect(searchObs.length).toBeGreaterThan(0);
+    expect(searchObs.every((e) => e.type === "agent/observation" && e.result && !e.result.success)).toBe(true);
+    // list_references 可执行；search 被摘要门禁拦下
+    expect(ctx.budget.toolCallCount).toBe(1);
+    expect((out.observations ?? []).map((o) => o.tool)).toEqual(["list_references"]);
+    expect((out.toolSummaries ?? []).some((s) => /收口|摘要/.test(s))).toBe(true);
+  });
+});
+
 describe("runParallelReads", () => {
   it("并发执行只读调用，结果按原顺序产出，预算正确累计", async () => {
     const ctx = makeCtx();

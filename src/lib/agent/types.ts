@@ -47,6 +47,15 @@ export interface AgentContext {
   workMemory?: import("@/lib/agent/work-memory").AgentWorkMemory | null;
   /** 工具执行期间可选的实时事件通道（write_section 进度透传用；未接图循环时缺省为 undefined） */
   emitLiveEvent?: (event: AgentSSEEvent) => void;
+  /** 当前 write_section 断点（内存；与会话快照 activeWrite 同步） */
+  activeWrite?: import("@/contracts/agent-session").AgentActiveWrite | null;
+  /**
+   * 将 activeWrite 落盘到会话快照（由 run-graph 注入；节流由调用方控制）。
+   * 传 null 表示清除断点。
+   */
+  patchActiveWrite?: (
+    activeWrite: import("@/contracts/agent-session").AgentActiveWrite | null,
+  ) => Promise<void>;
   budget: {
     maxIterations: number;
     currentIteration: number;

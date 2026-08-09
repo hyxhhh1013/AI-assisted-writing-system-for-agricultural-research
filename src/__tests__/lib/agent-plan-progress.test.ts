@@ -171,6 +171,30 @@ describe("routeAfterAgent plan continue", () => {
     ).toBe("finalize");
   });
 
+  it("re-enters agent when figure QA needs replace even if continue budget exhausted", () => {
+    expect(
+      routeAfterAgent(
+        base({
+          plan: null,
+          pendingToolCalls: [],
+          finished: true,
+          planContinueCount: 99,
+          observations: [
+            {
+              tool: "read_figure",
+              success: true,
+              data: {
+                needsRegen: true,
+                imageUrl: "/api/charts/bad.png",
+                mode: "qa",
+              },
+            },
+          ],
+        }),
+      ),
+    ).toBe("agent");
+  });
+
   it("finalizes when iteration at cap", () => {
     expect(
       routeAfterAgent(

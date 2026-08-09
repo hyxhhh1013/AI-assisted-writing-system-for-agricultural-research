@@ -8,9 +8,9 @@
  * - 仅当 pendingToolCalls 全部命中 PARALLEL_READ_TOOLS 白名单（纯读、无确认、
  *   无 checkpoint 副作用）时才走快路径；混入写/确认/检查点工具时由 toolsNode
  *   原串行循环处理，快路径对其零影响。
- * - 门禁/重复/配额在顺序扫描中按原顺序判定，门禁用「增量累计观察」模拟串行路径
- *   （接纳批次时按 success:true 合成观察，见 runParallelReads 内注释）；执行用 Promise.all；
- *   结果按原顺序产出，保证 SSE 事件与 observations 顺序稳定。
+ * - 门禁与串行路径同源：evaluatePreGates + evaluatePhaseGate（含摘要/审查/分类意图），
+ *   门禁用「增量累计观察」模拟串行路径（接纳批次时按 success:true 合成观察）；
+ *   执行用 Promise.all；结果按原顺序产出，保证 SSE 事件与 observations 顺序稳定。
  * - agent/action→agent/observation 按批次成组发出（A,A,O,O）而非逐个交织；未知工具分支
  *   在图中不可达（allParallelSafe 不通过时由 toolsNode 串行处理）。
  * - 停滞熔断（noteToolProgress 的 stagnant）对并行批不生效：批内调用已全部执行，
@@ -18,31 +18,27 @@
  */
 
 import type { AgentSSEEvent } from "@/contracts/agent";
-import {
-  checkSearchQuota,
-  noteSearchCall,
-  noteToolProgress,
-} from "@/lib/agent/core/antispam";
-import { checkRepeatCall } from "@/lib/agent/core/safety";
-import { checkAgentToolPhaseGate } from "@/lib/agent/core/phase-gates";
-import { checkReadBeforeWrite } from "@/lib/agent/core/read-before-write";
-import {
-  checkCitationCheckGate,
-  checkCitationSideTripGate,
-  checkDiagnoseInspectGate,
-  checkDraftSearchGate,
-} from "@/lib/agent/core/goal-intents";
+import { noteSearchCall, noteToolProgress } from "@/lib/agent/core/antispam";
 import { findTool, parseToolArgs } from "@/lib/agent/core/tool-registry";
 import { advancePlanAfterTool } from "@/lib/agent/core/plan-progress";
 import { formatToolObservationForLlm } from "@/lib/agent/observation-memory";
 import type { AgentGraphStateType } from "@/lib/agent/langgraph/state";
 import type { AgentGraphRuntime } from "@/lib/agent/langgraph/runtime";
+import {
+  evaluatePhaseGate,
+  evaluatePreGates,
+  type PreGateInput,
+} from "@/lib/agent/langgraph/tool-gates";
 import type {
   LLMMessage,
   ParsedToolCall,
   ToolDefinition,
   ToolObservation,
 } from "@/lib/agent/types";
+import {
+  buildFigureQaContinueNudge,
+  collectFigureQaFailures,
+} from "@/lib/agent/figure-loop";
 
 /** 纯读、无确认、无 checkpoint/记忆副作用、可乱序并行的工具白名单 */
 export const PARALLEL_READ_TOOLS = new Set([
@@ -54,6 +50,7 @@ export const PARALLEL_READ_TOOLS = new Set([
   "read_attachment",
   "list_attachments",
   "list_plot_sources",
+  "read_figure",
   "read_full_text",
   "search_knowledge",
   "search_external",
@@ -130,76 +127,43 @@ export async function runParallelReads(
     }
     const params = parseToolArgs(toolCall.args);
 
-    const repeat = checkRepeatCall(repeatTracker, tool.name, params);
-    if (!repeat.allowed) {
-      const isSoftTool =
-        tool.name === "read_section"
-        || tool.name === "search_knowledge"
-        || tool.name === "search_external";
-      const SOFT_REPEAT_CAP = 8;
-      const hardStop = !isSoftTool || (repeat.repeatCount ?? 0) > SOFT_REPEAT_CAP;
-      if (!hardStop) {
-        const soft = repeat.warning ?? "请停止重复调用，改换策略或直接回复用户";
-        newSummaries.push(`[${tool.name}] ${soft}`);
+    const gateInput: PreGateInput = {
+      tool,
+      params,
+      state,
+      agentContext,
+      repeatTracker,
+      antispamTracker,
+      recentObservations: effectiveObs,
+    };
+    const gateVerdict = evaluatePreGates(gateInput);
+    if (!gateVerdict.ok) {
+      if (gateVerdict.kind === "hard") {
+        error = gateVerdict.error;
+        events.push({ type: "agent/error", error });
+        break;
+      }
+      if (gateVerdict.kind === "soft") {
+        newSummaries.push(`[${tool.name}] ${gateVerdict.error}`);
         newMessages.push({
           role: "user",
-          content: `Tool result (${tool.name}):\n${soft}`,
+          content: `Tool result (${tool.name}):\n${gateVerdict.error}`,
         });
         events.push({
           type: "agent/observation",
           tool: tool.name,
-          result: { success: false, error: soft },
-          error: soft,
+          result: { success: false, error: gateVerdict.error },
+          error: gateVerdict.error,
         });
         continue;
       }
-      error = repeat.warning ?? "重复调用";
-      events.push({ type: "agent/error", error });
-      break;
-    }
-
-    const quota = checkSearchQuota(antispamTracker, tool.name);
-    if (!quota.allowed) {
-      const soft = quota.warning ?? "检索次数已达上限";
-      newSummaries.push(`[${tool.name}] ${soft}`);
-      newMessages.push({
-        role: "user",
-        content: `Tool result (${tool.name}):\n${soft}`,
-      });
-      events.push({
-        type: "agent/observation",
-        tool: tool.name,
-        result: { success: false, error: soft },
-        error: soft,
-      });
+      rejectGate(tool.name, gateVerdict.error);
       continue;
     }
 
-    const gates: Array<() => { ok: boolean; error?: string }> = [
-      () => checkDiagnoseInspectGate(state.goal, tool.name, effectiveObs),
-      () => checkDraftSearchGate(state.goal, tool.name, effectiveObs),
-      () => checkCitationCheckGate(state.goal, tool.name, effectiveObs),
-      () => checkCitationSideTripGate(state.goal, tool.name, effectiveObs),
-      () => checkReadBeforeWrite(tool.name, params, effectiveObs),
-    ];
-    let rejected = false;
-    for (const gate of gates) {
-      const r = gate();
-      if (!r.ok) {
-        rejectGate(tool.name, r.error ?? "门禁未通过");
-        rejected = true;
-        break;
-      }
-    }
-    if (rejected) continue;
-
-    const phaseGate = checkAgentToolPhaseGate(
-      tool.name,
-      params,
-      agentContext.projectSnapshot,
-    );
-    if (!phaseGate.ok) {
-      rejectGate(tool.name, phaseGate.error);
+    const phaseVerdict = evaluatePhaseGate(gateInput);
+    if (!phaseVerdict.ok) {
+      rejectGate(tool.name, phaseVerdict.error);
       continue;
     }
 
@@ -232,7 +196,7 @@ export async function runParallelReads(
   );
 
   // 按原顺序记录结果
-  for (const { tool, params, result } of results) {
+  for (const { tool, result } of results) {
     toolCallCount += 1;
     const line = result.success
       ? `[${tool.name}] ${result.summary ?? "完成"}`
@@ -261,6 +225,16 @@ export async function runParallelReads(
       agentContext.projectSnapshot,
       result.success,
     );
+  }
+
+  // 并行 read_figure(qa) 未走串行 figure-loop：在此补硬 nudge，避免模型空口收尾
+  const qaFails = collectFigureQaFailures(newObservations);
+  for (const imageUrl of qaFails) {
+    newSummaries.push(`[figure-loop] QA 未通过：下一轮必须 replaceImageUrl=${imageUrl}`);
+    newMessages.push({
+      role: "user",
+      content: buildFigureQaContinueNudge(imageUrl),
+    });
   }
 
   if (plan) {

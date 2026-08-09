@@ -137,7 +137,7 @@ function fallbackPlan(goal: string): AgentPlan {
           id: "1",
           title: "检查并补齐大纲/写作蓝图/论证蓝图",
           status: "pending",
-          toolHints: ["generate_outline", "generate_writing_blueprint", "build_argument_blueprint"],
+          toolHints: ["generate_outline", "generate_writing_blueprint"],
         },
         { id: "2", title: "检索与本章相关的文献要点", status: "pending", toolHints: ["search_knowledge"] },
         { id: "3", title: "调用 write_section 生成并写回章节", status: "pending", toolHints: ["write_section"] },

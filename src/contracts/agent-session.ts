@@ -24,12 +24,43 @@ export type AgentUiMessage =
       error?: string;
       /** generate_chart 等工具返回的预览图 */
       imageUrl?: string;
+      /** /plot 深链（机理图精修） */
+      plotHref?: string;
+      /** 就地改图时建议带的旧图 URL */
+      replaceImageUrl?: string;
+      /** 写入的章节 key（如 literature_body） */
+      sectionKey?: string;
+      /** replaced | appended */
+      insertMode?: string;
       /** validate_citations 等结构化结果 */
       data?: unknown;
     }
   | { kind: "summary"; summary: AgentSummary }
   /** 多会话历史 /「新对话」分界（仅 UI，可不落库） */
   | { kind: "divider"; label?: string };
+
+/**
+ * write_section 执行中断点（W3-AP-WRITE-RESUME）。
+ * 落在会话快照里，供 SSE 断开后续跑去重 / 沿用草稿，避免整段重跑烧 AI。
+ */
+export interface AgentActiveWrite {
+  tool: "write_section";
+  /** section+context+bullets+mode 指纹 */
+  attemptKey: string;
+  section: string;
+  /** 原始工具参数（中断后补回 pendingToolCalls） */
+  params: Record<string, unknown>;
+  startedAt: number;
+  updatedAt: number;
+  status: "running" | "completed" | "aborted";
+  stage?: string;
+  draftChars: number;
+  /** 阶段性 / 最终草稿（有上限，见 write-resume MAX_ACTIVE_WRITE_DRAFT_CHARS） */
+  draftText?: string;
+  pipelineMode?: "fast" | "full";
+  references?: string[];
+  completedSummary?: string;
+}
 
 export interface AgentSessionSnapshot {
   version: 1;
@@ -55,6 +86,8 @@ export interface AgentSessionSnapshot {
   workMemory?: import("@/lib/agent/work-memory").AgentWorkMemory | null;
   /** 本会话附件 id（traceability；归属以 AgentAttachment.sessionId 为准） */
   attachmentIds?: string[];
+  /** write_section 执行中 / 中断草稿（跟聊新目标时应清空） */
+  activeWrite?: AgentActiveWrite | null;
 }
 
 export interface AgentSessionListItem {
