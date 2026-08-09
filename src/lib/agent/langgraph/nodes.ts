@@ -31,12 +31,23 @@ import {
 } from "@/lib/agent/core/plan-progress";
 import {
   buildBlueprintCheckpoint,
+  buildClarifyCheckpoint,
   buildConfigCheckpoint,
   buildOutlineCheckpoint,
   shouldPauseForBlueprintApprove,
   shouldPauseForConfigConfirm,
   shouldPauseForOutlineApprove,
 } from "@/lib/agent/core/checkpoints";
+import {
+  buildFigureQaContinueNudge,
+  buildReadFigureQaCall,
+  extractFigureImageUrl,
+  FIGURE_BRIEF_QUESTION,
+  FIGURE_GENERATE_TOOLS,
+  isFigureQaNeedsRegen,
+  lastFigureQaNeedsReplace,
+  shouldPauseForFigureBrief,
+} from "@/lib/agent/figure-loop";
 import { buildToolConfirmMessage } from "@/lib/agent/confirm-message";
 import { isConfirmGranted } from "@/lib/agent/core/confirm-grant";
 import {
@@ -66,7 +77,7 @@ import {
   refreshAgentProjectContext,
 } from "@/lib/agent/project-refresh";
 import { isProjectMutatingTool } from "@/lib/agent/project-mutated";
-import type { ToolObservation } from "@/lib/agent/types";
+import type { ParsedToolCall, ToolObservation } from "@/lib/agent/types";
 import { getAgentGraphRuntime } from "@/lib/agent/langgraph/runtime";
 import {
   shouldContinuePlanWork,
@@ -175,6 +186,14 @@ export async function agentNode(
     return {
       events: [{ type: "agent/status", status: "cancelled" }],
       finished: true,
+    };
+  }
+
+  // 检查点/确认续跑：快照里已有待执行工具时直接放行，勿再调 LLM 覆盖 pending
+  // （否则 ensureWritePrereqs 暂停时保留的 write_section 会在 resume 后被冲掉）
+  if (state.pendingToolCalls.length > 0) {
+    return {
+      events: [{ type: "agent/status", status: "executing" }],
     };
   }
 
@@ -311,8 +330,24 @@ export async function agentNode(
 
     const canIntentContinue = state.planContinueCount < MAX_INTENT_CONTINUES;
     const intentNudge = !canIntentContinue ? null : pickIntentNudge(intentCtx);
+    // QA 未通过：优先于计划续跑/收尾，强制再跑一轮工具（避免长篇推演后 finished）
+    const figureQaPending = lastFigureQaNeedsReplace(observations);
+    const canFigureQaContinue =
+      Boolean(figureQaPending)
+      && nextIteration < agentContext.budget.maxIterations;
 
-    if (canContinue && plan) {
+    if (canFigureQaContinue && figureQaPending) {
+      updates.finished = false;
+      updates.planContinueCount = state.planContinueCount + 1;
+      updates.messages = [
+        ...(updates.messages ?? extraMessages),
+        {
+          role: "user",
+          content: buildFigureQaContinueNudge(figureQaPending.imageUrl),
+        },
+      ];
+      events.push({ type: "agent/status", status: "executing" });
+    } else if (canContinue && plan) {
       updates.finished = false;
       updates.planContinueCount = state.planContinueCount + 1;
       updates.messages = [
@@ -345,14 +380,16 @@ export async function agentNode(
       }
       // 收尾兜底：执行型指令（用户要实际改动）但整轮无落地写操作 → 引导 Agent 用 ask_user 确认，
       // 避免「分析完就当完成」——这是 ask_user 澄清链路的关键触发点
-      const execWords = /(改|修|调整|优化|更新|修正|refine|执行|按方案|补|删|插入|替换|生成|重写|润色|扩展|处理|弄)/i;
+      const execWords =
+        /(改|修|调整|优化|更新|修正|refine|执行|按方案|补|删|插入|替换|生成|重写|重画|润色|扩展|处理|弄|配图)/i;
       const landedWrite = observations.some(
         (o) => o.success
           && (o.tool === "write_section" || o.tool === "refine_content"
             || o.tool === "update_paper_config" || o.tool === "generate_outline"
             || o.tool === "write_bilingual_abstract" || o.tool === "import_reference"
-            || o.tool === "generate_chart" || o.tool === "apply_revision_item"
-            || o.tool === "build_argument_blueprint" || o.tool === "generate_writing_blueprint"),
+            || o.tool === "generate_chart" || o.tool === "draft_mechanism_figure"
+            || o.tool === "apply_revision_item"
+            || o.tool === "generate_writing_blueprint"),
       );
       if (
         !hint
@@ -422,7 +459,7 @@ export function buildPrereqCheckpoint(
     return buildOutlineCheckpoint(preview);
   }
   if (
-    (step.tool === "generate_writing_blueprint" || step.tool === "build_argument_blueprint")
+    step.tool === "generate_writing_blueprint"
     && shouldPauseForBlueprintApprove({
       goal: state.goal,
       toolName: step.tool,
@@ -478,8 +515,11 @@ export async function toolsNode(
     plan = advancePlanAfterTool(plan, toolName, false);
   };
 
-  for (let tcIdx = 0; tcIdx < state.pendingToolCalls.length; tcIdx++) {
-    const toolCall = state.pendingToolCalls[tcIdx];
+  // 可变队列：出图成功后可 splice 注入 read_figure(qa)
+  const toolQueue: ParsedToolCall[] = [...state.pendingToolCalls];
+  for (let tcIdx = 0; tcIdx < toolQueue.length; tcIdx++) {
+    const toolCall = toolQueue[tcIdx];
+    if (!toolCall) continue;
     if (agentContext.budget.toolCallCount >= agentContext.budget.maxToolCalls) {
       error = `单次任务最多调用 ${agentContext.budget.maxToolCalls} 次工具`;
       events.push({ type: "agent/error", error });
@@ -492,10 +532,63 @@ export async function toolsNode(
       const msg = `未知工具: ${toolCall.name}`;
       newSummaries.push(`[${toolCall.name}] 失败: ${msg}`);
       newMessages.push({ role: "user", content: `Tool result (${toolCall.name}):\n${msg}` });
+      events.push({
+        type: "agent/observation",
+        tool: toolCall.name,
+        result: { success: false, error: msg },
+        error: msg,
+      });
+      newObservations.push({ tool: toolCall.name, success: false, error: msg });
       continue;
     }
 
     let params = parseToolArgs(toolCall.args);
+
+    // 多张机理图任务：首次出图前 clarify FigureBrief（个性化版式/素材）
+    if (
+      shouldPauseForFigureBrief({
+        toolName: tool.name,
+        params,
+        goal: state.goal,
+        messages: [...state.messages, ...newMessages],
+      })
+    ) {
+      const checkpoint = buildClarifyCheckpoint(FIGURE_BRIEF_QUESTION);
+      events.push({
+        type: "agent/action",
+        tool: "ask_user",
+        params: { question: FIGURE_BRIEF_QUESTION, figureBrief: true },
+      });
+      events.push({
+        type: "agent/observation",
+        tool: "ask_user",
+        result: {
+          success: true,
+          summary: "出图前需确认版式与个性化要点",
+          data: { needClarification: true, question: FIGURE_BRIEF_QUESTION },
+        },
+      });
+      newObservations.push({
+        tool: "ask_user",
+        success: true,
+        data: { needClarification: true, question: FIGURE_BRIEF_QUESTION, figureBrief: true },
+      });
+      events.push({ type: "agent/checkpoint", checkpoint });
+      events.push({ type: "agent/status", status: "awaiting_checkpoint" });
+      return {
+        // 保留当前出图调用，用户回答后继续
+        pendingToolCalls: toolQueue.slice(tcIdx),
+        toolCallCount,
+        toolSummaries: newSummaries,
+        observations: newObservations,
+        messages: newMessages,
+        events,
+        plan,
+        awaitingCheckpoint: checkpoint,
+        finished: true,
+      };
+    }
+
     // 前置门禁链（重复 / 检索配额 / 意图+先读后写）：
     // soft → 记 observation 继续下一个工具；reject → 记失败继续；hard → agent/error 停本轮
     const gateInput: PreGateInput = {
@@ -596,7 +689,7 @@ export async function toolsNode(
             events.push({ type: "agent/status", status: "awaiting_checkpoint" });
             return {
               // 保留当前 toolCall（write_section 等）及剩余待处理调用，resume 后重跑
-              pendingToolCalls: state.pendingToolCalls.slice(tcIdx),
+              pendingToolCalls: toolQueue.slice(tcIdx),
               toolCallCount,
               toolSummaries: newSummaries,
               observations: newObservations,
@@ -687,7 +780,8 @@ export async function toolsNode(
           events.push({ type: "agent/plan", plan });
         }
         return {
-          pendingToolCalls: [],
+          // 确认工具由 run-graph 批准路径执行；保留后续同批调用，resume 后继续
+          pendingToolCalls: toolQueue.slice(tcIdx + 1),
           toolCallCount,
           toolSummaries: newSummaries,
           observations: newObservations,
@@ -739,6 +833,51 @@ export async function toolsNode(
         clearBlockedReads(repeatTracker);
       }
 
+      // P0：出图成功后硬注入 read_figure(mode=qa)，不依赖模型自觉
+      if (result.success && FIGURE_GENERATE_TOOLS.has(tool.name)) {
+        const imageUrl = extractFigureImageUrl(result);
+        if (imageUrl) {
+          const qaCall = buildReadFigureQaCall(imageUrl);
+          const alreadyQueued = toolQueue
+            .slice(tcIdx + 1)
+            .some(
+              (c) =>
+                c.name === "read_figure"
+                && String(c.args.imageUrl ?? "") === imageUrl
+                && String(c.args.mode ?? "") === "qa",
+            );
+          if (!alreadyQueued) {
+            toolQueue.splice(tcIdx + 1, 0, qaCall);
+            newSummaries.push(
+              `[figure-loop] 已自动排队 read_figure(qa) → ${imageUrl}`,
+            );
+            newMessages.push({
+              role: "user",
+              content:
+                `System: 刚生成的图已自动排队识图质检 read_figure(mode=qa, imageUrl=${imageUrl})。`
+                + "若 QA 判定需重生成，下一轮必须带 replaceImageUrl 重画，禁止同标题无 replace 再 append。",
+            });
+          }
+        }
+      }
+
+      // P0：QA 判定需重生成 → 硬 nudge，禁止无 replace 再出图
+      if (result.success && tool.name === "read_figure" && isFigureQaNeedsRegen(result)) {
+        const failUrl =
+          extractFigureImageUrl(result)
+          || String((result.data as { imageUrl?: unknown })?.imageUrl ?? "");
+        newMessages.push({
+          role: "user",
+          content:
+            "System: 识图质检未通过（需重生成）。"
+            + (failUrl
+              ? `下一轮 draft_mechanism_figure / generate_chart 必须带 replaceImageUrl="${failUrl}" 就地替换；`
+              : "下一轮出图必须带 replaceImageUrl；")
+            + "禁止同标题再 append。也可先 remove_figure。期刊观感请引导用户到 /plot 精修。",
+        });
+        newSummaries.push("[figure-loop] QA 未通过：下一轮必须 replaceImageUrl");
+      }
+
       // 后置门禁链（antispam 停滞 / clarify / outline 检查点）：
       // break → 记 observation 停本轮；checkpoint → 暂停等用户（outline 时同步 plan 焦点）
       const postVerdict = evaluatePostGates({
@@ -783,7 +922,8 @@ export async function toolsNode(
           events.push({ type: "agent/plan", plan });
         }
         return {
-          pendingToolCalls: [],
+          // 当前工具已执行完并触发检查点；保留后续同批调用，批准后继续
+          pendingToolCalls: toolQueue.slice(tcIdx + 1),
           toolCallCount,
           toolSummaries: newSummaries,
           observations: newObservations,

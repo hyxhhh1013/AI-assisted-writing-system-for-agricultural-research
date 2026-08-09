@@ -124,6 +124,58 @@ describe("evaluatePreGates", () => {
     // 命中的是配额（soft），而非意图门禁（reject）
     expect(v).toMatchObject({ ok: false, kind: "soft" });
   });
+
+  it("QA 未通过后出图无 replaceImageUrl → reject", () => {
+    const v = evaluatePreGates(
+      makePreInput({
+        tool: makeTool("draft_mechanism_figure", "write"),
+        params: { title: "机理图", kind: "flow" },
+        recentObservations: [
+          {
+            tool: "read_figure",
+            success: true,
+            data: {
+              needsRegen: true,
+              imageUrl: "/api/charts/old.png",
+              mode: "qa",
+            },
+          },
+        ],
+      }),
+    );
+    expect(v).toMatchObject({ ok: false, kind: "reject" });
+    if (!v.ok && v.kind === "reject") {
+      expect(v.error).toMatch(/replaceImageUrl/);
+    }
+  });
+
+  it("QA 未通过但带 replaceImageUrl → 放行 figureReplaceGate", () => {
+    const v = evaluatePreGates(
+      makePreInput({
+        tool: makeTool("draft_mechanism_figure", "write"),
+        params: {
+          title: "机理图",
+          kind: "flow",
+          replaceImageUrl: "/api/charts/old.png",
+        },
+        recentObservations: [
+          {
+            tool: "read_figure",
+            success: true,
+            data: {
+              needsRegen: true,
+              imageUrl: "/api/charts/old.png",
+              mode: "qa",
+            },
+          },
+        ],
+      }),
+    );
+    // 可能仍被意图/先读后写等门禁挡住，但不应是 replace 门禁
+    if (!v.ok && v.kind === "reject") {
+      expect(v.error).not.toMatch(/质检未通过/);
+    }
+  });
 });
 
 describe("evaluatePostGates", () => {
