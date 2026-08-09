@@ -2,6 +2,17 @@ import { toolsDescriptionText } from "@/lib/agent/core/tool-registry";
 import { phaseGatePromptRules } from "@/lib/agent/core/phase-gates";
 import type { LLMMessage, ToolDefinition } from "@/lib/agent/types";
 
+/** 机理图纪律：普通字符串拼接，禁止写进大段模板字面量（避免反引号截断解析） */
+const MECHANISM_FIGURE_RULE = [
+  "- **机理图/流程图**：draft_mechanism_figure 必须传中文结构——",
+  "flow 用 flowSteps 或 nodesJson+edgesJson；",
+  "多面板用 panelsJson（每项含 title 与 steps 数组，每栏至少 2 个中文 steps）。",
+  "禁止依赖默认英文占位（Pathway/Product/Feedstock）或「Upload figure asset」。",
+  "生成成功后立刻 read_figure（传 imageUrl，mode=qa）回看；",
+  "若需重画：必须带 replaceImageUrl 指向旧图 URL 就地替换，禁止再追加一张叠在下面；",
+  "也可先 remove_figure 删旧图再生成。清多余重复图用 remove_figure。",
+].join("");
+
 /**
  * 只含稳定内容的系统提示：角色、工作方式、工具纪律、写作入口、工具 schema。
  * 项目简报等易变上下文一律不放在这里（保持 system 前缀恒定，命中 provider 前缀缓存），
@@ -10,7 +21,7 @@ import type { LLMMessage, ToolDefinition } from "@/lib/agent/types";
 export function buildAgentSystemPrompt(tools: ToolDefinition[]): string {
   const writeEnabled = tools.some((t) => t.safety === "write");
   const writeNote = writeEnabled
-    ? `【写回】可用 generate_* / write_section / refine / import_reference / 图表与修订工具；section 用英文 key（introduction、methods、results、discussion、conclusion、literature_body、abstract 等）。缺大纲/蓝图时可直接 write_section（系统会自动补齐）。写后可用 validate_citations；交付可用 export_manuscript_markdown。`
+    ? `【写回】可用 generate_* / write_section / refine / import_reference / 图表与修订工具；section 用英文 key（introduction、methods、results、discussion、conclusion、literature_body、abstract 等）。**主路径**：大纲 → 写作蓝图（含各节 claim/evidenceHint，勿再 build_argument_blueprint）→ 分节写。**已有写作蓝图时**：按 writingOrder 推进；context/bullets 对齐该节 purpose/keyPoints/主张（系统会注入【写作蓝图（本节）】）。缺大纲/蓝图时可直接 write_section（系统自动补齐并走批准检查点）。写后可用 validate_citations；交付可用 export_manuscript_markdown。`
     : "【限制】当前只能使用只读工具，不能撰写或修改论文。";
 
   return `你是禾书耕文（GrainScript）的科研写作智能体——像 Cursor 里的通用 Agent：思考 → 自己取上下文 → 调工具 → 用中文说明 → 问下一步。
@@ -30,6 +41,7 @@ export function buildAgentSystemPrompt(tools: ToolDefinition[]): string {
 - 诊断任务：先 inspect_project 看最新快照，再决定下一步。
 - import_reference：优先 hitIndices 引用最近一次 search_external 的命中；确需手写 hitsJson 时，source 仅限 openalex|semantic-scholar|crossref|pubmed，authors 必须是字符串数组，有 doi 可省略 id。
 - 连续多次调工具仍无进展时：停止调用，用中文总结已掌握信息并询问用户。
+${MECHANISM_FIGURE_RULE}
 
 ## 执行 vs 反问（先判意图，再动手）
 - 用户指令明确（「修正图注」「改某处引用」「写某节」「按方案改」）→ **直接调用工具执行**，不要只做分析就收尾。

@@ -16,6 +16,7 @@ export const PROJECT_MUTATING_TOOLS = [
   "generate_xrd_analysis",
   "generate_table",
   "draft_mechanism_figure",
+  "remove_figure",
   "save_reference_classification",
   "remove_references",
 ] as const;
@@ -46,6 +47,7 @@ const TOOL_LABELS: Record<string, string> = {
   generate_xrd_analysis: "XRD 分析",
   generate_table: "三线表",
   draft_mechanism_figure: "机理图",
+  remove_figure: "删除图表",
   save_reference_classification: "文献分类",
   remove_references: "删除文献",
 };

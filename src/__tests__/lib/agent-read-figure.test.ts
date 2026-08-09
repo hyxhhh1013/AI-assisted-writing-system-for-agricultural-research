@@ -7,6 +7,7 @@ const mDescribe = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/agent/attachments/describe-image", () => ({
   describeImage: mDescribe.describeImage,
+  FIGURE_QA_PROMPT: "你是论文机理图/配图质检助手。",
 }));
 
 // mock prisma（项目 charts 查询）
@@ -140,5 +141,34 @@ describe("readFigureTool", () => {
     await readFigureTool.execute({ sectionKey: "results" }, ctx);
     await readFigureTool.execute({ sectionKey: "results" }, ctx);
     expect(mDescribe.describeImage).toHaveBeenCalledTimes(2); // mtime 变 → miss
+  });
+
+  it("可直接用 imageUrl 回看（不依赖 sectionKey）", async () => {
+    const r = await readFigureTool.execute(
+      { imageUrl: "/api/charts/1234567890abcdef.png" },
+      ctx,
+    );
+    expect(r.success).toBe(true);
+    expect(mPrisma.project.findFirst).not.toHaveBeenCalled();
+    expect(mDescribe.describeImage).toHaveBeenCalledTimes(1);
+  });
+
+  it("mode=qa 使用质检 prompt", async () => {
+    mDescribe.describeImage.mockResolvedValue({
+      status: "ready",
+      text: "1. 占位：Upload figure asset\n结论：需重生成",
+      source: "image_vision",
+    });
+    const r = await readFigureTool.execute(
+      { imageUrl: "/api/charts/1234567890abcdef.png", mode: "qa" },
+      ctx,
+    );
+    expect(r.error ?? null).toBeNull();
+    expect(r.success).toBe(true);
+    expect(mDescribe.describeImage).toHaveBeenCalledWith(
+      expect.stringContaining("1234567890abcdef.png"),
+      expect.objectContaining({ prompt: expect.stringContaining("质检") }),
+    );
+    expect((r.data as { needsRegen?: boolean }).needsRegen).toBe(true);
   });
 });

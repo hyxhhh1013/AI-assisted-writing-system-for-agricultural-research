@@ -464,8 +464,9 @@ function WorkbenchContent() {
         const data = await projectStore.get(projectId);
         if (data) {
           setProject(data);
+          // 与章节写回一致：只 toast + 刷新，绝不 focusEditorAfterDraft / 切 Tab，
+          // 避免生成图后把用户从 Agent 面板拽到大纲/结构页
           if (info.sectionKey) {
-            focusEditorAfterDraft(info.sectionKey);
             toast.success(
               info.caption
                 ? `图表「${info.caption}」已插入「${info.sectionKey}」`
@@ -483,20 +484,23 @@ function WorkbenchContent() {
         toast.error("图表已生成，但刷新项目失败，请手动刷新页面");
       }
     },
-    [projectId, focusEditorAfterDraft],
+    [projectId],
   );
 
   /** Agent 任意写回（配置/大纲/蓝图/文献等）后刷新工作台项目 */
   const handleAgentProjectMutated = useCallback(
     async (info: { label: string; tool: string }) => {
       if (!projectId) return;
-      // 章节/图表已有专属 toast + 跳转，避免重复提示
+      // 章节/图表已有专属 toast（不跳转），避免重复提示
       if (
         info.tool === "write_section"
         || info.tool === "refine_content"
         || info.tool === "apply_revision_item"
         || info.tool === "write_bilingual_abstract"
         || info.tool === "generate_chart"
+        || info.tool === "draft_mechanism_figure"
+        || info.tool === "remove_figure"
+        || info.tool === "generate_xrd_analysis"
         || info.tool === "generate_table"
       ) {
         const data = await projectStore.get(projectId);
@@ -1062,6 +1066,12 @@ function WorkbenchContent() {
                   onProjectMutated={(info) => void handleAgentProjectMutated(info)}
                   onCollapse={() => setIsSidebarOpen(false)}
                   onOpenBlueprint={() => void handleOpenBlueprintDialog()}
+                  onJumpToSection={(sectionKey) => {
+                    setActiveSection(sectionKey);
+                    toast.message(
+                      "已切换到对应章节；插图当前在节末，可在底部「本节插图」条挪位置",
+                    );
+                  }}
                 />
               </ErrorBoundary>
             </div>

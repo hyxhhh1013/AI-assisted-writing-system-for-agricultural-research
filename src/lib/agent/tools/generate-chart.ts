@@ -5,14 +5,19 @@ import {
   chartTypeToFigureId,
   encodeChartAssetReplay,
 } from "@/contracts/figure";
-import { persistAgentChart } from "@/lib/agent/chart-persist";
+import {
+  insertOrReplaceAgentSectionImage,
+  listAgentCharts,
+  persistAgentChart,
+  removeAgentChart,
+} from "@/lib/agent/chart-persist";
+import { resolveReplaceForAntiStack } from "@/lib/agent/figure-loop";
 import {
   loadAgentPlotSources,
   resolvePlotCandidate,
   type AgentPlotSourcesBundle,
 } from "@/lib/agent/plot-sources";
 import { runPanelGeneration, type PanelSpec } from "@/lib/agent/panel-runner";
-import { appendAgentSectionMarkdown } from "@/lib/agent/project-persist";
 import {
   AGENT_WRITING_SECTIONS,
   isAgentWritingSectionKey,
@@ -157,6 +162,8 @@ async function generateOneChart(input: {
   chartIndex?: number;
   /** 期刊样式预设：nature（通用/Nature 风）/ agr_journal（农业期刊双栏）/ print_bw（黑白打印） */
   preset?: "nature" | "agr_journal" | "print_bw";
+  replaceImageUrl?: string;
+  replaceChartId?: string;
 }): Promise<{
   success: boolean;
   error?: string;
@@ -219,6 +226,23 @@ async function generateOneChart(input: {
     let persisted: ProjectChartAsset | null = null;
     let insertedSection: string | undefined;
 
+    let insertMode: "replaced" | "appended" | undefined;
+    if (input.sectionKey) {
+      const ins = await insertOrReplaceAgentSectionImage(
+        input.ctx.userId,
+        input.ctx.projectId!,
+        {
+          sectionKey: input.sectionKey,
+          caption,
+          imageUrl: generated.imageUrl,
+          replaceImageUrl: input.replaceImageUrl,
+          replaceChartId: input.replaceChartId,
+        },
+      );
+      insertMode = ins.mode;
+      insertedSection = input.sectionKey;
+    }
+
     if (input.persistToProject) {
       persisted = await persistAgentChart(input.ctx.userId, input.ctx.projectId!, {
         figureId: chartType,
@@ -231,20 +255,18 @@ async function generateOneChart(input: {
       });
     }
 
-    if (input.sectionKey) {
-      const md = `\n\n![${caption}](${generated.imageUrl})\n\n`;
-      await appendAgentSectionMarkdown(
-        input.ctx.userId,
-        input.ctx.projectId!,
-        input.sectionKey,
-        md,
-      );
-      insertedSection = input.sectionKey;
-    }
+    const href =
+      figureSpecEnc && input.ctx.projectId
+        ? `/plot?id=${encodeURIComponent(input.ctx.projectId)}`
+          + `&figure=${encodeURIComponent(chartType)}`
+          + `&figureSpec=${figureSpecEnc}`
+          + `&replaceImageUrl=${encodeURIComponent(generated.imageUrl)}`
+        : undefined;
 
     const bits = [`已生成 ${chartType}「${title}」`];
     if (persisted) bits.push("已登记到项目图表库");
-    if (insertedSection) bits.push(`已插入章节 ${insertedSection}`);
+    if (insertMode === "replaced") bits.push(`已就地替换章节 ${insertedSection} 中的旧图`);
+    else if (insertedSection) bits.push(`已插入章节 ${insertedSection}`);
     if (figureSpecEnc) bits.push("可回放编辑");
 
     return {
@@ -258,7 +280,10 @@ async function generateOneChart(input: {
         fileName: generated.fileName,
         persisted,
         insertedSection,
+        insertMode,
         hasReplay: Boolean(figureSpecEnc),
+        href,
+        figureSpecEnc,
       },
       summary: bits.join("；"),
     };
@@ -277,10 +302,19 @@ export const generateChartTool: ToolDefinition = {
     + "②轴标签带单位——务必传 x_label/y_label（如 y_label=\"产量 (kg/ha)\"）；"
     + "③多系列对比——多列数据即可，图例自动出现；④选型——对比/分组→bar_grouped，趋势→line，占比→pie，热区→heatmap，森林图→forest（四列：研究,估计值,CI下限,CI上限）；"
     + "⑤显著性——bar_grouped 对比显著时传 configJson={\"significance\":[{\"category\":0,\"series\":0,\"value\":\"**\",\"label\":\"p<0.01\"},{\"fromCategory\":0,\"toCategory\":1,\"value\":\"*\"}]}（单柱星号/跨类括号；series 缺省=该类最高柱）。"
+    + "改图务必传 replaceImageUrl（旧图 URL）就地替换，勿再追加一张。"
     + "无数据不要编造数值",
   parameters: {
     type: "object",
     properties: {
+      replaceImageUrl: {
+        type: "string",
+        description: "改图：旧图 /api/charts/...png；就地替换正文并删除旧资产（单图/复合图）",
+      },
+      replaceChartId: {
+        type: "string",
+        description: "改图：旧图表资产 id（与 replaceImageUrl 二选一）",
+      },
       panelsJson: {
         type: "string",
         description:
@@ -356,6 +390,23 @@ export const generateChartTool: ToolDefinition = {
       };
     }
 
+    // P0 防叠图：同 caption/section 已有图 → 自动填 replace
+    const existingCharts = await listAgentCharts(ctx.projectId);
+    const anti = resolveReplaceForAntiStack({
+      params: {
+        ...params,
+        title: params.title ?? params.caption,
+        caption: params.caption ?? params.title,
+        sectionKey: sectionKey ?? sectionKeyRaw,
+      },
+      charts: existingCharts,
+    });
+    const replaceImageUrl =
+      String(anti.params.replaceImageUrl ?? "").trim() || undefined;
+    const replaceChartId =
+      String(anti.params.replaceChartId ?? "").trim() || undefined;
+    const autoReplaced = anti.autoReplaced;
+
     // —— 多面板复合图：panelsJson（2~6 个面板拼成 a/b/c 期刊网格图）——
     if (params.panelsJson != null && String(params.panelsJson).trim()) {
       const parsedPanels = parsePanelsJson(params.panelsJson);
@@ -371,6 +422,33 @@ export const generateChartTool: ToolDefinition = {
           preset,
           panels: parsedPanels.panels,
         });
+        let insertMode: "replaced" | "appended" | undefined;
+        let insertedSection: string | undefined;
+        if (sectionKey) {
+          const ins = await insertOrReplaceAgentSectionImage(
+            ctx.userId,
+            ctx.projectId!,
+            {
+              sectionKey,
+              caption,
+              imageUrl: generated.imageUrl,
+              replaceImageUrl,
+              replaceChartId,
+            },
+          );
+          insertMode = ins.mode;
+          insertedSection = sectionKey;
+        } else if (replaceImageUrl || replaceChartId) {
+          try {
+            await removeAgentChart(ctx.userId, ctx.projectId!, {
+              chartId: replaceChartId,
+              imageUrl: replaceImageUrl,
+              stripFromBody: true,
+            });
+          } catch {
+            /* ignore */
+          }
+        }
         let persisted: ProjectChartAsset | null = null;
         if (persistToProject) {
           persisted = await persistAgentChart(ctx.userId, ctx.projectId!, {
@@ -380,21 +458,15 @@ export const generateChartTool: ToolDefinition = {
             sectionKey: sectionKey ?? undefined,
           });
         }
-        let insertedSection: string | undefined;
-        if (sectionKey) {
-          await appendAgentSectionMarkdown(
-            ctx.userId,
-            ctx.projectId!,
-            sectionKey,
-            `\n\n![${caption}](${generated.imageUrl})\n\n`,
-          );
-          insertedSection = sectionKey;
-        }
         const bits = [
           `已生成 ${parsedPanels.panels.length} 面板复合图「${title}」`,
         ];
         if (persisted) bits.push("已登记到项目图表库");
-        if (insertedSection) bits.push(`已插入章节 ${insertedSection}`);
+        if (insertMode === "replaced" || autoReplaced) {
+          bits.push(`已就地替换旧图（防叠图${autoReplaced ? "·自动" : ""}）`);
+        } else if (insertedSection) {
+          bits.push(`已插入章节 ${insertedSection}`);
+        }
         return {
           success: true,
           data: {
@@ -402,6 +474,7 @@ export const generateChartTool: ToolDefinition = {
             panelCount: generated.panelCount,
             persisted,
             insertedSection,
+            insertMode: insertMode ?? (autoReplaced ? "replaced" : undefined),
             figureId: "panel_multi",
           },
           summary: bits.join("；"),
@@ -454,6 +527,9 @@ export const generateChartTool: ToolDefinition = {
           persistToProject,
           preset: parsePresetParam(params.preset),
           extras,
+          // 批量多图时不套用 replace（避免把同一旧图换掉多次）
+          replaceImageUrl: indices.length === 1 ? replaceImageUrl : undefined,
+          replaceChartId: indices.length === 1 ? replaceChartId : undefined,
         });
         if (!one.success) {
           errors.push(`[${idx}] ${one.error ?? "失败"}`);
@@ -495,6 +571,8 @@ export const generateChartTool: ToolDefinition = {
       persistToProject,
       preset: parsePresetParam(params.preset),
       extras,
+      replaceImageUrl,
+      replaceChartId,
     });
   },
 };
@@ -511,6 +589,8 @@ async function generateFromBundle(input: {
   persistToProject: boolean;
   preset?: "nature" | "agr_journal" | "print_bw";
   extras: Record<string, unknown>;
+  replaceImageUrl?: string;
+  replaceChartId?: string;
 }) {
   const resolved = resolvePlotCandidate(input.bundle, input.chartIndex);
   if ("error" in resolved) {
@@ -529,6 +609,8 @@ async function generateFromBundle(input: {
     preset: input.preset,
     extras: input.extras,
     chartIndex: input.chartIndex,
+    replaceImageUrl: input.replaceImageUrl,
+    replaceChartId: input.replaceChartId,
   });
 }
 
