@@ -313,6 +313,21 @@ export function formatBlueprintSectionHint(
     if (guide.keyPoints.length > 0) {
       parts.push(`- 要点：${guide.keyPoints.join("；")}`);
     }
+    if (guide.claim?.trim()) parts.push(`- 主张：${guide.claim.trim()}`);
+    if (guide.evidenceHint?.trim()) {
+      parts.push(`- 证据：${guide.evidenceHint.trim()}`);
+    }
+    if (guide.warrant?.trim()) parts.push(`- 推理：${guide.warrant.trim()}`);
+    if (guide.rebuttal?.objection?.trim()) {
+      parts.push(
+        `- 预期反驳：${guide.rebuttal.objection.trim()} → ${guide.rebuttal.response?.trim() || "（待回应）"}`,
+      );
+    }
+    if (guide.assignedSources && guide.assignedSources.length > 0) {
+      parts.push(
+        `- 优先文献源：${guide.assignedSources.slice(0, 8).join("；")}`,
+      );
+    }
   }
   if (figures.length > 0) {
     parts.push("- 规划配图：");
@@ -336,6 +351,14 @@ export function formatBlueprintGlobalSummary(blueprint: WritingBlueprint): strin
     "- 叙事脉络：" + blueprint.narrativeSummary.slice(0, 400),
     `- 预计篇幅：${min}–${max} 字；配图 ${fig.totalMin}–${fig.totalMax} 张（已规划 ${fig.items.length} 项）`,
   ];
+  if (blueprint.researchQuestion?.trim()) {
+    lines.push("- 研究问题：" + blueprint.researchQuestion.trim().slice(0, 200));
+  }
+  if (blueprint.argumentGaps && blueprint.argumentGaps.length > 0) {
+    lines.push(
+      "- 证据缺口：" + blueprint.argumentGaps.slice(0, 5).join("；"),
+    );
+  }
   if (blueprint.prerequisites.length > 0) {
     lines.push("- 前置条件：" + blueprint.prerequisites.slice(0, 5).join("；"));
   }

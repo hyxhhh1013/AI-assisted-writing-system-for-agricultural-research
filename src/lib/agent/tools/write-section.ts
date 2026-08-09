@@ -1,3 +1,4 @@
+import type { AgentActiveWrite } from "@/contracts/agent-session";
 import { resolveWritingDraftContext } from "@/contracts/writing";
 import { persistAgentDraft } from "@/lib/agent/project-persist";
 import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
@@ -11,6 +12,14 @@ import {
   isAgentWritingSectionKey,
   parsePersistToProject,
 } from "@/lib/agent/writing-sections";
+import {
+  ACTIVE_WRITE_PATCH_MIN_MS,
+  applyWritingEventToDraftAcc,
+  buildWriteAttemptKey,
+  clipActiveWriteDraft,
+  evaluateWriteResume,
+} from "@/lib/agent/write-resume";
+import { prepareAgentWriteBlueprintContext } from "@/lib/agent/blueprint-write-context";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import { getAgentModelConfig } from "@/lib/ai";
 import { isSectionValidForMode } from "@/lib/section-registry";
@@ -19,7 +28,7 @@ import type { WritingInput } from "@/lib/validations";
 export const writeSectionTool: ToolDefinition = {
   name: "write_section",
   description:
-    "调用 Writer 扩写管道为指定章节生成正文（含 RAG；默认写后自动核查修正一轮，可关）",
+    "调用 Writer 扩写管道为指定章节生成正文（含 RAG；默认写后自动核查修正一轮，可关）。有写作蓝图时系统会自动注入该节 purpose/keyPoints/配图；context/bullets 须对齐蓝图要点，勿另起炉灶。",
   parameters: {
     type: "object",
     properties: {
@@ -28,10 +37,15 @@ export const writeSectionTool: ToolDefinition = {
         description: "论文章节 key，如 introduction、methods、literature_body",
         enum: [...AGENT_WRITING_SECTIONS],
       },
-      context: { type: "string", description: "扩写要点或补充说明" },
+      context: {
+        type: "string",
+        description:
+          "扩写要点或补充说明；有蓝图时应对齐该节蓝图 purpose/keyPoints（系统也会自动注入本节蓝图）",
+      },
       bullets: {
         type: "string",
-        description: "JSON 数组字符串，扩写要点列表（优先于 context）",
+        description:
+          "JSON 数组字符串，扩写要点列表（优先于 context）；有蓝图时优先使用该节 keyPoints",
       },
       pipelineMode: {
         type: "string",
@@ -93,11 +107,6 @@ export const writeSectionTool: ToolDefinition = {
       return { success: false, error: "context 或 bullets 不能为空" };
     }
 
-    const { keyError } = getAgentModelConfig("writer");
-    if (keyError) {
-      return { success: false, error: keyError };
-    }
-
     const pipelineMode = params.pipelineMode === "full" ? "full" : "fast";
     const autoFixRaw = params.autoFix;
     const autoFix =
@@ -107,17 +116,83 @@ export const writeSectionTool: ToolDefinition = {
           ? true
           : undefined;
 
-    // 确保 writer 能看到完整大纲（blueprint 的 globalContext 可能缺 outline，
-    // 大纲缺失会导致只写 Agent 传入的 bullets 子节、漏掉其它大纲子节）
-    const globalContext = {
-      ...(project.globalContext ?? {}),
-      outline: project.outline || project.globalContext?.outline || undefined,
-    };
+    const attemptKey = buildWriteAttemptKey({
+      section: sectionRaw,
+      context,
+      bullets: params.bullets ? String(params.bullets) : undefined,
+      pipelineMode,
+      autoFix: autoFixRaw as string | boolean | undefined,
+      subsectionTitle: params.subsectionTitle
+        ? String(params.subsectionTitle)
+        : undefined,
+    });
+
+    // 断点续写 / 去重：同一次尝试已有足够草稿 → 跳过 AI
+    const resume = evaluateWriteResume(ctx.activeWrite, {
+      section: sectionRaw,
+      context,
+      bullets: params.bullets ? String(params.bullets) : undefined,
+      pipelineMode,
+      autoFix: autoFixRaw as string | boolean | undefined,
+      subsectionTitle: params.subsectionTitle
+        ? String(params.subsectionTitle)
+        : undefined,
+    });
+    if (resume.action === "reuse") {
+      let persisted: { sectionKey: string; referencesAdded: number } | null = null;
+      if (persistToProject) {
+        persisted = await persistAgentDraft(
+          ctx.userId,
+          ctx.projectId,
+          sectionRaw,
+          resume.draft,
+          resume.references,
+        );
+      }
+      ctx.activeWrite = null;
+      await ctx.patchActiveWrite?.(null);
+      return {
+        success: true,
+        data: {
+          section: sectionRaw,
+          draft: resume.draft,
+          charCount: resume.draft.length,
+          newReferences: resume.references,
+          pipelineMode: resume.pipelineMode,
+          issueCount: 0,
+          citationWarnings: 0,
+          persisted,
+          resumedFrom: resume.resumedFrom,
+        },
+        summary: resume.summary,
+      };
+    }
+
+    const { keyError } = getAgentModelConfig("writer");
+    if (keyError) {
+      return { success: false, error: keyError };
+    }
+
+    const subsectionTitle = params.subsectionTitle
+      ? String(params.subsectionTitle)
+      : undefined;
+
+    // 嵌套 blueprint + 本节蓝图 hint + assignedSources→检索范围（与工作台扩写对齐）
+    const {
+      globalContext,
+      draftContext: draftWithBlueprint,
+      selectedSourceIds,
+    } = prepareAgentWriteBlueprintContext({
+      project,
+      sectionKey: sectionRaw,
+      draftContext,
+      subsectionTitle,
+    });
 
     const data: WritingInput = {
       title: project.title,
       section: sectionRaw,
-      context,
+      context: draftWithBlueprint,
       bullets,
       language: project.language,
       template: project.template as WritingInput["template"],
@@ -129,34 +204,88 @@ export const writeSectionTool: ToolDefinition = {
       researchDirection: project.researchDirection,
       projectMode: project.mode,
       citationStyle: project.citationStyle,
-      subsectionTitle: params.subsectionTitle
-        ? String(params.subsectionTitle)
-        : undefined,
+      subsectionTitle,
       dataClaims: project.dataClaims,
+      ...(selectedSourceIds?.length ? { selectedSourceIds } : {}),
     };
 
     const progressState = createWriteProgressState();
+    const draftAcc = { draft: "", references: [] as string[] };
+    const startedAt = Date.now();
+    let lastPatchAt = 0;
+    let lastStage: string | undefined;
+
+    const toolParams: Record<string, unknown> = {
+      section: sectionRaw,
+      context,
+      ...(params.bullets ? { bullets: String(params.bullets) } : {}),
+      pipelineMode,
+      ...(autoFixRaw !== undefined ? { autoFix: autoFixRaw } : {}),
+      ...(params.subsectionTitle
+        ? { subsectionTitle: String(params.subsectionTitle) }
+        : {}),
+      ...(params.persistToProject !== undefined
+        ? { persistToProject: params.persistToProject }
+        : {}),
+    };
+
+    const buildActive = (
+      status: AgentActiveWrite["status"],
+      extra?: Partial<AgentActiveWrite>,
+    ): AgentActiveWrite => ({
+      tool: "write_section",
+      attemptKey,
+      section: sectionRaw,
+      params: toolParams,
+      startedAt,
+      updatedAt: Date.now(),
+      status,
+      stage: lastStage,
+      draftChars: draftAcc.draft.length,
+      draftText: clipActiveWriteDraft(draftAcc.draft),
+      pipelineMode,
+      references: draftAcc.references,
+      ...extra,
+    });
+
+    const patchActive = async (status: AgentActiveWrite["status"], force = false) => {
+      const now = Date.now();
+      if (!force && now - lastPatchAt < ACTIVE_WRITE_PATCH_MIN_MS) return;
+      lastPatchAt = now;
+      const aw = buildActive(status);
+      ctx.activeWrite = aw;
+      await ctx.patchActiveWrite?.(aw);
+    };
+
+    await patchActive("running", true);
 
     try {
       const result = await runAgentWriteSection({
         data,
-        context: draftContext,
+        context: draftWithBlueprint,
         dataClaims: project.dataClaims,
         globalContext,
         userId: ctx.userId,
         signal: ctx.signal,
         autoFix,
         onWritingEvent: (event) => {
+          applyWritingEventToDraftAcc(draftAcc, event);
           const progress = translateWritingEventToProgress(sectionRaw, event, progressState);
           if (progress) {
+            if (progress.stage) lastStage = progress.stage;
             ctx.emitLiveEvent?.({ type: "agent/progress", ...progress });
           }
+          void patchActive("running");
         },
       });
 
       if (!result.draft) {
+        await patchActive("aborted", true);
         return { success: false, error: "Writer 未返回正文" };
       }
+
+      draftAcc.draft = result.draft;
+      draftAcc.references = result.references;
 
       let persisted: { sectionKey: string; referencesAdded: number } | undefined;
       if (persistToProject) {
@@ -176,6 +305,21 @@ export const writeSectionTool: ToolDefinition = {
             : "，自动核查通过"
           : "";
 
+      const summary = persisted
+        ? `已生成并写回 ${sectionRaw}（${result.draft.length} 字${fixNote}）`
+        : `已生成 ${sectionRaw}（${result.draft.length} 字，${result.pipelineMode}${fixNote}）`;
+
+      // 保留 completed 断点：刚写完就断线续跑时可去重，不必再烧 AI
+      const completed = buildActive("completed", {
+        draftText: clipActiveWriteDraft(result.draft),
+        draftChars: result.draft.length,
+        pipelineMode: result.pipelineMode,
+        references: result.references,
+        completedSummary: summary,
+      });
+      ctx.activeWrite = completed;
+      await ctx.patchActiveWrite?.(completed);
+
       return {
         success: true,
         data: {
@@ -189,12 +333,12 @@ export const writeSectionTool: ToolDefinition = {
           citationWarnings: result.citationWarnings,
           persisted: persisted ?? null,
         },
-        summary: persisted
-          ? `已生成并写回 ${sectionRaw}（${result.draft.length} 字${fixNote}）`
-          : `已生成 ${sectionRaw}（${result.draft.length} 字，${result.pipelineMode}${fixNote}）`,
+        summary,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      // 中断 / 失败：保留已生成草稿供续跑去重
+      await patchActive("aborted", true);
       return { success: false, error: message };
     }
   },

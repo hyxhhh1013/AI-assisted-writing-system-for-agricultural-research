@@ -73,11 +73,12 @@ export function recomputePassportProgress(
     }
   }
 
-  if (signals.hasArgumentBlueprint) {
+  // Phase 3：论证已并入写作蓝图；有写作蓝图即视为论证规划完成（兼容旧独立论证蓝图）
+  if (signals.hasBlueprint || signals.hasArgumentBlueprint) {
     phaseStatus["3"] = "done";
   } else if (phaseStatus["2"] === "done" && phaseStatus["3"] === "locked") {
     phaseStatus["3"] = "ready";
-  } else if (phaseStatus["2"] === "done" && !signals.hasArgumentBlueprint) {
+  } else if (phaseStatus["2"] === "done") {
     phaseStatus["3"] = "ready";
   }
 

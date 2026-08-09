@@ -42,12 +42,13 @@ export function buildBlueprintPrompt(params: {
 【论文类型】${isResearch ? "原创研究（IMRaD）" : "文献综述"}${directionContext ? `\n\n【方向战略上下文】\n${directionContext}` : ""}
 
 【任务】
-1. 用 2–3 句话概括全文叙事逻辑（narrativeSummary）和一句核心论点（thesis）。
+1. 用 2–3 句话概括全文叙事逻辑（narrativeSummary）和一句核心论点（thesis）；可选 researchQuestion。
 2. 估计全文字数区间（estimatedWordCount，中文论文通常 6000–12000）。
 3. 规划配图：先估总量（totalMin/totalMax），再分配到具体大纲节点（sectionPath 必须与大纲中的「完整路径」一致，用 " > " 连接层级，如 "结果与分析 > 产量变化"）。
-4. 为重要章节写 sectionGuides（purpose + keyPoints）。
+4. 为重要章节写 sectionGuides：purpose + keyPoints，并尽量填写论证字段 claim / evidenceHint / warrant（必要时 rebuttal）。
 5. 给出建议写作顺序 writingOrder（sectionPath 数组）。
-6. 列出 prerequisites（如需先备实验数据、先画流程图等）。
+6. 列出 prerequisites（如需先备实验数据、先画流程图等）；可选 argumentGaps（证据缺口）。
+7. 论证不再单独成文件：主张—证据—推理写进各节 sectionGuides，全文缺口进 argumentGaps。
 
 【配图规则】
 ${figureRules}
@@ -111,11 +112,17 @@ ${chartCatalog.map((c) => `- [${c.index}] ${c.title}${c.variable ? `（${c.varia
       "sectionPath": "引言",
       "purpose": "...",
       "keyPoints": ["...", "..."],
-      "estimatedParagraphs": 4
+      "estimatedParagraphs": 4,
+      "claim": "本节要立住的主张…",
+      "evidenceHint": "需引用的文献主题/数据…",
+      "warrant": "证据如何支撑主张…",
+      "rebuttal": { "objection": "可能的质疑…", "response": "回应策略…" }
     }
   ],
   "writingOrder": ["材料与方法", "结果与分析", "引言", "结论"],
   "prerequisites": ["..."],
+  "researchQuestion": "可选",
+  "argumentGaps": ["可选：尚缺的数据或文献"],
   "generatedAt": 0
 }
 

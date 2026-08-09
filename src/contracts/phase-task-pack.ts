@@ -14,6 +14,7 @@ export type PhaseTaskToolHint =
   | "generate_outline"
   | "generate_writing_blueprint"
   | "build_argument_blueprint"
+  | "open_blueprint_workspace"
   | "read_section"
   | "write_section"
   | "refine_content"
@@ -87,11 +88,18 @@ export const PHASE_TASK_PACKS: Record<number, PhaseTaskPack> = {
   },
   3: {
     phase: 3,
-    title: "论证",
-    goal: "基于现有大纲生成论证蓝图（主张—证据—推理）并写回项目",
-    preferredTools: ["read_project_asset", "build_argument_blueprint"],
-    constraints: ["必须已有大纲", "生成后用中文说明中心论点与链条数量"],
-    humanFallback: "提纲侧栏「论证蓝图」",
+    title: "蓝图确认",
+    goal: "确认写作蓝图已含各节主张/证据（claim/evidenceHint）；缺则 generate_writing_blueprint 或打开蓝图工作台",
+    preferredTools: [
+      "read_project_asset",
+      "generate_writing_blueprint",
+      "open_blueprint_workspace",
+    ],
+    constraints: [
+      "论证已并入写作蓝图，勿再 build_argument_blueprint",
+      "生成/确认后用中文说明中心论点与写作顺序",
+    ],
+    humanFallback: "蓝图工作台",
   },
   4: {
     phase: 4,
@@ -106,7 +114,7 @@ export const PHASE_TASK_PACKS: Record<number, PhaseTaskPack> = {
       "generate_chart",
     ],
     constraints: [
-      "必须已有大纲 + 写作蓝图 + 论证蓝图",
+      "必须已有大纲 + 写作蓝图（含各节论证要点）",
       "优先空白章节；一次任务可连续写多节若预算允许",
       "写完说明章节 key 与字数；有数据时可配图",
     ],

@@ -32,6 +32,12 @@ export interface FigurePlanItem {
   dataBinding?: FigureDataBinding;
 }
 
+/** 本节预期反驳与回应（原 ArgumentBlueprint.rebuttals 并入） */
+export interface SectionRebuttal {
+  objection: string;
+  response: string;
+}
+
 export interface SectionGuide {
   sectionPath: string;
   purpose: string;
@@ -39,6 +45,15 @@ export interface SectionGuide {
   estimatedParagraphs?: number;
   /** 从 Direction 预确定文献中分配到此章节的 sourceKey 列表 */
   assignedSources?: string[];
+  // ====== 论证层（原独立 ArgumentBlueprint 已并入写作蓝图）======
+  /** 本节核心主张 */
+  claim?: string;
+  /** 证据要点（文献主题/数据，勿编造具体数值） */
+  evidenceHint?: string;
+  /** 推理：证据如何支撑主张 */
+  warrant?: string;
+  /** 预期审稿质疑与回应 */
+  rebuttal?: SectionRebuttal;
 }
 
 export interface WritingBlueprint {
@@ -74,6 +89,11 @@ export interface WritingBlueprint {
   pendingExperiments?: string[];
   /** 来源的路线图候选人 ID（用于追溯） */
   roadmapCandidateId?: string;
+  // ====== 论证层（全文级，原 ArgumentBlueprint 顶栏字段）======
+  /** 研究问题（可选） */
+  researchQuestion?: string;
+  /** 证据缺口 / 需补强处 */
+  argumentGaps?: string[];
 }
 
 export function serializeWritingBlueprint(blueprint: WritingBlueprint): string {
@@ -148,13 +168,30 @@ function isFigurePlanItem(value: unknown): value is FigurePlanItem {
   );
 }
 
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === "string";
+}
+
+function isSectionRebuttal(value: unknown): value is SectionRebuttal {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return typeof v.objection === "string" && typeof v.response === "string";
+}
+
 function isSectionGuide(value: unknown): value is SectionGuide {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
-  return (
-    typeof v.sectionPath === "string" &&
-    typeof v.purpose === "string" &&
-    Array.isArray(v.keyPoints) &&
-    v.keyPoints.every((p) => typeof p === "string")
-  );
+  if (
+    typeof v.sectionPath !== "string" ||
+    typeof v.purpose !== "string" ||
+    !Array.isArray(v.keyPoints) ||
+    !v.keyPoints.every((p) => typeof p === "string")
+  ) {
+    return false;
+  }
+  if (!isOptionalString(v.claim) || !isOptionalString(v.evidenceHint) || !isOptionalString(v.warrant)) {
+    return false;
+  }
+  if (v.rebuttal !== undefined && !isSectionRebuttal(v.rebuttal)) return false;
+  return true;
 }

@@ -49,7 +49,7 @@ describe("checkAgentToolPhaseGate", () => {
     if (!r.ok) expect(r.error).toMatch(/generate_writing_blueprint/);
   });
 
-  it("blocks write_section without argument blueprint", () => {
+  it("allows write_section with writing blueprint even without legacy argument blueprint", () => {
     const r = checkAgentToolPhaseGate(
       "write_section",
       { section: "introduction" },
@@ -60,11 +60,10 @@ describe("checkAgentToolPhaseGate", () => {
         hasArgumentBlueprint: false,
       }),
     );
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toMatch(/build_argument_blueprint/);
+    expect(r.ok).toBe(true);
   });
 
-  it("allows write_section when outline + blueprints ready regardless of phase number", () => {
+  it("allows write_section when outline + writing blueprint ready regardless of phase number", () => {
     const r = checkAgentToolPhaseGate(
       "write_section",
       { section: "introduction" },
@@ -72,7 +71,7 @@ describe("checkAgentToolPhaseGate", () => {
         outline: "A".repeat(50),
         currentPhase: 2,
         hasWritingBlueprint: true,
-        hasArgumentBlueprint: true,
+        hasArgumentBlueprint: false,
       }),
     );
     expect(r.ok).toBe(true);
@@ -117,11 +116,6 @@ describe("checkAgentToolPhaseGate", () => {
       }),
     );
     expect(r.ok).toBe(true);
-  });
-
-  it("blocks argument blueprint without outline", () => {
-    const r = checkAgentToolPhaseGate("build_argument_blueprint", {}, snap());
-    expect(r.ok).toBe(false);
   });
 
   it("blocks bilingual abstract without body", () => {

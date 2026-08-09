@@ -234,6 +234,15 @@ const sectionGuideSchema = z.object({
   keyPoints: z.array(z.string()).min(1),
   estimatedParagraphs: z.number().int().positive().optional(),
   assignedSources: z.array(z.string()).optional(),
+  claim: z.string().optional(),
+  evidenceHint: z.string().optional(),
+  warrant: z.string().optional(),
+  rebuttal: z
+    .object({
+      objection: z.string().min(1),
+      response: z.string().min(1),
+    })
+    .optional(),
 });
 
 export const writingBlueprintPayloadSchema = z.object({
@@ -256,6 +265,8 @@ export const writingBlueprintPayloadSchema = z.object({
   language: z.enum(["zh", "en"]).optional(),
   outlineHash: z.string().optional(),
   generatedAt: z.number().optional(),
+  researchQuestion: z.string().optional(),
+  argumentGaps: z.array(z.string()).optional(),
 });
 
 const blueprintChartCatalogEntrySchema = z.object({

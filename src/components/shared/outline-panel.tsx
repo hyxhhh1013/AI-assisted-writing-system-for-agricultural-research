@@ -14,15 +14,9 @@ import {
   serializeWritingBlueprint,
   type WritingBlueprint,
 } from "@/contracts/writing-blueprint";
-import {
-  parseArgumentBlueprint,
-  serializeArgumentBlueprint,
-  type ArgumentBlueprint,
-} from "@/contracts/argument-blueprint";
 import { listKnowledgeFiles } from "@/services/knowledge";
 import { resolveOutlineResearchDirection, streamOutline } from "@/services/outline";
 import { generateWritingBlueprint } from "@/services/blueprint";
-import { generateArgumentBlueprint } from "@/services/argument-blueprint";
 import { parseOutline, OutlineSection } from "@/lib/utils";
 import { countFiguresForSection, isBlueprintStale, buildBlueprintChartCatalog } from "@/lib/blueprint-utils";
 import { parseDataSources } from "@/contracts/project";
@@ -64,7 +58,6 @@ export function OutlinePanel({
   const [categories, setCategories] = useState<string[]>(["全部"]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isBlueprintGenerating, setIsBlueprintGenerating] = useState(false);
-  const [isArgumentGenerating, setIsArgumentGenerating] = useState(false);
   const [result, setResult] = useState(project.outline || "");
   const writingMode = project.mode ?? "review";
   const [skeletonText, setSkeletonText] = useState(() =>
@@ -74,11 +67,6 @@ export function OutlinePanel({
   const blueprint = useMemo(
     () => parseWritingBlueprint(project.writingBlueprint),
     [project.writingBlueprint],
-  );
-
-  const argumentBlueprint = useMemo(
-    () => parseArgumentBlueprint(project.argumentBlueprint),
-    [project.argumentBlueprint],
   );
 
   const blueprintStale = useMemo(
@@ -121,7 +109,6 @@ export function OutlinePanel({
   const handleSave = useCallback((
     customOutline?: string,
     customBlueprint?: WritingBlueprint | null,
-    customArgument?: ArgumentBlueprint | null,
   ) => {
     if (!projectId) return;
     const effectiveDirection = resolveOutlineResearchDirection(title, researchDirection);
@@ -134,11 +121,6 @@ export function OutlinePanel({
       updates.writingBlueprint = customBlueprint === null
         ? null
         : serializeWritingBlueprint(customBlueprint);
-    }
-    if (customArgument !== undefined) {
-      updates.argumentBlueprint = customArgument === null
-        ? null
-        : serializeArgumentBlueprint(customArgument);
     }
     onSave?.(updates);
   }, [projectId, title, researchDirection, result, onSave]);
@@ -175,42 +157,6 @@ export function OutlinePanel({
       setIsBlueprintGenerating(false);
     }
   }, [title, researchDirection, result, language, project.mode, project, handleSave]);
-
-  const handleGenerateArgument = useCallback(async () => {
-    const effectiveTitle = title.trim();
-    const effectiveDirection = resolveOutlineResearchDirection(title, researchDirection);
-    const outlineText = result.trim();
-
-    if (!effectiveTitle) {
-      toast.error("请填写论文题目");
-      return;
-    }
-    if (!outlineText) {
-      toast.error("请先生成或填写大纲");
-      return;
-    }
-
-    setIsArgumentGenerating(true);
-    try {
-      const next = await generateArgumentBlueprint({
-        title: effectiveTitle,
-        outline: outlineText,
-        researchDirection: effectiveDirection,
-        language,
-        projectMode: project.mode ?? "review",
-        thesisHint: blueprint?.thesis,
-        projectId,
-      });
-      handleSave(undefined, undefined, next);
-      toast.success(
-        `论证蓝图已生成：${next.chains.length} 条主张链、${next.rebuttals.length} 条反驳`,
-      );
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "论证蓝图生成失败");
-    } finally {
-      setIsArgumentGenerating(false);
-    }
-  }, [title, researchDirection, result, language, project.mode, blueprint, projectId, handleSave]);
 
   const handleGenerate = async () => {
     const effectiveTitle = title.trim();
@@ -348,10 +294,15 @@ export function OutlinePanel({
         }}
       />
       <OutlineArgumentSummary
-        blueprint={argumentBlueprint}
-        isGenerating={isArgumentGenerating}
         hasOutline={Boolean(result.trim())}
-        onGenerate={() => void handleGenerateArgument()}
+        hasWritingBlueprint={Boolean(blueprint)}
+        onOpenWritingBlueprint={() => {
+          if (!blueprint) {
+            toast.message("请先生成写作蓝图（上方入口）");
+            return;
+          }
+          onOpenBlueprint?.();
+        }}
       />
 
       <div className="flex-1 min-h-0 overflow-y-auto">
@@ -359,7 +310,7 @@ export function OutlinePanel({
           <div className="text-center py-16 text-muted-foreground">
             <FileText className="h-10 w-10 mx-auto mb-3 opacity-20" />
             <p className="text-sm">{isReview ? "填写综述题目后生成主题式大纲" : "填写论文信息后生成大纲"}</p>
-            <p className="text-[10px] mt-1">生成大纲 → 写作蓝图 → 论证蓝图 → 章节扩写</p>
+            <p className="text-[10px] mt-1">生成大纲 → 写作蓝图（含主张/证据）→ 章节扩写</p>
           </div>
         )}
 

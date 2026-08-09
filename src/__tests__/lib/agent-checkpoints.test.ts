@@ -73,7 +73,7 @@ describe("agent checkpoints", () => {
         persisted: true,
         approvedKinds: [],
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("skips blueprint pause for non-full goals / non-blueprint tools / already approved", () => {

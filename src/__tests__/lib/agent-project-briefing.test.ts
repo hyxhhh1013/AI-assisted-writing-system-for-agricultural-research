@@ -52,7 +52,7 @@ describe("agent project briefing", () => {
   it("injects blueprint writing order and section guides", () => {
     const text = formatAgentProjectBriefing(sample);
     expect(text).toContain("建议写作顺序（蓝图）：1. 研究现状与问题 → 2. 引言 → 3. 结论与展望 → 4. 摘要");
-    expect(text).toContain("各节写作要点（蓝图）");
+    expect(text).toContain("各节写作要点（蓝图");
     expect(text).toContain("- 引言：建立研究背景与核心命题");
   });
 
@@ -79,12 +79,12 @@ describe("agent project briefing", () => {
       currentPhase: 4,
       writeEnabled: true,
       hasOutline: true,
-      hasArgumentBlueprint: false,
+      hasWritingBlueprint: true,
       emptySections: ["literature_body", "abstract"],
       nextSectionKey: "literature_body",
       thinOrGapSections: ["literature_body"],
     });
-    expect(tips.some((t) => t.includes("综述正文") || t.includes("论证"))).toBe(true);
+    expect(tips.some((t) => t.includes("综述正文"))).toBe(true);
   });
 
   it("suggests thickening a thin section", () => {
@@ -92,7 +92,7 @@ describe("agent project briefing", () => {
       currentPhase: 4,
       writeEnabled: true,
       hasOutline: true,
-      hasArgumentBlueprint: true,
+      hasWritingBlueprint: true,
       emptySections: [],
       nextSectionKey: "introduction",
       thinOrGapSections: ["introduction"],

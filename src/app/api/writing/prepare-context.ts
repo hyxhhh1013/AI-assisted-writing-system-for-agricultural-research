@@ -196,7 +196,9 @@ ${Array.isArray(globalContext?.analysisResults) && globalContext.analysisResults
     - 实验数据分析：${Array.isArray(globalContext?.analysisResults)
         ? globalContext.analysisResults.slice(0, 3).map((r: string) => r.slice(0, 300)).join("\n")
         : "暂无"}
-${globalContext.blueprint ? `\n【写作蓝图摘要】\n${formatBlueprintGlobalSummary(globalContext.blueprint)}\n` : ""}`
+${globalContext.blueprint
+  ? `\n【写作蓝图摘要】\n${formatBlueprintGlobalSummary(globalContext.blueprint)}\n⚠️ 若上下文含【写作蓝图（本节）】，本节正文须覆盖其目的与要点，并呼应规划配图；勿偏离蓝图另起结构。\n`
+  : ""}`
       : "";
 
   const domainExpertise = buildDomainExpertise(researchDirection);

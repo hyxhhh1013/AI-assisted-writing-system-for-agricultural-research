@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronRight, ChevronUp, Save } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  ExternalLink,
+  Save,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,6 +38,7 @@ import {
   figureTypeLabel,
   groupSectionGuides,
 } from "@/lib/blueprint-utils";
+import { cn } from "@/lib/utils";
 
 const FIGURE_TYPES: FigurePlanType[] = [
   "flow",
@@ -77,11 +84,9 @@ export function BlueprintWorkspace({
     [project],
   );
 
-  /** 论文类型（优先蓝图自带的 projectMode，其次项目 mode） */
   const paperMode: "research" | "review" =
     draft?.projectMode ?? (project.mode === "research" ? "research" : "review");
 
-  /** 章节导览按顶层章节分组（sectionPath 用 " > " 表示层级，如「研究进展综述 > 生物油定向提质」） */
   const guideGroups = useMemo(
     () => groupSectionGuides(draft?.sectionGuides ?? []),
     [draft],
@@ -159,28 +164,46 @@ export function BlueprintWorkspace({
     });
   };
 
-  /** 单个章节指导卡片（分组后复用） */
+  const updatePrerequisite = (index: number, value: string) => {
+    updateDraft((prev) => {
+      const next = [...prev.prerequisites];
+      next[index] = value;
+      return { ...prev, prerequisites: next };
+    });
+  };
+
+  const removePrerequisite = (index: number) => {
+    updateDraft((prev) => ({
+      ...prev,
+      prerequisites: prev.prerequisites.filter((_, i) => i !== index),
+    }));
+  };
+
+  const addPrerequisite = () => {
+    updateDraft((prev) => ({
+      ...prev,
+      prerequisites: [...prev.prerequisites, ""],
+    }));
+  };
+
   const renderGuideCard = (guide: SectionGuide) => (
-    <div
-      key={guide.sectionPath}
-      className="rounded-md border p-3 space-y-2 bg-background"
-    >
+    <div key={guide.sectionPath} className="space-y-2 border-l-2 border-[#1a5632]/25 pl-3">
       <Input
-        className="h-8 text-xs font-medium"
+        className="h-8 border-0 border-b border-[#1a5632]/12 bg-transparent px-0 text-[13px] font-medium shadow-none focus-visible:border-[#1a5632]/40 focus-visible:ring-0"
         value={guide.sectionPath}
         onChange={(e) =>
           updateGuide(guide.sectionPath, { sectionPath: e.target.value })
         }
       />
       <Textarea
-        className="min-h-[56px] text-xs text-muted-foreground"
+        className="min-h-[48px] resize-none border-0 bg-transparent px-0 text-[12.5px] leading-relaxed text-[#3d4f46] shadow-none focus-visible:ring-0"
         value={guide.purpose}
         onChange={(e) =>
           updateGuide(guide.sectionPath, { purpose: e.target.value })
         }
       />
       <Textarea
-        className="min-h-[64px] text-[11px] font-mono"
+        className="min-h-[52px] resize-none border-0 bg-[#f4f6f4] px-2.5 py-2 text-[11px] leading-relaxed text-[#5a6b63] shadow-none focus-visible:ring-1 focus-visible:ring-[#1a5632]/20"
         placeholder="要点，每行一条"
         value={guide.keyPoints.join("\n")}
         onChange={(e) =>
@@ -192,157 +215,265 @@ export function BlueprintWorkspace({
           })
         }
       />
+      <Textarea
+        className="min-h-[40px] resize-none border-0 bg-transparent px-0 text-[11px] leading-relaxed text-[#3d4f46] shadow-none focus-visible:ring-0"
+        placeholder="主张（claim）"
+        value={guide.claim ?? ""}
+        onChange={(e) =>
+          updateGuide(guide.sectionPath, { claim: e.target.value })
+        }
+      />
+      <Textarea
+        className="min-h-[40px] resize-none border-0 bg-[#f4f6f4]/70 px-2.5 py-2 text-[11px] leading-relaxed text-[#5a6b63] shadow-none focus-visible:ring-1 focus-visible:ring-[#1a5632]/20"
+        placeholder="证据要点（evidenceHint）"
+        value={guide.evidenceHint ?? ""}
+        onChange={(e) =>
+          updateGuide(guide.sectionPath, { evidenceHint: e.target.value })
+        }
+      />
+      <Textarea
+        className="min-h-[36px] resize-none border-0 bg-transparent px-0 text-[11px] leading-relaxed text-[#5a6b63] shadow-none focus-visible:ring-0"
+        placeholder="推理（warrant，可选）"
+        value={guide.warrant ?? ""}
+        onChange={(e) =>
+          updateGuide(guide.sectionPath, { warrant: e.target.value })
+        }
+      />
     </div>
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <header className="flex h-11 shrink-0 items-center gap-3 border-b bg-muted/20 px-4">
-        {isStale && (
-          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 rounded px-2 py-1">
-            大纲已变更，建议在大纲侧栏刷新蓝图
-          </span>
-        )}
-        <span className="rounded-md border border-[#1a5632]/20 bg-[#1a5632]/8 px-2 py-1 text-[10px] font-medium text-[#1a5632]">
-          {paperMode === "research" ? "研究论文" : "文献综述"}
-        </span>
-        <div className="min-w-0 flex-1" />
+    <div className="flex h-full min-h-0 flex-col bg-[#eef1ee]">
+      {/* 顶栏：标题 + 保存合一，去掉第二层灰条 */}
+      <header className="flex shrink-0 items-center gap-3 bg-white/90 px-5 py-3.5 backdrop-blur-sm sm:px-7">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-[18px] font-semibold tracking-tight text-[#122820]">
+              写作蓝图
+            </h2>
+            <span className="rounded-full bg-[#1a5632]/10 px-2 py-0.5 text-[10px] font-medium text-[#1a5632]">
+              {paperMode === "research" ? "研究论文" : "文献综述"}
+            </span>
+            {isDirty ? (
+              <span className="text-[11px] text-amber-700">未保存</span>
+            ) : (
+              <span className="text-[11px] text-[#5a6b63]/70">已同步</span>
+            )}
+          </div>
+          <p className="mt-0.5 text-[12px] text-[#5a6b63]">
+            改完保存即可指导扩写，不会动编辑器正文
+          </p>
+        </div>
         <Button
           size="sm"
-          className="gap-1.5 h-8"
+          className={cn(
+            "h-9 gap-1.5 rounded-full px-4",
+            isDirty
+              ? "bg-[#1a5632] text-white hover:bg-[#143f26]"
+              : "bg-[#1a5632]/12 text-[#1a5632] hover:bg-[#1a5632]/18",
+          )}
           disabled={!isDirty}
           onClick={() => save()}
         >
           <Save className="h-3.5 w-3.5" />
-          保存修改
+          保存
         </Button>
       </header>
 
+      {isStale ? (
+        <div className="mx-5 mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[11.5px] text-amber-900 sm:mx-7">
+          大纲已变更，建议在大纲侧栏刷新蓝图后再编辑。
+        </div>
+      ) : null}
+
       <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-5 p-6 text-sm max-w-5xl">
-          <SectionHeading>核心论点</SectionHeading>
-          <Textarea
-            className="min-h-[72px] text-sm leading-relaxed"
-            value={draft.thesis}
-            onChange={(e) => updateDraft((p) => ({ ...p, thesis: e.target.value }))}
-          />
-
-          <SectionHeading>叙事脉络</SectionHeading>
-          <Textarea
-            className="min-h-[88px] text-sm leading-relaxed"
-            value={draft.narrativeSummary}
-            onChange={(e) =>
-              updateDraft((p) => ({ ...p, narrativeSummary: e.target.value }))
-            }
-          />
-
-          <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5">
-              预计篇幅
-              <Input
-                type="number"
-                min={0}
-                className="h-7 w-20 text-xs"
-                value={draft.estimatedWordCount.min}
-                onChange={(e) =>
-                  updateDraft((p) => ({
-                    ...p,
-                    estimatedWordCount: {
-                      ...p.estimatedWordCount,
-                      min: Number(e.target.value) || 0,
-                    },
-                  }))
-                }
-              />
-              –
-              <Input
-                type="number"
-                min={0}
-                className="h-7 w-20 text-xs"
-                value={draft.estimatedWordCount.max}
-                onChange={(e) =>
-                  updateDraft((p) => ({
-                    ...p,
-                    estimatedWordCount: {
-                      ...p.estimatedWordCount,
-                      max: Number(e.target.value) || 0,
-                    },
-                  }))
-                }
-              />
-              字
-            </span>
-            {figurePlan.items.length > 0 && (
-              <span>
-                配图：{figurePlan.totalMin}–{figurePlan.totalMax} 张（明细 {figurePlan.items.length} 项）
-              </span>
-            )}
-          </div>
-          <p className="text-[10px] text-muted-foreground/70">
-            {paperMode === "research"
-              ? "研究论文：流程图集中在「材料与方法」，数据图/XRD 集中在「结果与分析」，引言/结论 0–1 张示意。"
-              : "文献综述：以概念框架图、对比表、趋势综合图为主，不安排本试验数据图。"}
-          </p>
-
-          {draft.prerequisites.length > 0 && (
-            <div className="space-y-1.5">
-              <SectionHeading>前置条件</SectionHeading>
-              <Textarea
-                className="min-h-[64px] text-xs font-mono"
-                placeholder="每行一条"
-                value={draft.prerequisites.join("\n")}
-                onChange={(e) =>
-                  updateDraft((p) => ({
-                    ...p,
-                    prerequisites: e.target.value
-                      .split("\n")
-                      .map((s) => s.trim())
-                      .filter(Boolean),
-                  }))
-                }
-              />
+        <div className="mx-auto grid max-w-6xl gap-6 px-5 py-5 sm:px-7 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-8 lg:py-6">
+          {/* 左侧：篇幅 + 写作顺序（桌面常驻） */}
+          <aside className="space-y-5 lg:sticky lg:top-0 lg:self-start">
+            <div className="rounded-2xl bg-white p-4 shadow-sm shadow-[#122820]/[0.04]">
+              <p className="text-[10px] font-semibold tracking-[0.08em] text-[#1a5632]/75 uppercase">
+                预计篇幅
+              </p>
+              <div className="mt-2.5 flex items-end gap-1.5">
+                <Input
+                  type="number"
+                  min={0}
+                  className="h-9 w-[4.75rem] rounded-lg border-[#1a5632]/12 text-center text-sm font-medium tabular-nums"
+                  value={draft.estimatedWordCount.min}
+                  onChange={(e) =>
+                    updateDraft((p) => ({
+                      ...p,
+                      estimatedWordCount: {
+                        ...p.estimatedWordCount,
+                        min: Number(e.target.value) || 0,
+                      },
+                    }))
+                  }
+                />
+                <span className="pb-2 text-[#5a6b63]">–</span>
+                <Input
+                  type="number"
+                  min={0}
+                  className="h-9 w-[4.75rem] rounded-lg border-[#1a5632]/12 text-center text-sm font-medium tabular-nums"
+                  value={draft.estimatedWordCount.max}
+                  onChange={(e) =>
+                    updateDraft((p) => ({
+                      ...p,
+                      estimatedWordCount: {
+                        ...p.estimatedWordCount,
+                        max: Number(e.target.value) || 0,
+                      },
+                    }))
+                  }
+                />
+                <span className="pb-2 text-[12px] text-[#5a6b63]">字</span>
+              </div>
+              {figurePlan.items.length > 0 ? (
+                <p className="mt-3 text-[11.5px] text-[#5a6b63]">
+                  配图 {figurePlan.totalMin}–{figurePlan.totalMax} 张
+                  <span className="text-[#5a6b63]/70"> · {figurePlan.items.length} 项</span>
+                </p>
+              ) : null}
+              <p className="mt-2 text-[10.5px] leading-relaxed text-[#5a6b63]/85">
+                {paperMode === "research"
+                  ? "流程在方法，数据图在结果；引言/结论各至多 1 张示意。"
+                  : "偏概念框架、对比表与趋势图，不安排本试验数据图。"}
+              </p>
             </div>
-          )}
 
-          {figurePlan.items.length > 0 && (
-          <div className="space-y-2">
-            <SectionHeading>配图规划</SectionHeading>
-            <div className="rounded-md border overflow-x-auto">
-              <table className="w-full text-xs min-w-[640px]">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="text-left p-2 font-medium w-[88px]">章节</th>
-                    <th className="text-left p-2 font-medium w-[72px]">类型</th>
-                    <th className="text-left p-2 font-medium">图题 / 用途</th>
-                    <th className="text-left p-2 font-medium w-[64px]">优先级</th>
-                    <th className="text-left p-2 font-medium w-[120px]">数据</th>
-                    <th className="text-left p-2 font-medium w-14">操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {figurePlan.items.map((item) => {
-                    const plotHref = blueprintFigureToPlotHref(projectId, item, chartConfigs);
+            {draft.writingOrder.length > 0 ? (
+              <div className="rounded-2xl bg-white p-4 shadow-sm shadow-[#122820]/[0.04]">
+                <p className="text-[10px] font-semibold tracking-[0.08em] text-[#1a5632]/75 uppercase">
+                  写作顺序
+                </p>
+                <ol className="mt-3 space-y-1.5">
+                  {draft.writingOrder.map((path, index) => (
+                    <li
+                      key={`${path}-${index}`}
+                      className="group flex items-center gap-1.5 rounded-lg py-0.5"
+                    >
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[#1a5632]/10 text-[10px] font-semibold text-[#1a5632]">
+                        {index + 1}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[11.5px] text-[#122820]">
+                        {path}
+                      </span>
+                      <span className="flex opacity-0 transition-opacity group-hover:opacity-100">
+                        <button
+                          type="button"
+                          className="rounded p-0.5 text-[#5a6b63] hover:bg-[#eef1ee] disabled:opacity-30"
+                          disabled={index === 0}
+                          onClick={() => moveWritingOrder(index, -1)}
+                          aria-label="上移"
+                        >
+                          <ChevronUp className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded p-0.5 text-[#5a6b63] hover:bg-[#eef1ee] disabled:opacity-30"
+                          disabled={index === draft.writingOrder.length - 1}
+                          onClick={() => moveWritingOrder(index, 1)}
+                          aria-label="下移"
+                        >
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        </button>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
+          </aside>
+
+          {/* 主栏：开放排版，少套盒 */}
+          <main className="min-w-0 space-y-8 rounded-2xl bg-white px-5 py-6 shadow-sm shadow-[#122820]/[0.04] sm:px-8 sm:py-7">
+            <section>
+              <Label>核心论点</Label>
+              <Textarea
+                className="mt-2 min-h-[88px] resize-none border-0 bg-transparent p-0 text-[15px] leading-[1.65] text-[#122820] shadow-none focus-visible:ring-0"
+                value={draft.thesis}
+                onChange={(e) => updateDraft((p) => ({ ...p, thesis: e.target.value }))}
+              />
+            </section>
+
+            <section className="border-t border-[#1a5632]/08 pt-6">
+              <Label>叙事脉络</Label>
+              <Textarea
+                className="mt-2 min-h-[100px] resize-none border-0 bg-transparent p-0 text-[13.5px] leading-[1.7] text-[#3d4f46] shadow-none focus-visible:ring-0"
+                value={draft.narrativeSummary}
+                onChange={(e) =>
+                  updateDraft((p) => ({ ...p, narrativeSummary: e.target.value }))
+                }
+              />
+            </section>
+
+            {draft.prerequisites.length > 0 ? (
+              <section className="border-t border-[#1a5632]/08 pt-6">
+                <div className="flex items-baseline justify-between gap-3">
+                  <Label>前置条件</Label>
+                  <button
+                    type="button"
+                    onClick={addPrerequisite}
+                    className="text-[11.5px] font-medium text-[#1a5632] hover:underline"
+                  >
+                    + 添加
+                  </button>
+                </div>
+                <ul className="mt-3 space-y-2">
+                  {draft.prerequisites.map((line, index) => (
+                    <li key={index} className="flex items-start gap-2.5">
+                      <span className="mt-2 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#eef1ee] text-[10px] font-semibold text-[#1a5632]">
+                        {index + 1}
+                      </span>
+                      <Input
+                        className="h-9 flex-1 rounded-lg border-[#1a5632]/10 bg-[#f7f8f6] text-[12.5px] shadow-none focus-visible:bg-white focus-visible:ring-[#1a5632]/20"
+                        value={line}
+                        onChange={(e) => updatePrerequisite(index, e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removePrerequisite(index)}
+                        className="mt-2 text-[11px] text-[#5a6b63] hover:text-destructive"
+                        aria-label="删除"
+                      >
+                        删
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
+            {figurePlan.items.length > 0 ? (
+              <section className="border-t border-[#1a5632]/08 pt-6">
+                <Label>配图规划</Label>
+                <div className="mt-3 grid gap-3">
+                  {figurePlan.items.map((item, index) => {
+                    const plotHref = blueprintFigureToPlotHref(
+                      projectId,
+                      item,
+                      chartConfigs,
+                    );
                     const bindingLabel =
-                      item.type === "chart" ? blueprintFigureDataBindingLabel(item) : null;
+                      item.type === "chart"
+                        ? blueprintFigureDataBindingLabel(item)
+                        : null;
                     return (
-                      <tr key={item.id} className="border-t align-top">
-                        <td className="p-2">
-                          <Input
-                            className="h-7 text-xs"
-                            value={item.sectionPath}
-                            onChange={(e) =>
-                              updateFigure(item.id, { sectionPath: e.target.value })
-                            }
-                          />
-                        </td>
-                        <td className="p-2">
+                      <article
+                        key={item.id}
+                        className="rounded-xl bg-[#f7f8f6] p-3.5 sm:p-4"
+                      >
+                        <div className="mb-2.5 flex flex-wrap items-center gap-2">
+                          <span className="text-[10px] font-semibold tabular-nums text-[#1a5632]/70">
+                            FIG {index + 1}
+                          </span>
                           <Select
                             value={item.type}
                             onValueChange={(v) =>
                               updateFigure(item.id, { type: v as FigurePlanType })
                             }
                           >
-                            <SelectTrigger className="h-7 text-xs px-2">
+                            <SelectTrigger className="h-7 w-auto gap-1 border-0 bg-white px-2 text-[11px] shadow-sm">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -353,31 +484,15 @@ export function BlueprintWorkspace({
                               ))}
                             </SelectContent>
                           </Select>
-                        </td>
-                        <td className="p-2 space-y-1.5">
-                          <Input
-                            className="h-7 text-xs font-medium"
-                            value={item.suggestedCaption}
-                            onChange={(e) =>
-                              updateFigure(item.id, { suggestedCaption: e.target.value })
-                            }
-                          />
-                          <Textarea
-                            className="min-h-[52px] text-xs text-muted-foreground"
-                            value={item.purpose}
-                            onChange={(e) =>
-                              updateFigure(item.id, { purpose: e.target.value })
-                            }
-                          />
-                        </td>
-                        <td className="p-2">
                           <Select
                             value={item.priority}
                             onValueChange={(v) =>
-                              updateFigure(item.id, { priority: v as FigurePlanPriority })
+                              updateFigure(item.id, {
+                                priority: v as FigurePlanPriority,
+                              })
                             }
                           >
-                            <SelectTrigger className="h-7 text-xs px-2">
+                            <SelectTrigger className="h-7 w-auto gap-1 border-0 bg-white px-2 text-[11px] shadow-sm">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -385,13 +500,50 @@ export function BlueprintWorkspace({
                               <SelectItem value="optional">可选</SelectItem>
                             </SelectContent>
                           </Select>
-                        </td>
-                        <td className="p-2">
-                          {item.type === "chart" ? (
-                            chartCatalog.length === 0 ? (
-                              <span className="text-[10px] text-muted-foreground leading-snug">
-                                请先上传实验数据
-                              </span>
+                          <Input
+                            className="h-7 min-w-[8rem] flex-1 border-0 bg-white px-2 text-[11px] shadow-sm"
+                            value={item.sectionPath}
+                            onChange={(e) =>
+                              updateFigure(item.id, { sectionPath: e.target.value })
+                            }
+                            placeholder="所属章节"
+                          />
+                          {plotHref ? (
+                            <Link
+                              href={plotHref}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] font-medium text-[#1a5632] hover:underline"
+                            >
+                              绘图
+                              <ExternalLink className="h-3 w-3" />
+                            </Link>
+                          ) : null}
+                        </div>
+                        <Input
+                          className="mb-1.5 h-8 border-0 bg-transparent px-0 text-[13px] font-medium shadow-none focus-visible:ring-0"
+                          value={item.suggestedCaption}
+                          onChange={(e) =>
+                            updateFigure(item.id, {
+                              suggestedCaption: e.target.value,
+                            })
+                          }
+                          placeholder="图题"
+                        />
+                        <Textarea
+                          className="min-h-[44px] resize-none border-0 bg-transparent px-0 text-[12px] leading-relaxed text-[#5a6b63] shadow-none focus-visible:ring-0"
+                          value={item.purpose}
+                          onChange={(e) =>
+                            updateFigure(item.id, { purpose: e.target.value })
+                          }
+                          placeholder="用途说明"
+                        />
+                        {item.type === "chart" ? (
+                          <div className="mt-2">
+                            {chartCatalog.length === 0 ? (
+                              <p className="text-[10.5px] text-[#5a6b63]">
+                                请先上传实验数据后再绑定
+                              </p>
                             ) : (
                               <Select
                                 value={
@@ -407,8 +559,8 @@ export function BlueprintWorkspace({
                                   bindFigureChart(item.id, Number.parseInt(v, 10));
                                 }}
                               >
-                                <SelectTrigger className="h-7 text-[10px] px-2">
-                                  <SelectValue placeholder="绑定" />
+                                <SelectTrigger className="h-7 w-full max-w-xs border-0 bg-white text-[10.5px] shadow-sm">
+                                  <SelectValue placeholder="绑定数据" />
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="none">不绑定</SelectItem>
@@ -419,128 +571,75 @@ export function BlueprintWorkspace({
                                   ))}
                                 </SelectContent>
                               </Select>
-                            )
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                          {bindingLabel && (
-                            <p className="text-[10px] text-emerald-700 mt-1 leading-snug">
-                              {bindingLabel}
-                            </p>
-                          )}
-                        </td>
-                        <td className="p-2">
-                          {plotHref ? (
-                            <Link
-                              href={plotHref}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-primary hover:underline whitespace-nowrap"
-                            >
-                              绘图 →
-                            </Link>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </td>
-                      </tr>
+                            )}
+                            {bindingLabel ? (
+                              <p className="mt-1 text-[10px] text-[#1a5632]/80">
+                                {bindingLabel}
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </article>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          )}
+                </div>
+              </section>
+            ) : null}
 
-          {draft.sectionGuides.length > 0 && (
-          <div className="space-y-2">
-            <SectionHeading>章节导览</SectionHeading>
-            <div className="space-y-3">
-              {guideGroups.map((group) => {
-                if (group.nested.length === 0) {
-                  return group.topLevel.map((g) => renderGuideCard(g));
-                }
-                const open = openGroups.has(group.top);
-                return (
-                  <div key={group.top} className="overflow-hidden rounded-md border">
-                    <button
-                      type="button"
-                      onClick={() => toggleGroup(group.top)}
-                      className="flex w-full items-center gap-2 bg-muted/30 px-3 py-2 text-left hover:bg-muted/50"
-                    >
-                      {open ? (
-                        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      ) : (
-                        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      )}
-                      <span className="text-xs font-semibold">{group.top}</span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {group.nested.length} 个子节
-                      </span>
-                    </button>
-                    {open && (
-                      <div className="space-y-2 border-t p-2 pl-4">
-                        {group.topLevel.map((g) => renderGuideCard(g))}
-                        {group.nested.map((g) => renderGuideCard(g))}
+            {draft.sectionGuides.length > 0 ? (
+              <section className="border-t border-[#1a5632]/08 pt-6 pb-2">
+                <Label>章节导览</Label>
+                <div className="mt-4 space-y-5">
+                  {guideGroups.map((group) => {
+                    if (group.nested.length === 0) {
+                      return (
+                        <div key={group.top} className="space-y-4">
+                          {group.topLevel.map((g) => renderGuideCard(g))}
+                        </div>
+                      );
+                    }
+                    const open = openGroups.has(group.top);
+                    return (
+                      <div key={group.top}>
+                        <button
+                          type="button"
+                          onClick={() => toggleGroup(group.top)}
+                          className="mb-3 flex w-full items-center gap-2 text-left"
+                        >
+                          {open ? (
+                            <ChevronDown className="h-4 w-4 text-[#1a5632]/70" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-[#1a5632]/70" />
+                          )}
+                          <span className="text-[13px] font-semibold text-[#122820]">
+                            {group.top}
+                          </span>
+                          <span className="text-[11px] text-[#5a6b63]">
+                            {group.nested.length} 个子节
+                          </span>
+                        </button>
+                        {open ? (
+                          <div className="space-y-4 pl-1">
+                            {group.topLevel.map((g) => renderGuideCard(g))}
+                            {group.nested.map((g) => renderGuideCard(g))}
+                          </div>
+                        ) : null}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          )}
-
-          {draft.writingOrder.length > 0 && (
-            <div className="space-y-2 pb-2">
-              <SectionHeading>建议写作顺序</SectionHeading>
-              <p className="text-[10px] text-muted-foreground">
-                调整顺序仅作扩写参考，不影响大纲结构。
-              </p>
-              <div className="space-y-1.5">
-                {draft.writingOrder.map((path, index) => (
-                  <div
-                    key={`${path}-${index}`}
-                    className="flex items-center gap-2 rounded-md border bg-background px-2.5 py-1.5"
-                  >
-                    <span className="text-[10px] text-muted-foreground w-5 shrink-0">
-                      {index + 1}.
-                    </span>
-                    <span className="flex-1 text-xs truncate">{path}</span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      disabled={index === 0}
-                      onClick={() => moveWritingOrder(index, -1)}
-                    >
-                      <ChevronUp className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      disabled={index === draft.writingOrder.length - 1}
-                      onClick={() => moveWritingOrder(index, 1)}
-                    >
-                      <ChevronDown className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+                    );
+                  })}
+                </div>
+              </section>
+            ) : null}
+          </main>
         </div>
       </ScrollArea>
     </div>
   );
 }
 
-function SectionHeading({ children }: { children: React.ReactNode }) {
+function Label({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+    <h3 className="text-[11px] font-semibold tracking-[0.06em] text-[#1a5632]/80 uppercase">
       {children}
     </h3>
   );

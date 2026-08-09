@@ -7,8 +7,7 @@ import type { AgentContext, AgentToolResult, ToolDefinition } from "@/lib/agent/
 
 export type WritePrereqStep =
   | "generate_outline"
-  | "generate_writing_blueprint"
-  | "build_argument_blueprint";
+  | "generate_writing_blueprint";
 
 /** 有结构即可；短中文大纲常见 20～40 字 */
 const MIN_OUTLINE_CHARS = 20;
@@ -19,7 +18,7 @@ export function isWriteToolNeedingPrereqs(toolName: string): boolean {
   return WRITE_TOOLS.has(toolName);
 }
 
-/** 按依赖顺序返回仍缺的前置工具名 */
+/** 按依赖顺序返回仍缺的前置工具名（论证已并入写作蓝图，不再要求 build_argument_blueprint） */
 export function listMissingWritePrereqs(
   project: AgentProjectSnapshot | null | undefined,
 ): WritePrereqStep[] {
@@ -30,9 +29,6 @@ export function listMissingWritePrereqs(
   }
   if (!project.hasWritingBlueprint) {
     missing.push("generate_writing_blueprint");
-  }
-  if (!project.hasArgumentBlueprint) {
-    missing.push("build_argument_blueprint");
   }
   return missing;
 }

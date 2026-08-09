@@ -26,8 +26,8 @@ KnowledgeFile 1──* KnowledgeChunk
 | `dataClaims` | JSON `EvidenceClaim[]` |
 | `dataSources` | JSON `DataSourceAnalysis[]` |
 | `expandedOutlineSections` | JSON `string[]`，大纲扩写已完成任务 id（`stableHash(fullPath)`）；整章扩写时同 `sectionKey` 下子节一并标记 |
-| `writingBlueprint` | JSON `WritingBlueprint`（`src/contracts/writing-blueprint.ts`），扩写前全局叙事与配图规划 |
-| `argumentBlueprint` | JSON `ArgumentBlueprint`（`src/contracts/argument-blueprint.ts`），Phase 3 主张—证据—推理链（≠ writingBlueprint） |
+| `writingBlueprint` | JSON `WritingBlueprint`（`src/contracts/writing-blueprint.ts`），扩写前唯一计划：叙事、配图、各节要点 + **主张/证据/推理**（`sectionGuides.claim` 等） |
+| `argumentBlueprint` | JSON `ArgumentBlueprint`（遗留）。**主路径已弃用**：论证并入 `writingBlueprint`；列可仍存在供旧数据只读 |
 | `paperPassport` | JSON `PaperPassport`（`src/contracts/paper-passport.ts`）：8 阶段 + `config` / `literature` / `draftProgress` / `abstractSnapshot` / `reviewRound` 快照 |
 | `qualitySession` | JSON 质量中心会话快照（查重配置、审查展开状态、降重采纳记录），刷新/切项目恢复 |
 
@@ -50,7 +50,7 @@ KnowledgeFile 1──* KnowledgeChunk
 - `AnalysisResult`：**增量 PATCH** `/api/projects/[id]/analysis-results`
 - `expandedOutlineSections`：随项目 **POST** `/api/projects` 写入（JSON 列）；自动保存/手动保存均走此路径
 - `writingBlueprint`：`project-writing-blueprint-db.ts` 统一读写蓝图数据
-- `argumentBlueprint`：`project-argument-blueprint-db.ts` 统一读写论证蓝图；Passport Phase 3 用 `hasArgumentBlueprint`
+- `argumentBlueprint`：遗留读写；Passport Phase 3 在有 `writingBlueprint` 时即视为论证规划完成
 - 禁止前端 `saveProject` 全量覆盖 refs/analysis（已迁移，见 ENG-PR-025b）
 
 ### Agent 附件（AgentAttachment · W3-FILE-UPLOAD）

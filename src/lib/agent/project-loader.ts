@@ -1,5 +1,6 @@
 import type { EvidenceClaim } from "@/contracts/data-source";
 import type { WritingGlobalContext } from "@/app/api/writing/types";
+import { parseWritingBlueprint } from "@/contracts/writing-blueprint";
 import { hasCompletePaperConfig } from "@/lib/agent/config-qa";
 import { readWritingBlueprint } from "@/lib/project-writing-blueprint-db";
 import { rowsToSoftReferenceEvidence } from "@/lib/reference-evidence";
@@ -36,14 +37,27 @@ export interface AgentProjectSnapshot {
   writingBlueprintSummary?: string | null;
   /** 写作蓝图建议写作顺序（sectionPath 数组，注入 Agent 简报引导写作顺序） */
   blueprintWritingOrder?: string[];
-  /** 写作蓝图各节引导（path + purpose，注入简报供 Agent 按节推进） */
-  blueprintSectionGuides?: { path: string; purpose: string }[];
+  /** 写作蓝图各节引导（path + purpose + keyPoints，注入简报供 Agent 按节推进） */
+  blueprintSectionGuides?: {
+    path: string;
+    purpose: string;
+    keyPoints?: string[];
+  }[];
+  /** 写作蓝图配图计划短摘要（注入简报） */
+  blueprintFigurePlanSummary?: string | null;
   /** 论证蓝图短摘要 */
   argumentBlueprintSummary?: string | null;
   /** Passport 是否已有 config 记录 */
   hasPaperConfig: boolean;
   /** 写作入口（新建项目选定） */
   agentEntryMode?: import("@/contracts/paper-passport").AgentEntryModeId | null;
+  /**
+   * 文献分类映射签名（refIndex:category 排序拼接），供 antispam 指纹检测
+   * save_reference_classification 写回后指纹变化
+   */
+  referenceClassificationSig?: string;
+  /** ReferenceSource.sourceName（RAG 文件名），供蓝图 assignedSources 解析 [n] */
+  referenceSourceNames?: { refIndex: number; sourceName: string }[];
 }
 
 export async function loadAgentProject(
@@ -55,6 +69,14 @@ export async function loadAgentProject(
     include: {
       references: { orderBy: { order: "asc" } },
       sections: true,
+      referenceSources: {
+        select: { refIndex: true, category: true, sourceName: true },
+        orderBy: { refIndex: "asc" },
+      },
+      analysisResults: {
+        select: { content: true },
+        take: 12,
+      },
     },
   });
   if (!project) return null;
@@ -71,15 +93,8 @@ export async function loadAgentProject(
     }
   }
 
-  const writingBlueprint = await readWritingBlueprint(projectId);
-  let globalContext: WritingGlobalContext | undefined;
-  if (writingBlueprint) {
-    try {
-      globalContext = JSON.parse(writingBlueprint) as WritingGlobalContext;
-    } catch {
-      globalContext = undefined;
-    }
-  }
+  const writingBlueprintRaw = await readWritingBlueprint(projectId);
+  const blueprint = parseWritingBlueprint(writingBlueprintRaw);
 
   const langRaw = (project as { language?: string | null }).language;
   const styleRaw = project.citationStyle;
@@ -130,41 +145,68 @@ export async function loadAgentProject(
     refNums: extractRefNumsSignature(abstractText),
   });
 
+  const sectionPreviews: Record<string, string> = {};
+  for (const s of sectionFills) {
+    if (s.preview?.trim()) {
+      const p = s.preview.trim();
+      sectionPreviews[s.key] = p.length > 150 ? `${p.slice(0, 150)}...` : p;
+    }
+  }
+
+  const analysisResults = project.analysisResults
+    .map((r) => r.content?.trim())
+    .filter((c): c is string => Boolean(c));
+
+  // WritingBlueprint 必须嵌套在 globalContext.blueprint（勿把蓝图 JSON 整坨当作 WritingGlobalContext）
+  const globalContext: WritingGlobalContext | undefined =
+    blueprint
+    || abstractText
+    || project.outline
+    || Object.keys(sectionPreviews).length > 0
+    || analysisResults.length > 0
+      ? {
+          abstract: abstractText || undefined,
+          outline: project.outline || undefined,
+          sectionPreviews:
+            Object.keys(sectionPreviews).length > 0 ? sectionPreviews : undefined,
+          analysisResults:
+            analysisResults.length > 0 ? analysisResults : undefined,
+          blueprint: blueprint ?? null,
+        }
+      : undefined;
+
   let writingBlueprintSummary: string | null = null;
   let blueprintWritingOrder: string[] | undefined;
-  let blueprintSectionGuides: { path: string; purpose: string }[] | undefined;
-  if (writingBlueprint?.trim()) {
-    try {
-      const bp = JSON.parse(writingBlueprint) as {
-        thesis?: string;
-        estimatedWordCount?: { min?: number; max?: number };
-        writingOrder?: unknown;
-        sectionGuides?: unknown;
-      };
-      const words =
-        bp.estimatedWordCount?.min != null && bp.estimatedWordCount?.max != null
-          ? `词数约 ${bp.estimatedWordCount.min}-${bp.estimatedWordCount.max}`
-          : "";
-      writingBlueprintSummary = [bp.thesis?.slice(0, 200), words]
-        .filter(Boolean)
-        .join("；") || "（已有写作蓝图）";
-      if (Array.isArray(bp.writingOrder)) {
-        blueprintWritingOrder = bp.writingOrder.filter((s) => typeof s === "string");
-      }
-      if (Array.isArray(bp.sectionGuides)) {
-        blueprintSectionGuides = bp.sectionGuides
-          .filter(
-            (g): g is { sectionPath: string; purpose: string } =>
-              !!g
-              && typeof g === "object"
-              && typeof (g as { sectionPath?: unknown }).sectionPath === "string"
-              && typeof (g as { purpose?: unknown }).purpose === "string",
-          )
-          .map((g) => ({ path: g.sectionPath, purpose: g.purpose.slice(0, 160) }));
-      }
-    } catch {
-      writingBlueprintSummary = "（已有写作蓝图）";
+  let blueprintSectionGuides:
+    | { path: string; purpose: string; keyPoints?: string[] }[]
+    | undefined;
+  let blueprintFigurePlanSummary: string | null = null;
+  if (blueprint) {
+    const words = `词数约 ${blueprint.estimatedWordCount.min}-${blueprint.estimatedWordCount.max}`;
+    writingBlueprintSummary =
+      [blueprint.thesis.slice(0, 200), words].filter(Boolean).join("；")
+      || "（已有写作蓝图）";
+    if (blueprint.writingOrder.length > 0) {
+      blueprintWritingOrder = [...blueprint.writingOrder];
     }
+    if (blueprint.sectionGuides.length > 0) {
+      blueprintSectionGuides = blueprint.sectionGuides.map((g) => ({
+        path: g.sectionPath,
+        purpose: g.purpose.slice(0, 160),
+        keyPoints: g.keyPoints.slice(0, 6).map((k) => k.slice(0, 80)),
+      }));
+    }
+    const figItems = blueprint.figurePlan.items.slice(0, 6);
+    if (figItems.length > 0) {
+      blueprintFigurePlanSummary = figItems
+        .map(
+          (f) =>
+            `${f.sectionPath}：[${f.type}] ${f.suggestedCaption.slice(0, 40)}`,
+        )
+        .join("；");
+    }
+  } else if (writingBlueprintRaw?.trim()) {
+    writingBlueprintSummary = "（已有写作蓝图）";
   }
 
   let argumentBlueprintSummary: string | null = null;
@@ -185,6 +227,18 @@ export async function loadAgentProject(
     }
   }
 
+  const referenceClassificationSig = project.referenceSources
+    .map((s) => `${s.refIndex}:${(s.category || "").trim()}`)
+    .filter((s) => !s.endsWith(":"))
+    .join("|");
+
+  const referenceSourceNames = project.referenceSources
+    .filter((s) => s.sourceName?.trim())
+    .map((s) => ({
+      refIndex: s.refIndex,
+      sourceName: s.sourceName.trim(),
+    }));
+
   return {
     title: project.title,
     mode: project.mode === "research" ? "research" : "review",
@@ -201,15 +255,19 @@ export async function loadAgentProject(
     dataClaims,
     globalContext,
     currentPhase,
-    hasWritingBlueprint: Boolean(writingBlueprint?.trim()),
+    hasWritingBlueprint: Boolean(writingBlueprintRaw?.trim()),
     hasArgumentBlueprint: Boolean(project.argumentBlueprint?.trim()),
     sectionFills,
     writingBlueprintSummary,
     blueprintWritingOrder,
     blueprintSectionGuides,
+    blueprintFigurePlanSummary,
     argumentBlueprintSummary,
     hasPaperConfig,
     agentEntryMode,
+    referenceClassificationSig: referenceClassificationSig || undefined,
+    referenceSourceNames:
+      referenceSourceNames.length > 0 ? referenceSourceNames : undefined,
   };
 }
 

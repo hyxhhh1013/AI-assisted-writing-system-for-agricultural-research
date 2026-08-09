@@ -51,7 +51,6 @@ export function checkAgentToolPhaseGate(
   const writeTools = new Set([
     "write_section",
     "refine_content",
-    "build_argument_blueprint",
     "write_bilingual_abstract",
   ]);
 
@@ -77,23 +76,12 @@ export function checkAgentToolPhaseGate(
     return { ok: true };
   }
 
-  if (toolName === "build_argument_blueprint") {
-    if (!outlineReady(project)) {
-      return {
-        ok: false,
-        error:
-          "论证蓝图需要大纲。请先 generate_outline（必要时再 generate_writing_blueprint），然后调用 build_argument_blueprint",
-      };
-    }
-    return { ok: true };
-  }
-
   if (toolName === "write_section" || toolName === "refine_content") {
     if (!outlineReady(project)) {
       return {
         ok: false,
         error:
-          "尚未有可用大纲。请先调用 generate_outline → generate_writing_blueprint → build_argument_blueprint，再 write_section",
+          "尚未有可用大纲。请先调用 generate_outline → generate_writing_blueprint，再 write_section",
       };
     }
 
@@ -101,15 +89,7 @@ export function checkAgentToolPhaseGate(
       return {
         ok: false,
         error:
-          "尚无写作蓝图。请先调用 generate_writing_blueprint，再起草正文",
-      };
-    }
-
-    if (!project.hasArgumentBlueprint) {
-      return {
-        ok: false,
-        error:
-          "尚无论证蓝图。请先调用 build_argument_blueprint，再 write_section 起草",
+          "尚无写作蓝图。请先调用 generate_writing_blueprint，再起草正文（论证要点已含在写作蓝图各节 claim/evidenceHint 中）",
       };
     }
 
@@ -130,9 +110,10 @@ export function checkAgentToolPhaseGate(
 
 /** 写入系统提示的门禁摘要 */
 export function phaseGatePromptRules(): string {
-  return `阶段策略（对齐 academic-paper；缺前置用工具自补，缺信息就问用户）：
+  return `阶段策略（缺前置用工具自补，缺信息就问用户）：
 - 用 inspect_project 了解当前阶段与空白章节，再决定工具
-- 写章节时若缺大纲/写作蓝图/论证蓝图：可直接 write_section，系统会自动补齐前置（也可手动 generate_*）
+- 主路径：配置 → 大纲 → 写作蓝图（含各节主张/证据）→ 分节写 → 摘要/核查
+- 写章节若缺大纲/写作蓝图：可直接 write_section，系统会自动补齐（勿再调用已弃用的 build_argument_blueprint）
 - 无正文时不要写摘要 / write_bilingual_abstract
 - 引用以 validate_citations 为准；不编造文献
 - 审查最多 2 轮；满轮后总结问题并征求用户是否继续改`;

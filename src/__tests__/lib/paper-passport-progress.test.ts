@@ -67,25 +67,16 @@ describe("recomputePassportProgress", () => {
       reviewDoneCount: 0,
     });
     expect(passport.phaseStatus["2"]).toBe("done");
-    expect(passport.currentPhase).toBe(3);
+    // 论证已并入写作蓝图：有 blueprint 时 Phase 3 一并完成
+    expect(passport.phaseStatus["3"]).toBe("done");
+    expect(passport.currentPhase).toBe(4);
   });
 
-  it("marks phase 3 done when argument blueprint exists", () => {
-    let passport = recomputePassportProgress(basePassport(), {
+  it("marks phase 3 done when writing blueprint exists (argument merged)", () => {
+    const passport = recomputePassportProgress(basePassport(), {
       referenceCount: 3,
       hasBlueprint: true,
       hasArgumentBlueprint: false,
-      outlineChars: 200,
-      filledCoreSections: 0,
-      totalCoreSections: 4,
-      expandedOutlineCount: 0,
-      abstractChars: 0,
-      reviewDoneCount: 0,
-    });
-    passport = recomputePassportProgress(passport, {
-      referenceCount: 3,
-      hasBlueprint: true,
-      hasArgumentBlueprint: true,
       outlineChars: 200,
       filledCoreSections: 0,
       totalCoreSections: 4,

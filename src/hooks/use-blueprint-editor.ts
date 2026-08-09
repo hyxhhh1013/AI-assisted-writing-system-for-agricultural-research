@@ -16,10 +16,12 @@ export function useBlueprintEditor(
   const [draft, setDraft] = useState<WritingBlueprint | null>(initial);
   const [isDirty, setIsDirty] = useState(false);
 
+  // 仅在无未保存编辑时同步外部蓝图。项目刷新 / Agent 写回不应把正在改的草稿打掉（否则像「页面被弹开重载」）。
   useEffect(() => {
+    if (!initial) return;
+    if (isDirty) return;
     setDraft(initial);
-    setIsDirty(false);
-  }, [initial?.generatedAt, initial?.outlineHash]);
+  }, [initial, initial?.generatedAt, initial?.outlineHash, isDirty]);
 
   const updateDraft = useCallback((updater: (prev: WritingBlueprint) => WritingBlueprint) => {
     setDraft((prev) => {

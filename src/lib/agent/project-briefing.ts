@@ -113,13 +113,24 @@ export function formatAgentProjectBriefing(
       : []),
     ...(project.blueprintSectionGuides?.length
       ? [
-          `各节写作要点（蓝图）：\n${project.blueprintSectionGuides
-            .map((g) => `- ${g.path}：${g.purpose}`)
+          `各节写作要点（蓝图；write_section 须对齐，系统会自动注入本节蓝图）：\n${project.blueprintSectionGuides
+            .map((g) => {
+              const kp =
+                g.keyPoints?.length
+                  ? `；要点：${g.keyPoints.join("；")}`
+                  : "";
+              return `- ${g.path}：${g.purpose}${kp}`;
+            })
             .join("\n")}`,
         ]
       : []),
-    `论证蓝图：${project.hasArgumentBlueprint ? "有" : "无"}${
-      project.argumentBlueprintSummary ? ` — ${project.argumentBlueprintSummary}` : ""
+    ...(project.blueprintFigurePlanSummary
+      ? [`蓝图配图计划：${project.blueprintFigurePlanSummary}`]
+      : []),
+    `论证规划：已并入写作蓝图各节（claim / evidenceHint / warrant）；勿再单独生成论证蓝图${
+      project.argumentBlueprintSummary
+        ? `（项目中仍有旧版独立论证蓝图摘要，仅供参考：${project.argumentBlueprintSummary}）`
+        : ""
     }`,
     `已有正文：${filled || "无"}`,
     `空白章节：${empty || "无"}`,
@@ -147,7 +158,9 @@ export function suggestNextAgentActions(input: {
   currentPhase?: number | null;
   writeEnabled: boolean;
   hasOutline: boolean;
-  hasArgumentBlueprint: boolean;
+  /** @deprecated 论证已并入写作蓝图；保留字段以免旧调用方崩 */
+  hasArgumentBlueprint?: boolean;
+  hasWritingBlueprint?: boolean;
   emptySections: string[];
   /** 优先于 emptySections 的薄节/缺口 */
   nextSectionKey?: string | null;
@@ -157,7 +170,7 @@ export function suggestNextAgentActions(input: {
     currentPhase,
     writeEnabled,
     hasOutline,
-    hasArgumentBlueprint,
+    hasWritingBlueprint,
     emptySections,
     nextSectionKey,
     thinOrGapSections,
@@ -168,10 +181,10 @@ export function suggestNextAgentActions(input: {
     tips.push("检索相关文献并总结研究缺口");
   }
   if (!hasOutline && (currentPhase ?? 2) <= 2) {
-    tips.push("按 academic-paper 生成大纲与写作蓝图并写回项目");
+    tips.push("生成大纲与写作蓝图并写回项目");
   }
-  if (hasOutline && !hasArgumentBlueprint && writeEnabled) {
-    tips.push("基于大纲生成论证蓝图并写回项目");
+  if (hasOutline && writeEnabled && !hasWritingBlueprint) {
+    tips.push("基于大纲生成写作蓝图（含各节主张/证据）并写回项目");
   }
 
   const writeTarget =

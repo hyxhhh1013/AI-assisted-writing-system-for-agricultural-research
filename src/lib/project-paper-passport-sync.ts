@@ -168,10 +168,12 @@ async function recomputeAndPersistPassport(
   );
 
   const argument = parseArgumentBlueprint(argumentRaw);
+  // 写作蓝图存在即满足「论证规划」（主张/证据已并入 sectionGuides）；旧独立论证蓝图仍计入链条数
+  const hasWritingBlueprint = Boolean(blueprintRaw?.trim());
   const signals = buildSignals(
     project,
-    Boolean(blueprintRaw?.trim()),
-    Boolean(argument),
+    hasWritingBlueprint,
+    hasWritingBlueprint || Boolean(argument),
     reviewDoneCount,
     argument
       ? { chainCount: argument.chains.length, rebuttalCount: argument.rebuttals.length }

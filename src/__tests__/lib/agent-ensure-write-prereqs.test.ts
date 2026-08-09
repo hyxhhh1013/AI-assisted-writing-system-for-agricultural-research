@@ -27,11 +27,10 @@ function snap(overrides: Partial<AgentProjectSnapshot> = {}): AgentProjectSnapsh
 }
 
 describe("listMissingWritePrereqs", () => {
-  it("lists outline then blueprints in order", () => {
+  it("lists outline then writing blueprint only (argument merged in)", () => {
     expect(listMissingWritePrereqs(snap())).toEqual([
       "generate_outline",
       "generate_writing_blueprint",
-      "build_argument_blueprint",
     ]);
     expect(
       listMissingWritePrereqs(
@@ -41,7 +40,7 @@ describe("listMissingWritePrereqs", () => {
           hasArgumentBlueprint: false,
         }),
       ),
-    ).toEqual(["build_argument_blueprint"]);
+    ).toEqual([]);
     expect(
       listMissingWritePrereqs(
         snap({
@@ -79,13 +78,6 @@ describe("ensureWritePrerequisites", () => {
       };
       return { success: true, summary: "写作蓝图已写回" };
     });
-    const argument = vi.fn(async () => {
-      state.snap = {
-        ...state.snap,
-        hasArgumentBlueprint: true,
-      };
-      return { success: true, summary: "论证蓝图已写回" };
-    });
 
     const tools: ToolDefinition[] = [
       {
@@ -94,13 +86,6 @@ describe("ensureWritePrerequisites", () => {
         parameters: { type: "object", properties: {}, required: [] },
         safety: "write",
         execute: writing,
-      },
-      {
-        name: "build_argument_blueprint",
-        description: "",
-        parameters: { type: "object", properties: {}, required: [] },
-        safety: "write",
-        execute: argument,
       },
       {
         name: "generate_outline",
@@ -116,13 +101,9 @@ describe("ensureWritePrerequisites", () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(result.ran).toEqual([
-      "generate_writing_blueprint",
-      "build_argument_blueprint",
-    ]);
+    expect(result.ran).toEqual(["generate_writing_blueprint"]);
     expect(writing).toHaveBeenCalledOnce();
-    expect(argument).toHaveBeenCalledOnce();
-    expect(ctx.budget.toolCallCount).toBe(2);
+    expect(ctx.budget.toolCallCount).toBe(1);
   });
 
   it("no-ops when prerequisites already satisfied", async () => {

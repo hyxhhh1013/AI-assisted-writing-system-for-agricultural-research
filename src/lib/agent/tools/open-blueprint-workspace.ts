@@ -8,8 +8,9 @@ import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 export const openBlueprintWorkspaceTool: ToolDefinition = {
   name: "open_blueprint_workspace",
   description:
-    "用户想看或编辑「写作蓝图」时调用：前端会打开蓝图工作台供其查看/编辑。"
-    + "若蓝图尚未生成，先 generate_writing_blueprint 生成后再调用；不要自行把蓝图内容贴成长文。",
+    "仅当用户明确说「看看蓝图 / 打开蓝图 / 编辑蓝图」时调用；前端会打开蓝图工作台。"
+    + "禁止在 generate_writing_blueprint 后自动调用；批准检查点与面板已有「打开蓝图」按钮。"
+    + "若蓝图尚未生成，先 generate_writing_blueprint；不要把蓝图全文贴进对话。",
   parameters: {
     type: "object",
     properties: {},
