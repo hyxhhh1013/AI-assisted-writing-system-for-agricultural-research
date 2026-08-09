@@ -1071,6 +1071,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-09 | W3-AP-FIG-QA-CONTINUE | AI | 「重画并调整图」会话：QA 判图5需重生成后模型长文推演就 finished。并行 read_figure 补 nudge；`routeAfterAgent` 在 `lastFigureQaNeedsReplace` 时强制续跑；禁止空口收尾。 |
 | 2026-08-09 | W3-AP-FIG-UX | AI | 个性化改图：Agent 结构化表单替 window.prompt；结果卡落点说明+跳转；编辑器本节插图条挪位（节末策略）。 |
 | 2026-08-09 | W3-AP-FIG-DOCK-P2 | AI | 配图坞（输入区上方最近出图）；/plot 深链带 replaceImageUrl，插入对话框默认就地替换；改图表单快捷项（分叉/三面板/模板）。 |
+| 2026-08-09 | 部署 Turbopack hash | AI | 生产 Agent 500：`@prisma/client-<hash>` + `@napi-rs/canvas-<hash>` 缺失。`apply.sh` 改为扫描全部 hashed external 并链接；`@napi-rs/canvas` 升为直接依赖；DEPLOY.md 踩坑更新。 |
 
 ---
 

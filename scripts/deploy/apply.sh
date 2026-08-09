@@ -28,19 +28,43 @@ echo "→ Prisma Generate（生成 Debian 引擎）"
 echo "→ Prisma DB Push"
 ./node_modules/.bin/prisma db push --skip-generate
 
-echo "→ Turbopack Prisma 客户端 hash 符号链接"
-# Turbopack 把 @prisma/client external 成 @prisma/client-<hash>，prisma generate 不生成该模块
-# → 符号链接指向生成的 .prisma/client，否则 standalone 启动报 "Cannot find module '@prisma/client-<hash>'"
-PRISMA_HASH="$(grep -hoE '@prisma/client-[a-f0-9]+' .next/server/chunks/*.js 2>/dev/null | sort -u | head -1 | cut -d/ -f2)"
-if [ -n "$PRISMA_HASH" ]; then
-  if [ ! -e "node_modules/@prisma/$PRISMA_HASH" ]; then
-    ln -sfn "../.prisma/client" "node_modules/@prisma/$PRISMA_HASH"
-    echo "→ 已创建 node_modules/@prisma/$PRISMA_HASH → .prisma/client"
-  else
-    echo "→ $PRISMA_HASH 已存在，跳过"
-  fi
+echo "→ Turbopack hashed external 符号链接"
+# serverExternalPackages（@prisma/client、@napi-rs/canvas）会被 Turbopack 改写成
+# @scope/name-<hash>，npm 不会生成该目录 → 必须符号链接到真实包，否则 Agent/PDF 等路由 500。
+# 用 -r/--include，避免 chunks/*.js glob 参数过长或未命中导致静默跳过。
+HASHED_MODS="$(
+  grep -rhoE '@[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+-[a-f0-9]{8,}' .next/server --include='*.js' 2>/dev/null \
+    | sort -u || true
+)"
+if [ -z "$HASHED_MODS" ]; then
+  echo "→ 构建产物中未命中 hashed external，跳过"
 else
-  echo "→ 构建产物中未命中 @prisma/client-<hash>，跳过"
+  while IFS= read -r mod; do
+    [ -n "$mod" ] || continue
+    scope="${mod%%/*}"
+    name_hash="${mod#*/}"
+    name="$(printf '%s' "$name_hash" | sed -E 's/-[a-f0-9]{8,}$//')"
+    mkdir -p "node_modules/$scope"
+    if [ "$scope/$name" = "@prisma/client" ]; then
+      if [ ! -d node_modules/.prisma/client ]; then
+        echo "→ 缺少 node_modules/.prisma/client，无法链接 $mod" >&2
+        exit 1
+      fi
+      ln -sfn "../.prisma/client" "node_modules/$scope/$name_hash"
+      echo "→ 已链接 $mod → .prisma/client"
+    else
+      if [ ! -d "node_modules/$scope/$name" ]; then
+        echo "→ 缺少 node_modules/$scope/$name，尝试安装…"
+        npm install "$scope/$name" --legacy-peer-deps --no-save
+      fi
+      if [ ! -d "node_modules/$scope/$name" ]; then
+        echo "→ 无法链接 $mod（包不存在）" >&2
+        exit 1
+      fi
+      ln -sfn "$name" "node_modules/$scope/$name_hash"
+      echo "→ 已链接 $mod → $scope/$name"
+    fi
+  done <<< "$HASHED_MODS"
 fi
 
 echo "→ 部署前自检"

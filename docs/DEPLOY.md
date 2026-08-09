@@ -122,7 +122,7 @@ ssh -i "E:/Edownload/cursor.pem" -o StrictHostKeyChecking=no ubuntu@159.75.106.2
 | 3 | **standalone 含 692M node_modules** | 复制 + 打包超时（本机 2 分钟卡死） | `package.sh` 用 `tar -C .next/standalone --exclude=node_modules --exclude=papers --exclude=data -cf - . \| tar -C deploy-pkg -xf -` 排除 |
 | 4 | **SSH 限流（fail2ban）** | `Connection closed by ... port 22`，持续几分钟 | **别硬连/别重试**（每次失败重置计时）；等 ~10 分钟一次性干净上传；部署用 nohup 分离，短连接只负责启动 |
 | 5 | **`pm2 reload` 吃旧 `.env`** | 改服务器 `.env`（如 `WRITING_MAX_CONCURRENT`）后 reload 不生效 | 改 env 必须 `pm2 delete grainscript && pm2 start ecosystem.config.cjs && pm2 save`；纯代码部署（无 env 变更）用 `apply.sh` 的 reload 即可 |
-| 6 | **Turbopack + Prisma hash 断裂** | `pm2 status` online 但 HTTP 500，日志 `Cannot find module '@prisma/client-<hash>'` | `next.config.ts` 的 `serverExternalPackages: ["@prisma/client"]` 被 Turbopack external 成 `@prisma/client-<hash>`，`prisma generate` 不生成该模块 → **`apply.sh` 已自动**从 `.next/server/chunks/*.js` grep hash 并 `ln -sfn ../.prisma/client node_modules/@prisma/<hash>` |
+| 6 | **Turbopack hashed external 断裂** | HTTP 500；日志 `Cannot find module '@prisma/client-<hash>'` 或 `@napi-rs/canvas-<hash>`（Agent/附件 PDF 常见） | `serverExternalPackages` 被 Turbopack 改写成带 hash 的模块名。**`apply.sh` 已自动**扫描 `.next/server` 并为 `@prisma/client-*` / `@napi-rs/canvas-*` 等建符号链接 |
 | 7 | **用 `next start` 跑 standalone** | 报错 / 不工作 | 必须 `node server.js`（standalone 模式不支持 `next start`） |
 | 8 | **`.env` 被打进部署包** | 覆盖服务器生产配置（DATABASE_URL 变 SQLite/`@db:`） | 打包排除 `.env`；`apply.sh` `--exclude='.env'` |
 | 9 | **未验证 BUILD_ID** | 自以为部署成功，实际旧包/漏包 | 部署后 `cat .next/BUILD_ID` 与本地核对；打包后 `tar -tzf deploy.tar.gz \| grep -c '\.next/BUILD_ID'` |
@@ -168,7 +168,7 @@ PYTHON_CMD=python3
 
 | 现象 | 原因 | 处理 |
 |------|------|------|
-| HTTP 500 + `Cannot find module '@prisma/client-<hash>'` | Turbopack Prisma external hash 缺失 | 检查 `apply.sh` 的符号链接步骤是否执行；手动：`ln -sfn ../.prisma/client node_modules/@prisma/client-<hash>` + `pm2 restart` |
+| HTTP 500 + `Cannot find module '@prisma/client-<hash>'` / `@napi-rs/canvas-<hash>` | Turbopack hashed external 缺失 | 检查 `apply.sh` 链接步骤；手动：`ln -sfn ../.prisma/client node_modules/@prisma/client-<hash>`；`ln -sfn canvas node_modules/@napi-rs/canvas-<hash>` + `pm2 reload` |
 | `Could not find a production build in './.next'` | 打包漏 `.next`（glob 坑 #1） | 重打包（`package.sh`），验证 BUILD_ID |
 | 数据库连不上 | `.env` 用了 `@db:` / SQLite | 改 `127.0.0.1:5432` |
 | 扩写 API Key 错误 | 服务器 `.env` 未配 / PM2 未吃新 env | 填 Key + `pm2 delete + start` |
