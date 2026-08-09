@@ -26,9 +26,11 @@ import {
   appendProjectSectionMarkdown,
   getProject,
   listProjects,
+  patchProjectCharts,
+  replaceOrAppendSectionImage,
 } from "@/services/project";
 import type { ProjectListItem } from "@/services/project";
-import { parseProjectCharts } from "@/contracts/figure";
+import { parseProjectCharts, type ProjectChartAsset } from "@/contracts/figure";
 import {
   getSectionKeysForMode,
   getSectionLabelForMode,
@@ -53,7 +55,13 @@ interface PlotInsertDialogProps {
   contentHtml?: string;
   /** 为 false 时只追加章节 Markdown，不新增 charts 资产（用于已登记图再次插入） */
   registerAsset?: boolean;
-  onSuccess?: (payload: { projectId: string; sectionKey: string }) => void;
+  /** 就地替换正文中的旧图 URL（/plot?replaceImageUrl=） */
+  replaceImageUrl?: string;
+  onSuccess?: (payload: {
+    projectId: string;
+    sectionKey: string;
+    mode?: "replaced" | "appended";
+  }) => void;
 }
 
 export function PlotInsertDialog({
@@ -69,6 +77,7 @@ export function PlotInsertDialog({
   customMarkdown,
   contentHtml,
   registerAsset = true,
+  replaceImageUrl: replaceImageUrlProp,
   onSuccess,
 }: PlotInsertDialogProps) {
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
@@ -79,12 +88,17 @@ export function PlotInsertDialog({
   const [inserting, setInserting] = useState(false);
   const [done, setDone] = useState(false);
   const [insertedProjectId, setInsertedProjectId] = useState<string | null>(null);
+  const [replaceImageUrl, setReplaceImageUrl] = useState(replaceImageUrlProp?.trim() || "");
+  const [preferReplace, setPreferReplace] = useState(Boolean(replaceImageUrlProp?.trim()));
+  const [projectCharts, setProjectCharts] = useState<ProjectChartAsset[]>([]);
   const router = useRouter();
 
   useEffect(() => {
     if (!open) return;
     setInsertCaption(caption);
-  }, [open, caption]);
+    setReplaceImageUrl(replaceImageUrlProp?.trim() || "");
+    setPreferReplace(Boolean(replaceImageUrlProp?.trim()));
+  }, [open, caption, replaceImageUrlProp]);
 
   useEffect(() => {
     if (!open) return;
@@ -111,20 +125,45 @@ export function PlotInsertDialog({
         label: getSectionLabelForMode(key, mode),
       }));
       setSectionOptions(options);
-      const preferred = mode === "research" ? "results" : "literature_body";
-      if (keys.includes(preferred)) {
-        setSelectedSection(preferred);
-      } else if (keys[0]) {
-        setSelectedSection(keys[0]);
+      const charts = parseProjectCharts(project.charts);
+      setProjectCharts(charts);
+
+      // 深链未带 replace 时：按同 caption 自动匹配旧图
+      let resolvedReplace = replaceImageUrlProp?.trim() || "";
+      if (!resolvedReplace && caption.trim()) {
+        const hit = [...charts]
+          .reverse()
+          .find(
+            (c) =>
+              (c.caption || "").trim() === caption.trim()
+              || caption.trim().includes((c.caption || "").trim()),
+          );
+        if (hit?.imageUrl) {
+          resolvedReplace = hit.imageUrl;
+          setPreferReplace(true);
+          if (hit.sectionKey && keys.includes(hit.sectionKey)) {
+            setSelectedSection(hit.sectionKey);
+          }
+        }
       }
-      const chartCount = parseProjectCharts(project.charts).length;
+      if (resolvedReplace) setReplaceImageUrl(resolvedReplace);
+
+      const preferred = mode === "research" ? "results" : "literature_body";
+      if (!resolvedReplace) {
+        if (keys.includes(preferred)) {
+          setSelectedSection(preferred);
+        } else if (keys[0]) {
+          setSelectedSection(keys[0]);
+        }
+      }
+      const chartCount = charts.length;
       const numbered = caption.match(/^图\s*\d+|^表\s*\d+/);
-      if (!numbered && registerAsset) {
+      if (!numbered && registerAsset && !resolvedReplace) {
         const prefix = figureId === "table_three_line" ? "表" : "图";
         setInsertCaption(`${prefix}${chartCount + 1} ${caption}`.trim());
       }
     });
-  }, [open, selectedProject, caption, registerAsset, figureId]);
+  }, [open, selectedProject, caption, registerAsset, figureId, replaceImageUrlProp]);
 
   const markdown =
     customMarkdown ?? `\n\n![${insertCaption}](${imageUrl})\n\n`;
@@ -140,7 +179,30 @@ export function PlotInsertDialog({
     if (!selectedProject || !selectedSection) return;
     setInserting(true);
     try {
-      await appendProjectSectionMarkdown(selectedProject, selectedSection, markdown);
+      let mode: "replaced" | "appended" = "appended";
+      if (customMarkdown) {
+        await appendProjectSectionMarkdown(selectedProject, selectedSection, markdown);
+      } else if (preferReplace && replaceImageUrl && imageUrl) {
+        mode = await replaceOrAppendSectionImage(selectedProject, selectedSection, {
+          newImageUrl: imageUrl,
+          caption: insertCaption,
+          replaceImageUrl,
+        });
+        // 退休旧资产（若 URL 不同）
+        if (mode === "replaced" && replaceImageUrl !== imageUrl) {
+          const victim = projectCharts.find((c) => c.imageUrl === replaceImageUrl);
+          if (victim?.id) {
+            try {
+              await patchProjectCharts(selectedProject, [{ op: "delete", id: victim.id }]);
+            } catch {
+              /* 不阻塞 */
+            }
+          }
+        }
+      } else {
+        await appendProjectSectionMarkdown(selectedProject, selectedSection, markdown);
+      }
+
       const shouldRegisterAsset = registerAsset && Boolean(imageUrl);
       if (shouldRegisterAsset) {
         await appendChartAsset(selectedProject, {
@@ -155,13 +217,15 @@ export function PlotInsertDialog({
       }
       setDone(true);
       setInsertedProjectId(selectedProject);
-      onSuccess?.({ projectId: selectedProject, sectionKey: selectedSection });
+      onSuccess?.({ projectId: selectedProject, sectionKey: selectedSection, mode });
       toast.success(
-        shouldRegisterAsset
-          ? "已插入章节并登记图表资产"
-          : customMarkdown
-            ? "已插入章节"
-            : "已再次插入到章节",
+        mode === "replaced"
+          ? "已就地替换正文中的旧图并登记新资产"
+          : shouldRegisterAsset
+            ? "已插入章节并登记图表资产"
+            : customMarkdown
+              ? "已插入章节"
+              : "已再次插入到章节",
       );
     } catch (err: unknown) {
       toast.error(getErrorMessage(err));
@@ -174,7 +238,13 @@ export function PlotInsertDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{registerAsset ? "插入到论文" : "再次插入到章节"}</DialogTitle>
+          <DialogTitle>
+            {preferReplace && replaceImageUrl
+              ? "精修回写到论文"
+              : registerAsset
+                ? "插入到论文"
+                : "再次插入到章节"}
+          </DialogTitle>
         </DialogHeader>
 
         {done ? (
@@ -261,6 +331,24 @@ export function PlotInsertDialog({
               </Select>
             </div>
 
+            {!customMarkdown && replaceImageUrl ? (
+              <label className="flex items-start gap-2 rounded-md border border-[#1a5632]/20 bg-[#f0f4f1] px-2.5 py-2 text-xs text-[#122820]">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={preferReplace}
+                  onChange={(e) => setPreferReplace(e.target.checked)}
+                />
+                <span>
+                  <span className="font-medium">就地替换正文旧图</span>
+                  <span className="mt-0.5 block text-[10px] text-muted-foreground break-all">
+                    {replaceImageUrl}
+                    {!preferReplace ? "（取消后将追加到节末）" : ""}
+                  </span>
+                </span>
+              </label>
+            ) : null}
+
             <DialogFooter className="gap-2 sm:gap-0">
               <Button variant="outline" onClick={handleCopy}>
                 <Copy className="h-4 w-4 mr-1.5" />
@@ -276,7 +364,7 @@ export function PlotInsertDialog({
                 ) : (
                   <FileCheck className="h-4 w-4 mr-1.5" />
                 )}
-                插入到章节
+                {preferReplace && replaceImageUrl ? "替换到正文" : "插入到章节"}
               </Button>
             </DialogFooter>
           </>

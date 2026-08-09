@@ -255,12 +255,40 @@ export function useAgent(options: UseAgentOptions = {}) {
         break;
       case "agent/observation": {
         const data = event.result?.data;
+        const dataObj =
+          data && typeof data === "object" ? (data as Record<string, unknown>) : null;
         const imageUrl =
-          data
-          && typeof data === "object"
-          && typeof (data as { imageUrl?: unknown }).imageUrl === "string"
-            ? String((data as { imageUrl: string }).imageUrl)
+          dataObj && typeof dataObj.imageUrl === "string"
+            ? dataObj.imageUrl
             : undefined;
+        const rawPlotHref =
+          dataObj && typeof dataObj.href === "string" && dataObj.href.startsWith("/plot")
+            ? dataObj.href
+            : undefined;
+        const replaceImageUrl = imageUrl;
+        // 兜底：旧 observation 的 href 可能未带 replaceImageUrl
+        let plotHref = rawPlotHref;
+        if (rawPlotHref && imageUrl && !rawPlotHref.includes("replaceImageUrl=")) {
+          const sep = rawPlotHref.includes("?") ? "&" : "?";
+          plotHref = `${rawPlotHref}${sep}replaceImageUrl=${encodeURIComponent(imageUrl)}`;
+        }
+        const sectionKey =
+          dataObj && typeof dataObj.insertedSection === "string"
+            ? dataObj.insertedSection
+            : dataObj?.persisted
+              && typeof dataObj.persisted === "object"
+              && typeof (dataObj.persisted as { sectionKey?: unknown }).sectionKey === "string"
+              ? String((dataObj.persisted as { sectionKey: string }).sectionKey)
+              : undefined;
+        const insertMode =
+          dataObj && typeof dataObj.insertMode === "string"
+            ? dataObj.insertMode
+            : undefined;
+        const keepData =
+          data != null
+          && (event.tool === "validate_citations"
+            || event.tool === "draft_mechanism_figure"
+            || event.tool === "generate_chart");
         setMessages((prev) => [
           ...prev,
           {
@@ -269,7 +297,11 @@ export function useAgent(options: UseAgentOptions = {}) {
             summary: event.result?.summary,
             error: event.error ?? event.result?.error,
             ...(imageUrl ? { imageUrl } : {}),
-            ...(data != null && event.tool === "validate_citations" ? { data } : {}),
+            ...(plotHref ? { plotHref } : {}),
+            ...(replaceImageUrl ? { replaceImageUrl } : {}),
+            ...(sectionKey ? { sectionKey } : {}),
+            ...(insertMode ? { insertMode } : {}),
+            ...(keepData ? { data } : {}),
           },
         ]);
         if (event.tool === "import_reference") setImportProgress(null);

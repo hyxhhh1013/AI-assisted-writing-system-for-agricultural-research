@@ -43,6 +43,16 @@ import { getCoreSectionKeysForMode } from "@/lib/section-registry";
 import type { PhaseTaskPack } from "@/contracts/phase-task-pack";
 import { resolveLiveProgress } from "@/lib/agent/ui-progress";
 import { toast } from "sonner";
+import { findNewBlueprintOpenIndex } from "@/lib/agent/blueprint-open-guard";
+import { buildFigureReviseGoal } from "@/lib/agent/figure-revise";
+import {
+  collectSessionFigureDockItems,
+  mergeProjectChartsIntoDock,
+} from "@/lib/agent/figure-dock";
+import type { FigureReviseFormValue, FigureReviseTarget } from "@/contracts/figure-revise";
+import { parseProjectCharts } from "@/contracts/figure";
+import { getProjectWritingMode, getSectionLabelForMode } from "@/lib/section-registry";
+import { AgentFigureDock } from "@/components/shared/agent/agent-figure-dock";
 
 const easeOut = [0.22, 1, 0.36, 1] as const;
 
@@ -81,6 +91,8 @@ interface AgentPanelProps {
   onCollapse?: () => void;
   /** 打开蓝图工作台（blueprint_approve 检查点时查看/编辑完整蓝图） */
   onOpenBlueprint?: () => void;
+  /** 跳到正文章节（配图结果卡「查看正文位置」） */
+  onJumpToSection?: (sectionKey: string) => void;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -120,6 +132,7 @@ export function AgentPanel({
   onProjectMutated,
   onCollapse,
   onOpenBlueprint,
+  onJumpToSection,
 }: AgentPanelProps) {
   const agent = useAgent({
     projectId,
@@ -224,7 +237,7 @@ export function AgentPanel({
           currentPhase: passport?.currentPhase ?? null,
           writeEnabled: WRITE_PUBLIC,
           hasOutline: Boolean(p.outline?.trim()),
-          hasArgumentBlueprint: Boolean(p.argumentBlueprint?.trim()),
+          hasWritingBlueprint: Boolean(p.writingBlueprint?.trim()),
           emptySections,
           nextSectionKey: coverage.nextSectionKey,
           thinOrGapSections: [
@@ -272,7 +285,7 @@ export function AgentPanel({
         suggestNextAgentActions({
           writeEnabled: WRITE_PUBLIC,
           hasOutline: false,
-          hasArgumentBlueprint: false,
+          hasWritingBlueprint: false,
           emptySections: [],
         }),
       );
@@ -363,29 +376,37 @@ export function AgentPanel({
     }
   }, [agent.pendingConfirm]);
 
-  /** 「看看蓝图」→ open_blueprint_workspace 成功 observation → 打开蓝图工作台 */
-  const lastBlueprintOpenIdx = useRef(-1);
+  /**
+   * 「看看蓝图」→ 仅对本轮新追加的 open_blueprint_workspace 成功结果自动打开。
+   * 会话恢复 / 面板重挂载时只推进水位，绝不因历史 observation 误弹。
+   */
+  const blueprintScanSessionRef = useRef<string | null>(null);
+  const blueprintScannedUntilRef = useRef<number | null>(null);
   useEffect(() => {
     if (!onOpenBlueprint) return;
-    let lastIdx = -1;
-    for (let i = agent.messages.length - 1; i >= 0; i--) {
-      const m = agent.messages[i];
-      if (m.kind === "observation" && m.tool === "open_blueprint_workspace") {
-        lastIdx = i;
-        break;
-      }
+    const sessionKey = agent.sessionId ?? "__none__";
+    if (blueprintScanSessionRef.current !== sessionKey) {
+      blueprintScanSessionRef.current = sessionKey;
+      blueprintScannedUntilRef.current = null;
     }
-    const msg = lastIdx >= 0 ? agent.messages[lastIdx] : undefined;
-    if (
-      msg
-      && msg.kind === "observation"
-      && lastIdx !== lastBlueprintOpenIdx.current
-      && !msg.error
-    ) {
-      lastBlueprintOpenIdx.current = lastIdx;
-      onOpenBlueprint();
+    // 首次同步（含恢复历史）：只记水位
+    if (blueprintScannedUntilRef.current === null) {
+      blueprintScannedUntilRef.current = agent.messages.length - 1;
+      return;
     }
-  }, [agent.messages, onOpenBlueprint]);
+    // 换会话或清空后变短：重置水位，仍不打开
+    if (agent.messages.length - 1 < blueprintScannedUntilRef.current) {
+      blueprintScannedUntilRef.current = agent.messages.length - 1;
+      return;
+    }
+    const idx = findNewBlueprintOpenIndex(
+      agent.messages,
+      blueprintScannedUntilRef.current,
+    );
+    if (idx < 0) return;
+    blueprintScannedUntilRef.current = idx;
+    onOpenBlueprint();
+  }, [agent.messages, agent.sessionId, onOpenBlueprint]);
 
   const statusHint = useMemo(
     () => STATUS_LABEL[agent.status] ?? agent.status,
@@ -503,6 +524,36 @@ export function AgentPanel({
       isImportBatchConfirm ? [...(importSelection ?? [])] : undefined,
     );
   }, [isImportBatchConfirm, confirmImportItems, importSelection, agent]);
+
+  /** 配图结果卡「按意见改」：结构化表单 → 强制 replace */
+  const handleReviseFigure = useCallback(
+    (target: FigureReviseTarget, form: FigureReviseFormValue) => {
+      if (agent.isRunning) {
+        toast.message("请等当前任务结束后再改图");
+        return;
+      }
+      void agent.sendGoal(buildFigureReviseGoal(target, form));
+    },
+    [agent],
+  );
+
+  const figureSectionLabel = useCallback(
+    (sectionKey?: string) => {
+      if (!sectionKey || !project) return undefined;
+      return getSectionLabelForMode(
+        sectionKey,
+        getProjectWritingMode(project.mode),
+        project.language === "en" ? "en" : "zh",
+      );
+    },
+    [project],
+  );
+
+  const figureDockItems = useMemo(() => {
+    const fromSession = collectSessionFigureDockItems(agent.messages, 6);
+    const charts = project ? parseProjectCharts(project.charts) : [];
+    return mergeProjectChartsIntoDock(fromSession, charts, 6);
+  }, [agent.messages, project]);
 
   return (
     <div className={cn("flex h-full min-h-0 flex-col bg-[#fafaf8]", className)}>
@@ -800,6 +851,36 @@ export function AgentPanel({
                   </MessageEnter>
                 );
               }
+              if (
+                msg.tool === "open_blueprint_workspace"
+                && observation
+                && !observation.error
+                && onOpenBlueprint
+              ) {
+                return (
+                  <MessageEnter key={i} animate={animateEnter}>
+                    <div className="space-y-1.5">
+                      <AgentActionCard
+                        tool={msg.tool}
+                        params={msg.params}
+                        summary={observation.summary}
+                        error={observation.error}
+                        pending={pending}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-8 w-full text-xs"
+                        onClick={onOpenBlueprint}
+                      >
+                        <FileText className="mr-1.5 h-3.5 w-3.5" />
+                        打开蓝图工作台
+                      </Button>
+                    </div>
+                  </MessageEnter>
+                );
+              }
               return (
                 <MessageEnter key={i} animate={animateEnter}>
                   <AgentActionCard
@@ -808,6 +889,13 @@ export function AgentPanel({
                     summary={observation?.summary}
                     error={observation?.error}
                     imageUrl={observation?.imageUrl}
+                    plotHref={observation?.plotHref}
+                    replaceImageUrl={observation?.replaceImageUrl}
+                    sectionKey={observation?.sectionKey}
+                    insertMode={observation?.insertMode}
+                    sectionLabel={figureSectionLabel(observation?.sectionKey)}
+                    onReviseFigure={handleReviseFigure}
+                    onJumpToSection={onJumpToSection}
                     pending={pending}
                   />
                 </MessageEnter>
@@ -822,6 +910,34 @@ export function AgentPanel({
                   </MessageEnter>
                 );
               }
+              if (
+                msg.tool === "open_blueprint_workspace"
+                && !msg.error
+                && onOpenBlueprint
+              ) {
+                return (
+                  <MessageEnter key={i} animate={animateEnter}>
+                    <div className="space-y-1.5">
+                      <AgentActionCard
+                        tool={msg.tool}
+                        params={EMPTY_PARAMS}
+                        summary={msg.summary}
+                        error={msg.error}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-8 w-full text-xs"
+                        onClick={onOpenBlueprint}
+                      >
+                        <FileText className="mr-1.5 h-3.5 w-3.5" />
+                        打开蓝图工作台
+                      </Button>
+                    </div>
+                  </MessageEnter>
+                );
+              }
               return (
                 <MessageEnter key={i} animate={animateEnter}>
                   <AgentActionCard
@@ -830,6 +946,13 @@ export function AgentPanel({
                     summary={msg.summary}
                     error={msg.error}
                     imageUrl={msg.imageUrl}
+                    plotHref={msg.plotHref}
+                    replaceImageUrl={msg.replaceImageUrl}
+                    sectionKey={msg.sectionKey}
+                    insertMode={msg.insertMode}
+                    sectionLabel={figureSectionLabel(msg.sectionKey)}
+                    onReviseFigure={handleReviseFigure}
+                    onJumpToSection={onJumpToSection}
                   />
                 </MessageEnter>
               );
@@ -1233,6 +1356,16 @@ export function AgentPanel({
           </motion.div>
         ) : null}
       </AnimatePresence>
+
+      {/* 配图坞：贴输入框上方，免翻聊天找「按意见改」 */}
+      <AgentFigureDock
+        items={figureDockItems}
+        sectionLabelOf={figureSectionLabel}
+        disabled={agent.isRunning}
+        onRevise={handleReviseFigure}
+        onJumpToSection={onJumpToSection}
+        projectId={projectId}
+      />
 
       {/* 输入始终可见 */}
       <AgentInputBar

@@ -69,8 +69,11 @@
 - UI：`flow-canvas.tsx` 轻量可拖拽编排；**Mermaid/DOT 导入导出**（`flow-diagram-io.ts`，对照 Kroki 多引擎思路、无服务依赖）
 - 终稿渲染（`flow_diagram_v2.py`）：**禁止 ratio=compress**；白底细线 + 左侧色条 HTML 节点；有边标签时用 polyline；400dpi 后按栏宽等比缩放
 - 农科模板：生物质热解路径、双路径产物等
-- 多面板：用户上传 3D/显微素材 + 内嵌 flow_subgraph；**不自动生成写实 3D**（Nature GA 观感依赖素材）
-- Agent：`draft_mechanism_figure` 草稿结构与 `/plot` 深链
+- 多面板：优先每栏 `flow_subgraph`（中文 steps）；有真实素材时才挂 image。**Agent 默认不再输出「Upload figure asset」空占位**
+- Agent 三层定位：
+  1. **草稿**：`draft_mechanism_figure` / `generate_chart`（可 `templateId` 农科模板）→ PNG 入库
+  2. **硬闭环**：出图后系统自动 `read_figure(qa)`；不合格必须 `replaceImageUrl`；同标题防叠图自动 replace；`remove_figure` 清旧图
+  3. **个性化（Agent 表单为主）**：输入框上方**配图坞**随时「按意见改」；表单快捷项（分叉/三面板/模板）→ `replaceImageUrl` 重画；复杂观感进 `/plot?replaceImageUrl=`，插入对话框默认**就地替换**正文旧图。**插图位置**：默认节末落盘，编辑器「本节插图」条可挪位（不做智能章节锚定）
 
 ## 主要 API
 

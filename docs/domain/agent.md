@@ -1,6 +1,6 @@
 # Agent 编排（写作助手）
 
-> L3 域文档 · 更新：2026-08-07
+> L3 域文档 · 更新：2026-08-09
 > 契约唯一权威源：`src/contracts/agent.ts`（SSE 事件）、`src/contracts/agent-session.ts`（会话消息）。
 
 ## 概览
@@ -42,7 +42,7 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 | `src/lib/agent/writing-runner.ts` | 复用写作管道；`onWritingEvent` 转发进度 |
 | `src/lib/agent/session-store.ts` | 会话持久化 + `tryAcquireAgentSession` 并发互斥 |
 | `src/hooks/use-agent.ts` / `components/shared/agent/agent-panel.tsx` | 前端状态机与面板 |
-| `src/app/api/agent/route.ts` | SSE 路由（认证、会话抢占、流式输出） |
+| `src/app/api/agent/route.ts` | SSE 路由（认证、会话抢占、流式输出）；客户端断开后 `enqueue`/`close` 软失败，不记 `agent stream error` |
 
 ## SSE 事件表（`contracts/agent.ts`）
 
@@ -112,9 +112,12 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 
 `generate_writing_blueprint` / `build_argument_blueprint` 持久化后，若为 academic-paper 全流程目标（`isApFullStyleGoal`，entryMode=full 前缀含 `academic-paper` 即命中）且本轮未批准过 → 后置门禁 `blueprintApproveGate` 暂停，`buildBlueprintCheckpoint` 弹出「一起确认写作蓝图」（预览 + 批准/需修改）。批准后 `decisionMessage("blueprint_approve","approve")` 指示模型严格按蓝图推进。`run-graph.ts` 恢复时按 checkpointId 含 `blueprint` 映射 `blueprint_approve`。前端复用通用检查点 UI（与 outline 一致）。
 - **查看/编辑完整蓝图（2026-08-07）**：`blueprint_approve` 检查点卡额外显示「打开蓝图工作台（查看 / 编辑）」按钮（`agent-panel` 新增 `onOpenBlueprint` 回调，由 workbench 接 `handleOpenBlueprintDialog` 打开既有 `BlueprintWorkspaceDialog`）。`generate_writing_blueprint` 属 `PROJECT_MUTATING_TOOLS`，生成后工作台自动刷新 `writingBlueprint`，确保按钮打开的是最新蓝图。
-- **对话里「看看蓝图」调出工作台（2026-08-07）**：新增只读工具 `open_blueprint_workspace`（`tools/open-blueprint-workspace.ts`）。Agent 识别到用户想看/编辑写作蓝图时调用它；前端 `agent-panel` 收到该工具的成功 observation 后自动 `onOpenBlueprint()` 打开工作台。蓝图未生成时工具报错，Agent 应先生成蓝图。
+- **对话里「看看蓝图」调出工作台（2026-08-07）**：只读工具 `open_blueprint_workspace`。仅当用户明确要求打开/编辑时调用；**禁止**在 `generate_writing_blueprint` 后自动调用。前端仅对本轮**新追加**的成功 observation 自动打开（`blueprint-open-guard`）；会话恢复/面板重挂载不因历史记录误弹。observation 卡另有「打开蓝图工作台」按钮可手点。
 - **工作台随内容自适应（2026-08-07）**：蓝图 schema 新增可选 `projectMode`/`language`（生成时用项目兜底填充）；工作台按顶层章节把 `sectionGuides` 树形分组（`" > "` 层级，顶层可折叠）、按论文类型显示徽标与配图提示（综述→概念图/对比表，研究→方法流程图/结果数据图）、空区块（前置条件/配图/章节导览/写作顺序）自动隐藏。分组纯函数 `groupSectionGuides` 在 `lib/blueprint-utils.ts`。
 - **蓝图顺序注入 Agent 简报（2026-08-08）**：修复「蓝图建议写作顺序与实际写作顺序不一致」——此前 `project-briefing` 只给 LLM「写作蓝图：有 + thesis 摘要」，`writingOrder` 与 `sectionGuides` 未进 Agent 决策输入，Agent 靠直觉/大纲顺序写。现在 `loadAgentProject` 额外提取 `blueprintWritingOrder`/`blueprintSectionGuides`（`project-loader.ts`），简报注入「建议写作顺序（蓝图）：1. x → 2. y → …」+「各节写作要点（蓝图）」区块（`project-briefing.ts`）。Agent 写作前即可见蓝图建议顺序并按序推进。
+- **蓝图真正驱动 Writer（2026-08-09）**：修复「批准蓝图后正文仍不按蓝图生成」。根因：①`loadAgentProject` 曾把 `WritingBlueprint` JSON 误 `as WritingGlobalContext`，`prepare-context` 读 `globalContext.blueprint` 恒为 undefined，【写作蓝图摘要】不进 Writer；②`write_section` 未调用工作台同款的本节蓝图注入（purpose/keyPoints/配图）。现：loader 用 `parseWritingBlueprint` 正确嵌套 `globalContext.blueprint` 并附 outline/sectionPreviews；`lib/agent/blueprint-write-context.ts` 将英文 section key 映射到大纲/蓝图中文路径，聚合本节 guides 注入 `【写作蓝图（本节）】`；简报补 keyPoints + 配图计划；system prompt / 工具说明要求对齐蓝图。
+- **论证并入写作蓝图（2026-08-09，方案 A）**：产品主路径改为 `配置 → 大纲 → 写作蓝图 → 分节写`。`SectionGuide` 增加 `claim` / `evidenceHint` / `warrant` / `rebuttal`；全文级 `researchQuestion` / `argumentGaps`。`ensure-write-prereqs` / phase-gate 不再要求 `build_argument_blueprint`；该工具改为弃用引导；检查点只对 `generate_writing_blueprint` 暂停。Passport Phase 3 有写作蓝图即 done。旧 `argumentBlueprint` 列保留只读兼容。
+- **蓝图文献源 + 分析笔记进 Writer（2026-08-09）**：`sectionGuides.assignedSources`（文件名或 `[n]`）经 `blueprint-write-context` 解析为 `selectedSourceIds`，Agent `write_section` 限 RAG 范围（解析为空则不限，避免误清空）。`loadAgentProject` 加载 `analysisResults` 进 `globalContext.analysisResults`，与工作台扩写一致。
 - **自动补齐插入批准检查点（2026-08-08）**：修复「ensureWritePrerequisites 自动补齐绕过 outline/blueprint 批准检查点」——ap-full 目标（写整篇/从零推进）下，自动补齐生成大纲/蓝图直接执行工具，用户看不到确认弹窗、失去对结构的审核。现在 `ensureWritePrerequisites` 拆出 `ensureNextWritePrerequisite`（一次只补一个缺失前置），`toolsNode` 逐步补齐 + 每步用 `buildPrereqCheckpoint`（nodes.ts）检查是否命中 outline/blueprint 批准检查点，命中即暂停等用户批准，resume 后继续补下一个 / 执行写工具。普通目标（非 ap-full）保持一次补完不暂停。
 - **蓝图常驻入口（2026-08-07）**：工作台侧栏头（非 Agent Tab）与 Agent 面板头均新增「蓝图」按钮（Map 图标），随时可打开蓝图工作台；无蓝图时点击自动切到「章节结构」侧栏引导生成。
 - **文献分类编码持久化（2026-08-07）**：新增写工具 `save_reference_classification`（`tools/save-reference-classification.ts`），把「文献分类编码」结果批量 upsert 到 `ReferenceSource`（refIndex 1 基 → sourceName/category/citation），与前端「引用-文献映射」同一张表。`list_references` 输出附带 `category`/`sourceName`，写作时 Agent 能看到分类。属 `PROJECT_MUTATING_TOOLS`，保存后工作台刷新。之前 Agent 只能靠多次关键词检索在对话里"分类"、结果不落库，现已闭环。
@@ -133,6 +136,58 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 
 - **引用修正收敛（2026-08-08）**：修复「Agent 陷入 validate→改引→再 validate 打地鼠循环，不收尾、没下一步」——`validate_citations` 的 summary 按硬错/软可疑分级引导（硬检越界必须修；可判定且明显错引改引一次；缺摘要/语义勉强属软性可接受，**不要反复重验**），并在通过时明确「引用已符合要求，请汇报并给下一步」；`buildAgentSystemPrompt` 增加「引用修正要收敛，勿打地鼠循环」规则。双保险让 Agent 在改引循环里能停下并给出下一步计划。
 - **写章节缺文献照常写（2026-08-08）**：修复「Agent 写子节时因蓝图要求引用的某类文献（如 ZnCl₂/黏土催化剂）库内缺失，反复 search_knowledge/list_references 找不存在的文献，迟迟不落地写、卡住无下一步」。①`buildAgentSystemPrompt` 增加「写章节缺文献时用现有文献替代或泛化表述照常写，检索 1 次确认没有后即可开写」纪律；②`isSectionDraftGoal` 增强：goal 失真（跟聊简短回复覆盖）时，用 observations 判断（有 write_section/read_section 观察即视为写章节流程），`mergeFollowUpGoalHint` 补 `isSectionDraftGoal` 分支（跟 fresh 路径一致），`checkDraftSearchGate` 传 observations——修复跟聊时写章节纪律丢失、Agent 可随意 search 的断点；③agentNode 收尾兜底：`execWords.test(goal) || isSectionDraftGoal(goal, observations)` 才提示「落地写并给下一步」，不再因 goal 失真而跳过。
+
+## 断点续跑 / 门禁旁路修复（2026-08-09）
+
+**pending 工具续跑（P0）**：检查点/确认暂停时保留同批后续 `pendingToolCalls`（确认：`slice(tcIdx+1)`；后置大纲/蓝图检查点：同；自动补齐前置：仍为 `slice(tcIdx)` 含当前写工具）。`agentNode` 在 `pendingToolCalls.length > 0` 时短路放行、不再调 LLM，避免 resume 后冲掉已排队的 `write_section`。图拓扑仍为 `plan → agent → tools`，靠短路实现「批准后继续执行」。
+
+**并行只读门禁同源（P0）**：`runParallelReads` 改用与串行相同的 `evaluatePreGates` + `evaluatePhaseGate`（含摘要收口 / 审查 / 分类编码意图），修复批内多次 `list_references` / `search_*` 绕过意图门禁。
+
+**工具名对齐**：`get_full_text` 残留 → `read_full_text`（antispam 只读豁免、plan 焦点、UI 标签）。
+
+**指纹 / 空转**：快照增加 `referenceClassificationSig`；`save_reference_classification` / 图表类工具列入 `FINGERPRINT_BLIND_PROGRESS_TOOLS`（成功即清 stagnant，避免分类/出图被误判空转）。
+
+**检查点 kind 回退**：`applyCheckpointDecision` 按 checkpointId 识别 `blueprint` / `clarify`，与 UI 文案映射一致。
+
+## write_section 断点续写 / 去重（2026-08-09，W3-AP-WRITE-RESUME）
+
+不做 Writer token 级续流（写作管道无流式 checkpoint）。策略是**执行中落草稿 + resume 去重**：
+
+```text
+write_section 开始 → 会话快照 activeWrite(status=running, draftText…)
+  → 管道 delta 节流 patch（≥1.5s）更新草稿
+  → 成功 → activeWrite=completed（防刚写完断线再烧一遍）
+  → 中断/抛错 → activeWrite=aborted（保留已生成草稿）
+resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromActive 补回
+  → write_section：同 attemptKey 且草稿够长 → 跳过 AI，写回项目并标注 resumedFrom
+```
+
+| 字段 / 模块 | 说明 |
+|-------------|------|
+| `AgentActiveWrite`（`contracts/agent-session`） | attemptKey / params / draftText / status |
+| `lib/agent/write-resume.ts` | 指纹、reuse 判定、pending 补回、事件累计草稿 |
+| `ctx.patchActiveWrite`（`run-graph` 注入） | 与 graph persist 共用串行链，防互抢 |
+| 复用阈值 | completed ≥80 字；partial/aborted ≥400 字；草稿上限 80k |
+
+跟聊（followUp）清空 `activeWrite`。partial 复用未跑 Verifier/Refiner，summary 提示可再 `refine_content` / `write_section(full)`。
+
+## 机理图 / 识图自检（2026-08-09）
+
+**产品定位**：Agent 负责「结构正确的可编辑草稿」；期刊观感与个性化在 `/plot` + 对话迭代完成。不承诺一键出 Nature 级机理终稿。
+
+| 层 | 行为 |
+|----|------|
+| L1 草稿 | `draft_mechanism_figure` / `generate_chart`；多机理图任务前 **FigureBrief clarify**（版式/配色/分子式/素材）；可选 `templateId` 农科模板 |
+| L2 硬闭环 | 出图成功后 **toolsNode 自动注入** `read_figure(mode=qa)`；并行读图批也会补 QA nudge；QA 未通过则**禁止空口收尾**（`routeAfterAgent` 强制续跑）+ 门禁强制 `replaceImageUrl`；同 caption/section 无 replace 时工具内自动就地替换（防叠图） |
+| L3 精修 | **配图坞**（输入框上方常驻最近出图，免翻聊天）+ 结果卡：落点说明（默认**节末落盘**）+「查看正文位置」+ 结构化「按意见改」（含分叉/三面板/脱氧等快捷）+ `/plot?replaceImageUrl=` 深链（精修回写默认真地替换）；编辑器「本节插图」可挪位 |
+
+| 工具 | 作用 |
+|------|------|
+| `draft_mechanism_figure` / `generate_chart` | 出图并写入图表库；可插章节。**改图传 `replaceImageUrl`/`replaceChartId` 就地替换**；同标题已有图自动 replace |
+| `remove_figure` | 删图表资产 + 默认去掉正文对应 `![](url)`（清重复旧图） |
+| `read_figure` | GLM-4V 回看；`mode=qa` 查占位/英文模板/空栏；`needsRegen` 驱动门禁 |
+
+实现：`lib/agent/figure-loop.ts`、`langgraph/tool-gates.ts`（`figureReplaceGate`）、`langgraph/nodes.ts`（自动排队 QA / FigureBrief）。视觉 provider：`callAI({ provider: "vision" })`。
 
 ## 循环防护与写回保护（2026-08-06 修复）
 

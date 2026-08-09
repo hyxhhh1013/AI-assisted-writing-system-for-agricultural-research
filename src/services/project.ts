@@ -191,6 +191,41 @@ export async function appendProjectSectionMarkdown(
   await patchProjectSection(projectId, sectionKey, current + markdown);
 }
 
+/**
+ * 就地替换章节中的 Markdown 图片 URL（/plot 精修回写）。
+ * 若正文找不到旧 URL，则追加到节末。
+ */
+export async function replaceOrAppendSectionImage(
+  projectId: string,
+  sectionKey: string,
+  input: {
+    newImageUrl: string;
+    caption: string;
+    replaceImageUrl?: string;
+  },
+): Promise<"replaced" | "appended"> {
+  const { replaceMarkdownImageUrl } = await import("@/lib/agent/chart-markdown");
+  const project = await getProject(projectId);
+  if (!project) throw new Error("项目未找到");
+  const current = project.sections[sectionKey] ?? "";
+  const oldUrl = input.replaceImageUrl?.trim() || "";
+  if (oldUrl) {
+    const { next, replaced } = replaceMarkdownImageUrl(
+      current,
+      oldUrl,
+      input.newImageUrl,
+      input.caption,
+    );
+    if (replaced > 0) {
+      await patchProjectSection(projectId, sectionKey, next);
+      return "replaced";
+    }
+  }
+  const chunk = `\n\n![${input.caption}](${input.newImageUrl})\n\n`;
+  await patchProjectSection(projectId, sectionKey, current + chunk);
+  return "appended";
+}
+
 /** PATCH /api/projects/:id/charts — 登记图表资产 */
 export async function patchProjectCharts(
   projectId: string,

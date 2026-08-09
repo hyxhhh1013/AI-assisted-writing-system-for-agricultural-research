@@ -99,6 +99,7 @@ function PlotContent() {
   const chartIdxParam = searchParams.get("chartIdx");
   const figureSpecParam = searchParams.get("figureSpec");
   const chartAssetIdParam = searchParams.get("chartAssetId");
+  const replaceImageUrlParam = searchParams.get("replaceImageUrl") || undefined;
   const chartIdx =
     chartIdxParam !== null && chartIdxParam !== "" ? Number.parseInt(chartIdxParam, 10) : null;
   const projectId = routeProjectId || "default";
@@ -122,6 +123,7 @@ function PlotContent() {
     figureSpecEnc?: string;
     customMarkdown?: string;
     contentHtml?: string;
+    replaceImageUrl?: string;
   }>({ open: false, imageUrl: "", caption: "" });
 
   useEffect(() => {
@@ -272,9 +274,11 @@ function PlotContent() {
         svgUrl: replay?.svgUrl,
         pdfUrl: replay?.pdfUrl,
         figureSpecEnc: replay?.figureSpecEnc,
+        // 从 Agent / 资产深链带来的旧图 URL → 精修后默认就地替换
+        replaceImageUrl: replaceImageUrlParam,
       });
     },
-    [],
+    [replaceImageUrlParam],
   );
 
   const handleInsertTable = useCallback((caption: string, html: string, statsText: string) => {
@@ -463,6 +467,7 @@ function PlotContent() {
         figureSpecEnc={insertDialog.figureSpecEnc}
         customMarkdown={insertDialog.customMarkdown}
         contentHtml={insertDialog.contentHtml}
+        replaceImageUrl={insertDialog.replaceImageUrl}
         defaultProjectId={routeProjectId ?? undefined}
         figureId={selectedFigure.id}
       />

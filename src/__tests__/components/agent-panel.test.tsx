@@ -70,10 +70,10 @@ describe("AgentPanel × WritingStatusCard：写进度职责移交", () => {
   it("写状态卡激活时显示卡片，不渲染 AgentWorkingIndicator", () => {
     mockAgent = makeAgent({ writeStatus });
     render(<AgentPanel />);
-    // 卡片阶段标题 + 字数统计
-    expect(screen.getByText("生成初稿…")).toBeTruthy();
-    expect(screen.getByText(/已 1200 字/)).toBeTruthy();
-    // 通用工作指示器被抑制（不显示「正在撰写「引言」…」）
+    expect(screen.getByText(/撰写「引言」/)).toBeTruthy();
+    expect(screen.getByText(/正在生成正文/)).toBeTruthy();
+    expect(screen.getByText(/1,200 字/)).toBeTruthy();
+    // 通用工作指示器被抑制
     expect(screen.queryByText(/正在撰写「引言」…/)).toBeNull();
   });
 
@@ -81,6 +81,6 @@ describe("AgentPanel × WritingStatusCard：写进度职责移交", () => {
     mockAgent = makeAgent({ writeStatus: null });
     render(<AgentPanel />);
     expect(screen.getByText(/正在撰写「引言」…/)).toBeTruthy();
-    expect(screen.queryByText("生成初稿…")).toBeNull();
+    expect(screen.queryByText(/正在生成正文/)).toBeNull();
   });
 });

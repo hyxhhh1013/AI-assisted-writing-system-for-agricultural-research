@@ -216,6 +216,16 @@
 | W3-AP-ANTISPAM-FP | antispam 指纹增强：refNums 检测「字数不变但引用变化」的实质写操作 | W3-AP-ANTISPAM | 0.5d | **done** | 2026-08-08；全量 1007 通过；见 §4 会话日志 |
 | W3-AP-PREREQ-CHECKPOINT | 自动补齐插入批准检查点：ap-full 目标逐步补齐 + outline/blueprint 逐步批准 | W3-AP-AUTONOMY | 1d | **done** | 2026-08-08；`ensureNextWritePrerequisite` + `buildPrereqCheckpoint`；全量 1012 通过 |
 | W3-AP-WRITE-DISCIPLINE | 写章节缺文献照常写：prompt 纪律 + 跟聊意图恢复 + 收尾兜底 | W3-AP-QUALITY | 0.5d | **done** | 2026-08-08；`isSectionDraftGoal` 增强 + `mergeFollowUpGoalHint` 补分支 + 收尾 execWords 兜底；全量 1014 通过 |
+| W3-AP-WRITE-RESUME | write_section 断点续写/去重（activeWrite + resume reuse） | W3-AP-WRITE-PROGRESS | 1d | **done** | 2026-08-09；`write-resume.ts` + 会话快照；非 token 级续流 |
+| W3-AP-BLUEPRINT-STEER | 蓝图真正驱动 Writer：嵌套 globalContext.blueprint + write_section 本节注入 | W3-AP-WRITE-UX | 0.5d | **done** | 2026-08-09；`blueprint-write-context.ts`；见 agent.md |
+| W3-AP-BLUEPRINT-MERGE | 论证并入写作蓝图（方案 A）：主路径消肿 | W3-AP-BLUEPRINT-STEER | 0.5d | **done** | 2026-08-09；sectionGuides.claim*；弃用 build_argument 强制 |
+| W3-AP-BLUEPRINT-SCOPE | 蓝图 assignedSources→RAG + analysisResults 进 Agent Writer | W3-AP-BLUEPRINT-MERGE | 0.5d | **done** | 2026-08-09；见 agent.md |
+| W3-AP-SSE-CLOSE | Agent SSE 断流 `Controller is already closed` 软关闭 | W3-AP-WRITE-RESUME | 0.5d | **done** | 2026-08-09；`api/agent/route.ts` 对齐 writing SSE |
+| W3-AP-MECH-VISION | 机理图去占位+分叉布局；read_figure(imageUrl,qa) 识图自检闭环 | FIG-MECH | 0.5d | **done** | 2026-08-09；panelsJson/flowSteps；禁 Upload/英文模板默认 |
+| W3-AP-FIG-REPLACE | Agent 删图/改图就地替换（remove_figure + replaceImageUrl） | W3-AP-CHART-BRIDGE | 0.5d | **done** | 2026-08-09；避免改图叠在旧图下面 |
+| W3-AP-FIG-LOOP | 配图硬闭环：自动 read_figure(qa)+replace 门禁+防叠图+FigureBrief+结果卡+农科模板 | W3-AP-FIG-REPLACE | 1d | **done** | 2026-08-09；Agent=草稿，/plot=期刊精修 |
+| W3-AP-FIG-UX | Agent 改图表单 + 节末落盘说明/跳转 + 编辑器插图挪位 | W3-AP-FIG-LOOP | 0.5d | **done** | 2026-08-09；表单为主，位置后挪 |
+| W3-AP-FIG-DOCK-P2 | 配图坞免翻聊天 + /plot 回写 replace + 改图快捷项 | W3-AP-FIG-UX | 0.5d | **done** | 2026-08-09；输入区上方坞；plot?replaceImageUrl |
 | W3-AP-ATTACH-UX | 附件提取时序提示 + 写作进度可见性 + extract_failed 自动重试 + xlsx Turbopack 兼容 | W3-AP-WRITE-DISCIPLINE | 0.5d | **done** | 2026-08-08；manifest/read_attachment 提示「提取中稍后重试」+ WritingStatusCard 0 字显示「等待 AI 输出」+ `retryAttachmentExtraction` + xlsx 改 `fs.readFileSync`→`XLSX.read`；全量 1020 通过 |
 
 
@@ -1048,6 +1058,19 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-08 | 附件时序 + 进度可见性 | AI | 用户反馈：①上传 xlsx 附件后「生成初稿 0 字」——根因非解析 bug（xlsx 提取测试通过），而是提取后台异步（extracting）期间 Agent 立即 read_attachment 读不到。修复：manifest/read_attachment 对 extracting 提示「正在后台提取，稍后重试，勿反复立即重读」。②生成初稿 0 字停留：WritingStatusCard 0 字时显示「等待 AI 输出首段（通常数秒）」+ spinner，替代误导的「已 0 字」。新增 4 用例（xlsx 提取 ×2 + 0 字显示 ×2），全量 1018 通过 |
 | 2026-08-08 | 附件提取失败自动重试 | AI | 用户反馈「还是显示未能解析」——查 DB 确认真实 xlsx 附件是 extract_failed（提取代码/文件本身正常，瞬时失败）。修复：`retryAttachmentExtraction`（文件仍在则重新提取），`read_attachment` 遇 extract_failed 自动重试一次，成功后返回内容；仍失败提示「可重新上传或稍后再读」。已对真实失败附件验证：重试后变 ready。新增 2 用例，全量 1020 通过 |
 | 2026-08-08 | xlsx Turbopack 兼容 | AI | 用户反馈「还是解析不了」——真实上传复现 extract_failed，加诊断发现 `fs.statSync` 成功但 `XLSX.readFile` 报「Cannot access file」（文件存在）。根因：SheetJS `_fs` 在 Turbopack 下为 undefined（模块加载时 `require('fs')` 捕获失败），`XLSX.readFile` 无法读文件；vitest Node 环境正常所以测试一直通过。修复：`fs.readFileSync` 读 buffer → `XLSX.read(buf)`。实测上传 → ready，旧失败附件重试 → ready。保留 `[attachment] extract not ready` 错误日志 |
+| 2026-08-09 | Agent 编排断点修复 | AI | ①`agentNode` pending 短路：检查点/确认 resume 不再冲掉排队工具。②确认/后置检查点统一保留同批后续 `pendingToolCalls`。③并行只读改用 `evaluatePreGates`（摘要/审查/分类门禁同源）。④`get_full_text`→`read_full_text`；分类签名进指纹 + `FINGERPRINT_BLIND_PROGRESS_TOOLS`。⑤`applyCheckpointDecision` 识别 blueprint/clarify。见 `docs/domain/agent.md`；相关 vitest 绿。 |
+| 2026-08-09 | W3-AP-WRITE-RESUME | AI | write_section 断点续写/去重：`AgentActiveWrite` 落会话快照；执行中节流写草稿；resume 补 pending + 同 attemptKey reuse（completed/partial）；非 token 级续流。`write-resume.ts` + 单测；队列 P3b → done |
+| 2026-08-09 | W3-AP-BLUEPRINT-STEER | AI | 修复蓝图不引领生成：loader 误把 WritingBlueprint 当作 WritingGlobalContext；write_section 未注入本节蓝图。现嵌套 `globalContext.blueprint` + `blueprint-write-context` 映射 key→路径并注入 purpose/keyPoints/配图；简报补 keyPoints/配图；prompt 要求对齐。 |
+| 2026-08-09 | W3-AP-BLUEPRINT-MERGE | AI | 方案 A：论证并入写作蓝图。`SectionGuide`+生成 prompt；ensure/gate/检查点不再强制 `build_argument_blueprint`（工具改弃用引导）；Passport Phase3=有写作蓝图；工作台可编辑 claim/evidence。 |
+| 2026-08-09 | W3-AP-BLUEPRINT-SCOPE | AI | `assignedSources`→`selectedSourceIds`（含 [n]→sourceName）；loader 挂 `analysisResults` 进 globalContext；蓝图弹窗防误关（focus-out/粘性缓存）。 |
+| 2026-08-09 | W3-AP-SSE-CLOSE | AI | 查运行日志：`agent stream error {}` = 客户端断流后仍 `enqueue`/`close`。`route.ts` 软关闭；真错误才 `log.fail`。 |
+| 2026-08-09 | W3-AP-MECH-VISION | AI | 机理图差：`buildMechanismPanelConfig` 故意 a/b Upload 占位 + c 英文 Pathway 模板；flow 单链过简。改为每栏中文 flow_subgraph、≥4 步分叉、`panelsJson`；`read_figure(imageUrl,mode=qa)` + prompt 强制生成后识图自检。 |
+| 2026-08-09 | 图表后跳转 | AI | Agent 出图后 `handleAgentChartPersisted` 仍调 `focusEditorAfterDraft`（切 structure Tab）。已取消，仅 toast+刷新，与章节写回一致。 |
+| 2026-08-09 | W3-AP-FIG-REPLACE | AI | 改图只 append 导致旧图叠层。新增 `remove_figure` + `replaceImageUrl`/`replaceChartId` 就地替换正文 Markdown 并删旧资产。 |
+| 2026-08-09 | W3-AP-FIG-LOOP | AI | 出图硬闭环：`figure-loop` + toolsNode 自动 `read_figure(qa)` + `figureReplaceGate`；同标题防叠图；FigureBrief；面板结果卡→/plot；`templateId` 农科模板。定位：Agent=草稿，期刊精修在 /plot。 |
+| 2026-08-09 | W3-AP-FIG-QA-CONTINUE | AI | 「重画并调整图」会话：QA 判图5需重生成后模型长文推演就 finished。并行 read_figure 补 nudge；`routeAfterAgent` 在 `lastFigureQaNeedsReplace` 时强制续跑；禁止空口收尾。 |
+| 2026-08-09 | W3-AP-FIG-UX | AI | 个性化改图：Agent 结构化表单替 window.prompt；结果卡落点说明+跳转；编辑器本节插图条挪位（节末策略）。 |
+| 2026-08-09 | W3-AP-FIG-DOCK-P2 | AI | 配图坞（输入区上方最近出图）；/plot 深链带 replaceImageUrl，插入对话框默认就地替换；改图表单快捷项（分叉/三面板/模板）。 |
 
 ---
 
@@ -1064,7 +1087,8 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | P1 | W3-AP-ABS-FLOW → REVIEW-FLOW | 摘要与可选审查收口 |
 | P2 | W3-AP-LIVE-EVAL / W0-5 | 质量冒烟；仓库卫生可穿插 |
 | P3 | W3-AP-WRITE-NO-RAG | write_section 检索优化（已诊断，待实施）：项目已有可引用文献摘要（referenceEvidence）时跳过知识库 RAG 检索，直接用项目文献摘要写作；无文献时才检索。实测：有 52 条文献+摘要时检索耗时 0.6s 且引入 8 条项目外新来源，跳过可避免引用混乱 + 进度误导 |
-| P3b | W3-AP-WRITE-RESUME | write_section 断点续写/去重（已诊断，2026-08-08 部分缓解）：用户实际痛点是「引用修正打地鼠循环不收尾」——validate_citations 反复报软可疑（缺摘要/语义勉强）诱导 Agent 无限改引，antispam 软停不彻底，最终 summary 无下一步。已修：validate summary 分级引导（硬错必修/软可疑可接受）+ system prompt 收敛规则「修完一轮只报软可疑就汇报并给下一步」。剩余：write_section 执行中 SSE 断开 resume 重跑重复消耗 AI（未做，需断点续写）；`agent stream error {}` 空对象（诊断日志已加 route.ts `stream-error-detail`） |
+| P3b | W3-AP-WRITE-RESUME | **done**（2026-08-09）：会话 `activeWrite` + 执行中草稿落盘 + resume 同 attemptKey 去重/沿用 partial（≥400 字）或 completed；见 `write-resume.ts` / `docs/domain/agent.md` |
+| P3c | W3-AP-SSE-CLOSE | **done**（2026-08-09）：`/api/agent` SSE `Controller is already closed` 软关闭（对齐 writing route），断流不再刷假 ERROR |
 
 **若只能做一个产品 PR**：先做 **WQC**（文风质检）。  
 **明确不做本波**：全自动 Conductor、plan 苏格拉底、五人组外审、LaTeX/disclosure、Generator–Evaluator 纸盲合同。
