@@ -367,7 +367,7 @@ export function draftGoalNudge(goal = ""): string {
     return (
       `【系统】写综述：先 inspect / list_references。参考文献通常至少约 ${n} 篇；`
       + "不足则多轮 search_knowledge / search_external + import_reference(hitsJson=...) 分批导入，"
-      + "达标后再 write_section(literature_body)。禁止只用两三篇硬写综述。"
+      + "达标后再按蓝图子节 write_section(literature_body, subsectionTitle=…)。禁止只用两三篇硬写综述。"
     );
   }
   return (
@@ -639,7 +639,7 @@ export function reviewRefsShortageNudge(refCount: number, target = 30): string |
   return (
     `【系统】当前项目参考文献仅 ${refCount} 篇，写综述通常至少需要约 ${target} 篇。`
     + "请先多轮 search_external / search_knowledge + import_reference 批量导入，"
-    + "达到体量后再 write_section(literature_body)。不要只用两三篇硬写综述。"
+    + "达到体量后再按蓝图子节 write_section(literature_body, subsectionTitle=…)。不要只用两三篇硬写综述。"
   );
 }
 
@@ -925,7 +925,9 @@ const INTENT_CLOSURES: Record<IntentKind, IntentClosureEntry> = {
     isIncomplete: (ctx) =>
       isReviewWritingGoal(ctx.goal) && importedOk(ctx) && !ctx.wroteOk,
     nudge: () =>
-      "【系统】文献体量已够，请 list_references 核对后 write_section(literature_body) 写回综述正文。",
+      "【系统】文献体量已够，请 list_references 核对后，按蓝图子节逐次 "
+      + "write_section(literature_body, subsectionTitle=子节标题) 写回正文；"
+      + "禁止一次 write_section(literature_body) 写完整章万字。",
     stopAsk: (ctx) =>
       buildIntentStopAskUser({ kind: "review_write", ...stopAskOpts(ctx) }),
   },

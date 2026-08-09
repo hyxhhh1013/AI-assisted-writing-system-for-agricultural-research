@@ -2,10 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import type { ProjectChartAsset } from "@/contracts/figure";
 import { parseProjectCharts } from "@/contracts/figure";
-import {
-  describeImage,
-  FIGURE_QA_PROMPT,
-} from "@/lib/agent/attachments/describe-image";
+import { describeImage } from "@/lib/agent/attachments/describe-image";
+import { FIGURE_QA_PROMPT, parseFigureQaVerdict } from "@/lib/agent/figure-qa";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import prisma from "@/lib/prisma";
 
@@ -96,7 +94,7 @@ export const readFigureTool: ToolDefinition = {
     "回看已生成的图表/配图/机理图（GLM-4V 识图）。"
     + "生成后自检请传 imageUrl（来自 draft_mechanism_figure / generate_chart）且 mode=qa；"
     + "也可按 sectionKey（+ index/figureId）定位。"
-    + "mode=qa 会检查占位框、英文模板节点、空栏、重复文字并给出是否需重生成。",
+    + "mode=qa 两级质检：硬伤→需重生成；观感问题→可接受·建议精修；通过→可接受。",
   parameters: {
     type: "object",
     properties: {
@@ -206,19 +204,29 @@ export const readFigureTool: ToolDefinition = {
       return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
 
-    const needsRegen =
-      mode === "qa"
-      && /结论\s*[:：]\s*需重生成|Upload figure asset|Pathway\s*\d|Feedstock/i.test(vision.text);
+    const qa =
+      mode === "qa" ? parseFigureQaVerdict(vision.text) : null;
+
+    const qaLabel =
+      qa?.verdict === "regen"
+        ? "需重生成"
+        : qa?.verdict === "polish"
+          ? "可接受·建议精修"
+          : qa?.verdict === "pass"
+            ? "可接受"
+            : undefined;
 
     return {
       success: true,
       summary: asset
-        ? `已回看${mode === "qa" ? "并质检" : ""} ${asset.sectionKey ?? "项目"} 的图（${asset.figureId ?? "?"}）：${asset.caption ?? ""}`
-        : `已回看${mode === "qa" ? "并质检" : ""} ${imageUrl}`,
+        ? `已回看${mode === "qa" ? "并质检" : ""} ${asset.sectionKey ?? "项目"} 的图（${asset.figureId ?? "?"}）：${asset.caption ?? ""}${qaLabel ? ` · ${qaLabel}` : ""}`
+        : `已回看${mode === "qa" ? "并质检" : ""} ${imageUrl}${qaLabel ? ` · ${qaLabel}` : ""}`,
       data: {
         description: vision.text,
         mode,
-        needsRegen: needsRegen || undefined,
+        needsRegen: qa?.needsRegen || undefined,
+        needsPolish: qa?.needsPolish || undefined,
+        qaVerdict: qa?.verdict,
         caption: asset?.caption ?? "",
         figureId: asset?.figureId ?? "",
         sectionKey: asset?.sectionKey ?? "",

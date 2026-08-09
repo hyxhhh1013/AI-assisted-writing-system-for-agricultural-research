@@ -301,7 +301,8 @@ describe("intent continuation pickers", () => {
 
   it("prioritizes review_write over nothing when refs enough but body missing", () => {
     const c = ctx({ goal: "写一篇生物炭综述", refTotal: 30, importTarget: 30 });
-    expect(pickIntentNudge(c)).toContain("write_section(literature_body)");
+    expect(pickIntentNudge(c)).toContain("subsectionTitle");
+    expect(pickIntentNudge(c)).toContain("literature_body");
     expect(pickIntentStopAsk(c)).toContain("综述正文尚未写回");
   });
 

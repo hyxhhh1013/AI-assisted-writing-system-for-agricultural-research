@@ -5,6 +5,7 @@ import {
   buildAgentWritingGlobalContext,
   collectBlueprintAssignedSourceTokens,
   formatBlueprintSectionHintForKey,
+  listBlueprintSubsectionPathsForKey,
   prepareAgentWriteBlueprintContext,
   resolveAssignedSourcesToSelectedIds,
   resolveBlueprintSectionPathForKey,
@@ -103,6 +104,25 @@ describe("resolveBlueprintSectionPathForKey", () => {
       "zh",
     );
     expect(path).toBe("引言");
+  });
+});
+
+describe("listBlueprintSubsectionPathsForKey", () => {
+  it("returns nested literature_body paths when ≥2", () => {
+    const paths = listBlueprintSubsectionPathsForKey(
+      sampleBlueprint,
+      "literature_body",
+      "review",
+    );
+    expect(paths.length).toBeGreaterThanOrEqual(2);
+    expect(paths.every((p) => p.includes("研究进展综述"))).toBe(true);
+    expect(paths.some((p) => p.includes("改性策略"))).toBe(true);
+  });
+
+  it("returns empty when blueprint missing", () => {
+    expect(listBlueprintSubsectionPathsForKey(null, "literature_body", "review")).toEqual(
+      [],
+    );
   });
 });
 

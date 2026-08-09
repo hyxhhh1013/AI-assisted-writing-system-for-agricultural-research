@@ -550,10 +550,10 @@ export function AgentPanel({
   );
 
   const figureDockItems = useMemo(() => {
-    const fromSession = collectSessionFigureDockItems(agent.messages, 6);
+    const fromSession = collectSessionFigureDockItems(agent.messages, 6, projectId);
     const charts = project ? parseProjectCharts(project.charts) : [];
-    return mergeProjectChartsIntoDock(fromSession, charts, 6);
-  }, [agent.messages, project]);
+    return mergeProjectChartsIntoDock(fromSession, charts, 6, projectId);
+  }, [agent.messages, project, projectId]);
 
   return (
     <div className={cn("flex h-full min-h-0 flex-col bg-[#fafaf8]", className)}>

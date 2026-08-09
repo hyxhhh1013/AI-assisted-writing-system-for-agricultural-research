@@ -1,6 +1,7 @@
 import type { ChartType } from "@/contracts/data-source";
 import type { ProjectChartAsset } from "@/contracts/figure";
 import {
+  buildAgentPlotRefineHref,
   buildChartReplayFigureSpec,
   chartTypeToFigureId,
   encodeChartAssetReplay,
@@ -256,11 +257,14 @@ async function generateOneChart(input: {
     }
 
     const href =
-      figureSpecEnc && input.ctx.projectId
-        ? `/plot?id=${encodeURIComponent(input.ctx.projectId)}`
-          + `&figure=${encodeURIComponent(chartType)}`
-          + `&figureSpec=${figureSpecEnc}`
-          + `&replaceImageUrl=${encodeURIComponent(generated.imageUrl)}`
+      (figureSpecEnc || persisted?.id) && input.ctx.projectId
+        ? buildAgentPlotRefineHref({
+            projectId: input.ctx.projectId,
+            figureId: chartType,
+            figureSpecEnc,
+            chartAssetId: persisted?.id,
+            imageUrl: generated.imageUrl,
+          })
         : undefined;
 
     const bits = [`已生成 ${chartType}「${title}」`];
@@ -416,6 +420,18 @@ export const generateChartTool: ToolDefinition = {
       const title = String(params.title ?? "").trim() || "复合图";
       const caption = String(params.caption ?? "").trim() || title;
       const preset = parsePresetParam(params.preset);
+      // 复合图整图暂无独立 plot 编辑器：回放第一面板 CSV，便于进绘图页改数据
+      const firstPanel = parsedPanels.panels[0]!;
+      const firstFigureId = normalizeChartType(firstPanel.chartType);
+      const figureSpecEnc = buildFigureSpecEnc({
+        csvData: firstPanel.csv,
+        chartType: firstFigureId,
+        title: firstPanel.title?.trim() || `${title} (a)`,
+        caption,
+        xLabel: firstPanel.xLabel?.trim() || "",
+        yLabel: firstPanel.yLabel?.trim() || "",
+        style: preset ? { preset } : undefined,
+      });
       try {
         const generated = await runPanelGeneration({
           title,
@@ -452,12 +468,23 @@ export const generateChartTool: ToolDefinition = {
         let persisted: ProjectChartAsset | null = null;
         if (persistToProject) {
           persisted = await persistAgentChart(ctx.userId, ctx.projectId!, {
-            figureId: "panel_multi",
+            figureId: firstFigureId || "panel_multi",
             caption,
             imageUrl: generated.imageUrl,
             sectionKey: sectionKey ?? undefined,
+            figureSpecEnc,
           });
         }
+        const href =
+          figureSpecEnc || persisted?.id
+            ? buildAgentPlotRefineHref({
+                projectId: ctx.projectId!,
+                figureId: firstFigureId || "bar_grouped",
+                figureSpecEnc,
+                chartAssetId: persisted?.id,
+                imageUrl: generated.imageUrl,
+              })
+            : undefined;
         const bits = [
           `已生成 ${parsedPanels.panels.length} 面板复合图「${title}」`,
         ];
@@ -467,6 +494,7 @@ export const generateChartTool: ToolDefinition = {
         } else if (insertedSection) {
           bits.push(`已插入章节 ${insertedSection}`);
         }
+        if (href) bits.push("绘图页可回放编辑面板 (a) 数据");
         return {
           success: true,
           data: {
@@ -475,7 +503,10 @@ export const generateChartTool: ToolDefinition = {
             persisted,
             insertedSection,
             insertMode: insertMode ?? (autoReplaced ? "replaced" : undefined),
-            figureId: "panel_multi",
+            figureId: firstFigureId || "panel_multi",
+            href,
+            figureSpecEnc,
+            hasReplay: Boolean(figureSpecEnc),
           },
           summary: bits.join("；"),
         };

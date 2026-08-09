@@ -122,7 +122,8 @@ function fallbackPlan(goal: string): AgentPlan {
         },
         {
           id: "3",
-          title: "write_section(literature_body) 写回综述正文",
+          title:
+            "按蓝图子节多次 write_section(literature_body, subsectionTitle=…) 写回正文（禁止一次写整章）",
           status: "pending",
           toolHints: ["write_section"],
         },

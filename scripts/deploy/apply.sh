@@ -7,14 +7,23 @@ set -euo pipefail
 APP_DIR="${APP_DIR:-/home/ubuntu/grainscript}"
 TAR_FILE="${TAR_FILE:-/home/ubuntu/deploy.tar.gz}"
 
-echo "→ 解压到 ${APP_DIR}（不覆盖 .env）"
+# ── Phase 1：只解压，然后 exec 新包里的 apply.sh ──────────────────────────
+# 否则 nohup 启动的是「旧目录里的旧脚本」，会漏掉新加的 canvas 等链接步骤
+# （2026-08-09 Agent 500：只链了 prisma，未链 @napi-rs/canvas-<hash>）。
+if [ "${GRAINSCRIPT_APPLY_PHASE:-}" != "post" ]; then
+  echo "→ 解压到 ${APP_DIR}（不覆盖 .env）"
+  cd "$APP_DIR"
+  echo "→ 清理旧 .next"
+  rm -rf .next
+  tar -xzf "$TAR_FILE" --exclude='.env' 2>/dev/null || tar -xzf "$TAR_FILE"
+  chmod +x scripts/deploy/apply.sh scripts/deploy/link-hashed-externals.sh scripts/deploy/preflight.sh 2>/dev/null || true
+  echo "→ 解压完成，切换到新包内 apply.sh"
+  exec env GRAINSCRIPT_APPLY_PHASE=post APP_DIR="$APP_DIR" TAR_FILE="$TAR_FILE" \
+    bash "$APP_DIR/scripts/deploy/apply.sh"
+fi
+
+# ── Phase 2：安装 / 迁移 / 链接 / 重启（始终跑刚解压的脚本）──────────────
 cd "$APP_DIR"
-# 清理旧构建产物：.next/standalone/node_modules 含 symlink/哈希目录，
-# 不删会在 tar 解包时报 "Cannot open: File exists"
-echo "→ 清理旧 .next"
-rm -rf .next
-# 排除 .env —— 服务器配置永远不被部署包覆盖
-tar -xzf "$TAR_FILE" --exclude='.env' 2>/dev/null || tar -xzf "$TAR_FILE"
 
 echo "→ 安装依赖"
 npm install --production --legacy-peer-deps --ignore-scripts
@@ -28,44 +37,8 @@ echo "→ Prisma Generate（生成 Debian 引擎）"
 echo "→ Prisma DB Push"
 ./node_modules/.bin/prisma db push --skip-generate
 
-echo "→ Turbopack hashed external 符号链接"
-# serverExternalPackages（@prisma/client、@napi-rs/canvas）会被 Turbopack 改写成
-# @scope/name-<hash>，npm 不会生成该目录 → 必须符号链接到真实包，否则 Agent/PDF 等路由 500。
-# 用 -r/--include，避免 chunks/*.js glob 参数过长或未命中导致静默跳过。
-HASHED_MODS="$(
-  grep -rhoE '@[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+-[a-f0-9]{8,}' .next/server --include='*.js' 2>/dev/null \
-    | sort -u || true
-)"
-if [ -z "$HASHED_MODS" ]; then
-  echo "→ 构建产物中未命中 hashed external，跳过"
-else
-  while IFS= read -r mod; do
-    [ -n "$mod" ] || continue
-    scope="${mod%%/*}"
-    name_hash="${mod#*/}"
-    name="$(printf '%s' "$name_hash" | sed -E 's/-[a-f0-9]{8,}$//')"
-    mkdir -p "node_modules/$scope"
-    if [ "$scope/$name" = "@prisma/client" ]; then
-      if [ ! -d node_modules/.prisma/client ]; then
-        echo "→ 缺少 node_modules/.prisma/client，无法链接 $mod" >&2
-        exit 1
-      fi
-      ln -sfn "../.prisma/client" "node_modules/$scope/$name_hash"
-      echo "→ 已链接 $mod → .prisma/client"
-    else
-      if [ ! -d "node_modules/$scope/$name" ]; then
-        echo "→ 缺少 node_modules/$scope/$name，尝试安装…"
-        npm install "$scope/$name" --legacy-peer-deps --no-save
-      fi
-      if [ ! -d "node_modules/$scope/$name" ]; then
-        echo "→ 无法链接 $mod（包不存在）" >&2
-        exit 1
-      fi
-      ln -sfn "$name" "node_modules/$scope/$name_hash"
-      echo "→ 已链接 $mod → $scope/$name"
-    fi
-  done <<< "$HASHED_MODS"
-fi
+chmod +x scripts/deploy/link-hashed-externals.sh 2>/dev/null || true
+bash scripts/deploy/link-hashed-externals.sh
 
 echo "→ 部署前自检"
 chmod +x scripts/deploy/preflight.sh 2>/dev/null || true

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ChartConfig, DataSourceAnalysis } from "@/contracts/data-source";
 import {
+  buildAgentPlotRefineHref,
   buildChartReplayFigureSpec,
   buildPlotInsertReplay,
   buildPlotPageHref,
@@ -260,5 +261,30 @@ describe("chart prefill contracts", () => {
       caption: "图2",
     });
     expect(href).toContain("/plot?");
+  });
+
+  it("maps mermaid mechanism to PlotToolPrefill (not empty FlowPrefill)", () => {
+    const spec = {
+      tool: "mechanism" as const,
+      config: { mermaid: "graph TD\n  A-->B", title: "机理" },
+      caption: "图3 机理",
+    };
+    expect(figureSpecToFlowPrefill(spec)).toBeNull();
+    const tool = figureSpecToPlotToolPrefill(spec);
+    expect(tool?.figureId).toBe("mechanism");
+    expect(tool?.config.mermaid).toContain("graph TD");
+  });
+
+  it("buildAgentPlotRefineHref prefers chartAssetId over long figureSpec", () => {
+    const href = buildAgentPlotRefineHref({
+      projectId: "p1",
+      figureId: "flow",
+      figureSpecEnc: "enc-long",
+      chartAssetId: "asset-9",
+      imageUrl: "/api/charts/x.png",
+    });
+    expect(href).toContain("chartAssetId=asset-9");
+    expect(href).not.toContain("figureSpec=");
+    expect(href).toContain("replaceImageUrl=");
   });
 });

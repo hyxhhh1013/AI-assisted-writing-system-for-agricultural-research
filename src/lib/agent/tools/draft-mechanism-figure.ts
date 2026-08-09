@@ -1,4 +1,7 @@
-import { encodeFigureSpecParam } from "@/contracts/figure";
+import {
+  buildAgentPlotRefineHref,
+  encodeFigureSpecParam,
+} from "@/contracts/figure";
 import type { ProjectChartAsset } from "@/contracts/figure";
 import {
   insertOrReplaceAgentSectionImage,
@@ -489,7 +492,11 @@ export const draftMechanismFigureTool: ToolDefinition = {
     D --> E`;
       const config = { mermaid, title };
       const figureSpecEnc = encodeFigureSpecParam({ tool: "mechanism", caption: title, config });
-      const href = `/plot?id=${encodeURIComponent(ctx.projectId)}&figure=mechanism&figureSpec=${figureSpecEnc}`;
+      const href = buildAgentPlotRefineHref({
+        projectId: ctx.projectId,
+        figureId: "mechanism",
+        figureSpecEnc,
+      });
       return {
         success: true,
         data: { kind, title, config, href, figureSpecEnc, imageUrl: undefined },
@@ -535,12 +542,6 @@ export const draftMechanismFigureTool: ToolDefinition = {
 
     try {
       const generated = await runMechanismGeneration(kind, config);
-      // 精修深链默认带 replaceImageUrl，/plot 回写可就地替换正文旧图
-      const href =
-        `/plot?id=${encodeURIComponent(ctx.projectId)}`
-        + `&figure=${figureId}`
-        + `&figureSpec=${figureSpecEnc}`
-        + `&replaceImageUrl=${encodeURIComponent(generated.imageUrl)}`;
 
       let insertMode: "replaced" | "appended" | undefined;
       let retiredId: string | undefined;
@@ -584,6 +585,15 @@ export const draftMechanismFigureTool: ToolDefinition = {
         });
       }
 
+      // 优先 chartAssetId，避免长 figureSpec 塞 URL 被截断后无法回放
+      const href = buildAgentPlotRefineHref({
+        projectId: ctx.projectId,
+        figureId,
+        figureSpecEnc,
+        chartAssetId: persisted?.id,
+        imageUrl: generated.imageUrl,
+      });
+
       const bits = [
         `已生成${kind === "flow" ? "流程图" : "多面板机理图"}「${title}」`,
       ];
@@ -623,10 +633,11 @@ export const draftMechanismFigureTool: ToolDefinition = {
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const fallbackHref =
-        `/plot?id=${encodeURIComponent(ctx.projectId)}`
-        + `&figure=${figureId}`
-        + `&figureSpec=${figureSpecEnc}`;
+      const fallbackHref = buildAgentPlotRefineHref({
+        projectId: ctx.projectId,
+        figureId,
+        figureSpecEnc,
+      });
       return {
         success: false,
         error: message,

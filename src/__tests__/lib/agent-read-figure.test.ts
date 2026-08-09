@@ -167,8 +167,30 @@ describe("readFigureTool", () => {
     expect(r.success).toBe(true);
     expect(mDescribe.describeImage).toHaveBeenCalledWith(
       expect.stringContaining("1234567890abcdef.png"),
-      expect.objectContaining({ prompt: expect.stringContaining("质检") }),
+      expect.objectContaining({ prompt: expect.stringContaining("两级标准") }),
     );
     expect((r.data as { needsRegen?: boolean }).needsRegen).toBe(true);
+    expect((r.data as { qaVerdict?: string }).qaVerdict).toBe("regen");
+  });
+
+  it("mode=qa 解析建议精修且不强制重生成", async () => {
+    mDescribe.describeImage.mockResolvedValue({
+      status: "ready",
+      text: "1. 无\n8. 可再加分叉\n结论：可接受·建议精修",
+      source: "image_vision",
+    });
+    const r = await readFigureTool.execute(
+      { imageUrl: "/api/charts/1234567890abcdef.png", mode: "qa" },
+      ctx,
+    );
+    expect(r.success).toBe(true);
+    const data = r.data as {
+      needsRegen?: boolean;
+      needsPolish?: boolean;
+      qaVerdict?: string;
+    };
+    expect(data.needsRegen).toBeFalsy();
+    expect(data.needsPolish).toBe(true);
+    expect(data.qaVerdict).toBe("polish");
   });
 });

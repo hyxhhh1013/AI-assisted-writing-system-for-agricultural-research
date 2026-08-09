@@ -62,6 +62,12 @@ describe("figure-loop", () => {
         data: { mode: "qa", description: "结论：可接受" },
       }),
     ).toBe(false);
+    expect(
+      isFigureQaNeedsRegen({
+        success: true,
+        data: { mode: "qa", description: "结论：可接受·建议精修" },
+      }),
+    ).toBe(false);
   });
 
   it("lastFigureQaNeedsReplace / checkFigureReplaceRequired", () => {

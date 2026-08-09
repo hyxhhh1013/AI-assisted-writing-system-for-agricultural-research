@@ -38,12 +38,14 @@ import {
   shouldPauseForConfigConfirm,
   shouldPauseForOutlineApprove,
 } from "@/lib/agent/core/checkpoints";
+import { buildFigureQaPolishNudge } from "@/lib/agent/figure-qa";
 import {
   buildFigureQaContinueNudge,
   buildReadFigureQaCall,
   extractFigureImageUrl,
   FIGURE_BRIEF_QUESTION,
   FIGURE_GENERATE_TOOLS,
+  isFigureQaNeedsPolish,
   isFigureQaNeedsRegen,
   lastFigureQaNeedsReplace,
   shouldPauseForFigureBrief,
@@ -876,6 +878,19 @@ export async function toolsNode(
             + "禁止同标题再 append。也可先 remove_figure。期刊观感请引导用户到 /plot 精修。",
         });
         newSummaries.push("[figure-loop] QA 未通过：下一轮必须 replaceImageUrl");
+      } else if (
+        result.success
+        && tool.name === "read_figure"
+        && isFigureQaNeedsPolish(result)
+      ) {
+        const polishUrl =
+          extractFigureImageUrl(result)
+          || String((result.data as { imageUrl?: unknown })?.imageUrl ?? "");
+        newMessages.push({
+          role: "user",
+          content: buildFigureQaPolishNudge(polishUrl || undefined),
+        });
+        newSummaries.push("[figure-loop] QA 可接受·建议精修（不强制重画）");
       }
 
       // 后置门禁链（antispam 停滞 / clarify / outline 检查点）：

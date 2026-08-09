@@ -19,7 +19,10 @@ import {
   clipActiveWriteDraft,
   evaluateWriteResume,
 } from "@/lib/agent/write-resume";
-import { prepareAgentWriteBlueprintContext } from "@/lib/agent/blueprint-write-context";
+import {
+  listBlueprintSubsectionPathsForKey,
+  prepareAgentWriteBlueprintContext,
+} from "@/lib/agent/blueprint-write-context";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import { getAgentModelConfig } from "@/lib/ai";
 import { isSectionValidForMode } from "@/lib/section-registry";
@@ -28,7 +31,8 @@ import type { WritingInput } from "@/lib/validations";
 export const writeSectionTool: ToolDefinition = {
   name: "write_section",
   description:
-    "调用 Writer 扩写管道为指定章节生成正文（含 RAG；默认写后自动核查修正一轮，可关）。有写作蓝图时系统会自动注入该节 purpose/keyPoints/配图；context/bullets 须对齐蓝图要点，勿另起炉灶。",
+    "调用 Writer 扩写管道为指定章节生成正文（含 RAG；默认写后自动核查修正一轮，可关）。有写作蓝图时系统会自动注入该节 purpose/keyPoints/配图；context/bullets 须对齐蓝图要点，勿另起炉灶。"
+    + "综述 literature_body：蓝图有多个子节时必须带 subsectionTitle 逐节写，禁止一次写完整章万字。",
   parameters: {
     type: "object",
     properties: {
@@ -56,7 +60,11 @@ export const writeSectionTool: ToolDefinition = {
         type: "string",
         description: "写后自动核查并修正（默认 true；false 关闭）。对应 AGENT_WRITE_AUTO_FIX",
       },
-      subsectionTitle: { type: "string", description: "可选：子节标题" },
+      subsectionTitle: {
+        type: "string",
+        description:
+          "子节标题（建议传蓝图 sectionPath 或末级标题）。literature_body 在蓝图有多子节时必填",
+      },
       persistToProject: {
         type: "string",
         description: "是否写回项目章节与新增参考文献（默认 true）",
@@ -87,6 +95,29 @@ export const writeSectionTool: ToolDefinition = {
         success: false,
         error: `章节 ${sectionRaw} 与项目类型 ${project.mode} 不匹配`,
       };
+    }
+
+    const subsectionTitleEarly = params.subsectionTitle
+      ? String(params.subsectionTitle).trim()
+      : "";
+    // 综述正文：蓝图多子节时禁止一次 write 整章（否则易产出万字、超时/质量塌陷）
+    if (sectionRaw === "literature_body" && !subsectionTitleEarly) {
+      const subs = listBlueprintSubsectionPathsForKey(
+        project.globalContext?.blueprint ?? null,
+        "literature_body",
+        project.mode,
+      );
+      if (subs.length >= 2) {
+        const preview = subs.slice(0, 6).map((p, i) => `${i + 1}. ${p}`).join("；");
+        return {
+          success: false,
+          error:
+            `综述正文请按蓝图子节分批写，不要一次 write_section(literature_body) 写完整章。`
+            + `请带 subsectionTitle，例如：${preview}`
+            + (subs.length > 6 ? "…" : "")
+            + "。每调用一次只写一个子节。",
+        };
+      }
     }
 
     let bullets: string[] | undefined;

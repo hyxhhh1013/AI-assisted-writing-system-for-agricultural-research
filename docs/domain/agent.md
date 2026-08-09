@@ -116,6 +116,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **工作台随内容自适应（2026-08-07）**：蓝图 schema 新增可选 `projectMode`/`language`（生成时用项目兜底填充）；工作台按顶层章节把 `sectionGuides` 树形分组（`" > "` 层级，顶层可折叠）、按论文类型显示徽标与配图提示（综述→概念图/对比表，研究→方法流程图/结果数据图）、空区块（前置条件/配图/章节导览/写作顺序）自动隐藏。分组纯函数 `groupSectionGuides` 在 `lib/blueprint-utils.ts`。
 - **蓝图顺序注入 Agent 简报（2026-08-08）**：修复「蓝图建议写作顺序与实际写作顺序不一致」——此前 `project-briefing` 只给 LLM「写作蓝图：有 + thesis 摘要」，`writingOrder` 与 `sectionGuides` 未进 Agent 决策输入，Agent 靠直觉/大纲顺序写。现在 `loadAgentProject` 额外提取 `blueprintWritingOrder`/`blueprintSectionGuides`（`project-loader.ts`），简报注入「建议写作顺序（蓝图）：1. x → 2. y → …」+「各节写作要点（蓝图）」区块（`project-briefing.ts`）。Agent 写作前即可见蓝图建议顺序并按序推进。
 - **蓝图真正驱动 Writer（2026-08-09）**：修复「批准蓝图后正文仍不按蓝图生成」。根因：①`loadAgentProject` 曾把 `WritingBlueprint` JSON 误 `as WritingGlobalContext`，`prepare-context` 读 `globalContext.blueprint` 恒为 undefined，【写作蓝图摘要】不进 Writer；②`write_section` 未调用工作台同款的本节蓝图注入（purpose/keyPoints/配图）。现：loader 用 `parseWritingBlueprint` 正确嵌套 `globalContext.blueprint` 并附 outline/sectionPreviews；`lib/agent/blueprint-write-context.ts` 将英文 section key 映射到大纲/蓝图中文路径，聚合本节 guides 注入 `【写作蓝图（本节）】`；简报补 keyPoints + 配图计划；system prompt / 工具说明要求对齐蓝图。
+- **综述正文禁止一次写整章（2026-08-09）**：Agent 曾把 phase 文案「一次任务可连续写多节」理解成对 `literature_body` 一次写出 5–7k 字（UI 可达万字+），导致超时/质量塌陷。现：① phase-pack / planner / review_write nudge / system prompt 明确「按蓝图子节 + subsectionTitle 逐节写」；② `write_section` 在 `literature_body` 无 `subsectionTitle` 且蓝图有 ≥2 子节路径时 soft-gate 拒绝并列出建议标题。
 - **论证并入写作蓝图（2026-08-09，方案 A）**：产品主路径改为 `配置 → 大纲 → 写作蓝图 → 分节写`。`SectionGuide` 增加 `claim` / `evidenceHint` / `warrant` / `rebuttal`；全文级 `researchQuestion` / `argumentGaps`。`ensure-write-prereqs` / phase-gate 不再要求 `build_argument_blueprint`；该工具改为弃用引导；检查点只对 `generate_writing_blueprint` 暂停。Passport Phase 3 有写作蓝图即 done。旧 `argumentBlueprint` 列保留只读兼容。
 - **写作蓝图「结构无效」修复（2026-08-09）**：首因是 prompt 示例 `language: Chinese/English`（schema 仅 `zh|en`）。复查后发现仍会因 `dataSource`/`projectMode` 非法枚举、`keyPoints` 写成字符串、`estimatedWordCount` 写成 `"6000-12000"`、缺 `version`/空 items 等失败。现：① prompt 按 review/research 分示例并写明枚举约束；② `blueprint-coerce.ts` 纠偏上述偏差并在必要时合成最小合法 figure/guides；③ 错误文案带字段路径。API 与 `generate_writing_blueprint` 共用。
 - **蓝图文献源 + 分析笔记进 Writer（2026-08-09）**：`sectionGuides.assignedSources`（文件名或 `[n]`）经 `blueprint-write-context` 解析为 `selectedSourceIds`，Agent `write_section` 限 RAG 范围（解析为空则不限，避免误清空）。`loadAgentProject` 加载 `analysisResults` 进 `globalContext.analysisResults`，与工作台扩写一致。
@@ -180,7 +181,8 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 |----|------|
 | L1 草稿 | `draft_mechanism_figure` / `generate_chart`；多机理图任务前 **FigureBrief clarify**（版式/配色/分子式/素材）；可选 `templateId` 农科模板 |
 | L2 硬闭环 | 出图成功后 **toolsNode 自动注入** `read_figure(mode=qa)`；并行读图批也会补 QA nudge；QA 未通过则**禁止空口收尾**（`routeAfterAgent` 强制续跑）+ 门禁强制 `replaceImageUrl`；同 caption/section 无 replace 时工具内自动就地替换（防叠图） |
-| L3 精修 | **配图坞**（输入框上方常驻最近出图，免翻聊天）+ 结果卡：落点说明（默认**节末落盘**）+「查看正文位置」+ 结构化「按意见改」（含分叉/三面板/脱氧等快捷）+ `/plot?replaceImageUrl=` 深链（精修回写默认真地替换）；编辑器「本节插图」可挪位 |
+| L3 精修 | **配图坞**（输入框上方常驻最近出图，免翻聊天）+ 结果卡：落点说明（默认**节末落盘**）+「查看正文位置」+ 结构化「按意见改」（含分叉/三面板/脱氧等快捷）+ `/plot?chartAssetId=&replaceImageUrl=` 深链（优先资产快照回放，精修回写默认真地替换）；编辑器「本节插图」可挪位 |
+| 图质检两级（2026-08-09） | `figure-qa.ts`：硬伤→`needsRegen`（强制 replace 重画）；观感→`needsPolish`（不强制重画，nudge 去 `/plot`）；通过→`pass`。规则含节点文案过载、多栏严重失衡等，灰区默认建议精修而非一律放行 |
 
 | 工具 | 作用 |
 |------|------|

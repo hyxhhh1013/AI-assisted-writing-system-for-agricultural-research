@@ -11,15 +11,8 @@ const IMAGE_PROMPT =
   + "数据与坐标轴：若有，列出轴名与关键数值，并用一句话说趋势\n"
   + "不要编造图中没有的信息。";
 
-/** Agent 自检机理图/流程图用：抓占位、英文模板、空栏、重复文字 */
-export const FIGURE_QA_PROMPT =
-  "你是论文机理图/配图质检助手。用中文按下列条目检查（没有就写「无」）：\n"
-  + "1. 占位/空栏：是否出现 Upload figure asset、虚线空框、空白面板\n"
-  + "2. 英文模板节点：是否出现 Pathway/Product/Feedstock/Support/Conversion 等通用英文占位\n"
-  + "3. 文字重复：同一段说明是否重复出现（如 callout 与脚注相同）\n"
-  + "4. 结构过简：是否仅为无分支单列清单、缺乏机理并行路径\n"
-  + "5. 改进建议：一句话说明应如何重生成（更具体中文 steps / 分叉边）\n"
-  + "最后一行写「结论：可接受」或「结论：需重生成」。不要编造图中没有的内容。";
+/** @deprecated 请从 `@/lib/agent/figure-qa` 导入；此处再导出保持旧 import 可用 */
+export { FIGURE_QA_PROMPT } from "@/lib/agent/figure-qa";
 
 function mimeOf(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase().replace(/^\./, "");

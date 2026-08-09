@@ -115,7 +115,8 @@ export const PHASE_TASK_PACKS: Record<number, PhaseTaskPack> = {
     ],
     constraints: [
       "必须已有大纲 + 写作蓝图（含各节论证要点）",
-      "优先空白章节；一次任务可连续写多节若预算允许",
+      "优先空白章节；一次任务可连续写多个小节（如引言+背景），但单次 write_section 只写一节/一子节",
+      "综述 literature_body：蓝图有多子节时必须带 subsectionTitle 逐节写，禁止一次写完整章万字",
       "写完说明章节 key 与字数；有数据时可配图",
     ],
     humanFallback: "章节协作 Tab 人控扩写",

@@ -357,9 +357,10 @@ export function figureSpecToPrefill(spec: FigureSpec): ChartPanelPrefill | null 
   return figureChartConfigToPrefill(spec.config, spec.caption);
 }
 
-/** FigureSpec → PlotToolPrefill（molecule / xrd_*） */
+/** FigureSpec → PlotToolPrefill（mechanism Mermaid / mechanism_panel / molecule / xrd_*） */
 export function figureSpecToPlotToolPrefill(spec: FigureSpec): PlotToolPrefill | null {
-  if (spec.tool === "chart" || spec.tool === "flow" || spec.tool === "mechanism") {
+  // flow 走 FlowPanelPrefill；chart 走 ChartPanelPrefill
+  if (spec.tool === "chart" || spec.tool === "flow") {
     return null;
   }
   if (!isRecord(spec.config)) return null;
@@ -405,9 +406,9 @@ export function buildPlotInsertReplay(
   };
 }
 
-/** FigureSpec → FlowPanelPrefill（flow / mechanism） */
+/** FigureSpec → FlowPanelPrefill（仅 flow；Mermaid mechanism 走 PlotToolPrefill） */
 export function figureSpecToFlowPrefill(spec: FigureSpec): FlowPanelPrefill | null {
-  if (spec.tool !== "flow" && spec.tool !== "mechanism") return null;
+  if (spec.tool !== "flow") return null;
   if (!isRecord(spec.config)) return null;
   const direction = spec.config.direction;
   const nodesRaw = spec.config.nodes;
@@ -527,6 +528,30 @@ export function chartAssetToPlotHref(
     figureId: asset.figureId,
     chartAssetId: asset.figureSpecEnc ? asset.id : undefined,
   });
+}
+
+/**
+ * Agent 出图后的 /plot 精修深链。
+ * 优先 chartAssetId（避免 figureSpec 塞进 URL 被截断导致无法回放）；
+ * 无资产时再退回内嵌 figureSpec。
+ */
+export function buildAgentPlotRefineHref(params: {
+  projectId: string;
+  figureId: string;
+  figureSpecEnc?: string;
+  chartAssetId?: string;
+  imageUrl?: string;
+}): string {
+  const q = new URLSearchParams();
+  q.set("id", params.projectId);
+  if (params.figureId) q.set("figure", params.figureId);
+  if (params.chartAssetId && params.figureSpecEnc) {
+    q.set("chartAssetId", params.chartAssetId);
+  } else if (params.figureSpecEnc) {
+    q.set("figureSpec", params.figureSpecEnc);
+  }
+  if (params.imageUrl) q.set("replaceImageUrl", params.imageUrl);
+  return `/plot?${q.toString()}`;
 }
 
 export interface ChartReplayParsedData {

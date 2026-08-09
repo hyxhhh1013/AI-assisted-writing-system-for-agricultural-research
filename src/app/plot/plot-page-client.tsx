@@ -210,11 +210,17 @@ function PlotContent() {
         const assets = parseProjectCharts(project.charts);
         const asset = assets.find((a) => a.id === chartAssetIdParam);
         if (!asset) return;
-        applyFigureSelection(asset.figureId);
+        // 优先从快照选图种（panel_multi 等非 registry id 不能直接选）
         if (asset.figureSpecEnc) {
           const spec = decodeFigureSpecParam(asset.figureSpecEnc);
-          if (spec) applySpecPrefill(spec);
+          if (spec) {
+            applyFigureSelection(figureToolToRegistryId(spec.tool, spec.config));
+            applySpecPrefill(spec);
+            setPrefillApplied(true);
+            return;
+          }
         }
+        applyFigureSelection(asset.figureId);
         setPrefillApplied(true);
       });
       return;

@@ -21,7 +21,7 @@ const MECHANISM_FIGURE_RULE = [
 export function buildAgentSystemPrompt(tools: ToolDefinition[]): string {
   const writeEnabled = tools.some((t) => t.safety === "write");
   const writeNote = writeEnabled
-    ? `【写回】可用 generate_* / write_section / refine / import_reference / 图表与修订工具；section 用英文 key（introduction、methods、results、discussion、conclusion、literature_body、abstract 等）。**主路径**：大纲 → 写作蓝图（含各节 claim/evidenceHint，勿再 build_argument_blueprint）→ 分节写。**已有写作蓝图时**：按 writingOrder 推进；context/bullets 对齐该节 purpose/keyPoints/主张（系统会注入【写作蓝图（本节）】）。缺大纲/蓝图时可直接 write_section（系统自动补齐并走批准检查点）。写后可用 validate_citations；交付可用 export_manuscript_markdown。`
+    ? `【写回】可用 generate_* / write_section / refine / import_reference / 图表与修订工具；section 用英文 key（introduction、methods、results、discussion、conclusion、literature_body、abstract 等）。**主路径**：大纲 → 写作蓝图（含各节 claim/evidenceHint，勿再 build_argument_blueprint）→ 分节写。**已有写作蓝图时**：按 writingOrder 推进；context/bullets 对齐该节 purpose/keyPoints/主张（系统会注入【写作蓝图（本节）】）。**综述 literature_body**：蓝图有多子节时必须带 subsectionTitle 逐节写，禁止一次写完整章。缺大纲/蓝图时可直接 write_section（系统自动补齐并走批准检查点）。写后可用 validate_citations；交付可用 export_manuscript_markdown。`
     : "【限制】当前只能使用只读工具，不能撰写或修改论文。";
 
   return `你是禾书耕文（GrainScript）的科研写作智能体——像 Cursor 里的通用 Agent：思考 → 自己取上下文 → 调工具 → 用中文说明 → 问下一步。

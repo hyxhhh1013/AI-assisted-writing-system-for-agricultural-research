@@ -125,6 +125,27 @@ export function formatBlueprintSectionHintForKey(
   return `${parts.join("\n")}\n`;
 }
 
+/**
+ * 蓝图中映射到某 sectionKey 的子节路径列表。
+ * 有 ≥2 条含「 > 」的嵌套路径时优先返回嵌套；否则返回全部匹配路径。
+ * 用于综述 literature_body：禁止一次写整章时列出应分批的 subsectionTitle。
+ */
+export function listBlueprintSubsectionPathsForKey(
+  blueprint: WritingBlueprint | null | undefined,
+  sectionKey: string,
+  mode: ProjectWritingMode | undefined,
+): string[] {
+  if (!blueprint) return [];
+  const paths = blueprint.sectionGuides
+    .map((g) => g.sectionPath.trim())
+    .filter(
+      (p) => p.length > 0 && mapToSectionForMode(p, mode) === sectionKey,
+    );
+  const unique = [...new Set(paths)];
+  const nested = unique.filter((p) => p.includes(">"));
+  return nested.length >= 2 ? nested : unique;
+}
+
 /** 收集本节蓝图 assignedSources（含子路径 guides） */
 export function collectBlueprintAssignedSourceTokens(opts: {
   blueprint: WritingBlueprint;

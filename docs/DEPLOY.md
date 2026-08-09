@@ -122,7 +122,8 @@ ssh -i "E:/Edownload/cursor.pem" -o StrictHostKeyChecking=no ubuntu@159.75.106.2
 | 3 | **standalone 含 692M node_modules** | 复制 + 打包超时（本机 2 分钟卡死） | `package.sh` 用 `tar -C .next/standalone --exclude=node_modules --exclude=papers --exclude=data -cf - . \| tar -C deploy-pkg -xf -` 排除 |
 | 4 | **SSH 限流（fail2ban）** | `Connection closed by ... port 22`，持续几分钟 | **别硬连/别重试**（每次失败重置计时）；等 ~10 分钟一次性干净上传；部署用 nohup 分离，短连接只负责启动 |
 | 5 | **`pm2 reload` 吃旧 `.env`** | 改服务器 `.env`（如 `WRITING_MAX_CONCURRENT`）后 reload 不生效 | 改 env 必须 `pm2 delete grainscript && pm2 start ecosystem.config.cjs && pm2 save`；纯代码部署（无 env 变更）用 `apply.sh` 的 reload 即可 |
-| 6 | **Turbopack hashed external 断裂** | HTTP 500；日志 `Cannot find module '@prisma/client-<hash>'` 或 `@napi-rs/canvas-<hash>`（Agent/附件 PDF 常见） | `serverExternalPackages` 被 Turbopack 改写成带 hash 的模块名。**`apply.sh` 已自动**扫描 `.next/server` 并为 `@prisma/client-*` / `@napi-rs/canvas-*` 等建符号链接 |
+| 6 | **Turbopack hashed external 断裂** | HTTP 500；日志 `Cannot find module '@prisma/client-<hash>'` 或 `@napi-rs/canvas-<hash>`（Agent/附件 PDF 常见） | `serverExternalPackages` 被 Turbopack 改写成带 hash 的模块名。**`link-hashed-externals.sh`** 扫描并链接；`apply.sh` 解压后 **exec 新脚本**再跑链接（避免 nohup 仍执行旧 apply、只链 prisma） |
+| 6b | **nohup 跑旧 apply.sh** | 部署日志只出现 prisma 链接、Agent 仍 500缺 canvas | bash 不会热更新已打开的脚本；`apply.sh` Phase1 解压后 `exec` 新包内脚本 |
 | 7 | **用 `next start` 跑 standalone** | 报错 / 不工作 | 必须 `node server.js`（standalone 模式不支持 `next start`） |
 | 8 | **`.env` 被打进部署包** | 覆盖服务器生产配置（DATABASE_URL 变 SQLite/`@db:`） | 打包排除 `.env`；`apply.sh` `--exclude='.env'` |
 | 9 | **未验证 BUILD_ID** | 自以为部署成功，实际旧包/漏包 | 部署后 `cat .next/BUILD_ID` 与本地核对；打包后 `tar -tzf deploy.tar.gz \| grep -c '\.next/BUILD_ID'` |

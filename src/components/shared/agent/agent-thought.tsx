@@ -290,9 +290,12 @@ export const AgentActionCard = memo(function AgentActionCard({
               </p>
               <div className="flex flex-wrap items-center gap-1.5">
                 {(() => {
-                  const href = imageUrl
-                    ? withReplaceImageUrlParam(plotHref ?? "/plot", imageUrl)
-                    : plotHref;
+                  // 无 plotHref 时不落空 /plot（否则进页无数据可编辑）
+                  const href = plotHref
+                    ? (imageUrl
+                        ? withReplaceImageUrlParam(plotHref, imageUrl)
+                        : plotHref)
+                    : undefined;
                   if (!href) return null;
                   return (
                     <Link

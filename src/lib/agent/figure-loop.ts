@@ -4,6 +4,7 @@
  */
 import type { AgentToolResult } from "@/contracts/agent";
 import type { ProjectChartAsset } from "@/contracts/figure";
+import { parseFigureQaVerdict } from "@/lib/agent/figure-qa";
 import type { LLMMessage, ParsedToolCall, ToolObservation } from "@/lib/agent/types";
 import { randomUUID } from "crypto";
 
@@ -71,12 +72,34 @@ export function isFigureQaNeedsRegen(result: AgentToolResult): boolean {
   if (!result.success || result.data == null || typeof result.data !== "object") {
     return false;
   }
-  const data = result.data as { needsRegen?: unknown; description?: unknown; mode?: unknown };
-  if (data.needsRegen === true) return true;
+  const data = result.data as {
+    needsRegen?: unknown;
+    description?: unknown;
+    mode?: unknown;
+    qaVerdict?: unknown;
+  };
+  if (data.needsRegen === true || data.qaVerdict === "regen") return true;
   if (data.mode === "qa" && typeof data.description === "string") {
-    return /结论\s*[:：]\s*需重生成|Upload figure asset|Pathway\s*\d|Feedstock/i.test(
-      data.description,
-    );
+    return parseFigureQaVerdict(data.description).needsRegen;
+  }
+  return false;
+}
+
+/** 「可接受·建议精修」：不强制重画，引导 /plot */
+export function isFigureQaNeedsPolish(result: AgentToolResult): boolean {
+  if (!result.success || result.data == null || typeof result.data !== "object") {
+    return false;
+  }
+  if (isFigureQaNeedsRegen(result)) return false;
+  const data = result.data as {
+    needsPolish?: unknown;
+    description?: unknown;
+    mode?: unknown;
+    qaVerdict?: unknown;
+  };
+  if (data.needsPolish === true || data.qaVerdict === "polish") return true;
+  if (data.mode === "qa" && typeof data.description === "string") {
+    return parseFigureQaVerdict(data.description).needsPolish;
   }
   return false;
 }
@@ -93,11 +116,18 @@ export function lastFigureQaNeedsReplace(
       return null;
     }
     if (o.tool === "read_figure" && o.success && o.data && typeof o.data === "object") {
-      const data = o.data as { needsRegen?: unknown; imageUrl?: unknown; mode?: unknown; description?: unknown };
+      const data = o.data as {
+        needsRegen?: unknown;
+        imageUrl?: unknown;
+        mode?: unknown;
+        description?: unknown;
+        qaVerdict?: unknown;
+      };
       const needs =
         data.needsRegen === true
+        || data.qaVerdict === "regen"
         || (typeof data.description === "string"
-          && /结论\s*[:：]\s*需重生成/i.test(data.description));
+          && parseFigureQaVerdict(data.description).needsRegen);
       if (needs && typeof data.imageUrl === "string" && data.imageUrl) {
         return { imageUrl: data.imageUrl };
       }
@@ -191,11 +221,13 @@ export function collectFigureQaFailures(
       needsRegen?: unknown;
       imageUrl?: unknown;
       description?: unknown;
+      qaVerdict?: unknown;
     };
     const needs =
       data.needsRegen === true
+      || data.qaVerdict === "regen"
       || (typeof data.description === "string"
-        && /结论\s*[:：]\s*需重生成/i.test(data.description));
+        && parseFigureQaVerdict(data.description).needsRegen);
     if (needs && typeof data.imageUrl === "string" && data.imageUrl) {
       urls.push(data.imageUrl);
     }
