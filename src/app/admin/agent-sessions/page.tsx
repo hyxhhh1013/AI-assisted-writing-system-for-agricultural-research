@@ -16,6 +16,7 @@ import {
 } from "@/services/admin";
 import type { AgentUiMessage } from "@/contracts/agent-session";
 import { useAdminList } from "@/hooks/use-admin-list";
+import { adminAgentStatusLabel } from "@/lib/admin-labels";
 import { AdminPageHeader, AdminFilterPills } from "@/components/admin/admin-page-header";
 import { AdminPagination } from "@/components/admin/admin-pagination";
 import { AdminExpandableList } from "@/components/admin/admin-expandable-list";
@@ -247,7 +248,9 @@ export default function AdminAgentSessionsPage() {
                 {new Date(s.updatedAt).toLocaleString("zh-CN")}
               </p>
             </div>
-            <Badge className={`shrink-0 ${STATUS_COLOR[s.status] || ""}`}>{s.status}</Badge>
+            <Badge className={`shrink-0 ${STATUS_COLOR[s.status] || ""}`}>
+              {adminAgentStatusLabel(s.status)}
+            </Badge>
           </div>
         )}
         renderDetail={() =>
@@ -256,7 +259,7 @@ export default function AdminAgentSessionsPage() {
               <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
                 <div className="rounded border border-[#1a5632]/10 bg-white p-2">迭代 <b>{detail.iteration}</b></div>
                 <div className="rounded border border-[#1a5632]/10 bg-white p-2">工具调用 <b>{detail.toolCallCount}</b></div>
-                <div className="rounded border border-[#1a5632]/10 bg-white p-2">状态 <b>{detail.status}</b></div>
+                <div className="rounded border border-[#1a5632]/10 bg-white p-2">状态 <b>{adminAgentStatusLabel(detail.status)}</b></div>
                 <div className="rounded border border-[#1a5632]/10 bg-white p-2">用户 <b>{detail.userName ?? detail.userId.slice(0, 8)}</b></div>
               </div>
               <div>
@@ -285,7 +288,7 @@ export default function AdminAgentSessionsPage() {
                           }`}
                         />
                         <span className="text-[#3d4f46]">{i + 1}. {s.title}</span>
-                        <span className="ml-auto text-[9px] text-[#9aa8a0]">{s.status}</span>
+                        <span className="ml-auto text-[9px] text-[#9aa8a0]">{adminAgentStatusLabel(s.status)}</span>
                       </div>
                     ))}
                   </div>

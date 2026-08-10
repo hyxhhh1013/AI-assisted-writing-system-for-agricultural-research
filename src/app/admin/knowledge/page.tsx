@@ -197,52 +197,6 @@ export default function AdminKnowledgePage() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-[#1a5632]/10 bg-[#faf9f6] p-4 space-y-2">
-        <p className="text-sm font-medium text-[#122820]">期刊指标表（CSV / Excel）</p>
-        <p className="text-xs text-[#6b7c72]">
-          直接上传课题组 Excel 即可；列名支持中英文（如 issn/刊号、journal/刊名、影响因子、分区）。优先 ISSN 匹配，否则刊名。
-        </p>
-        {lastMetricsImport && (
-          <p className="text-[11px] text-[#9aa8a0]">
-            最近导入：{lastMetricsImport.filename} · 更新 {lastMetricsImport.updated} 篇 · 命中率{" "}
-            {lastMetricsImport.matchRate}% ·{" "}
-            {new Date(lastMetricsImport.at).toLocaleString("zh-CN")}
-            {" · "}
-            <Link href="/admin/health" className="text-[#1a5632] hover:underline">
-              健康面板覆盖率
-            </Link>
-          </p>
-        )}
-        <div className="flex flex-wrap items-center gap-2">
-          <Input
-            type="file"
-            accept=".csv,.xlsx,.xls,text/csv"
-            className="h-9 max-w-xs text-sm"
-            disabled={metricsImporting}
-            onChange={(e) => {
-              queueMetricsImport(e.target.files?.[0], false);
-              e.target.value = "";
-            }}
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9"
-            disabled={metricsImporting}
-            onClick={() => {
-              const input = document.createElement("input");
-              input.type = "file";
-              input.accept = ".csv,.xlsx,.xls,text/csv";
-              input.onchange = () => queueMetricsImport(input.files?.[0], true);
-              input.click();
-            }}
-          >
-            {metricsImporting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Upload className="h-4 w-4 mr-1" />}
-            试运行
-          </Button>
-        </div>
-      </div>
-
       <AdminPageHeader
         title="文献管理"
         actions={
@@ -266,6 +220,62 @@ export default function AdminKnowledgePage() {
           </div>
         }
       />
+
+      <details className="rounded-xl border border-[#1a5632]/10 bg-[#faf9f6] open:bg-white">
+        <summary className="cursor-pointer list-none px-4 py-3 text-sm [&::-webkit-details-marker]:hidden">
+          <span className="font-medium text-[#122820]">导入期刊指标</span>
+          <span className="ml-2 text-[11px] text-[#9aa8a0]">CSV / Excel · 影响因子与分区</span>
+          {lastMetricsImport && (
+            <span className="ml-2 text-[11px] text-[#9aa8a0]">
+              · 最近 {lastMetricsImport.updated} 篇 · {lastMetricsImport.matchRate}%
+            </span>
+          )}
+        </summary>
+        <div className="space-y-2 border-t border-[#1a5632]/8 px-4 pb-4 pt-3">
+          <p className="text-xs text-[#6b7c72]">
+            列名支持中英文（issn/刊号、journal/刊名、影响因子、分区）。优先 ISSN 匹配。
+          </p>
+          {lastMetricsImport && (
+            <p className="text-[11px] text-[#9aa8a0]">
+              最近：{lastMetricsImport.filename} · 更新 {lastMetricsImport.updated} 篇 · 命中率{" "}
+              {lastMetricsImport.matchRate}% ·{" "}
+              {new Date(lastMetricsImport.at).toLocaleString("zh-CN")}
+              {" · "}
+              <Link href="/admin/health" className="text-[#1a5632] hover:underline">
+                健康面板
+              </Link>
+            </p>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              type="file"
+              accept=".csv,.xlsx,.xls,text/csv"
+              className="h-9 max-w-xs text-sm"
+              disabled={metricsImporting}
+              onChange={(e) => {
+                queueMetricsImport(e.target.files?.[0], false);
+                e.target.value = "";
+              }}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9"
+              disabled={metricsImporting}
+              onClick={() => {
+                const input = document.createElement("input");
+                input.type = "file";
+                input.accept = ".csv,.xlsx,.xls,text/csv";
+                input.onchange = () => queueMetricsImport(input.files?.[0], true);
+                input.click();
+              }}
+            >
+              {metricsImporting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Upload className="h-4 w-4 mr-1" />}
+              试运行
+            </Button>
+          </div>
+        </div>
+      </details>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <AdminSearchInput value={q} onChange={setQ} placeholder="搜索文件名..." />

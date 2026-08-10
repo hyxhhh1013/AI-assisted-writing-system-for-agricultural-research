@@ -367,8 +367,8 @@ export default function AdminSettingsPage() {
           <Zap className="h-4 w-4 text-[#1a5632]" />
           <h3 className="text-sm font-medium text-[#122820]">运行时开关</h3>
         </div>
-        <p className="text-[10px] text-[#9aa8a0] mt-1 mb-3">
-          存入 SystemSetting，热加载（无需改 .env）。环境变量若显式设置则仍优先于此处。
+        <p className="mt-1 mb-3 text-[10px] text-[#9aa8a0]">
+          写入数据库后热加载，无需改服务器环境变量。
         </p>
         <div className="grid gap-3 sm:grid-cols-3">
           <label className="flex items-start gap-2 rounded-lg bg-[#faf9f6] px-3 py-2 text-xs">
@@ -380,7 +380,7 @@ export default function AdminSettingsPage() {
             />
             <span>
               <span className="font-medium text-[#122820]">OA 全文自动入库</span>
-              <span className="block text-[9px] text-[#9aa8a0]">ENABLE_OA_AUTO_IMPORT</span>
+              <span className="mt-0.5 block text-[10px] text-[#9aa8a0]">外部开放获取文献抓到后自动进知识库</span>
             </span>
           </label>
           <label className="flex items-start gap-2 rounded-lg bg-[#faf9f6] px-3 py-2 text-xs">
@@ -392,14 +392,14 @@ export default function AdminSettingsPage() {
             />
             <span>
               <span className="font-medium text-[#122820]">Agent 写后自动核查修正</span>
-              <span className="block text-[9px] text-[#9aa8a0]">AGENT_WRITE_AUTO_FIX</span>
+              <span className="mt-0.5 block text-[10px] text-[#9aa8a0]">写完一节后自动跑核查并修正</span>
             </span>
           </label>
           <div className="rounded-lg bg-[#faf9f6] px-3 py-2 text-xs">
             <div className="font-medium text-[#122820]">扩写并发上限</div>
-            <div className="text-[9px] text-[#9aa8a0] mb-1">WRITING_MAX_CONCURRENT（1–32）</div>
+            <div className="mb-1 text-[10px] text-[#9aa8a0]">同时进行的扩写请求数（1–32）</div>
             <Input
-              className="h-8 font-mono text-xs"
+              className="h-8 text-xs"
               value={writingMaxConcurrent}
               onChange={(e) => setWritingMaxConcurrentUi(e.target.value)}
               inputMode="numeric"
@@ -420,21 +420,21 @@ export default function AdminSettingsPage() {
           <Settings2 className="h-4 w-4 text-[#1a5632]" />
           <h3 className="text-sm font-medium text-[#122820]">Agent 角色模型映射</h3>
         </div>
-        <p className="text-[10px] text-[#9aa8a0] mt-1 mb-3">
-          Writer / Verifier / Refiner / Planner 可分别使用 DeepSeek 或智谱；Verifier 与 Writer 用不同模型时实现真正的独立审查；Planner 默认智谱（便宜模型跑规划）。保存后立即生效。
+        <p className="mt-1 mb-3 text-[10px] text-[#9aa8a0]">
+          写作与审查用不同厂商更稳。保存后立即生效。
         </p>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {ROLE_LABELS.map(({ role, label, desc }) => (
             <div key={role} className="rounded-lg bg-[#faf9f6] px-3 py-2">
               <div className="text-xs font-medium text-[#122820]">{label}</div>
-              <div className="text-[9px] text-[#9aa8a0] mb-1">{desc}</div>
+              <div className="mb-1 text-[10px] text-[#9aa8a0]">{desc}</div>
               <select
-                className="h-8 w-full rounded-md border border-input bg-white px-2 text-xs font-mono"
+                className="h-8 w-full rounded-md border border-input bg-white px-2 text-xs"
                 value={roles[role]}
                 onChange={(e) => setRoles((prev) => ({ ...prev, [role]: e.target.value as AiProviderKey }))}
               >
-                <option value="deepseek">deepseek</option>
-                <option value="zhipu">zhipu</option>
+                <option value="deepseek">DeepSeek</option>
+                <option value="zhipu">智谱</option>
               </select>
             </div>
           ))}
@@ -447,29 +447,30 @@ export default function AdminSettingsPage() {
         </div>
       </div>
 
-      {/* ==================== 全部设置（高级） ==================== */}
-      <div className="rounded-xl border border-[#1a5632]/10 bg-white overflow-hidden">
-        <div className="px-4 py-2.5 border-b border-[#1a5632]/10 bg-[#faf9f6] text-sm text-[#6b7c72]">
-          全部设置（高级，含自定义 Key）
-        </div>
-        <table className="w-full text-sm">
+      {/* ==================== 全部设置（高级，默认折叠） ==================== */}
+      <details className="rounded-xl border border-[#1a5632]/10 bg-white overflow-hidden">
+        <summary className="cursor-pointer list-none px-4 py-3 text-sm text-[#6b7c72] hover:bg-[#faf9f6] [&::-webkit-details-marker]:hidden">
+          <span className="font-medium text-[#122820]">全部设置</span>
+          <span className="ml-2 text-[11px] text-[#9aa8a0]">高级 · 自定义 Key（{settings.length}）</span>
+        </summary>
+        <table className="w-full border-t border-[#1a5632]/10 text-sm">
           <thead>
             <tr className="border-b border-[#1a5632]/10 bg-[#faf9f6] text-left text-[#6b7c72]">
-              <th className="py-2.5 px-4 font-medium">Key</th>
-              <th className="py-2.5 px-4 font-medium">Value</th>
-              <th className="py-2.5 px-4 font-medium hidden sm:table-cell">更新时间</th>
-              <th className="py-2.5 px-4 font-medium">操作</th>
+              <th className="px-4 py-2.5 font-medium">Key</th>
+              <th className="px-4 py-2.5 font-medium">Value</th>
+              <th className="hidden px-4 py-2.5 font-medium sm:table-cell">更新时间</th>
+              <th className="px-4 py-2.5 font-medium">操作</th>
             </tr>
           </thead>
           <tbody>
             {settings.map((s) => (
               <tr key={s.key} className="border-b border-[#1a5632]/5 hover:bg-[#1a5632]/[0.02]">
-                <td className="py-2.5 px-4 font-mono text-xs text-[#122820]">{s.key}</td>
-                <td className="py-2.5 px-4 font-mono text-xs text-[#6b7c72]">{s.maskedValue}</td>
-                <td className="py-2.5 px-4 hidden sm:table-cell text-xs text-[#9aa8a0]">
+                <td className="px-4 py-2.5 font-mono text-xs text-[#122820]">{s.key}</td>
+                <td className="px-4 py-2.5 font-mono text-xs text-[#6b7c72]">{s.maskedValue}</td>
+                <td className="hidden px-4 py-2.5 text-xs text-[#9aa8a0] sm:table-cell">
                   {new Date(s.updatedAt).toLocaleString("zh-CN")}
                 </td>
-                <td className="py-2.5 px-4">
+                <td className="px-4 py-2.5">
                   <div className="flex items-center gap-1">
                     <Button variant="ghost" size="icon" className="h-7 w-7" title="重新设置" onClick={() => openEditKey(s.key)}>
                       <Key className="h-3.5 w-3.5" />
@@ -483,7 +484,7 @@ export default function AdminSettingsPage() {
             ))}
             {settings.length === 0 && (
               <tr>
-                <td colSpan={4} className="py-12 text-center text-[#9aa8a0] text-sm">
+                <td colSpan={4} className="py-12 text-center text-sm text-[#9aa8a0]">
                   暂无设置<br />
                   <span className="text-[10px]">点击上方卡片「添加 Key」或「配置模型」</span>
                 </td>
@@ -491,7 +492,7 @@ export default function AdminSettingsPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </details>
 
       {/* ==================== 编辑 / 新增对话框 ==================== */}
       <Dialog open={showEdit} onOpenChange={setShowEdit}>

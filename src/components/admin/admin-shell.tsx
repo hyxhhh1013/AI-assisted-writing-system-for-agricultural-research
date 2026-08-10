@@ -62,9 +62,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen bg-[#f6f8f7]">
       <aside className="flex w-56 shrink-0 flex-col border-r border-[#1a5632]/10 bg-white">
         <div className="flex h-14 items-center gap-2 border-b border-[#1a5632]/10 px-4">
-          <Link href="/" className="flex items-center gap-1.5 text-xs text-[#6b7c72] hover:text-[#1a5632]">
+          <Link href="/projects" className="flex items-center gap-1.5 text-xs text-[#6b7c72] hover:text-[#1a5632]">
             <ArrowLeft className="h-3.5 w-3.5" />
-            返回工作台
+            返回项目
           </Link>
         </div>
         <div className="border-b border-[#1a5632]/8 px-4 py-4">
@@ -77,7 +77,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               <p className="px-3 py-1.5 text-[10px] font-medium text-[#9aa8a0]">{group.label}</p>
               <div className="space-y-0.5">
                 {group.items.map((item) => {
-                  const active = pathname === item.href;
+                  const active =
+                    item.href === "/admin"
+                      ? pathname === "/admin"
+                      : pathname === item.href || pathname.startsWith(`${item.href}/`);
                   return (
                     <Link
                       key={item.href}

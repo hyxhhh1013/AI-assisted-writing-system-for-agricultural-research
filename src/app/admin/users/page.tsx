@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { exportUsersCSV } from "@/lib/admin-export";
 import { deleteAdminUser, listAdminUsers, updateAdminUserRole, type AdminUserRecord } from "@/services/admin";
 import { useAdminList } from "@/hooks/use-admin-list";
+import { adminRoleLabel } from "@/lib/admin-labels";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminSearchInput } from "@/components/admin/admin-search-input";
 import { AdminPagination } from "@/components/admin/admin-pagination";
@@ -62,7 +63,7 @@ export default function AdminUsersPage() {
     setRoleChanging(true);
     try {
       await updateAdminUserRole(roleTarget.id, newRole);
-      toast.success(`角色已切换为 ${newRole}`);
+      toast.success(`角色已切换为 ${adminRoleLabel(newRole)}`);
       reload();
     } catch {
       toast.error("角色切换失败");
@@ -103,7 +104,9 @@ export default function AdminUsersPage() {
             header: "角色",
             sortable: true,
             cell: (u) => (
-              <Badge variant={u.role === "admin" ? "default" : "secondary"} className="text-[10px]">{u.role}</Badge>
+              <Badge variant={u.role === "admin" ? "default" : "secondary"} className="text-[10px]">
+                {adminRoleLabel(u.role)}
+              </Badge>
             ),
           },
           {
@@ -126,14 +129,30 @@ export default function AdminUsersPage() {
             header: "操作",
             cell: (u) => (
               <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setRoleTarget(u)} title={u.role === "admin" ? "降级" : "升级"}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => setRoleTarget(u)}
+                  title={u.role === "admin" ? "降为普通用户" : "升为管理员"}
+                  aria-label={u.role === "admin" ? "降为普通用户" : "升为管理员"}
+                >
                   {u.role === "admin" ? <ShieldOff className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}
                 </Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700" onClick={() => setDeleteTarget(u)}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-red-500 hover:text-red-700"
+                  onClick={() => setDeleteTarget(u)}
+                  title="删除用户"
+                  aria-label="删除用户"
+                >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
                 <Link href={`/admin/users/${u.id}`}>
-                  <Button variant="ghost" size="icon" className="h-7 w-7"><ChevronRight className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" title="查看详情" aria-label="查看详情">
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
                 </Link>
               </div>
             ),
@@ -176,9 +195,11 @@ export default function AdminUsersPage() {
         description={
           <p>
             将 <strong>{roleTarget?.name}</strong> 的角色从
-            <Badge className="mx-1 text-[10px]">{roleTarget?.role}</Badge>
+            <Badge className="mx-1 text-[10px]">{roleTarget ? adminRoleLabel(roleTarget.role) : ""}</Badge>
             切换为
-            <Badge className="mx-1 text-[10px]">{roleTarget?.role === "admin" ? "user" : "admin"}</Badge>
+            <Badge className="mx-1 text-[10px]">
+              {roleTarget ? adminRoleLabel(roleTarget.role === "admin" ? "user" : "admin") : ""}
+            </Badge>
             ？
           </p>
         }

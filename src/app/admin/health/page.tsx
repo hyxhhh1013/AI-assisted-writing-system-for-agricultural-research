@@ -77,14 +77,14 @@ export default function AdminHealthPage() {
           { label: "内存", value: data.server.memoryMB, icon: Server, suffix: "MB" },
           {
             label: data.db.connected ? "数据库" : "DB 异常",
-            value: Math.max(1, Math.round(data.db.sizeBytes / 1024 / 1024)),
+            value: Math.max(0, Math.round(data.db.sizeBytes / 1024 / 1024)),
             icon: Database,
             suffix: "MB",
           },
         ]}
       />
 
-      <AdminPanel title="健康度" subtitle="环形指标">
+      <AdminPanel title="健康度">
         <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-6">
           <AdminRingMetric
             label="数据库"
@@ -125,7 +125,6 @@ export default function AdminHealthPage() {
             max={1024}
             unit="MB"
             status={data.server.memoryMB < 768 ? "ok" : "warn"}
-            color="#6366f1"
           />
         </div>
       </AdminPanel>
@@ -196,8 +195,14 @@ export default function AdminHealthPage() {
         <AdminPanel title="知识库 / 磁盘抽样">
           <div className="space-y-2 text-sm text-[#6b7c72]">
             <p>
-              文献 <strong className="text-[#122820]">{data.knowledge.fileCount}</strong> 篇 · 块{" "}
-              <strong className="text-[#122820]">{data.knowledge.chunkCount}</strong>
+              文献 <strong className="text-[#122820]">{data.knowledge.fileCount}</strong> 篇
+              {data.knowledge.chunkCount > 0 ? (
+                <>
+                  {" · "}块 <strong className="text-[#122820]">{data.knowledge.chunkCount}</strong>
+                </>
+              ) : (
+                <span className="text-[#9aa8a0]"> · 分块统计未入库（见索引文件）</span>
+              )}
             </p>
             <p>
               未分类{" "}

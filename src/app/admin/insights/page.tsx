@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Loader2, Bot, AlertTriangle, Target, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { getAdminInsights, type AdminInsights } from "@/services/admin";
+import { adminToolLabel } from "@/lib/admin-labels";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminMetricStrip } from "@/components/admin/admin-stat-card";
 import { AdminPanel, AdminCompactList } from "@/components/admin/admin-panel";
@@ -32,7 +33,11 @@ export default function AdminInsightsPage() {
   }
 
   const intentItems = insights.goalIntents.map((g) => ({ label: g.intent, value: g.count }));
-  const toolItems = insights.toolCalls.map((t) => ({ label: t.tool, value: t.count, hint: "调用" }));
+  const toolItems = insights.toolCalls.map((t) => ({
+    label: adminToolLabel(t.tool),
+    value: t.count,
+    hint: "调用",
+  }));
   const errorTotal = Math.max(insights.errorSessionCount, 1);
   const errorItems = insights.errorPatterns.map((p) => ({
     label: p.pattern,
@@ -74,7 +79,7 @@ export default function AdminInsightsPage() {
         </AdminPanel>
       </div>
 
-      <AdminPanel title="失败模式排行" subtitle="error 会话的错误聚类，按占比排序">
+      <AdminPanel title="失败模式排行" subtitle="出错会话的错误聚类">
         {errorItems.length > 0 ? (
           <AdminCompactList items={errorItems} />
         ) : (

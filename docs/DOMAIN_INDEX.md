@@ -111,9 +111,9 @@
 
 | 功能 | 页面 | API | 核心代码 |
 |------|------|-----|----------|
-| 后台布局（RSC 鉴权） | `admin/layout.tsx`, `admin-shell.tsx` | — | `lib/admin-auth-page.ts` |
+| 后台布局（RSC 鉴权） | `admin/layout.tsx`, `admin-shell.tsx` | — | 侧栏分组；子路由高亮；返回 `/projects` |
 | 全局搜索 | `admin-global-search.tsx` | `GET /api/admin/search` | Ctrl+K（用户/项目/文献/方向/Agent 会话） |
-| 仪表盘 | `admin/page.tsx` | `GET /api/admin/stats` | `admin-dashboard-client.tsx` |
+| 仪表盘 | `admin/page.tsx` | `GET /api/admin/stats` | 单行 KPI + 告警 + 活动/分类；用量标签人性化（`admin-labels`） |
 | 用户/项目 | `admin/users`, `projects` | `/api/admin/users`, `projects` | `admin-data-table.tsx`, `use-admin-list.ts` |
 | 文献运维 | `admin/knowledge` | `GET/POST/DELETE /api/admin/knowledge`；`POST .../journal-metrics` | 索引状态、SSE 重索引、期刊 IF/分区导入 |
 | 研究方向 | `admin/directions` | `/api/admin/directions` | 归档/详情（资产·文献·路线图） |

@@ -80,6 +80,9 @@ export function AdminBarChart({
 
         {points.map((p, i) => {
           const active = hovered === i;
+          // 点多时稀疏打标，避免 X 轴叠字
+          const labelStep = points.length > 14 ? 5 : points.length > 8 ? 2 : 1;
+          const showLabel = i % labelStep === 0 || i === points.length - 1;
 
           if (variant === "area") {
             const step = (width - padX * 2) / Math.max(points.length - 1, 1);
@@ -96,9 +99,11 @@ export function AdminBarChart({
                   onMouseEnter={() => setHovered(i)}
                   onMouseLeave={() => setHovered(null)}
                 />
-                <text x={cx} y={height - 4} textAnchor="middle" className="fill-[#9aa8a0] text-[8px]">
-                  {p.label}
-                </text>
+                {showLabel && (
+                  <text x={cx} y={height - 4} textAnchor="middle" className="fill-[#9aa8a0] text-[8px]">
+                    {p.label}
+                  </text>
+                )}
               </g>
             );
           }
@@ -121,9 +126,11 @@ export function AdminBarChart({
                 onMouseEnter={() => setHovered(i)}
                 onMouseLeave={() => setHovered(null)}
               />
-              <text x={x + barW / 2} y={height - 4} textAnchor="middle" className="fill-[#9aa8a0] text-[8px]">
-                {p.label}
-              </text>
+              {showLabel && (
+                <text x={x + barW / 2} y={height - 4} textAnchor="middle" className="fill-[#9aa8a0] text-[8px]">
+                  {p.label}
+                </text>
+              )}
             </g>
           );
         })}

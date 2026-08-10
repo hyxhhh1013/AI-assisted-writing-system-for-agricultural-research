@@ -11,6 +11,7 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminMetricStrip } from "@/components/admin/admin-stat-card";
 import { AdminPanel } from "@/components/admin/admin-panel";
 import { AdminBarChart, AdminHBarChart } from "@/components/admin/admin-bar-chart";
+import { adminFeatureLabel } from "@/lib/admin-labels";
 
 function formatTime(ts: number) {
   return new Date(ts).toLocaleString("zh-CN");
@@ -120,7 +121,7 @@ export default function AdminUsagePage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <AdminPanel title="功能分布">
           <AdminHBarChart
-            items={data.stats.map((s) => ({ label: s.feature, value: s.count }))}
+            items={data.stats.map((s) => ({ label: adminFeatureLabel(s.feature), value: s.count }))}
           />
         </AdminPanel>
 
@@ -135,7 +136,9 @@ export default function AdminUsagePage() {
                   className="flex items-center gap-3 rounded-lg border border-[#1a5632]/8 bg-[#faf9f6]/60 px-3 py-2 text-xs transition-colors hover:border-[#1a5632]/20"
                 >
                   <span className="shrink-0 tabular-nums text-[#9aa8a0]">{formatTime(entry.timestamp).slice(5, 16)}</span>
-                  <Badge variant="secondary" className="text-[10px] shrink-0">{entry.feature}</Badge>
+                  <Badge variant="secondary" className="shrink-0 text-[10px]">
+                    {adminFeatureLabel(entry.feature)}
+                  </Badge>
                   <span className="min-w-0 truncate text-[#6b7c72]">{entry.userLabel ?? entry.userId ?? "—"}</span>
                 </div>
               ))}

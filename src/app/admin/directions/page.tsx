@@ -57,10 +57,10 @@ function AssetItem({ asset }: { asset: DirectionAsset }) {
 }
 
 const ROADMAP_STATUS_LABEL: Record<string, string> = {
-  planned: "planned",
-  writing: "writing",
-  submitted: "submitted",
-  published: "published",
+  planned: "计划中",
+  writing: "撰写中",
+  submitted: "已投稿",
+  published: "已发表",
 };
 
 export default function AdminDirectionsPage() {

@@ -5,17 +5,16 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   Users, FileText, Database, Search, Clock, Loader2, Heart, ArrowRight,
-  Compass, Bot, AlertTriangle, BarChart3,
+  Compass, Bot, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getAdminStats, getAdminHealth, type AdminStats } from "@/services/admin";
 import type { AdminHealthData } from "@/contracts/admin";
 import { buildAdminHealthAlerts } from "@/lib/admin-health-alerts";
-import { adminModeLabel, adminTplLabel } from "@/lib/admin-labels";
+import { adminFeatureLabel, adminModeLabel, adminTplLabel } from "@/lib/admin-labels";
 import { AdminHeroBand } from "@/components/admin/admin-hero-band";
 import { AdminPanel, AdminCompactList } from "@/components/admin/admin-panel";
-import { AdminBarChart, AdminHBarChart } from "@/components/admin/admin-bar-chart";
-import { AdminMetricStrip } from "@/components/admin/admin-stat-card";
+import { AdminHBarChart } from "@/components/admin/admin-bar-chart";
 import { AdminAlertStrip } from "@/components/admin/admin-alert-strip";
 import { AdminSparkline, isSparseTrend } from "@/components/admin/admin-sparkline";
 
@@ -78,14 +77,19 @@ export default function AdminDashboard() {
     ? `AI 调用：总计 ${stats.aiUsage.totalCalls} · 今日 ${stats.aiUsage.todayCount} · 本周 ${stats.aiUsage.weekCount}`
     : undefined;
 
-  // 扩写并发排队观测（进程内累计；用于量化「提高并发上限」收益）
   const wq = stats.writingQueue;
-  const writingQueueItems = wq
+  const showWritingQueue = Boolean(
+    wq && (wq.waitCount > 0 || wq.timeoutCount > 0),
+  );
+  const writingQueueItems = showWritingQueue && wq
     ? [
-        { label: "并发上限", value: wq.maxConcurrent, hint: "WRITING_MAX_CONCURRENT" },
-        { label: "排队次数", value: wq.waitCount, hint: "并发已满时等待的请求数" },
-        { label: "平均等待", value: wq.waitCount > 0 ? `${Math.round(wq.waitMs / wq.waitCount)}ms` : "—", hint: wq.waitCount > 0 ? `总等待 ${wq.waitMs}ms` : "本轮无排队" },
-        { label: "超时次数", value: wq.timeoutCount, hint: "排队超时返回「繁忙」的请求数" },
+        { label: "并发上限", value: wq.maxConcurrent },
+        { label: "排队次数", value: wq.waitCount },
+        {
+          label: "平均等待",
+          value: wq.waitCount > 0 ? `${Math.round(wq.waitMs / wq.waitCount)}ms` : "—",
+        },
+        { label: "超时次数", value: wq.timeoutCount },
       ]
     : [];
 
@@ -93,7 +97,7 @@ export default function AdminDashboard() {
     ? Object.entries(stats.aiUsage.byFeature)
         .sort(([, a], [, b]) => b - a)
         .slice(0, 5)
-        .map(([label, value]) => ({ label, value }))
+        .map(([label, value]) => ({ label: adminFeatureLabel(label), value }))
     : [];
 
   const userItems = stats.aiUsage
@@ -103,33 +107,33 @@ export default function AdminDashboard() {
       }))
     : [];
 
-  const sessionTrend = (stats.agentSessionTrend ?? []).map((d) => ({
-    label: d.date.slice(5),
-    value: d.count,
-  }));
   const statusItems = (stats.agentSessionByStatus ?? [])
     .map((s) => ({
       label: ADMIN_SESSION_STATUS_LABEL[s.status] ?? s.status,
       value: s.count,
     }))
     .sort((a, b) => b.value - a.value);
-  const recentDirItems = (stats.recentDirections ?? []).map((d) => ({
-    label: d.name,
-    value: formatTime(d.time),
-    hint: d.status === "active" ? "启用" : "已归档",
-  }));
 
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-lg font-semibold text-[#122820]">运维概览</h1>
-          <p className="text-sm text-[#6b7c72]">实验室运行状态一览</p>
+          <p className="text-sm text-[#6b7c72]">关键数字与告警，细节进各子页</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href="/knowledge"><Button variant="outline" size="sm" className="h-8 text-xs">上传文献</Button></Link>
-          <Link href="/admin/health"><Button variant="outline" size="sm" className="h-8 text-xs gap-1"><Heart className="h-3.5 w-3.5" />健康</Button></Link>
-          <Link href="/admin/usage"><Button size="sm" className="h-8 text-xs bg-[#1a5632]">用量详情</Button></Link>
+          <Link href="/admin/health">
+            <Button variant="outline" size="sm" className="h-8 gap-1 text-xs">
+              <Heart className="h-3.5 w-3.5" />
+              健康
+            </Button>
+          </Link>
+          <Link href="/admin/knowledge">
+            <Button variant="outline" size="sm" className="h-8 text-xs">文献</Button>
+          </Link>
+          <Link href="/admin/usage">
+            <Button size="sm" className="h-8 bg-[#1a5632] text-xs">用量</Button>
+          </Link>
         </div>
       </div>
 
@@ -141,37 +145,62 @@ export default function AdminDashboard() {
           { label: "项目", value: stats.projectCount, icon: FileText, href: "/admin/projects" },
           { label: "用户", value: stats.userCount, icon: Users, href: "/admin/users" },
           { label: "审查", value: stats.reviewCount, icon: Search, href: "/admin/reviews" },
+          { label: "方向", value: stats.directionCount, icon: Compass, href: "/admin/directions" },
+          {
+            label: "Agent",
+            value: stats.agentSessionCount,
+            icon: Bot,
+            href: "/admin/agent-sessions",
+          },
+          {
+            label: "出错",
+            value: stats.agentSessionErrorCount,
+            icon: AlertTriangle,
+            href: "/admin/agent-sessions?status=error",
+          },
         ]}
         aiLine={aiLine}
       />
 
-      <AdminMetricStrip
-        items={[
-          { label: "研究方向", value: stats.directionCount, icon: Compass, href: "/admin/directions" },
-          { label: "Agent 会话", value: stats.agentSessionCount, icon: Bot, href: "/admin/agent-sessions" },
-          { label: "Agent 出错", value: stats.agentSessionErrorCount, icon: AlertTriangle, href: "/admin/agent-sessions?status=error" },
-          { label: "分析记录", value: stats.analysisCount, icon: BarChart3 },
-        ]}
-      />
-
       <div className="grid gap-5 lg:grid-cols-5">
-        {/* 主栏：动态 + 趋势 */}
         <div className="space-y-5 lg:col-span-3">
-          <AdminPanel title="最近活动" subtitle="项目更新记录">
+          <AdminPanel
+            title="最近活动"
+            subtitle="项目更新"
+            actions={
+              weekNewProjects > 0 ? (
+                <div className="flex items-center gap-2 text-right">
+                  <div>
+                    <p className="text-[10px] text-[#9aa8a0]">近 7 天新建</p>
+                    <p className="text-sm font-semibold tabular-nums text-[#122820]">
+                      {weekNewProjects}
+                    </p>
+                  </div>
+                  {sparseTrend && (
+                    <AdminSparkline
+                      points={projectTrend.map((p) => p.value)}
+                      width={72}
+                      height={28}
+                    />
+                  )}
+                </div>
+              ) : undefined
+            }
+          >
             {stats.recentActivity.length === 0 ? (
               <p className="py-8 text-center text-xs text-[#9aa8a0]">暂无活动</p>
             ) : (
-              <ul className="space-y-3">
-                {stats.recentActivity.map((a, i) => (
+              <ul className="space-y-2.5">
+                {stats.recentActivity.slice(0, 6).map((a, i) => (
                   <li
-                    key={i}
+                    key={`${a.time}-${i}`}
                     className="flex gap-3 rounded-lg border border-[#1a5632]/8 bg-[#fafbfa] px-3 py-2.5"
                   >
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#1a5632]/10">
                       <Clock className="h-3.5 w-3.5 text-[#1a5632]" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm text-[#3d4f46]">
+                      <p className="truncate text-sm text-[#3d4f46]">
                         <span className="font-medium text-[#122820]">{a.user}</span>
                         {" "}更新了 {a.title || "未命名项目"}
                       </p>
@@ -182,57 +211,37 @@ export default function AdminDashboard() {
               </ul>
             )}
           </AdminPanel>
-
-          {weekNewProjects > 0 && (
-            <div className="flex items-center justify-between rounded-xl border border-[#1a5632]/10 bg-white px-4 py-3">
-              <div>
-                <p className="text-xs text-[#9aa8a0]">近 7 天新建项目</p>
-                <p className="text-xl font-semibold tabular-nums text-[#122820]">
-                  {weekNewProjects}
-                  <span className="ml-1 text-sm font-normal text-[#6b7c72]">个</span>
-                </p>
-              </div>
-              {sparseTrend ? (
-                <AdminSparkline
-                  points={projectTrend.map((p) => p.value)}
-                  width={140}
-                  height={36}
-                />
-              ) : (
-                <div className="w-48">
-                  <AdminBarChart variant="bar" points={projectTrend} height={80} />
-                </div>
-              )}
-              <Link href="/admin/projects" className="text-[#1a5632] hover:text-[#143d28]">
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
-          )}
         </div>
 
-        {/* 侧栏：静态分布 */}
         <div className="space-y-5 lg:col-span-2">
           <AdminPanel title="文献分类" subtitle="Top 6">
             <AdminHBarChart items={categoryItems} maxItems={6} />
           </AdminPanel>
 
           {stats.aiUsage && (featureItems.length > 0 || userItems.length > 0) && (
-            <AdminPanel title="AI 用量快照">
+            <AdminPanel
+              title="AI 用量"
+              actions={
+                <Link
+                  href="/admin/usage"
+                  className="inline-flex items-center gap-1 text-xs text-[#1a5632] hover:underline"
+                >
+                  详情 <ArrowRight className="h-3 w-3" aria-hidden />
+                </Link>
+              }
+            >
               {featureItems.length > 0 && (
-                <div className="mb-4">
-                  <p className="mb-2 text-[10px] font-medium text-[#9aa8a0]">功能</p>
+                <div className="mb-3">
+                  <p className="mb-1.5 text-[10px] font-medium text-[#9aa8a0]">模型</p>
                   <AdminCompactList items={featureItems.map((f) => ({ label: f.label, value: f.value }))} />
                 </div>
               )}
               {userItems.length > 0 && (
                 <div>
-                  <p className="mb-2 text-[10px] font-medium text-[#9aa8a0]">用户</p>
+                  <p className="mb-1.5 text-[10px] font-medium text-[#9aa8a0]">用户</p>
                   <AdminCompactList items={userItems} />
                 </div>
               )}
-              <Link href="/admin/usage" className="mt-3 inline-flex items-center gap-1 text-xs text-[#1a5632] hover:underline">
-                查看完整统计 <ArrowRight className="h-3 w-3" />
-              </Link>
             </AdminPanel>
           )}
 
@@ -255,37 +264,25 @@ export default function AdminDashboard() {
             </AdminPanel>
           )}
 
-          {(sessionTrend.some((t) => t.value > 0) || statusItems.length > 0) && (
-            <AdminPanel title="Agent 会话概览" subtitle="近 7 天">
-              {sessionTrend.some((t) => t.value > 0) && (
-                <AdminBarChart variant="bar" points={sessionTrend} height={80} />
-              )}
-              {statusItems.length > 0 && (
-                <div className="mt-3">
-                  <AdminCompactList items={statusItems} />
-                </div>
-              )}
-              <Link href="/admin/agent-sessions" className="mt-3 inline-flex items-center gap-1 text-xs text-[#1a5632] hover:underline">
-                查看会话 <ArrowRight className="h-3 w-3" />
-              </Link>
-            </AdminPanel>
-          )}
-
-          {recentDirItems.length > 0 && (
-            <AdminPanel title="方向活跃" subtitle="最近更新">
-              <AdminCompactList items={recentDirItems} />
-              <Link href="/admin/directions" className="mt-3 inline-flex items-center gap-1 text-xs text-[#1a5632] hover:underline">
-                管理方向 <ArrowRight className="h-3 w-3" />
-              </Link>
+          {statusItems.length > 0 && (
+            <AdminPanel
+              title="Agent 状态"
+              actions={
+                <Link
+                  href="/admin/agent-sessions"
+                  className="inline-flex items-center gap-1 text-xs text-[#1a5632] hover:underline"
+                >
+                  会话 <ArrowRight className="h-3 w-3" aria-hidden />
+                </Link>
+              }
+            >
+              <AdminCompactList items={statusItems} />
             </AdminPanel>
           )}
 
           {writingQueueItems.length > 0 && (
-            <AdminPanel title="扩写排队观测" subtitle="并发 3 收益量化（进程内累计）">
+            <AdminPanel title="扩写排队" subtitle="仅在有排队/超时时显示">
               <AdminCompactList items={writingQueueItems} />
-              <Link href="/admin/usage" className="mt-3 inline-flex items-center gap-1 text-xs text-[#1a5632] hover:underline">
-                用量详情 <ArrowRight className="h-3 w-3" />
-              </Link>
             </AdminPanel>
           )}
         </div>
