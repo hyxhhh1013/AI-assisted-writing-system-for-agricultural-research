@@ -53,21 +53,43 @@ const DIAGRAM_PANELS: Record<
   string,
   (props: PlotToolProps & { prefill?: FlowPanelPrefill | PlotToolPrefill | null }) => ReactNode
 > = {
-  flow: (props) => <FlowCard key="flow" {...props} prefill={props.prefill as FlowPanelPrefill | null | undefined} />,
-  mechanism: (props) => (
-    <MermaidMechanismCard
-      key="mechanism"
+  mechanism_panel: (props) => {
+    const toolPrefill =
+      props.prefill && "config" in props.prefill
+        ? (props.prefill as PlotToolPrefill)
+        : null;
+    return (
+      <MechanismPanelCard
+        key={
+          toolPrefill
+            ? `mechanism_panel-prefill-${String(toolPrefill.config.title ?? "")}`
+            : "mechanism_panel"
+        }
+        {...props}
+        prefill={toolPrefill}
+      />
+    );
+  },
+  flow: (props) => (
+    <FlowCard
+      key={props.prefill ? "flow-prefill" : "flow"}
       {...props}
-      prefill={props.prefill as PlotToolPrefill | null | undefined}
+      prefill={props.prefill as FlowPanelPrefill | null | undefined}
     />
   ),
-  mechanism_panel: (props) => (
-    <MechanismPanelCard
-      key="mechanism_panel"
-      {...props}
-      prefill={props.prefill as PlotToolPrefill | null | undefined}
-    />
-  ),
+  mechanism: (props) => {
+    const toolPrefill =
+      props.prefill && "config" in props.prefill
+        ? (props.prefill as PlotToolPrefill)
+        : null;
+    return (
+      <MermaidMechanismCard
+        key={toolPrefill ? "mechanism-prefill" : "mechanism"}
+        {...props}
+        prefill={toolPrefill}
+      />
+    );
+  },
   molecule: (props) => (
     <MolCard key="molecule" {...props} prefill={props.prefill as PlotToolPrefill | null | undefined} />
   ),

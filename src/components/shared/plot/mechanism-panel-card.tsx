@@ -252,9 +252,10 @@ export function MechanismPanelCard({
         description ??
         "Nature 风格 a/b/c 合成：文字/素材图/流程子图/标注；3D 写实图请上传后排版"
       }
+      configSize="wide"
       config={
         <ScrollArea className="min-h-0 flex-1">
-          <div className="space-y-3 px-4 pb-5 pt-3">
+          <div className="space-y-3 px-4 pb-5 pt-3 sm:px-5">
             <div className="flex gap-2">
               <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={loadAbcTemplate}>
                 三栏模板 (a/b/c)
@@ -456,7 +457,7 @@ export function MechanismPanelCard({
                       )}
                       {b.type === "flow_subgraph" && (
                         <FlowSubgraphEditor
-                          compact
+                          compact={false}
                           value={{
                             direction: b.direction || "vertical",
                             nodes: (b.nodes || []).map(

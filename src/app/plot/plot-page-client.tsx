@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense, useMemo, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { getFigureRegistry } from "@/services/figures";
 import type { FigureDef, FigureRegistry } from "@/services/figures";
-import { getProject } from "@/services/project";
+import { getProject, getProjectCharts } from "@/services/project";
 import {
   applyFigureSpecToPlotPrefill,
   chartConfigToPrefill,
@@ -12,12 +12,13 @@ import {
   collectChartConfigsFromSources,
   decodeFigureSpecParam,
   figureToolToRegistryId,
-  parseProjectCharts,
   type ChartPanelPrefill,
   type FlowPanelPrefill,
   type PlotInsertReplay,
   type PlotToolPrefill,
 } from "@/contracts/figure";
+import { takePlotPrefill } from "@/lib/plot-prefill-stash";
+import { toast } from "sonner";
 import { parseDataSources } from "@/contracts/project";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,6 +48,14 @@ import {
   XRD_FIGURE_TIERS,
 } from "@/contracts/xrd-figures";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+/** 示意图重编辑工具：收窄左侧类型栏，把宽度留给编辑整块 */
+const WIDE_EDITOR_FIGURE_IDS = new Set([
+  "mechanism_panel",
+  "flow",
+  "mechanism",
+]);
 
 const CATEGORY_ICONS: Record<string, ElementType> = {
   chart: BarChart,
@@ -192,36 +201,62 @@ function PlotContent() {
       if (applied.chartPrefill) setChartPrefill(applied.chartPrefill);
       if (applied.flowPrefill) setFlowPrefill(applied.flowPrefill);
       if (applied.toolPrefill) setToolPrefill(applied.toolPrefill);
+      return Boolean(applied.chartPrefill || applied.flowPrefill || applied.toolPrefill);
     };
 
+    const tryDecodeAndApply = (enc: string | null | undefined): boolean => {
+      if (!enc) return false;
+      const spec = decodeFigureSpecParam(enc);
+      if (!spec) return false;
+      applyFigureSelection(figureToolToRegistryId(spec.tool, spec.config));
+      return applySpecPrefill(spec);
+    };
+
+    // 1) sessionStorage 兜底（点击精修时写入，避免长 figureSpec URL 截断）
+    const stashed = takePlotPrefill({
+      chartAssetId: chartAssetIdParam ?? undefined,
+      imageUrl: replaceImageUrlParam,
+      projectId: routeProjectId ?? undefined,
+    });
+    if (tryDecodeAndApply(stashed)) {
+      setPrefillApplied(true);
+      return;
+    }
+
+    // 2) URL 内嵌 figureSpec（短快照）
     if (figureSpecParam) {
-      const spec = decodeFigureSpecParam(figureSpecParam);
-      if (spec) {
-        applyFigureSelection(figureToolToRegistryId(spec.tool, spec.config));
-        applySpecPrefill(spec);
+      if (tryDecodeAndApply(figureSpecParam)) {
         setPrefillApplied(true);
         return;
       }
+      // 截断/损坏：继续走资产回放
     }
 
-    if (chartAssetIdParam && routeProjectId) {
-      void getProject(routeProjectId).then((project) => {
-        if (!project) return;
-        const assets = parseProjectCharts(project.charts);
-        const asset = assets.find((a) => a.id === chartAssetIdParam);
-        if (!asset) return;
-        // 优先从快照选图种（panel_multi 等非 registry id 不能直接选）
-        if (asset.figureSpecEnc) {
-          const spec = decodeFigureSpecParam(asset.figureSpecEnc);
-          if (spec) {
-            applyFigureSelection(figureToolToRegistryId(spec.tool, spec.config));
-            applySpecPrefill(spec);
-            setPrefillApplied(true);
-            return;
-          }
+    // 3) 项目图表资产（chartAssetId 或 replaceImageUrl 匹配）
+    if (routeProjectId && (chartAssetIdParam || replaceImageUrlParam)) {
+      void getProjectCharts(routeProjectId, {
+        assetId: chartAssetIdParam || undefined,
+        imageUrl: !chartAssetIdParam ? replaceImageUrlParam : undefined,
+      }).then(({ asset }) => {
+        if (asset?.figureSpecEnc && tryDecodeAndApply(asset.figureSpecEnc)) {
+          setPrefillApplied(true);
+          return;
         }
-        applyFigureSelection(asset.figureId);
+        if (asset) {
+          applyFigureSelection(asset.figureId);
+          setPrefillApplied(true);
+          toast.message("未找到可编辑快照", {
+            description: "已打开对应图种，请从项目图表库重新打开或让 Agent 重新出图后再精修。",
+          });
+          return;
+        }
+        if (figureParam) {
+          applyFigureSelection(figureParam);
+        }
         setPrefillApplied(true);
+        toast.message("未能导入编辑数据", {
+          description: "请确认已登录同一账号，或从「已登记图表」进入绘图页。",
+        });
       });
       return;
     }
@@ -253,6 +288,7 @@ function PlotContent() {
     chartIdx,
     figureSpecParam,
     chartAssetIdParam,
+    replaceImageUrlParam,
     prefillApplied,
   ]);
 
@@ -414,7 +450,14 @@ function PlotContent() {
       </header>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <aside className="flex w-52 shrink-0 flex-col border-r border-[#1a5632]/10 bg-white/90">
+        <aside
+          className={cn(
+            "flex shrink-0 flex-col border-r border-[#1a5632]/10 bg-white/90 transition-[width]",
+            selectedFigure && WIDE_EDITOR_FIGURE_IDS.has(selectedFigure.id)
+              ? "w-40"
+              : "w-52",
+          )}
+        >
           <div className="shrink-0 border-b border-[#1a5632]/8 px-3 py-2.5">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-[#6b7c72]">
               {categories.find((c) => c.id === activeCategory)?.name ?? "图形"}

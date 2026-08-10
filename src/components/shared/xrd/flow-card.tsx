@@ -358,6 +358,7 @@ export function FlowCard({
         description ??
         "先在右侧大画布编排，再生成期刊终稿；生成后画布收至左侧，右侧看 PNG/SVG/PDF。"
       }
+      configSize="wide"
       config={
         <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-3 px-4 pb-5 pt-3">

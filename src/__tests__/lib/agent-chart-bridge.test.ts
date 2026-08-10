@@ -56,19 +56,26 @@ describe("chart bridge", () => {
     });
   });
 
-  it("stores imageUrl on observation ui transcript", () => {
+  it("stores imageUrl and plotHref on observation ui transcript", () => {
     const t = appendUiFromAgentEvent([], {
       type: "agent/observation",
       tool: "generate_chart",
       result: {
         success: true,
         summary: "已生成",
-        data: { imageUrl: "/api/charts/x.png" },
+        data: {
+          imageUrl: "/api/charts/x.png",
+          href: "/plot?id=p1&figure=line&chartAssetId=c1",
+          figureSpecEnc: "enc",
+          persisted: { id: "c1" },
+        },
       },
     });
     expect(t[0]).toMatchObject({
       kind: "observation",
       imageUrl: "/api/charts/x.png",
+      plotHref: expect.stringContaining("chartAssetId=c1"),
     });
+    expect((t[0] as { data?: { figureSpecEnc?: string } }).data?.figureSpecEnc).toBe("enc");
   });
 });

@@ -183,6 +183,7 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 | L2 硬闭环 | 出图成功后 **toolsNode 自动注入** `read_figure(mode=qa)`；并行读图批也会补 QA nudge；QA 未通过则**禁止空口收尾**（`routeAfterAgent` 强制续跑）+ 门禁强制 `replaceImageUrl`；同 caption/section 无 replace 时工具内自动就地替换（防叠图） |
 | L3 精修 | **配图坞**（输入框上方常驻最近出图，免翻聊天）+ 结果卡：落点说明（默认**节末落盘**）+「查看正文位置」+ 结构化「按意见改」（含分叉/三面板/脱氧等快捷）+ `/plot?chartAssetId=&replaceImageUrl=` 深链（优先资产快照回放，精修回写默认真地替换）；编辑器「本节插图」可挪位 |
 | 图质检两级（2026-08-09） | `figure-qa.ts`：硬伤→`needsRegen`（强制 replace 重画）；观感→`needsPolish`（不强制重画，nudge 去 `/plot`）；通过→`pass`。规则含节点文案过载、多栏严重失衡等，灰区默认建议精修而非一律放行 |
+| 精修回放加固（2026-08-10） | 根因：`uiTranscript` 未持久化 `plotHref`；长 `figureSpec` URL 易截断。现：transcript 保留深链+轻量快照；`GET .../charts`；点击精修 `sessionStorage` 暂存；绘图页按 assetId/imageUrl 回放并 remount 预填 |
 
 | 工具 | 作用 |
 |------|------|

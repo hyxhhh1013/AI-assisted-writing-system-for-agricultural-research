@@ -4,7 +4,51 @@ import prisma from "@/lib/prisma";
 import { validateBody } from "@/lib/api-validate";
 import { projectChartsPatchSchema } from "@/lib/validations";
 import { applyChartPatchOps } from "@/lib/project-charts";
-import type { ChartsPatchResponse } from "@/contracts/figure";
+import { parseProjectCharts, type ChartsPatchResponse } from "@/contracts/figure";
+
+/** GET /api/projects/:id/charts — 图表资产列表（供 /plot 精修回放） */
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id: projectId } = await params;
+    const userId = req.headers.get("x-user-id");
+    if (!userId) return NextResponse.json({ error: "未登录" }, { status: 401 });
+
+    const owned = await prisma.project.findFirst({
+      where: { id: projectId, userId },
+      select: { charts: true },
+    });
+    if (!owned) return NextResponse.json({ error: "项目未找到" }, { status: 404 });
+
+    const charts = parseProjectCharts(owned.charts);
+    const { searchParams } = new URL(req.url);
+    const assetId = searchParams.get("assetId")?.trim();
+    const imageUrl = searchParams.get("imageUrl")?.trim();
+
+    if (assetId) {
+      const asset = charts.find((c) => c.id === assetId);
+      if (!asset) {
+        return NextResponse.json({ error: "图表资产不存在" }, { status: 404 });
+      }
+      return NextResponse.json({ charts: [asset], asset });
+    }
+    if (imageUrl) {
+      const hits = charts.filter((c) => c.imageUrl === imageUrl);
+      const asset = hits[hits.length - 1] ?? null;
+      return NextResponse.json({
+        charts: asset ? [asset] : [],
+        asset,
+      });
+    }
+
+    return NextResponse.json({ charts });
+  } catch (error) {
+    logger.error("Charts GET error:", error);
+    return NextResponse.json({ error: "读取失败" }, { status: 500 });
+  }
+}
 
 /** PATCH /api/projects/:id/charts — 图表资产 JSON 增量更新 */
 export async function PATCH(

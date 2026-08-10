@@ -120,8 +120,13 @@ function isProjectChartAsset(value: unknown): value is ProjectChartAsset {
   );
 }
 
-export function parseProjectCharts(raw: string | null | undefined): ProjectChartAsset[] {
-  if (!raw?.trim()) return [];
+export function parseProjectCharts(raw: string | null | undefined | unknown): ProjectChartAsset[] {
+  if (raw == null) return [];
+  // 防御：个别路径可能已 JSON.parse 成数组
+  if (Array.isArray(raw)) {
+    return raw.filter(isProjectChartAsset);
+  }
+  if (typeof raw !== "string" || !raw.trim()) return [];
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];

@@ -130,6 +130,7 @@ export function MermaidMechanismCard({
     <PlotWorkspace
       title={toolTitle ?? "Mermaid 机理图"}
       description={description ?? "用 Mermaid 语法快速草绘概念机理，导出高清 PNG 插入论文"}
+      configSize="wide"
       config={
         <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-3 px-4 pb-5 pt-3">

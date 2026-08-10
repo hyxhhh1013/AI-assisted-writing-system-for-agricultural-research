@@ -244,6 +244,32 @@ export async function patchProjectCharts(
   return data.charts;
 }
 
+/** GET /api/projects/:id/charts — 读图表资产（精修回放） */
+export async function getProjectCharts(
+  projectId: string,
+  opts?: { assetId?: string; imageUrl?: string },
+): Promise<{ charts: ProjectChartAsset[]; asset: ProjectChartAsset | null }> {
+  const q = new URLSearchParams();
+  if (opts?.assetId) q.set("assetId", opts.assetId);
+  if (opts?.imageUrl) q.set("imageUrl", opts.imageUrl);
+  const qs = q.toString();
+  const res = await fetch(
+    `/api/projects/${encodeURIComponent(projectId)}/charts${qs ? `?${qs}` : ""}`,
+  );
+  if (!res.ok) {
+    return { charts: [], asset: null };
+  }
+  const data = (await res.json()) as {
+    charts?: ProjectChartAsset[];
+    asset?: ProjectChartAsset | null;
+  };
+  const charts = Array.isArray(data.charts) ? data.charts : [];
+  return {
+    charts,
+    asset: data.asset ?? charts[0] ?? null,
+  };
+}
+
 export async function appendChartAsset(
   projectId: string,
   asset: Extract<ChartPatchOp, { op: "append" }>["asset"],

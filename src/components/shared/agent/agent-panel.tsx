@@ -894,6 +894,21 @@ export function AgentPanel({
                     sectionKey={observation?.sectionKey}
                     insertMode={observation?.insertMode}
                     sectionLabel={figureSectionLabel(observation?.sectionKey)}
+                    figureSpecEnc={
+                      observation?.data
+                      && typeof observation.data === "object"
+                      && typeof (observation.data as { figureSpecEnc?: unknown }).figureSpecEnc === "string"
+                        ? String((observation.data as { figureSpecEnc: string }).figureSpecEnc)
+                        : undefined
+                    }
+                    chartAssetId={
+                      observation?.data
+                      && typeof observation.data === "object"
+                      && typeof (observation.data as { persisted?: { id?: unknown } }).persisted?.id === "string"
+                        ? String((observation.data as { persisted: { id: string } }).persisted.id)
+                        : undefined
+                    }
+                    projectId={projectId}
                     onReviseFigure={handleReviseFigure}
                     onJumpToSection={onJumpToSection}
                     pending={pending}
@@ -951,6 +966,21 @@ export function AgentPanel({
                     sectionKey={msg.sectionKey}
                     insertMode={msg.insertMode}
                     sectionLabel={figureSectionLabel(msg.sectionKey)}
+                    figureSpecEnc={
+                      msg.data
+                      && typeof msg.data === "object"
+                      && typeof (msg.data as { figureSpecEnc?: unknown }).figureSpecEnc === "string"
+                        ? String((msg.data as { figureSpecEnc: string }).figureSpecEnc)
+                        : undefined
+                    }
+                    chartAssetId={
+                      msg.data
+                      && typeof msg.data === "object"
+                      && typeof (msg.data as { persisted?: { id?: unknown } }).persisted?.id === "string"
+                        ? String((msg.data as { persisted: { id: string } }).persisted.id)
+                        : undefined
+                    }
+                    projectId={projectId}
                     onReviseFigure={handleReviseFigure}
                     onJumpToSection={onJumpToSection}
                   />

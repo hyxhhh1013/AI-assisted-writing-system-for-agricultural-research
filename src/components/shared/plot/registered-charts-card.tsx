@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { PlotInsertDialog } from "@/components/shared/plot-insert-dialog";
 import { chartAssetToPlotHref } from "@/contracts/figure";
 import type { ProjectChartAsset } from "@/contracts/figure";
+import { stashPlotPrefill } from "@/lib/plot-prefill-stash";
 
 interface RegisteredChartsCardProps {
   projectId: string;
@@ -86,6 +87,16 @@ export function RegisteredChartsCard({
                       target="_blank"
                       rel="noreferrer"
                       className="text-center text-primary hover:underline"
+                      onClick={() => {
+                        if (asset.figureSpecEnc) {
+                          stashPlotPrefill({
+                            figureSpecEnc: asset.figureSpecEnc,
+                            chartAssetId: asset.id,
+                            imageUrl: asset.imageUrl,
+                            projectId,
+                          });
+                        }
+                      }}
                     >
                       绘图页
                     </a>

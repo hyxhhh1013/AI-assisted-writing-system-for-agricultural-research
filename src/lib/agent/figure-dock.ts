@@ -10,22 +10,75 @@ export type FigureDockItem = FigureReviseTarget & {
   id: string;
   /** 来源：会话 observation / 项目图表库 */
   source: "session" | "project";
+  /** 精修回放快照（点击时写入 sessionStorage） */
+  figureSpecEnc?: string;
+  chartAssetId?: string;
 };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
 
-/** 从 observation.data 拼回 /plot 精修深链（缺 plotHref 时兜底） */
+function hrefHasChartAssetId(href: string): boolean {
+  return /[?&]chartAssetId=/.test(href);
+}
+
+/** 从 observation.data 拼回 /plot 精修深链（缺 plotHref 或仅有易截断 figureSpec 时兜底） */
 export function resolvePlotHrefFromObservation(
   m: Extract<AgentUiMessage, { kind: "observation" }>,
   projectId?: string,
 ): string | undefined {
-  if (m.plotHref?.startsWith("/plot")) return m.plotHref;
-  if (!projectId) return undefined;
   const data = isRecord(m.data) ? m.data : null;
-  if (!data) return undefined;
+  const figureSpecEnc =
+    data && typeof data.figureSpecEnc === "string" && data.figureSpecEnc
+      ? data.figureSpecEnc
+      : undefined;
+  const persisted = data && isRecord(data.persisted) ? data.persisted : null;
+  const chartAssetId =
+    persisted && typeof persisted.id === "string" ? persisted.id : undefined;
 
+  // 已有 chartAssetId 的深链最稳，直接用
+  if (m.plotHref?.startsWith("/plot") && hrefHasChartAssetId(m.plotHref)) {
+    return m.plotHref;
+  }
+
+  if (projectId && (figureSpecEnc || chartAssetId)) {
+    const figureId =
+      (data && typeof data.figureId === "string" && data.figureId)
+      || (data && typeof data.chartType === "string" && data.chartType)
+      || (data && typeof data.kind === "string" && data.kind === "mechanism_panel"
+        ? "mechanism_panel"
+        : data && typeof data.kind === "string" && data.kind === "flow"
+          ? "flow"
+          : data && typeof data.kind === "string" && data.kind === "mechanism"
+            ? "mechanism"
+            : undefined)
+      || (persisted && typeof persisted.figureId === "string"
+        ? persisted.figureId
+        : undefined)
+      || "flow";
+    return buildAgentPlotRefineHref({
+      projectId,
+      figureId,
+      figureSpecEnc,
+      chartAssetId: figureSpecEnc ? chartAssetId : undefined,
+      imageUrl: m.imageUrl,
+    });
+  }
+
+  if (m.plotHref?.startsWith("/plot")) return m.plotHref;
+  if (data && typeof data.href === "string" && data.href.startsWith("/plot")) {
+    return data.href;
+  }
+  return undefined;
+}
+
+function extractReplayMeta(m: Extract<AgentUiMessage, { kind: "observation" }>): {
+  figureSpecEnc?: string;
+  chartAssetId?: string;
+} {
+  const data = isRecord(m.data) ? m.data : null;
+  if (!data) return {};
   const figureSpecEnc =
     typeof data.figureSpecEnc === "string" && data.figureSpecEnc
       ? data.figureSpecEnc
@@ -33,33 +86,7 @@ export function resolvePlotHrefFromObservation(
   const persisted = isRecord(data.persisted) ? data.persisted : null;
   const chartAssetId =
     persisted && typeof persisted.id === "string" ? persisted.id : undefined;
-  const figureId =
-    (typeof data.figureId === "string" && data.figureId)
-    || (typeof data.chartType === "string" && data.chartType)
-    || (typeof data.kind === "string" && data.kind === "mechanism_panel"
-      ? "mechanism_panel"
-      : typeof data.kind === "string" && data.kind === "flow"
-        ? "flow"
-        : typeof data.kind === "string" && data.kind === "mechanism"
-          ? "mechanism"
-          : undefined)
-    || (persisted && typeof persisted.figureId === "string"
-      ? persisted.figureId
-      : undefined)
-    || "flow";
-
-  if (!figureSpecEnc && !chartAssetId) {
-    const href = data.href;
-    return typeof href === "string" && href.startsWith("/plot") ? href : undefined;
-  }
-
-  return buildAgentPlotRefineHref({
-    projectId,
-    figureId,
-    figureSpecEnc,
-    chartAssetId: figureSpecEnc ? chartAssetId : undefined,
-    imageUrl: m.imageUrl,
-  });
+  return { figureSpecEnc, chartAssetId };
 }
 
 /** 从对话里收集最近出图（新→旧去重 by imageUrl） */
@@ -81,15 +108,26 @@ export function collectSessionFigureDockItems(
         ? String((m.data as { title: string }).title)
         : undefined);
     const plotHref = resolvePlotHrefFromObservation(m, projectId);
+    const replay = extractReplayMeta(m);
     if (seen.has(m.imageUrl)) {
-      // 同 URL：用较早 observation 补全标题/章节等（最新一条可能只有缩略图）
       const hit = out.find((x) => x.imageUrl === m.imageUrl);
       if (hit) {
         if (!hit.title && title) hit.title = title;
         if (!hit.sectionKey && m.sectionKey) hit.sectionKey = m.sectionKey;
         if (!hit.insertMode && m.insertMode) hit.insertMode = m.insertMode;
-        if (!hit.plotHref && plotHref) hit.plotHref = plotHref;
+        if (
+          (!hit.plotHref || !hrefHasChartAssetId(hit.plotHref))
+          && plotHref
+        ) {
+          hit.plotHref = plotHref;
+        }
         if (!hit.replaceImageUrl) hit.replaceImageUrl = m.replaceImageUrl ?? m.imageUrl;
+        if (!hit.figureSpecEnc && replay.figureSpecEnc) {
+          hit.figureSpecEnc = replay.figureSpecEnc;
+        }
+        if (!hit.chartAssetId && replay.chartAssetId) {
+          hit.chartAssetId = replay.chartAssetId;
+        }
       }
       continue;
     }
@@ -103,13 +141,14 @@ export function collectSessionFigureDockItems(
       sectionKey: m.sectionKey,
       insertMode: m.insertMode,
       plotHref,
+      ...replay,
     });
     if (out.length >= limit) break;
   }
   return out;
 }
 
-/** 合并项目图表库（补全会话未带 section 的项；不重复 URL） */
+/** 合并项目图表库（补全会话未带 section / 精修深链的项） */
 export function mergeProjectChartsIntoDock(
   sessionItems: FigureDockItem[],
   charts: ProjectChartAsset[],
@@ -132,12 +171,18 @@ export function mergeProjectChartsIntoDock(
             })
           : undefined;
     if (seen.has(c.imageUrl)) {
-      // 用资产补全 section / title / plotHref
       const hit = merged.find((x) => x.imageUrl === c.imageUrl);
       if (hit) {
         if (!hit.sectionKey && c.sectionKey) hit.sectionKey = c.sectionKey;
         if (!hit.title && c.caption) hit.title = c.caption;
-        if (!hit.plotHref && assetHref) hit.plotHref = assetHref;
+        if (!hit.figureSpecEnc && c.figureSpecEnc) hit.figureSpecEnc = c.figureSpecEnc;
+        if (!hit.chartAssetId && c.id) hit.chartAssetId = c.id;
+        // 资产深链优先于易截断的 figureSpec URL
+        if (assetHref && c.figureSpecEnc) {
+          hit.plotHref = assetHref;
+        } else if (!hit.plotHref && assetHref) {
+          hit.plotHref = assetHref;
+        }
       }
       continue;
     }
@@ -151,6 +196,8 @@ export function mergeProjectChartsIntoDock(
       sectionKey: c.sectionKey,
       insertMode: c.sectionKey ? "appended" : undefined,
       plotHref: assetHref,
+      figureSpecEnc: c.figureSpecEnc,
+      chartAssetId: c.id,
     });
     if (merged.length >= limit) break;
   }

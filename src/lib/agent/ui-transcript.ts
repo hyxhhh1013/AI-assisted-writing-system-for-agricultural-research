@@ -19,11 +19,43 @@ export function appendUiFromAgentEvent(
       ];
     case "agent/observation": {
       const data = event.result?.data;
+      const dataObj =
+        data && typeof data === "object" ? (data as Record<string, unknown>) : null;
       const imageUrl =
-        data
-        && typeof data === "object"
-        && typeof (data as { imageUrl?: unknown }).imageUrl === "string"
-          ? String((data as { imageUrl: string }).imageUrl)
+        dataObj && typeof dataObj.imageUrl === "string"
+          ? dataObj.imageUrl
+          : undefined;
+      const rawHref =
+        dataObj && typeof dataObj.href === "string" && dataObj.href.startsWith("/plot")
+          ? dataObj.href
+          : undefined;
+      let plotHref = rawHref;
+      if (rawHref && imageUrl && !rawHref.includes("replaceImageUrl=")) {
+        const sep = rawHref.includes("?") ? "&" : "?";
+        plotHref = `${rawHref}${sep}replaceImageUrl=${encodeURIComponent(imageUrl)}`;
+      }
+      const sectionKey =
+        dataObj && typeof dataObj.insertedSection === "string"
+          ? dataObj.insertedSection
+          : dataObj?.persisted
+            && typeof dataObj.persisted === "object"
+            && typeof (dataObj.persisted as { sectionKey?: unknown }).sectionKey === "string"
+            ? String((dataObj.persisted as { sectionKey: string }).sectionKey)
+            : undefined;
+      const insertMode =
+        dataObj && typeof dataObj.insertMode === "string"
+          ? dataObj.insertMode
+          : undefined;
+      // 精修回放：只留轻量字段，避免 uiTranscript 塞入整份 config
+      const figureSpecEnc =
+        dataObj && typeof dataObj.figureSpecEnc === "string"
+          ? dataObj.figureSpecEnc
+          : undefined;
+      const chartAssetId =
+        dataObj?.persisted
+        && typeof dataObj.persisted === "object"
+        && typeof (dataObj.persisted as { id?: unknown }).id === "string"
+          ? String((dataObj.persisted as { id: string }).id)
           : undefined;
       return [
         ...transcript,
@@ -33,6 +65,18 @@ export function appendUiFromAgentEvent(
           summary: event.result?.summary,
           error: event.error ?? event.result?.error,
           ...(imageUrl ? { imageUrl } : {}),
+          ...(plotHref ? { plotHref } : {}),
+          ...(imageUrl ? { replaceImageUrl: imageUrl } : {}),
+          ...(sectionKey ? { sectionKey } : {}),
+          ...(insertMode ? { insertMode } : {}),
+          ...((figureSpecEnc || chartAssetId)
+            ? {
+                data: {
+                  ...(figureSpecEnc ? { figureSpecEnc } : {}),
+                  ...(chartAssetId ? { persisted: { id: chartAssetId } } : {}),
+                },
+              }
+            : {}),
         },
       ];
     }

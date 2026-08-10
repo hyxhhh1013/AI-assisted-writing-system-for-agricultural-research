@@ -9,6 +9,7 @@ import type { FigureReviseFormValue, FigureReviseTarget } from "@/contracts/figu
 import type { FigureDockItem } from "@/lib/agent/figure-dock";
 import { withReplaceImageUrlParam } from "@/lib/agent/figure-dock";
 import { formatFigurePlacementHint } from "@/lib/agent/figure-revise";
+import { stashPlotPrefill } from "@/lib/plot-prefill-stash";
 import { cn } from "@/lib/utils";
 
 interface AgentFigureDockProps {
@@ -138,6 +139,16 @@ export function AgentFigureDock({
                     href={plotHref}
                     target="_blank"
                     rel="noreferrer"
+                    onClick={() => {
+                      if (active.figureSpecEnc) {
+                        stashPlotPrefill({
+                          figureSpecEnc: active.figureSpecEnc,
+                          chartAssetId: active.chartAssetId,
+                          imageUrl: active.imageUrl,
+                          projectId,
+                        });
+                      }
+                    }}
                     className={cn(
                       buttonVariants({ variant: "outline", size: "sm" }),
                       "h-7 gap-1 px-2 text-[11px]",

@@ -10,6 +10,7 @@ import { FigureReviseForm } from "@/components/shared/agent/figure-revise-form";
 import type { FigureReviseFormValue, FigureReviseTarget } from "@/contracts/figure-revise";
 import { withReplaceImageUrlParam } from "@/lib/agent/figure-dock";
 import { formatFigurePlacementHint } from "@/lib/agent/figure-revise";
+import { stashPlotPrefill } from "@/lib/plot-prefill-stash";
 import { splitExecSummary } from "@/lib/agent/split-exec-summary";
 import {
   formatToolParamHint,
@@ -155,6 +156,10 @@ interface AgentActionProps {
   imageUrl?: string;
   /** /plot 深链：在绘图页精修 */
   plotHref?: string;
+  /** 精修回放快照（点击时写入 sessionStorage） */
+  figureSpecEnc?: string;
+  chartAssetId?: string;
+  projectId?: string;
   /** 就地改图旧 URL */
   replaceImageUrl?: string;
   sectionKey?: string;
@@ -176,6 +181,9 @@ export const AgentActionCard = memo(function AgentActionCard({
   error,
   imageUrl,
   plotHref,
+  figureSpecEnc,
+  chartAssetId,
+  projectId,
   replaceImageUrl,
   sectionKey,
   insertMode,
@@ -302,6 +310,16 @@ export const AgentActionCard = memo(function AgentActionCard({
                       href={href}
                       target="_blank"
                       rel="noreferrer"
+                      onClick={() => {
+                        if (figureSpecEnc) {
+                          stashPlotPrefill({
+                            figureSpecEnc,
+                            chartAssetId,
+                            imageUrl,
+                            projectId,
+                          });
+                        }
+                      }}
                       className={cn(
                         buttonVariants({ variant: "outline", size: "sm" }),
                         "h-7 gap-1 px-2 text-[11px]",
