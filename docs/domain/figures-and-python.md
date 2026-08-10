@@ -75,7 +75,7 @@
   1. **草稿**：`draft_mechanism_figure` / `generate_chart`（可 `templateId` 农科模板）→ PNG 入库
   2. **硬闭环**：出图后系统自动 `read_figure(qa)`（两级：`需重生成` / `可接受·建议精修` / `可接受`）；硬伤必须 `replaceImageUrl`；建议精修不强制重画、引导 `/plot`；同标题防叠图自动 replace；`remove_figure` 清旧图
   3. **个性化（Agent 表单为主）**：输入框上方**配图坞**随时「按意见改」；表单快捷项（分叉/三面板/模板）→ `replaceImageUrl` 重画；复杂观感进 `/plot?replaceImageUrl=`，插入对话框默认**就地替换**正文旧图。**插图位置**：默认节末落盘，编辑器「本节插图」条可挪位（不做智能章节锚定）
-  4. **精修回放（2026-08-09；2026-08-10 加固）**：`/plot` 深链优先 `chartAssetId`；点击精修时 `sessionStorage` 暂存 `figureSpecEnc`（防 URL 截断）；`GET /api/projects/:id/charts` 供绘图页按资产/图片 URL 回放；`uiTranscript` 持久化 `plotHref` + 轻量快照字段。配图坞无稳链时从资产重建，禁止落空 `/plot`
+  4. **精修回放（2026-08-09；2026-08-10 加固）**：`/plot` 深链优先 `chartAssetId`；点击精修时用 **`localStorage`** 暂存 `figureSpecEnc`（`target=_blank` 新标签读不到 `sessionStorage`）；`GET /api/projects/:id/charts` 供绘图页按资产/图片 URL 回放；`uiTranscript` 持久化 `plotHref` + 轻量快照字段。配图坞无稳链时从资产重建，禁止落空 `/plot`
 
 ## 主要 API
 

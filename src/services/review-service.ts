@@ -5,7 +5,7 @@
  */
 
 import prisma from "@/lib/prisma";
-import { callAI, callAINonStreaming } from "@/lib/ai";
+import { callAINonStreaming } from "@/lib/ai";
 import { buildAcademicReviewPrompt } from "@/lib/prompts/review-academic";
 import { buildArgumentReviewPrompt } from "@/lib/prompts/review-argument";
 import { buildStructureReviewPrompt } from "@/lib/prompts/review-structure";
@@ -106,7 +106,7 @@ async function reviewDimension(
   }
 
   const raw = await callAINonStreaming({
-    provider: "deepseek",
+    provider: "zhipu",
     messages: [
       { role: "system", content: prompt.system },
       { role: "user", content: prompt.user },
@@ -200,7 +200,7 @@ export async function runReview(
   try {
     const summaryPrompt = buildSummaryPrompt(input.title, fullContent, dimensions);
     const summaryRaw = await callAINonStreaming({
-      provider: "deepseek",
+      provider: "zhipu",
       messages: [
         { role: "system", content: "你是学术论文评审专家，用中文生成简洁的论文概要和总体评价。" },
         { role: "user", content: summaryPrompt },

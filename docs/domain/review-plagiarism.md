@@ -19,6 +19,7 @@
 ### 行为
 
 - **四维度并行**：学术规范、论证逻辑、结构、诚信（`review-academic` 等 prompt 文件）。
+- **默认模型**：`review-service` 调用智谱（`provider: "zhipu"`）；概要生成同款。
 - 请求经 **`validateBody(reviewSchema)`**；返回 JSON 结构化 `ReviewReport`（非 SSE）。
 - 结果持久化 **`ReviewCheck`**（`prisma/schema.prisma`），含 `overallScore` / `overallGrade`。
 - **W3-REVIEW-2**：最多 2 轮；第 2 轮注入上一轮中高严重度问题；同步 Passport `reviewRound`（`doneCount>=2` → Phase 7 done）。

@@ -169,12 +169,12 @@ const WORKBENCH_TABS: WorkbenchTab[] = [
 const isWorkbenchTab = (value: string | null): value is WorkbenchTab =>
   value !== null && WORKBENCH_TABS.includes(value as WorkbenchTab);
 
-const EDITOR_MODE_STORAGE_KEY = "grainscript_editor_mode";
+const EDITOR_MODE_STORAGE_KEY = "grainscript_editor_mode_v2";
 
 function readStoredEditorMode(): "classic" | "paragraph" {
-  if (typeof window === "undefined") return "paragraph";
+  if (typeof window === "undefined") return "classic";
   const stored = localStorage.getItem(EDITOR_MODE_STORAGE_KEY);
-  return stored === "classic" || stored === "paragraph" ? stored : "paragraph";
+  return stored === "classic" || stored === "paragraph" ? stored : "classic";
 }
 
 export default function WorkbenchPageClient() {
@@ -201,7 +201,7 @@ function WorkbenchContent() {
   );
   const [isPreviewOpen, setIsPreviewOpen] = useState(true);
   const [rightPanelMode, setRightPanelMode] = useState<"preview" | "reader">("preview");
-  const [editorMode, setEditorMode] = useState<"classic" | "paragraph">("paragraph");
+  const [editorMode, setEditorMode] = useState<"classic" | "paragraph">("classic");
   const [currentPdf, setCurrentPdf] = useState<string | null>(null);
   const [isWritingGenerating, setIsWritingGenerating] = useState(false);
   const [aiPreview, setAiPreview] = useState<{

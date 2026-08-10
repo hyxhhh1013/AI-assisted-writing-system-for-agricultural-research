@@ -10,7 +10,8 @@ describe("plot-prefill-stash", () => {
 
   beforeEach(() => {
     store.clear();
-    vi.stubGlobal("sessionStorage", {
+    // 精修链 target=_blank：须用 localStorage（跨标签共享），不能用 sessionStorage
+    vi.stubGlobal("localStorage", {
       getItem: (k: string) => store.get(k) ?? null,
       setItem: (k: string, v: string) => {
         store.set(k, v);
