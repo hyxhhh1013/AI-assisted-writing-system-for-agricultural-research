@@ -6,8 +6,11 @@ import {
   COST_LIMITS,
   isAgentWriteEnabled,
   isAgentWritePublicEnabled,
+  shouldRequestConfirmation,
 } from "@/lib/agent/core/safety";
 import { createAgentTools, createReadOnlyTools } from "@/lib/agent/core/agent-loop";
+import { removeFigureTool } from "@/lib/agent/tools/remove-figure";
+import { removeReferencesTool } from "@/lib/agent/tools/remove-references";
 
 describe("agent safety", () => {
   it("blocks identical consecutive tool calls beyond limit", () => {
@@ -130,9 +133,16 @@ describe("agent safety", () => {
     expect(names).toContain("refine_content");
     expect(names).toContain("import_reference");
     expect(names).toContain("generate_chart");
-    expect(names).toContain("build_argument_blueprint");
+    expect(names).not.toContain("build_argument_blueprint");
     expect(names).toContain("write_bilingual_abstract");
+    expect(names).toContain("remove_figure");
+    expect(names).toContain("remove_references");
     process.env.AGENT_ENABLED = prevAgent;
     process.env.AGENT_WRITE_ENABLED = prevWrite;
+  });
+
+  it("remove_figure / remove_references 需用户确认", () => {
+    expect(shouldRequestConfirmation(removeFigureTool)).toBe(true);
+    expect(shouldRequestConfirmation(removeReferencesTool)).toBe(true);
   });
 });

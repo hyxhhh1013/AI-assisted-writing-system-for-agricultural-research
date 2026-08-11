@@ -6,7 +6,10 @@ import type {
 } from "@/contracts/agent";
 import type { AgentUiMessage } from "@/contracts/agent-session";
 import { buildPriorConversationMessages } from "@/lib/agent/conversation-continuity";
-import { decisionMessage } from "@/lib/agent/core/checkpoints";
+import {
+  applyCheckpointDecisionPatch,
+  decisionMessage,
+} from "@/lib/agent/core/checkpoints";
 import {
   createAntispamTracker,
   projectFingerprint,
@@ -638,31 +641,9 @@ function applyCheckpointDecision(
   decision: AgentCheckpointDecision,
   kindHint?: AgentLoopOptions["pendingCheckpointKind"],
 ): Partial<AgentGraphStateType> {
-  const kind =
-    kindHint
-    ?? (decision.checkpointId.includes("config")
-      ? "config_confirm"
-      : decision.checkpointId.includes("blueprint")
-        ? "blueprint_approve"
-        : decision.checkpointId.includes("clarify")
-          ? "clarify"
-          : "outline_approve");
-  const prev = state.approvedCheckpointKinds ?? [];
-  // clarify 不写入 approvedKinds（可反复提问）；其余批准类检查点记入防重复暂停
-  const approved =
-    decision.decision === "approve" && kind !== "clarify"
-      ? Array.from(new Set([...prev, kind]))
-      : prev;
   return {
     ...state,
-    approvedCheckpointKinds: approved,
-    messages: [
-      ...(state.messages ?? []),
-      {
-        role: "user",
-        content: decisionMessage(kind, decision.decision, decision.note),
-      },
-    ],
+    ...applyCheckpointDecisionPatch(state, decision, kindHint),
   };
 }
 

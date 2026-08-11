@@ -1,6 +1,6 @@
 # Agent 编排（写作助手）
 
-> L3 域文档 · 更新：2026-08-09
+> L3 域文档 · 更新：2026-08-11
 > 契约唯一权威源：`src/contracts/agent.ts`（SSE 事件）、`src/contracts/agent-session.ts`（会话消息）。
 
 ## 概览
@@ -117,7 +117,10 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **蓝图顺序注入 Agent 简报（2026-08-08）**：修复「蓝图建议写作顺序与实际写作顺序不一致」——此前 `project-briefing` 只给 LLM「写作蓝图：有 + thesis 摘要」，`writingOrder` 与 `sectionGuides` 未进 Agent 决策输入，Agent 靠直觉/大纲顺序写。现在 `loadAgentProject` 额外提取 `blueprintWritingOrder`/`blueprintSectionGuides`（`project-loader.ts`），简报注入「建议写作顺序（蓝图）：1. x → 2. y → …」+「各节写作要点（蓝图）」区块（`project-briefing.ts`）。Agent 写作前即可见蓝图建议顺序并按序推进。
 - **蓝图真正驱动 Writer（2026-08-09）**：修复「批准蓝图后正文仍不按蓝图生成」。根因：①`loadAgentProject` 曾把 `WritingBlueprint` JSON 误 `as WritingGlobalContext`，`prepare-context` 读 `globalContext.blueprint` 恒为 undefined，【写作蓝图摘要】不进 Writer；②`write_section` 未调用工作台同款的本节蓝图注入（purpose/keyPoints/配图）。现：loader 用 `parseWritingBlueprint` 正确嵌套 `globalContext.blueprint` 并附 outline/sectionPreviews；`lib/agent/blueprint-write-context.ts` 将英文 section key 映射到大纲/蓝图中文路径，聚合本节 guides 注入 `【写作蓝图（本节）】`；简报补 keyPoints + 配图计划；system prompt / 工具说明要求对齐蓝图。
 - **综述正文禁止一次写整章（2026-08-09）**：Agent 曾把 phase 文案「一次任务可连续写多节」理解成对 `literature_body` 一次写出 5–7k 字（UI 可达万字+），导致超时/质量塌陷。现：① phase-pack / planner / review_write nudge / system prompt 明确「按蓝图子节 + subsectionTitle 逐节写」；② `write_section` 在 `literature_body` 无 `subsectionTitle` 且蓝图有 ≥2 子节路径时 soft-gate 拒绝并列出建议标题。
-- **论证并入写作蓝图（2026-08-09，方案 A）**：产品主路径改为 `配置 → 大纲 → 写作蓝图 → 分节写`。`SectionGuide` 增加 `claim` / `evidenceHint` / `warrant` / `rebuttal`；全文级 `researchQuestion` / `argumentGaps`。`ensure-write-prereqs` / phase-gate 不再要求 `build_argument_blueprint`；该工具改为弃用引导；检查点只对 `generate_writing_blueprint` 暂停。Passport Phase 3 有写作蓝图即 done。旧 `argumentBlueprint` 列保留只读兼容。
+- **论证并入写作蓝图（2026-08-09，方案 A）**：产品主路径改为 `配置 → 大纲 → 写作蓝图 → 分节写`。`SectionGuide` 增加 `claim` / `evidenceHint` / `warrant` / `rebuttal`；全文级 `researchQuestion` / `argumentGaps`。`ensure-write-prereqs` / phase-gate 不再要求 `build_argument_blueprint`；检查点只对 `generate_writing_blueprint` 暂停。Passport Phase 3 有写作蓝图即 done。旧 `argumentBlueprint` 列保留只读兼容。
+- **卸掉弃用工具注册（2026-08-11）**：`createAgentTools` 不再注册 `build_argument_blueprint`（源文件保留作说明）；planner / Phase 3 hint 文案改为「确认写作蓝图主张」，不再引导生成独立论证蓝图。
+- **大纲阈值统一（2026-08-11）**：`MIN_OUTLINE_CHARS = 20`（`lib/outline-threshold.ts`）供写门禁与 Passport Phase 2 共用，消除 20 vs 80 漂移。
+- **破坏性删除需确认（2026-08-11）**：`remove_figure` / `remove_references` 标 `requiresConfirmation` + `safety: "destructive"`，确认卡文案见 `confirm-message.ts`。
 - **写作蓝图「结构无效」修复（2026-08-09）**：首因是 prompt 示例 `language: Chinese/English`（schema 仅 `zh|en`）。复查后发现仍会因 `dataSource`/`projectMode` 非法枚举、`keyPoints` 写成字符串、`estimatedWordCount` 写成 `"6000-12000"`、缺 `version`/空 items 等失败。现：① prompt 按 review/research 分示例并写明枚举约束；② `blueprint-coerce.ts` 纠偏上述偏差并在必要时合成最小合法 figure/guides；③ 错误文案带字段路径。API 与 `generate_writing_blueprint` 共用。
 - **蓝图文献源 + 分析笔记进 Writer（2026-08-09）**：`sectionGuides.assignedSources`（文件名或 `[n]`）经 `blueprint-write-context` 解析为 `selectedSourceIds`，Agent `write_section` 限 RAG 范围（解析为空则不限，避免误清空）。`loadAgentProject` 加载 `analysisResults` 进 `globalContext.analysisResults`，与工作台扩写一致。
 - **自动补齐插入批准检查点（2026-08-08）**：修复「ensureWritePrerequisites 自动补齐绕过 outline/blueprint 批准检查点」——ap-full 目标（写整篇/从零推进）下，自动补齐生成大纲/蓝图直接执行工具，用户看不到确认弹窗、失去对结构的审核。现在 `ensureWritePrerequisites` 拆出 `ensureNextWritePrerequisite`（一次只补一个缺失前置），`toolsNode` 逐步补齐 + 每步用 `buildPrereqCheckpoint`（nodes.ts）检查是否命中 outline/blueprint 批准检查点，命中即暂停等用户批准，resume 后继续补下一个 / 执行写工具。普通目标（非 ap-full）保持一次补完不暂停。
@@ -142,6 +145,8 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 ## 断点续跑 / 门禁旁路修复（2026-08-09）
 
 **pending 工具续跑（P0）**：检查点/确认暂停时保留同批后续 `pendingToolCalls`（确认：`slice(tcIdx+1)`；后置大纲/蓝图检查点：同；自动补齐前置：仍为 `slice(tcIdx)` 含当前写工具）。`agentNode` 在 `pendingToolCalls.length > 0` 时短路放行、不再调 LLM，避免 resume 后冲掉已排队的 `write_section`。图拓扑仍为 `plan → agent → tools`，靠短路实现「批准后继续执行」。
+
+**检查点「需修改」清空 pending（P0，2026-08-11）**：`applyCheckpointDecisionPatch` 在 `decision === "revise"` 时强制 `pendingToolCalls = []`。否则短路会直接重跑排队中的 `write_section`，用户修改意见进不了 LLM。批准路径仍保留 pending。
 
 **并行只读门禁同源（P0）**：`runParallelReads` 改用与串行相同的 `evaluatePreGates` + `evaluatePhaseGate`（含摘要收口 / 审查 / 分类编码意图），修复批内多次 `list_references` / `search_*` 绕过意图门禁。
 
@@ -171,7 +176,7 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 | `ctx.patchActiveWrite`（`run-graph` 注入） | 与 graph persist 共用串行链，防互抢 |
 | 复用阈值 | completed ≥80 字；partial/aborted ≥400 字；草稿上限 80k |
 
-跟聊（followUp）清空 `activeWrite`。partial 复用未跑 Verifier/Refiner，summary 提示可再 `refine_content` / `write_section(full)`。
+跟聊（followUp）清空 `activeWrite`。partial 复用未跑 Verifier/Refiner：`toolsNode` **硬排队** `refine_content`（同 figure QA 注入模式），summary 同步说明。
 
 ## 机理图 / 识图自检（2026-08-09）
 
@@ -183,12 +188,12 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 | L2 硬闭环 | 出图成功后 **toolsNode 自动注入** `read_figure(mode=qa)`；并行读图批也会补 QA nudge；QA 未通过则**禁止空口收尾**（`routeAfterAgent` 强制续跑）+ 门禁强制 `replaceImageUrl`；同 caption/section 无 replace 时工具内自动就地替换（防叠图） |
 | L3 精修 | **配图坞**（输入框上方常驻最近出图，免翻聊天）+ 结果卡：落点说明（默认**节末落盘**）+「查看正文位置」+ 结构化「按意见改」（含分叉/三面板/脱氧等快捷）+ `/plot?chartAssetId=&replaceImageUrl=` 深链（优先资产快照回放，精修回写默认真地替换）；编辑器「本节插图」可挪位 |
 | 图质检两级（2026-08-09） | `figure-qa.ts`：硬伤→`needsRegen`（强制 replace 重画）；观感→`needsPolish`（不强制重画，nudge 去 `/plot`）；通过→`pass`。规则含节点文案过载、多栏严重失衡等，灰区默认建议精修而非一律放行 |
-| 精修回放加固（2026-08-10） | 根因：`uiTranscript` 未持久化 `plotHref`；长 `figureSpec` URL 易截断。现：transcript 保留深链+轻量快照；`GET .../charts`；点击精修 `sessionStorage` 暂存；绘图页按 assetId/imageUrl 回放并 remount 预填 |
+| 精修回放加固（2026-08-10） | 根因：`uiTranscript` 未持久化 `plotHref`；长 `figureSpec` URL 易截断；`target=_blank` 新标签读不到 opener 的 `sessionStorage`。现：transcript 保留深链+轻量快照；`GET .../charts`；点击精修用 **`localStorage`** 暂存（`plot-prefill-stash.ts`）；绘图页按 assetId/imageUrl 回放并 remount 预填 |
 
 | 工具 | 作用 |
 |------|------|
 | `draft_mechanism_figure` / `generate_chart` | 出图并写入图表库；可插章节。**改图传 `replaceImageUrl`/`replaceChartId` 就地替换**；同标题已有图自动 replace |
-| `remove_figure` | 删图表资产 + 默认去掉正文对应 `![](url)`（清重复旧图） |
+| `remove_figure` | 删图表资产 + 默认去掉正文对应 `![](url)`（清重复旧图）；**需用户确认** |
 | `read_figure` | GLM-4V 回看；`mode=qa` 查占位/英文模板/空栏；`needsRegen` 驱动门禁 |
 
 实现：`lib/agent/figure-loop.ts`、`langgraph/tool-gates.ts`（`figureReplaceGate`）、`langgraph/nodes.ts`（自动排队 QA / FigureBrief）。视觉 provider：`callAI({ provider: "vision" })`。

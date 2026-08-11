@@ -136,7 +136,7 @@ function fallbackPlan(goal: string): AgentPlan {
       subtasks: [
         {
           id: "1",
-          title: "检查并补齐大纲/写作蓝图/论证蓝图",
+          title: "检查并补齐大纲/写作蓝图",
           status: "pending",
           toolHints: ["generate_outline", "generate_writing_blueprint"],
         },

@@ -12,8 +12,10 @@ export const removeFigureTool: ToolDefinition = {
     "删除项目里已生成的图表/机理图：从图表库移除资产，并默认从章节正文去掉对应 Markdown 图片。"
     + "改图重画时优先在 draft_mechanism_figure / generate_chart 传 replaceImageUrl（或 replaceChartId）就地替换；"
     + "若旧图已叠了多张，用本工具按 imageUrl 或 chartId 清掉多余的。"
-    + "imageUrl 形如 /api/charts/<uuid>.png；chartId 来自图表资产 id（可用 read_figure / inspect 查看）。",
-  safety: "write",
+    + "imageUrl 形如 /api/charts/<uuid>.png；chartId 来自图表资产 id（可用 read_figure / inspect 查看）。"
+    + "属破坏性操作，执行前会请用户确认。",
+  safety: "destructive",
+  requiresConfirmation: true,
   parameters: {
     type: "object",
     properties: {

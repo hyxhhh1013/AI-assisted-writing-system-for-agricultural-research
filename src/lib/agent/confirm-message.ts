@@ -118,6 +118,33 @@ export function buildToolConfirmMessage(
     }
   }
 
+  if (toolName === "remove_figure") {
+    const chartId = String(params.chartId ?? "").trim();
+    const imageUrl = String(params.imageUrl ?? "").trim();
+    const reason = String(params.reason ?? "").trim();
+    const target = chartId || imageUrl || "（未指定）";
+    return {
+      message:
+        `确认删除图表「${target.slice(0, 80)}」？默认会同步去掉正文中的对应图片。`
+        + (reason ? `\n原因：${reason.slice(0, 120)}` : ""),
+      preview: target,
+    };
+  }
+
+  if (toolName === "remove_references") {
+    const indices = Array.isArray(params.indices)
+      ? params.indices.map((x) => Number(x)).filter((n) => Number.isInteger(n) && n >= 1)
+      : [];
+    const reason = String(params.reason ?? "").trim();
+    const list = indices.length > 0 ? indices.join(", ") : "（未指定）";
+    return {
+      message:
+        `确认删除参考文献编号 [${list}]？删除后将重排后续编号。`
+        + (reason ? `\n原因：${reason.slice(0, 120)}` : ""),
+      preview: `indices: ${list}`,
+    };
+  }
+
   return {
     message: `需要你确认后再执行「${toolName}」。批准后我会继续；取消则跳过。`,
   };

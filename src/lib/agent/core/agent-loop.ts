@@ -31,7 +31,6 @@ import { searchKnowledgeTool } from "@/lib/agent/tools/search-knowledge";
 import { validateCitationsTool } from "@/lib/agent/tools/validate-citations";
 import { verifyContentTool } from "@/lib/agent/tools/verify-content";
 import { writeSectionTool } from "@/lib/agent/tools/write-section";
-import { buildArgumentBlueprintTool } from "@/lib/agent/tools/build-argument-blueprint";
 import { writeBilingualAbstractTool } from "@/lib/agent/tools/write-bilingual-abstract";
 import { generateOutlineTool } from "@/lib/agent/tools/generate-outline";
 import { generateWritingBlueprintTool } from "@/lib/agent/tools/generate-writing-blueprint";
@@ -125,7 +124,6 @@ export function createAgentTools(): ToolDefinition[] {
       generateTableTool,
       draftMechanismFigureTool,
       removeFigureTool,
-      buildArgumentBlueprintTool,
       writeBilingualAbstractTool,
       saveReferenceClassificationTool,
       removeReferencesTool,

@@ -1,4 +1,9 @@
-import type { AgentCheckpointKind, AgentCheckpointRequest } from "@/contracts/agent";
+import type {
+  AgentCheckpointDecision,
+  AgentCheckpointKind,
+  AgentCheckpointRequest,
+} from "@/contracts/agent";
+import type { LLMMessage, ParsedToolCall } from "@/lib/agent/types";
 
 /** 整篇 / academic-paper 自主推进类目标 → 需要大纲批准检查点 */
 export function isApFullStyleGoal(goal: string): boolean {
@@ -116,4 +121,54 @@ export function decisionMessage(
       : "【检查点】用户跳过配置问答、先按现状继续。请 inspect_project，然后用中文建议下一步并征求同意。";
   }
   return `【检查点】用户希望先完善配置。${note?.trim() ? `说明：${note.trim()}。` : ""}请继续用问答协助完善（update_paper_config），不要甩到其他 Tab。`;
+}
+
+/** 从 checkpointId / hint 解析 kind（与 run-graph 续跑映射一致） */
+export function resolveCheckpointKind(
+  decision: AgentCheckpointDecision,
+  kindHint?: AgentCheckpointKind,
+): AgentCheckpointKind {
+  if (kindHint) return kindHint;
+  if (decision.checkpointId.includes("config")) return "config_confirm";
+  if (decision.checkpointId.includes("blueprint")) return "blueprint_approve";
+  if (decision.checkpointId.includes("clarify")) return "clarify";
+  return "outline_approve";
+}
+
+export interface CheckpointDecisionStateSlice {
+  approvedCheckpointKinds?: AgentCheckpointKind[];
+  messages?: LLMMessage[];
+  pendingToolCalls?: ParsedToolCall[];
+}
+
+/**
+ * 将用户检查点决定写入图状态。
+ * 「需修改」(revise) 必须清空 pendingToolCalls：否则 agentNode 短路放行旧排队工具，
+ * 修改意见进不了 LLM，可能直接重跑 write_section。
+ */
+export function applyCheckpointDecisionPatch(
+  state: CheckpointDecisionStateSlice,
+  decision: AgentCheckpointDecision,
+  kindHint?: AgentCheckpointKind,
+): CheckpointDecisionStateSlice {
+  const kind = resolveCheckpointKind(decision, kindHint);
+  const prev = state.approvedCheckpointKinds ?? [];
+  const approved =
+    decision.decision === "approve" && kind !== "clarify"
+      ? Array.from(new Set([...prev, kind]))
+      : prev;
+  const patch: CheckpointDecisionStateSlice = {
+    approvedCheckpointKinds: approved,
+    messages: [
+      ...(state.messages ?? []),
+      {
+        role: "user",
+        content: decisionMessage(kind, decision.decision, decision.note),
+      },
+    ],
+  };
+  if (decision.decision === "revise") {
+    patch.pendingToolCalls = [];
+  }
+  return patch;
 }

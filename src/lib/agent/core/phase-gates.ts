@@ -1,15 +1,14 @@
 import type { AgentProjectSnapshot } from "@/lib/agent/project-loader";
+import { isOutlineReady } from "@/lib/outline-threshold";
 
 export type PhaseGateResult =
   | { ok: true }
   | { ok: false; error: string };
 
-/** 与 ensure-write-prereqs / generate_* 工具一致 */
-const MIN_OUTLINE_CHARS = 20;
 const MIN_BODY_CHARS_FOR_ABSTRACT = 80;
 
 function outlineReady(project: AgentProjectSnapshot): boolean {
-  return project.outline.trim().length >= MIN_OUTLINE_CHARS;
+  return isOutlineReady(project.outline);
 }
 
 function hasBodyDraft(project: AgentProjectSnapshot): boolean {

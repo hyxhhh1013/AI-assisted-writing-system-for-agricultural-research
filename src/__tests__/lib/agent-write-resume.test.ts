@@ -3,10 +3,12 @@ import type { AgentActiveWrite } from "@/contracts/agent-session";
 import {
   MIN_PARTIAL_CHARS,
   applyWritingEventToDraftAcc,
+  buildPartialWriteRefineCall,
   buildWriteAttemptKey,
   clipActiveWriteDraft,
   ensurePendingWriteFromActive,
   evaluateWriteResume,
+  isPartialWriteResume,
 } from "@/lib/agent/write-resume";
 
 function active(partial: Partial<AgentActiveWrite> & Pick<AgentActiveWrite, "status" | "draftText">): AgentActiveWrite {
@@ -81,7 +83,17 @@ describe("evaluateWriteResume", () => {
     if (decision.action === "reuse") {
       expect(decision.resumedFrom).toBe("partial");
       expect(decision.summary).toMatch(/断点续写/);
+      expect(decision.summary).toMatch(/refine_content/);
     }
+  });
+
+  it("isPartialWriteResume / buildPartialWriteRefineCall", () => {
+    expect(isPartialWriteResume({ resumedFrom: "partial", section: "methods" })).toBe(true);
+    expect(isPartialWriteResume({ resumedFrom: "completed" })).toBe(false);
+    const call = buildPartialWriteRefineCall("methods");
+    expect(call.name).toBe("refine_content");
+    expect(call.args.section).toBe("methods");
+    expect(String(call.args.feedback)).toMatch(/断点续写/);
   });
 
   it("aborted 但草稿太短 → run", () => {

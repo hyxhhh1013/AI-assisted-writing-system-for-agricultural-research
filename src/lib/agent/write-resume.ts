@@ -105,11 +105,33 @@ export function evaluateWriteResume(
       resumedFrom: "partial",
       summary:
         `断点续写：沿用中断前已生成的 ${active.section} 草稿（${draft.length} 字，管道未完整跑完），`
-        + "已写回项目；如需核查润色可再叫 refine_content / write_section(full)",
+        + "已写回项目；系统将自动排队 refine_content 补跑核查润色（草稿未经 Verifier/Refiner）",
     };
   }
 
   return { action: "run" };
+}
+
+/** write_section 观察是否为 partial 断点复用（跳过了 AI 管道） */
+export function isPartialWriteResume(data: unknown): boolean {
+  if (!data || typeof data !== "object") return false;
+  return (data as { resumedFrom?: unknown }).resumedFrom === "partial";
+}
+
+/** partial 复用后硬排队 refine_content，补上被跳过的核查润色 */
+export function buildPartialWriteRefineCall(section: string): ParsedToolCall {
+  const key = section.trim() || "introduction";
+  return {
+    id: `resume_refine_${key}_${Date.now()}`,
+    name: "refine_content",
+    args: {
+      section: key,
+      draftText: "(resume-partial)",
+      feedback:
+        "断点续写草稿未经 Verifier/Refiner：请核查学术规范、引用编号、结果与讨论边界及表述，修正后写回本节。",
+      persistToProject: "true",
+    },
+  };
 }
 
 /**

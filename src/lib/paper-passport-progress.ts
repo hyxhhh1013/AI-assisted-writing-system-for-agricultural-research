@@ -1,4 +1,5 @@
 import type { PaperPassport, PaperPhase, PhaseStatus } from "@/contracts/paper-passport";
+import { MIN_OUTLINE_CHARS } from "@/lib/outline-threshold";
 
 export interface PassportProgressSignals {
   referenceCount: number;
@@ -62,7 +63,8 @@ export function recomputePassportProgress(
     phaseStatus["1"] = "ready";
   }
 
-  const hasArchitecture = signals.outlineChars >= 80 && signals.hasBlueprint;
+  const hasArchitecture =
+    signals.outlineChars >= MIN_OUTLINE_CHARS && signals.hasBlueprint;
   if (hasArchitecture) {
     phaseStatus["2"] = "done";
   } else if (phaseStatus["1"] === "done") {
@@ -146,7 +148,7 @@ export function getNextPhaseHint(passport: PaperPassport): string | null {
     0: "完善论文配置",
     1: "导入或检索参考文献",
     2: "生成大纲与写作蓝图",
-    3: "生成论证蓝图（主张—证据—推理）",
+    3: "确认写作蓝图中的主张与证据（claim / evidenceHint）",
     4: "协作扩写各章节",
     5: "核对正文引用编号",
     6: "撰写摘要与关键词",

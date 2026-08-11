@@ -4,13 +4,11 @@
 
 import type { AgentProjectSnapshot } from "@/lib/agent/project-loader";
 import type { AgentContext, AgentToolResult, ToolDefinition } from "@/lib/agent/types";
+import { isOutlineReady } from "@/lib/outline-threshold";
 
 export type WritePrereqStep =
   | "generate_outline"
   | "generate_writing_blueprint";
-
-/** 有结构即可；短中文大纲常见 20～40 字 */
-const MIN_OUTLINE_CHARS = 20;
 
 const WRITE_TOOLS = new Set(["write_section", "refine_content"]);
 
@@ -24,7 +22,7 @@ export function listMissingWritePrereqs(
 ): WritePrereqStep[] {
   if (!project) return [];
   const missing: WritePrereqStep[] = [];
-  if (project.outline.trim().length < MIN_OUTLINE_CHARS) {
+  if (!isOutlineReady(project.outline)) {
     missing.push("generate_outline");
   }
   if (!project.hasWritingBlueprint) {

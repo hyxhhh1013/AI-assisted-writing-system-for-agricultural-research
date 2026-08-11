@@ -38,6 +38,10 @@ import {
   shouldPauseForConfigConfirm,
   shouldPauseForOutlineApprove,
 } from "@/lib/agent/core/checkpoints";
+import {
+  buildPartialWriteRefineCall,
+  isPartialWriteResume,
+} from "@/lib/agent/write-resume";
 import { buildFigureQaPolishNudge } from "@/lib/agent/figure-qa";
 import {
   buildFigureQaContinueNudge,
@@ -833,6 +837,40 @@ export async function toolsNode(
         await refreshAgentProjectContext(agentContext);
         // 项目有实际写进展：放行被隔离的读章节
         clearBlockedReads(repeatTracker);
+      }
+
+      // partial 断点复用跳过了 Verifier/Refiner → 硬排队 refine_content
+      if (
+        result.success
+        && tool.name === "write_section"
+        && isPartialWriteResume(result.data)
+      ) {
+        const section = String(
+          (result.data as { section?: unknown })?.section
+            ?? toolCall.args?.section
+            ?? "",
+        ).trim();
+        if (section) {
+          const alreadyQueued = toolQueue
+            .slice(tcIdx + 1)
+            .some(
+              (c) =>
+                c.name === "refine_content"
+                && String(c.args.section ?? "").trim() === section,
+            );
+          if (!alreadyQueued) {
+            toolQueue.splice(tcIdx + 1, 0, buildPartialWriteRefineCall(section));
+            newSummaries.push(
+              `[write-resume] 已自动排队 refine_content → ${section}`,
+            );
+            newMessages.push({
+              role: "user",
+              content:
+                `System: 断点续写复用了 ${section} 的未完整管道草稿，已自动排队 refine_content 补跑核查润色。`
+                + "请等待该工具完成后再向用户汇报；勿再无故重跑 write_section。",
+            });
+          }
+        }
       }
 
       // P0：出图成功后硬注入 read_figure(mode=qa)，不依赖模型自觉

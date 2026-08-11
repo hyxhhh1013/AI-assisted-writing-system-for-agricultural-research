@@ -13,7 +13,8 @@ export const removeReferencesTool: ToolDefinition = {
     "删除项目参考文献中不相关 / 误导入的条目。参数 indices 为引用编号数组（1 起，对应 [n]）。"
     + "删除后自动重排后续编号，并清理对应分类映射。"
     + "若正文已引用这些编号，删除后必须 validate_citations 检查越界引用；"
-    + "若用户认为某文献离题、误导入，或准备换一批更相关的，可用本工具清理。",
+    + "若用户认为某文献离题、误导入，或准备换一批更相关的，可用本工具清理。"
+    + "属破坏性操作，执行前会请用户确认。",
   parameters: {
     type: "object",
     properties: {
@@ -28,7 +29,8 @@ export const removeReferencesTool: ToolDefinition = {
     },
     required: ["indices"],
   },
-  safety: "write",
+  safety: "destructive",
+  requiresConfirmation: true,
   async execute(params: Record<string, unknown>, ctx: AgentContext) {
     if (!ctx.projectId) {
       return { success: false, error: "remove_references 需要关联 projectId" };
