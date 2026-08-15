@@ -405,9 +405,15 @@ function assertP6(
     pushFail(fails, "p6-action", "action 应为 scherrer");
   }
 
+  const sourceId = String(
+    xrdStep.params?.sourceAttachmentId ?? xrdStep.params?.attachmentId ?? "",
+  ).trim();
   const peaksJson = String(xrdStep.params?.peaksJson ?? "").trim();
-  if (!peaksJson) {
-    pushFail(fails, "p6-peaks", "须提供 peaksJson，不得无数据调用 Scherrer");
+  if (!sourceId && peaksJson) {
+    pushFail(fails, "p6-peaks", "禁止只手填 peaksJson，须用已入库峰表或 sourceAttachmentId");
+  }
+  if (!sourceId && !peaksJson) {
+    pushFail(fails, "p6-peaks", "须指定已入库峰表来源（sourceAttachmentId）");
   }
 
   const sectionKey = String(xrdStep.params?.sectionKey ?? "").trim();
@@ -742,7 +748,7 @@ export const AGENT_SCRIPT_FIXTURES: {
           tool: "generate_xrd_analysis",
           params: {
             action: "scherrer",
-            peaksJson: '[{"two_theta":26.64,"fwhm":0.25}]',
+            sourceAttachmentId: "att-peaks",
             sectionKey: "results",
             title: "Scherrer 分析",
           },

@@ -126,6 +126,30 @@ export async function extractAttachmentText(
     if (ATTACHMENT_IMAGE_EXTENSIONS.has(ext)) {
       return await describeImage(filePath);
     }
+    if (ext === "xy" || ext === "xyd" || ext === "ras" || ext === "raw" || ext === "uxd" || ext === "dif") {
+      const buf = fs.readFileSync(filePath);
+      const text = buf.toString("utf8");
+      const printable = [...text.slice(0, 4000)].filter((ch) => {
+        const c = ch.charCodeAt(0);
+        return c === 9 || c === 10 || c === 13 || (c >= 32 && c < 127) || c > 159;
+      }).length;
+      const ratio = text.length === 0 ? 0 : printable / Math.min(text.length, 4000);
+      if (ratio < 0.85) {
+        return {
+          status: "ready",
+          ...truncateTo("【仪器谱】二进制谱文件已保存。峰位须峰拟合后以峰表 CSV 入库，不能手填 peaksJson。"),
+          source: "spectrum",
+        };
+      }
+      const lines = text.split(/\r?\n/).filter((l) => l.trim()).slice(0, 80);
+      return {
+        status: "ready",
+        ...truncateTo(
+          `【仪器谱预览】前 ${lines.length} 行（两列文本）。峰位须峰拟合/确认后入库，不能把本预览当 peaksJson。\n${lines.join("\n")}`,
+        ),
+        source: "spectrum",
+      };
+    }
     return { status: "unsupported", source: "failed" };
   } catch (err) {
     return {

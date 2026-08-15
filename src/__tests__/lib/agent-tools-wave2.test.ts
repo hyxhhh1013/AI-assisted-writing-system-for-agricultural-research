@@ -3,6 +3,7 @@ import { importReferenceTool } from "@/lib/agent/tools/import-reference";
 import { checkPlagiarismTool } from "@/lib/agent/tools/check-plagiarism";
 import { generateChartTool } from "@/lib/agent/tools/generate-chart";
 import { generateXrdAnalysisTool } from "@/lib/agent/tools/generate-xrd-analysis";
+import { loadIngestedPeakTable } from "@/lib/agent/xrd-ingested-peaks";
 import type { AgentContext } from "@/lib/agent/types";
 
 vi.mock("@/lib/chart-runner", () => ({
@@ -53,6 +54,22 @@ vi.mock("@/lib/agent/project-persist", () => ({
     sectionKey,
   })),
 }));
+
+vi.mock("@/lib/prisma", () => ({
+  default: {
+    project: { findFirst: vi.fn(), update: vi.fn() },
+    agentAttachment: { findFirst: vi.fn() },
+  },
+}));
+
+vi.mock("@/lib/agent/xrd-ingested-peaks", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/agent/xrd-ingested-peaks")>();
+  return {
+    ...actual,
+    loadIngestedPeakTable: vi.fn(),
+    appendXrdResultClaims: vi.fn(async () => undefined),
+  };
+});
 
 // check_plagiarism 会调 getAgentProjectSnapshot 取标题；CI 无 DB，需 mock
 vi.mock("@/lib/agent/project-refresh", () => ({
@@ -119,9 +136,22 @@ const sampleHit = {
   source: "openalex" as const,
 };
 
+const mockLoadPeaks = loadIngestedPeakTable as unknown as ReturnType<typeof vi.fn>;
+
 describe("agent tools wave2", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockLoadPeaks.mockResolvedValue({
+      source: {
+        fileName: "peaks.csv",
+        rowCount: 1,
+        columns: [],
+        stats: [],
+        generatedAt: 1,
+        peakTable: [{ two_theta: 28.4, fwhm: 0.25 }],
+      },
+      peaks: [{ two_theta: 28.4, fwhm: 0.25, intensity: 0, relative_intensity: 100 }],
+    });
   });
 
   it("import_reference returns preview when userConfirmed is false", async () => {
@@ -222,6 +252,19 @@ describe("agent tools wave2", () => {
     expect(result.data).toMatchObject({
       href: expect.stringContaining("figure=xrd_workflow"),
     });
+  });
+
+  it("generate_xrd_analysis rejects bare peaksJson when nothing ingested", async () => {
+    mockLoadPeaks.mockResolvedValueOnce(null);
+    const result = await generateXrdAnalysisTool.execute(
+      {
+        action: "scherrer",
+        peaksJson: JSON.stringify([{ two_theta: 28.4, fwhm: 0.25 }]),
+      },
+      baseCtx,
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/不要手填|入库/);
   });
 
   it("generate_xrd_analysis scherrer persists and inserts section", async () => {

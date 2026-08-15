@@ -346,7 +346,7 @@ export function AgentInputBar({
         <input
           ref={inputRef}
           type="file"
-          accept=".pdf,.docx,.txt,.md,.tex,.ris,.bib,.csv,.xlsx,.xls,.png,.jpg,.jpeg,.webp,.gif"
+          accept=".pdf,.docx,.txt,.md,.tex,.ris,.bib,.csv,.xlsx,.xls,.xy,.xyd,.ras,.raw,.uxd,.dif,.png,.jpg,.jpeg,.webp,.gif"
           multiple
           className="hidden"
           onChange={onFileChange}

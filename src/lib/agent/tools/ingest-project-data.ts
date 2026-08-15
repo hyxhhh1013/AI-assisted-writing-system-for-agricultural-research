@@ -1,6 +1,7 @@
 import { analyzeFile } from "@/services/data-analysis";
 import { readAttachmentFile } from "@/lib/agent/attachments/storage";
 import { persistIngestedAnalysis } from "@/lib/agent/ingest-project-data";
+import { enrichAnalysisWithPeakTable } from "@/lib/agent/xrd-ingested-peaks";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import prisma from "@/lib/prisma";
 
@@ -120,7 +121,8 @@ export const ingestProjectDataTool: ToolDefinition = {
       };
     }
 
-    const { analysis, claims } = await analyzeFile(input, fileName);
+    const { analysis: rawAnalysis, claims } = await analyzeFile(input, fileName);
+    const analysis = await enrichAnalysisWithPeakTable(rawAnalysis, input, fileName);
     if (analysis.rowCount <= 0) {
       return {
         success: false,

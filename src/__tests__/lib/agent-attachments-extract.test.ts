@@ -41,6 +41,13 @@ describe("extractAttachmentText", () => {
     expect(r.source).toBe("csv");
   });
 
+  it("extracts instrument xy as spectrum preview", async () => {
+    const r = await extractAttachmentText(tmpFile("s.xy", "20.0 100\n21.0 110\n"), "s.xy");
+    expect(r.status).toBe("ready");
+    expect(r.source).toBe("spectrum");
+    expect(r.text).toMatch(/仪器谱/);
+  });
+
   it("marks unsupported extensions", async () => {
     const r = await extractAttachmentText(tmpFile("x.exe", "MZ"), "x.exe");
     expect(r.status).toBe("unsupported");

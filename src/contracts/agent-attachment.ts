@@ -4,7 +4,7 @@
  */
 
 export type AttachmentExtractSource =
-  | "pdf" | "docx" | "csv" | "excel" | "text"
+  | "pdf" | "docx" | "csv" | "excel" | "text" | "spectrum"
   | "image_vision" | "image_ocr" | "pdf_vision" | "failed";
 
 export type AttachmentStatus =

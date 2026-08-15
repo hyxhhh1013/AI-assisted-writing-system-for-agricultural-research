@@ -45,6 +45,8 @@ export interface DataSourceAnalysis {
   generatedAt: number;
   /** 分析时生成的推荐图表（随 dataSources JSON 持久化） */
   chartConfigs?: ChartConfig[];
+  /** 峰表（two_theta + fwhm）；有则 XRD 可引用，禁止模型手填 peaksJson */
+  peakTable?: Array<{ two_theta: number; fwhm?: number; intensity?: number; relative_intensity?: number }>;
 }
 
 // === 证据声明 ===

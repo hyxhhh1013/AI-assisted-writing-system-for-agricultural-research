@@ -14,6 +14,7 @@ import {
   persistIngestedAnalysis,
   normalizeIngestSourceId,
 } from "@/lib/agent/ingest-project-data";
+import { enrichAnalysisWithPeakTable } from "@/lib/agent/xrd-ingested-peaks";
 import prisma from "@/lib/prisma";
 
 function countClaimsForFile(
@@ -82,10 +83,9 @@ export async function maybeAutoIngestTabularAttachment(opts: {
   }
 
   try {
-    const { analysis, claims } = await analyzeFile(
-      bufferToAnalyzeInput(buf, opts.fileName),
-      opts.fileName,
-    );
+    const input = bufferToAnalyzeInput(buf, opts.fileName);
+    const { analysis: rawAnalysis, claims } = await analyzeFile(input, opts.fileName);
+    const analysis = await enrichAnalysisWithPeakTable(rawAnalysis, input, opts.fileName);
     if (analysis.rowCount <= 0) {
       return { status: "failed", error: "没有有效数据行" };
     }

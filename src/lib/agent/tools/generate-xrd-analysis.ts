@@ -16,6 +16,15 @@ import {
 } from "@/lib/xrd-workflow-utils";
 import { xrdScherrerSchema } from "@/lib/validations";
 import type { PeakInfo } from "@/services/xrd";
+import type { EvidenceClaim } from "@/contracts/data-source";
+import { normalizeIngestSourceId } from "@/lib/agent/ingest-project-data";
+import {
+  XRD_BARE_PEAKS_ERROR,
+  appendXrdResultClaims,
+  loadIngestedPeakTable,
+  peaksMatchIngested,
+} from "@/lib/agent/xrd-ingested-peaks";
+import prisma from "@/lib/prisma";
 
 type XrdAnalysisAction = "scherrer" | "peak_table" | "phase_search" | "workflow_link";
 
@@ -81,7 +90,9 @@ function buildWorkflowHref(projectId?: string): string {
 export const generateXrdAnalysisTool: ToolDefinition = {
   name: "generate_xrd_analysis",
   description:
-    "XRD 分析写回：action=scherrer 用 peaksJson 算 Scherrer 并出图；action=phase_search 内置相库匹配；action=peak_table 插入峰表；action=workflow_link 返回工作流深链。传 sectionKey 可插入章节。不要编造峰位",
+    "XRD 分析写回：峰位必须来自已入库峰表（ingest 过的 two_theta/fwhm 表）。"
+    + "禁止只手填 peaksJson。可传 sourceAttachmentId 指定峰表附件。"
+    + "action=scherrer 出图；phase_search 相检索；peak_table 插表；workflow_link 深链。",
   parameters: {
     type: "object",
     properties: {
@@ -90,10 +101,14 @@ export const generateXrdAnalysisTool: ToolDefinition = {
         enum: ["scherrer", "peak_table", "phase_search", "workflow_link"],
         description: "scherrer=晶粒尺寸；phase_search=相检索；peak_table=峰表；workflow_link=工作流向导",
       },
+      sourceAttachmentId: {
+        type: "string",
+        description: "已上传并入库的峰表附件 id（与 fileId 相同）",
+      },
       peaksJson: {
         type: "string",
         description:
-          "峰列表 JSON 数组，例：[{\"two_theta\":28.4,\"fwhm\":0.25,\"label\":\"(111)\"}]",
+          "仅当与已入库峰表一致时可用；单独手填会被拒绝",
       },
       title: { type: "string", description: "图/表标题" },
       caption: { type: "string", description: "图注（Scherrer 出图时使用，默认同 title）" },
@@ -135,17 +150,37 @@ export const generateXrdAnalysisTool: ToolDefinition = {
       return { success: false, error: "generate_xrd_analysis 需要关联 projectId" };
     }
 
-    const peaksRaw = String(params.peaksJson ?? "").trim();
-    if (!peaksRaw) {
-      return {
-        success: false,
-        error: "缺少 peaksJson：请提供实测或用户确认的峰位与 FWHM，不要编造",
-      };
+    const sourceAttachmentId = String(
+      params.sourceAttachmentId ?? params.attachmentId ?? params.fileId ?? "",
+    ).trim();
+    let peakFileName: string | undefined;
+    if (sourceAttachmentId) {
+      const att = await prisma.agentAttachment.findFirst({
+        where: { id: sourceAttachmentId, userId: ctx.userId },
+        select: { originalName: true },
+      });
+      peakFileName = att?.originalName;
+    }
+    const ingested = await loadIngestedPeakTable({
+      userId: ctx.userId,
+      projectId: ctx.projectId,
+      fileName: peakFileName,
+    });
+    if (!ingested) {
+      return { success: false, error: XRD_BARE_PEAKS_ERROR };
     }
 
-    const parsedPeaks = parsePeaksJson(peaksRaw);
-    if ("error" in parsedPeaks) {
-      return { success: false, error: parsedPeaks.error };
+    const peaksRaw = String(params.peaksJson ?? "").trim();
+    let parsedPeaks = ingested.peaks;
+    if (peaksRaw) {
+      const proposed = parsePeaksJson(peaksRaw);
+      if ("error" in proposed) {
+        return { success: false, error: proposed.error };
+      }
+      if (!peaksMatchIngested(proposed, ingested.peaks)) {
+        return { success: false, error: XRD_BARE_PEAKS_ERROR };
+      }
+      parsedPeaks = proposed;
     }
 
     const title = String(params.title ?? "").trim() || "XRD 分析";
@@ -201,6 +236,25 @@ export const generateXrdAnalysisTool: ToolDefinition = {
           : "未匹配到参考相",
       ];
       if (insertedSection) bits.push(`已插入章节 ${insertedSection}`);
+      if (top) {
+        const sourceId = normalizeIngestSourceId(ingested.source.fileName);
+        const claim: EvidenceClaim = {
+          id: `${sourceId}-phase`,
+          sourceId,
+          sourceType: "data",
+          type: "ranking",
+          text: `相检索 Top1：${top.name} (${top.formula})`,
+          values: { name: top.name, formula: top.formula, score: top.score },
+          variables: ["phase"],
+          tolerance: 10,
+        };
+        await appendXrdResultClaims({
+          userId: ctx.userId,
+          projectId: ctx.projectId,
+          claims: [claim],
+        });
+        bits.push("已回写相检索声明");
+      }
       return {
         success: true,
         data: {
@@ -264,6 +318,24 @@ export const generateXrdAnalysisTool: ToolDefinition = {
       const bits = [`Scherrer「${title}」`];
       if (meanNm != null && Number.isFinite(meanNm)) {
         bits.push(`平均晶粒尺寸约 ${meanNm.toFixed(1)} nm`);
+        const sourceId = normalizeIngestSourceId(ingested.source.fileName);
+        const claim: EvidenceClaim = {
+          id: `${sourceId}-scherrer`,
+          sourceId,
+          sourceType: "data",
+          type: "mean",
+          text: `Scherrer 平均晶粒尺寸 ${meanNm.toFixed(1)} nm`,
+          values: { mean_size_nm: meanNm },
+          variables: ["crystallite_size"],
+          unit: "nm",
+          tolerance: 10,
+        };
+        await appendXrdResultClaims({
+          userId: ctx.userId,
+          projectId: ctx.projectId,
+          claims: [claim],
+        });
+        bits.push("已回写晶粒尺寸声明");
       }
       if (persisted) bits.push("已登记到项目图表库");
       if (insertedSection) bits.push(`已插入章节 ${insertedSection}`);

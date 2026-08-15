@@ -5,6 +5,8 @@ describe("clientRejectReason", () => {
   it("passes allowed files", () => {
     expect(clientRejectReason({ name: "a.pdf", size: 1000 })).toBeNull();
     expect(clientRejectReason({ name: "d.CSV", size: 1000 })).toBeNull();
+    expect(clientRejectReason({ name: "scan.xy", size: 1000 })).toBeNull();
+    expect(clientRejectReason({ name: "sample.ras", size: 1000 })).toBeNull();
   });
   it("rejects oversize / disallowed", () => {
     expect(clientRejectReason({ name: "a.pdf", size: 21 * 1024 * 1024 })).toContain("20MB");
