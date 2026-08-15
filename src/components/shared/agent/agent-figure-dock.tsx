@@ -155,7 +155,7 @@ export function AgentFigureDock({
                     )}
                   >
                     <ExternalLink className="h-3 w-3" />
-                    绘图页精修
+                    期刊精修
                   </Link>
                 ) : null}
                 {active.sectionKey && onJumpToSection ? (

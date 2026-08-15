@@ -1,6 +1,6 @@
 # W3-AP-AGENT-HUB：Agent 单面工作台 + 数据闭环
 
-> **状态**：规划生效（2026-08-15）  
+> **状态**：本波 PR 已落地（2026-08-15）  
 > **队列**：[`ENGINEERING_OPTIMIZATION_QUEUE.md`](../ENGINEERING_OPTIMIZATION_QUEUE.md) §1 Phase 11c  
 > **域文档**：[`domain/agent.md`](../domain/agent.md)、[`domain/figures-and-python.md`](../domain/figures-and-python.md)  
 > **前置诊断**：数据/图/写作是四座孤岛；研究型结果章可以零数据写完（空论文）。
@@ -103,7 +103,7 @@ AgentInputBar 附件（唯一上传口）
 | 4 | **W3-AP-DATA-03** | 附件白名单加仪器扩展名；XRD **禁止裸 peaksJson**，只读已入库峰表 | 1d | 02 | **done** |
 | 5 | **W3-AP-DATA-04** | 结果章数字对账：无声明新数字拒写/标红 | 0.5d | 01, 02 | **done** |
 | 6 | **W3-AP-HUB-02** | 工作台默认只留 Agent + 编辑器；data/xrd/writing/outline 进「专家工具」 | 1d | 01–03 可用 | **done** |
-| 7 | **W3-AP-HUB-03** | `/plot` 降为配图坞「去精修」抽屉；不从主导航进 | 0.5d | FIG 精修链已有 | todo |
+| 7 | **W3-AP-HUB-03** | `/plot` 降为配图坞「去精修」抽屉；不从主导航进 | 0.5d | FIG 精修链已有 | **done** |
 
 推荐开干顺序：**01 → 02 → 01 的门禁才有入口（02）→ HUB-01 把上传变成无感入库**。  
 01 可先做（先拦住空写）；02/HUB-01 让「附件=数据口」成立。
@@ -227,7 +227,7 @@ AgentInputBar 附件（唯一上传口）
 
 ---
 
-### W3-AP-HUB-03 — /plot 降为精修抽屉
+### W3-AP-HUB-03 — /plot 降为精修抽屉 ✅ 2026-08-15
 
 **目标：** 日常不出独立「去绘图页」主路径。
 

@@ -27,6 +27,13 @@ describe("module-registry", () => {
     expect(sidebar.some((m) => m.id === "plot")).toBe(false);
   });
 
+  it("does not put plot on the workbench sidebar (精修不走主栏)", async () => {
+    vi.stubEnv("NEXT_PUBLIC_ENABLE_CHART", "true");
+    const { listModules } = await import("@/lib/module-registry");
+    const sidebar = listModules({ placement: "workbench-sidebar" });
+    expect(sidebar.some((m) => m.id === "plot")).toBe(false);
+  });
+
   it("appends project id for modules that require it", async () => {
     const { getModuleById, getModuleHref } = await import("@/lib/module-registry");
     const plot = getModuleById("plot");

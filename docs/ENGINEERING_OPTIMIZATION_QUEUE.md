@@ -228,14 +228,14 @@
 | W3-AP-FIG-DOCK-P2 | 配图坞免翻聊天 + /plot 回写 replace + 改图快捷项 | W3-AP-FIG-UX | 0.5d | **done** | 2026-08-09；输入区上方坞；plot?replaceImageUrl |
 | W3-AP-ATTACH-UX | 附件提取时序提示 + 写作进度可见性 + extract_failed 自动重试 + xlsx Turbopack 兼容 | W3-AP-WRITE-DISCIPLINE | 0.5d | **done** | 2026-08-08；manifest/read_attachment 提示「提取中稍后重试」+ WritingStatusCard 0 字显示「等待 AI 输出」+ `retryAttachmentExtraction` + xlsx 改 `fs.readFileSync`→`XLSX.read`；全量 1020 通过 |
 | **Phase 11c — Wave 3.8 Agent 单面工作台 + 数据闭环** |
-| **W3-AP-AGENT-HUB** | **主轴：附件=唯一上传口；数据根基；结果章硬门禁；Tab 收敛** | W3-AP-QUALITY | 1～2w | **doing** | 详规 [`plans/W3-AP-AGENT-HUB.md`](./plans/W3-AP-AGENT-HUB.md) |
+| **W3-AP-AGENT-HUB** | **主轴：附件=唯一上传口；数据根基；结果章硬门禁；Tab 收敛** | W3-AP-QUALITY | 1～2w | **done** | 2026-08-15；DATA-01～04 + HUB-01～03 |
 | W3-AP-DATA-01 | 数据根基判定 + 研究型 results 硬门禁 + inspect/简报同源 | — | 0.5d | **done** | 2026-08-15；`data-foundation.ts`；research+results+empty 拒写 |
 | W3-AP-DATA-02 | `ingest_project_data`：附件/粘贴 CSV → dataSources+dataClaims | DATA-01 | 1d | **done** | 2026-08-15；复用 `analyzeFile`；同 fileName 覆盖 |
 | W3-AP-HUB-01 | 附件芯片识别表格；上传完成自动 ingest | DATA-02 | 1d | **done** | 2026-08-15；扩展名推断 kind，不迁库 |
 | W3-AP-DATA-03 | 仪器附件白名单；XRD 禁止裸 peaksJson | DATA-02 | 1d | **done** | 2026-08-15；峰表必须已入库；Scherrer/相检索回写 claims |
 | W3-AP-DATA-04 | 结果章数字对账（无声明新数字拒写） | DATA-01, DATA-02 | 0.5d | **done** | 2026-08-15；精确小数须 ⊆ claims；约/数量级不拦 |
 | W3-AP-HUB-02 | 工作台默认 Agent+编辑器；旧 Tab 进专家工具 | DATA-01～03 | 1d | **done** | 2026-08-15；`NEXT_PUBLIC_WORKBENCH_EXPERT_TABS=1` 恢复旧栏 |
-| W3-AP-HUB-03 | `/plot` 降为配图坞精修抽屉 | FIG-DOCK | 0.5d | todo | |
+| W3-AP-HUB-03 | `/plot` 降为配图坞精修抽屉 | FIG-DOCK | 0.5d | **done** | 2026-08-15；工作台侧栏去掉 plot；配图坞「期刊精修」 |
 | — | 任务单细节 | — | — | — | [`plans/W3-AP-AGENT-HUB.md`](./plans/W3-AP-AGENT-HUB.md) |
 
 
@@ -1091,14 +1091,14 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-15 | W3-AP-DATA-03 | AI | 附件白名单加 xy/ras 等；谱文件只预览；`generate_xrd_analysis` 拒绝裸 peaksJson；成功后回写晶粒/相声明。 |
 | 2026-08-15 | W3-AP-DATA-04 | AI | 研究型 results 写回前对账：精确小数须能对上 dataClaims；约/数量级不拦。 |
 | 2026-08-15 | W3-AP-HUB-02 | AI | 工作台主栏默认 Agent+结构；data/xrd/outline/writing 进专家工具。`?tab=data` 仍可用。 |
+| 2026-08-15 | W3-AP-HUB-03 | AI | `/plot` 不再出现在工作台侧栏；配图坞按钮改为「期刊精修」。路由保留。 |
 
 ---
 
 ## 5. 推荐执行顺序（给「下一次 AI」）
 
-**当前主轴（2026-08-15）**：**W3-AP-AGENT-HUB** — Agent 单面工作台 + 数据闭环（附件上传 → 入库 → 结果章硬门禁 → Tab 收敛）。  
-详规：[`plans/W3-AP-AGENT-HUB.md`](./plans/W3-AP-AGENT-HUB.md)。  
-下一刀：`W3-AP-HUB-03`（`/plot` 降为配图坞精修抽屉）。
+**当前主轴（2026-08-15）**：**W3-AP-AGENT-HUB 本波已落地** — 附件上传 → 入库 → 结果章硬门禁 → Tab 收敛。  
+详规：[`plans/W3-AP-AGENT-HUB.md`](./plans/W3-AP-AGENT-HUB.md)。后续按质量/精修体验迭代，勿平行开第三条流水线。
 
 | 优先级 | ID | 说明 |
 |--------|-----|------|

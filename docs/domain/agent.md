@@ -195,7 +195,9 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 
 **已落地 DATA-04**：`write_section(results)` 写回前对账精确小数 ⊆ `dataClaims`（`results-number-reconcile.ts`）。约/数量级不拦。
 
-**已落地 HUB-02**：工作台主栏默认 Agent + 结构；data/xrd/outline/writing 收进「专家工具」。`NEXT_PUBLIC_WORKBENCH_EXPERT_TABS=1` 恢复旧布局；`?tab=data` 仍可用。下一刀 **HUB-03**：`/plot` 降为精修抽屉。
+**已落地 HUB-02**：工作台主栏默认 Agent + 结构；data/xrd/outline/writing 收进「专家工具」。`NEXT_PUBLIC_WORKBENCH_EXPERT_TABS=1` 恢复旧布局；`?tab=data` 仍可用。
+
+**已落地 HUB-03**：`/plot` 不再挂工作台侧栏；配图坞只留「期刊精修」深链。路由与回写保留。
 
 ## 机理图 / 识图自检（2026-08-09）
 
