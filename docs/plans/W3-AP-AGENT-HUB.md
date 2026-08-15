@@ -102,7 +102,7 @@ AgentInputBar 附件（唯一上传口）
 | 3 | **W3-AP-HUB-01** | 附件芯片识别数据文件；表格 **上传完成自动 ingest**；状态「已入库」 | 1d | 02 | **done** |
 | 4 | **W3-AP-DATA-03** | 附件白名单加仪器扩展名；XRD **禁止裸 peaksJson**，只读已入库峰表 | 1d | 02 | **done** |
 | 5 | **W3-AP-DATA-04** | 结果章数字对账：无声明新数字拒写/标红 | 0.5d | 01, 02 | **done** |
-| 6 | **W3-AP-HUB-02** | 工作台默认只留 Agent + 编辑器；data/xrd/writing/outline 进「专家工具」 | 1d | 01–03 可用 | todo |
+| 6 | **W3-AP-HUB-02** | 工作台默认只留 Agent + 编辑器；data/xrd/writing/outline 进「专家工具」 | 1d | 01–03 可用 | **done** |
 | 7 | **W3-AP-HUB-03** | `/plot` 降为配图坞「去精修」抽屉；不从主导航进 | 0.5d | FIG 精修链已有 | todo |
 
 推荐开干顺序：**01 → 02 → 01 的门禁才有入口（02）→ HUB-01 把上传变成无感入库**。  
@@ -211,7 +211,7 @@ AgentInputBar 附件（唯一上传口）
 
 ---
 
-### W3-AP-HUB-02 — 工作台收敛为 Agent + 编辑器
+### W3-AP-HUB-02 — 工作台收敛为 Agent + 编辑器 ✅ 2026-08-15
 
 **目标：** 默认不再露出 data/xrd/writing/outline 当主 Tab。
 

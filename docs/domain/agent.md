@@ -193,7 +193,9 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 
 **已落地 DATA-03**：附件白名单含 `xy/xyd/ras/raw/uxd/dif`（谱文件只做两列预览）。`generate_xrd_analysis` 只吃已入库 `peakTable`（或 `sourceAttachmentId` 对应峰表）；裸 `peaksJson` 拒绝。Scherrer / 相检索成功后回写 `dataClaims`。
 
-**已落地 DATA-04**：`write_section(results)` 写回前对账精确小数 ⊆ `dataClaims`（`results-number-reconcile.ts`）。约/数量级不拦。下一刀 **HUB-02**：工作台默认 Agent+编辑器。
+**已落地 DATA-04**：`write_section(results)` 写回前对账精确小数 ⊆ `dataClaims`（`results-number-reconcile.ts`）。约/数量级不拦。
+
+**已落地 HUB-02**：工作台主栏默认 Agent + 结构；data/xrd/outline/writing 收进「专家工具」。`NEXT_PUBLIC_WORKBENCH_EXPERT_TABS=1` 恢复旧布局；`?tab=data` 仍可用。下一刀 **HUB-03**：`/plot` 降为精修抽屉。
 
 ## 机理图 / 识图自检（2026-08-09）
 

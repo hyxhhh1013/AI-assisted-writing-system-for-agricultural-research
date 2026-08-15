@@ -8,10 +8,15 @@ import { getModeAccent, getDataTabTooltip, getOutlineTabTooltip, getStructureTab
 import { siteTheme } from "@/lib/site-theme";
 import {
   ArrowLeft, Layout, Database, Radar, BookOpen,
-  FileText, FileSearch, Search, Save, Bot,
+  FileText, FileSearch, Search, Save, Bot, Wrench,
 } from "lucide-react";
 import type { WorkbenchTab } from "@/app/workbench/page";
 import { getModuleHref, listModules, MODULE_ICON_MAP } from "@/lib/module-registry";
+import { Popover, PopoverPopup, PopoverTrigger } from "@/components/ui/popover";
+import {
+  isWorkbenchExpertTab,
+  shouldShowAllWorkbenchTabs,
+} from "@/lib/workbench-visible-tabs";
 
 interface WorkbenchTabSwitcherProps {
   activeTab: WorkbenchTab;
@@ -68,7 +73,12 @@ export function WorkbenchTabSwitcher({
   const goBack = useGoBack();
   const router = useRouter();
   const sidebarModules = listModules({ placement: "workbench-sidebar" });
-  const visibleTabs = TAB_DEFS;
+  const showAllTabs = shouldShowAllWorkbenchTabs();
+  const visibleTabs = showAllTabs
+    ? TAB_DEFS
+    : TAB_DEFS.filter((tab) => !isWorkbenchExpertTab(tab.id));
+  const expertTabs = TAB_DEFS.filter((tab) => isWorkbenchExpertTab(tab.id));
+  const expertActive = isWorkbenchExpertTab(activeTab);
   const accent = getModeAccent(projectMode);
 
   const handleTabClick = (tabId: WorkbenchTab) => {
@@ -104,6 +114,37 @@ export function WorkbenchTabSwitcher({
             <tab.icon className={cn("h-5 w-5", tab.id === "writing" && isWritingGenerating && !isActive && accent.iconText)} />
           </Button>
         );})}
+        {!showAllTabs ? (
+          <Popover>
+            <PopoverTrigger
+              title="专家工具（数据 / XRD / 大纲 / 扩写）"
+              className={cn(
+                "relative inline-flex h-9 w-9 items-center justify-center rounded-md",
+                expertActive && accent.activeTab,
+                !expertActive && siteTheme.btnGhost,
+              )}
+            >
+              <Wrench className="h-5 w-5" />
+            </PopoverTrigger>
+            <PopoverPopup className="w-52 p-2">
+              <p className="mb-1.5 px-2 text-[11px] text-muted-foreground">专家工具</p>
+              {expertTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => handleTabClick(tab.id)}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] hover:bg-black/5",
+                    activeTab === tab.id && "bg-black/5 font-medium",
+                  )}
+                >
+                  <tab.icon className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{getTabTitle(tab.id, projectMode)}</span>
+                </button>
+              ))}
+            </PopoverPopup>
+          </Popover>
+        ) : null}
       </div>
       {sidebarModules.map((module) => {
         const Icon = MODULE_ICON_MAP[module.iconKey];
