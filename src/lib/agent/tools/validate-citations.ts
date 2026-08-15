@@ -5,6 +5,11 @@ import {
   evaluateCitationGrounding,
   refsFromLiteRows,
 } from "@/lib/citation-grounding";
+import {
+  createLLMClaimJudge,
+  evaluateCitationClaimGrounding,
+} from "@/lib/citation-claim-grounding";
+import type { ClaimGroundingReport } from "@/contracts/citation-claim-grounding";
 import { syncProjectPaperPassport } from "@/lib/project-paper-passport-sync";
 import { findReferenceRowsLite } from "@/lib/reference-rows";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
@@ -88,6 +93,23 @@ export const validateCitationsTool: ToolDefinition = {
       : [];
     const overlapIssues = checks.filter((c) => !c.passed || c.overlap < 0.15);
 
+    // 引用级 grounding（claim 支撑判定）：LLM 判定，env 显式开启且文献有摘要才跑；
+    // 失败（无 key / 超时 / 解析失败）降级为 null，不阻断 validate_citations 主流程。
+    let claimGrounding: ClaimGroundingReport | null = null;
+    if (
+      process.env.CITATION_CLAIM_GROUNDING === "1"
+      && references.some((r) => r.abstract?.trim())
+    ) {
+      try {
+        claimGrounding = await evaluateCitationClaimGrounding(
+          { draftText, references: refsFromLiteRows(references) },
+          createLLMClaimJudge({ signal: ctx.signal, userId: ctx.userId }),
+        );
+      } catch {
+        claimGrounding = null;
+      }
+    }
+
     await syncProjectPaperPassport(ctx.projectId).catch(() => null);
 
     const blocked = !gate.exportReady;
@@ -117,6 +139,10 @@ export const validateCitationsTool: ToolDefinition = {
       summary = `引用检查通过（硬检 OK，语义接地 OK，${checks.length || gate.citationCount} 处引用）${softHint}。引用已符合要求，无需再改，请向用户汇报并给出下一步`;
     }
 
+    if (claimGrounding) {
+      summary += `\n【claim 接地】${claimGrounding.hint}`;
+    }
+
     return {
       success: true,
       data: {
@@ -131,6 +157,20 @@ export const validateCitationsTool: ToolDefinition = {
           softPool: grounding.softPool,
           suspicious: grounding.hits.filter((h) => h.suspicious).slice(0, 8),
         },
+        claimGrounding: claimGrounding
+          ? {
+              judgedCount: claimGrounding.judgedCount,
+              supportCount: claimGrounding.supportCount,
+              contradictCount: claimGrounding.contradictCount,
+              neutralCount: claimGrounding.neutralCount,
+              skippedCount: claimGrounding.skippedCount,
+              supportRate: claimGrounding.supportRate,
+              hint: claimGrounding.hint,
+              contradict: claimGrounding.items
+                .filter((i) => i.verdict === "contradict")
+                .slice(0, 8),
+            }
+          : null,
         totalChecks: checks.length,
         overlapIssueCount: overlapIssues.length,
         overlapIssues: overlapIssues.map((c) => ({

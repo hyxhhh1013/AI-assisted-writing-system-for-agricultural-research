@@ -71,7 +71,7 @@ function sameScriptComparable(sentence: string, corpus: string): boolean {
   return (zhS >= 4 && zhC >= 4) || (enS >= 2 && enC >= 2);
 }
 
-function extractCitationContext(text: string, position: number): string {
+export function extractCitationContext(text: string, position: number): string {
   // 优先取含引用的整句（按 。！？；;\n 切），避免 ±window 吞进邻句造成假阴性/假阳性
   const before = text.slice(0, position);
   const after = text.slice(position);
