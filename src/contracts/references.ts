@@ -33,3 +33,20 @@ export interface UpsertReferenceRequest {
   category?: string;
   citation?: string;
 }
+
+/** 引用「原文三态」详情（GET /api/projects/:id/references/source） */
+export interface ReferenceSourceDetail {
+  refIndex: number;
+  /** 引用文本（书目） */
+  citation: string;
+  title: string | null;
+  abstract: string | null;
+  doi: string | null;
+  openAccessUrl: string | null;
+  /** ReferenceSource.sourceName（知识库文件名或题录兜底标识） */
+  sourceName: string | null;
+  /** full=知识库全文；abstract=外部导入摘要；bib_only=仅书目 */
+  mode: "full" | "abstract" | "bib_only";
+  /** mode=full 时的原文片段（按段落截断） */
+  fullTextChunks: { content: string }[] | null;
+}

@@ -8,10 +8,13 @@ import {
   PopoverPopup,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { BookOpen, ChevronDown, ChevronRight, Quote, FileText, Loader2 } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, Quote, FileText } from "lucide-react";
 import { CITATION_GROUP_RE, FULLWIDTH_CITATION_RE, expandCitationGroup } from "@/lib/citation";
 import { formatFilenames } from "@/services/references";
 import { searchKnowledge } from "@/services/knowledge";
+import { fetchReferenceSources } from "@/services/references";
+import type { ReferenceSourceDetail } from "@/contracts/references";
+import { ReferenceSourceView } from "@/components/shared/reference-source-view";
 import { ReferenceProvenance } from "@/components/shared/reference-provenance";
 
 function collectUsedNumbers(text: string, refCount: number): Set<number> {
@@ -44,11 +47,6 @@ function quickCleanFilename(raw: string): string {
     .trim();
 }
 
-interface LiteratureChunk {
-  content: string;
-  index: number;
-}
-
 interface ReferenceBrowserProps {
   references: string[];
   projectId?: string;
@@ -70,7 +68,7 @@ export function ReferenceBrowser({
 }: ReferenceBrowserProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [loadingSource, setLoadingSource] = useState<number | null>(null);
-  const [sourceChunks, setSourceChunks] = useState<Record<number, LiteratureChunk[]>>({});
+  const [sourceDetails, setSourceDetails] = useState<Record<number, ReferenceSourceDetail | null>>({});
 
   // 批量格式化引用：文件名 → GB/T 7714
   const [formattedRefs, setFormattedRefs] = useState<Record<string, string>>({});
@@ -100,11 +98,18 @@ export function ReferenceBrowser({
   }, [allContents, references.length, usedInSection]);
 
   const fetchSourceContent = useCallback(async (num: number, refText: string) => {
-    if (sourceChunks[num]) return; // 已加载
+    if (sourceDetails[num] !== undefined) return; // 已加载（含 null）
 
     setLoadingSource(num);
     try {
-      // 从引用文字中提取关键词，搜索知识库
+      if (projectId) {
+        // 精确反查：按引用编号取原文三态（全文/摘要/书目）
+        const items = await fetchReferenceSources(projectId, [num]);
+        setSourceDetails((prev) => ({ ...prev, [num]: items[0] ?? null }));
+        return;
+      }
+
+      // 无 projectId（项目未持久化）：退回语义检索兜底
       const keywords = refText
         .replace(/\[\d+\]\s*/, "")
         .split(/[,;，；]/)
@@ -114,24 +119,36 @@ export function ReferenceBrowser({
         .join(" ");
 
       if (!keywords) {
-        setSourceChunks((prev) => ({ ...prev, [num]: [] }));
+        setSourceDetails((prev) => ({ ...prev, [num]: null }));
         return;
       }
 
       const data = await searchKnowledge({ q: keywords, type: "semantic", pageSize: 5 });
-      const chunks: LiteratureChunk[] = (data.files || []).flatMap((f) =>
-        (f._snippets || []).map((s: string, i: number) => ({
-          content: s,
-          index: i + 1,
-        }))
+      const chunks = (data.files || []).flatMap((f) =>
+        (f._snippets || []).map((s: string) => ({ content: s }))
       );
-      setSourceChunks((prev) => ({ ...prev, [num]: chunks }));
+      setSourceDetails((prev) => ({
+        ...prev,
+        [num]: chunks.length > 0
+          ? {
+              refIndex: num,
+              citation: refText,
+              title: null,
+              abstract: null,
+              doi: null,
+              openAccessUrl: null,
+              sourceName: null,
+              mode: "full",
+              fullTextChunks: chunks,
+            }
+          : null,
+      }));
     } catch {
-      setSourceChunks((prev) => ({ ...prev, [num]: [] }));
+      setSourceDetails((prev) => ({ ...prev, [num]: null }));
     } finally {
       setLoadingSource(null);
     }
-  }, [sourceChunks]);
+  }, [sourceDetails, projectId]);
 
   if (references.length === 0) {
     return (
@@ -193,7 +210,6 @@ export function ReferenceBrowser({
             const label = formatted
               ? (formatted.length > 65 ? formatted.slice(0, 65) + " ..." : formatted)
               : getRefPreview(`[${num}] ${quickCleanFilename(ref)}`);
-            const chunks = sourceChunks[num];
 
             return (
               <Popover key={idx}>
@@ -232,34 +248,17 @@ export function ReferenceBrowser({
                       </p>
                     </div>
 
-                    {/* 知识库原文 */}
+                    {/* 原文 / 摘要 */}
                     <div className="border-t pt-2">
                       <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-1 mb-1.5">
                         <FileText className="h-3 w-3" />
-                        知识库原文
+                        原文 / 摘要
                       </span>
 
-                      {loadingSource === num ? (
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground py-4">
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          检索文献原文...
-                        </div>
-                      ) : chunks && chunks.length > 0 ? (
-                        <div className="space-y-2">
-                          {chunks.map((chunk, ci) => (
-                            <div
-                              key={ci}
-                              className="text-[11px] leading-relaxed text-foreground bg-green-50 border border-green-200 rounded-md p-2.5"
-                            >
-                              {chunk.content}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-[10px] text-muted-foreground italic">
-                          暂未在知识库中找到匹配文献原文
-                        </p>
-                      )}
+                      <ReferenceSourceView
+                        detail={sourceDetails[num] ?? null}
+                        loading={loadingSource === num}
+                      />
                     </div>
                   </div>
                 </PopoverPopup>

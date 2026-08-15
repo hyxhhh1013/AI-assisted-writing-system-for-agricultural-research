@@ -3,6 +3,7 @@
 import type {
   BatchUpsertReferencesRequest,
   FormattedRefsResponse,
+  ReferenceSourceDetail,
   ReferenceSourceRecord,
   UpsertReferenceRequest,
 } from "@/contracts/references";
@@ -11,6 +12,7 @@ export type {
   BatchUpsertReferencesRequest,
   FormattedRefsResponse,
   ReferenceMappingInput,
+  ReferenceSourceDetail,
   ReferenceSourceRecord,
   UpsertReferenceRequest,
 } from "@/contracts/references";
@@ -73,4 +75,23 @@ export async function batchUpsertReferences(
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error || "批量保存引用映射失败");
   }
+}
+
+/** 按引用编号精确获取「原文三态」详情（全文/摘要/书目） */
+export async function fetchReferenceSources(
+  projectId: string,
+  refIndexes: number[],
+): Promise<ReferenceSourceDetail[]> {
+  if (refIndexes.length === 0) return [];
+  const res = await fetch(
+    `/api/projects/${encodeURIComponent(projectId)}/references/source?refIndexes=${refIndexes.join(",")}`,
+  );
+  const data = (await res.json().catch(() => ({}))) as {
+    items?: ReferenceSourceDetail[];
+    error?: string;
+  };
+  if (!res.ok || !Array.isArray(data.items)) {
+    throw new Error(data.error || "获取引用原文失败");
+  }
+  return data.items;
 }

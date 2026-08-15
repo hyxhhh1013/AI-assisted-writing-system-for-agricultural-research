@@ -38,6 +38,7 @@
 | POST | `/api/projects/[id]/paper-passport/sync` | — | — | — |
 | PATCH | `/api/projects/[id]/references` | ✓ | — | — |
 | POST | `/api/projects/[id]/references/import-external` | ✓ | — | — |
+| GET | `/api/projects/[id]/references/source?refIndexes=` | — | — | — |
 | PATCH | `/api/projects/[id]/sections/[key]` | ✓ | — | — |
 
 ### AI 写作
