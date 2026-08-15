@@ -101,7 +101,7 @@ AgentInputBar 附件（唯一上传口）
 | 2 | **W3-AP-DATA-02** | `ingest_project_data`：附件/粘贴 CSV → 复用 `analyzeData` 写入项目 | 1d | 01 | **done** |
 | 3 | **W3-AP-HUB-01** | 附件芯片识别数据文件；表格 **上传完成自动 ingest**；状态「已入库」 | 1d | 02 | **done** |
 | 4 | **W3-AP-DATA-03** | 附件白名单加仪器扩展名；XRD **禁止裸 peaksJson**，只读已入库峰表 | 1d | 02 | **done** |
-| 5 | **W3-AP-DATA-04** | 结果章数字对账：无声明新数字拒写/标红 | 0.5d | 01, 02 | todo |
+| 5 | **W3-AP-DATA-04** | 结果章数字对账：无声明新数字拒写/标红 | 0.5d | 01, 02 | **done** |
 | 6 | **W3-AP-HUB-02** | 工作台默认只留 Agent + 编辑器；data/xrd/writing/outline 进「专家工具」 | 1d | 01–03 可用 | todo |
 | 7 | **W3-AP-HUB-03** | `/plot` 降为配图坞「去精修」抽屉；不从主导航进 | 0.5d | FIG 精修链已有 | todo |
 
@@ -197,7 +197,7 @@ AgentInputBar 附件（唯一上传口）
 
 ---
 
-### W3-AP-DATA-04 — 结果数字对账
+### W3-AP-DATA-04 — 结果数字对账 ✅ 2026-08-15
 
 **目标：** 有根基之后，正文不得长出声明里没有的新数字。
 

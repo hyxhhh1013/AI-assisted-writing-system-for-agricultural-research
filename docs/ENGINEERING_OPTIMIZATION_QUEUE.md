@@ -233,7 +233,7 @@
 | W3-AP-DATA-02 | `ingest_project_data`：附件/粘贴 CSV → dataSources+dataClaims | DATA-01 | 1d | **done** | 2026-08-15；复用 `analyzeFile`；同 fileName 覆盖 |
 | W3-AP-HUB-01 | 附件芯片识别表格；上传完成自动 ingest | DATA-02 | 1d | **done** | 2026-08-15；扩展名推断 kind，不迁库 |
 | W3-AP-DATA-03 | 仪器附件白名单；XRD 禁止裸 peaksJson | DATA-02 | 1d | **done** | 2026-08-15；峰表必须已入库；Scherrer/相检索回写 claims |
-| W3-AP-DATA-04 | 结果章数字对账（无声明新数字拒写） | DATA-01, DATA-02 | 0.5d | todo | |
+| W3-AP-DATA-04 | 结果章数字对账（无声明新数字拒写） | DATA-01, DATA-02 | 0.5d | **done** | 2026-08-15；精确小数须 ⊆ claims；约/数量级不拦 |
 | W3-AP-HUB-02 | 工作台默认 Agent+编辑器；旧 Tab 进专家工具 | DATA-01～03 | 1d | todo | 不删路由 |
 | W3-AP-HUB-03 | `/plot` 降为配图坞精修抽屉 | FIG-DOCK | 0.5d | todo | |
 | — | 任务单细节 | — | — | — | [`plans/W3-AP-AGENT-HUB.md`](./plans/W3-AP-AGENT-HUB.md) |
@@ -1089,6 +1089,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-15 | W3-AP-DATA-02 | AI | `ingest_project_data`：附件或粘贴 CSV → 复用 `analyzeFile` → 只 PATCH `dataSources`/`dataClaims`（同 fileName 覆盖）。空表不写库。 |
 | 2026-08-15 | W3-AP-HUB-01 | AI | 表格附件上传后自动入库；芯片「已入库 · N 条声明」；kind 由扩展名推断，不改 Prisma。 |
 | 2026-08-15 | W3-AP-DATA-03 | AI | 附件白名单加 xy/ras 等；谱文件只预览；`generate_xrd_analysis` 拒绝裸 peaksJson；成功后回写晶粒/相声明。 |
+| 2026-08-15 | W3-AP-DATA-04 | AI | 研究型 results 写回前对账：精确小数须能对上 dataClaims；约/数量级不拦。 |
 
 ---
 
@@ -1096,7 +1097,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 
 **当前主轴（2026-08-15）**：**W3-AP-AGENT-HUB** — Agent 单面工作台 + 数据闭环（附件上传 → 入库 → 结果章硬门禁 → Tab 收敛）。  
 详规：[`plans/W3-AP-AGENT-HUB.md`](./plans/W3-AP-AGENT-HUB.md)。  
-下一刀：`W3-AP-DATA-04`（结果章数字对账：无声明新数字拒写）。
+下一刀：`W3-AP-HUB-02`（工作台默认 Agent+编辑器，旧 Tab 进专家工具）。
 
 | 优先级 | ID | 说明 |
 |--------|-----|------|

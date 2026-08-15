@@ -191,7 +191,9 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 
 **已落地 HUB-01**：表格附件上传时带 `projectId`；提取成功后自动 ingest（与 DATA-02 同一套）。芯片显示「已入库 · N 条声明」/「分析失败」。`kind` 由扩展名推断，不改 Prisma。
 
-**已落地 DATA-03**：附件白名单含 `xy/xyd/ras/raw/uxd/dif`（谱文件只做两列预览）。`generate_xrd_analysis` 只吃已入库 `peakTable`（或 `sourceAttachmentId` 对应峰表）；裸 `peaksJson` 拒绝。Scherrer / 相检索成功后回写 `dataClaims`。下一刀 **DATA-04**：结果章数字对账。
+**已落地 DATA-03**：附件白名单含 `xy/xyd/ras/raw/uxd/dif`（谱文件只做两列预览）。`generate_xrd_analysis` 只吃已入库 `peakTable`（或 `sourceAttachmentId` 对应峰表）；裸 `peaksJson` 拒绝。Scherrer / 相检索成功后回写 `dataClaims`。
+
+**已落地 DATA-04**：`write_section(results)` 写回前对账精确小数 ⊆ `dataClaims`（`results-number-reconcile.ts`）。约/数量级不拦。下一刀 **HUB-02**：工作台默认 Agent+编辑器。
 
 ## 机理图 / 识图自检（2026-08-09）
 

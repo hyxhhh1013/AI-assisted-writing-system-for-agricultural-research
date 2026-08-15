@@ -30,6 +30,7 @@ import {
   shouldBlockResultsWrite,
 } from "@/lib/agent/data-foundation";
 import { loadAgentPlotSources } from "@/lib/agent/plot-sources";
+import { reconcileResultsNumbers } from "@/lib/agent/results-number-reconcile";
 import { getAgentModelConfig } from "@/lib/ai";
 import { isSectionValidForMode } from "@/lib/section-registry";
 import type { WritingInput } from "@/lib/validations";
@@ -188,6 +189,12 @@ export const writeSectionTool: ToolDefinition = {
         : undefined,
     });
     if (resume.action === "reuse") {
+      if (project.mode === "research" && sectionRaw === "results") {
+        const recon = reconcileResultsNumbers(resume.draft, project.dataClaims);
+        if (!recon.ok) {
+          return { success: false, error: recon.message };
+        }
+      }
       let persisted: { sectionKey: string; referencesAdded: number } | null = null;
       if (persistToProject) {
         persisted = await persistAgentDraft(
@@ -335,6 +342,14 @@ export const writeSectionTool: ToolDefinition = {
 
       draftAcc.draft = result.draft;
       draftAcc.references = result.references;
+
+      if (project.mode === "research" && sectionRaw === "results") {
+        const recon = reconcileResultsNumbers(result.draft, project.dataClaims);
+        if (!recon.ok) {
+          await patchActive("aborted", true);
+          return { success: false, error: recon.message };
+        }
+      }
 
       let persisted: { sectionKey: string; referencesAdded: number } | undefined;
       if (persistToProject) {
