@@ -18,6 +18,7 @@
     "test:e2e:ui": "playwright test --ui",
     "eval:gates": "vitest run src/__tests__/eval",
     "eval:agent": "vitest run src/__tests__/eval/agent-scripts.eval.test.ts",
+    "eval:quality": "npx --yes tsx scripts/eval-quality.ts",
     "eval:pipeline": "npx --yes tsx scripts/eval-pipeline-paper.ts",
     "index-docs": "node scripts/index-pdfs.mjs",
     "create-admin": "node scripts/create-admin.mjs",

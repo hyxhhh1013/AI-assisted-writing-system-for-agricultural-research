@@ -1,6 +1,6 @@
 # Agent 编排（写作助手）
 
-> L3 域文档 · 更新：2026-08-11
+> L3 域文档 · 更新：2026-08-15
 > 契约唯一权威源：`src/contracts/agent.ts`（SSE 事件）、`src/contracts/agent-session.ts`（会话消息）。
 
 ## 概览
@@ -123,7 +123,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **破坏性删除需确认（2026-08-11）**：`remove_figure` / `remove_references` 标 `requiresConfirmation` + `safety: "destructive"`，确认卡文案见 `confirm-message.ts`。
 - **写作蓝图「结构无效」修复（2026-08-09）**：首因是 prompt 示例 `language: Chinese/English`（schema 仅 `zh|en`）。复查后发现仍会因 `dataSource`/`projectMode` 非法枚举、`keyPoints` 写成字符串、`estimatedWordCount` 写成 `"6000-12000"`、缺 `version`/空 items 等失败。现：① prompt 按 review/research 分示例并写明枚举约束；② `blueprint-coerce.ts` 纠偏上述偏差并在必要时合成最小合法 figure/guides；③ 错误文案带字段路径。API 与 `generate_writing_blueprint` 共用。
 - **蓝图文献源 + 分析笔记进 Writer（2026-08-09）**：`sectionGuides.assignedSources`（文件名或 `[n]`）经 `blueprint-write-context` 解析为 `selectedSourceIds`，Agent `write_section` 限 RAG 范围（解析为空则不限，避免误清空）。`loadAgentProject` 加载 `analysisResults` 进 `globalContext.analysisResults`，与工作台扩写一致。
-- **自动补齐插入批准检查点（2026-08-08）**：修复「ensureWritePrerequisites 自动补齐绕过 outline/blueprint 批准检查点」——ap-full 目标（写整篇/从零推进）下，自动补齐生成大纲/蓝图直接执行工具，用户看不到确认弹窗、失去对结构的审核。现在 `ensureWritePrerequisites` 拆出 `ensureNextWritePrerequisite`（一次只补一个缺失前置），`toolsNode` 逐步补齐 + 每步用 `buildPrereqCheckpoint`（nodes.ts）检查是否命中 outline/blueprint 批准检查点，命中即暂停等用户批准，resume 后继续补下一个 / 执行写工具。普通目标（非 ap-full）保持一次补完不暂停。
+- **自动补齐插入批准检查点（2026-08-08）**：修复「写前置自动补齐绕过 outline/blueprint 批准检查点」——ap-full 目标（写整篇/从零推进）下，自动补齐生成大纲/蓝图若直接连跑，用户看不到确认弹窗。现统一走 `ensureNextWritePrerequisite`（一次只补一个缺失前置），`toolsNode` 循环补齐 + 每步 `buildPrereqCheckpoint` 命中 outline/blueprint 即暂停；resume 后继续补下一个 / 执行写工具。普通目标（非 ap-full）同循环一次补完、不插入批准暂停。
 - **蓝图常驻入口（2026-08-07）**：工作台侧栏头（非 Agent Tab）与 Agent 面板头均新增「蓝图」按钮（Map 图标），随时可打开蓝图工作台；无蓝图时点击自动切到「章节结构」侧栏引导生成。
 - **文献分类编码持久化（2026-08-07）**：新增写工具 `save_reference_classification`（`tools/save-reference-classification.ts`），把「文献分类编码」结果批量 upsert 到 `ReferenceSource`（refIndex 1 基 → sourceName/category/citation），与前端「引用-文献映射」同一张表。`list_references` 输出附带 `category`/`sourceName`，写作时 Agent 能看到分类。属 `PROJECT_MUTATING_TOOLS`，保存后工作台刷新。之前 Agent 只能靠多次关键词检索在对话里"分类"、结果不落库，现已闭环。
 - **删除不相关文献（2026-08-07）**：新增写工具 `remove_references`（`tools/remove-references.ts`），按引用编号（1 基 [n]）删除不相关/误导入文献，自动重排后续编号，并同步清理/重排 `ReferenceSource` 分类映射。若正文已引用被删编号，工具说明要求随后 `validate_citations` 检查越界引用。
@@ -178,6 +178,14 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 
 跟聊（followUp）清空 `activeWrite`。partial 复用未跑 Verifier/Refiner：`toolsNode` **硬排队** `refine_content`（同 figure QA 注入模式），summary 同步说明。
 
+## Agent 单面 + 数据闭环（2026-08-15 规划）
+
+产品方向：用户只待在 Agent Tab。表格/仪器走**附件上传**（不再以 data Tab 为主口）；研究型无数据根基时禁止写 results。页面收敛分波，第一刀不拆 Tab。
+
+详规与 PR 序：[`plans/W3-AP-AGENT-HUB.md`](../plans/W3-AP-AGENT-HUB.md)（队列 Phase 11c）。
+
+**已落地 DATA-01**：`lib/agent/data-foundation.ts`。研究型 `write_section(results)` 在根基 `empty` 时拒绝；`inspect_project` / 简报 / `list_plot_sources` 共用同一套状态。下一刀 **DATA-02**：附件/粘贴 CSV 入库。
+
 ## 机理图 / 识图自检（2026-08-09）
 
 **产品定位**：Agent 负责「结构正确的可编辑草稿」；期刊观感与个性化在 `/plot` + 对话迭代完成。不承诺一键出 Nature 级机理终稿。
@@ -207,6 +215,42 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 **antispam 硬停机（P1b）**：停滞熔断（`MAX_STAGNANT_TOOLS`=3）触发累计 `breakCount`；同 goal 内达 `MAX_BREAKS_BEFORE_HARD_STOP`=2 次即硬停机（`finished=true` 进 finalize），不再放行工具，避免循环烧光 32 迭代/64 工具预算。
 
 **antispam 指纹增强（2026-08-08）**：`projectFingerprint` 原来只用 section 字符数总和，refine_content 改引（如 [7]→[4]）字数不变时指纹不变 → 误报「无进展」。现在 `AgentSectionFill` 增加 `refNums`（该 section 去重排序的引用编号签名，`extractRefNumsSignature` 从正文提取），fingerprint 纳入 refs 维度，能检测「字数不变但引用变化」的实质写操作。
+
+## 编排加固（配置检查点收窄 / 路由预算同源 / live 队列清理）
+
+- **config_confirm 检查点收窄**：原 `shouldPauseForConfigConfirm` 只看「缺 paper config」即暂停，导致诊断 / 检索 / 引用核查 / 审查 / 分类编码等与论文配置无关的目标也被配置问答拦一道。现加入 goal 维度：仅 `isApFullStyleGoal`（整篇/从零/entryMode=full）、`isAcademicPaperPipelineGoal`、`isSectionDraftGoal` 命中时才触发，其余目标直接跳过（`core/checkpoints.ts` + `planNode`）。
+- **路由预算同源**：`routeAfterAgent` 原硬编码 `COST_LIMITS.maxIterations`，与 `agentNode` 用的 `budget.maxIterations` 各持一份。现改为从 `config.configurable.agentRuntime` 读 `budget.maxIterations`（纯函数单测无 config 时回落 `COST_LIMITS`），避免将来调整预算时路由/节点分叉（`langgraph/state.ts`）。
+- **LiveEventQueue.clear() 清 stale waiter**：确认续跑执行循环用 `Promise.race([executePromise, next()])` 排空进度，execute 胜出时 `next()` 会残留一个无人 await 的 waiter；原 `clear()` 只清 items 不清 waiter，恢复后首个实时事件（首段 thought_delta）会被旧 waiter 吞掉。现 `clear()` 同步摘掉 pending waiter（以 done 收尾），防事件丢失（`langgraph/run-graph.ts`）。
+- **检查点 uiTranscript kind 同源**：续跑写用户气泡时不再手写 config/blueprint/outline 三元回退（漏了 clarify），改为 `resolveCheckpointKind`，与 `applyCheckpointDecisionPatch` 一致（`langgraph/run-graph.ts`）。
+- **死代码清理**：移除未在生产使用的 `ensureWritePrerequisites`（复数；逐步补齐已统一走 `ensureNextWritePrerequisite`）与 `buildFocusNudge`（不再注入计划焦点假 user）；`registerTools` 接入 `createReadOnlyTools` / `createAgentTools`，重复工具名的运行时防护生效。
+
+## 引用级 grounding 与质量评测集
+
+### 引用级 grounding（claim 支撑判定）
+
+词重叠（`citation-grounding.ts`）是快速免费代理，判不出「编号合法但句意张冠李戴」。新增第三层 `lib/citation-claim-grounding.ts`：
+
+- `collectCitedSentences`：抽每个 [n] 首次出现处的整句 + 对应题录/摘要（纯函数）。
+- `evaluateCitationClaimGrounding(input, judge)`：judge 可注入；生产 `createLLMClaimJudge()` 用 **verifier 角色** 批量判定 support / contradict / neutral（缺摘要/题录过短 → skip）。聚合 `ClaimGroundingReport`（supportRate / contradict 清单 / hint）。
+- 契约：`contracts/citation-claim-grounding.ts`；单测：`src/__tests__/lib/citation-claim-grounding.test.ts`（fake judge，无 key）。
+- 接入 `validate_citations`：env `CITATION_CLAIM_GROUNDING=1` 且文献有摘要时开启；失败（无 key/超时/解析失败）降级为 `claimGrounding: null`，不阻断主流程。结果并入 `data.claimGrounding`，summary 追加 `【claim 接地】`。contradict 是「可判定且确实错引」的强信号，供 Agent 优先改引/改写。
+
+### 论文质量评测集（一把量质量的尺子）
+
+`lib/quality-eval/`：确定性四维打分（不调 LLM，可进 CI），让 prompt/门禁改动从「盲调」变「可度量」：
+
+| 维度 | 检查 |
+|------|------|
+| structure 结构完整性 | 摘要≥150 / 引言≥400 / 结论≥150 + 主体节（方法/结果/讨论/综述正文）≥300 的数量 |
+| citation 引用支撑 | 越界硬检（-40）+ 词重叠可疑占比（-≤60） |
+| consistency 跨节一致性 | 结果有数值但结论没回扣 → 脱节风险；方法英文术语未在结果出现 → 脱节 |
+| overclaim 结论语气克制 | overclaim 措辞扣分 vs hedge 加分 |
+
+- `evaluateQuality(input)` 加权得 `overallScore`（引用支撑权重最高 0.35）。
+- golden fixtures：`lib/quality-eval/fixtures.ts`（好/坏样例）；单测 `src/__tests__/eval/quality-eval.test.ts`。
+- 脚本：`npm run eval:quality`（`scripts/eval-quality.ts`，无参输出好/坏对比，可传 manifest.json）。
+
+**注意**：词重叠/数值回扣是「代理信号」，claim 级 truthfulness 以 claim 接地为准；四维分数用于「判断方向」，不做硬门禁。
 
 ## 常用命令
 
