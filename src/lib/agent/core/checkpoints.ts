@@ -3,6 +3,10 @@ import type {
   AgentCheckpointKind,
   AgentCheckpointRequest,
 } from "@/contracts/agent";
+import {
+  isAcademicPaperPipelineGoal,
+  isSectionDraftGoal,
+} from "@/lib/agent/core/goal-intents";
 import type { LLMMessage, ParsedToolCall } from "@/lib/agent/types";
 
 /** 整篇 / academic-paper 自主推进类目标 → 需要大纲批准检查点 */
@@ -26,12 +30,19 @@ export function shouldPauseForOutlineApprove(input: {
 }
 
 export function shouldPauseForConfigConfirm(input: {
+  goal: string;
   hasPaperConfig: boolean;
   approvedKinds: readonly AgentCheckpointKind[];
 }): boolean {
   if (input.hasPaperConfig) return false;
   if (input.approvedKinds.includes("config_confirm")) return false;
-  return true;
+  // 仅「从零写整篇 / academic-paper 流程 / 起草某节」等写作目标需要先做论文配置问答；
+  // 诊断 / 检索 / 引用核查 / 审查 / 分类编码等与论文配置无关的目标不应被配置问答拦一道。
+  return (
+    isApFullStyleGoal(input.goal)
+    || isAcademicPaperPipelineGoal(input.goal)
+    || isSectionDraftGoal(input.goal)
+  );
 }
 
 export function buildOutlineCheckpoint(preview: string): AgentCheckpointRequest {

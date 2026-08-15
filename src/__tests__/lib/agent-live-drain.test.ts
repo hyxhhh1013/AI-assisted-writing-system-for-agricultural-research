@@ -58,4 +58,22 @@ describe("confirm-resume live drain", () => {
     expect(n).toBe(0);
     waiter.then(() => {}); // 避免 unhandled
   });
+
+  it("clear() drops a stale waiter so the next event is not swallowed", async () => {
+    const q = new LiveEventQueue();
+    // 模拟确认执行循环：next() 挂起一个 waiter，随后 execute 胜出、clear()
+    const abandoned = q.next();
+    q.clear();
+
+    const got: AgentSSEEvent[] = [];
+    const consumer = q.next().then((r) => {
+      if (!r.done) got.push(r.value);
+    });
+    q.push({ type: "agent/progress", label: "首段", stage: "writing" });
+    await consumer;
+
+    expect(got).toHaveLength(1);
+    expect(got[0]).toMatchObject({ type: "agent/progress", label: "首段" });
+    abandoned.then(() => {}); // 已被 clear 以 done 收尾，避免 unhandled
+  });
 });

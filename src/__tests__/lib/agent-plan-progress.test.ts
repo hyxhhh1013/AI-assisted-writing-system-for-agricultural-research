@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import type { AgentPlan } from "@/contracts/agent";
 import {
   advancePlanAfterTool,
-  buildFocusNudge,
   getFocusSubtask,
   markFocusRunning,
   planHasPendingWork,
@@ -46,12 +45,6 @@ describe("plan-progress", () => {
     const next = advancePlanAfterTool(p, "generate_outline", true);
     expect(next?.subtasks[0].status).toBe("done");
     expect(planHasPendingWork(next)).toBe(false);
-  });
-
-  it("builds focus nudge", () => {
-    const text = buildFocusNudge(markFocusRunning(plan()));
-    expect(text).toContain("【计划焦点】");
-    expect(text).toContain("检索文献");
   });
 });
 

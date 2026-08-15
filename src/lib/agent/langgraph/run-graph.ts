@@ -9,6 +9,7 @@ import { buildPriorConversationMessages } from "@/lib/agent/conversation-continu
 import {
   applyCheckpointDecisionPatch,
   decisionMessage,
+  resolveCheckpointKind,
 } from "@/lib/agent/core/checkpoints";
 import {
   createAntispamTracker,
@@ -236,13 +237,8 @@ export async function* runAgentGraphLoop(
       uiTranscript = seedUiTranscript(goal);
     }
     if (checkpointDecision) {
-      const kind =
-        pendingCheckpointKind
-        ?? (checkpointDecision.checkpointId.includes("config")
-          ? "config_confirm"
-          : checkpointDecision.checkpointId.includes("blueprint")
-            ? "blueprint_approve"
-            : "outline_approve");
+      // 与 applyCheckpointDecision / resolveCheckpointKind 同源，避免 clarify 等回退成 outline
+      const kind = resolveCheckpointKind(checkpointDecision, pendingCheckpointKind);
       uiTranscript = [
         ...uiTranscript,
         {
@@ -669,9 +665,17 @@ export class LiveEventQueue {
     }
   }
 
-  /** 丢弃已缓冲但未消费的实时事件（确认续跑执行结束后的陈旧进度等） */
+  /**
+   * 丢弃已缓冲但未消费的实时事件（确认续跑执行结束后的陈旧进度等）。
+   * 同时摘掉被 Promise.race 抛弃的 waiter：确认执行循环里 `next()` 的败者会残留一个
+   * 无人 await 的 waiter，若不清理，恢复后首个实时事件会被它吞掉（事件丢失）。
+   */
   clear(): void {
     this.items = [];
+    this.pending = null;
+    for (const waiter of this.waiters.splice(0)) {
+      waiter({ done: true, value: undefined as never });
+    }
   }
 
   next(): Promise<IteratorResult<AgentSSEEvent>> {

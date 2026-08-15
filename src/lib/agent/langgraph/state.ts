@@ -1,4 +1,4 @@
-import { Annotation } from "@langchain/langgraph";
+import { Annotation, type LangGraphRunnableConfig } from "@langchain/langgraph";
 import type {
   AgentCheckpointKind,
   AgentCheckpointRequest,
@@ -10,6 +10,7 @@ import { COST_LIMITS } from "@/lib/agent/core/safety";
 import { planHasPendingWork } from "@/lib/agent/core/plan-progress";
 import { analyzeReflection, MAX_REFLECT_ROUNDS } from "@/lib/agent/core/reflect";
 import { lastFigureQaNeedsReplace } from "@/lib/agent/figure-loop";
+import { getAgentGraphRuntime } from "@/lib/agent/langgraph/runtime";
 import type { LLMMessage, ParsedToolCall, ToolObservation } from "@/lib/agent/types";
 
 export const AgentGraphState = Annotation.Root({
@@ -135,8 +136,18 @@ export function shouldContinuePlanWork(state: {
   );
 }
 
-/** 纯函数：agent 节点后的路由（单测友好） */
-export function routeAfterAgent(state: AgentGraphStateType): AgentGraphRoute {
+/** agent 节点后的路由（单测友好：无 config 时预算回落 COST_LIMITS） */
+export function routeAfterAgent(
+  state: AgentGraphStateType,
+  config?: LangGraphRunnableConfig,
+): AgentGraphRoute {
+  // 预算以运行时为准（与 agentNode 用同一个 budget.maxIterations），
+  // 避免路由层与节点层对「最大迭代」各持一份常量、将来调整预算时分叉。
+  // 单测无 runtime / 缺 configurable 时回落常量，勿因空 config 抛错。
+  const maxIterations = config?.configurable?.agentRuntime
+    ? getAgentGraphRuntime(config.configurable).agentContext.budget.maxIterations
+    : COST_LIMITS.maxIterations;
+
   if (state.error || state.awaitingCheckpoint || state.awaitingConfirm) {
     return "finalize";
   }
@@ -147,7 +158,7 @@ export function routeAfterAgent(state: AgentGraphStateType): AgentGraphRoute {
       iteration: state.iteration,
       planContinueCount: state.planContinueCount,
       toolSummaries: state.toolSummaries,
-      maxIterations: COST_LIMITS.maxIterations,
+      maxIterations,
     })
   ) {
     return "agent";
@@ -155,7 +166,7 @@ export function routeAfterAgent(state: AgentGraphStateType): AgentGraphRoute {
   // 图质检未通过：即使 finished / 续跑计数耗尽，仍回 agent（安全阀=maxIterations）
   if (
     lastFigureQaNeedsReplace(state.observations)
-    && state.iteration < COST_LIMITS.maxIterations
+    && state.iteration < maxIterations
   ) {
     return "agent";
   }
@@ -163,7 +174,7 @@ export function routeAfterAgent(state: AgentGraphStateType): AgentGraphRoute {
   if (
     state.planContinueCount > 0
     && state.planContinueCount <= MAX_INTENT_CONTINUES
-    && state.iteration < COST_LIMITS.maxIterations
+    && state.iteration < maxIterations
   ) {
     return "agent";
   }

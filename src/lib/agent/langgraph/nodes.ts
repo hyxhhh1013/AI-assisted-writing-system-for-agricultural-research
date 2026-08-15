@@ -120,6 +120,7 @@ export async function planNode(
     // S2：缺配置时先停（须在「已有 plan 续跑」之前，否则永远看不到问答）
     if (
       shouldPauseForConfigConfirm({
+        goal: state.goal,
         hasPaperConfig: Boolean(agentContext.projectSnapshot?.hasPaperConfig),
         approvedKinds: state.approvedCheckpointKinds ?? [],
       })

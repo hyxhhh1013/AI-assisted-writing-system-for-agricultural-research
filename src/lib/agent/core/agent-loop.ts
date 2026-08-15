@@ -5,6 +5,7 @@ import {
 } from "@/lib/agent/core/safety";
 import { runAgentGraphLoop } from "@/lib/agent/langgraph/run-graph";
 import { analyzeDirectionTool } from "@/lib/agent/tools/analyze-direction";
+import { registerTools } from "@/lib/agent/core/tool-registry";
 import { checkPlagiarismTool } from "@/lib/agent/tools/check-plagiarism";
 import { checkConsistencyTool } from "@/lib/agent/tools/check-consistency";
 import { rewritePlagiarismTool } from "@/lib/agent/tools/rewrite-plagiarism";
@@ -77,7 +78,7 @@ export function createAgentContext(params: {
 }
 
 export function createReadOnlyTools(): ToolDefinition[] {
-  return [
+  return registerTools([
     askUserTool,
     readAttachmentTool,
     listAttachmentsTool,
@@ -104,7 +105,7 @@ export function createReadOnlyTools(): ToolDefinition[] {
     runReviewRoundsTool,
     parseRevisionCommentsTool,
     exportManuscriptMarkdownTool,
-  ];
+  ]);
 }
 
 /** 只读 + 可选写工具（AGENT_WRITE_ENABLED=1） */
@@ -129,5 +130,5 @@ export function createAgentTools(): ToolDefinition[] {
       removeReferencesTool,
     );
   }
-  return tools;
+  return registerTools(tools);
 }

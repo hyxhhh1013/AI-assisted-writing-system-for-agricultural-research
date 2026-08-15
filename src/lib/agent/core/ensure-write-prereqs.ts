@@ -109,37 +109,3 @@ export async function ensureNextWritePrerequisite(
   await refresh();
   return { ok: true, ran, steps };
 }
-
-/**
- * 在 write_section / refine_content 前补齐全部缺失前置；已齐则 no-op。
- * 保留给不需要逐步批准检查点的调用方（普通对话 / 非 ap-full 目标）。
- * @param refresh 每步成功后刷新 projectSnapshot（由调用方注入，避免环依赖）
- */
-export async function ensureWritePrerequisites(
-  ctx: AgentContext,
-  tools: ToolDefinition[],
-  refresh: () => Promise<void>,
-): Promise<EnsureWritePrereqsResult> {
-  const ran: WritePrereqStep[] = [];
-  const steps: EnsureWritePrereqsResult["steps"] = [];
-
-  // 最多三轮：每轮按当前快照看还缺什么（大纲生成后才允许蓝图）
-  for (let round = 0; round < 3; round++) {
-    const r = await ensureNextWritePrerequisite(ctx, tools, refresh);
-    ran.push(...r.ran);
-    steps.push(...r.steps);
-    if (!r.ok) return { ...r, ran, steps };
-    if (r.ran.length === 0) break;
-  }
-
-  const still = listMissingWritePrereqs(ctx.projectSnapshot);
-  if (still.length > 0) {
-    return {
-      ok: false,
-      ran,
-      steps,
-      error: `自动补齐后仍缺：${still.join(" → ")}`,
-    };
-  }
-  return { ok: true, ran, steps };
-}

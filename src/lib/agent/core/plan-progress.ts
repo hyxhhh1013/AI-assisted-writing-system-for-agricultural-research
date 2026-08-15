@@ -134,22 +134,6 @@ export function advancePlanAfterTool(
   };
 }
 
-/** 注入到 messages，约束模型先做当前子任务 */
-export function buildFocusNudge(plan: AgentPlan | null | undefined): string | null {
-  const focus = getFocusSubtask(plan);
-  if (!focus) return null;
-  const pending = plan?.subtasks.filter((s) => s.status === "pending" || s.status === "running") ?? [];
-  const rest = pending
-    .filter((s) => s.id !== focus.id)
-    .map((s) => `- ${s.title}`)
-    .join("\n");
-  return [
-    `【计划焦点】请优先完成子任务「${focus.title}」（id=${focus.id}）。`,
-    "完成后若仍有未完成子任务，继续调用工具，不要提前结束。",
-    rest ? `剩余子任务：\n${rest}` : "这是最后一项计划任务。",
-  ].join("\n");
-}
-
 export function buildContinueNudge(plan: AgentPlan): string {
   const focus = getFocusSubtask(plan);
   const lines = plan.subtasks

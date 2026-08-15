@@ -38,12 +38,39 @@ describe("agent checkpoints", () => {
     ).toBe(false);
   });
 
-  it("requires config confirm when missing", () => {
+  it("requires config confirm only for writing/full goals when missing", () => {
     expect(
-      shouldPauseForConfigConfirm({ hasPaperConfig: false, approvedKinds: [] }),
+      shouldPauseForConfigConfirm({
+        goal: "按 academic-paper 写完整篇",
+        hasPaperConfig: false,
+        approvedKinds: [],
+      }),
     ).toBe(true);
     expect(
       shouldPauseForConfigConfirm({
+        goal: "帮我写引言",
+        hasPaperConfig: false,
+        approvedKinds: [],
+      }),
+    ).toBe(true);
+    // 与论文配置无关的目标不应被配置问答拦一道
+    expect(
+      shouldPauseForConfigConfirm({
+        goal: "帮我检索几篇生物炭文献",
+        hasPaperConfig: false,
+        approvedKinds: [],
+      }),
+    ).toBe(false);
+    expect(
+      shouldPauseForConfigConfirm({
+        goal: "帮我看看项目现状",
+        hasPaperConfig: false,
+        approvedKinds: [],
+      }),
+    ).toBe(false);
+    expect(
+      shouldPauseForConfigConfirm({
+        goal: "按 academic-paper 写完整篇",
         hasPaperConfig: false,
         approvedKinds: ["config_confirm"],
       }),

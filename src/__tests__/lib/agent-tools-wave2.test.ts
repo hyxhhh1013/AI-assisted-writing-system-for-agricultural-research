@@ -24,6 +24,11 @@ vi.mock("@/lib/agent/chart-persist", () => ({
     imageUrl: "/api/charts/test.png",
     createdAt: Date.now(),
   })),
+  // P0 防叠图：同 caption/section 已有图时自动填 replace；mock 返回空列表 = 无已有图
+  listAgentCharts: vi.fn(async () => []),
+  // 章节插图写入（原 appendAgentSectionMarkdown 已重构至此）
+  insertOrReplaceAgentSectionImage: vi.fn(async () => ({ mode: "appended" })),
+  removeAgentChart: vi.fn(async () => ({})),
 }));
 
 vi.mock("@/lib/xrd-scherrer-runner", () => ({
@@ -192,7 +197,7 @@ describe("agent tools wave2", () => {
   });
 
   it("generate_chart inserts into section when sectionKey set", async () => {
-    const { appendAgentSectionMarkdown } = await import("@/lib/agent/project-persist");
+    const { insertOrReplaceAgentSectionImage } = await import("@/lib/agent/chart-persist");
     const result = await generateChartTool.execute(
       {
         chartType: "line",
@@ -203,8 +208,8 @@ describe("agent tools wave2", () => {
       baseCtx,
     );
     expect(result.success).toBe(true);
-    expect(result.data).toMatchObject({ insertedSection: "results" });
-    expect(appendAgentSectionMarkdown).toHaveBeenCalled();
+    expect(result.data).toMatchObject({ insertedSection: "results", insertMode: "appended" });
+    expect(insertOrReplaceAgentSectionImage).toHaveBeenCalled();
     expect(result.summary).toMatch(/插入章节/);
   });
 
