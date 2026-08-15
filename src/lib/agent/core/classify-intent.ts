@@ -1,6 +1,9 @@
 /**
  * 每轮只分类一次：跟聊短回复继承快照 kind，明确换任务才重判。
- * 不上 LLM。不一致只打日志。
+ * 不上 LLM。不一致只打日志（goal 正则 vs observations、inherit vs observations）。
+ *
+ * W3-AP-INTENT-SHADOW **cancelled**（2026-08-15）：跟聊「A/继续/好」已是 inherit，
+ * 规定的影子触发在 source=regex，测不到跟聊；无标注样本则不往热路径加 LLM 分类。
  */
 
 import type { IntentKind } from "@/contracts/agent-intent";

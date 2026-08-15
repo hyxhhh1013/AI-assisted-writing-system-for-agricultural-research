@@ -23,6 +23,12 @@ describe("classifyIntent", () => {
     );
   });
 
+  it("follow-ups stay inherit so a regex-only LLM shadow would never see them", () => {
+    for (const goal of ["A", "继续", "好", "ok"]) {
+      expect(classifyIntent({ goal, previousKind: "draft" }).source).toBe("inherit");
+    }
+  });
+
   it("reclassifies when the user clearly switches tasks", () => {
     const result = classifyIntent({
       goal: "检查引用编号对不对",

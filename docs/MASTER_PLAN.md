@@ -1,6 +1,6 @@
 # 禾书耕文（GrainScript）整体规划 v2
 
-> **状态**：生效中（2026-08-15：Wave 3.9 意图状态化挂载；3.8 已收口）  
+> **状态**：生效中（2026-08-15：Wave 3.9 已收口；3.8 已收口）  
 > **取代**：分散的「部分规划」作为唯一战略主轴；任务状态以 `ENGINEERING_OPTIMIZATION_QUEUE.md` **§1 Phase 11 / 11b / 11c / 11d** 为准  
 > **北极星**：从「功能齐全的 AI 写作工具箱」→「可走完一篇论文全生命周期的科研写作系统」
 
@@ -18,7 +18,7 @@
 | Wave 3.6 Agent 行为可靠 | ✅ 已收口 | [`plans/W3-AP-BEHAVIOR.md`](./plans/W3-AP-BEHAVIOR.md)：剧本 eval → 压空转 → 先读后写 |
 | Wave 3.7 Agent 写作质量 | ✅ 完成 | [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md)：引用接地/分节完整/WQC/摘要/审查/LIVE-EVAL 全落地（2026-08-06） |
 | Wave 3.8 Agent 单面 + 数据闭环 | ✅ 本波已落地 | [`plans/W3-AP-AGENT-HUB.md`](./plans/W3-AP-AGENT-HUB.md)：附件=唯一上传口；结果章硬门禁；Tab 收敛。队列 Phase 11c |
-| Wave 3.9 意图状态化 + 质量尺 | 📋 规划生效 | [`plans/W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md)：intentKind 进快照；规则 SSOT；收口默认 claim grounding。队列 Phase 11d |
+| Wave 3.9 意图状态化 + 质量尺 | ✅ 已收口 | [`plans/W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md)：intentKind 进快照；规则 SSOT；收口默认 claim grounding；SHADOW cancelled。队列 Phase 11d |
 | Wave 4 导出抛光 | ⚠️ backlog | **W4-EXPORT** done；LaTeX/disclosure 等让路给 3.7 |
 | 从 Demo→完整产品 | 📋 规划生效 | 见 [`PRODUCT_COMPLETION_PLAN.md`](./PRODUCT_COMPLETION_PLAN.md) |
 | `/academic-paper` | ➡️ 引导页 | **不是**第二套流水线；只引导进工作台 **Agent Tab** |
@@ -199,19 +199,19 @@ Wave 2 产品化三项已完成。
 
 附件=唯一上传口；研究型空数据拒写 results；Tab 收敛为 Agent+编辑器。详规 [`plans/W3-AP-AGENT-HUB.md`](./plans/W3-AP-AGENT-HUB.md)。
 
-### Wave 3.9 — 意图状态化 + 规则 SSOT + 质量可度量（当前主轴）
+### Wave 3.9 — 意图状态化 + 规则 SSOT + 质量可度量（已收口）
 
 | 项 | 状态 | 说明 |
 |----|------|------|
-| **W3-AP-INTENT-QUALITY** | 📋 todo | 主轴；详规 [`plans/W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md) |
+| **W3-AP-INTENT-QUALITY** | ✅ done | 主轴收口；详规 [`plans/W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md) |
 | W3-AP-INTENT-01 | ✅ done | `intentKind` 进快照；跟聊继承；不上 LLM 分类 |
 | W3-AP-INTENT-02 | ✅ done | gate/nudge 只消费 kind |
 | W3-AP-RULES-01 | ✅ done | `AGENT_RULES` 单一事实源 |
 | W3-AP-QUALITY-CLAIM | ✅ done | 收口默认 claim grounding；写节自查不跑 |
 | W3-AP-QUALITY-JUDGE | ✅ done | LLM-judge 仅 `eval:quality`；规则尺仍是 CI 地板 |
-| W3-AP-INTENT-SHADOW | todo | 可选影子分类；允许 cancelled |
+| W3-AP-INTENT-SHADOW | cancelled | 跟聊 inherit 已覆盖；regex 影子测不到跟聊；无标注样本 |
 
-原则：冻口语门禁；冻 LangGraph 拓扑；不把 LLM-judge 接进热路径。
+原则：冻口语门禁；冻 LangGraph 拓扑；不把 LLM-judge 接进热路径；不重开 SHADOW。
 
 ### Wave 4 — 导出与抛光（backlog）
 

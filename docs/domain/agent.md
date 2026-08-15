@@ -209,7 +209,7 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 
 **即刻冻结**：不准再往 `goal-intents.ts` 加口语 `isXxxGoal` / `checkXxxGate`。领域不变量（空数据、越界引用）与事故型安全门除外。
 
-**已落地 INTENT-01 + INTENT-02 + RULES-01 + QUALITY-CLAIM + QUALITY-JUDGE**：`contracts/agent-intent.ts`；`classifyIntent` 每轮一次；跟聊短回复继承 `snapshot.intentKind`。gate / `nudgeForKind` 只消费 kind。`AGENT_RULES`（`core/agent-rules.ts`）是 prompt / nudge / results 硬拦文案的单一事实源；第一批 5 条。收口默认 claim grounding。`eval:quality` 同时打规则分 + 可选 LLM 分（不进写节热路径）。下一刀可选 **INTENT-SHADOW**（允许 cancelled）。
+**已收口（2026-08-15）**：INTENT-01/02、RULES-01、QUALITY-CLAIM、QUALITY-JUDGE。`classifyIntent` 每轮一次；跟聊短回复继承 `snapshot.intentKind`。gate / `nudgeForKind` 只消费 kind。`AGENT_RULES` 单一事实源（5 条）。收口默认 claim grounding。`eval:quality` 规则分 + 可选 LLM 分（不进写节）。**INTENT-SHADOW cancelled**：跟聊 inherit 已覆盖「A/继续」；规定的影子触发在 `source=regex`，测不到跟聊；无标注样本则不上热路径 LLM 分类。
 
 ## 机理图 / 识图自检（2026-08-09）
 

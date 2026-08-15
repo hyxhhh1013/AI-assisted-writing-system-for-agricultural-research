@@ -1,6 +1,6 @@
 # W3-AP-INTENT-QUALITY：意图状态化 + 规则 SSOT + 质量可度量
 
-> **状态**：规划生效（2026-08-15）  
+> **状态**：已收口（2026-08-15）；INTENT-SHADOW **cancelled**  
 > **队列**：[`ENGINEERING_OPTIMIZATION_QUEUE.md`](../ENGINEERING_OPTIMIZATION_QUEUE.md) §1 Phase 11d  
 > **域文档**：[`domain/agent.md`](../domain/agent.md)  
 > **前置诊断**：控制面靠 prompt + 正则 + 门禁三层堆叠；`IntentKind` 已存在但只用来挑 nudge；质量尺仍是启发式，claim grounding 默认关。  
@@ -109,10 +109,9 @@ AgentSessionSnapshot.intentKind
 | 3 | **W3-AP-RULES-01** | `AGENT_RULES` 单一事实源；prompt/nudge 渲染；hard 才进 gate | 1d | 02 | **done** 2026-08-15 |
 | 4 | **W3-AP-QUALITY-CLAIM** | 收口路径默认开 claim grounding；`=0` 才关 | 0.5d | — | **done** 2026-08-15 |
 | 5 | **W3-AP-QUALITY-JUDGE** | LLM-judge 只进 `eval:quality`，不进热路径 | 1d | CLAIM 或并行 | **done** 2026-08-15 |
-| 6 | **W3-AP-INTENT-SHADOW** | 可选：LLM 分类影子模式，与正则对照记日志 | 0.5d | 01 | **有数据再决定是否 promote** |
+| 6 | **W3-AP-INTENT-SHADOW** | 可选：LLM 分类影子模式，与正则对照记日志 | 0.5d | 01 | **cancelled** 2026-08-15 |
 
-推荐开干顺序：**INTENT-SHADOW**（INTENT-01/02、RULES-01、QUALITY-CLAIM、QUALITY-JUDGE 已于 2026-08-15 落地）。  
-SHADOW 不是入场券：01 的跟聊继承若已修好「A/继续」，LLM 增量可能很小，允许结论为「不 promote」。
+Wave 3.9 必做项已落地。SHADOW 按任务单允许 cancelled，理由见 §4。
 
 ---
 
@@ -220,15 +219,20 @@ SHADOW 不是入场券：01 的跟聊继承若已修好「A/继续」，LLM 增�
 
 ---
 
-### W3-AP-INTENT-SHADOW — LLM 分类影子（可选）
+### W3-AP-INTENT-SHADOW — LLM 分类影子 **cancelled** 2026-08-15
 
-**目标：** 用数据决定要不要替换正则分类器，而不是先重写。
+**目标（原）：** 用数据决定要不要替换正则分类器，而不是先重写。
 
-**实现顺序：**
+**结论：cancelled（无增量）。** 不上影子 LLM，也不 promote 分类器。
 
-1. `classifyIntent` 在 `source: "regex"` 时异步再跑一次便宜模型，输出必须是 `IntentKind`
-2. 不一致只记日志，**不**写快照
-3. 收集 10～20 条真实跟聊后再决定 promote；若 inherit 已覆盖「A/继续」，允许 **cancelled（数据不足 / 无增量）**
+| 理由 | 证据 |
+|------|------|
+| 跟聊失败模式已被 inherit 覆盖 | `goal=A/继续/好` + `previousKind` → `source: "inherit"`（`agent-classify-intent.test.ts`） |
+| 规定触发测不到跟聊 | 任务单写「`source: "regex"` 时再跑 LLM」；跟聊根本不进 regex |
+| 没有 promote 所需样本 | 未收集 10～20 条标注过的误分类；先上热路径 LLM 等于未测先写 |
+| 已有廉价对照日志 | `classifyIntent` 已记 goal 正则 vs observations、inherit vs observations |
+
+重开条件：有标注样本证明**首轮完整 utterance** 的正则 kind 系统性错，且 inherit 救不了。那时再开独立 PR，默认关、只记日志、不写快照。
 
 ---
 
@@ -252,6 +256,7 @@ SHADOW 不是入场券：01 的跟聊继承若已修好「A/继续」，LLM 增�
 - 不改 Prisma raw SQL / Turbopack workaround  
 - 不动 `context.budget` 双账本 / `projectDirty`（意图进快照之后若再咬人再开 PR）  
 - 不回头改 3.8 已收口的导航 / 配图坞 / `/plot`（除非回归失败）
+- 不重开 INTENT-SHADOW / 不上热路径 LLM 分类（除非有标注过的正则误分类样本）
 
 ---
 
