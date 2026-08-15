@@ -1,7 +1,7 @@
 # 禾书耕文（GrainScript）整体规划 v2
 
-> **状态**：生效中（2026-07-28：Wave 3.7 质量主轴挂载）  
-> **取代**：分散的「部分规划」作为唯一战略主轴；任务状态以 `ENGINEERING_OPTIMIZATION_QUEUE.md` **§1 Phase 11 / 11b** 为准  
+> **状态**：生效中（2026-08-15：Wave 3.8 Agent 单面 + 数据闭环挂载）  
+> **取代**：分散的「部分规划」作为唯一战略主轴；任务状态以 `ENGINEERING_OPTIMIZATION_QUEUE.md` **§1 Phase 11 / 11b / 11c** 为准  
 > **北极星**：从「功能齐全的 AI 写作工具箱」→「可走完一篇论文全生命周期的科研写作系统」
 
 ---
@@ -17,10 +17,11 @@
 | Wave 3.5 Agent≈AP 编排 | ✅ 能力桥收口 | LIT/CONFIG/CHART/MULTI-TURN done；见 orchestration 计划 |
 | Wave 3.6 Agent 行为可靠 | ✅ 已收口 | [`plans/W3-AP-BEHAVIOR.md`](./plans/W3-AP-BEHAVIOR.md)：剧本 eval → 压空转 → 先读后写 |
 | Wave 3.7 Agent 写作质量 | ✅ 完成 | [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md)：引用接地/分节完整/WQC/摘要/审查/LIVE-EVAL 全落地（2026-08-06） |
+| Wave 3.8 Agent 单面 + 数据闭环 | 📋 规划生效 | [`plans/W3-AP-AGENT-HUB.md`](./plans/W3-AP-AGENT-HUB.md)：附件=唯一上传口；结果章硬门禁；Tab 收敛。队列 Phase 11c |
 | Wave 4 导出抛光 | ⚠️ backlog | **W4-EXPORT** done；LaTeX/disclosure 等让路给 3.7 |
 | 从 Demo→完整产品 | 📋 规划生效 | 见 [`PRODUCT_COMPLETION_PLAN.md`](./PRODUCT_COMPLETION_PLAN.md) |
 | `/academic-paper` | ➡️ 引导页 | **不是**第二套流水线；只引导进工作台 **Agent Tab** |
-| 产品主入口 | 工作台 | 人控 Tab + 自主 Agent Tab；质量中心 / 知识库为深链 |
+| 产品主入口 | 工作台 **Agent Tab** | 人控 Tab 降为专家抽屉（Wave 3.8）；质量中心 / 知识库 / `/plot` 为深链 |
 
 **唯一叙事（勿再平行造入口）：**
 

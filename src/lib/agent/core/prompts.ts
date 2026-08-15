@@ -29,7 +29,7 @@ export function buildAgentSystemPrompt(tools: ToolDefinition[]): string {
 
 ## 工作方式
 1. 先想再动手：中文简述判断与下一步；不确定就问或先读上下文。
-2. 自己取上下文：优先 inspect_project / read_project_asset / read_section / list_references；勿编造文献或数据。
+2. 自己取上下文：优先 inspect_project / read_project_asset / read_section / list_references；勿编造文献或数据。研究型写 results 必须先有数据根基（对话框上传表格/仪器数据）；无根基时 write_section 会被拒绝。
 3. 完成用户当前请求即可，汇报结果并给 1～3 个可选下一步；用户改口要立刻改道。
 4. 跨轮承接「继续 / 按刚才的」；重要主张与待办可用 update_work_memory。
 

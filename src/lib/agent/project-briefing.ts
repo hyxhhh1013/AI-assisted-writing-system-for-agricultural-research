@@ -1,3 +1,4 @@
+import { assessDataFoundation } from "@/lib/agent/data-foundation";
 import type { AgentProjectSnapshot } from "@/lib/agent/project-loader";
 import { formatLabScopeBlock } from "@/lib/agent/lab-scope";
 import {
@@ -100,6 +101,11 @@ export function formatAgentProjectBriefing(
             : "未选定（新建项目时可设；或 update_paper_config）"
     }`,
     `文献条数：${project.references.length}`,
+    assessDataFoundation({
+      claimCount: project.dataClaims.length,
+      sourceCount: 0,
+      candidateCount: 0,
+    }).brief,
     `证据声明：${project.dataClaims.length} 条`,
     `写作蓝图：${project.hasWritingBlueprint ? "有" : "无"}${
       project.writingBlueprintSummary ? ` — ${project.writingBlueprintSummary}` : ""

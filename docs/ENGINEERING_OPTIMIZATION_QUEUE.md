@@ -9,7 +9,7 @@
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
 > **最后更新**：2026-08-06（**全部 todo 清零**：W3-AP-QUALITY 全子项 + W0-5 仓库卫生 done）  
-> **实时 status 只看 §1 Phase 11**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
+> **实时 status 只看 §1 Phase 11 / 11b / 11c**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
 
@@ -227,6 +227,16 @@
 | W3-AP-FIG-UX | Agent 改图表单 + 节末落盘说明/跳转 + 编辑器插图挪位 | W3-AP-FIG-LOOP | 0.5d | **done** | 2026-08-09；表单为主，位置后挪 |
 | W3-AP-FIG-DOCK-P2 | 配图坞免翻聊天 + /plot 回写 replace + 改图快捷项 | W3-AP-FIG-UX | 0.5d | **done** | 2026-08-09；输入区上方坞；plot?replaceImageUrl |
 | W3-AP-ATTACH-UX | 附件提取时序提示 + 写作进度可见性 + extract_failed 自动重试 + xlsx Turbopack 兼容 | W3-AP-WRITE-DISCIPLINE | 0.5d | **done** | 2026-08-08；manifest/read_attachment 提示「提取中稍后重试」+ WritingStatusCard 0 字显示「等待 AI 输出」+ `retryAttachmentExtraction` + xlsx 改 `fs.readFileSync`→`XLSX.read`；全量 1020 通过 |
+| **Phase 11c — Wave 3.8 Agent 单面工作台 + 数据闭环** |
+| **W3-AP-AGENT-HUB** | **主轴：附件=唯一上传口；数据根基；结果章硬门禁；Tab 收敛** | W3-AP-QUALITY | 1～2w | **doing** | 详规 [`plans/W3-AP-AGENT-HUB.md`](./plans/W3-AP-AGENT-HUB.md) |
+| W3-AP-DATA-01 | 数据根基判定 + 研究型 results 硬门禁 + inspect/简报同源 | — | 0.5d | **done** | 2026-08-15；`data-foundation.ts`；research+results+empty 拒写 |
+| W3-AP-DATA-02 | `ingest_project_data`：附件/粘贴 CSV → dataSources+dataClaims | DATA-01 | 1d | todo | 复用 `analyzeFile` |
+| W3-AP-HUB-01 | 附件芯片识别表格；上传完成自动 ingest | DATA-02 | 1d | todo | 用户不必喊工具名 |
+| W3-AP-DATA-03 | 仪器附件白名单；XRD 禁止裸 peaksJson | DATA-02 | 1d | todo | 峰表必须已入库 |
+| W3-AP-DATA-04 | 结果章数字对账（无声明新数字拒写） | DATA-01, DATA-02 | 0.5d | todo | |
+| W3-AP-HUB-02 | 工作台默认 Agent+编辑器；旧 Tab 进专家工具 | DATA-01～03 | 1d | todo | 不删路由 |
+| W3-AP-HUB-03 | `/plot` 降为配图坞精修抽屉 | FIG-DOCK | 0.5d | todo | |
+| — | 任务单细节 | — | — | — | [`plans/W3-AP-AGENT-HUB.md`](./plans/W3-AP-AGENT-HUB.md) |
 
 
 | 来源 | 本队列处理方式 |
@@ -237,6 +247,7 @@
 | `CLAUDE.md` p1-1～p3-5 | 映射见 §8 |
 | `docs/plans/ENG-PR-080-human-in-the-loop.md` | ENG-PR-087～086 + **096a～d** 任务单以该文 §0～§十六 为准；**096 为产品主轴**；合并时同步 §1 Phase 6 |
 | `docs/plans/W3-AP-QUALITY.md` | Wave 3.7 质量主轴任务单；合并时同步 §1 Phase 11b |
+| `docs/plans/W3-AP-AGENT-HUB.md` | Wave 3.8 Agent 单面 + 数据闭环；合并时同步 §1 Phase 11c |
 
 ### 1.2 已完成（勿重复开 PR）
 
@@ -1072,14 +1083,17 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-09 | W3-AP-FIG-UX | AI | 个性化改图：Agent 结构化表单替 window.prompt；结果卡落点说明+跳转；编辑器本节插图条挪位（节末策略）。 |
 | 2026-08-09 | W3-AP-FIG-DOCK-P2 | AI | 配图坞（输入区上方最近出图）；/plot 深链带 replaceImageUrl，插入对话框默认就地替换；改图表单快捷项（分叉/三面板/模板）。 |
 | 2026-08-09 | 部署 Turbopack hash | AI | 生产 Agent 500：`@prisma/client-<hash>` + `@napi-rs/canvas-<hash>` 缺失。`apply.sh` 改为扫描全部 hashed external 并链接；`@napi-rs/canvas` 升为直接依赖；DEPLOY.md 踩坑更新。 |
+| 2026-08-15 | 图表落盘不丢 | AI | 根因：图只在 `data/charts`，库只存 URL；`peakfit` 模块加载会删 1 小时前全部 PNG。已移除误删；`getChartsDir()` 统一目录并避开 `.next/standalone`。见 `docs/domain/figures-and-python.md` |
+| 2026-08-15 | W3-AP-AGENT-HUB | AI | 规划生效：Agent 单面工作台 + 数据闭环。附件=唯一上传口；四座孤岛诊断；PR 序 DATA-01→02→HUB-01→DATA-03/04→HUB-02/03。见 `docs/plans/W3-AP-AGENT-HUB.md`；队列 Phase 11c |
+| 2026-08-15 | W3-AP-DATA-01 | AI | 数据根基 `assessDataFoundation`；研究型 `write_section(results)` 在 empty 时硬拒（引导对话框上传，不推 data Tab）；inspect/简报/`list_plot_sources` 同源。单测 17 绿 |
 
 ---
 
 ## 5. 推荐执行顺序（给「下一次 AI」）
 
-**当前主轴（2026-07-28）**：**W3-AP-QUALITY** — Agent 写作质量（引用接地 → 分节完整 → 文风质检 → 摘要/审查收口）。  
-详规：[`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md)。  
-行为主轴已收口：[`plans/W3-AP-BEHAVIOR.md`](./plans/W3-AP-BEHAVIOR.md)。
+**当前主轴（2026-08-15）**：**W3-AP-AGENT-HUB** — Agent 单面工作台 + 数据闭环（附件上传 → 入库 → 结果章硬门禁 → Tab 收敛）。  
+详规：[`plans/W3-AP-AGENT-HUB.md`](./plans/W3-AP-AGENT-HUB.md)。  
+下一刀：`W3-AP-DATA-01`（无数据禁止空写 results）。
 
 | 优先级 | ID | 说明 |
 |--------|-----|------|

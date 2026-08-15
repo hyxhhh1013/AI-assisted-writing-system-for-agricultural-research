@@ -1,6 +1,7 @@
 import { formatAgentProjectBriefing } from "@/lib/agent/project-briefing";
 import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
 import { resolvePhaseTaskPack } from "@/lib/agent/phase-task-pack";
+import { assessDataFoundation } from "@/lib/agent/data-foundation";
 import { loadAgentPlotSources } from "@/lib/agent/plot-sources";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import {
@@ -60,6 +61,11 @@ export const inspectProjectTool: ToolDefinition = {
     const claimCount = project.dataClaims.length;
     const plotCandidates = plot?.candidates.length ?? 0;
     const existingCharts = plot?.existingChartCount ?? 0;
+    const dataFoundation = assessDataFoundation({
+      claimCount,
+      sourceCount: plot?.sources.length ?? 0,
+      candidateCount: plotCandidates,
+    });
 
     let citationGrounding: {
       suspiciousCount: number;
@@ -132,6 +138,7 @@ export const inspectProjectTool: ToolDefinition = {
         claimCount,
         plotCandidates,
         existingCharts,
+        dataFoundation,
         filledSections: filled,
         emptySections: empty,
         draftCoverage: {
@@ -157,7 +164,7 @@ export const inspectProjectTool: ToolDefinition = {
         skillHint: `academic-paper Phase ${pack.pack.phase}（${pack.pack.title}）→ 推荐 ${pack.pack.preferredTools.join(" → ") || "对话确认配置"}`,
         ...(includeBriefing ? { briefing } : {}),
       },
-      summary: `项目「${project.title}」阶段 ${project.currentPhase ?? "?"}（${pack.pack.title}）；空白节 ${empty.length}；文献 ${project.references.length}；证据 ${claimCount}；可配图 ${plotCandidates}${coverNote}${susNote}${softNote}。${nextNote}`,
+      summary: `项目「${project.title}」阶段 ${project.currentPhase ?? "?"}（${pack.pack.title}）；空白节 ${empty.length}；文献 ${project.references.length}；${dataFoundation.brief}；可配图 ${plotCandidates}${coverNote}${susNote}${softNote}。${nextNote}`,
     };
   },
 };

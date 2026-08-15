@@ -24,6 +24,12 @@ import {
   prepareAgentWriteBlueprintContext,
 } from "@/lib/agent/blueprint-write-context";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
+import {
+  assessDataFoundation,
+  resultsWriteBlockMessage,
+  shouldBlockResultsWrite,
+} from "@/lib/agent/data-foundation";
+import { loadAgentPlotSources } from "@/lib/agent/plot-sources";
 import { getAgentModelConfig } from "@/lib/ai";
 import { isSectionValidForMode } from "@/lib/section-registry";
 import type { WritingInput } from "@/lib/validations";
@@ -95,6 +101,18 @@ export const writeSectionTool: ToolDefinition = {
         success: false,
         error: `章节 ${sectionRaw} 与项目类型 ${project.mode} 不匹配`,
       };
+    }
+
+    if (shouldBlockResultsWrite(project.mode, sectionRaw, "empty")) {
+      const plot = await loadAgentPlotSources(ctx.userId, ctx.projectId);
+      const foundation = assessDataFoundation({
+        claimCount: project.dataClaims.length,
+        sourceCount: plot?.sources.length ?? 0,
+        candidateCount: plot?.candidates.length ?? 0,
+      });
+      if (shouldBlockResultsWrite(project.mode, sectionRaw, foundation.status)) {
+        return { success: false, error: resultsWriteBlockMessage() };
+      }
     }
 
     const subsectionTitleEarly = params.subsectionTitle

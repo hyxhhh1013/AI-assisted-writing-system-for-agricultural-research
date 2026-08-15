@@ -107,7 +107,7 @@ export function resolvePlotCandidate(
 export function noPlotDataGuidance(claimCount: number, existingCharts: number): string {
   const parts = [
     "项目里还没有可直接出图的试验数据表（dataSources / 推荐 ChartConfig 为空）。",
-    "请用户：① 在「数据」面板上传 CSV/Excel 并分析；或 ② 在对话里粘贴 CSV（含表头），再调用 generate_chart(csvData=...)。",
+    "请用户在 Agent 对话框上传 CSV/Excel（入库后即可出图/写结果）；也可粘贴 CSV 后 generate_chart(csvData=...) 或 ingest_project_data。",
   ];
   if (claimCount > 0) {
     parts.push(`目前有 ${claimCount} 条证据声明，但仍缺结构化表格；优先让用户补数据文件。`);

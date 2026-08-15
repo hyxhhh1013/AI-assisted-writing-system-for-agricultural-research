@@ -20,11 +20,11 @@
 | Tab | 职责 |
 |-----|------|
 | `structure` | 章节 + 参考文献 + Cockpit |
-| `data` | 实验数据 / AI 分析（主入口；旧 `/analysis` 重定向至此） |
-| `xrd` | 工作台内嵌 XRD |
+| `data` | 实验数据 / AI 分析（**Wave 3.8 起降为专家抽屉**；主上传口改为 Agent 附件，见 [`plans/W3-AP-AGENT-HUB.md`](./plans/W3-AP-AGENT-HUB.md)） |
+| `xrd` | 工作台内嵌 XRD（同样降为专家抽屉；仪器文件走 Agent 附件） |
 | `outline` | 论证提纲 / 写作蓝图（旧 `/outline` 重定向至此） |
 | `writing` | 协作扩写流水线（旧 `/writing` 重定向至此） |
-| `agent` | AI Agent（需 `NEXT_PUBLIC_AGENT_ENABLED=1`；写工具需 `AGENT_WRITE_ENABLED=1`） |
+| `agent` | **产品主入口**（需 `NEXT_PUBLIC_AGENT_ENABLED=1`；写工具需 `AGENT_WRITE_ENABLED=1`）。数据/出图/写结果主路径都在此 |
 | `reader` | 补录参考文献 |
 | `plagiarism` | 查重侧栏（精简）；完整质量中心见 `/plagiarism` |
 

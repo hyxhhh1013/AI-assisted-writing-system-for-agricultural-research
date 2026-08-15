@@ -1,3 +1,4 @@
+import { assessDataFoundation } from "@/lib/agent/data-foundation";
 import {
   loadAgentPlotSources,
   noPlotDataGuidance,
@@ -38,6 +39,12 @@ export const listPlotSourcesTool: ToolDefinition = {
       || params.includeClaimSample === "true"
       || params.includeClaimSample === "1";
 
+    const foundation = assessDataFoundation({
+      claimCount: bundle.claims.length,
+      sourceCount: bundle.sources.length,
+      candidateCount: bundle.candidates.length,
+    });
+
     if (bundle.candidates.length === 0) {
       const guidance = noPlotDataGuidance(
         bundle.claims.length,
@@ -50,6 +57,7 @@ export const listPlotSourcesTool: ToolDefinition = {
           candidateCount: 0,
           claimCount: bundle.claims.length,
           existingChartCount: bundle.existingChartCount,
+          dataFoundation: foundation,
           candidates: [],
           guidance,
           sources: bundle.sources.map((s) => ({
@@ -77,6 +85,7 @@ export const listPlotSourcesTool: ToolDefinition = {
         candidateCount: bundle.candidates.length,
         claimCount: bundle.claims.length,
         existingChartCount: bundle.existingChartCount,
+        dataFoundation: foundation,
         candidates: bundle.candidates,
         claimSample,
         howTo:
