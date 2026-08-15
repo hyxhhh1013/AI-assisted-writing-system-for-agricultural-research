@@ -1,6 +1,8 @@
 /**
  * 质量评测聚合：四个维度加权得到 overallScore（0-100）。
  * 权重向「引用支撑」倾斜——它是论文「可不可信」的最强信号。
+ *
+ * 保持同步纯函数。LLM-judge 在 llm-judge.ts，由 eval:quality 单独调用，勿从此文件 import。
  */
 
 import {

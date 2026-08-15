@@ -209,7 +209,7 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 
 **即刻冻结**：不准再往 `goal-intents.ts` 加口语 `isXxxGoal` / `checkXxxGate`。领域不变量（空数据、越界引用）与事故型安全门除外。
 
-**已落地 INTENT-01 + INTENT-02 + RULES-01**：`contracts/agent-intent.ts`；`classifyIntent` 每轮一次；跟聊短回复继承 `snapshot.intentKind`。gate / `nudgeForKind` 只消费 kind。`AGENT_RULES`（`core/agent-rules.ts`）是 prompt / nudge / results 硬拦文案的单一事实源；第一批 5 条。下一刀 **QUALITY-JUDGE**（仅 eval，不进热路径）。
+**已落地 INTENT-01 + INTENT-02 + RULES-01 + QUALITY-CLAIM + QUALITY-JUDGE**：`contracts/agent-intent.ts`；`classifyIntent` 每轮一次；跟聊短回复继承 `snapshot.intentKind`。gate / `nudgeForKind` 只消费 kind。`AGENT_RULES`（`core/agent-rules.ts`）是 prompt / nudge / results 硬拦文案的单一事实源；第一批 5 条。收口默认 claim grounding。`eval:quality` 同时打规则分 + 可选 LLM 分（不进写节热路径）。下一刀可选 **INTENT-SHADOW**（允许 cancelled）。
 
 ## 机理图 / 识图自检（2026-08-09）
 
@@ -260,9 +260,9 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 - 契约：`contracts/citation-claim-grounding.ts`；单测：`src/__tests__/lib/citation-claim-grounding.test.ts`（fake judge，无 key）。
 - 接入 `validate_citations`：**收口路径默认开**（`intentKind` 为 citation / citation_apply / abstract_finish / review_request / ap_full / pipeline_*；无 kind 时按 goal 正则回退；无 goal 的直接调用视为显式核查）。写节 / 综述起草（`draft` / `review_write`）的 reflect 自查**不跑**，避免每节烧 verifier。文献无摘要则 skip。`CITATION_CLAIM_GROUNDING=0`（或 `false`/`off`）全局关闭。失败（无 key/超时/解析失败）降级为 `claimGrounding: null`，不阻断主流程。结果并入 `data.claimGrounding`，summary 追加 `【claim 接地】`。contradict 是「可判定且确实错引」的强信号，供 Agent 优先改引/改写。
 
-### 论文质量评测集（一把量质量的尺子）
+### 论文质量评测集（两把尺）
 
-`lib/quality-eval/`：确定性四维打分（不调 LLM，可进 CI），让 prompt/门禁改动从「盲调」变「可度量」：
+`lib/quality-eval/`：规则尺是 CI 地板（不调 LLM）；模型尺只给 `eval:quality` 做回归对照，**禁止**从 `write_section` / `toolsNode` 调用。
 
 | 维度 | 检查 |
 |------|------|
@@ -271,14 +271,16 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 | consistency 跨节一致性 | 结果有数值但结论没回扣 → 脱节风险；方法英文术语未在结果出现 → 脱节 |
 | overclaim 结论语气克制 | overclaim 措辞扣分 vs hedge 加分 |
 
-- `evaluateQuality(input)` 加权得 `overallScore`（引用支撑权重最高 0.35）。
-- golden fixtures：`lib/quality-eval/fixtures.ts`（好/坏样例）；单测 `src/__tests__/eval/quality-eval.test.ts`。
+- 规则尺 `evaluateQuality(input)` 加权得 `overallScore`（引用支撑权重最高 0.35）；同步纯函数，可进 CI。
+- 模型尺 `evaluateQualityLlm(input, judge?)`（`llm-judge.ts`）：verifier 角色，四维 citation_support / data_conclusion / overclaim / coherence；可注入 fake。无 key / 超时 / 解析失败 → `skipped`，不把脚本打红。`--no-llm` 只打规则分。
+- golden fixtures：`lib/quality-eval/fixtures.ts`（好/坏样例）；单测 `quality-eval.test.ts` + `quality-llm-judge.test.ts`。
 - 脚本：`npm run eval:quality`（`scripts/eval-quality.ts`，无参输出好/坏对比，可传 manifest.json）。
 
-**注意**：词重叠/数值回扣是「代理信号」，claim 级 truthfulness 以 claim 接地为准；四维分数用于「判断方向」，不做硬门禁。
+**注意**：词重叠/数值回扣是「代理信号」，claim 级 truthfulness 以 claim 接地为准；规则分用于「判断方向」，不做硬门禁。LLM 分与规则分不可直接比绝对值（量纲不同），只看改完后两把尺是否同向。
 
 ## 常用命令
 
+- 质量评测：`npm run eval:quality`（规则分始终打印；有 verifier key 时加 LLM 分；`--no-llm` 只打规则）
 - Agent 端到端剧本：`npm run eval:agent`（`src/lib/eval/agent-scripts.ts`，P1~P6 + FILE-READ 断言）
 - 全量测试：`npx vitest run`（Agent 相关测试在 `src/__tests__/lib/agent-*.test.ts`、`src/__tests__/api/agent-*.test.ts`）
 - 测试注意：Agent 接口用 `x-user-id` header 会 401（proxy 需 session cookie）；测试方式是 JWT_SECRET 签 token 作 cookie，或用真实域名登录。

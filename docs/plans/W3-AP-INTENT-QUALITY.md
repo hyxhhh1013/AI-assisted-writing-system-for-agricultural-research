@@ -62,7 +62,7 @@ goal 字符串
 
 - `lib/quality-eval/` 四维确定性打分，可进 CI，但量不出「句意张冠李戴」
 - ~~`citation-claim-grounding` 要 `CITATION_CLAIM_GROUNDING=1` 才跑~~ **QUALITY-CLAIM done**：收口默认开，`=0` 才关
-- LLM-judge 未进 `eval:quality`
+- ~~LLM-judge 未进 `eval:quality`~~ **QUALITY-JUDGE done**：规则分始终打印；LLM 分无 key 则跳过
 
 LangGraph：`graph.ts` 42 行线性拓扑；暂停/续跑靠 `pendingToolCalls` 短路。本波 **冻拓扑**，不重写 interrupt/checkpoint。
 
@@ -93,6 +93,7 @@ AgentSessionSnapshot.intentKind
 | 纪律条文 | `AGENT_RULES[]` | 人改这一处 | `buildAgentSystemPrompt`、nudge 渲染、hard gate 只认 `severity: hard` |
 | 引用句意判定 | `claimGrounding`（validate 结果） | verifier 角色 LLM | Agent 改引；eval 对照 |
 | CI 质量地板 | `lib/quality-eval` 确定性四维 | 纯函数 | `npm run eval:quality`；**不**进热路径每轮写后 |
+| 回归对照尺 | `quality-eval/llm-judge.ts` | verifier LLM | 仅 `eval:quality`；无 key skip；禁止 write_section |
 
 ---
 
@@ -107,10 +108,10 @@ AgentSessionSnapshot.intentKind
 | 2 | **W3-AP-INTENT-02** | gate / skipPlanner / hint **只消费** `state.intentKind` | 1d | 01 | **done** 2026-08-15 |
 | 3 | **W3-AP-RULES-01** | `AGENT_RULES` 单一事实源；prompt/nudge 渲染；hard 才进 gate | 1d | 02 | **done** 2026-08-15 |
 | 4 | **W3-AP-QUALITY-CLAIM** | 收口路径默认开 claim grounding；`=0` 才关 | 0.5d | — | **done** 2026-08-15 |
-| 5 | **W3-AP-QUALITY-JUDGE** | LLM-judge 只进 `eval:quality`，不进热路径 | 1d | CLAIM 或并行 | 不碰 nodes |
+| 5 | **W3-AP-QUALITY-JUDGE** | LLM-judge 只进 `eval:quality`，不进热路径 | 1d | CLAIM 或并行 | **done** 2026-08-15 |
 | 6 | **W3-AP-INTENT-SHADOW** | 可选：LLM 分类影子模式，与正则对照记日志 | 0.5d | 01 | **有数据再决定是否 promote** |
 
-推荐开干顺序：**QUALITY-JUDGE**（INTENT-01/02、RULES-01、QUALITY-CLAIM 已于 2026-08-15 落地）。  
+推荐开干顺序：**INTENT-SHADOW**（INTENT-01/02、RULES-01、QUALITY-CLAIM、QUALITY-JUDGE 已于 2026-08-15 落地）。  
 SHADOW 不是入场券：01 的跟聊继承若已修好「A/继续」，LLM 增量可能很小，允许结论为「不 promote」。
 
 ---
@@ -204,18 +205,18 @@ SHADOW 不是入场券：01 的跟聊继承若已修好「A/继续」，LLM 增�
 
 ---
 
-### W3-AP-QUALITY-JUDGE — eval 用 LLM-judge
+### W3-AP-QUALITY-JUDGE — eval 用 LLM-judge ✅ done 2026-08-15
 
 **目标：** 有第二把尺对照确定性 `quality-eval`，回答「改完变没变好」。
 
 **禁止：** 在 `write_section` / `toolsNode` 热路径每轮调用。
 
-**实现顺序：**
+**已落地：**
 
 1. `lib/quality-eval/llm-judge.ts`：verifier 角色，固定 rubric → JSON（引用支撑 / 数据-结论 / overclaim / 连贯），可注入 fake judge
-2. `scripts/eval-quality.ts`（或 `eval:quality`）同时打出规则分 + LLM 分
-3. 夹具：现有 `GOOD_PAPER` / `BAD_PAPER`；LLM 路径无 key 时跳过不红
-4. 域文档写清：规则尺是 CI 地板；模型尺是回归对照
+2. `scripts/eval-quality.ts`（`npm run eval:quality`）同时打出规则分 + LLM 分；`--no-llm` 只打规则分
+3. 夹具：现有 `GOOD_PAPER` / `BAD_PAPER`；无 key / 失败 → skipped，退出码 0
+4. 域文档：规则尺 = CI 地板；模型尺 = 回归对照（不可比绝对值）
 
 ---
 

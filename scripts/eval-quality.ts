@@ -1,29 +1,24 @@
 /**
- * 论文质量评测脚本：对一份「章节文本 + 参考文献」清单四维打分。
+ * 论文质量评测脚本：确定性四维（CI 地板）+ 可选 LLM-judge（回归对照）。
  *
  * 运行：
- *   npx tsx scripts/eval-quality.ts                 # 无参数：输出内置 golden 好/坏样例对比
- *   npx tsx scripts/eval-quality.ts path/to.json    # 读自定义 manifest 打分
+ *   npx tsx scripts/eval-quality.ts                 # 内置 golden 好/坏样例
+ *   npx tsx scripts/eval-quality.ts path/to.json    # 自定义 manifest
+ *   npx tsx scripts/eval-quality.ts --no-llm        # 只打规则分
  *
- * manifest 格式（见 src/lib/quality-eval/types.ts QualityEvalInput）：
- * {
- *   "title": "论文标题",
- *   "sections": [{ "key": "introduction", "title": "引言", "content": "..." }],
- *   "references": [{ "index": 1, "title": "...", "abstract": "..." }]
- * }
- *
- * 说明：这是确定性规则尺（不调 LLM），用于给 prompt/门禁改动一个可度量的方向；
- * 引用 claim 级判定另见 validate_citations 的 claimGrounding（收口默认开；CITATION_CLAIM_GROUNDING=0 关闭）。
+ * 规则尺不调 LLM，始终打印。LLM 尺用 verifier；无 key / 失败则跳过，退出码仍 0。
+ * 禁止把 LLM-judge 接到 write_section 热路径。
  */
 import fs from "fs";
 import path from "path";
 import { BAD_PAPER, GOOD_PAPER } from "../src/lib/quality-eval/fixtures";
+import { evaluateQualityLlm } from "../src/lib/quality-eval/llm-judge";
 import { evaluateQuality } from "../src/lib/quality-eval/score";
-import type { QualityEvalInput } from "../src/lib/quality-eval/types";
+import type { QualityEvalInput, QualityLlmReport } from "../src/lib/quality-eval/types";
 
-function printReport(title: string, input: QualityEvalInput): void {
+function printRuleReport(title: string, input: QualityEvalInput): void {
   const r = evaluateQuality(input);
-  console.log(`\n========== ${title} — 总分 ${r.overallScore}/100 ==========`);
+  console.log(`\n========== ${title} — 规则分 ${r.overallScore}/100 ==========`);
   for (const d of r.dimensions) {
     console.log(`\n[${d.label}] ${d.score}/100`);
     for (const s of d.strengths) console.log(`  + ${s}`);
@@ -31,17 +26,44 @@ function printReport(title: string, input: QualityEvalInput): void {
   }
 }
 
-function main(): void {
-  const arg = process.argv[2];
-  if (!arg) {
-    console.log("用法：npx tsx scripts/eval-quality.ts [manifest.json]");
-    console.log("无参数时输出内置 golden 好/坏样例对比。\n");
-    printReport("好样例", GOOD_PAPER);
-    printReport("坏样例", BAD_PAPER);
+function printLlmReport(title: string, llm: QualityLlmReport): void {
+  if (llm.skipped) {
+    console.log(`\n---------- ${title} — LLM 分：跳过（${llm.skipReason ?? "无 key 或调用失败"}） ----------`);
     return;
   }
-  const manifest = JSON.parse(fs.readFileSync(path.resolve(arg), "utf-8")) as QualityEvalInput;
-  printReport(manifest.title ?? "论文", manifest);
+  console.log(`\n---------- ${title} — LLM 分 ${llm.overallScore}/100 ----------`);
+  for (const d of llm.dimensions) {
+    const comment = d.comment ? `  ${d.comment}` : "";
+    console.log(`  [${d.label}] ${d.score}/100${comment}`);
+  }
 }
 
-main();
+async function scoreOne(title: string, input: QualityEvalInput, withLlm: boolean): Promise<void> {
+  printRuleReport(title, input);
+  if (!withLlm) return;
+  const llm = await evaluateQualityLlm(input);
+  printLlmReport(title, llm);
+}
+
+async function main(): Promise<void> {
+  const args = process.argv.slice(2);
+  const noLlm = args.includes("--no-llm");
+  const file = args.find((a) => !a.startsWith("--"));
+  const withLlm = !noLlm;
+
+  if (!file) {
+    console.log("用法：npx tsx scripts/eval-quality.ts [manifest.json] [--no-llm]");
+    console.log("无参数时输出内置 golden 好/坏样例对比。规则尺始终打印；LLM 尺无 key 则跳过。\n");
+    await scoreOne("好样例", GOOD_PAPER, withLlm);
+    await scoreOne("坏样例", BAD_PAPER, withLlm);
+    return;
+  }
+  const manifest = JSON.parse(fs.readFileSync(path.resolve(file), "utf-8")) as QualityEvalInput;
+  await scoreOne(manifest.title ?? "论文", manifest, withLlm);
+}
+
+main().catch((err: unknown) => {
+  const message = err instanceof Error ? err.message : String(err);
+  console.error(message);
+  process.exit(1);
+});

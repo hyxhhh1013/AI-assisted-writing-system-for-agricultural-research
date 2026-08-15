@@ -37,6 +37,7 @@
 | 扩写流水线 | 工作台 `writing` Tab | `POST /api/writing` SSE；`POST /api/writing/retrieve-preview` | `api/writing/pipeline/*`, `services/writing-context.ts` |
 | AI Agent | 工作台 `agent` Tab | `POST /api/agent` SSE；`GET /api/agent/sessions`（`history=1`） | Phase0 问答配置；行为 eval；表格入库 `ingest_project_data`（`lib/agent/ingest-project-data.ts`）；**质量主轴**见 [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md)；行为底稿 [`W3-AP-BEHAVIOR.md`](./plans/W3-AP-BEHAVIOR.md)；**Wave 3.9 意图/规则/尺子** [`W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md) |
 | 产品门禁评测 | 本地/CI | `npm run eval:gates`；可选 `npm run eval:pipeline` | `lib/eval/product-gates.ts`、`scripts/eval-pipeline-paper.ts` |
+| 论文质量评测 | 本地脚本 | `npm run eval:quality` | `lib/quality-eval/` 规则尺（CI 地板）+ `llm-judge.ts`（仅脚本，不进写节） |
 | 证据中心 | 工作台 `data` | — | `evidence-hub-sections.tsx`、`data-panel.tsx` |
 | 配图编辑 | 写作面板内联 | — | `writing-figure-edit-links.tsx` |
 | 大纲生成 | 工作台 `outline` Tab | `POST /api/outline` SSE | `outline-panel.tsx`, `lib/prompts/outline.ts` |

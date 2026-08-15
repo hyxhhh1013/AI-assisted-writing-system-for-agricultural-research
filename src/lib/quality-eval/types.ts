@@ -1,10 +1,10 @@
 /**
- * 论文质量评测（W3-AP-QUALITY-EVAL）— 一把「量质量的尺子」。
+ * 论文质量评测（W3-AP-QUALITY-EVAL / QUALITY-JUDGE）— 两把尺。
  *
- * 目的：把 prompt/门禁改动从「盲调」变成「可度量」——每次改完跑一次，
- * 得到四维分数与 overallScore，判断方向对不对。
+ * 规则尺（checks/score，确定性）：CI 地板。prompt/门禁改完跑一次，判断方向对不对。
+ * 模型尺（llm-judge.ts）：仅 `eval:quality` 回归对照；禁止进 write_section / toolsNode。
  *
- * 四个维度：
+ * 规则四维：
  * - structure   结构完整性（必选节 + 主体节篇幅）
  * - citation    引用支撑（越界硬检 + 词重叠可疑占比；claim 级判定见 validate_citations）
  * - consistency 跨节一致性（数据-结论回扣 + 方法-结果术语连续性）
@@ -53,3 +53,28 @@ export interface QualityEvalReport {
   strengths: string[];
   createdAt: string;
 }
+
+/** LLM-judge 四维（仅 eval:quality；不进写节热路径） */
+export type QualityLlmDimensionKey =
+  | "citation_support"
+  | "data_conclusion"
+  | "overclaim"
+  | "coherence";
+
+export interface QualityLlmDimensionScore {
+  key: QualityLlmDimensionKey;
+  label: string;
+  /** 0-100 */
+  score: number;
+  comment: string;
+}
+
+export interface QualityLlmReport {
+  dimensions: QualityLlmDimensionScore[];
+  /** 四维算术平均，0-100 */
+  overallScore: number;
+  skipped: boolean;
+  skipReason?: string;
+}
+
+export type QualityPaperJudge = (input: QualityEvalInput) => Promise<QualityLlmReport>;

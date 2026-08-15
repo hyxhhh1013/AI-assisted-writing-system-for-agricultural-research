@@ -208,7 +208,7 @@ Wave 2 产品化三项已完成。
 | W3-AP-INTENT-02 | ✅ done | gate/nudge 只消费 kind |
 | W3-AP-RULES-01 | ✅ done | `AGENT_RULES` 单一事实源 |
 | W3-AP-QUALITY-CLAIM | ✅ done | 收口默认 claim grounding；写节自查不跑 |
-| W3-AP-QUALITY-JUDGE | todo | LLM-judge 仅 `eval:quality` |
+| W3-AP-QUALITY-JUDGE | ✅ done | LLM-judge 仅 `eval:quality`；规则尺仍是 CI 地板 |
 | W3-AP-INTENT-SHADOW | todo | 可选影子分类；允许 cancelled |
 
 原则：冻口语门禁；冻 LangGraph 拓扑；不把 LLM-judge 接进热路径。

@@ -243,7 +243,7 @@
 | W3-AP-INTENT-02 | gate / skipPlanner / hint 只消费 `state.intentKind` | INTENT-01 | 1d | **done** | 2026-08-15；`nudgeForKind`；`isSectionDraftGoal` 仅分类器用 |
 | W3-AP-RULES-01 | `AGENT_RULES` 单一事实源；prompt/nudge 渲染 | INTENT-02 | 1d | **done** | 2026-08-15；先收 5 条已打架纪律 |
 | W3-AP-QUALITY-CLAIM | 收口路径默认开 claim grounding；`=0` 才关 | — | 0.5d | **done** | 2026-08-15；写节 reflect 自查不跑；无摘要 skip |
-| W3-AP-QUALITY-JUDGE | LLM-judge 只进 `eval:quality`，不进热路径 | — | 1d | todo | 确定性 quality-eval 保留为 CI 地板 |
+| W3-AP-QUALITY-JUDGE | LLM-judge 只进 `eval:quality`，不进热路径 | — | 1d | **done** | 2026-08-15；规则尺 CI 地板；无 key skip |
 | W3-AP-INTENT-SHADOW | 可选：LLM 分类影子模式，对照日志后再决定 promote | INTENT-01 | 0.5d | todo | 允许结论为 cancelled（无增量） |
 | — | 任务单细节 | — | — | — | [`plans/W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md) |
 
@@ -1106,6 +1106,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-15 | W3-AP-QUALITY-CLAIM | AI | 收口路径默认跑 claim grounding；`CITATION_CLAIM_GROUNDING=0` 才关。`draft`/`review_write` 的 reflect 自查不跑；无摘要 skip；失败 `claimGrounding: null`。 |
 | 2026-08-15 | W3-AP-INTENT-02 | AI | gate / skipPlanner / `nudgeForKind` / `pickIntentNudge` 已分类时只认 `intentKind`；goal 为垃圾字符串仍拦 draft search。`isSectionDraftGoal` 收成正则分类器，观察回推删除。 |
 | 2026-08-15 | W3-AP-RULES-01 | AI | `AGENT_RULES` 单一事实源（5 条）：prompt / nudge / results 硬拦文案同读 `ruleText`。`phaseGatePromptRules` 不再手写第二份「勿 build_argument_blueprint」。 |
+| 2026-08-15 | W3-AP-QUALITY-JUDGE | AI | `evaluateQualityLlm` 仅 `eval:quality`：规则分始终打印，LLM 分无 key/失败则 skip。不进 `write_section` / `toolsNode`。规则尺=CI 地板，模型尺=回归对照。 |
 
 ---
 
@@ -1117,11 +1118,10 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 
 | 优先级 | ID | 说明 |
 |--------|-----|------|
-| **P0** | **W3-AP-QUALITY-JUDGE** | LLM-judge 仅 eval；确定性 quality-eval 留作 CI 地板 |
-| P3 | W3-AP-INTENT-SHADOW | 有跟聊日志再决定是否 promote；允许 cancelled |
+| **P0** | **W3-AP-INTENT-SHADOW** | 可选：异步便宜 LLM 对照正则分类，只记日志不写快照；跟聊继承已覆盖「A/继续」时可 **cancelled** |
 | P3-legacy | W3-AP-WRITE-NO-RAG | 已诊断未实施：有项目文献摘要时跳过知识库 RAG（勿插进 INTENT-01） |
 
-**若只能做一个架构 PR**：先做 **QUALITY-JUDGE**（仅 eval）。  
+**若只能做一个架构 PR**：先做 **INTENT-SHADOW**（允许 cancelled：无增量则收口本波）。  
 **明确不做本波**：LangGraph 重写 / 多 agent、热路径 LLM-judge、再堆口语门禁、把 998 行正则搬进规则表。
 
 ---
