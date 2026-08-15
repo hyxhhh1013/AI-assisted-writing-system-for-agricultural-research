@@ -187,7 +187,9 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 
 **已落地 DATA-01**：`lib/agent/data-foundation.ts`。研究型 `write_section(results)` 在根基 `empty` 时拒绝；`inspect_project` / 简报 / `list_plot_sources` 共用同一套状态。
 
-**已落地 DATA-02**：`ingest_project_data`（`lib/agent/ingest-project-data.ts`）。附件 `attachmentId`/`fileId` 或粘贴 `csvData`+`fileName` → 复用 `analyzeFile` → 只 PATCH `dataSources`/`dataClaims`（同 fileName 覆盖源，按 sourceId 替换声明）。空表不写库。下一刀 **HUB-01**：上传完成自动入库。
+**已落地 DATA-02**：`ingest_project_data`（`lib/agent/ingest-project-data.ts`）。附件 `attachmentId`/`fileId` 或粘贴 `csvData`+`fileName` → 复用 `analyzeFile` → 只 PATCH `dataSources`/`dataClaims`（同 fileName 覆盖源，按 sourceId 替换声明）。空表不写库。
+
+**已落地 HUB-01**：表格附件上传时带 `projectId`；提取成功后自动 ingest（与 DATA-02 同一套）。芯片显示「已入库 · N 条声明」/「分析失败」。`kind` 由扩展名推断，不改 Prisma。下一刀 **DATA-03**：仪器扩展名 + XRD 禁手填峰。
 
 ## 机理图 / 识图自检（2026-08-09）
 

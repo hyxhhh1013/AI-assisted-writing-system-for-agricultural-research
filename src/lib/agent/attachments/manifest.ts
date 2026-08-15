@@ -15,8 +15,10 @@ export function buildAttachmentManifest(attachments: AgentAttachmentInfo[]): str
       ? `已提取（约 ${a.charCount ?? 0} 字${a.truncated ? "，已截断" : ""}）`
       : STATUS_LABEL[a.status];
     const hint =
-      a.status === "ready"
-        ? `可调用 read_attachment("${a.id}") 读取；长文本用 part="head"/"tail" 或 offset 分页。`
+      a.ingest?.status === "ingested"
+        ? `表格已入库（${a.ingest.claimCount ?? 0} 条声明）。可 list_plot_sources / generate_chart / write_section(results)，不必再 ingest_project_data。`
+        : a.status === "ready"
+        ? `可调用 read_attachment("${a.id}") 读取；长文本用 part="head"/"tail" 或 offset 分页。表格请 ingest_project_data。`
         : a.status === "extracting"
           ? "正在后台提取（可能需几秒）；稍后（如先做别的步骤或读其它资料）再调用 read_attachment 重试读取，不要反复立即重读。"
           : "该附件未能提取内容，仅展示文件名，无法读取。";

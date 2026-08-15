@@ -3,6 +3,11 @@ import { createLogger } from "@/lib/logger";
 import { isAgentEnabled } from "@/lib/agent/core/safety";
 import prisma from "@/lib/prisma";
 import { deleteAttachment } from "@/lib/agent/attachments/service";
+import { inferAttachmentKind } from "@/lib/agent/attachments/kind";
+import {
+  lookupIngestView,
+  maybeAutoIngestTabularAttachment,
+} from "@/lib/agent/attachments/auto-ingest";
 
 export const runtime = "nodejs";
 
@@ -24,11 +29,29 @@ export async function GET(
       where: { id, userId },
       select: {
         id: true, originalName: true, mimeType: true, size: true,
-        status: true, extractSource: true, extractedText: true, pinned: true, createdAt: true,
+        status: true, extractSource: true, extractedText: true, pinned: true,
+        createdAt: true, projectId: true,
       },
     });
     if (!row) return NextResponse.json({ error: "附件不存在或无权访问" }, { status: 404 });
     const text = row.extractedText ?? "";
+    const kind = inferAttachmentKind(row.originalName);
+    let ingest = null;
+    if (kind === "tabular" && row.status === "ready" && row.projectId) {
+      const project = await prisma.project.findFirst({
+        where: { id: row.projectId, userId },
+        select: { dataSources: true, dataClaims: true },
+      });
+      ingest = lookupIngestView(row.originalName, project?.dataSources, project?.dataClaims)
+        ?? await maybeAutoIngestTabularAttachment({
+          userId,
+          projectId: row.projectId,
+          attachmentId: row.id,
+          fileName: row.originalName,
+        });
+    } else if (kind === "tabular" && row.status === "ready") {
+      ingest = { status: "pending" as const };
+    }
     return NextResponse.json({
       attachment: {
         id: row.id,
@@ -37,6 +60,8 @@ export async function GET(
         size: row.size,
         status: row.status,
         extractSource: row.extractSource,
+        kind,
+        ingest,
         charCount: text.length,
         truncated: row.status === "ready" && text.length > 0,
         pinned: row.pinned,

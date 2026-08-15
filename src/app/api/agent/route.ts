@@ -13,6 +13,8 @@ import {
 import type { AgentSSEEvent } from "@/contracts/agent";
 import type { AttachmentExtractSource } from "@/contracts/agent-attachment";
 import { MAX_ATTACHMENT_TEXT_CHARS } from "@/lib/agent/attachments/constants";
+import { maybeAutoIngestTabularAttachment } from "@/lib/agent/attachments/auto-ingest";
+import { inferAttachmentKind } from "@/lib/agent/attachments/kind";
 import { buildAttachmentManifest } from "@/lib/agent/attachments/manifest";
 import { buildFollowUpInitialState } from "@/lib/agent/session-continue";
 import {
@@ -214,12 +216,33 @@ export async function POST(req: NextRequest) {
     }
     if (attachmentIds.length > 0) {
       try {
+        if (projectId) {
+          await prisma.agentAttachment.updateMany({
+            where: { id: { in: attachmentIds }, userId, projectId: null },
+            data: { projectId },
+          });
+        }
         const rows = await prisma.agentAttachment.findMany({
           where: { id: { in: attachmentIds }, userId },
         });
+        const ingestById = new Map<string, { status: "ingested" | "failed" | "skipped" | "pending"; claimCount?: number }>();
+        if (projectId) {
+          for (const r of rows) {
+            if (r.status !== "ready" || inferAttachmentKind(r.originalName) !== "tabular") continue;
+            const view = await maybeAutoIngestTabularAttachment({
+              userId,
+              projectId,
+              attachmentId: r.id,
+              fileName: r.originalName,
+            });
+            ingestById.set(r.id, view);
+          }
+        }
         attachmentManifest = buildAttachmentManifest(rows.map((r) => ({
           id: r.id, originalName: r.originalName, mimeType: r.mimeType, size: r.size,
           status: r.status, extractSource: r.extractSource as AttachmentExtractSource | null,
+          kind: inferAttachmentKind(r.originalName),
+          ingest: ingestById.get(r.id) ?? null,
           charCount: r.extractedText?.length ?? 0,
           truncated: (r.extractedText?.length ?? 0) >= MAX_ATTACHMENT_TEXT_CHARS,
           pinned: r.pinned, createdAt: r.createdAt.toISOString(),

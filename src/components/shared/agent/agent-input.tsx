@@ -7,6 +7,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { clientRejectReason } from "@/lib/agent/attachments/client-validate";
 import {
+  formatAttachmentChipBadge,
+  inferAttachmentKind,
+  type AttachmentIngestView,
+  type AttachmentKind,
+} from "@/lib/agent/attachments/kind";
+import {
   deleteAgentAttachment,
   getAgentAttachment,
   postAgentAttachment,
@@ -47,6 +53,8 @@ type Chip = {
   attachmentId: string | null;
   status: "uploading" | "extracting" | "ready" | "failed";
   error?: string;
+  kind: AttachmentKind;
+  ingest?: AttachmentIngestView | null;
   pinned: boolean;
   pinning?: boolean;
 };
@@ -85,10 +93,16 @@ export function AgentInputBar({
     }
     setChips((prev) => [
       ...prev,
-      { file, attachmentId: null, status: "uploading", pinned: false },
+      {
+        file,
+        attachmentId: null,
+        status: "uploading",
+        kind: inferAttachmentKind(file.name),
+        pinned: false,
+      },
     ]);
     try {
-      const { attachment } = await postAgentAttachment(file, sessionId);
+      const { attachment } = await postAgentAttachment(file, sessionId, projectId);
       const status: Chip["status"] =
         attachment.status === "ready"
           ? "ready"
@@ -102,7 +116,14 @@ export function AgentInputBar({
       setChips((prev) =>
         prev.map((c) =>
           c.file === file
-            ? { ...c, attachmentId: attachment.id, status, ...(error ? { error } : {}) }
+            ? {
+                ...c,
+                attachmentId: attachment.id,
+                status,
+                kind: attachment.kind ?? c.kind,
+                ingest: attachment.ingest,
+                ...(error ? { error } : {}),
+              }
             : c,
         ),
       );
@@ -128,7 +149,18 @@ export function AgentInputBar({
         try {
           const att = await getAgentAttachment(chip.attachmentId!);
           if (att.status === "ready") {
-            setChips((prev) => prev.map((c) => (c.file === chip.file ? { ...c, status: "ready" } : c)));
+            setChips((prev) =>
+              prev.map((c) =>
+                c.file === chip.file
+                  ? {
+                      ...c,
+                      status: "ready",
+                      kind: att.kind ?? c.kind,
+                      ingest: att.ingest ?? c.ingest,
+                    }
+                  : c,
+              ),
+            );
           } else if (att.status === "extract_failed" || att.status === "unsupported") {
             setChips((prev) =>
               prev.map((c) =>
@@ -243,10 +275,16 @@ export function AgentInputBar({
       </div>
       {chips.length > 0 ? (
         <div className="mb-2 flex flex-wrap gap-1.5">
-          {chips.map((chip) => (
+          {chips.map((chip) => {
+            const badge = formatAttachmentChipBadge({
+              kind: chip.kind,
+              extractStatus: chip.status,
+              ingest: chip.ingest,
+            });
+            return (
             <span
               key={`${chip.file.name}-${chip.file.size}`}
-              className="inline-flex h-7 max-w-[240px] items-center gap-1.5 rounded-full border border-border/60 bg-white px-2.5 text-[11px] text-[#3d4f46]"
+              className="inline-flex h-7 max-w-[280px] items-center gap-1.5 rounded-full border border-border/60 bg-white px-2.5 text-[11px] text-[#3d4f46]"
             >
               <span className="max-w-[140px] truncate" title={chip.file.name}>
                 {chip.file.name}
@@ -261,6 +299,15 @@ export function AgentInputBar({
               ) : chip.status === "failed" ? (
                 <span className="max-w-[120px] truncate text-red-600" title={chip.error}>
                   {chip.error ?? "上传失败"}
+                </span>
+              ) : badge ? (
+                <span
+                  className={`shrink-0 text-[10px] ${
+                    chip.ingest?.status === "failed" ? "text-red-600" : "text-[#5a7a68]"
+                  }`}
+                  title={chip.ingest?.error}
+                >
+                  {badge}
                 </span>
               ) : null}
               {chip.status === "ready" && chip.attachmentId && projectId ? (
@@ -287,7 +334,8 @@ export function AgentInputBar({
                 <X className="h-3 w-3" />
               </button>
             </span>
-          ))}
+            );
+          })}
         </div>
       ) : null}
       <div

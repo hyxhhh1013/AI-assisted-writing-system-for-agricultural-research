@@ -26,8 +26,11 @@ export async function POST(req: NextRequest) {
     const sessionIdRaw = formData.get("sessionId");
     const sessionId =
       typeof sessionIdRaw === "string" && sessionIdRaw.trim() ? sessionIdRaw.trim() : undefined;
+    const projectIdRaw = formData.get("projectId");
+    const projectId =
+      typeof projectIdRaw === "string" && projectIdRaw.trim() ? projectIdRaw.trim() : undefined;
 
-    const attachment = await createAttachmentFromFile(userId, sessionId, file);
+    const attachment = await createAttachmentFromFile(userId, sessionId, file, projectId);
     return NextResponse.json({ attachment }, { status: 201 });
   } catch (error: unknown) {
     if (error instanceof AttachmentValidationError) {

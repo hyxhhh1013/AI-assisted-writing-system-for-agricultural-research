@@ -37,6 +37,10 @@ vi.mock("@/lib/agent/attachments/storage", () => ({
   writeAttachmentFile: mocks.write,
 }));
 
+vi.mock("@/lib/agent/attachments/auto-ingest", () => ({
+  autoIngestAfterExtract: vi.fn(async () => null),
+}));
+
 const FILE_KEY = "data/attachments/u1/att-1/hello.txt";
 
 function fakeFile(name: string, content: string, mime = "text/plain"): File {
@@ -63,6 +67,8 @@ beforeEach(() => {
   // 后台提取完成后会 update 记录（fire-and-forget，不阻塞断言）
   mocks.update.mockReset();
   mocks.update.mockResolvedValue({});
+  mocks.findUnique.mockReset();
+  mocks.findUnique.mockResolvedValue({ projectId: null });
 });
 
 describe("createAttachmentFromFile", () => {
@@ -117,6 +123,18 @@ describe("createAttachmentFromFile", () => {
         }),
       );
     });
+  });
+
+  it("stores projectId for tabular auto-ingest without pinning", async () => {
+    await createAttachmentFromFile("u1", "s1", fakeFile("yield.csv", "a,b\n1,2"), "proj-1");
+    expect(mocks.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        projectId: "proj-1",
+        originalName: "yield.csv",
+      }),
+    });
+    const data = mocks.create.mock.calls[0][0].data as { pinned?: boolean };
+    expect(data.pinned).toBeUndefined();
   });
 
   it("deletes the on-disk file when db insert fails", async () => {

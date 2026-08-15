@@ -50,6 +50,19 @@ describe("buildAttachmentManifest", () => {
     expect(buildAttachmentManifest(info)).toContain("不支持的类型");
   });
 
+  it("ingested tabular points to plot/write instead of ingest", () => {
+    const info: AgentAttachmentInfo[] = [{
+      id: "a6", originalName: "yield.csv", mimeType: "text/csv",
+      size: 80, status: "ready", extractSource: "csv", charCount: 40, truncated: false,
+      kind: "tabular", ingest: { status: "ingested", claimCount: 4 },
+      pinned: false, createdAt: "2026-08-15T00:00:00Z",
+    }];
+    const text = buildAttachmentManifest(info);
+    expect(text).toContain("已入库");
+    expect(text).toContain("list_plot_sources");
+    expect(text).toMatch(/不必再 ingest_project_data/);
+  });
+
   it("empty returns empty string", () => {
     expect(buildAttachmentManifest([])).toBe("");
   });

@@ -91,11 +91,13 @@ export async function loadAgentChatHistory(
 export async function postAgentAttachment(
   file: File,
   sessionId?: string,
+  projectId?: string,
   signal?: AbortSignal,
 ): Promise<{ attachment: import("@/contracts/agent-attachment").AgentAttachmentInfo }> {
   const form = new FormData();
   form.append("file", file);
   if (sessionId) form.append("sessionId", sessionId);
+  if (projectId) form.append("projectId", projectId);
   const res = await fetch("/api/agent/attachments", {
     method: "POST",
     body: form,

@@ -10,6 +10,10 @@ export type AttachmentExtractSource =
 export type AttachmentStatus =
   | "extracting" | "ready" | "extract_failed" | "unsupported";
 
+export type AttachmentKind = "tabular" | "instrument" | "document" | "image";
+
+export type AttachmentIngestStatus = "ingested" | "failed" | "pending" | "skipped";
+
 /** 前后端共享的附件摘要（不含 extractedText 全文） */
 export interface AgentAttachmentInfo {
   id: string;
@@ -18,6 +22,12 @@ export interface AgentAttachmentInfo {
   size: number;
   status: AttachmentStatus;
   extractSource?: AttachmentExtractSource | null;
+  kind?: AttachmentKind;
+  ingest?: {
+    status: AttachmentIngestStatus;
+    claimCount?: number;
+    error?: string;
+  } | null;
   charCount?: number;
   truncated?: boolean;
   pinned: boolean;

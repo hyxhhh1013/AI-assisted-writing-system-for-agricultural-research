@@ -1,6 +1,8 @@
 import { randomUUID } from "crypto";
 import { ATTACHMENT_ALLOWED_EXTENSIONS, MAX_ATTACHMENT_BYTES } from "@/lib/agent/attachments/constants";
 import { extractAttachmentText } from "@/lib/agent/attachments/extract";
+import { autoIngestAfterExtract } from "@/lib/agent/attachments/auto-ingest";
+import { inferAttachmentKind } from "@/lib/agent/attachments/kind";
 import { deleteAttachmentFile, readAttachmentFile, writeAttachmentFile } from "@/lib/agent/attachments/storage";
 import { resolveProjectRuntimePath } from "@/lib/runtime-paths";
 import prisma from "@/lib/prisma";
@@ -37,6 +39,7 @@ export async function createAttachmentFromFile(
   userId: string,
   sessionId: string | undefined,
   file: File,
+  projectId?: string,
 ): Promise<AgentAttachmentInfo> {
   assertAttachmentAcceptable(file);
   const attachmentId = randomUUID();
@@ -53,6 +56,7 @@ export async function createAttachmentFromFile(
         id: attachmentId,
         userId,
         sessionId: sessionId ?? null,
+        ...(projectId ? { projectId } : {}),
         fileKey,
         originalName: file.name,
         mimeType: file.type || "application/octet-stream",
@@ -79,6 +83,7 @@ export async function createAttachmentFromFile(
     size: row.size,
     status: row.status as AgentAttachmentInfo["status"],
     extractSource: null,
+    kind: inferAttachmentKind(row.originalName),
     pinned: false,
     createdAt: row.createdAt.toISOString(),
   };
@@ -127,6 +132,18 @@ export async function runAttachmentExtraction(
         extractedText: sanitizeTextForDb(result.text ?? null),
       },
     });
+    if (result.status === "ready") {
+      const meta = await prisma.agentAttachment.findUnique({
+        where: { id: attachmentId },
+        select: { projectId: true },
+      });
+      await autoIngestAfterExtract({
+        userId,
+        projectId: meta?.projectId,
+        attachmentId,
+        fileName: originalName,
+      });
+    }
     return result.status === "ready";
   } catch (error) {
     // 提取失败标记 extract_failed（附件仍保留，用户可删/重传/重试）
