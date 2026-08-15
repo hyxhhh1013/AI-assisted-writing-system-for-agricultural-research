@@ -3,6 +3,7 @@
  * 保留工具名以免旧会话/计划硬崩；执行时引导改用 generate_writing_blueprint。
  */
 
+import { ruleText } from "@/lib/agent/core/agent-rules";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 
 export const buildArgumentBlueprintTool: ToolDefinition = {
@@ -31,7 +32,7 @@ export const buildArgumentBlueprintTool: ToolDefinition = {
     return {
       success: false,
       error:
-        "论证已并入写作蓝图，无需 build_argument_blueprint。"
+        ruleText("no-argument-blueprint")
         + "请调用 generate_writing_blueprint（生成含主张/证据的各节指导），"
         + "或 open_blueprint_workspace 编辑后 write_section。",
       data: {

@@ -206,7 +206,7 @@ Wave 2 产品化三项已完成。
 | **W3-AP-INTENT-QUALITY** | 📋 todo | 主轴；详规 [`plans/W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md) |
 | W3-AP-INTENT-01 | ✅ done | `intentKind` 进快照；跟聊继承；不上 LLM 分类 |
 | W3-AP-INTENT-02 | ✅ done | gate/nudge 只消费 kind |
-| W3-AP-RULES-01 | todo | `AGENT_RULES` 单一事实源 |
+| W3-AP-RULES-01 | ✅ done | `AGENT_RULES` 单一事实源 |
 | W3-AP-QUALITY-CLAIM | ✅ done | 收口默认 claim grounding；写节自查不跑 |
 | W3-AP-QUALITY-JUDGE | todo | LLM-judge 仅 `eval:quality` |
 | W3-AP-INTENT-SHADOW | todo | 可选影子分类；允许 cancelled |

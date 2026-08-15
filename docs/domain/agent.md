@@ -39,6 +39,7 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 | `src/lib/agent/writing-progress.ts` | 写节进度翻译层（管道事件 → `agent/progress` label） |
 | `src/lib/agent/writing-quality.ts` | WQC 写作质检轻量：喉清开场 / 综上所述堆砌 / overclaim / 段长方差（确定性规则，warn 级不阻断） |
 | `src/lib/agent/quality-closure.ts` | 质量收口看板数据层：聚合节完整度/摘要/引用硬检/审查 4 信号（纯函数） |
+| `src/lib/agent/core/agent-rules.ts` | `AGENT_RULES` 单一事实源；prompt/nudge/硬拦文案读同一 `text` |
 | `src/lib/agent/core/classify-intent.ts` | 每轮 `classifyIntent`：跟聊继承或正则；不上 LLM |
 | `components/shared/agent/quality-closure-panel.tsx` | 质量收口看板 UI（工作台 agent Tab 顶部） |
 | `src/lib/agent/writing-runner.ts` | 复用写作管道；`onWritingEvent` 转发进度 |
@@ -142,7 +143,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 **修正（2026-08-07）**：进入「引用修正」意图/阶段必须满足**最近一次 validate 报告确实发现待修问题**（硬检未过 `exportReady/phase5Passed`，或语义可疑 `grounding.suspiciousCount > 0`；判定复用 `reflect.ts` 导出的 `validateIssueCount`）。写完自查的干净报告（0 问题）不再把会话顶进修正模式，后续 `write_section` 正常放行。覆盖链路：跟聊短确认、AP 流程 `citation_fix` 阶段、并行只读批门禁（`parallel-tools.ts` 同源）。
 
 - **引用修正收敛（2026-08-08）**：修复「Agent 陷入 validate→改引→再 validate 打地鼠循环，不收尾、没下一步」——`validate_citations` 的 summary 按硬错/软可疑分级引导（硬检越界必须修；可判定且明显错引改引一次；缺摘要/语义勉强属软性可接受，**不要反复重验**），并在通过时明确「引用已符合要求，请汇报并给下一步」；`buildAgentSystemPrompt` 增加「引用修正要收敛，勿打地鼠循环」规则。双保险让 Agent 在改引循环里能停下并给出下一步计划。
-- **写章节缺文献照常写（2026-08-08）**：`buildAgentSystemPrompt` 增加「写章节缺文献时用现有文献替代或泛化表述照常写，检索 1 次确认没有后即可开写」纪律。跟聊 goal 失真（「A/继续」）的写章节纪律，2026-08-15 起改由 `snapshot.intentKind` 继承（INTENT-01/02），不再靠 `isSectionDraftGoal(goal, observations)` 回推。`checkDraftSearchGate` / 收尾兜底只认 `intentKind === "draft"`。
+- **写章节缺文献照常写（2026-08-08 / RULES-01 2026-08-15）**：条文现只写在 `AGENT_RULES` id=`draft-missing-refs`；`buildAgentSystemPrompt` 与 `draftGoalNudge` 同读 `ruleText`。跟聊 goal 失真（「A/继续」）的写章节纪律由 `snapshot.intentKind` 继承（INTENT-01/02）。`checkDraftSearchGate` / 收尾兜底只认 `intentKind === "draft"`。
 
 ## 断点续跑 / 门禁旁路修复（2026-08-09）
 
@@ -208,7 +209,7 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 
 **即刻冻结**：不准再往 `goal-intents.ts` 加口语 `isXxxGoal` / `checkXxxGate`。领域不变量（空数据、越界引用）与事故型安全门除外。
 
-**已落地 INTENT-01 + INTENT-02**：`contracts/agent-intent.ts`；`classifyIntent` 每轮一次；跟聊短回复继承 `snapshot.intentKind`。gate / `nudgeForKind` / `pickIntentNudge` **只消费 kind**（`intentKind === undefined` 时测试可回退正则）。`isSectionDraftGoal` 仅保留给 `classifyIntent` 的正则分类。下一刀 **RULES-01**：规则只写一处。
+**已落地 INTENT-01 + INTENT-02 + RULES-01**：`contracts/agent-intent.ts`；`classifyIntent` 每轮一次；跟聊短回复继承 `snapshot.intentKind`。gate / `nudgeForKind` 只消费 kind。`AGENT_RULES`（`core/agent-rules.ts`）是 prompt / nudge / results 硬拦文案的单一事实源；第一批 5 条。下一刀 **QUALITY-JUDGE**（仅 eval，不进热路径）。
 
 ## 机理图 / 识图自检（2026-08-09）
 

@@ -112,7 +112,7 @@ export function phaseGatePromptRules(): string {
   return `阶段策略（缺前置用工具自补，缺信息就问用户）：
 - 用 inspect_project 了解当前阶段与空白章节，再决定工具
 - 主路径：配置 → 大纲 → 写作蓝图（含各节主张/证据）→ 分节写 → 摘要/核查
-- 写章节若缺大纲/写作蓝图：可直接 write_section，系统会自动补齐（勿再调用已弃用的 build_argument_blueprint）
+- 写章节若缺大纲/写作蓝图：可直接 write_section，系统会自动补齐
 - 无正文时不要写摘要 / write_bilingual_abstract
 - 引用以 validate_citations 为准；不编造文献
 - 审查最多 2 轮；满轮后总结问题并征求用户是否继续改`;

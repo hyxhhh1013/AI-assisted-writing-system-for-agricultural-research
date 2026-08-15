@@ -6,6 +6,7 @@
  */
 
 import type { IntentClosureKind, IntentKind } from "@/contracts/agent-intent";
+import { withRule } from "@/lib/agent/core/agent-rules";
 import type { ToolObservation } from "@/lib/agent/types";
 import { validateIssueCount } from "@/lib/agent/core/reflect";
 
@@ -400,16 +401,21 @@ export function diagnoseGoalNudge(): string {
 export function draftGoalNudge(goal = "", intentKind?: IntentKind | null): string {
   if (matchesIntent(intentKind, ["review_write"], () => isReviewWritingGoal(goal))) {
     const n = parseLiteratureImportTarget(goal);
-    return (
+    return withRule(
       `【系统】写综述：先 inspect / list_references。参考文献通常至少约 ${n} 篇；`
-      + "不足则多轮 search_knowledge / search_external + import_reference(hitsJson=...) 分批导入，"
-      + "达标后再按蓝图子节 write_section(literature_body, subsectionTitle=…)。禁止只用两三篇硬写综述。"
+        + "不足则多轮 search_knowledge / search_external + import_reference(hitsJson=...) 分批导入，"
+        + "达标后再按蓝图子节 write_section(literature_body, subsectionTitle=…)。禁止只用两三篇硬写综述。",
+      "review-subsection",
     );
   }
-  return (
-    "【系统】本轮目标是写章节：先 inspect 或 read_project_asset(outline)/list_references，"
-    + "然后直接 write_section（缺大纲/蓝图时系统会自动补齐）。"
-    + "不要停下来只问「要不要写」；除非用户明确要求检索，否则不要先 search_external。"
+  return withRule(
+    withRule(
+      "【系统】本轮目标是写章节：先 inspect 或 read_project_asset(outline)/list_references，"
+        + "然后直接 write_section（缺大纲/蓝图时系统会自动补齐）。"
+        + "不要停下来只问「要不要写」；除非用户明确要求检索，否则不要先 search_external。",
+      "draft-missing-refs",
+    ),
+    "no-argument-blueprint",
   );
 }
 
@@ -459,10 +465,11 @@ export function apPipelineNudge(
         + "用中文汇报 suspicious [n]；禁止 search/import/写摘要。"
       );
     case "citation_fix":
-      return (
+      return withRule(
         "【系统】academic-paper 流程·②引用修正：按 validate 报告，read_section(literature_body/background) "
-        + "+ refine_content(section=..., draftText=全文, feedback=改引清单, persistToProject=true) 写回。"
-        + "不要只 read；修正完成前禁止 write_bilingual_abstract。"
+          + "+ refine_content(section=..., draftText=全文, feedback=改引清单, persistToProject=true) 写回。"
+          + "不要只 read；修正完成前禁止 write_bilingual_abstract。",
+        "citation-refine-writeback",
       );
     case "abstract":
       return (
@@ -482,13 +489,13 @@ export function apPipelineNudge(
 
 /** 用户确认修正方案后的跟聊提示 */
 export function citationApplyNudge(): string {
-  return (
+  return withRule(
     "【系统】用户已确认引用修正方案。请按上轮清单执行："
-    + "1) read_section(literature_body) 取全文；"
-    + "2) refine_content(section=literature_body, draftText=全文, feedback=修正清单, persistToProject=true)；"
-    + "3) 若 background/introduction 也有错引，同样 read_section + refine_content。"
-    + "禁止 search_external / search_knowledge / import_reference / write_bilingual_abstract / write_section。"
-    + "不要只 read 不写回。"
+      + "1) read_section(literature_body) 取全文；"
+      + "2) refine_content(section=literature_body, draftText=全文, feedback=修正清单, persistToProject=true)；"
+      + "3) 若 background/introduction 也有错引，同样 read_section + refine_content。"
+      + "禁止 search_external / search_knowledge / import_reference / write_bilingual_abstract / write_section。",
+    "citation-refine-writeback",
   );
 }
 
@@ -900,9 +907,12 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
     isIncomplete: (ctx) =>
       resolveApPipelineStep(ctx.goal, ctx.observations, ctx.intentKind) === "citation_fix",
     nudge: () =>
-      "【系统】academic-paper 流程·引用修正：read_section(literature_body) 后立刻 "
-      + "refine_content(section=literature_body, draftText=全文, feedback=validate 报告中的改引清单, persistToProject=true)。"
-      + "background/introduction 有错引时同样 refine。不要只 read；不要写摘要直到 refine 写回。",
+      withRule(
+        "【系统】academic-paper 流程·引用修正：read_section(literature_body) 后立刻 "
+          + "refine_content(section=literature_body, draftText=全文, feedback=validate 报告中的改引清单, persistToProject=true)。"
+          + "background/introduction 有错引时同样 refine。不要写摘要直到 refine 写回。",
+        "citation-refine-writeback",
+      ),
     stopAsk: (ctx) =>
       buildIntentStopAskUser({ kind: "pipeline_fix", ...stopAskOpts(ctx) }),
   },
@@ -966,9 +976,12 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
       )
       && !hasCitationRefineSuccess(ctx.observations),
     nudge: () =>
-      "【系统】用户已确认引用修正，但尚未 refine_content 写回。"
-      + "请 read_section(literature_body) 后立刻 refine_content(section=literature_body, draftText=全文, feedback=上轮修正清单)。"
-      + "background/introduction 有错引时同样处理。不要只 read 不写回；不要 search/import/写摘要。",
+      withRule(
+        "【系统】用户已确认引用修正，但尚未 refine_content 写回。"
+          + "请 read_section(literature_body) 后立刻 refine_content(section=literature_body, draftText=全文, feedback=上轮修正清单)。"
+          + "background/introduction 有错引时同样处理。不要 search/import/写摘要。",
+        "citation-refine-writeback",
+      ),
     stopAsk: (ctx) =>
       buildIntentStopAskUser({ kind: "citation_apply", ...stopAskOpts(ctx) }),
   },
@@ -1004,8 +1017,11 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
         () => isSectionDraftGoal(ctx.goal) && !isReviewWritingGoal(ctx.goal),
       ) && !ctx.wroteOk,
     nudge: () =>
-      "【系统】用户要写章节，但尚未成功 write_section 写回。"
-      + "请先读大纲/文献（或 inspect），再直接 write_section（蓝图可自动补）；不要只提问。",
+      withRule(
+        "【系统】用户要写章节，但尚未成功 write_section 写回。"
+          + "请先读大纲/文献（或 inspect），再直接 write_section（蓝图可自动补）；不要只提问。",
+        "draft-missing-refs",
+      ),
     stopAsk: (ctx) =>
       buildIntentStopAskUser({ kind: "draft", ...stopAskOpts(ctx) }),
   },
@@ -1016,9 +1032,12 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
       && importedOk(ctx)
       && !ctx.wroteOk,
     nudge: () =>
-      "【系统】文献体量已够，请 list_references 核对后，按蓝图子节逐次 "
-      + "write_section(literature_body, subsectionTitle=子节标题) 写回正文；"
-      + "禁止一次 write_section(literature_body) 写完整章万字。",
+      withRule(
+        "【系统】文献体量已够，请 list_references 核对后，按蓝图子节逐次 "
+          + "write_section(literature_body, subsectionTitle=子节标题) 写回正文；"
+          + "禁止一次 write_section(literature_body) 写完整章万字。",
+        "review-subsection",
+      ),
     stopAsk: (ctx) =>
       buildIntentStopAskUser({ kind: "review_write", ...stopAskOpts(ctx) }),
   },

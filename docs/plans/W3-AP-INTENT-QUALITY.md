@@ -105,12 +105,12 @@ AgentSessionSnapshot.intentKind
 | 0 | **冻结** | 禁止新 `isXxxGoal` / 口语 `checkXxxGate` | — | 即刻 | 3.8 已收口 |
 | 1 | **W3-AP-INTENT-01** | `IntentKind` 上提契约；快照字段；每轮只分类一次；跟聊继承；不一致打日志 | 1.5d | — | **done** 2026-08-15 |
 | 2 | **W3-AP-INTENT-02** | gate / skipPlanner / hint **只消费** `state.intentKind` | 1d | 01 | **done** 2026-08-15 |
-| 3 | **W3-AP-RULES-01** | `AGENT_RULES` 单一事实源；prompt/nudge 渲染；hard 才进 gate | 1d | 02 | |
+| 3 | **W3-AP-RULES-01** | `AGENT_RULES` 单一事实源；prompt/nudge 渲染；hard 才进 gate | 1d | 02 | **done** 2026-08-15 |
 | 4 | **W3-AP-QUALITY-CLAIM** | 收口路径默认开 claim grounding；`=0` 才关 | 0.5d | — | **done** 2026-08-15 |
 | 5 | **W3-AP-QUALITY-JUDGE** | LLM-judge 只进 `eval:quality`，不进热路径 | 1d | CLAIM 或并行 | 不碰 nodes |
 | 6 | **W3-AP-INTENT-SHADOW** | 可选：LLM 分类影子模式，与正则对照记日志 | 0.5d | 01 | **有数据再决定是否 promote** |
 
-推荐开干顺序：**RULES-01**（INTENT-01/02 与 QUALITY-CLAIM 已于 2026-08-15 落地）。  
+推荐开干顺序：**QUALITY-JUDGE**（INTENT-01/02、RULES-01、QUALITY-CLAIM 已于 2026-08-15 落地）。  
 SHADOW 不是入场券：01 的跟聊继承若已修好「A/继续」，LLM 增量可能很小，允许结论为「不 promote」。
 
 ---
@@ -163,6 +163,8 @@ SHADOW 不是入场券：01 的跟聊继承若已修好「A/继续」，LLM 增�
 ---
 
 ### W3-AP-RULES-01 — 规则单一事实源
+
+> **状态**：✅ done 2026-08-15
 
 **目标：** 「勿 `build_argument_blueprint`」等纪律只改一处。
 

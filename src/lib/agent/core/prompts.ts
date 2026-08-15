@@ -1,3 +1,5 @@
+import type { IntentKind } from "@/contracts/agent-intent";
+import { renderRulesForPrompt } from "@/lib/agent/core/agent-rules";
 import { toolsDescriptionText } from "@/lib/agent/core/tool-registry";
 import { phaseGatePromptRules } from "@/lib/agent/core/phase-gates";
 import type { LLMMessage, ToolDefinition } from "@/lib/agent/types";
@@ -14,14 +16,17 @@ const MECHANISM_FIGURE_RULE = [
 ].join("");
 
 /**
- * 只含稳定内容的系统提示：角色、工作方式、工具纪律、写作入口、工具 schema。
- * 项目简报等易变上下文一律不放在这里（保持 system 前缀恒定，命中 provider 前缀缓存），
- * 由 buildAgentBriefingMessage 以独立 user 消息注入。
+ * 角色、工作方式等前缀保持稳定（provider 前缀缓存）；
+ * 「本轮纪律」按 intentKind 渲染 AGENT_RULES，属后缀。
+ * 项目简报等易变上下文由 buildAgentBriefingMessage 以独立 user 消息注入。
  */
-export function buildAgentSystemPrompt(tools: ToolDefinition[]): string {
+export function buildAgentSystemPrompt(
+  tools: ToolDefinition[],
+  intentKind?: IntentKind | null,
+): string {
   const writeEnabled = tools.some((t) => t.safety === "write");
   const writeNote = writeEnabled
-    ? `【写回】可用 generate_* / write_section / refine / import_reference / ingest_project_data / 图表与修订工具；section 用英文 key（introduction、methods、results、discussion、conclusion、literature_body、abstract 等）。**主路径**：大纲 → 写作蓝图（含各节 claim/evidenceHint，勿再 build_argument_blueprint）→ 分节写。**已有写作蓝图时**：按 writingOrder 推进；context/bullets 对齐该节 purpose/keyPoints/主张（系统会注入【写作蓝图（本节）】）。**综述 literature_body**：蓝图有多子节时必须带 subsectionTitle 逐节写，禁止一次写完整章。缺大纲/蓝图时可直接 write_section（系统自动补齐并走批准检查点）。写后可用 validate_citations；交付可用 export_manuscript_markdown。`
+    ? `【写回】可用 generate_* / write_section / refine / import_reference / ingest_project_data / 图表与修订工具；section 用英文 key（introduction、methods、results、discussion、conclusion、literature_body、abstract 等）。**主路径**：大纲 → 写作蓝图（含各节 claim/evidenceHint）→ 分节写。**已有写作蓝图时**：按 writingOrder 推进；context/bullets 对齐该节 purpose/keyPoints/主张（系统会注入【写作蓝图（本节）】）。缺大纲/蓝图时可直接 write_section（系统自动补齐并走批准检查点）。写后可用 validate_citations；交付可用 export_manuscript_markdown。`
     : "【限制】当前只能使用只读工具，不能撰写或修改论文。";
 
   return `你是禾书耕文（GrainScript）的科研写作智能体——像 Cursor 里的通用 Agent：思考 → 自己取上下文 → 调工具 → 用中文说明 → 问下一步。
@@ -29,13 +34,12 @@ export function buildAgentSystemPrompt(tools: ToolDefinition[]): string {
 
 ## 工作方式
 1. 先想再动手：中文简述判断与下一步；不确定就问或先读上下文。
-2. 自己取上下文：优先 inspect_project / read_project_asset / read_section / list_references；勿编造文献或数据。研究型写 results 必须先有数据根基：对话框上传表格后调用 ingest_project_data，或直接 ingest_project_data(csvData+fileName)；无根基时 write_section 会被拒绝。
+2. 自己取上下文：优先 inspect_project / read_project_asset / read_section / list_references；勿编造文献或数据。
 3. 完成用户当前请求即可，汇报结果并给 1～3 个可选下一步；用户改口要立刻改道。
 4. 跨轮承接「继续 / 按刚才的」；重要主张与待办可用 update_work_memory。
 
 ## 工具纪律（先判任务，再选工具）
 - 写章节任务：不要 search_external / search_knowledge，除非用户明确说「检索 / 找文献」；用 inspect / read_project_asset / list_references 取上下文。
-- **写章节缺文献时照常写，勿反复检索**：蓝图/要点要求引用的某类文献（如某催化剂/某方法）库内没有时，用库内现有文献替代或泛化表述（「有研究报道…」「多种金属盐改性催化剂…」）照常写，**不要为了找某一篇缺失文献反复 search / list_references / read_reference**。检索 1 次确认没有后即可开写；写完给下一步。写章节的产出是「写出该节正文」，不是「凑齐所有引用」。
 - 引用核查/修正任务：只 validate_citations + 修订，不要导入文献、写摘要或其它章节。
 - **引用修正要收敛，勿打地鼠循环**：validate 报的「硬检越界编号」必须修；「可判定且明显错引」改引一次；「缺摘要/语义勉强」属软性提示，改引一次即可接受。修完一轮后若 validate 仍只报软可疑，就停止修订，用中文汇报已修正项 + 剩余软可疑，并给出下一步——不要反复 validate → 改引 → 再 validate。
 - 诊断任务：先 inspect_project 看最新快照，再决定下一步。
@@ -52,6 +56,8 @@ ${MECHANISM_FIGURE_RULE}
 若消息含 \`【写作入口=…】\`：full=从零推进；outline_ready=读大纲后写；data_ready=优先 methods/results/配图。用户只要引用检查、修订、摘要时选对应工具即可。
 
 ${writeNote}
+
+${renderRulesForPrompt(intentKind)}
 
 ${phaseGatePromptRules()}
 

@@ -214,7 +214,7 @@ export async function agentNode(
   // 不每轮注入【计划焦点】假 user；改为提前结束时用 buildContinueNudge 轻推（见下方 canContinue）
   const extraMessages: AgentGraphStateType["messages"] = [];
 
-  const systemPrompt = buildAgentSystemPrompt(tools);
+  const systemPrompt = buildAgentSystemPrompt(tools, state.intentKind);
   // 项目简报经独立 user 消息注入（system prompt 前缀恒定 → provider 前缀缓存友好）
   const briefingMsg = buildAgentBriefingMessage(agentContext.projectBriefing);
   // 长会话压缩：超过阈值时把早期轮次的工具观察压成摘要块，控制 LLM 输入长度

@@ -3,6 +3,8 @@
  * @see docs/plans/W3-AP-AGENT-HUB.md W3-AP-DATA-01
  */
 
+import { ruleText } from "@/lib/agent/core/agent-rules";
+
 export type DataFoundationStatus = "empty" | "claims_only" | "tabular" | "instrument";
 
 export interface DataFoundationInput {
@@ -77,8 +79,5 @@ export function shouldBlockResultsWrite(
 }
 
 export function resultsWriteBlockMessage(): string {
-  return (
-    "研究型结果章需要数据根基：请在 Agent 对话框上传 CSV/Excel（或仪器数据）并入库后再写 results。"
-    + "不要编造实验数值，也不要先写空结果再补数据。"
-  );
+  return ruleText("results-data-foundation");
 }

@@ -241,7 +241,7 @@
 | **W3-AP-INTENT-QUALITY** | **主轴：intentKind 进快照；规则只写一处；收口默认 claim grounding** | W3-AP-AGENT-HUB | 4～6d | **todo** | 详规 [`plans/W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md)；**即刻冻结**新口语 `isXxxGoal` |
 | W3-AP-INTENT-01 | IntentKind 上提契约；快照字段；每轮只分类一次；跟聊继承 | — | 1.5d | **done** | 2026-08-15；不上 LLM 分类；`classifyIntent` + 快照 `intentKind` |
 | W3-AP-INTENT-02 | gate / skipPlanner / hint 只消费 `state.intentKind` | INTENT-01 | 1d | **done** | 2026-08-15；`nudgeForKind`；`isSectionDraftGoal` 仅分类器用 |
-| W3-AP-RULES-01 | `AGENT_RULES` 单一事实源；prompt/nudge 渲染 | INTENT-02 | 1d | todo | 先收已打架的 5 条纪律 |
+| W3-AP-RULES-01 | `AGENT_RULES` 单一事实源；prompt/nudge 渲染 | INTENT-02 | 1d | **done** | 2026-08-15；先收 5 条已打架纪律 |
 | W3-AP-QUALITY-CLAIM | 收口路径默认开 claim grounding；`=0` 才关 | — | 0.5d | **done** | 2026-08-15；写节 reflect 自查不跑；无摘要 skip |
 | W3-AP-QUALITY-JUDGE | LLM-judge 只进 `eval:quality`，不进热路径 | — | 1d | todo | 确定性 quality-eval 保留为 CI 地板 |
 | W3-AP-INTENT-SHADOW | 可选：LLM 分类影子模式，对照日志后再决定 promote | INTENT-01 | 0.5d | todo | 允许结论为 cancelled（无增量） |
@@ -1105,6 +1105,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-15 | W3-AP-INTENT-01 | AI | `IntentKind` 上提 `contracts/agent-intent.ts`；`classifyIntent` 跟聊短回复继承快照 kind；写入 `AgentSessionSnapshot.intentKind`。`checkDraftSearchGate`/`mergeFollowUpGoalHint` 可消费 kind，goal=`A` 无观察仍拦 search。不上 LLM。 |
 | 2026-08-15 | W3-AP-QUALITY-CLAIM | AI | 收口路径默认跑 claim grounding；`CITATION_CLAIM_GROUNDING=0` 才关。`draft`/`review_write` 的 reflect 自查不跑；无摘要 skip；失败 `claimGrounding: null`。 |
 | 2026-08-15 | W3-AP-INTENT-02 | AI | gate / skipPlanner / `nudgeForKind` / `pickIntentNudge` 已分类时只认 `intentKind`；goal 为垃圾字符串仍拦 draft search。`isSectionDraftGoal` 收成正则分类器，观察回推删除。 |
+| 2026-08-15 | W3-AP-RULES-01 | AI | `AGENT_RULES` 单一事实源（5 条）：prompt / nudge / results 硬拦文案同读 `ruleText`。`phaseGatePromptRules` 不再手写第二份「勿 build_argument_blueprint」。 |
 
 ---
 
@@ -1116,12 +1117,11 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 
 | 优先级 | ID | 说明 |
 |--------|-----|------|
-| **P0** | **W3-AP-RULES-01** | `AGENT_RULES` 单一事实源；prompt/nudge 渲染 |
-| P2 | W3-AP-QUALITY-JUDGE | LLM-judge 仅 eval；确定性 quality-eval 留作 CI 地板 |
+| **P0** | **W3-AP-QUALITY-JUDGE** | LLM-judge 仅 eval；确定性 quality-eval 留作 CI 地板 |
 | P3 | W3-AP-INTENT-SHADOW | 有跟聊日志再决定是否 promote；允许 cancelled |
 | P3-legacy | W3-AP-WRITE-NO-RAG | 已诊断未实施：有项目文献摘要时跳过知识库 RAG（勿插进 INTENT-01） |
 
-**若只能做一个架构 PR**：先做 **INTENT-02**（消费者只认 kind）。  
+**若只能做一个架构 PR**：先做 **QUALITY-JUDGE**（仅 eval）。  
 **明确不做本波**：LangGraph 重写 / 多 agent、热路径 LLM-judge、再堆口语门禁、把 998 行正则搬进规则表。
 
 ---
