@@ -35,6 +35,7 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 | `src/lib/agent/langgraph/tool-gates.ts` | toolsNode 门禁中间件：前置链（重复/配额/意图+先读后写）+ 阶段 + 后置链（antispam/clarify/outline） |
 | `src/lib/agent/langgraph/graph.ts` | 编译 LangGraph |
 | `src/lib/agent/tools/*.ts` | 各工具定义（`ToolDefinition`） |
+| `src/lib/agent/ingest-project-data.ts` | 表格入库合并 + 只 PATCH `dataSources`/`dataClaims`（`ingest_project_data`） |
 | `src/lib/agent/writing-progress.ts` | 写节进度翻译层（管道事件 → `agent/progress` label） |
 | `src/lib/agent/writing-quality.ts` | WQC 写作质检轻量：喉清开场 / 综上所述堆砌 / overclaim / 段长方差（确定性规则，warn 级不阻断） |
 | `src/lib/agent/quality-closure.ts` | 质量收口看板数据层：聚合节完整度/摘要/引用硬检/审查 4 信号（纯函数） |
@@ -184,7 +185,9 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 
 详规与 PR 序：[`plans/W3-AP-AGENT-HUB.md`](../plans/W3-AP-AGENT-HUB.md)（队列 Phase 11c）。
 
-**已落地 DATA-01**：`lib/agent/data-foundation.ts`。研究型 `write_section(results)` 在根基 `empty` 时拒绝；`inspect_project` / 简报 / `list_plot_sources` 共用同一套状态。下一刀 **DATA-02**：附件/粘贴 CSV 入库。
+**已落地 DATA-01**：`lib/agent/data-foundation.ts`。研究型 `write_section(results)` 在根基 `empty` 时拒绝；`inspect_project` / 简报 / `list_plot_sources` 共用同一套状态。
+
+**已落地 DATA-02**：`ingest_project_data`（`lib/agent/ingest-project-data.ts`）。附件 `attachmentId`/`fileId` 或粘贴 `csvData`+`fileName` → 复用 `analyzeFile` → 只 PATCH `dataSources`/`dataClaims`（同 fileName 覆盖源，按 sourceId 替换声明）。空表不写库。下一刀 **HUB-01**：上传完成自动入库。
 
 ## 机理图 / 识图自检（2026-08-09）
 

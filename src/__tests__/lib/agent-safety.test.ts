@@ -133,6 +133,7 @@ describe("agent safety", () => {
     expect(names).toContain("refine_content");
     expect(names).toContain("import_reference");
     expect(names).toContain("generate_chart");
+    expect(names).toContain("ingest_project_data");
     expect(names).not.toContain("build_argument_blueprint");
     expect(names).toContain("write_bilingual_abstract");
     expect(names).toContain("remove_figure");

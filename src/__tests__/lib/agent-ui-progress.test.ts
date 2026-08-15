@@ -11,6 +11,8 @@ describe("agent ui-progress", () => {
   it("formats working lines for common tools", () => {
     expect(formatToolWorkingLine("read_reference", { index: 2 })).toContain("[2]");
     expect(formatToolWorkingLine("write_section", { section: "introduction" })).toContain("引言");
+    expect(formatToolWorkingLine("ingest_project_data", { fileName: "yield.csv" })).toMatch(/表格|数据/);
+    expect(formatToolParamHint("ingest_project_data", { fileName: "yield.csv" })).toBe("yield.csv");
   });
 
   it("softens stagnant notices for users", () => {

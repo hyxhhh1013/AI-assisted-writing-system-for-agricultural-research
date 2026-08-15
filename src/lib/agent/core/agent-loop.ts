@@ -12,6 +12,7 @@ import { rewritePlagiarismTool } from "@/lib/agent/tools/rewrite-plagiarism";
 import { generateTableTool } from "@/lib/agent/tools/generate-table";
 import { generateChartTool } from "@/lib/agent/tools/generate-chart";
 import { generateXrdAnalysisTool } from "@/lib/agent/tools/generate-xrd-analysis";
+import { ingestProjectDataTool } from "@/lib/agent/tools/ingest-project-data";
 import { draftMechanismFigureTool } from "@/lib/agent/tools/draft-mechanism-figure";
 import { getFullTextTool } from "@/lib/agent/tools/get-full-text";
 import { askUserTool } from "@/lib/agent/tools/ask-user";
@@ -120,6 +121,7 @@ export function createAgentTools(): ToolDefinition[] {
       refineContentTool,
       applyRevisionItemTool,
       importReferenceTool,
+      ingestProjectDataTool,
       generateChartTool,
       generateXrdAnalysisTool,
       generateTableTool,

@@ -9,6 +9,7 @@ const TOOL_LABELS: Record<string, string> = {
   read_section: "读取章节",
   list_references: "列出参考文献",
   list_plot_sources: "查看可配图数据",
+  ingest_project_data: "入库试验数据",
   search_knowledge: "检索知识库",
   search_external: "外部文献检索",
   search_external_literature: "外部文献检索",
@@ -154,6 +155,8 @@ export function formatToolWorkingLine(
       return "正在写双语摘要…";
     case "generate_chart":
       return "正在生成图表…";
+    case "ingest_project_data":
+      return "正在把表格写入项目数据…";
     case "run_review_rounds":
       return "正在审查文稿…";
     default:
@@ -182,6 +185,12 @@ export function formatToolParamHint(
     case "search_knowledge": {
       const q = String(params.query ?? "").trim();
       return q ? (q.length > 28 ? `${q.slice(0, 28)}…` : q) : null;
+    }
+    case "ingest_project_data": {
+      const name = String(params.fileName ?? "").trim();
+      if (name) return name;
+      const id = String(params.attachmentId ?? params.fileId ?? "").trim();
+      return id ? `附件 ${id.slice(0, 8)}` : null;
     }
     case "import_reference": {
       // 优先显示真实批量数：确认卡勾选（selectedIndices）> 候选列表（importItems）> 模型入参

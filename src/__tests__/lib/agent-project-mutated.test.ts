@@ -53,6 +53,15 @@ describe("extractProjectMutated", () => {
     ).toBeNull();
   });
 
+  it("detects ingest_project_data when persisted", () => {
+    const info = extractProjectMutated("ingest_project_data", {
+      success: true,
+      data: { persisted: true, fileName: "yield.csv" },
+    });
+    expect(info?.tool).toBe("ingest_project_data");
+    expect(info?.label).toBe("数据入库");
+  });
+
   it("ignores read-only tools", () => {
     expect(
       extractProjectMutated("inspect_project", {

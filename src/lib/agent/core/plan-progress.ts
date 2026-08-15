@@ -22,6 +22,7 @@ const TOOL_TITLE_HINTS: Record<string, string[]> = {
   read_figure: ["识图", "回看", "看图", "质检图"],
   generate_xrd_analysis: ["XRD", "xrd", "Scherrer", "晶粒", "衍射", "峰表"],
   list_plot_sources: ["图表", "chart", "配图", "数据源"],
+  ingest_project_data: ["入库", "数据", "ingest", "上传表格", "csv", "excel"],
   list_references: ["文献", "参考", "reference"],
   read_reference: ["读文献", "摘要", "read_reference", "文献摘要"],
   read_project_asset: ["大纲", "蓝图", "护照", "配置", "outline", "blueprint"],

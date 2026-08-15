@@ -42,6 +42,7 @@ export const AGENT_ENTRY_MODES: AgentEntryModeOption[] = [
     hint: "先看数据/图表，再写方法与结果",
     goalPrefix:
       "【写作入口=data_ready｜用户已有实验/分析数据】先 list_plot_sources / read_project_asset(analysis_notes)；"
+      + "若还没有数据源，用 ingest_project_data（附件或粘贴 CSV）入库。"
       + "优先 methods/results 与配图（generate_chart / generate_xrd_analysis）；引言综述可后置。禁止编造数值。",
   },
 ];

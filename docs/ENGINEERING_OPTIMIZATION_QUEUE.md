@@ -230,7 +230,7 @@
 | **Phase 11c — Wave 3.8 Agent 单面工作台 + 数据闭环** |
 | **W3-AP-AGENT-HUB** | **主轴：附件=唯一上传口；数据根基；结果章硬门禁；Tab 收敛** | W3-AP-QUALITY | 1～2w | **doing** | 详规 [`plans/W3-AP-AGENT-HUB.md`](./plans/W3-AP-AGENT-HUB.md) |
 | W3-AP-DATA-01 | 数据根基判定 + 研究型 results 硬门禁 + inspect/简报同源 | — | 0.5d | **done** | 2026-08-15；`data-foundation.ts`；research+results+empty 拒写 |
-| W3-AP-DATA-02 | `ingest_project_data`：附件/粘贴 CSV → dataSources+dataClaims | DATA-01 | 1d | todo | 复用 `analyzeFile` |
+| W3-AP-DATA-02 | `ingest_project_data`：附件/粘贴 CSV → dataSources+dataClaims | DATA-01 | 1d | **done** | 2026-08-15；复用 `analyzeFile`；同 fileName 覆盖 |
 | W3-AP-HUB-01 | 附件芯片识别表格；上传完成自动 ingest | DATA-02 | 1d | todo | 用户不必喊工具名 |
 | W3-AP-DATA-03 | 仪器附件白名单；XRD 禁止裸 peaksJson | DATA-02 | 1d | todo | 峰表必须已入库 |
 | W3-AP-DATA-04 | 结果章数字对账（无声明新数字拒写） | DATA-01, DATA-02 | 0.5d | todo | |
@@ -1086,6 +1086,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-15 | 图表落盘不丢 | AI | 根因：图只在 `data/charts`，库只存 URL；`peakfit` 模块加载会删 1 小时前全部 PNG。已移除误删；`getChartsDir()` 统一目录并避开 `.next/standalone`。见 `docs/domain/figures-and-python.md` |
 | 2026-08-15 | W3-AP-AGENT-HUB | AI | 规划生效：Agent 单面工作台 + 数据闭环。附件=唯一上传口；四座孤岛诊断；PR 序 DATA-01→02→HUB-01→DATA-03/04→HUB-02/03。见 `docs/plans/W3-AP-AGENT-HUB.md`；队列 Phase 11c |
 | 2026-08-15 | W3-AP-DATA-01 | AI | 数据根基 `assessDataFoundation`；研究型 `write_section(results)` 在 empty 时硬拒（引导对话框上传，不推 data Tab）；inspect/简报/`list_plot_sources` 同源。单测 17 绿 |
+| 2026-08-15 | W3-AP-DATA-02 | AI | `ingest_project_data`：附件或粘贴 CSV → 复用 `analyzeFile` → 只 PATCH `dataSources`/`dataClaims`（同 fileName 覆盖）。空表不写库。 |
 
 ---
 
@@ -1093,7 +1094,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 
 **当前主轴（2026-08-15）**：**W3-AP-AGENT-HUB** — Agent 单面工作台 + 数据闭环（附件上传 → 入库 → 结果章硬门禁 → Tab 收敛）。  
 详规：[`plans/W3-AP-AGENT-HUB.md`](./plans/W3-AP-AGENT-HUB.md)。  
-下一刀：`W3-AP-DATA-01`（无数据禁止空写 results）。
+下一刀：`W3-AP-HUB-01`（表格附件上传完成自动 ingest，芯片显示「已入库」）。
 
 | 优先级 | ID | 说明 |
 |--------|-----|------|

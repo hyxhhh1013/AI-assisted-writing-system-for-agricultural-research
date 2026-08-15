@@ -46,6 +46,7 @@ export const PROGRESS_TOOLS = new Set([
   "apply_revision_item",
   "write_bilingual_abstract",
   "import_reference",
+  "ingest_project_data",
   "generate_chart",
   "generate_xrd_analysis",
   "generate_table",
@@ -63,6 +64,7 @@ export const PROGRESS_TOOLS = new Set([
  */
 export const FINGERPRINT_BLIND_PROGRESS_TOOLS = new Set([
   "save_reference_classification",
+  "ingest_project_data",
   "generate_chart",
   "generate_xrd_analysis",
   "generate_table",
