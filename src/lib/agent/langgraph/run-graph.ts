@@ -16,7 +16,6 @@ import {
   projectFingerprint,
 } from "@/lib/agent/core/antispam";
 import {
-  isDiagnoseStyleGoal,
   mergeFollowUpGoalHint,
   mergeGoalWithIntentHint,
 } from "@/lib/agent/core/goal-intents";
@@ -94,7 +93,7 @@ export async function* runAgentGraphLoop(
   });
 
   // 诊断任务跳过跨会话记忆，避免被上轮「待导入文献」带偏
-  const diagnoseGoal = isDiagnoseStyleGoal(goal) || classified.kind === "diagnose";
+  const diagnoseGoal = classified.kind === "diagnose";
   context.goal = goal;
   context.intentKind = classified.kind;
 
@@ -175,7 +174,7 @@ export async function* runAgentGraphLoop(
         goal,
         intentKind: classified.kind,
         messages: [
-          { role: "user", content: mergeGoalWithIntentHint(goal) },
+          { role: "user", content: mergeGoalWithIntentHint(goal, classified.kind) },
         ],
       };
 

@@ -15,6 +15,19 @@ export type GoalIntentGateResult =
   | { ok: true }
   | { ok: false; error: string };
 
+/**
+ * `undefined` = 调用方尚未分类（测试/旧调用可回退正则）；
+ * `null` 或具体 kind = 本轮已分类，只认 kind，不再对 goal 跑意图正则。
+ */
+function matchesIntent(
+  intentKind: IntentKind | null | undefined,
+  kinds: readonly IntentKind[],
+  fallback: () => boolean,
+): boolean {
+  if (intentKind === undefined) return fallback();
+  return intentKind !== null && kinds.includes(intentKind);
+}
+
 /** 该工具是否存在成功记录 */
 function hasSuccessfulTool(
   observations: readonly ToolObservation[],
@@ -82,8 +95,11 @@ export function checkClassificationRetrieveGate(
   goal: string,
   toolName: string,
   observations: readonly ToolObservation[],
+  intentKind?: IntentKind | null,
 ): { ok: boolean; error?: string } {
-  if (!isReferenceClassificationGoal(goal)) return { ok: true };
+  if (!matchesIntent(intentKind, ["classify"], () => isReferenceClassificationGoal(goal))) {
+    return { ok: true };
+  }
   if (toolName === "save_reference_classification") return { ok: true };
   if (hasSuccessfulTool(observations, "save_reference_classification")) return { ok: true };
   // 分类模式禁止逐个读文献：list_references 已返回题录/来源/已有分类，足够按编号分类
@@ -185,8 +201,11 @@ function lastValidateHasIssues(
 export function resolveApPipelineStep(
   goal: string,
   observations: readonly ToolObservation[],
+  intentKind?: IntentKind | null,
 ): ApPipelineStep | null {
-  if (!isAcademicPaperPipelineGoal(goal)) return null;
+  if (!matchesIntent(intentKind, ["ap_full"], () => isAcademicPaperPipelineGoal(goal))) {
+    return null;
+  }
   if (!citationCheckReportReady(observations)) return "citation_check";
   // 仅当 validate 报告确实发现待修问题才进「引用修正」；写完自查的干净报告（0 问题）
   // 不应把起草中的会话顶到修正阶段（否则后续 write_section 会被 side-trip 门禁误拦）。
@@ -256,29 +275,30 @@ export function hasCitationRefineSuccess(observations: readonly ToolObservation[
   return hasPersistedTool(observations, "refine_content");
 }
 
+const SKIP_PLANNER_KINDS: readonly IntentKind[] = [
+  "diagnose",
+  "ap_full",
+  "citation",
+  "citation_apply",
+  "draft",
+];
+
 /** 诊断 / 单节起草 / 引用核查·修正 / AP 流程：跳过 Planner LLM，直接进对话循环 */
 export function shouldSkipPlanner(
   goal: string,
   observations: readonly ToolObservation[] = [],
   intentKind?: IntentKind | null,
 ): boolean {
-  if (
-    intentKind === "diagnose"
-    || intentKind === "ap_full"
-    || intentKind === "citation"
-    || intentKind === "citation_apply"
-    || intentKind === "draft"
-  ) {
-    return true;
-  }
-  if (isDiagnoseStyleGoal(goal)) return true;
-  if (isAcademicPaperPipelineGoal(goal)) return true;
-  if (isCitationCheckGoal(goal)) return true;
-  if (isCitationApplyGoal(goal, observations)) return true;
-  if (isSectionDraftGoal(goal, observations, intentKind) && !isReviewWritingGoal(goal)) {
-    return true;
-  }
-  return false;
+  return matchesIntent(
+    intentKind,
+    SKIP_PLANNER_KINDS,
+    () =>
+      isDiagnoseStyleGoal(goal)
+      || isAcademicPaperPipelineGoal(goal)
+      || isCitationCheckGoal(goal)
+      || isCitationApplyGoal(goal, observations)
+      || (isSectionDraftGoal(goal) && !isReviewWritingGoal(goal)),
+  );
 }
 
 /**
@@ -301,29 +321,17 @@ export function parseLiteratureImportTarget(goal: string): number {
   return 15;
 }
 
-/** 起草某一节（引言/讨论/综述等），非检索任务 */
-export function isSectionDraftGoal(
-  goal: string,
-  observations?: readonly ToolObservation[],
-  intentKind?: IntentKind | null,
-): boolean {
+/** 起草某一节（引言/讨论/综述等），非检索任务。仅供 classifyIntent 使用。 */
+export function isSectionDraftGoal(goal: string): boolean {
   if (isLiteratureHuntGoal(goal)) return false;
   if (isAcademicPaperPipelineGoal(goal)) return false;
-  if (intentKind === "draft" || intentKind === "review_write") return true;
-  const goalHit =
+  return (
     /写引言|写讨论|写方法|写结果|写结论|写综述|起草|扩写.*节|write\s*(the\s*)?(introduction|discussion|review)/i.test(
       goal,
     )
     || (/写/.test(goal)
-      && /引言|讨论|方法|结果|结论|综述|introduction|discussion|literature/i.test(goal));
-  if (goalHit) return true;
-  // 跟聊 goal 可能失真（用户简短回复覆盖）；用 observations 推断是否在写章节流程。
-  // 可靠信号：本会话已成功 write_section（正在写/续写），或刚 read_section 读章节准备写。
-  if (observations?.length) {
-    if (hasSuccessfulTool(observations, "write_section")) return true;
-    if (hasSuccessfulTool(observations, "read_section")) return true;
-  }
-  return false;
+      && /引言|讨论|方法|结果|结论|综述|introduction|discussion|literature/i.test(goal))
+  );
 }
 
 function hasSuccessfulInspect(observations: readonly ToolObservation[]): boolean {
@@ -339,7 +347,9 @@ export function checkDiagnoseInspectGate(
   observations: readonly ToolObservation[],
   intentKind?: IntentKind | null,
 ): GoalIntentGateResult {
-  if (!isDiagnoseStyleGoal(goal) && intentKind !== "diagnose") return { ok: true };
+  if (!matchesIntent(intentKind, ["diagnose"], () => isDiagnoseStyleGoal(goal))) {
+    return { ok: true };
+  }
   if (toolName === "inspect_project") return { ok: true };
   if (hasSuccessfulInspect(observations)) return { ok: true };
   return {
@@ -361,8 +371,12 @@ export function checkDraftSearchGate(
   observations: readonly ToolObservation[],
   intentKind?: IntentKind | null,
 ): GoalIntentGateResult {
-  if (!isSectionDraftGoal(goal, observations, intentKind)) return { ok: true };
-  if (isReviewWritingGoal(goal) || intentKind === "review_write") return { ok: true };
+  const isDraft = matchesIntent(
+    intentKind,
+    ["draft"],
+    () => isSectionDraftGoal(goal) && !isReviewWritingGoal(goal),
+  );
+  if (!isDraft) return { ok: true };
   if (toolName !== "search_external" && toolName !== "search_knowledge") {
     return { ok: true };
   }
@@ -384,7 +398,7 @@ export function diagnoseGoalNudge(): string {
 
 /** 写节任务开场提示 */
 export function draftGoalNudge(goal = "", intentKind?: IntentKind | null): string {
-  if (isReviewWritingGoal(goal) || intentKind === "review_write") {
+  if (matchesIntent(intentKind, ["review_write"], () => isReviewWritingGoal(goal))) {
     const n = parseLiteratureImportTarget(goal);
     return (
       `【系统】写综述：先 inspect / list_references。参考文献通常至少约 ${n} 篇；`
@@ -435,8 +449,9 @@ export function citationCheckNudge(): string {
 export function apPipelineNudge(
   goal: string,
   observations: readonly ToolObservation[],
+  intentKind?: IntentKind | null,
 ): string {
-  const step = resolveApPipelineStep(goal, observations);
+  const step = resolveApPipelineStep(goal, observations, intentKind);
   switch (step) {
     case "citation_check":
       return (
@@ -502,8 +517,9 @@ export function checkCitationSideTripGate(
   goal: string,
   toolName: string,
   observations: readonly ToolObservation[],
+  intentKind?: IntentKind | null,
 ): GoalIntentGateResult {
-  const pipelineStep = resolveApPipelineStep(goal, observations);
+  const pipelineStep = resolveApPipelineStep(goal, observations, intentKind);
   if (pipelineStep) {
     if (pipelineStep === "abstract" && toolName === "write_bilingual_abstract") {
       return { ok: true };
@@ -552,10 +568,16 @@ export function checkCitationSideTripGate(
     return { ok: true };
   }
 
-  if (!isCitationFlowGoal(goal, observations)) return { ok: true };
+  if (!matchesIntent(
+    intentKind,
+    ["citation", "citation_apply"],
+    () => isCitationFlowGoal(goal, observations),
+  )) {
+    return { ok: true };
+  }
   if (!CITATION_SIDE_TRIP_TOOLS.has(toolName)) return { ok: true };
   if (
-    isCitationApplyGoal(goal, observations)
+    matchesIntent(intentKind, ["citation_apply"], () => isCitationApplyGoal(goal, observations))
     && hasCitationRefineSuccess(observations)
   ) {
     return { ok: true };
@@ -575,10 +597,11 @@ export function checkCitationCheckGate(
   goal: string,
   toolName: string,
   observations: readonly ToolObservation[],
+  intentKind?: IntentKind | null,
 ): GoalIntentGateResult {
-  const pipelineStep = resolveApPipelineStep(goal, observations);
+  const pipelineStep = resolveApPipelineStep(goal, observations, intentKind);
   const inCitationCheck =
-    isCitationCheckGoal(goal)
+    matchesIntent(intentKind, ["citation"], () => isCitationCheckGoal(goal))
     || pipelineStep === "citation_check";
   if (!inCitationCheck) return { ok: true };
   if (toolName === "validate_citations") return { ok: true };
@@ -621,8 +644,11 @@ export function checkAbstractFinishGate(
   goal: string,
   toolName: string,
   observations: readonly ToolObservation[],
+  intentKind?: IntentKind | null,
 ): GoalIntentGateResult {
-  if (!isAbstractFinishGoal(goal)) return { ok: true };
+  if (!matchesIntent(intentKind, ["abstract_finish"], () => isAbstractFinishGoal(goal))) {
+    return { ok: true };
+  }
   if (toolName === "write_bilingual_abstract") return { ok: true };
   if (ABSTRACT_FINISH_BLOCKED_TOOLS.has(toolName)) {
     return {
@@ -642,8 +668,11 @@ export function checkReviewRequestGate(
   goal: string,
   toolName: string,
   observations: readonly ToolObservation[],
+  intentKind?: IntentKind | null,
 ): GoalIntentGateResult {
-  if (!isReviewRequestGoal(goal)) return { ok: true };
+  if (!matchesIntent(intentKind, ["review_request"], () => isReviewRequestGoal(goal))) {
+    return { ok: true };
+  }
   if (REVIEW_REQUEST_BLOCKED_TOOLS.has(toolName)) {
     return {
       ok: false,
@@ -724,38 +753,71 @@ export function buildIntentStopAskUser(opts: {
   );
 }
 
-/** 跟聊时按 observations 注入意图提示（如「好」→ 引用修正） */
+/** 按已分类 kind 取开场/跟聊 hint；kind 为空则无 hint */
+export function nudgeForKind(
+  kind: IntentKind | null | undefined,
+  goal: string,
+  observations: readonly ToolObservation[] = [],
+): string | null {
+  if (!kind) return null;
+  switch (kind) {
+    case "ap_full":
+      return apPipelineNudge(goal, observations, kind);
+    case "citation_apply":
+      return citationApplyNudge();
+    case "diagnose":
+      return diagnoseGoalNudge();
+    case "citation":
+      return citationCheckNudge();
+    case "classify":
+      return referenceClassificationNudge();
+    case "literature":
+      return literatureHuntNudge(goal);
+    case "draft":
+    case "review_write":
+      return draftGoalNudge(goal, kind);
+    default:
+      return null;
+  }
+}
+
+/** 跟聊时按已分类 kind 注入意图提示（如「好」→ 引用修正） */
 export function mergeFollowUpGoalHint(
   goal: string,
   observations: readonly ToolObservation[],
   intentKind?: IntentKind | null,
 ): string | null {
-  if (isAcademicPaperPipelineGoal(goal) || intentKind === "ap_full") {
+  if (intentKind !== undefined) return nudgeForKind(intentKind, goal, observations);
+  if (isAcademicPaperPipelineGoal(goal)) {
     return apPipelineNudge(goal, observations);
   }
-  if (isCitationApplyGoal(goal, observations) || intentKind === "citation_apply") {
+  if (isCitationApplyGoal(goal, observations)) {
     return citationApplyNudge();
   }
-  if (isDiagnoseStyleGoal(goal) || intentKind === "diagnose") {
+  if (isDiagnoseStyleGoal(goal)) {
     return diagnoseGoalNudge();
   }
-  if (isCitationCheckGoal(goal) || intentKind === "citation") {
+  if (isCitationCheckGoal(goal)) {
     return citationCheckNudge();
   }
-  if (isReferenceClassificationGoal(goal) || intentKind === "classify") {
+  if (isReferenceClassificationGoal(goal)) {
     return referenceClassificationNudge();
   }
-  if (intentKind === "literature") {
-    return literatureHuntNudge(goal);
-  }
-  if (isSectionDraftGoal(goal, observations, intentKind)) {
-    return draftGoalNudge(goal, intentKind);
+  if (isSectionDraftGoal(goal)) {
+    return draftGoalNudge(goal);
   }
   return null;
 }
 
 /** 把意图提示并进首条用户消息，避免额外假 user 轮次 */
-export function mergeGoalWithIntentHint(goal: string): string {
+export function mergeGoalWithIntentHint(
+  goal: string,
+  intentKind?: IntentKind | null,
+): string {
+  if (intentKind !== undefined) {
+    const hint = nudgeForKind(intentKind, goal, []);
+    return hint ? `${goal}\n\n${hint}` : goal;
+  }
   if (isAcademicPaperPipelineGoal(goal)) {
     return `${goal}\n\n${apPipelineNudge(goal, [])}`;
   }
@@ -786,6 +848,8 @@ export function mergeGoalWithIntentHint(goal: string): string {
 export interface IntentClosureContext {
   goal: string;
   observations: ToolObservation[];
+  /** 本轮已分类意图；缺省则闭包回退 goal 正则（仅测试） */
+  intentKind?: IntentKind | null;
   /** 本轮是否有检索成功 */
   searchedOk: boolean;
   /** 本轮累计成功导入篇数 */
@@ -834,7 +898,7 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
   pipeline_fix: {
     kind: "pipeline_fix",
     isIncomplete: (ctx) =>
-      resolveApPipelineStep(ctx.goal, ctx.observations) === "citation_fix",
+      resolveApPipelineStep(ctx.goal, ctx.observations, ctx.intentKind) === "citation_fix",
     nudge: () =>
       "【系统】academic-paper 流程·引用修正：read_section(literature_body) 后立刻 "
       + "refine_content(section=literature_body, draftText=全文, feedback=validate 报告中的改引清单, persistToProject=true)。"
@@ -845,7 +909,7 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
   pipeline_abstract: {
     kind: "pipeline_abstract",
     isIncomplete: (ctx) =>
-      resolveApPipelineStep(ctx.goal, ctx.observations) === "abstract",
+      resolveApPipelineStep(ctx.goal, ctx.observations, ctx.intentKind) === "abstract",
     nudge: () =>
       "【系统】academic-paper 流程·双语摘要：引用已修正，请立刻 write_bilingual_abstract 写回 abstract。",
     stopAsk: (ctx) =>
@@ -854,7 +918,7 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
   abstract_finish: {
     kind: "abstract_finish",
     isIncomplete: (ctx) =>
-      isAbstractFinishGoal(ctx.goal)
+      matchesIntent(ctx.intentKind, ["abstract_finish"], () => isAbstractFinishGoal(ctx.goal))
       && !hasSuccessfulAbstractWrite(ctx.observations),
     nudge: () =>
       "【系统】本轮是收口/摘要：调用 write_bilingual_abstract 写回 abstract（中英双语）。"
@@ -865,7 +929,7 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
   review_request: {
     kind: "review_request",
     isIncomplete: (ctx) =>
-      isReviewRequestGoal(ctx.goal)
+      matchesIntent(ctx.intentKind, ["review_request"], () => isReviewRequestGoal(ctx.goal))
       && !hasSuccessfulReview(ctx.observations),
     nudge: () =>
       "【系统】本轮是审查/审稿：调用 run_review_rounds（Phase 7 轮次）或 review_content 产出四维报告。"
@@ -877,7 +941,7 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
   pipeline_review: {
     kind: "pipeline_review",
     isIncomplete: (ctx) =>
-      resolveApPipelineStep(ctx.goal, ctx.observations) === "review",
+      resolveApPipelineStep(ctx.goal, ctx.observations, ctx.intentKind) === "review",
     nudge: () =>
       "【系统】academic-paper 流程·审查：请调用 run_review_rounds（Phase 7 轮次）或 review_content 产出审查报告。",
     stopAsk: (ctx) =>
@@ -886,7 +950,7 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
   pipeline_check: {
     kind: "pipeline_check",
     isIncomplete: (ctx) =>
-      resolveApPipelineStep(ctx.goal, ctx.observations) === "citation_check",
+      resolveApPipelineStep(ctx.goal, ctx.observations, ctx.intentKind) === "citation_check",
     nudge: () =>
       "【系统】academic-paper 流程·引用检查：请立刻 validate_citations（一次全文），汇报 suspicious [n]。",
     // 引用检查未出报告时无专属「问用户」文案，落到通用收尾
@@ -895,7 +959,11 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
   citation_apply: {
     kind: "citation_apply",
     isIncomplete: (ctx) =>
-      isCitationApplyGoal(ctx.goal, ctx.observations)
+      matchesIntent(
+        ctx.intentKind,
+        ["citation_apply"],
+        () => isCitationApplyGoal(ctx.goal, ctx.observations),
+      )
       && !hasCitationRefineSuccess(ctx.observations),
     nudge: () =>
       "【系统】用户已确认引用修正，但尚未 refine_content 写回。"
@@ -907,7 +975,11 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
   literature: {
     kind: "literature",
     isIncomplete: (ctx) =>
-      (isLiteratureHuntGoal(ctx.goal) || Boolean(reviewShort(ctx))) && !importedOk(ctx),
+      matchesIntent(
+        ctx.intentKind,
+        ["literature", "review_write"],
+        () => isLiteratureHuntGoal(ctx.goal) || Boolean(reviewShort(ctx)),
+      ) && !importedOk(ctx),
     nudge: (ctx) => {
       if (ctx.importCount === 0 && ctx.refTotal < ctx.importTarget && ctx.searchedOk) {
         return `【系统】已检索但项目文献仍不足（现有 ${ctx.refTotal} 篇，目标约 ${ctx.importTarget} 篇）。`
@@ -926,7 +998,11 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
   draft: {
     kind: "draft",
     isIncomplete: (ctx) =>
-      isSectionDraftGoal(ctx.goal) && !isReviewWritingGoal(ctx.goal) && !ctx.wroteOk,
+      matchesIntent(
+        ctx.intentKind,
+        ["draft"],
+        () => isSectionDraftGoal(ctx.goal) && !isReviewWritingGoal(ctx.goal),
+      ) && !ctx.wroteOk,
     nudge: () =>
       "【系统】用户要写章节，但尚未成功 write_section 写回。"
       + "请先读大纲/文献（或 inspect），再直接 write_section（蓝图可自动补）；不要只提问。",
@@ -936,7 +1012,9 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
   review_write: {
     kind: "review_write",
     isIncomplete: (ctx) =>
-      isReviewWritingGoal(ctx.goal) && importedOk(ctx) && !ctx.wroteOk,
+      matchesIntent(ctx.intentKind, ["review_write"], () => isReviewWritingGoal(ctx.goal))
+      && importedOk(ctx)
+      && !ctx.wroteOk,
     nudge: () =>
       "【系统】文献体量已够，请 list_references 核对后，按蓝图子节逐次 "
       + "write_section(literature_body, subsectionTitle=子节标题) 写回正文；"
@@ -947,7 +1025,8 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
   citation: {
     kind: "citation",
     isIncomplete: (ctx) =>
-      isCitationCheckGoal(ctx.goal) && !citationCheckReportReady(ctx.observations),
+      matchesIntent(ctx.intentKind, ["citation"], () => isCitationCheckGoal(ctx.goal))
+      && !citationCheckReportReady(ctx.observations),
     nudge: () =>
       "【系统】用户要做引用核查，但尚未成功 validate_citations。"
       + "请立刻调用 validate_citations（默认检查全文），用中文汇报硬检结果与 suspicious [n]；"

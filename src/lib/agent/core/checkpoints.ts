@@ -31,6 +31,7 @@ export function shouldPauseForOutlineApprove(input: {
 
 export function shouldPauseForConfigConfirm(input: {
   goal: string;
+  intentKind?: import("@/contracts/agent-intent").IntentKind | null;
   hasPaperConfig: boolean;
   approvedKinds: readonly AgentCheckpointKind[];
 }): boolean {
@@ -38,6 +39,13 @@ export function shouldPauseForConfigConfirm(input: {
   if (input.approvedKinds.includes("config_confirm")) return false;
   // 仅「从零写整篇 / academic-paper 流程 / 起草某节」等写作目标需要先做论文配置问答；
   // 诊断 / 检索 / 引用核查 / 审查 / 分类编码等与论文配置无关的目标不应被配置问答拦一道。
+  if (input.intentKind !== undefined) {
+    return (
+      input.intentKind === "ap_full"
+      || input.intentKind === "draft"
+      || input.intentKind === "review_write"
+    );
+  }
   return (
     isApFullStyleGoal(input.goal)
     || isAcademicPaperPipelineGoal(input.goal)

@@ -62,7 +62,7 @@ export function classifyIntentFromRegex(
   if (isReviewRequestGoal(goal)) return "review_request";
   if (isLiteratureHuntGoal(goal)) return "literature";
   if (isReviewWritingGoal(goal)) return "review_write";
-  if (isSectionDraftGoal(goal, observations)) return "draft";
+  if (isSectionDraftGoal(goal)) return "draft";
   return null;
 }
 

@@ -99,11 +99,11 @@ export const intentGate: PreToolGate = ({ state, tool, params, recentObservation
   const gates: Array<() => { ok: boolean; error?: string }> = [
     () => checkDiagnoseInspectGate(state.goal, tool.name, recentObservations, state.intentKind),
     () => checkDraftSearchGate(state.goal, tool.name, recentObservations, state.intentKind),
-    () => checkCitationCheckGate(state.goal, tool.name, recentObservations),
-    () => checkCitationSideTripGate(state.goal, tool.name, recentObservations),
-    () => checkAbstractFinishGate(state.goal, tool.name, recentObservations),
-    () => checkReviewRequestGate(state.goal, tool.name, recentObservations),
-    () => checkClassificationRetrieveGate(state.goal, tool.name, recentObservations),
+    () => checkCitationCheckGate(state.goal, tool.name, recentObservations, state.intentKind),
+    () => checkCitationSideTripGate(state.goal, tool.name, recentObservations, state.intentKind),
+    () => checkAbstractFinishGate(state.goal, tool.name, recentObservations, state.intentKind),
+    () => checkReviewRequestGate(state.goal, tool.name, recentObservations, state.intentKind),
+    () => checkClassificationRetrieveGate(state.goal, tool.name, recentObservations, state.intentKind),
     () => checkReadBeforeWrite(tool.name, params, recentObservations),
   ];
   for (const gate of gates) {

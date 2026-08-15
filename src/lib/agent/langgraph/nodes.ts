@@ -62,10 +62,6 @@ import {
   type WritePrereqStep,
 } from "@/lib/agent/core/ensure-write-prereqs";
 import {
-  isAcademicPaperPipelineGoal,
-  isCitationApplyGoal,
-  isCitationCheckGoal,
-  isSectionDraftGoal,
   parseLiteratureImportTarget,
   pickIntentNudge,
   pickIntentStopAsk,
@@ -121,6 +117,7 @@ export async function planNode(
     if (
       shouldPauseForConfigConfirm({
         goal: state.goal,
+        intentKind: state.intentKind,
         hasPaperConfig: Boolean(agentContext.projectSnapshot?.hasPaperConfig),
         approvedKinds: state.approvedCheckpointKinds ?? [],
       })
@@ -328,6 +325,7 @@ export async function agentNode(
     const intentCtx: IntentClosureContext = {
       goal: state.goal,
       observations,
+      intentKind: state.intentKind,
       searchedOk,
       importCount,
       importTarget,
@@ -375,9 +373,9 @@ export async function agentNode(
       // 对话式收尾：意图未完成 → 问用户；有未完成计划 → 提醒可继续（引用修正跟聊不提示旧 plan）
       let hint = pickIntentStopAsk(intentCtx);
       const suppressPlanHint =
-        isAcademicPaperPipelineGoal(state.goal)
-        || isCitationApplyGoal(state.goal, observations)
-        || isCitationCheckGoal(state.goal);
+        state.intentKind === "ap_full"
+        || state.intentKind === "citation_apply"
+        || state.intentKind === "citation";
       if (!hint && !suppressPlanHint && planHasPendingWork(plan) && plan) {
         const left = plan.subtasks
           .filter((s) => s.status === "pending" || s.status === "running")
@@ -400,7 +398,9 @@ export async function agentNode(
       );
       if (
         !hint
-        && (execWords.test(state.goal) || isSectionDraftGoal(state.goal, observations, state.intentKind))
+        && (execWords.test(state.goal)
+          || state.intentKind === "draft"
+          || state.intentKind === "review_write")
         && observations.length > 0
         && !landedWrite
       ) {

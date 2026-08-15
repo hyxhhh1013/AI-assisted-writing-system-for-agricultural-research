@@ -119,6 +119,7 @@ describe("并行路径意图门禁（与串行同源）", () => {
     const out = await runParallelReads(
       baseState({
         goal: "请做文献分类编码",
+        intentKind: "classify",
         pendingToolCalls: [
           call("1", "list_references", {}),
           call("2", "list_references", {}),
@@ -141,6 +142,7 @@ describe("并行路径意图门禁（与串行同源）", () => {
     const out = await runParallelReads(
       baseState({
         goal: "帮我收口写摘要",
+        intentKind: "abstract_finish",
         pendingToolCalls: [
           call("1", "search_external", { query: "biochar" }),
           call("2", "list_references", {}),
@@ -206,6 +208,7 @@ describe("runParallelReads", () => {
     const out = await runParallelReads(
       baseState({
         goal: "诊断一下项目卡在哪",
+        intentKind: "diagnose",
         pendingToolCalls: [
           call("1", "inspect_project", { id: "P" }),
           call("2", "list_references", { id: "L" }),

@@ -43,23 +43,15 @@ describe("goal-intents", () => {
     expect(isReviewWritingGoal("写一篇生物炭综述")).toBe(true);
   });
 
-  it("treats follow-up with write_section observation as draft even when goal is terse", () => {
-    // 跟聊 goal 失真（用户简短回复「A」）但本会话已成功 write_section → 仍是写章节流程
-    expect(isSectionDraftGoal("A", [{ tool: "write_section", success: true }])).toBe(true);
-    expect(isSectionDraftGoal("继续", [{ tool: "read_section", success: true }])).toBe(true);
-    // 无写/读章节观察 → 不算写章节
-    expect(isSectionDraftGoal("A", [{ tool: "search_knowledge", success: true }])).toBe(false);
-    expect(isSectionDraftGoal("A", [], "draft")).toBe(true);
+  it("isSectionDraftGoal is regex-only; follow-up inherit lives in classifyIntent", () => {
+    expect(isSectionDraftGoal("A")).toBe(false);
+    expect(isSectionDraftGoal("继续")).toBe(false);
   });
 
-  it("blocks search during draft follow-up when write_section observed", () => {
-    const obs = [
-      { tool: "read_project_asset", success: true },
-      { tool: "write_section", success: true },
-    ];
-    const r = checkDraftSearchGate("A", "search_knowledge", obs);
-    expect(r.ok).toBe(false);
+  it("blocks search during draft follow-up when kind is draft even if goal is garbage", () => {
     expect(checkDraftSearchGate("A", "search_knowledge", [], "draft").ok).toBe(false);
+    expect(checkDraftSearchGate("nonsense", "search_knowledge", [], "draft").ok).toBe(false);
+    expect(checkDraftSearchGate("写引言", "search_knowledge", [], "literature").ok).toBe(true);
   });
 
   it("parses literature import target count", () => {
@@ -77,6 +69,8 @@ describe("goal-intents", () => {
     expect(shouldSkipPlanner("检查引用并汇报可疑项")).toBe(true);
     expect(shouldSkipPlanner("写一篇生物炭综述")).toBe(false);
     expect(shouldSkipPlanner("检索并导入文献")).toBe(false);
+    expect(shouldSkipPlanner("garbage", [], "draft")).toBe(true);
+    expect(shouldSkipPlanner("写引言", [], "literature")).toBe(false);
   });
 
   it("detects citation check goals", () => {
@@ -134,7 +128,7 @@ describe("goal-intents", () => {
     const observations = [ok("validate_citations", { exportReady: false })];
     expect(isCitationApplyGoal("好", observations)).toBe(true);
     expect(isCitationApplyGoal("好", [])).toBe(false);
-    expect(shouldSkipPlanner("好", observations)).toBe(true);
+    expect(shouldSkipPlanner("好", observations, "citation_apply")).toBe(true);
     expect(citationCheckReportReady(observations)).toBe(true);
   });
 
@@ -228,12 +222,12 @@ describe("goal-intents", () => {
   });
 
   it("draft blocks search even after context read", () => {
-    const blocked = checkDraftSearchGate("写引言", "search_external", []);
+    const blocked = checkDraftSearchGate("写引言", "search_external", [], "draft");
     expect(blocked.ok).toBe(false);
 
     const afterInspect = checkDraftSearchGate("写引言", "search_knowledge", [
       ok("inspect_project"),
-    ]);
+    ], "draft");
     expect(afterInspect.ok).toBe(false);
   });
 
@@ -299,6 +293,9 @@ describe("intent continuation pickers", () => {
     expect(nudge).toContain("write_section");
     const stop = pickIntentStopAsk(ctx({ goal: "写引言", refTotal: 5 }));
     expect(stop).toContain("继续写");
+    expect(
+      pickIntentNudge(ctx({ goal: "A", intentKind: "draft", refTotal: 5 })),
+    ).toContain("write_section");
   });
 
   it("prioritizes review_write over nothing when refs enough but body missing", () => {

@@ -70,6 +70,22 @@ describe("agent checkpoints", () => {
     ).toBe(false);
     expect(
       shouldPauseForConfigConfirm({
+        goal: "nonsense",
+        intentKind: "draft",
+        hasPaperConfig: false,
+        approvedKinds: [],
+      }),
+    ).toBe(true);
+    expect(
+      shouldPauseForConfigConfirm({
+        goal: "帮我写引言",
+        intentKind: "literature",
+        hasPaperConfig: false,
+        approvedKinds: [],
+      }),
+    ).toBe(false);
+    expect(
+      shouldPauseForConfigConfirm({
         goal: "按 academic-paper 写完整篇",
         hasPaperConfig: false,
         approvedKinds: ["config_confirm"],
