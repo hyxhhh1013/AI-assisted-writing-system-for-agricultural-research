@@ -56,6 +56,10 @@ export interface AgentContext {
   patchActiveWrite?: (
     activeWrite: import("@/contracts/agent-session").AgentActiveWrite | null,
   ) => Promise<void>;
+  /** 当前用户目标（claim grounding 收口判定等） */
+  goal?: string;
+  /** 本轮已分类意图（跟聊继承后的 kind） */
+  intentKind?: import("@/contracts/agent-intent").IntentKind | null;
   budget: {
     maxIterations: number;
     currentIteration: number;

@@ -10,6 +10,10 @@ import {
   evaluateCitationClaimGrounding,
 } from "@/lib/citation-claim-grounding";
 import type { ClaimGroundingReport } from "@/contracts/citation-claim-grounding";
+import {
+  isCitationClaimGroundingCloseOut,
+  shouldRunCitationClaimGrounding,
+} from "@/lib/agent/citation-claim-policy";
 import { syncProjectPaperPassport } from "@/lib/project-paper-passport-sync";
 import { findReferenceRowsLite } from "@/lib/reference-rows";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
@@ -93,12 +97,16 @@ export const validateCitationsTool: ToolDefinition = {
       : [];
     const overlapIssues = checks.filter((c) => !c.passed || c.overlap < 0.15);
 
-    // 引用级 grounding（claim 支撑判定）：LLM 判定，env 显式开启且文献有摘要才跑；
+    // 引用级 grounding：收口路径默认开（写节 reflect 自查不跑）；=0/false/off 全局关。
     // 失败（无 key / 超时 / 解析失败）降级为 null，不阻断 validate_citations 主流程。
     let claimGrounding: ClaimGroundingReport | null = null;
+    const closeOut = isCitationClaimGroundingCloseOut(ctx.goal ?? "", ctx.intentKind);
     if (
-      process.env.CITATION_CLAIM_GROUNDING === "1"
-      && references.some((r) => r.abstract?.trim())
+      shouldRunCitationClaimGrounding({
+        hasAbstracts: references.some((r) => r.abstract?.trim()),
+        env: process.env.CITATION_CLAIM_GROUNDING,
+        closeOut,
+      })
     ) {
       try {
         claimGrounding = await evaluateCitationClaimGrounding(

@@ -808,6 +808,8 @@ export async function toolsNode(
     agentContext.budget.toolCallCount += 1;
     toolCallCount += 1;
     noteSearchCall(antispamTracker, tool.name);
+    agentContext.intentKind = state.intentKind ?? agentContext.intentKind;
+    agentContext.goal = state.goal || agentContext.goal;
 
     try {
       const result = await tool.execute(params, agentContext);

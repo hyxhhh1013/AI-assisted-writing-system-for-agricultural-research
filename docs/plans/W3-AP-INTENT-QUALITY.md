@@ -61,7 +61,7 @@ goal 字符串
 质量面：
 
 - `lib/quality-eval/` 四维确定性打分，可进 CI，但量不出「句意张冠李戴」
-- `citation-claim-grounding` 要 `CITATION_CLAIM_GROUNDING=1` 才跑
+- ~~`citation-claim-grounding` 要 `CITATION_CLAIM_GROUNDING=1` 才跑~~ **QUALITY-CLAIM done**：收口默认开，`=0` 才关
 - LLM-judge 未进 `eval:quality`
 
 LangGraph：`graph.ts` 42 行线性拓扑；暂停/续跑靠 `pendingToolCalls` 短路。本波 **冻拓扑**，不重写 interrupt/checkpoint。
@@ -106,11 +106,11 @@ AgentSessionSnapshot.intentKind
 | 1 | **W3-AP-INTENT-01** | `IntentKind` 上提契约；快照字段；每轮只分类一次；跟聊继承；不一致打日志 | 1.5d | — | **done** 2026-08-15 |
 | 2 | **W3-AP-INTENT-02** | gate / skipPlanner / hint **只消费** `state.intentKind` | 1d | 01 | |
 | 3 | **W3-AP-RULES-01** | `AGENT_RULES` 单一事实源；prompt/nudge 渲染；hard 才进 gate | 1d | 02 | |
-| 4 | **W3-AP-QUALITY-CLAIM** | 收口路径默认开 claim grounding；`=0` 才关 | 0.5d | — | 可与 01 并行（`validate-citations.ts`） |
+| 4 | **W3-AP-QUALITY-CLAIM** | 收口路径默认开 claim grounding；`=0` 才关 | 0.5d | — | **done** 2026-08-15 |
 | 5 | **W3-AP-QUALITY-JUDGE** | LLM-judge 只进 `eval:quality`，不进热路径 | 1d | CLAIM 或并行 | 不碰 nodes |
 | 6 | **W3-AP-INTENT-SHADOW** | 可选：LLM 分类影子模式，与正则对照记日志 | 0.5d | 01 | **有数据再决定是否 promote** |
 
-推荐开干顺序：**INTENT-01 → INTENT-02 → RULES-01**；**QUALITY-CLAIM 可插在 01 旁边**（不改 `goal-intents.ts`）。  
+推荐开干顺序：**INTENT-01 → INTENT-02 → RULES-01**（QUALITY-CLAIM 已于 2026-08-15 落地）。  
 SHADOW 不是入场券：01 的跟聊继承若已修好「A/继续」，LLM 增量可能很小，允许结论为「不 promote」。
 
 ---
@@ -182,6 +182,8 @@ SHADOW 不是入场券：01 的跟聊继承若已修好「A/继续」，LLM 增�
 ---
 
 ### W3-AP-QUALITY-CLAIM — 收口默认 claim grounding
+
+> **状态**：✅ done 2026-08-15
 
 **目标：** 最值钱的一层不再 opt-in 关掉。
 

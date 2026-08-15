@@ -13,7 +13,7 @@
  * }
  *
  * 说明：这是确定性规则尺（不调 LLM），用于给 prompt/门禁改动一个可度量的方向；
- * 引用 claim 级判定另见 validate_citations 的 claimGrounding（CITATION_CLAIM_GROUNDING=1）。
+ * 引用 claim 级判定另见 validate_citations 的 claimGrounding（收口默认开；CITATION_CLAIM_GROUNDING=0 关闭）。
  */
 import fs from "fs";
 import path from "path";

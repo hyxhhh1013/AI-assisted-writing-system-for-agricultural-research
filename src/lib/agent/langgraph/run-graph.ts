@@ -95,6 +95,8 @@ export async function* runAgentGraphLoop(
 
   // 诊断任务跳过跨会话记忆，避免被上轮「待导入文献」带偏
   const diagnoseGoal = isDiagnoseStyleGoal(goal) || classified.kind === "diagnose";
+  context.goal = goal;
+  context.intentKind = classified.kind;
 
   // 跟聊已自带完整消息历史，不必再注入跨会话 prior / 记忆（简报仍可保留）
   const memoryPromise =

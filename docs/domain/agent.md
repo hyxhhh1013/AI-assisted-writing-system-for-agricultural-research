@@ -257,7 +257,7 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 - `collectCitedSentences`：抽每个 [n] 首次出现处的整句 + 对应题录/摘要（纯函数）。
 - `evaluateCitationClaimGrounding(input, judge)`：judge 可注入；生产 `createLLMClaimJudge()` 用 **verifier 角色** 批量判定 support / contradict / neutral（缺摘要/题录过短 → skip）。聚合 `ClaimGroundingReport`（supportRate / contradict 清单 / hint）。
 - 契约：`contracts/citation-claim-grounding.ts`；单测：`src/__tests__/lib/citation-claim-grounding.test.ts`（fake judge，无 key）。
-- 接入 `validate_citations`：env `CITATION_CLAIM_GROUNDING=1` 且文献有摘要时开启；失败（无 key/超时/解析失败）降级为 `claimGrounding: null`，不阻断主流程。结果并入 `data.claimGrounding`，summary 追加 `【claim 接地】`。contradict 是「可判定且确实错引」的强信号，供 Agent 优先改引/改写。
+- 接入 `validate_citations`：**收口路径默认开**（`intentKind` 为 citation / citation_apply / abstract_finish / review_request / ap_full / pipeline_*；无 kind 时按 goal 正则回退；无 goal 的直接调用视为显式核查）。写节 / 综述起草（`draft` / `review_write`）的 reflect 自查**不跑**，避免每节烧 verifier。文献无摘要则 skip。`CITATION_CLAIM_GROUNDING=0`（或 `false`/`off`）全局关闭。失败（无 key/超时/解析失败）降级为 `claimGrounding: null`，不阻断主流程。结果并入 `data.claimGrounding`，summary 追加 `【claim 接地】`。contradict 是「可判定且确实错引」的强信号，供 Agent 优先改引/改写。
 
 ### 论文质量评测集（一把量质量的尺子）
 
