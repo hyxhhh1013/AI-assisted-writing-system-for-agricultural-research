@@ -1,7 +1,7 @@
 # Agent 编排（写作助手）
 
-> L3 域文档 · 更新：2026-08-15
-> 契约唯一权威源：`src/contracts/agent.ts`（SSE 事件）、`src/contracts/agent-session.ts`（会话消息）。
+> L3 域文档 · 更新：2026-08-15  
+> 契约唯一权威源：`src/contracts/agent.ts`（SSE 事件）、`src/contracts/agent-session.ts`（会话消息）、`src/contracts/agent-intent.ts`（`IntentKind`）。
 
 ## 概览
 
@@ -39,6 +39,7 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 | `src/lib/agent/writing-progress.ts` | 写节进度翻译层（管道事件 → `agent/progress` label） |
 | `src/lib/agent/writing-quality.ts` | WQC 写作质检轻量：喉清开场 / 综上所述堆砌 / overclaim / 段长方差（确定性规则，warn 级不阻断） |
 | `src/lib/agent/quality-closure.ts` | 质量收口看板数据层：聚合节完整度/摘要/引用硬检/审查 4 信号（纯函数） |
+| `src/lib/agent/core/classify-intent.ts` | 每轮 `classifyIntent`：跟聊继承或正则；不上 LLM |
 | `components/shared/agent/quality-closure-panel.tsx` | 质量收口看板 UI（工作台 agent Tab 顶部） |
 | `src/lib/agent/writing-runner.ts` | 复用写作管道；`onWritingEvent` 转发进度 |
 | `src/lib/agent/session-store.ts` | 会话持久化 + `tryAcquireAgentSession` 并发互斥 |
@@ -198,6 +199,16 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 **已落地 HUB-02**：工作台主栏默认 Agent + 结构；data/xrd/outline/writing 收进「专家工具」。`NEXT_PUBLIC_WORKBENCH_EXPERT_TABS=1` 恢复旧布局；`?tab=data` 仍可用。
 
 **已落地 HUB-03**：`/plot` 不再挂工作台侧栏；配图坞只留「期刊精修」深链。路由与回写保留。
+
+## 意图状态化 + 质量尺（2026-08-15 规划，Wave 3.9）
+
+产品方向：跟聊不再用残缺 `goal` 字符串重判意图；规则只写一处；收口默认能量引用句意。
+
+详规与 PR 序：[`plans/W3-AP-INTENT-QUALITY.md`](../plans/W3-AP-INTENT-QUALITY.md)（队列 Phase 11d）。
+
+**即刻冻结**：不准再往 `goal-intents.ts` 加口语 `isXxxGoal` / `checkXxxGate`。领域不变量（空数据、越界引用）与事故型安全门除外。
+
+**已落地 INTENT-01**：`contracts/agent-intent.ts`；`classifyIntent` 每轮一次；跟聊短回复继承 `snapshot.intentKind`。下一刀 **INTENT-02**：gate / nudge 只消费 kind，不再对残缺 `goal` 重跑正则。
 
 ## 机理图 / 识图自检（2026-08-09）
 

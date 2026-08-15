@@ -21,6 +21,7 @@ function baseState(overrides: Partial<AgentGraphStateType> = {}): AgentGraphStat
     awaitingCheckpoint: null,
     awaitingConfirm: null,
     grantedConfirm: null,
+    intentKind: null,
     approvedCheckpointKinds: [],
     ...overrides,
   };

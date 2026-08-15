@@ -68,6 +68,7 @@ describe("routeAfterAgent plan continue", () => {
       awaitingCheckpoint: null,
       awaitingConfirm: null,
       grantedConfirm: null,
+      intentKind: null,
       approvedCheckpointKinds: [],
       ...overrides,
     };

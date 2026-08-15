@@ -148,7 +148,7 @@ export async function planNode(
     }
 
     // 诊断 / 单节起草 / 引用核查·修正：跳过 Planner LLM，直接对话
-    if (shouldSkipPlanner(state.goal, state.observations ?? [])) {
+    if (shouldSkipPlanner(state.goal, state.observations ?? [], state.intentKind)) {
       events.push({ type: "agent/status", status: "thinking" });
       return { events, plan: null };
     }
@@ -400,7 +400,7 @@ export async function agentNode(
       );
       if (
         !hint
-        && (execWords.test(state.goal) || isSectionDraftGoal(state.goal, observations))
+        && (execWords.test(state.goal) || isSectionDraftGoal(state.goal, observations, state.intentKind))
         && observations.length > 0
         && !landedWrite
       ) {

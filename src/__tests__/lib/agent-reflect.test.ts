@@ -122,6 +122,7 @@ describe("reflection routing", () => {
       awaitingCheckpoint: null,
       awaitingConfirm: null,
       grantedConfirm: null,
+      intentKind: null,
       approvedCheckpointKinds: [],
       ...overrides,
     };

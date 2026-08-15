@@ -1,9 +1,15 @@
 /**
  * 用户 goal 意图门禁 — 抗跨会话记忆带偏 / 写稿时无谓检索
+ *
+ * Wave 3.9 冻结：不要再加口语 isXxxGoal / checkXxxGate。
+ * 意图应写入会话快照；见 docs/plans/W3-AP-INTENT-QUALITY.md
  */
 
+import type { IntentClosureKind, IntentKind } from "@/contracts/agent-intent";
 import type { ToolObservation } from "@/lib/agent/types";
 import { validateIssueCount } from "@/lib/agent/core/reflect";
+
+export type { IntentKind, IntentClosureKind } from "@/contracts/agent-intent";
 
 export type GoalIntentGateResult =
   | { ok: true }
@@ -254,12 +260,24 @@ export function hasCitationRefineSuccess(observations: readonly ToolObservation[
 export function shouldSkipPlanner(
   goal: string,
   observations: readonly ToolObservation[] = [],
+  intentKind?: IntentKind | null,
 ): boolean {
+  if (
+    intentKind === "diagnose"
+    || intentKind === "ap_full"
+    || intentKind === "citation"
+    || intentKind === "citation_apply"
+    || intentKind === "draft"
+  ) {
+    return true;
+  }
   if (isDiagnoseStyleGoal(goal)) return true;
   if (isAcademicPaperPipelineGoal(goal)) return true;
   if (isCitationCheckGoal(goal)) return true;
   if (isCitationApplyGoal(goal, observations)) return true;
-  if (isSectionDraftGoal(goal) && !isReviewWritingGoal(goal)) return true;
+  if (isSectionDraftGoal(goal, observations, intentKind) && !isReviewWritingGoal(goal)) {
+    return true;
+  }
   return false;
 }
 
@@ -287,9 +305,11 @@ export function parseLiteratureImportTarget(goal: string): number {
 export function isSectionDraftGoal(
   goal: string,
   observations?: readonly ToolObservation[],
+  intentKind?: IntentKind | null,
 ): boolean {
   if (isLiteratureHuntGoal(goal)) return false;
   if (isAcademicPaperPipelineGoal(goal)) return false;
+  if (intentKind === "draft" || intentKind === "review_write") return true;
   const goalHit =
     /写引言|写讨论|写方法|写结果|写结论|写综述|起草|扩写.*节|write\s*(the\s*)?(introduction|discussion|review)/i.test(
       goal,
@@ -317,8 +337,9 @@ export function checkDiagnoseInspectGate(
   goal: string,
   toolName: string,
   observations: readonly ToolObservation[],
+  intentKind?: IntentKind | null,
 ): GoalIntentGateResult {
-  if (!isDiagnoseStyleGoal(goal)) return { ok: true };
+  if (!isDiagnoseStyleGoal(goal) && intentKind !== "diagnose") return { ok: true };
   if (toolName === "inspect_project") return { ok: true };
   if (hasSuccessfulInspect(observations)) return { ok: true };
   return {
@@ -338,9 +359,10 @@ export function checkDraftSearchGate(
   goal: string,
   toolName: string,
   observations: readonly ToolObservation[],
+  intentKind?: IntentKind | null,
 ): GoalIntentGateResult {
-  if (!isSectionDraftGoal(goal, observations)) return { ok: true };
-  if (isReviewWritingGoal(goal)) return { ok: true };
+  if (!isSectionDraftGoal(goal, observations, intentKind)) return { ok: true };
+  if (isReviewWritingGoal(goal) || intentKind === "review_write") return { ok: true };
   if (toolName !== "search_external" && toolName !== "search_knowledge") {
     return { ok: true };
   }
@@ -361,8 +383,8 @@ export function diagnoseGoalNudge(): string {
 }
 
 /** 写节任务开场提示 */
-export function draftGoalNudge(goal = ""): string {
-  if (isReviewWritingGoal(goal)) {
+export function draftGoalNudge(goal = "", intentKind?: IntentKind | null): string {
+  if (isReviewWritingGoal(goal) || intentKind === "review_write") {
     const n = parseLiteratureImportTarget(goal);
     return (
       `【系统】写综述：先 inspect / list_references。参考文献通常至少约 ${n} 篇；`
@@ -706,24 +728,28 @@ export function buildIntentStopAskUser(opts: {
 export function mergeFollowUpGoalHint(
   goal: string,
   observations: readonly ToolObservation[],
+  intentKind?: IntentKind | null,
 ): string | null {
-  if (isAcademicPaperPipelineGoal(goal)) {
+  if (isAcademicPaperPipelineGoal(goal) || intentKind === "ap_full") {
     return apPipelineNudge(goal, observations);
   }
-  if (isCitationApplyGoal(goal, observations)) {
+  if (isCitationApplyGoal(goal, observations) || intentKind === "citation_apply") {
     return citationApplyNudge();
   }
-  if (isDiagnoseStyleGoal(goal)) {
+  if (isDiagnoseStyleGoal(goal) || intentKind === "diagnose") {
     return diagnoseGoalNudge();
   }
-  if (isCitationCheckGoal(goal)) {
+  if (isCitationCheckGoal(goal) || intentKind === "citation") {
     return citationCheckNudge();
   }
-  if (isReferenceClassificationGoal(goal)) {
+  if (isReferenceClassificationGoal(goal) || intentKind === "classify") {
     return referenceClassificationNudge();
   }
-  if (isSectionDraftGoal(goal, observations)) {
-    return draftGoalNudge(goal);
+  if (intentKind === "literature") {
+    return literatureHuntNudge(goal);
+  }
+  if (isSectionDraftGoal(goal, observations, intentKind)) {
+    return draftGoalNudge(goal, intentKind);
   }
   return null;
 }
@@ -772,21 +798,8 @@ export interface IntentClosureContext {
   wroteOk: boolean;
 }
 
-export type IntentKind =
-  | "pipeline_fix"
-  | "pipeline_abstract"
-  | "pipeline_review"
-  | "pipeline_check"
-  | "citation_apply"
-  | "abstract_finish"
-  | "review_request"
-  | "literature"
-  | "draft"
-  | "review_write"
-  | "citation";
-
 export interface IntentClosureEntry {
-  kind: IntentKind;
+  kind: IntentClosureKind;
   /** 该意图处于「未完成」状态（主导且缺关键动作） */
   isIncomplete: (ctx: IntentClosureContext) => boolean;
   /** 续跑轻推（预算用尽前每轮注入） */
@@ -817,7 +830,7 @@ function stopAskOpts(ctx: IntentClosureContext): {
   };
 }
 
-const INTENT_CLOSURES: Record<IntentKind, IntentClosureEntry> = {
+const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
   pipeline_fix: {
     kind: "pipeline_fix",
     isIncomplete: (ctx) =>
@@ -948,7 +961,7 @@ const INTENT_CLOSURES: Record<IntentKind, IntentClosureEntry> = {
  * nudge 注入优先顺序（与历史行为一致）：先 academic-paper 流程子步，再引用应用，
  * 再文献/写作/引用核查。
  */
-const NUDGE_ORDER: IntentKind[] = [
+const NUDGE_ORDER: IntentClosureKind[] = [
   "pipeline_fix",
   "pipeline_abstract",
   "pipeline_review",
@@ -966,7 +979,7 @@ const NUDGE_ORDER: IntentKind[] = [
  * 「停下问用户」优先顺序。注意与 NUDGE_ORDER 不同：文献/写作在前
  * （continue 预算用尽前先轻推 AP 流程，用尽后优先问用户文献/写作等用户驱动强意图）。
  */
-const STOP_ORDER: IntentKind[] = [
+const STOP_ORDER: IntentClosureKind[] = [
   "literature",
   "draft",
   "review_write",

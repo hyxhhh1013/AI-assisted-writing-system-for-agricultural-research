@@ -72,6 +72,10 @@ export const AgentGraphState = Annotation.Root({
     reducer: (left, right) => left.concat(right),
     default: () => [],
   }),
+  intentKind: Annotation<import("@/contracts/agent-intent").IntentKind | null>({
+    reducer: (_, next) => next,
+    default: () => null,
+  }),
   awaitingCheckpoint: Annotation<AgentCheckpointRequest | null>({
     reducer: (_, next) => next,
     default: () => null,

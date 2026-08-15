@@ -28,6 +28,7 @@ function baseState(overrides: Partial<AgentGraphStateType> = {}): AgentGraphStat
     awaitingCheckpoint: null,
     awaitingConfirm: null,
     grantedConfirm: null,
+    intentKind: null,
     approvedCheckpointKinds: [],
     ...overrides,
   };
@@ -35,13 +36,15 @@ function baseState(overrides: Partial<AgentGraphStateType> = {}): AgentGraphStat
 
 describe("agent session snapshot", () => {
   it("round-trips graph state for resume", () => {
-    const snap = graphStateToSnapshot(baseState());
+    const snap = graphStateToSnapshot(baseState({ intentKind: "draft" }));
     expect(isAgentSessionSnapshot(snap)).toBe(true);
+    expect(snap.intentKind).toBe("draft");
     expect(snap.iteration).toBe(2);
     expect(snap.toolSummaries).toHaveLength(1);
     expect(snap.observations).toEqual([{ tool: "search_knowledge", success: true }]);
 
     const initial = snapshotToInitialState("写引言", snap);
+    expect(initial.intentKind).toBe("draft");
     expect(initial.iteration).toBe(2);
     expect(initial.plan?.subtasks[0]?.title).toBe("检索");
     expect(initial.finished).toBe(false);

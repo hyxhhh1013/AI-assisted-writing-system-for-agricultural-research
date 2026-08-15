@@ -8,8 +8,8 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-08-06（**全部 todo 清零**：W3-AP-QUALITY 全子项 + W0-5 仓库卫生 done）  
-> **实时 status 只看 §1 Phase 11 / 11b / 11c**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
+> **最后更新**：2026-08-15（Phase 11d Wave 3.9 挂载：意图状态化 + 规则 SSOT + 质量尺）  
+> **实时 status 只看 §1 Phase 11 / 11b / 11c / 11d**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
 
@@ -237,6 +237,15 @@
 | W3-AP-HUB-02 | 工作台默认 Agent+编辑器；旧 Tab 进专家工具 | DATA-01～03 | 1d | **done** | 2026-08-15；`NEXT_PUBLIC_WORKBENCH_EXPERT_TABS=1` 恢复旧栏 |
 | W3-AP-HUB-03 | `/plot` 降为配图坞精修抽屉 | FIG-DOCK | 0.5d | **done** | 2026-08-15；工作台侧栏去掉 plot；配图坞「期刊精修」 |
 | — | 任务单细节 | — | — | — | [`plans/W3-AP-AGENT-HUB.md`](./plans/W3-AP-AGENT-HUB.md) |
+| **Phase 11d — Wave 3.9 意图状态化 + 规则 SSOT + 质量可度量** |
+| **W3-AP-INTENT-QUALITY** | **主轴：intentKind 进快照；规则只写一处；收口默认 claim grounding** | W3-AP-AGENT-HUB | 4～6d | **todo** | 详规 [`plans/W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md)；**即刻冻结**新口语 `isXxxGoal` |
+| W3-AP-INTENT-01 | IntentKind 上提契约；快照字段；每轮只分类一次；跟聊继承 | — | 1.5d | **done** | 2026-08-15；不上 LLM 分类；`classifyIntent` + 快照 `intentKind` |
+| W3-AP-INTENT-02 | gate / skipPlanner / hint 只消费 `state.intentKind` | INTENT-01 | 1d | todo | |
+| W3-AP-RULES-01 | `AGENT_RULES` 单一事实源；prompt/nudge 渲染 | INTENT-02 | 1d | todo | 先收已打架的 5 条纪律 |
+| W3-AP-QUALITY-CLAIM | 收口路径默认开 claim grounding；`=0` 才关 | — | 0.5d | todo | 可与 INTENT-01 并行；文件 `validate-citations.ts` |
+| W3-AP-QUALITY-JUDGE | LLM-judge 只进 `eval:quality`，不进热路径 | — | 1d | todo | 确定性 quality-eval 保留为 CI 地板 |
+| W3-AP-INTENT-SHADOW | 可选：LLM 分类影子模式，对照日志后再决定 promote | INTENT-01 | 0.5d | todo | 允许结论为 cancelled（无增量） |
+| — | 任务单细节 | — | — | — | [`plans/W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md) |
 
 
 | 来源 | 本队列处理方式 |
@@ -248,6 +257,7 @@
 | `docs/plans/ENG-PR-080-human-in-the-loop.md` | ENG-PR-087～086 + **096a～d** 任务单以该文 §0～§十六 为准；**096 为产品主轴**；合并时同步 §1 Phase 6 |
 | `docs/plans/W3-AP-QUALITY.md` | Wave 3.7 质量主轴任务单；合并时同步 §1 Phase 11b |
 | `docs/plans/W3-AP-AGENT-HUB.md` | Wave 3.8 Agent 单面 + 数据闭环；合并时同步 §1 Phase 11c |
+| `docs/plans/W3-AP-INTENT-QUALITY.md` | Wave 3.9 意图状态化 + 规则 SSOT + 质量尺；合并时同步 §1 Phase 11d |
 
 ### 1.2 已完成（勿重复开 PR）
 
@@ -1092,26 +1102,26 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-15 | W3-AP-DATA-04 | AI | 研究型 results 写回前对账：精确小数须能对上 dataClaims；约/数量级不拦。 |
 | 2026-08-15 | W3-AP-HUB-02 | AI | 工作台主栏默认 Agent+结构；data/xrd/outline/writing 进专家工具。`?tab=data` 仍可用。 |
 | 2026-08-15 | W3-AP-HUB-03 | AI | `/plot` 不再出现在工作台侧栏；配图坞按钮改为「期刊精修」。路由保留。 |
+| 2026-08-15 | W3-AP-INTENT-01 | AI | `IntentKind` 上提 `contracts/agent-intent.ts`；`classifyIntent` 跟聊短回复继承快照 kind；写入 `AgentSessionSnapshot.intentKind`。`checkDraftSearchGate`/`mergeFollowUpGoalHint` 可消费 kind，goal=`A` 无观察仍拦 search。不上 LLM。 |
 
 ---
 
 ## 5. 推荐执行顺序（给「下一次 AI」）
 
-**当前主轴（2026-08-15）**：**W3-AP-AGENT-HUB 本波已落地** — 附件上传 → 入库 → 结果章硬门禁 → Tab 收敛。  
-详规：[`plans/W3-AP-AGENT-HUB.md`](./plans/W3-AP-AGENT-HUB.md)。后续按质量/精修体验迭代，勿平行开第三条流水线。
+**当前主轴（2026-08-15）**：**W3-AP-INTENT-QUALITY** — 意图状态化 + 规则单一事实源 + 质量可度量。  
+详规：[`plans/W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md)。  
+3.8（AGENT-HUB）已收口。**即刻冻结**：不准再往 `goal-intents.ts` 加口语 `isXxxGoal` / `checkXxxGate`（领域不变量与事故型安全门除外）。
 
 | 优先级 | ID | 说明 |
 |--------|-----|------|
-| **P0** | **W3-AP-WQC** | AI 腔 / overclaim 轻量质检（DRAFT-COVER 已 done） |
-| P0b | W3-AP-CHART-CJK / ENTRY-WIZARD | 收口已写代码：中文图 + 入口向导测 |
-| P1 | W3-AP-ABS-FLOW → REVIEW-FLOW | 摘要与可选审查收口 |
-| P2 | W3-AP-LIVE-EVAL / W0-5 | 质量冒烟；仓库卫生可穿插 |
-| P3 | W3-AP-WRITE-NO-RAG | write_section 检索优化（已诊断，待实施）：项目已有可引用文献摘要（referenceEvidence）时跳过知识库 RAG 检索，直接用项目文献摘要写作；无文献时才检索。实测：有 52 条文献+摘要时检索耗时 0.6s 且引入 8 条项目外新来源，跳过可避免引用混乱 + 进度误导 |
-| P3b | W3-AP-WRITE-RESUME | **done**（2026-08-09）：会话 `activeWrite` + 执行中草稿落盘 + resume 同 attemptKey 去重/沿用 partial（≥400 字）或 completed；见 `write-resume.ts` / `docs/domain/agent.md` |
-| P3c | W3-AP-SSE-CLOSE | **done**（2026-08-09）：`/api/agent` SSE `Controller is already closed` 软关闭（对齐 writing route），断流不再刷假 ERROR |
+| **P0** | **W3-AP-QUALITY-CLAIM** | 收口默认 claim grounding；可与已落地的 INTENT-01 并行（文件不重叠） |
+| P1 | W3-AP-INTENT-02 → RULES-01 | 消费者只认 kind → 规则只写一处 |
+| P2 | W3-AP-QUALITY-JUDGE | LLM-judge 仅 eval；确定性 quality-eval 留作 CI 地板 |
+| P3 | W3-AP-INTENT-SHADOW | 有跟聊日志再决定是否 promote；允许 cancelled |
+| P3-legacy | W3-AP-WRITE-NO-RAG | 已诊断未实施：有项目文献摘要时跳过知识库 RAG（勿插进 INTENT-01） |
 
-**若只能做一个产品 PR**：先做 **WQC**（文风质检）。  
-**明确不做本波**：全自动 Conductor、plan 苏格拉底、五人组外审、LaTeX/disclosure、Generator–Evaluator 纸盲合同。
+**若只能做一个架构 PR**：先做 **INTENT-02**（消费者只认 kind）。  
+**明确不做本波**：LangGraph 重写 / 多 agent、热路径 LLM-judge、再堆口语门禁、把 998 行正则搬进规则表。
 
 ---
 

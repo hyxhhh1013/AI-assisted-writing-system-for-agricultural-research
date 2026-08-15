@@ -49,6 +49,7 @@ describe("goal-intents", () => {
     expect(isSectionDraftGoal("继续", [{ tool: "read_section", success: true }])).toBe(true);
     // 无写/读章节观察 → 不算写章节
     expect(isSectionDraftGoal("A", [{ tool: "search_knowledge", success: true }])).toBe(false);
+    expect(isSectionDraftGoal("A", [], "draft")).toBe(true);
   });
 
   it("blocks search during draft follow-up when write_section observed", () => {
@@ -58,6 +59,7 @@ describe("goal-intents", () => {
     ];
     const r = checkDraftSearchGate("A", "search_knowledge", obs);
     expect(r.ok).toBe(false);
+    expect(checkDraftSearchGate("A", "search_knowledge", [], "draft").ok).toBe(false);
   });
 
   it("parses literature import target count", () => {

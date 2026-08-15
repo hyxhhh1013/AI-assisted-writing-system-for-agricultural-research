@@ -20,6 +20,8 @@ import {
   mergeFollowUpGoalHint,
   mergeGoalWithIntentHint,
 } from "@/lib/agent/core/goal-intents";
+import { classifyIntent } from "@/lib/agent/core/classify-intent";
+import { isIntentKind } from "@/contracts/agent-intent";
 import { createRepeatTracker } from "@/lib/agent/core/safety";
 import { getCompiledAgentGraph } from "@/lib/agent/langgraph/graph";
 import type { AgentGraphRuntime } from "@/lib/agent/langgraph/runtime";
@@ -83,8 +85,16 @@ export async function* runAgentGraphLoop(
 
   const antispamTracker = createAntispamTracker(context.projectSnapshot);
 
+  const previousKind =
+    resumeState && isIntentKind(resumeState.intentKind) ? resumeState.intentKind : null;
+  const classified = classifyIntent({
+    goal,
+    observations: followUp ? (resumeState?.observations ?? []) : [],
+    previousKind: followUp ? previousKind : null,
+  });
+
   // 诊断任务跳过跨会话记忆，避免被上轮「待导入文献」带偏
-  const diagnoseGoal = isDiagnoseStyleGoal(goal);
+  const diagnoseGoal = isDiagnoseStyleGoal(goal) || classified.kind === "diagnose";
 
   // 跟聊已自带完整消息历史，不必再注入跨会话 prior / 记忆（简报仍可保留）
   const memoryPromise =
@@ -147,6 +157,7 @@ export async function* runAgentGraphLoop(
     ? {
         ...resumeState,
         goal,
+        intentKind: classified.kind,
         events: [],
         finished: false,
         error: null,
@@ -160,6 +171,7 @@ export async function* runAgentGraphLoop(
       }
     : {
         goal,
+        intentKind: classified.kind,
         messages: [
           { role: "user", content: mergeGoalWithIntentHint(goal) },
         ],
@@ -186,6 +198,7 @@ export async function* runAgentGraphLoop(
     const nudge = mergeFollowUpGoalHint(
       goal,
       initialState.observations ?? [],
+      classified.kind,
     );
     if (nudge) {
       initialState = {

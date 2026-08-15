@@ -1,4 +1,6 @@
 import type { AgentSessionSnapshot } from "@/contracts/agent-session";
+import { isIntentKind } from "@/contracts/agent-intent";
+import { classifyIntent } from "@/lib/agent/core/classify-intent";
 import { snapshotToInitialState } from "@/lib/agent/session-snapshot";
 import type { AgentGraphStateType } from "@/lib/agent/langgraph/state";
 import type { LLMMessage } from "@/lib/agent/types";
@@ -15,10 +17,17 @@ export function buildFollowUpInitialState(
   const goal = newGoal.trim();
   const base = snapshotToInitialState(goal, snapshot);
   const history = clipMessages(base.messages ?? [], MAX_HISTORY_MESSAGES);
+  const previousKind = isIntentKind(snapshot.intentKind) ? snapshot.intentKind : null;
+  const classified = classifyIntent({
+    goal,
+    observations: (base.observations ?? []).slice(-20),
+    previousKind,
+  });
 
   return {
     ...base,
     goal,
+    intentKind: classified.kind,
     messages: [...history, { role: "user", content: goal }],
     plan: null,
     iteration: 0,

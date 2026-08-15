@@ -31,6 +31,7 @@ export function graphStateToSnapshot(
     awaitingCheckpoint: state.awaitingCheckpoint ?? null,
     awaitingConfirm: state.awaitingConfirm ?? null,
     approvedCheckpointKinds: state.approvedCheckpointKinds ?? [],
+    intentKind: state.intentKind ?? null,
     activeWrite: activeWrite ?? null,
     ...(uiTranscript ? { uiTranscript } : {}),
     ...(mem ? { workMemory: mem } : {}),
@@ -62,5 +63,6 @@ export function snapshotToInitialState(
     awaitingConfirm: null,
     grantedConfirm: null,
     approvedCheckpointKinds: snapshot.approvedCheckpointKinds ?? [],
+    intentKind: snapshot.intentKind ?? null,
   };
 }

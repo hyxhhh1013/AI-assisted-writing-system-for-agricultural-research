@@ -4,6 +4,7 @@
  */
 
 import type { AgentPlan, AgentSummary } from "@/contracts/agent";
+import type { IntentKind } from "@/contracts/agent-intent";
 import type { LLMMessage, ParsedToolCall } from "@/lib/agent/types";
 
 export type AgentSessionStatus =
@@ -88,6 +89,8 @@ export interface AgentSessionSnapshot {
   attachmentIds?: string[];
   /** write_section 执行中 / 中断草稿（跟聊新目标时应清空） */
   activeWrite?: AgentActiveWrite | null;
+  /** 本轮意图（跟聊短回复继承；旧快照缺省则本轮重判） */
+  intentKind?: IntentKind | null;
 }
 
 export interface AgentSessionListItem {

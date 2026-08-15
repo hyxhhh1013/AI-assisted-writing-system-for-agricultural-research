@@ -97,8 +97,8 @@ export const figureReplaceGate: PreToolGate = ({ tool, params, recentObservation
 /** 意图门禁组：诊断 inspect / 草稿检索 / 引用核查 / 引用绕行 / 收口摘要 / 审查审稿 / 先读后写 */
 export const intentGate: PreToolGate = ({ state, tool, params, recentObservations }) => {
   const gates: Array<() => { ok: boolean; error?: string }> = [
-    () => checkDiagnoseInspectGate(state.goal, tool.name, recentObservations),
-    () => checkDraftSearchGate(state.goal, tool.name, recentObservations),
+    () => checkDiagnoseInspectGate(state.goal, tool.name, recentObservations, state.intentKind),
+    () => checkDraftSearchGate(state.goal, tool.name, recentObservations, state.intentKind),
     () => checkCitationCheckGate(state.goal, tool.name, recentObservations),
     () => checkCitationSideTripGate(state.goal, tool.name, recentObservations),
     () => checkAbstractFinishGate(state.goal, tool.name, recentObservations),
