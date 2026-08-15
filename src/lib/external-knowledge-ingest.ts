@@ -131,12 +131,25 @@ function appendAbstractChunks(params: {
   sourceName: string;
   title: string;
   abstract: string;
-}): { chunkCount: number; appended: boolean } {
-  const { category, sourceName, title, abstract } = params;
+}): { chunkCount: number; appended: boolean; category: string } {
+  const { sourceName, title, abstract } = params;
+  let category = params.category;
+
+  // 目标分类已有 .emb（含真实 PDF 向量）：无向量摘要混入会导致 chunk↔.emb 下标错位，
+  // 且全量重建（只扫 papers/ PDF）会把这批摘要 chunk 丢掉；统一软落到「外部摘要」。
+  if (fs.existsSync(path.join(DATA_DIR, `index_${category}.emb`))) {
+    log.warn("abstract chunk redirected to fallback category (target has .emb)", {
+      from: category,
+      to: FALLBACK_CATEGORY,
+      source: sourceName,
+    });
+    category = FALLBACK_CATEGORY;
+  }
+
   const chunks = loadCategoryChunks(category);
   const existing = chunks.filter((c) => c.metadata?.source === sourceName);
   if (existing.length > 0) {
-    return { chunkCount: existing.length, appended: false };
+    return { chunkCount: existing.length, appended: false, category };
   }
 
   const parts = splitAbstract(abstract, ABS_CHUNK_SIZE);
@@ -156,7 +169,7 @@ function appendAbstractChunks(params: {
 
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(indexPathFor(category), JSON.stringify([...chunks, ...toAdd]), "utf-8");
-  return { chunkCount: toAdd.length, appended: true };
+  return { chunkCount: toAdd.length, appended: true, category };
 }
 
 async function findDuplicateFile(hit: ExternalLiteratureHit): Promise<{
@@ -191,6 +204,38 @@ async function listTakenNames(): Promise<Set<string>> {
 }
 
 /**
+ * 在 papers/ 下所有分类目录里查找同名 PDF（不区分大小写）。
+ * 外部导入落盘前调用：检测「同名文件已存在于其他分类」的孤儿副本，
+ * 避免再次制造跨分类同名（会被 index-pdfs 的 basename 去重静默吞掉）。
+ */
+function findPdfAcrossCategories(name: string): { category: string; path: string } | null {
+  if (!fs.existsSync(ARTICLES_DIR)) return null;
+  const baseName = path.basename(ARTICLES_DIR);
+  const walk = (dir: string): { category: string; path: string } | null => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return null;
+    }
+    for (const entry of entries) {
+      if (entry.isFile() && entry.name.toLowerCase() === name.toLowerCase()) {
+        const category = path.basename(dir) === baseName ? "未分类" : path.basename(dir);
+        return { category, path: path.join(dir, entry.name) };
+      }
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const hit = walk(path.join(dir, entry.name));
+        if (hit) return hit;
+      }
+    }
+    return null;
+  };
+  return walk(ARTICLES_DIR);
+}
+
+/**
  * 尝试 OA 下载并落盘；成功返回文件名与字节数。
  * 已有真实 PDF（size>0）的重复项跳过下载。
  */
@@ -222,6 +267,21 @@ async function trySaveOaPdf(params: {
     params.taken.add(name);
   } else {
     name = generateOaPdfFileName(title, params.taken);
+  }
+
+  // 同名 PDF 已存在于其他分类目录：跳过下载，避免制造跨分类同名孤儿副本
+  const existing = findPdfAcrossCategories(name);
+  if (existing) {
+    if (existing.category === params.category) {
+      // 同名同分类：复用已有 PDF，不重复下载
+      return { name, bytes: fs.statSync(existing.path).size };
+    }
+    log.warn("oa pdf name collision across categories, skip download", {
+      name,
+      existingCategory: existing.category,
+      targetCategory: params.category,
+    });
+    return null;
   }
 
   const targetPath = resolveKnowledgeFilePath(ARTICLES_DIR, params.category, name);
@@ -392,8 +452,9 @@ async function ingestOne(
 
   let chunkCount = 0;
   let indexMutated = false;
+  let softCategory = category;
   if (hasAbs) {
-    const { chunkCount: n, appended } = appendAbstractChunks({
+    const { chunkCount: n, appended, category: finalCat } = appendAbstractChunks({
       category,
       sourceName: name,
       title,
@@ -401,12 +462,13 @@ async function ingestOne(
     });
     chunkCount = n;
     indexMutated = appended;
+    softCategory = finalCat;
   }
 
   await prisma.knowledgeFile.create({
     data: {
       name,
-      category,
+      category: softCategory,
       documentType: "paper",
       size: 0,
       chunkCount,
@@ -428,15 +490,16 @@ async function ingestOne(
   };
 }
 
-async function reindexAndReload(files: string[]): Promise<void> {
+async function reindexAndReload(files: string[]): Promise<boolean> {
   const unique = [...new Set(files.filter(Boolean))];
-  if (unique.length === 0) return;
+  if (unique.length === 0) return true;
   const result = await runPartialPdfIndex(unique, { skipEmbed: true });
   if (!result.ok) {
     log.warn("oa pdf reindex failed", { files: unique, stderr: result.stderr.slice(0, 300) });
   }
   invalidateBibCache();
   await localRAG.reload().catch((e) => log.warn("rag reload after oa ingest", e));
+  return result.ok;
 }
 
 export async function ingestExternalHitToKnowledge(
@@ -445,12 +508,15 @@ export async function ingestExternalHitToKnowledge(
   const { indexMutated, reindexFile, ...result } = await ingestOne(opts.hit, opts);
   invalidateBibCache();
   if (reindexFile) {
-    await reindexAndReload([reindexFile]);
+    const ok = await reindexAndReload([reindexFile]);
     const row = await prisma.knowledgeFile.findUnique({
       where: { name: result.name },
       select: { chunkCount: true },
     });
     if (row) result.chunkCount = row.chunkCount;
+    if (!ok && result.chunkCount === 0) {
+      result.reason = "oa_pdf_index_failed";
+    }
   } else if (indexMutated) {
     await localRAG.reload().catch((e) => log.warn("rag reload after ingest", e));
   }
@@ -490,7 +556,7 @@ export async function ingestExternalHitsToKnowledge(
   }
 
   if (reindexFiles.length > 0) {
-    await reindexAndReload(reindexFiles);
+    const ok = await reindexAndReload(reindexFiles);
     for (const r of results) {
       if (r.mode !== "pdf") continue;
       const row = await prisma.knowledgeFile.findUnique({
@@ -498,6 +564,7 @@ export async function ingestExternalHitsToKnowledge(
         select: { chunkCount: true },
       });
       if (row) r.chunkCount = row.chunkCount;
+      if (!ok && r.chunkCount === 0) r.reason = "oa_pdf_index_failed";
     }
   } else {
     invalidateBibCache();

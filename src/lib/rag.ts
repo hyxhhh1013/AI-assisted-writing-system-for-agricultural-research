@@ -147,6 +147,37 @@ class EmbeddingStore {
   private embPath(category: string): string {
     return path.join(process.cwd(), `data/index_${category}.emb`);
   }
+
+  /** 读取任一 index_*.emb 的文件头维度（用于 query 向量一致性校验）；无 .emb 或读失败返回 0 */
+  anyDim(): number {
+    const dir = path.join(process.cwd(), "data");
+    let embFile: string | null = null;
+    try {
+      for (const f of fs.readdirSync(dir)) {
+        if (f.startsWith("index_") && f.endsWith(".emb")) {
+          embFile = path.join(dir, f);
+          break;
+        }
+      }
+    } catch {
+      return 0;
+    }
+    if (!embFile) return 0;
+    try {
+      const fd = fs.openSync(embFile, "r");
+      try {
+        const header = Buffer.alloc(EMB_HEADER_SIZE);
+        fs.readSync(fd, header, 0, EMB_HEADER_SIZE, 0);
+        const version = header.readUInt32LE(0);
+        const dim = header.readUInt32LE(4);
+        return version === 1 && dim > 0 ? dim : 0;
+      } finally {
+        fs.closeSync(fd);
+      }
+    } catch {
+      return 0;
+    }
+  }
 }
 
 // ── 书目元数据（Prisma KnowledgeFile，见 knowledge-metadata.ts）────────────
@@ -523,14 +554,16 @@ export class LocalRAG {
   private categoryPin = new Set<string>();
   private indexPath = path.join(process.cwd(), "data/index.json");
   private embStore = new EmbeddingStore();
+  /** query 向量与索引 .emb 维度不一致时只告警一次（换 model 未重建会触发） */
+  private embDimMismatchWarned = false;
 
   private getCategoryIndexPath(category: string): string {
     return path.join(process.cwd(), `data/index_${category}.json`);
   }
 
-  /** 列出所有可用的分类 */
+  /** 列出所有可用的分类（含「未分类」，确保根目录 PDF 也能进检索） */
   async getCategories(): Promise<string[]> {
-    return listKnowledgeCategories();
+    return listKnowledgeCategories(true);
   }
 
   /**
@@ -807,6 +840,19 @@ export class LocalRAG {
       const result = (await response.json()) as { data?: { embedding?: number[] }[] };
       const emb = result.data?.[0]?.embedding;
       if (Array.isArray(emb) && emb.length > 0) {
+        // 换 embedding model 却未重建索引时，query 向量维度与 .emb 不一致 → 向量静默失效退化为纯 BM25；
+        // 一次性告警，避免每请求刷屏。
+        if (!this.embDimMismatchWarned) {
+          const indexDim = this.embStore.anyDim();
+          if (indexDim > 0 && indexDim !== emb.length) {
+            log.warn("query embedding dim mismatch with index .emb — vectors disabled, rebuild index", {
+              queryDim: emb.length,
+              indexDim,
+              model,
+            });
+            this.embDimMismatchWarned = true;
+          }
+        }
         this.embQueryCache.set(cacheKey, emb);
         if (this.embQueryCache.size > EMB_QUERY_CACHE_MAX) {
           this.embQueryCache.delete(this.embQueryCache.keys().next().value as string);

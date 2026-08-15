@@ -641,6 +641,31 @@ function stage2_filterAndWrite(allRawChunks, existingMetaByName, sizeByName = ne
 
   emitProgress({ type: "phase", phase: "writing", detail: `写入 ${categoryMap.size} 个分类索引` });
 
+  // ── 全量重建：保留无 PDF 的纯摘要 chunk（外部导入软落地引用）──
+  // scanFiles 只扫 papers/ 下的 PDF，纯摘要（source 不在本次 PDF 集合）不会被重新生成，
+  // 需从旧 index 保留并统一软落到「外部摘要」分类，避免全量重建丢失（与 external-knowledge-ingest 的 FALLBACK_CATEGORY 对齐）。
+  const ABSTRACT_ONLY_CATEGORY = "外部摘要";
+  const abstractOnlyChunks = [];
+  if (!isPartialReindex()) {
+    const scannedSources = new Set(allRawChunks.map((x) => x.filename));
+    for (const [source, chunks] of existingFilteredBySource) {
+      if (scannedSources.has(source)) continue;
+      for (const c of chunks) {
+        if (!c || !c.content || !String(c.content).trim()) continue;
+        abstractOnlyChunks.push({
+          ...c,
+          embedding: undefined,
+          metadata: { ...(c.metadata || {}), category: ABSTRACT_ONLY_CATEGORY },
+        });
+      }
+    }
+  }
+  if (abstractOnlyChunks.length > 0) {
+    if (!categoryMap.has(ABSTRACT_ONLY_CATEGORY)) categoryMap.set(ABSTRACT_ONLY_CATEGORY, []);
+    categoryMap.get(ABSTRACT_ONLY_CATEGORY).push(...abstractOnlyChunks);
+    console.log(`  Preserved ${abstractOnlyChunks.length} abstract-only chunks (无 PDF) → ${ABSTRACT_ONLY_CATEGORY}`);
+  }
+
   const activeCategories = new Set(categoryMap.keys());
   for (const [cat, chunks] of categoryMap) {
     const merged = mergeCategoryChunks(cat, chunks);
@@ -796,14 +821,32 @@ function scanFiles() {
   }
   walkDir(ARTICLES_DIR);
 
-  // Deduplicate by basename
+  // Deduplicate by basename（KnowledgeFile.name 全局唯一，同名跨分类时仅保留首个）
   const byName = new Map();
   let dupes = 0;
+  const crossCatDuplicates = new Map(); // name -> Set<category>
   for (const f of allFiles) {
-    if (!byName.has(f.name)) { byName.set(f.name, f); } else { dupes++; }
+    const existing = byName.get(f.name);
+    if (!existing) {
+      byName.set(f.name, f);
+    } else {
+      dupes++;
+      let cats = crossCatDuplicates.get(f.name);
+      if (!cats) {
+        cats = new Set([existing.category]);
+        crossCatDuplicates.set(f.name, cats);
+      }
+      cats.add(f.category);
+    }
   }
   const uniqueFiles = [...byName.values()];
   console.log(`Scan: ${allFiles.length} PDFs, ${uniqueFiles.length} unique (${dupes} dupes skipped)`);
+  if (crossCatDuplicates.size > 0) {
+    console.warn(`  ⚠ ${crossCatDuplicates.size} 个同名 PDF 分布在多个分类目录，按 basename 去重仅保留首个目录副本，其余不会进索引：`);
+    for (const [name, cats] of crossCatDuplicates) {
+      console.warn(`    - ${name}: [${[...cats].join(" / ")}] → 保留「${byName.get(name)?.category}」`);
+    }
+  }
   return { uniqueFiles, duplicatesSkipped: dupes, pathsFound: allFiles.length };
 }
 

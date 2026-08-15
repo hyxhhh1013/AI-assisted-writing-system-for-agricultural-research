@@ -329,15 +329,21 @@ export async function getKnowledgeFileByName(name: string): Promise<KnowledgeFil
   return null;
 }
 
-/** 知识库分类列表（不含「全部」） */
-export async function listKnowledgeCategories(): Promise<string[]> {
+/**
+ * 知识库分类列表（不含「全部」）。
+ * @param includeUncategorized 为 true 时纳入「未分类」（RAG 检索侧需要遍历 index_未分类.json；
+ *   否则「未分类」目录下的 PDF 永远检索不到）。默认 false 供 UI/分类匹配使用。
+ */
+export async function listKnowledgeCategories(
+  includeUncategorized = false,
+): Promise<string[]> {
   const rows = await prisma.knowledgeFile.findMany({
     select: { category: true },
     distinct: ["category"],
   });
-  const fromDb = rows
-    .map((r) => r.category)
-    .filter((c) => c && c !== "未分类");
+  const keepCat = (c: string | null | undefined): boolean =>
+    Boolean(c) && (includeUncategorized || c !== "未分类");
+  const fromDb = rows.map((r) => r.category).filter(keepCat);
 
   if (!isMetadataJsonFallbackEnabled()) {
     return Array.from(new Set(fromDb));
@@ -345,7 +351,7 @@ export async function listKnowledgeCategories(): Promise<string[]> {
 
   const fromJson = loadMetadataJsonFallback()
     .map((m) => m.category)
-    .filter((c) => c && c !== "未分类");
+    .filter(keepCat);
   return Array.from(new Set([...fromDb, ...fromJson]));
 }
 

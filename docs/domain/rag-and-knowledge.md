@@ -135,12 +135,20 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 | 单篇 0 块 + parseWarning | 扫描版 PDF，无文本层 | 换 OCR 版或手动填书目 |
 | 书目缺字段 | 首页版式特殊 / 无 DOI | `--force-stage1`；有 DOI 时确认未设 `DISABLE_CROSSREF_ENRICH` |
 | 仅 BM25 无向量 | 未配置 Embedding Key 或 `--skip-stage3` | 配置 `RAG_EMBEDDING_*` 后全量重建 |
+| 换了 Embedding Model 后向量失效 | query 向量维度与 `.emb` 不一致 | 全量重建索引；运行时会打一次 `dim mismatch` 告警 |
+| 某目录有 PDF 但分类不出现 / 检索不到 | 同名 PDF 跨分类被 `scanFiles` basename 去重吞掉 | 重建索引看 ⚠ warning 列出的同名跨分类冲突；确认文件权威分类（Prisma `KnowledgeFile.category`） |
 
 ## 不变量
 
 - `KnowledgeFile.name` 与磁盘 PDF 文件名一致且唯一
 - `chunkCount` 表示 index JSON 块数，不等于 `KnowledgeChunk` 表行数
 - 大索引禁止 `readFileSync` 整文件加载（RAG-PR-002+）
+- 同名 PDF 出现在多个分类目录时，`scanFiles` 按 basename 去重**只保留首个目录副本**（其余不进索引，重建时打 ⚠ warning 列出冲突）；分类权威源是 Prisma `KnowledgeFile.category`，**不是目录名**——手动移动/复制文件到新目录不会改变分类
+- 外部导入 OA PDF（`external-knowledge-ingest.ts`）落盘前会检测跨分类同名：同名同分类复用、跨分类跳过下载，避免制造孤儿目录；增量索引失败时导入结果 `reason: "oa_pdf_index_failed"`
+- `listKnowledgeCategories()` 默认过滤「未分类」（UI 分类 Tab / `matchCategoryFromDirection` 用）；`LocalRAG.getCategories()` 传 `true` **纳入「未分类」**，确保 `papers/` 根目录 PDF（`index_未分类.json`）也能进检索
+- 外部导入无 PDF 摘要若目标分类已有 `.emb`（含真实 PDF 向量），`appendAbstractChunks` 会重定向到「外部摘要」分类，避免 chunk↔.emb 下标错位
+- **全量重建保留纯摘要**：`index-pdfs.mjs` Stage 2 全量写盘时，会把旧 index 里「source 不在本次 PDF 扫描集合」的纯摘要 chunk 保留下来、统一软落到「外部摘要」分类（`scanFiles` 只扫 PDF，否则全量重建会丢这批外部导入的无 PDF 摘要）
+- 运行时 query 向量维度与 `.emb` 不一致（换 Embedding Model 未重建）会打一次性 `dim mismatch` 告警，随后向量检索退化为纯 BM25
 
 ## UI
 
