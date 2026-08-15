@@ -1,23 +1,20 @@
 import { logger } from "@/lib/logger";
 import type { XrdPythonJsonResult } from "@/contracts/xrd-python";
 import { getErrorMessage } from "@/lib/error-utils";
-﻿import { NextRequest, NextResponse } from "next/server";
+import { ensureChartsDir } from "@/lib/charts-dir";
+import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
+import { PYTHON_CMD } from "@/services/xrd-runner";
+import { parseOptionalJsonConfig } from "@/lib/api-validate";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
+const CHARTS_DIR = ensureChartsDir();
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
-import { PYTHON_CMD } from "@/services/xrd-runner";
-import { parseOptionalJsonConfig } from "@/lib/api-validate";
-
-if (!fs.existsSync(CHARTS_DIR)) {
-  fs.mkdirSync(CHARTS_DIR, { recursive: true });
-}
 
 /**
  * 晶胞可视化

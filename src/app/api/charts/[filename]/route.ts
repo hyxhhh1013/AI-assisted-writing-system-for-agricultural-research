@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { getChartsDir } from "@/lib/charts-dir";
 
 export const runtime = "nodejs";
 
-const DATA_CHARTS_DIR = path.join(process.cwd(), "data", "charts");
 const PUBLIC_CHARTS_DIR = path.join(process.cwd(), "public", "charts");
 
 const SAFE_FILENAME =
@@ -28,7 +28,7 @@ export async function GET(
     return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
   }
 
-  const dataPath = path.join(DATA_CHARTS_DIR, filename);
+  const dataPath = path.join(getChartsDir(), filename);
   const publicPath = path.join(PUBLIC_CHARTS_DIR, filename);
 
   let filePath: string | null = null;

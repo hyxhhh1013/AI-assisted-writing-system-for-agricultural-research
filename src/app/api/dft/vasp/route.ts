@@ -8,16 +8,13 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { PYTHON_CMD } from "@/services/xrd-runner";
 import { parseOptionalJsonConfig } from "@/lib/api-validate";
+import { ensureChartsDir } from "@/lib/charts-dir";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
+const CHARTS_DIR = ensureChartsDir();
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
-
-if (!fs.existsSync(CHARTS_DIR)) {
-  fs.mkdirSync(CHARTS_DIR, { recursive: true });
-}
 
 /**
  * VASP DOSCAR / EIGENVAL / PROCAR → DFT 图

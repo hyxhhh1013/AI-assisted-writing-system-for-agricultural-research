@@ -4,8 +4,7 @@ import { randomUUID } from "crypto";
 import type { ChartPatchOp, ProjectChartAsset } from "@/contracts/figure";
 import { parseProjectCharts, serializeProjectCharts } from "@/contracts/figure";
 import prisma from "@/lib/prisma";
-
-const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
+import { getChartsDir } from "@/lib/charts-dir";
 
 /** 删除图表对应的磁盘文件（png/svg/pdf），失败静默 */
 function deleteChartFiles(urls: Array<string | undefined>): void {
@@ -13,7 +12,7 @@ function deleteChartFiles(urls: Array<string | undefined>): void {
     if (!url) continue;
     const name = url.split("/").pop();
     if (!name || !/^[0-9a-f-]{8,}\.(png|svg|pdf)$/i.test(name)) continue;
-    const fp = path.join(CHARTS_DIR, name);
+    const fp = path.join(getChartsDir(), name);
     try {
       if (fs.existsSync(fp)) fs.unlinkSync(fp);
     } catch {
@@ -103,11 +102,12 @@ export async function cleanupOrphanCharts(): Promise<number> {
     }
   }
   let removed = 0;
-  if (!fs.existsSync(CHARTS_DIR)) return 0;
-  for (const f of fs.readdirSync(CHARTS_DIR)) {
+  const chartsDir = getChartsDir();
+  if (!fs.existsSync(chartsDir)) return 0;
+  for (const f of fs.readdirSync(chartsDir)) {
     if (!referenced.has(f) && /^[0-9a-f-]{8,}\.(png|svg|pdf)$/i.test(f)) {
       try {
-        fs.unlinkSync(path.join(CHARTS_DIR, f));
+        fs.unlinkSync(path.join(chartsDir, f));
         removed++;
       } catch {
         /* ignore */

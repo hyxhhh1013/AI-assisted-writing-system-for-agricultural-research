@@ -4,6 +4,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { getErrorMessage } from "@/lib/error-utils";
 import { PYTHON_CMD, formatPythonSpawnError } from "@/lib/python-cmd";
+import { ensureChartsDir } from "@/lib/charts-dir";
 
 export type ChartRunMode = "generic" | "crd";
 
@@ -40,14 +41,7 @@ export interface RunChartGenerationResult {
   preset?: string;
 }
 
-const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
-
-function ensureChartsDir(): void {
-  if (!fs.existsSync(CHARTS_DIR)) {
-    fs.mkdirSync(CHARTS_DIR, { recursive: true });
-  }
-}
 
 function resolveDataExt(fileName: string): string {
   const lower = fileName.toLowerCase();
@@ -63,7 +57,7 @@ function resolveDataExt(fileName: string): string {
 export async function runChartGeneration(
   input: RunChartGenerationInput,
 ): Promise<RunChartGenerationResult> {
-  ensureChartsDir();
+  const CHARTS_DIR = ensureChartsDir();
 
   const mode = input.mode ?? "generic";
   const tmpDir = path.join(process.cwd(), ".tmp", randomUUID());

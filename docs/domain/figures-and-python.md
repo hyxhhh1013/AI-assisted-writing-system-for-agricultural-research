@@ -100,7 +100,7 @@
 
 - `/plot` 独立页（分类含 DFT）
 - 工作台侧边栏图表按钮
-- 工作台 **Agent Tab**：`list_plot_sources` → `generate_chart`
+- 工作台 **Agent Tab**：`list_plot_sources` → `generate_chart`（Wave 3.8：数据主入口改为 Agent 附件，见 [`plans/W3-AP-AGENT-HUB.md`](../plans/W3-AP-AGENT-HUB.md)）
 
 ## Agent 配图链路（2026-07-25）
 
@@ -108,8 +108,8 @@
 Data Tab 上传 CSV → Project.dataSources（含 chartConfigs）
     → list_plot_sources（候选 index）
     → generate_chart(chartIndex / csvData+chartType)
-    → Python runChartGeneration → data/charts/*.png
-    → Project.charts（含 figureSpecEnc 可回放）
+    → Python runChartGeneration → data/charts/*.png（`getChartsDir()`）
+    → Project.charts（含 figureSpecEnc 可回放；**只存 URL，二进制不入库**）
     → 可选 sectionKey：Markdown 图片写入章节
     → 工作台刷新 project.charts + Agent 气泡缩略图
 ```
@@ -121,6 +121,14 @@ Data Tab 上传 CSV → Project.dataSources（含 chartConfigs）
 | `lib/agent/chart-persist.ts` | 写入 `Project.charts` |
 | `lib/agent/chart-persisted.ts` | 前端解析 observation |
 | `lib/chart-tabular-parse.ts` | CSV→labels/datasets（回放；误差列 `*_sd`/`*_err`） |
+| `lib/charts-dir.ts` | 统一 `data/charts` 解析（`GRAINSCRIPT_DATA_ROOT` / 仓库根，避开 `.next/standalone`） |
+
+## 图片持久化（2026-08-15）
+
+- **二进制只在磁盘**：`data/charts/<uuid>.png|svg|pdf`。数据库 `Project.charts` 与章节 Markdown 只存 `/api/charts/<uuid>.png`。
+- **重启 `npm run dev` 不会丢文件**；`data/` 被 gitignore，重新 clone 或清空该目录后旧 URL 会 404。
+- 本地若跑 `node .next/standalone/server.js` 且 cwd 在 `.next` 内，图会写进 `.next`，下次 `npm run build` 清掉。现已回退到仓库根；也可设 `GRAINSCRIPT_DATA_ROOT`。
+- **已移除** XRD `peakfit` 模块加载时「删除 1 小时前全部 PNG」的误伤（会清掉论文插图）。显式删图仍同步删磁盘文件。
 
 ## Origin 向约定
 

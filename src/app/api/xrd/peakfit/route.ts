@@ -1,37 +1,20 @@
 import { logger } from "@/lib/logger";
 import type { XrdPythonJsonResult } from "@/contracts/xrd-python";
 import { getErrorMessage } from "@/lib/error-utils";
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
+import { PYTHON_CMD } from "@/services/xrd-runner";
+import { parseOptionalJsonConfig } from "@/lib/api-validate";
+import { resolveXrdUploadExt } from "@/lib/xrd-file-ext";
+import { ensureChartsDir } from "@/lib/charts-dir";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
-
-// conda pyxplore 环境 Python 路径
-import { PYTHON_CMD } from "@/services/xrd-runner";
-import { parseOptionalJsonConfig } from "@/lib/api-validate";
-import { resolveXrdUploadExt } from "@/lib/xrd-file-ext";
-
-if (!fs.existsSync(CHARTS_DIR)) {
-  fs.mkdirSync(CHARTS_DIR, { recursive: true });
-} else {
-  // 清理 1 小时前的旧图表文件
-  try {
-    const oneHourAgo = Date.now() - 60 * 60 * 1000;
-    for (const f of fs.readdirSync(CHARTS_DIR)) {
-      const p = path.join(CHARTS_DIR, f);
-      if (f.endsWith(".png") && fs.statSync(p).mtimeMs < oneHourAgo) {
-        fs.unlinkSync(p);
-      }
-    }
-  } catch { /* cleanup is best-effort */ }
-}
 
 /**
  * XRD 峰分解
@@ -68,7 +51,7 @@ export async function POST(req: NextRequest) {
 
     // 输出 PNG 路径
     const outputName = `${randomUUID()}.png`;
-    const outputPath = path.join(CHARTS_DIR, outputName);
+    const outputPath = path.join(ensureChartsDir(), outputName);
 
     // 调用 Python
     const scriptPath = path.join(SCRIPTS_DIR, "xrd_peakfit.py");

@@ -22,7 +22,7 @@ KnowledgeFile 1──* KnowledgeChunk
 | `mode` | `review` \| `research`（证据包口径） |
 | `language` | `zh` \| `en`（写作/大纲/扩写输出语言，创建时选定） |
 | `citationStyle` | `gbt7714` \| `vancouver` \| `apa7` \| `ieee` |
-| `charts` | JSON 字符串，图表元数据 |
+| `charts` | JSON 字符串，图表元数据（`imageUrl` 指向磁盘 `data/charts/`，PNG/SVG/PDF **不入库**） |
 | `dataClaims` | JSON `EvidenceClaim[]` |
 | `dataSources` | JSON `DataSourceAnalysis[]` |
 | `expandedOutlineSections` | JSON `string[]`，大纲扩写已完成任务 id（`stableHash(fullPath)`）；整章扩写时同 `sectionKey` 下子节一并标记 |

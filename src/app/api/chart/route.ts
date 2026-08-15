@@ -4,6 +4,7 @@ import { parseOptionalJsonConfig } from "@/lib/api-validate";
 import { chartModeSchema } from "@/lib/validations";
 import { getErrorMessage } from "@/lib/error-utils";
 import { runChartGeneration } from "@/lib/chart-runner";
+import { getChartsDir } from "@/lib/charts-dir";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
 
     const fs = await import("fs");
     const path = await import("path");
-    const outputPath = path.join(process.cwd(), "data", "charts", generated.fileName);
+    const outputPath = path.join(getChartsDir(), generated.fileName);
     const imageBuffer = fs.readFileSync(outputPath);
     const base64 = imageBuffer.toString("base64");
 

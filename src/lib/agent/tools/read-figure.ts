@@ -6,9 +6,7 @@ import { describeImage } from "@/lib/agent/attachments/describe-image";
 import { FIGURE_QA_PROMPT, parseFigureQaVerdict } from "@/lib/agent/figure-qa";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import prisma from "@/lib/prisma";
-
-/** 生成图存放目录（与 chart-runner / mechanism-runner 一致） */
-const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
+import { getChartsDir } from "@/lib/charts-dir";
 
 /** 视觉描述缓存上限（进程内，防内存膨胀） */
 const VISION_CACHE_MAX = 32;
@@ -70,8 +68,9 @@ function imageUrlToFilePath(imageUrl: string): string | null {
   const filename = m[1];
   // 拒绝 ..\、..、空文件名等路径穿越：文件名必须是 UUID 形态 + 允许的扩展名
   if (!SAFE_CHART_FILENAME_RE.test(filename)) return null;
-  const filePath = path.resolve(CHARTS_DIR, filename);
-  const base = path.resolve(CHARTS_DIR) + path.sep;
+  const chartsDir = getChartsDir();
+  const filePath = path.resolve(chartsDir, filename);
+  const base = path.resolve(chartsDir) + path.sep;
   if (!filePath.startsWith(base)) return null; // 双保险：必须落在 CHARTS_DIR 内
   return filePath;
 }

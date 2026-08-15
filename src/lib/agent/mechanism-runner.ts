@@ -9,8 +9,8 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { getErrorMessage } from "@/lib/error-utils";
 import { PYTHON_CMD, formatPythonSpawnError } from "@/lib/python-cmd";
+import { ensureChartsDir } from "@/lib/charts-dir";
 
-const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
 const GRAPHVIZ_BIN =
   process.platform === "win32"
@@ -35,9 +35,7 @@ export async function runMechanismGeneration(
   kind: MechanismKind,
   config: Record<string, unknown>,
 ): Promise<RunMechanismResult> {
-  if (!fs.existsSync(CHARTS_DIR)) {
-    fs.mkdirSync(CHARTS_DIR, { recursive: true });
-  }
+  const CHARTS_DIR = ensureChartsDir();
 
   const tmpDir = path.join(process.cwd(), ".tmp", randomUUID());
   fs.mkdirSync(tmpDir, { recursive: true });

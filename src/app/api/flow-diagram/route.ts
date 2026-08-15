@@ -5,19 +5,16 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { getErrorMessage } from "@/lib/error-utils";
 import { PYTHON_CMD } from "@/services/xrd-runner";
+import { ensureChartsDir } from "@/lib/charts-dir";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
+const CHARTS_DIR = ensureChartsDir();
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
 
 const GRAPHVIZ_BIN =
   process.platform === "win32" ? "C:\\Program Files\\Graphviz\\bin" : "/usr/bin";
-
-if (!fs.existsSync(CHARTS_DIR)) {
-  fs.mkdirSync(CHARTS_DIR, { recursive: true });
-}
 
 interface FlowNode {
   id: string;

@@ -1,24 +1,21 @@
 import { logger } from "@/lib/logger";
 import type { XrdPythonJsonResult } from "@/contracts/xrd-python";
 import { getErrorMessage } from "@/lib/error-utils";
-﻿import { NextRequest, NextResponse } from "next/server";
+import { ensureChartsDir } from "@/lib/charts-dir";
+import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
-
-export const runtime = "nodejs";
-export const maxDuration = 300;
-
-const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
-const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
 import { PYTHON_CMD } from "@/services/xrd-runner";
 import { parseOptionalJsonConfig } from "@/lib/api-validate";
 import { resolveXrdUploadExt } from "@/lib/xrd-file-ext";
 
-if (!fs.existsSync(CHARTS_DIR)) {
-  fs.mkdirSync(CHARTS_DIR, { recursive: true });
-}
+export const runtime = "nodejs";
+export const maxDuration = 300;
+
+const CHARTS_DIR = ensureChartsDir();
+const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
 
 /**
  * XPS 分析

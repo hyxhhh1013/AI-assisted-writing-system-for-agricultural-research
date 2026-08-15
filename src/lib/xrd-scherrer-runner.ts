@@ -6,8 +6,8 @@ import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
+import { ensureChartsDir } from "@/lib/charts-dir";
 
-const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
 
 export interface ScherrerRunResult {
@@ -16,17 +16,11 @@ export interface ScherrerRunResult {
   data: ScherrerData;
 }
 
-function ensureChartsDir(): void {
-  if (!fs.existsSync(CHARTS_DIR)) {
-    fs.mkdirSync(CHARTS_DIR, { recursive: true });
-  }
-}
-
 /** 服务端 Scherrer 计算（Agent / API 共用） */
 export async function runScherrerGeneration(
   body: XrdScherrerInput,
 ): Promise<ScherrerRunResult> {
-  ensureChartsDir();
+  const CHARTS_DIR = ensureChartsDir();
 
   const tmpDir = path.join(process.cwd(), ".tmp", randomUUID());
   fs.mkdirSync(tmpDir, { recursive: true });

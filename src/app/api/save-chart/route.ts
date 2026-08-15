@@ -3,15 +3,10 @@ import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 import { getErrorMessage } from "@/lib/error-utils";
+import { ensureChartsDir } from "@/lib/charts-dir";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
-
-const CHARTS_DIR = path.join(process.cwd(), "data", "charts");
-
-if (!fs.existsSync(CHARTS_DIR)) {
-  fs.mkdirSync(CHARTS_DIR, { recursive: true });
-}
 
 /**
  * 保存前端生成的图表（PNG base64）
@@ -31,7 +26,7 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(base64Data, "base64");
 
     const outputName = `${randomUUID()}.png`;
-    const outputPath = path.join(CHARTS_DIR, outputName);
+    const outputPath = path.join(ensureChartsDir(), outputName);
     fs.writeFileSync(outputPath, buffer);
 
     return NextResponse.json({

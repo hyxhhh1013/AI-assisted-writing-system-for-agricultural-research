@@ -13,6 +13,7 @@ import { stripOutOfRangeCitations } from "@/lib/reference-reorder";
 import { markOutOfBoundsCitations } from "@/lib/citation";
 import { cleanMarkdownArtifacts } from "@/lib/utils";
 import { getTemplateSections, type TemplateSectionDef } from "@/lib/template-sections";
+import { getChartsDir } from "@/lib/charts-dir";
 
 type PdfTemplate = "sci" | "ieee" | "gbt7713" | "nature" | "cas";
 
@@ -172,7 +173,7 @@ const renderImageBlock = (block: MarkdownBlock): string => {
     const filename = isOldPath ? url.slice("/charts/".length) : url.slice("/api/charts/".length);
     // 新路径优先从 data/charts/ 读取，旧路径从 public/charts/ 读取
     const candidates = isNewPath
-      ? [path.join(process.cwd(), "data", "charts", filename), path.join(process.cwd(), "public", "charts", filename)]
+      ? [path.join(getChartsDir(), filename), path.join(process.cwd(), "public", "charts", filename)]
       : [path.join(process.cwd(), "public", url)];
     const filePath = candidates.find(p => fs.existsSync(p)) ?? candidates[0];
     try {
