@@ -126,7 +126,7 @@ export function AgentGuidePage() {
             </li>
             <li className="flex gap-2">
               <ListChecks className="mt-0.5 h-4 w-4 shrink-0 text-[#1a5632]" />
-              想自己点按钮：用工作台其它 Tab（提纲 / 章节协作 / 查重）
+              想自己点按钮：左侧「专家工具」里的提纲 / 协作扩写；查重走质量中心
             </li>
           </ul>
         </section>

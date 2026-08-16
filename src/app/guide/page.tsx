@@ -6,156 +6,95 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/page-header";
 import { siteTheme } from "@/lib/site-theme";
 import {
-  FileText, Database, PenTool, BarChart3, Search,
-  Download, CheckCircle2, Users, BookOpen, FlaskConical,
-  Construction, Wrench, Save, Eye, FileSearch, Radar,
+  AlertTriangle,
+  BarChart3,
+  BookOpen,
+  Bot,
+  CheckCircle2,
+  Database,
+  Download,
+  Eye,
+  FileText,
+  FlaskConical,
+  Paperclip,
+  Search,
+  Wrench,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-const sections = [
-  {
-    icon: Users,
-    title: "1. 注册与登录",
-    badge: null,
-    steps: [
-      "打开网站，点击右上角「登录」",
-      "首次使用点击「注册」，填写邮箱和密码",
-      "每个同学独立账号，论文数据互不影响",
-    ],
-  },
+interface GuideSection {
+  icon: LucideIcon;
+  title: string;
+  badge?: { text: string; color: string };
+  steps: string[];
+}
+
+const sections: GuideSection[] = [
   {
     icon: FileText,
-    title: "2. 创建论文项目",
-    badge: null,
+    title: "1. 注册与登录",
     steps: [
-      "登录后进入项目列表 → 点击「新建项目」",
-      "填写论文标题、作者、研究方向",
-      "选择目标期刊模板：SCI / 国标 GB/T 7713 / Nature / IEEE",
-      "保存后进入工作台",
-    ],
-  },
-  {
-    icon: Database,
-    title: "3. 上传知识库文献（最关键）",
-    badge: null,
-    steps: [
-      "工作台左侧点击「文献库」图标（放大镜）",
-      "上传你研究方向的相关 PDF 论文",
-      "建议上传 20-50 篇高质量英文文献",
-      "上传后系统自动解析并建立检索索引",
-      "可按研究方向分类管理（热化学/碳材料/茶叶加工等）",
+      "打开网站，右上角「登录」；第一次用点「注册」，填邮箱和密码",
+      "每人一个账号，论文项目互不影响",
     ],
   },
   {
     icon: BookOpen,
-    title: "4. 生成论文大纲",
-    badge: null,
+    title: "2. 创建论文项目",
     steps: [
-      "左侧点击「论证提纲」标签",
-      "填写论文题目和研究方向（越详细越好）",
-      "选择参考的知识库分类（可选「全部」或指定分类）",
-      "点击「生成」→ AI 根据你的文献库生成结构化大纲",
-      "大纲可编辑——直接在下方文本框修改后点「保存修改」",
+      "登录后「新建项目」，填题目、作者、研究方向",
+      "选目标期刊模板（SCI / 国标 / Nature / IEEE 等）",
+      "保存后进入工作台：左侧 Agent，中间是论文编辑器",
     ],
   },
   {
-    icon: PenTool,
-    title: "5. 分任务逐节扩写",
-    badge: null,
+    icon: Database,
+    title: "3. 准备文献",
     steps: [
-      "在大纲列表中点击某个子节（如「研究背景与意义」）",
-      "左侧「侧栏扩写」面板自动填入上下文，中间编辑器切换为 AI 预览",
-      "右侧面板实时显示 7 步管道进度：检索文献 → 证据整理 → AI 写作 → 审稿核查 → 主编修正 → 引用校验 → 数据核查",
-      "生成过程中文字流式出现在中间编辑器，左侧栏显示核查意见和警告",
-      "满意后点击「应用到编辑器」→ 内容按子节标题自动合入对应章节，不覆盖已有内容",
+      "顶栏进「知识库」，上传你课题相关的 PDF（越相关越好，不必一次堆 50 篇）",
+      "实验室已有分类（热化学 / 碳材料等）可直接检索，不必重复上传",
+      "也可以在 Agent 里说「检索并导入相关文献」，确认后再勾选入库",
+      "文献质量直接决定草稿水平；没有相关 PDF，生成内容会空、会飘",
     ],
   },
   {
-    icon: BarChart3,
-    title: "6. 实验数据与证据",
-    badge: null,
+    icon: Bot,
+    title: "4. 在 Agent 里写（主路径）",
     steps: [
-      "在工作台 Agent 对话框上传 CSV 或 Excel（附件即数据口）",
-      "也可打开专家工具里的「数据」面板（过渡期仍可用）",
-      "填写研究方向后点击「开始数据分析」",
-      "切换到「证据 Hub」→ 系统自动提取数据声明（EvidenceClaim）",
-      "在写作时，AI 引用数据编号，Verifier 校验数值一致性",
-      "证据可手动编辑、添加、删除，自动保存到项目",
+      "工作台默认就是 Agent。直接说话，例如：「写引言」「写方法」「检查引用编号」",
+      "跟聊回「继续 / 好 / A」会接着刚才的任务，不用把要求再说一遍",
+      "正文写入当前项目对应章节，中间编辑器能看见；引用编号应落在文献池内",
+      "写结果章前，把 CSV / Excel 丢进 Agent 对话框（附件就是数据口）；没有数据会拦住空写",
+      "给的是可改草稿，不是终稿。数字、引用、语气都要自己过一眼",
+    ],
+  },
+  {
+    icon: Paperclip,
+    title: "5. 出图",
+    steps: [
+      "跟 Agent 说要画什么（柱状图、三线表、机理图等），图会进图表库并插入章节",
+      "期刊观感、配色、多面板精修走输入框上方的配图坞「期刊精修」，打开 /plot",
+      "不要指望一键出 Nature 级终稿；Agent 负责结构正确的可编辑图",
     ],
   },
   {
     icon: Search,
-    title: "7. 文献阅读与翻译",
-    badge: null,
+    title: "6. 核对与导出",
     steps: [
-      "知识库页面点击文献 → 进入 PDF 阅读器",
-      "划词选中英文段落 → 自动翻译（农业术语优化）",
-      "支持全文检索、AI 对话问答、AI 精读分析",
-      "单篇文献可强制重解析或重嵌向量（右键菜单）",
-    ],
-  },
-  {
-    icon: FileSearch,
-    title: "8. 查重与降重",
-    badge: null,
-    steps: [
-      "工作台左侧「查重」标签，或独立打开查重页面",
-      "导入项目内容或粘贴文本 → 检测自重复 / 跨项目 / 本地库 / 网络",
-      "SSE 实时推送进度：预处理 → 自检 → 跨项目 → 知识库 → 联网搜索",
-      "查看匹配详情 → 使用 AI 降重（4 种策略）",
-    ],
-  },
-  {
-    icon: FileText,
-    title: "9. 论文审查",
-    badge: null,
-    steps: [
-      "查重页 → 「论文审查」→ 打开审查中心（/review）",
-      "加载项目真实的 IMRAD 章节进行多维度审查",
-      "四个维度：学术规范 / 论证质量 / 结构规范 / 学术诚信",
-      "查看历史审查记录，展开详情按维度分组查看问题",
-      "发现问题可点击「修复」→ AI 生成建议 →「接受修复」写回章节",
-    ],
-  },
-  {
-    icon: Radar,
-    title: "10. 一致性检查",
-    badge: null,
-    steps: [
-      "工作台工具栏 → 「一致性检查」",
-      "自动核对 6 个维度：术语 / 数据 / 逻辑 / Overclaim / 引用 / 溯源",
-      "生成报告，标注需修正的段落",
+      "引用：对 Agent 说「检查引用」；越界编号会被去掉并提示",
+      "审查 / 查重：工作台可进质量中心（/review、/plagiarism），或让 Agent 跑审查",
+      "导出：工具栏导出 Word / PDF；越界引用过不了导出就绪检查",
+      "导出前先确认编辑器里是你要的版本",
     ],
   },
   {
     icon: Wrench,
-    title: "11. 科学绘图",
-    badge: null,
-    steps: [
-      "工作台或主页进入「科学绘图」",
-      "选择图表类型（柱状/折线/XRD/流程图等）",
-      "填写数据 → 生成 PNG",
-      "用「插入到论文」对话框选择项目和章节直接写入",
-      "也可复制 Markdown 手动粘贴到编辑器",
-    ],
-  },
-  {
-    icon: Construction,
-    title: "12. XRD / XPS 实验室",
+    title: "7. 专家工具（可选，不是上手必经）",
     badge: { text: "进阶", color: "bg-amber-50 text-amber-700 border-amber-200" },
     steps: [
-      "模拟 XRD 谱图、分析 XPS 数据、绘制分子结构",
-      "生成图片可直接插入到项目指定章节",
-    ],
-  },
-  {
-    icon: Download,
-    title: "13. 导出与投稿",
-    badge: null,
-    steps: [
-      "写完论文后点击工具栏「导出 Word」",
-      "系统按目标期刊模板自动排版（字体、字号、行距、标题格式）",
-      "支持导出 PDF（学术排版）和 Markdown（纯文本）",
-      "导出前请先手动保存一次",
+      "左侧「专家工具」里才有：论证提纲、协作扩写（旧 7 步管道）、数据面板、XRD",
+      "新人不必先点提纲再扩写；那些是熟悉流程后的人控入口",
+      "文献精读、划词翻译仍在知识库阅读器",
     ],
   },
 ];
@@ -165,7 +104,7 @@ export default function GuidePage() {
     <>
       <PageHeader
         title="使用指南"
-        subtitle="禾书耕文 GrainScript — 实验室同学快速上手"
+        subtitle="禾书耕文 — 实验室同学从空项目写到可改草稿"
         icon={BookOpen}
         actions={
           <div className="flex items-center gap-2">
@@ -174,9 +113,9 @@ export default function GuidePage() {
                 <Eye className="h-3.5 w-3.5" /> 项目演示
               </Button>
             </Link>
-            <Link href="/workbench">
+            <Link href="/workbench?tab=agent">
               <Button size="sm" className={`gap-1 text-xs ${siteTheme.btnPrimary}`}>
-                进入工作台
+                打开 Agent 工作台
               </Button>
             </Link>
           </div>
@@ -191,18 +130,23 @@ export default function GuidePage() {
           <div>
             <h2 className="mb-1 text-base font-bold text-[#122820]">写给实验室的同学</h2>
             <p className="text-sm leading-relaxed text-[#6b7c72]">
-              这个系统帮你在写 SCI 论文时自动完成文献检索、内容扩写、引用管理和格式排版。
-              最关键的步骤是第 3 步——<strong className="text-[#122820]">上传的文献质量直接决定了 AI 写作的学术水平</strong>。
-              文献越多、越相关，生成的内容越专业。
+              这不是通用聊天。主入口是工作台里的 <strong className="text-[#122820]">Agent</strong>
+              ：对着实验室文献库和你这篇稿说话，正文写进项目章节。
+              上手就四步——注册、建项目、准备文献、跟 Agent 说要写哪一节。
+              文献越相关，草稿越像样；没有数据不要硬写结果。
+            </p>
+            <p className="mt-2 flex items-start gap-1.5 text-sm text-[#6b7c72]">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+              Agent 给的是可编辑草稿。引用、实验数字、是否 overclaim，投稿前必须人审。
             </p>
           </div>
         </div>
       </div>
 
       <div className="space-y-4">
-        {sections.map((section, idx) => (
+        {sections.map((section) => (
           <div
-            key={idx}
+            key={section.title}
             className={`p-6 ${siteTheme.card} ${siteTheme.cardHover}`}
           >
             <div className="mb-3 flex items-center gap-3">
@@ -217,8 +161,8 @@ export default function GuidePage() {
               ) : null}
             </div>
             <ul className="ml-12 space-y-1.5">
-              {section.steps.map((step, si) => (
-                <li key={si} className="flex items-start gap-2 text-sm text-[#6b7c72]">
+              {section.steps.map((step) => (
+                <li key={step} className="flex items-start gap-2 text-sm text-[#6b7c72]">
                   <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#1a5632]/50" />
                   {step}
                 </li>
@@ -228,11 +172,31 @@ export default function GuidePage() {
         ))}
       </div>
 
-      <div className={`mt-10 rounded-2xl border border-[#1a5632]/10 bg-[#1a5632]/5 p-5 text-center`}>
+      <div className="mt-10 rounded-2xl border border-[#1a5632]/10 bg-[#1a5632]/5 p-5 text-center">
         <p className="text-sm text-[#3d4f46]">
-          有问题找 <span className="font-bold text-[#122820]">黄奕轩</span> 或者在实验室群里提问
+          卡住了找 <span className="font-bold text-[#122820]">黄奕轩</span>，或在实验室群里提问
         </p>
-        <p className="mt-1 text-xs text-[#9aa8a0]">GrainScript v2.2.0 · 2026-05</p>
+        <p className="mt-2 flex flex-wrap items-center justify-center gap-3 text-xs text-[#9aa8a0]">
+          <Link href="/academic-paper" className="underline underline-offset-2 hover:text-[#1a5632]">
+            选已有项目进 Agent
+          </Link>
+          <span>·</span>
+          <Link href="/knowledge" className="underline underline-offset-2 hover:text-[#1a5632]">
+            知识库
+          </Link>
+          <span>·</span>
+          <span className="inline-flex items-center gap-1">
+            <BarChart3 className="h-3 w-3" />
+            <Link href="/plot" className="underline underline-offset-2 hover:text-[#1a5632]">
+              配图坞
+            </Link>
+          </span>
+          <span>·</span>
+          <span className="inline-flex items-center gap-1">
+            <Download className="h-3 w-3" />
+            导出在工作台工具栏
+          </span>
+        </p>
       </div>
     </>
   );
