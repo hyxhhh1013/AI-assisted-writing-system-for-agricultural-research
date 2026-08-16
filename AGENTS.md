@@ -146,6 +146,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 | `src/proxy.ts` | 认证 / 限流 |
 | `src/app/api/writing/run-pipeline.ts` | 写作五阶段编排 |
 | `src/app/workbench/page.tsx` | 工作台（慎增代码） |
+| `src/lib/agent/tools/registry.ts` | Agent 工具唯一挂载表（加工具改这里，不改循环） |
 | `src/components/shared/writing-panel.tsx` | 扩写 UI（待拆） |
 
 ### 数据流（简图）

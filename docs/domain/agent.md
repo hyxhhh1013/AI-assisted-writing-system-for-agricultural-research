@@ -1,6 +1,6 @@
 # Agent 编排（写作助手）
 
-> L3 域文档 · 更新：2026-08-15  
+> L3 域文档 · 更新：2026-08-16  
 > 契约唯一权威源：`src/contracts/agent.ts`（SSE 事件）、`src/contracts/agent-session.ts`（会话消息）、`src/contracts/agent-intent.ts`（`IntentKind`）。
 
 ## 概览
@@ -35,6 +35,7 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 | `src/lib/agent/langgraph/tool-gates.ts` | toolsNode 门禁中间件：前置链（重复/配额/意图+先读后写）+ 阶段 + 后置链（antispam/clarify/outline） |
 | `src/lib/agent/langgraph/graph.ts` | 编译 LangGraph |
 | `src/lib/agent/tools/*.ts` | 各工具定义（`ToolDefinition`） |
+| `src/lib/agent/tools/registry.ts` | **工具唯一挂载表**（`READ_TOOLS` / `WRITE_TOOLS`）；`createAgentTools` 只读此表（W3-AP-ARCH-01） |
 | `src/lib/agent/ingest-project-data.ts` | 表格入库合并 + 只 PATCH `dataSources`/`dataClaims`（`ingest_project_data`） |
 | `src/lib/agent/writing-progress.ts` | 写节进度翻译层（管道事件 → `agent/progress` label） |
 | `src/lib/agent/writing-quality.ts` | WQC 写作质检轻量：喉清开场 / 综上所述堆砌 / overclaim / 段长方差（确定性规则，warn 级不阻断） |
@@ -121,7 +122,8 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **蓝图真正驱动 Writer（2026-08-09）**：修复「批准蓝图后正文仍不按蓝图生成」。根因：①`loadAgentProject` 曾把 `WritingBlueprint` JSON 误 `as WritingGlobalContext`，`prepare-context` 读 `globalContext.blueprint` 恒为 undefined，【写作蓝图摘要】不进 Writer；②`write_section` 未调用工作台同款的本节蓝图注入（purpose/keyPoints/配图）。现：loader 用 `parseWritingBlueprint` 正确嵌套 `globalContext.blueprint` 并附 outline/sectionPreviews；`lib/agent/blueprint-write-context.ts` 将英文 section key 映射到大纲/蓝图中文路径，聚合本节 guides 注入 `【写作蓝图（本节）】`；简报补 keyPoints + 配图计划；system prompt / 工具说明要求对齐蓝图。
 - **综述正文禁止一次写整章（2026-08-09）**：Agent 曾把 phase 文案「一次任务可连续写多节」理解成对 `literature_body` 一次写出 5–7k 字（UI 可达万字+），导致超时/质量塌陷。现：① phase-pack / planner / review_write nudge / system prompt 明确「按蓝图子节 + subsectionTitle 逐节写」；② `write_section` 在 `literature_body` 无 `subsectionTitle` 且蓝图有 ≥2 子节路径时 soft-gate 拒绝并列出建议标题。
 - **论证并入写作蓝图（2026-08-09，方案 A）**：产品主路径改为 `配置 → 大纲 → 写作蓝图 → 分节写`。`SectionGuide` 增加 `claim` / `evidenceHint` / `warrant` / `rebuttal`；全文级 `researchQuestion` / `argumentGaps`。`ensure-write-prereqs` / phase-gate 不再要求 `build_argument_blueprint`；检查点只对 `generate_writing_blueprint` 暂停。Passport Phase 3 有写作蓝图即 done。旧 `argumentBlueprint` 列保留只读兼容。
-- **卸掉弃用工具注册（2026-08-11）**：`createAgentTools` 不再注册 `build_argument_blueprint`（源文件保留作说明）；planner / Phase 3 hint 文案改为「确认写作蓝图主张」，不再引导生成独立论证蓝图。
+- **卸掉弃用工具注册（2026-08-11）**：`createAgentTools` 不再注册 `build_argument_blueprint`（源文件保留作说明，`UNREGISTERED_TOOL_FILES`）；planner / Phase 3 hint 文案改为「确认写作蓝图主张」，不再引导生成独立论证蓝图。
+- **工具挂载表（2026-08-16，W3-AP-ARCH-01）**：`tools/registry.ts` 为唯一挂载点。加工具：新建 `tools/<name>.ts` + 推进 `READ_TOOLS` 或 `WRITE_TOOLS`。禁止运行时扫磁盘。忘了挂表则 `agent-tool-registry.test.ts` 红。
 - **大纲阈值统一（2026-08-11）**：`MIN_OUTLINE_CHARS = 20`（`lib/outline-threshold.ts`）供写门禁与 Passport Phase 2 共用，消除 20 vs 80 漂移。
 - **破坏性删除需确认（2026-08-11）**：`remove_figure` / `remove_references` 标 `requiresConfirmation` + `safety: "destructive"`，确认卡文案见 `confirm-message.ts`。
 - **写作蓝图「结构无效」修复（2026-08-09）**：首因是 prompt 示例 `language: Chinese/English`（schema 仅 `zh|en`）。复查后发现仍会因 `dataSource`/`projectMode` 非法枚举、`keyPoints` 写成字符串、`estimatedWordCount` 写成 `"6000-12000"`、缺 `version`/空 items 等失败。现：① prompt 按 review/research 分示例并写明枚举约束；② `blueprint-coerce.ts` 纠偏上述偏差并在必要时合成最小合法 figure/guides；③ 错误文案带字段路径。API 与 `generate_writing_blueprint` 共用。
@@ -210,6 +212,14 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 **即刻冻结**：不准再往 `goal-intents.ts` 加口语 `isXxxGoal` / `checkXxxGate`。领域不变量（空数据、越界引用）与事故型安全门除外。
 
 **已收口（2026-08-15）**：INTENT-01/02、RULES-01、QUALITY-CLAIM、QUALITY-JUDGE。`classifyIntent` 每轮一次；跟聊短回复继承 `snapshot.intentKind`。gate / `nudgeForKind` 只消费 kind。`AGENT_RULES` 单一事实源（5 条）。收口默认 claim grounding。`eval:quality` 规则分 + 可选 LLM 分（不进写节）。**INTENT-SHADOW cancelled**：跟聊 inherit 已覆盖「A/继续」；规定的影子触发在 `source=regex`，测不到跟聊；无标注样本则不上热路径 LLM 分类。
+
+## 车间图纸（2026-08-16 规划，Wave 3.10）
+
+产品方向：循环够用；缺的是单一工具登记、可追查的短轨迹、旧扩写管不再加功能。不换 LangGraph / DeepSeek Harness。
+
+详规与 PR 序：[`plans/W3-AP-RUNTIME.md`](../plans/W3-AP-RUNTIME.md)（队列 Phase 11e）。
+
+**已落地 ARCH-01**：`lib/agent/tools/registry.ts` 为 `createReadOnlyTools` / `createAgentTools` 唯一挂载点。
 
 ## 机理图 / 识图自检（2026-08-09）
 

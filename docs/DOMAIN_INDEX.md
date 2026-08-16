@@ -10,10 +10,11 @@
 | 工作台主界面 | `src/app/workbench/page.tsx` | `GET/PATCH /api/projects` | `useProjectLoader`, `useAutoSave`, `useEditorSync` |
 | PaperPassport / Cockpit | 工作台 `structure` 侧栏顶部 | `PATCH .../paper-passport`；`POST .../sync` | `project-cockpit-bar.tsx`, `paper-config-panel.tsx`, `paper-passport-*.ts` |
 | 章节编辑保存 | 同上 | `PATCH .../sections/[key]` | `src/services/projects.ts` |
-| 参考文献 | 工作台侧栏 | `PATCH .../references` | `useReferenceReorder`, `contracts/project.ts` |
+| 参考文献 | 工作台侧栏 | `PATCH .../references` | `useReferenceReorder`, `contracts/project.ts`；预览点 [n] → `citation-inspect-dialog.tsx`（三态出处） |
 | 分析结果 | 工作台 `data` Tab | `PATCH .../analysis-results` | `patchAnalysisResults` service |
 | 项目列表 | `src/app/projects/page.tsx` | `/api/projects` | — |
 | 写作 Agent 引导 | `src/app/academic-paper/page.tsx` | Project 列表 | `academic-paper-studio/components/AgentGuidePage.tsx` → `/workbench?tab=agent` |
+| 使用指南 | `src/app/guide/page.tsx` | — | 上手主路径：注册 → 建项目 → 文献 → 工作台 Agent；提纲/7 步扩写仅专家工具 |
 
 ### 工作台 Tab（`workbench-tab-switcher.tsx`）
 
@@ -35,7 +36,7 @@
 | 功能 | 页面 | API | 核心代码 |
 |------|------|-----|----------|
 | 扩写流水线 | 工作台 `writing` Tab | `POST /api/writing` SSE；`POST /api/writing/retrieve-preview` | `api/writing/pipeline/*`, `services/writing-context.ts` |
-| AI Agent | 工作台 `agent` Tab | `POST /api/agent` SSE；`GET /api/agent/sessions`（`history=1`） | Phase0 问答配置；行为 eval；表格入库 `ingest_project_data`（`lib/agent/ingest-project-data.ts`）；**质量主轴**见 [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md)；行为底稿 [`W3-AP-BEHAVIOR.md`](./plans/W3-AP-BEHAVIOR.md)；**Wave 3.9 意图/规则/尺子** [`W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md) |
+| AI Agent | 工作台 `agent` Tab | `POST /api/agent` SSE；`GET /api/agent/sessions`（`history=1`） | 工具挂载 `lib/agent/tools/registry.ts`；质量 [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md)；**Wave 3.9** [`W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md)；**Wave 3.10 车间图纸** [`W3-AP-RUNTIME.md`](./plans/W3-AP-RUNTIME.md) |
 | 产品门禁评测 | 本地/CI | `npm run eval:gates`；可选 `npm run eval:pipeline` | `lib/eval/product-gates.ts`、`scripts/eval-pipeline-paper.ts` |
 | 论文质量评测 | 本地脚本 | `npm run eval:quality` | `lib/quality-eval/` 规则尺（CI 地板）+ `llm-judge.ts`（仅脚本，不进写节） |
 | 证据中心 | 工作台 `data` | — | `evidence-hub-sections.tsx`、`data-panel.tsx` |

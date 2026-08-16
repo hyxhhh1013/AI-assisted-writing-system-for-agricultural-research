@@ -41,6 +41,7 @@
 | `src/app/workbench/page.tsx` | 只接 hook，不新增业务逻辑 |
 | `src/components/shared/writing-panel.tsx` | 拆到 `writing/` 子组件 + hooks（ENG-PR-031） |
 | `src/app/api/writing/route.ts` | 已拆 pipeline；route 只做编排 |
+| `src/lib/agent/core/agent-loop.ts` | 只编排；工具挂 `src/lib/agent/tools/registry.ts`（W3-AP-ARCH-01） |
 
 ## 跨会话接力
 

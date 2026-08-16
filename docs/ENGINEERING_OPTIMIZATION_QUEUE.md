@@ -8,8 +8,8 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-08-15（Phase 11d Wave 3.9 收口；INTENT-SHADOW cancelled）  
-> **实时 status 只看 §1 Phase 11 / 11b / 11c / 11d**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
+> **最后更新**：2026-08-16（Phase 11e Wave 3.10 车间图纸；ARCH-01 进行中）  
+> **实时 status 只看 §1 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
 
@@ -246,6 +246,12 @@
 | W3-AP-QUALITY-JUDGE | LLM-judge 只进 `eval:quality`，不进热路径 | — | 1d | **done** | 2026-08-15；规则尺 CI 地板；无 key skip |
 | W3-AP-INTENT-SHADOW | 可选：LLM 分类影子模式，对照日志后再决定 promote | INTENT-01 | 0.5d | **cancelled** | 2026-08-15；跟聊 inherit 已覆盖；regex 影子测不到跟聊 |
 | — | 任务单细节 | — | — | — | [`plans/W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md) |
+| **Phase 11e — Wave 3.10 车间图纸（工具表 / 会话轨迹 / 冻结旧扩写）** |
+| **W3-AP-RUNTIME** | **主轴：循环够用；单一挂载表 + 短轨迹 + 旧管冻结** | W3-AP-INTENT-QUALITY | 1.5d | **in_progress** | 2026-08-16；不换 LangGraph / Harness |
+| W3-AP-ARCH-01 | 工具注册表 `tools/registry.ts`；单测防 `tools/*.ts` 漏挂 | — | 0.5d | **done** | 2026-08-16；弃用 `build-argument-blueprint` 留名单 |
+| W3-AP-ARCH-02 | 会话快照 `toolTrace`（工具名/成败/intentKind，上限 50） | ARCH-01 | 0.5d | todo | 无新 Prisma 表；先不进前端 |
+| W3-AP-ARCH-03 | 冻结 `POST /api/writing`：新写作规则只改 Agent | — | 0.5d | todo | 不删专家工具 7 步管 |
+| — | 任务单细节 | — | — | — | [`plans/W3-AP-RUNTIME.md`](./plans/W3-AP-RUNTIME.md) |
 
 
 | 来源 | 本队列处理方式 |
@@ -258,6 +264,7 @@
 | `docs/plans/W3-AP-QUALITY.md` | Wave 3.7 质量主轴任务单；合并时同步 §1 Phase 11b |
 | `docs/plans/W3-AP-AGENT-HUB.md` | Wave 3.8 Agent 单面 + 数据闭环；合并时同步 §1 Phase 11c |
 | `docs/plans/W3-AP-INTENT-QUALITY.md` | Wave 3.9 意图状态化 + 规则 SSOT + 质量尺；合并时同步 §1 Phase 11d |
+| `docs/plans/W3-AP-RUNTIME.md` | Wave 3.10 车间图纸；合并时同步 §1 Phase 11e |
 
 ### 1.2 已完成（勿重复开 PR）
 
@@ -1108,20 +1115,24 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-15 | W3-AP-RULES-01 | AI | `AGENT_RULES` 单一事实源（5 条）：prompt / nudge / results 硬拦文案同读 `ruleText`。`phaseGatePromptRules` 不再手写第二份「勿 build_argument_blueprint」。 |
 | 2026-08-15 | W3-AP-QUALITY-JUDGE | AI | `evaluateQualityLlm` 仅 `eval:quality`：规则分始终打印，LLM 分无 key/失败则 skip。不进 `write_section` / `toolsNode`。规则尺=CI 地板，模型尺=回归对照。 |
 | 2026-08-15 | W3-AP-INTENT-SHADOW | AI | **cancelled**：跟聊「A/继续」已 inherit；任务单影子触发在 `source=regex`，测不到跟聊；无标注样本不上热路径 LLM 分类。Wave 3.9 收口。 |
+| 2026-08-16 | W3-AP-RUNTIME | AI | 规划生效：车间图纸。PR 序 ARCH-01 工具表 → ARCH-02 会话轨迹 → ARCH-03 冻结旧扩写。不换循环。见 `docs/plans/W3-AP-RUNTIME.md`；队列 Phase 11e |
+| 2026-08-16 | W3-AP-ARCH-01 | AI | 工具唯一挂载表 `tools/registry.ts`；`createAgentTools` 只读表。单测扫 `tools/*.ts` 防漏挂。弃用蓝图文件留 `UNREGISTERED_TOOL_FILES`。 |
 
 ---
 
 ## 5. 推荐执行顺序（给「下一次 AI」）
 
-**当前主轴（2026-08-15）**：Wave 3.9（INTENT-QUALITY）**已收口**。INTENT-SHADOW **cancelled**。  
-3.8（AGENT-HUB）已收口。**即刻冻结**：不准再往 `goal-intents.ts` 加口语 `isXxxGoal` / `checkXxxGate`（领域不变量与事故型安全门除外）；不重开 SHADOW。
+**当前主轴（2026-08-16）**：Wave 3.10（W3-AP-RUNTIME）**进行中**。Wave 3.9 已收口。INTENT-SHADOW **cancelled**。  
+**即刻冻结**：不准再往 `goal-intents.ts` 加口语 `isXxxGoal` / `checkXxxGate`（领域不变量与事故型安全门除外）；不重开 SHADOW；不重写 LangGraph。
 
 | 优先级 | ID | 说明 |
 |--------|-----|------|
-| P3-legacy | W3-AP-WRITE-NO-RAG | 已诊断未实施：有项目文献摘要时跳过知识库 RAG（勿插进 3.9） |
-| backlog | Wave 4 | ENG-PR-094 OA / workbench 瘦身 / SEC-04～08；见 [`MASTER_PLAN.md`](./MASTER_PLAN.md) |
+| 现在 | W3-AP-ARCH-02 | 会话 `toolTrace` |
+| 下一刀 | W3-AP-ARCH-03 | 冻结旧扩写管道 |
+| P3-legacy | W3-AP-WRITE-NO-RAG | 有项目文献摘要时跳过知识库 RAG（勿插进本波） |
+| backlog | Wave 4 | ENG-PR-094 已 done；LaTeX / SEC-04～08 见 [`MASTER_PLAN.md`](./MASTER_PLAN.md) |
 
-**明确不做**：重开 INTENT-SHADOW、LangGraph 重写 / 多 agent、热路径 LLM-judge、再堆口语门禁、把 998 行正则搬进规则表。
+**明确不做**：重开 INTENT-SHADOW、LangGraph 重写 / 多 agent / DeepSeek Harness、热路径 LLM-judge、再堆口语门禁、运行时扫 `tools/` 磁盘。
 
 ---
 
