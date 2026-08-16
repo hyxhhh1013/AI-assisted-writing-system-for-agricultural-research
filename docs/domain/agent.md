@@ -272,6 +272,14 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 - 契约：`contracts/citation-claim-grounding.ts`；单测：`src/__tests__/lib/citation-claim-grounding.test.ts`（fake judge，无 key）。
 - 接入 `validate_citations`：**收口路径默认开**（`intentKind` 为 citation / citation_apply / abstract_finish / review_request / ap_full / pipeline_*；无 kind 时按 goal 正则回退；无 goal 的直接调用视为显式核查）。写节 / 综述起草（`draft` / `review_write`）的 reflect 自查**不跑**，避免每节烧 verifier。文献无摘要则 skip。`CITATION_CLAIM_GROUNDING=0`（或 `false`/`off`）全局关闭。失败（无 key/超时/解析失败）降级为 `claimGrounding: null`，不阻断主流程。结果并入 `data.claimGrounding`，summary 追加 `【claim 接地】`。contradict 是「可判定且确实错引」的强信号，供 Agent 优先改引/改写。
 
+### bib_only 精确数据告警（软信号）
+
+「仅书目」文献（无全文、无摘要）被正文标 [n] 且该句含精确数据（数字+单位 / 百分数 / 温度）时，数据无源可核。确定性规则，不调 LLM：
+
+- `lib/agent/precise-data-grounding.ts`：`extractPreciseData`（正则只认「数字+单位」，天然排除年份/纯编号/纯小数，避免误伤「in 2020」「[3]」「3 篇文献」）+ `evaluateBibOnlyPreciseData`（扫全文，命中 bib_only + 精确数据 → 告警）。
+- `lib/reference-mode.ts`：`resolveBibOnlyIndexes` / `resolveReferenceModes`，从 `source/route.ts` 抽离三态判定（full=知识库全文；abstract=有摘要；bib_only=仅书目）。性能折中：只对「无摘要」的文献查 `getFullText`。
+- 接入 `validate_citations`：结果并入 summary（`【仅书目精确数据】`，引导补原文或改定性表述）+ `data.bibOnlyPrecise`（结构化供前端）。**软信号，不阻断 exportReady**；硬检仍只看 citation-gate 的越界判断。
+
 ### 论文质量评测集（两把尺）
 
 `lib/quality-eval/`：规则尺是 CI 地板（不调 LLM）；模型尺只给 `eval:quality` 做回归对照，**禁止**从 `write_section` / `toolsNode` 调用。

@@ -1118,6 +1118,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-16 | W3-AP-RUNTIME | AI | 规划生效：车间图纸。PR 序 ARCH-01 工具表 → ARCH-02 会话轨迹 → ARCH-03 冻结旧扩写。不换循环。见 `docs/plans/W3-AP-RUNTIME.md`；队列 Phase 11e |
 | 2026-08-16 | W3-AP-ARCH-01 | AI | 工具唯一挂载表 `tools/registry.ts`；`createAgentTools` 只读表。单测扫 `tools/*.ts` 防漏挂。弃用蓝图文件留 `UNREGISTERED_TOOL_FILES`。 |
 | 2026-08-16 | W3-AP-ARCH-02 | AI | 会话快照 `toolTrace`（`AgentToolTrace{at,tool,ok,intentKind}`，上限 50）；`nodes.ts`/`parallel-tools.ts` 每次工具结局 append，`state` reducer 截断。`agent-tool-trace.test.ts` + snapshot 往返/旧快照兜底用例。前序：cite-inspect 抽取 + guide 文案对齐两 commit 收口。 |
+| 2026-08-16 | bib_only 精确数据告警 | AI | `precise-data-grounding.ts`（正则只认数字+单位，排除年份/编号误伤）+ `reference-mode.ts`（三态判定抽离，只对无摘要文献查全文）；接入 `validate_citations`，软信号不阻断 exportReady。7 单测绿。见 `domain/agent.md` §bib_only。 |
 
 ---
 

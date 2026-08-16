@@ -14,6 +14,8 @@ import {
   isCitationClaimGroundingCloseOut,
   shouldRunCitationClaimGrounding,
 } from "@/lib/agent/citation-claim-policy";
+import { evaluateBibOnlyPreciseData } from "@/lib/agent/precise-data-grounding";
+import { resolveBibOnlyIndexes } from "@/lib/reference-mode";
 import { syncProjectPaperPassport } from "@/lib/project-paper-passport-sync";
 import { findReferenceRowsLite } from "@/lib/reference-rows";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
@@ -92,6 +94,19 @@ export const validateCitationsTool: ToolDefinition = {
       references: refsFromLiteRows(references),
     });
 
+    // bib_only 精确数据告警（软信号，不阻断 exportReady）：
+    // 仅书目文献被标 [n] 且该句含「数字+单位/百分数/温度」→ 数据无源可核
+    let bibOnlyPrecise: ReturnType<typeof evaluateBibOnlyPreciseData> = [];
+    try {
+      const bibOnlyIndexes = await resolveBibOnlyIndexes(ctx.projectId, ctx.userId);
+      bibOnlyPrecise = evaluateBibOnlyPreciseData({
+        draftText,
+        bibOnlyIndexes,
+      });
+    } catch {
+      bibOnlyPrecise = [];
+    }
+
     const checks = contextText.trim()
       ? validateCitations(draftText, contextText)
       : [];
@@ -151,6 +166,17 @@ export const validateCitationsTool: ToolDefinition = {
       summary += `\n【claim 接地】${claimGrounding.hint}`;
     }
 
+    if (bibOnlyPrecise.length > 0) {
+      const sample = bibOnlyPrecise
+        .slice(0, 5)
+        .map((f) => `[${f.number}]（${f.data.join("、")}）`)
+        .join("，");
+      summary +=
+        `\n【仅书目精确数据】${bibOnlyPrecise.length} 条仅书目文献被引用了精确数据：${sample}。`
+        + "这些文献无全文无摘要，数据无源可核——请补原文（导入 PDF/摘要）或把该处改为定性表述。"
+        + "若为综述式概括引用（未引具体数字）可忽略。";
+    }
+
     return {
       success: true,
       data: {
@@ -180,6 +206,11 @@ export const validateCitationsTool: ToolDefinition = {
             }
           : null,
         totalChecks: checks.length,
+        bibOnlyPrecise: bibOnlyPrecise.map((f) => ({
+          number: f.number,
+          data: f.data,
+          sentence: f.sentence,
+        })),
         overlapIssueCount: overlapIssues.length,
         overlapIssues: overlapIssues.map((c) => ({
           number: c.number,
