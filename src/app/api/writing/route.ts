@@ -1,3 +1,12 @@
+/**
+ * 【已冻结 — W3-AP-ARCH-03】
+ *
+ * 本路由是「专家工具协作扩写」遗留管道（Writer → Verifier → Refiner）。
+ * 产品写作入口是 Agent（`POST /api/agent`，工具挂载 `lib/agent/tools/registry.ts`）。
+ *
+ * 纪律：**新的写作规则/引用规则/质检只改 Agent 这条路径**，禁止再给本管道加功能。
+ * 仅保留 bug 修复与安全加固；规则变更请改 Agent 侧，勿在此处新增分支。
+ */
 import { createLogger } from "@/lib/logger";
 import { getErrorMessage } from "@/lib/error-utils";
 import { releaseWritingSlot, tryAcquireWritingSlot } from "@/lib/writing-concurrency";

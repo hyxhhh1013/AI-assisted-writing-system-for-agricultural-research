@@ -2,6 +2,14 @@
 
 > 源码真相：`src/app/api/writing/`、`src/lib/prompts/writing.ts`、`src/contracts/sse.ts`。
 
+## ⚠️ 定位：专家工具遗留（已冻结 — W3-AP-ARCH-03）
+
+本管道是**协作扩写专家工具**的遗留实现。产品写作入口是 **Agent**（`POST /api/agent`，工具挂载 `lib/agent/tools/registry.ts`）：
+
+- **主路径**：Agent 对话写作（写节、引用核查、质检、收口都在这一条）。
+- **本管道（从）**：仅专家工具「协作扩写」人控流程（选文献→定要点→逐条扩写）仍走这里。
+- **纪律**：新的写作规则 / 引用规则 / 质检只改 Agent 侧；**禁止给本管道加功能**，仅 bug 修复与安全加固。改规则先改 `lib/prompts.ts`（Agent 侧）再改本文对应摘要。
+
 ## 模式
 
 | `mode` | 行为 |

@@ -1,3 +1,8 @@
+/**
+ * 【已冻结 — W3-AP-ARCH-03】
+ * 协作扩写管道编排（Writer → Verifier → Refiner）。专家工具遗留，产品写作入口为 Agent。
+ * 禁止新增写作规则/引用规则/质检分支；仅 bug 修复与安全加固。规则变更只改 Agent 侧。
+ */
 import type { EvidenceClaim } from "@/contracts/data-source";
 import type { WritingInput } from "@/lib/validations";
 import { prepareWritingContext } from "./prepare-context";

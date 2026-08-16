@@ -247,10 +247,10 @@
 | W3-AP-INTENT-SHADOW | 可选：LLM 分类影子模式，对照日志后再决定 promote | INTENT-01 | 0.5d | **cancelled** | 2026-08-15；跟聊 inherit 已覆盖；regex 影子测不到跟聊 |
 | — | 任务单细节 | — | — | — | [`plans/W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md) |
 | **Phase 11e — Wave 3.10 车间图纸（工具表 / 会话轨迹 / 冻结旧扩写）** |
-| **W3-AP-RUNTIME** | **主轴：循环够用；单一挂载表 + 短轨迹 + 旧管冻结** | W3-AP-INTENT-QUALITY | 1.5d | **in_progress** | 2026-08-16；不换 LangGraph / Harness |
+| **W3-AP-RUNTIME** | **主轴：循环够用；单一挂载表 + 短轨迹 + 旧管冻结** | W3-AP-INTENT-QUALITY | 1.5d | **done** | 2026-08-16；ARCH-01/02/03 全 done；不换 LangGraph / Harness |
 | W3-AP-ARCH-01 | 工具注册表 `tools/registry.ts`；单测防 `tools/*.ts` 漏挂 | — | 0.5d | **done** | 2026-08-16；弃用 `build-argument-blueprint` 留名单 |
 | W3-AP-ARCH-02 | 会话快照 `toolTrace`（工具名/成败/intentKind，上限 50） | ARCH-01 | 0.5d | **done** | 2026-08-16；`contracts/agent-session` `AgentToolTrace` + `state` `MAX_TOOL_TRACE` + `nodes`/`parallel-tools` append；无新 Prisma 表；不进前端 |
-| W3-AP-ARCH-03 | 冻结 `POST /api/writing`：新写作规则只改 Agent | — | 0.5d | todo | 不删专家工具 7 步管 |
+| W3-AP-ARCH-03 | 冻结 `POST /api/writing`：新写作规则只改 Agent | — | 0.5d | **done** | 2026-08-16；`route.ts`/`run-pipeline.ts` 文件头冻结声明 + `DOMAIN_INDEX`/`writing-pipeline.md` 主从标注；不删专家工具 7 步管 |
 | — | 任务单细节 | — | — | — | [`plans/W3-AP-RUNTIME.md`](./plans/W3-AP-RUNTIME.md) |
 
 
@@ -1119,18 +1119,19 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-16 | W3-AP-ARCH-01 | AI | 工具唯一挂载表 `tools/registry.ts`；`createAgentTools` 只读表。单测扫 `tools/*.ts` 防漏挂。弃用蓝图文件留 `UNREGISTERED_TOOL_FILES`。 |
 | 2026-08-16 | W3-AP-ARCH-02 | AI | 会话快照 `toolTrace`（`AgentToolTrace{at,tool,ok,intentKind}`，上限 50）；`nodes.ts`/`parallel-tools.ts` 每次工具结局 append，`state` reducer 截断。`agent-tool-trace.test.ts` + snapshot 往返/旧快照兜底用例。前序：cite-inspect 抽取 + guide 文案对齐两 commit 收口。 |
 | 2026-08-16 | bib_only 精确数据告警 | AI | `precise-data-grounding.ts`（正则只认数字+单位，排除年份/编号误伤）+ `reference-mode.ts`（三态判定抽离，只对无摘要文献查全文）；接入 `validate_citations`，软信号不阻断 exportReady。7 单测绿。见 `domain/agent.md` §bib_only。 |
+| 2026-08-16 | W3-AP-ARCH-03 | AI | 冻结旧扩写管道：`route.ts`/`run-pipeline.ts` 文件头声明「新写作规则只改 Agent」，`DOMAIN_INDEX`/`writing-pipeline.md` 标注 Agent 主、扩写从。不删代码。Phase 11e 收口。 |
 
 ---
 
 ## 5. 推荐执行顺序（给「下一次 AI」）
 
-**当前主轴（2026-08-16）**：Wave 3.10（W3-AP-RUNTIME）**进行中**。Wave 3.9 已收口。INTENT-SHADOW **cancelled**。  
-**即刻冻结**：不准再往 `goal-intents.ts` 加口语 `isXxxGoal` / `checkXxxGate`（领域不变量与事故型安全门除外）；不重开 SHADOW；不重写 LangGraph。
+**当前主轴（2026-08-16）**：Wave 3.10（W3-AP-RUNTIME）**已收口**（ARCH-01/02/03 全 done）。Wave 3.9 已收口。INTENT-SHADOW **cancelled**。  
+**即刻冻结**：不准再往 `goal-intents.ts` 加口语 `isXxxGoal` / `checkXxxGate`（领域不变量与事故型安全门除外）；不重开 SHADOW；不重写 LangGraph；不给 `POST /api/writing` 旧扩写管加功能。
 
 | 优先级 | ID | 说明 |
 |--------|-----|------|
-| 现在 | W3-AP-ARCH-03 | 冻结旧扩写管道 |
-| P3-legacy | W3-AP-WRITE-NO-RAG | 有项目文献摘要时跳过知识库 RAG（勿插进本波） |
+| P3-legacy | W3-AP-WRITE-NO-RAG | 有项目文献摘要时跳过知识库 RAG |
+| P3-legacy | bib_only 精确数据告警·导出前 | 现只在 `validate_citations` 触发；导出前兜底需把 reference 详情传进 export-readiness |
 | backlog | Wave 4 | ENG-PR-094 已 done；LaTeX / SEC-04～08 见 [`MASTER_PLAN.md`](./MASTER_PLAN.md) |
 
 **明确不做**：重开 INTENT-SHADOW、LangGraph 重写 / 多 agent / DeepSeek Harness、热路径 LLM-judge、再堆口语门禁、运行时扫 `tools/` 磁盘。

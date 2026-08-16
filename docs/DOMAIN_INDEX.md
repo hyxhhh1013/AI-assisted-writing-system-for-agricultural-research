@@ -33,10 +33,12 @@
 
 ## AI 写作
 
+> **主从（W3-AP-ARCH-03）**：产品写作入口 = **AI Agent**（下）。扩写流水线是专家工具遗留，**已冻结**——新写作/引用/质检规则只改 Agent 侧，禁止再给扩写管道加功能。
+
 | 功能 | 页面 | API | 核心代码 |
 |------|------|-----|----------|
-| 扩写流水线 | 工作台 `writing` Tab | `POST /api/writing` SSE；`POST /api/writing/retrieve-preview` | `api/writing/pipeline/*`, `services/writing-context.ts` |
-| AI Agent | 工作台 `agent` Tab | `POST /api/agent` SSE；`GET /api/agent/sessions`（`history=1`） | 工具挂载 `lib/agent/tools/registry.ts`；质量 [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md)；**Wave 3.9** [`W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md)；**Wave 3.10 车间图纸** [`W3-AP-RUNTIME.md`](./plans/W3-AP-RUNTIME.md) |
+| **AI Agent（主）** | 工作台 `agent` Tab | `POST /api/agent` SSE；`GET /api/agent/sessions`（`history=1`） | 工具挂载 `lib/agent/tools/registry.ts`；质量 [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md)；**Wave 3.9** [`W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md)；**Wave 3.10 车间图纸** [`W3-AP-RUNTIME.md`](./plans/W3-AP-RUNTIME.md) |
+| 扩写流水线（从·已冻结） | 工作台 `writing` Tab（专家工具） | `POST /api/writing` SSE；`POST /api/writing/retrieve-preview` | `api/writing/pipeline/*`, `services/writing-context.ts` |
 | 产品门禁评测 | 本地/CI | `npm run eval:gates`；可选 `npm run eval:pipeline` | `lib/eval/product-gates.ts`、`scripts/eval-pipeline-paper.ts` |
 | 论文质量评测 | 本地脚本 | `npm run eval:quality` | `lib/quality-eval/` 规则尺（CI 地板）+ `llm-judge.ts`（仅脚本，不进写节） |
 | 证据中心 | 工作台 `data` | — | `evidence-hub-sections.tsx`、`data-panel.tsx` |
