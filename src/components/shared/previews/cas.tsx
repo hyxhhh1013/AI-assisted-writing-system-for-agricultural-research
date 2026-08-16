@@ -3,7 +3,7 @@
 import { MarkdownContent, ReferencesSection } from "./shared";
 import { formatKeywords } from "@/lib/paper-metadata";
 import type { ProjectData } from "@/contracts/project";
-import { getTemplateSections, type TemplateSectionDef } from "@/lib/template-sections";
+import { getRenderableSections, type TemplateSectionDef } from "@/lib/template-sections";
 
 interface TemplateProps {
   project: ProjectData;
@@ -19,7 +19,7 @@ function getSectionContent(project: ProjectData, def: TemplateSectionDef): strin
 
 export function CASPreview({ project, onCiteClick }: TemplateProps) {
   const keywords = formatKeywords(project, "zh");
-  const templateSections = getTemplateSections("cas", project.mode);
+  const templateSections = getRenderableSections("cas", project.mode, project.sections);
   return (
     <div className="p-12 text-[10.5pt] text-black max-w-[210mm] mx-auto bg-white" style={{ fontFamily: '"SimSun", "Microsoft YaHei", "Noto Sans CJK SC", serif', lineHeight: '1.78' }}>
       <header className="text-center mb-12">

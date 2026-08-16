@@ -30,22 +30,25 @@ export const TEMPLATE_SECTIONS: Record<TemplateId, TemplateSectionDef[]> = {
   gbt7713: [
     { key: "introduction", label: "引言", sectionNumber: 1 },
     { key: "methods", label: "材料与方法", sectionNumber: 2 },
-    { key: "results", label: "结果与分析", sectionNumber: 3, mergeKeys: ["discussion"] },
-    { key: "conclusion", label: "结论", sectionNumber: 4 },
+    { key: "results", label: "结果与分析", sectionNumber: 3 },
+    { key: "discussion", label: "讨论", sectionNumber: 4 },
+    { key: "conclusion", label: "结论", sectionNumber: 5 },
   ],
 
   sci: [
     { key: "introduction", label: "Introduction", sectionNumber: 1 },
     { key: "methods", label: "Materials and Methods", sectionNumber: 2 },
-    { key: "results", label: "Results and Discussion", sectionNumber: 3, mergeKeys: ["discussion"] },
-    { key: "conclusion", label: "Conclusion", sectionNumber: 4 },
+    { key: "results", label: "Results", sectionNumber: 3 },
+    { key: "discussion", label: "Discussion", sectionNumber: 4 },
+    { key: "conclusion", label: "Conclusion", sectionNumber: 5 },
   ],
 
   ieee: [
     { key: "introduction", label: "Introduction", sectionNumber: 1 },
     { key: "methods", label: "Materials and Methods", sectionNumber: 2 },
     { key: "results", label: "Results", sectionNumber: 3 },
-    { key: "conclusion", label: "Conclusion", sectionNumber: 4 },
+    { key: "discussion", label: "Discussion", sectionNumber: 4 },
+    { key: "conclusion", label: "Conclusion", sectionNumber: 5 },
   ],
 
   nature: [
@@ -53,13 +56,15 @@ export const TEMPLATE_SECTIONS: Record<TemplateId, TemplateSectionDef[]> = {
     { key: "results", label: "Results", sectionNumber: 2 },
     { key: "methods", label: "Methods", sectionNumber: 3 },
     { key: "discussion", label: "Discussion", sectionNumber: 4 },
+    { key: "conclusion", label: "Conclusion", sectionNumber: 5 },
   ],
 
   cas: [
     { key: "introduction", label: "引言", sectionNumber: 1 },
     { key: "methods", label: "研究方法", sectionNumber: 2 },
-    { key: "results", label: "结果与讨论", sectionNumber: 3, mergeKeys: ["discussion"] },
-    { key: "conclusion", label: "结论", sectionNumber: 4 },
+    { key: "results", label: "结果与分析", sectionNumber: 3 },
+    { key: "discussion", label: "讨论", sectionNumber: 4 },
+    { key: "conclusion", label: "结论", sectionNumber: 5 },
   ],
 };
 
@@ -81,6 +86,39 @@ export function getTemplateSections(
 ): TemplateSectionDef[] {
   if (mode === "review") return REVIEW_TEMPLATE_SECTIONS;
   return TEMPLATE_SECTIONS[template as TemplateId] || TEMPLATE_SECTIONS.sci;
+}
+
+/** 章节是否有正文（用于预览 / 导出的空节过滤；含 mergeKeys 兜底） */
+function hasSectionContent(
+  sectionContents: Record<string, string | undefined> | undefined,
+  def: TemplateSectionDef,
+): boolean {
+  const main = sectionContents?.[def.key];
+  if (typeof main === "string" && main.trim()) return true;
+  return Boolean(
+    def.mergeKeys?.some((k) => {
+      const v = sectionContents?.[k];
+      return typeof v === "string" && v.trim();
+    }),
+  );
+}
+
+/**
+ * 按「实际有内容」的章节动态渲染：过滤空节并按 1..N 重排编号。
+ *
+ * 解决 agent 写出的章节多于模板固定四项（如独立 discussion、nature 的 conclusion）时，
+ * 预览与导出仍只按固定四项排、多写章节被合并或丢弃的问题。
+ * 注意：返回的是浅拷贝（sectionNumber 重排），不污染 TEMPLATE_SECTIONS 常量。
+ */
+export function getRenderableSections(
+  template: string,
+  mode: ProjectWritingMode | undefined,
+  sectionContents?: Record<string, string | undefined>,
+): TemplateSectionDef[] {
+  const base = getTemplateSections(template, mode);
+  return base
+    .filter((def) => hasSectionContent(sectionContents, def))
+    .map((def, i) => ({ ...def, sectionNumber: i + 1 }));
 }
 
 /**

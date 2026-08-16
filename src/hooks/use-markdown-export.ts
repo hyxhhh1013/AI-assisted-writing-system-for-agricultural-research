@@ -1,7 +1,7 @@
 ﻿import { useCallback } from "react";
 import { toast } from "sonner";
 import { mergeEditorIntoProject, getTemplateSectionContent } from "@/lib/export-content";
-import { getTemplateSections } from "@/lib/template-sections";
+import { getRenderableSections } from "@/lib/template-sections";
 import type { ProjectData } from "@/contracts/project";
 
 /** Markdown 导出：合并编辑器当前内容后生成 .md 文件 */
@@ -20,7 +20,7 @@ export function useMarkdownExport(
           : "[1] National Standard of PRC. GB/T 7713-1987 Presentation of scientific and technical reports, theses and academic papers [S]. Beijing: Standards Press of China, 1987.";
 
     const refsHeading = p.template === "gbt7713" ? "参考文献" : "References";
-    const templateSections = getTemplateSections(p.template || "sci", p.mode);
+    const templateSections = getRenderableSections(p.template || "sci", p.mode, p.sections);
     const bodyMd = templateSections
       .map((def) => {
         const content = getTemplateSectionContent(p.sections, def);

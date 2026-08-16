@@ -12,7 +12,7 @@ import { BodySectionKey } from "@/lib/imrad";
 import { stripOutOfRangeCitations } from "@/lib/reference-reorder";
 import { markOutOfBoundsCitations } from "@/lib/citation";
 import { cleanMarkdownArtifacts } from "@/lib/utils";
-import { getTemplateSections, type TemplateSectionDef } from "@/lib/template-sections";
+import { getRenderableSections, type TemplateSectionDef } from "@/lib/template-sections";
 import { getChartsDir } from "@/lib/charts-dir";
 
 type PdfTemplate = "sci" | "ieee" | "gbt7713" | "nature" | "cas";
@@ -418,7 +418,7 @@ const baseCss = (template: string) => `
 `;
 
 const standardSciHtml = (project: ProjectData): string => {
-  const templateDefs = getTemplateSections("sci", project.mode);
+  const templateDefs = getRenderableSections("sci", project.mode, project.sections);
   const bodyHtml = templateDefs.map(def =>
     sciSection(def.sectionNumber, def.label, sectionWithMerge(project, def))
   ).join("\n");
@@ -454,7 +454,7 @@ const sciSection = (number: number, title: string, content: string): string => `
 const ROMAN = ["I", "II", "III", "IV", "V", "VI"] as const;
 
 const ieeeHtml = (project: ProjectData): string => {
-  const templateDefs = getTemplateSections("ieee", project.mode);
+  const templateDefs = getRenderableSections("ieee", project.mode, project.sections);
   const bodyHtml = templateDefs.map(def =>
     ieeeSection(`${ROMAN[def.sectionNumber - 1] || def.sectionNumber}.`, def.label, sectionWithMerge(project, def), def.sectionNumber)
   ).join("\n");
@@ -488,7 +488,7 @@ const ieeeSection = (number: string, title: string, content: string, secNum: num
 
 const gbtHtml = (project: ProjectData): string => {
   const classification = formatClassification(project);
-  const sections = getTemplateSections("gbt7713", project.mode);
+  const sections = getRenderableSections("gbt7713", project.mode, project.sections);
 
   const bodyHtml = sections.map(def =>
     gbtSection(def.sectionNumber, def.label, sectionWithMerge(project, def))
@@ -522,7 +522,7 @@ const gbtSection = (number: number, title: string, content: string): string => `
 `;
 
 const natureHtml = (project: ProjectData): string => {
-  const templateDefs = getTemplateSections("nature", project.mode);
+  const templateDefs = getRenderableSections("nature", project.mode, project.sections);
   const introDef = templateDefs.find(d => d.key === "introduction");
   const resultsDef = templateDefs.find(d => d.key === "results");
   const methodsDef = templateDefs.find(d => d.key === "methods");
@@ -555,7 +555,7 @@ const natureHtml = (project: ProjectData): string => {
 };
 
 const casHtml = (project: ProjectData): string => {
-  const templateDefs = getTemplateSections("cas", project.mode);
+  const templateDefs = getRenderableSections("cas", project.mode, project.sections);
   const bodyHtml = templateDefs.map(def =>
     casSection(def.sectionNumber, def.label, sectionWithMerge(project, def))
   ).join("\n");

@@ -5,7 +5,7 @@ import { saveAs } from "file-saver";
 import type { ProjectData } from "@/contracts/project";
 import { mergeEditorIntoProject, stripHtmlToPlainForDocx, getTemplateSectionContent } from "@/lib/export-content";
 import { formatKeywords } from "@/lib/paper-metadata";
-import { getTemplateSections } from "@/lib/template-sections";
+import { getRenderableSections } from "@/lib/template-sections";
 import { parseMarkdownBlocks, MarkdownBlock } from "@/lib/markdown-parser";
 import { formatFilenames } from "@/services/references";
 import { assessExportReadiness } from "@/lib/export-readiness";
@@ -321,7 +321,7 @@ export function useDocxExport({ project, activeSection, editingContent, saveProj
               indent: isChinese ? { firstLine: config.indent } : undefined,
             }),
             // Sections
-            ...getTemplateSections(template, p.mode)
+            ...getRenderableSections(template, p.mode, p.sections)
               .flatMap((def, index) => {
               const raw = getTemplateSectionContent(p.sections, def);
               const content = stripHtmlToPlainForDocx(raw);

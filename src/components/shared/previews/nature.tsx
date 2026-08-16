@@ -2,7 +2,7 @@
 
 import { MarkdownContent, ReferencesSection } from "./shared";
 import type { ProjectData } from "@/contracts/project";
-import { getTemplateSections, type TemplateSectionDef } from "@/lib/template-sections";
+import { getRenderableSections, type TemplateSectionDef } from "@/lib/template-sections";
 
 interface TemplateProps {
   project: ProjectData;
@@ -17,11 +17,12 @@ function getSectionContent(project: ProjectData, def: TemplateSectionDef): strin
 }
 
 export function NaturePreview({ project, onCiteClick }: TemplateProps) {
-  const templateSections = getTemplateSections("nature", project.mode);
+  const templateSections = getRenderableSections("nature", project.mode, project.sections);
   const introDef = templateSections.find(d => d.key === "introduction");
   const resultsDef = templateSections.find(d => d.key === "results");
   const methodsDef = templateSections.find(d => d.key === "methods");
   const discussionDef = templateSections.find(d => d.key === "discussion");
+  const conclusionDef = templateSections.find(d => d.key === "conclusion");
 
   return (
     <div className="p-10 text-[10pt] leading-tight text-black max-w-[210mm] mx-auto bg-white" style={{ fontFamily: '"Times New Roman", Georgia, serif' }}>
@@ -67,6 +68,14 @@ export function NaturePreview({ project, onCiteClick }: TemplateProps) {
           )}
         </div>
       </div>
+      {conclusionDef && (
+        <div className="mt-8">
+          <h2 className="text-[12pt] font-bold border-t pt-4">{conclusionDef.label}</h2>
+          <div className="text-justify">
+            <MarkdownContent content={getSectionContent(project, conclusionDef)} sectionNumber={conclusionDef.sectionNumber} onCiteClick={onCiteClick} refCount={project.references?.length} />
+          </div>
+        </div>
+      )}
       <ReferencesSection references={project.references} isChinese={false} />
     </div>
   );

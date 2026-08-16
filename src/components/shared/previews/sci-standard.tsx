@@ -2,7 +2,7 @@
 
 import { MarkdownContent, ReferencesSection } from "./shared";
 import type { ProjectData } from "@/contracts/project";
-import { getTemplateSections, type TemplateSectionDef } from "@/lib/template-sections";
+import { getRenderableSections, type TemplateSectionDef } from "@/lib/template-sections";
 
 interface TemplateProps {
   project: ProjectData;
@@ -17,7 +17,7 @@ function getSectionContent(project: ProjectData, def: TemplateSectionDef): strin
 }
 
 export function StandardSCIPreview({ project, onCiteClick }: TemplateProps) {
-  const templateSections = getTemplateSections("sci", project.mode);
+  const templateSections = getRenderableSections("sci", project.mode, project.sections);
   return (
     <div className="p-12 text-[#1a1a1a] leading-relaxed max-w-[210mm] mx-auto bg-white" style={{ fontFamily: '"Times New Roman", Georgia, serif', fontSize: '10.5pt', lineHeight: '1.68' }}>
       <header className="text-center mb-12 border-b pb-8">
