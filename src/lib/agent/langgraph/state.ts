@@ -76,6 +76,11 @@ export const AgentGraphState = Annotation.Root({
     reducer: (_, next) => next,
     default: () => null,
   }),
+  /** 工具轨迹（W3-AP-ARCH-02）：append + 截断，供快照排障 */
+  toolTrace: Annotation<import("@/contracts/agent-session").AgentToolTrace[]>({
+    reducer: (left, right) => left.concat(right).slice(-MAX_TOOL_TRACE),
+    default: () => [],
+  }),
   awaitingCheckpoint: Annotation<AgentCheckpointRequest | null>({
     reducer: (_, next) => next,
     default: () => null,
@@ -96,6 +101,9 @@ export const AgentGraphState = Annotation.Root({
 });
 
 export type AgentGraphStateType = typeof AgentGraphState.State;
+
+/** 快照 toolTrace 上限（W3-AP-ARCH-02）：只留最近 N 条，避免快照无限膨胀 */
+export const MAX_TOOL_TRACE = 50;
 
 export type AgentGraphRoute = "tools" | "finalize" | "agent" | "reflect";
 

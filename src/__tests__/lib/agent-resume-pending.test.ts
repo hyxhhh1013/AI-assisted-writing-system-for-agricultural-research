@@ -62,6 +62,7 @@ function baseState(overrides: Partial<AgentGraphStateType> = {}): AgentGraphStat
     grantedConfirm: null,
     intentKind: null,
     approvedCheckpointKinds: [],
+    toolTrace: [],
     ...overrides,
   };
 }

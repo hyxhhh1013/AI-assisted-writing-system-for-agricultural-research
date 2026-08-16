@@ -124,6 +124,7 @@ describe("reflection routing", () => {
       grantedConfirm: null,
       intentKind: null,
       approvedCheckpointKinds: [],
+      toolTrace: [],
       ...overrides,
     };
   }

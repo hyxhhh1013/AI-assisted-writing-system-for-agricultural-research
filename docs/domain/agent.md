@@ -221,6 +221,8 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 
 **已落地 ARCH-01**：`lib/agent/tools/registry.ts` 为 `createReadOnlyTools` / `createAgentTools` 唯一挂载点。
 
+**已落地 ARCH-02（会话工具轨迹）**：快照字段 `toolTrace?: AgentToolTrace[]`（`{ at, tool, ok, intentKind? }`，上限 `MAX_TOOL_TRACE=50`）。`toolsNode` / `runParallelReads` 每次工具调用结局（execute 成败、门禁 reject/soft/hard、未知工具、prereq 步骤、抛错）都 append 一条，图状态 reducer `slice(-50)` 截断。**不进前端 UI**，排障时 `AgentSession.snapshot.toolTrace` 里能看到「最近调了什么、成没成」，不必翻 pm2 日志。旧快照缺字段兜底 `[]`。
+
 ## 机理图 / 识图自检（2026-08-09）
 
 **产品定位**：Agent 负责「结构正确的可编辑草稿」；期刊观感与个性化在 `/plot` + 对话迭代完成。不承诺一键出 Nature 级机理终稿。

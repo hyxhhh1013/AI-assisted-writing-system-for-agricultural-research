@@ -30,6 +30,7 @@ function baseState(overrides: Partial<AgentGraphStateType> = {}): AgentGraphStat
     grantedConfirm: null,
     intentKind: null,
     approvedCheckpointKinds: [],
+    toolTrace: [],
     ...overrides,
   };
 }
@@ -59,5 +60,24 @@ describe("agent session snapshot", () => {
   it("empty snapshot has user goal message", () => {
     const empty = emptyAgentSessionSnapshot("检查引用");
     expect(empty.messages[0]).toEqual({ role: "user", content: "检查引用" });
+  });
+
+  it("round-trips toolTrace; legacy snapshot without toolTrace falls back to []", () => {
+    const trace: import("@/contracts/agent-session").AgentToolTrace[] = [
+      { at: 1, tool: "search_knowledge", ok: true, intentKind: "draft" },
+      { at: 2, tool: "write_section", ok: false, intentKind: "draft" },
+    ];
+    const snap = graphStateToSnapshot(baseState({ toolTrace: trace }));
+    expect(snap.toolTrace).toEqual(trace);
+
+    const initial = snapshotToInitialState("写引言", snap);
+    expect(initial.toolTrace).toEqual(trace);
+
+    // 旧快照缺 toolTrace 字段 → 兜底 []
+    const legacy = snapshotToInitialState(
+      "写引言",
+      { ...snap, toolTrace: undefined as never },
+    );
+    expect(legacy.toolTrace).toEqual([]);
   });
 });

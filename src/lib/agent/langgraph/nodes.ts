@@ -80,6 +80,7 @@ import {
 } from "@/lib/agent/project-refresh";
 import { isProjectMutatingTool } from "@/lib/agent/project-mutated";
 import type { ParsedToolCall, ToolObservation } from "@/lib/agent/types";
+import type { AgentToolTrace } from "@/contracts/agent-session";
 import { getAgentGraphRuntime } from "@/lib/agent/langgraph/runtime";
 import {
   shouldContinuePlanWork,
@@ -498,6 +499,16 @@ export async function toolsNode(
   const newMessages: AgentGraphStateType["messages"] = [];
   const newSummaries: string[] = [];
   const newObservations: ToolObservation[] = [];
+  /** 本轮工具轨迹（W3-AP-ARCH-02）：每次调用结局 append，节点结束随 state 截断 */
+  const newTrace: AgentToolTrace[] = [];
+  const trace = (toolName: string, ok: boolean) => {
+    newTrace.push({
+      at: Date.now(),
+      tool: toolName,
+      ok,
+      intentKind: state.intentKind ?? null,
+    });
+  };
   /** 本轮是否有 write_section 成功写回：新写入需重新给反思预算 */
   let reflectReset = false;
   let toolCallCount = state.toolCallCount;
@@ -508,6 +519,7 @@ export async function toolsNode(
 
   /** 门禁失败统一记录：摘要 + LLM 消息 + SSE observation + 计划标记失败 */
   const rejectGate = (toolName: string, error: string) => {
+    trace(toolName, false);
     newSummaries.push(`[${toolName}] 失败: ${error}`);
     newMessages.push({
       role: "user",
@@ -537,6 +549,7 @@ export async function toolsNode(
     const tool = findTool(tools, toolCall.name);
     if (!tool) {
       const msg = `未知工具: ${toolCall.name}`;
+      trace(toolCall.name, false);
       newSummaries.push(`[${toolCall.name}] 失败: ${msg}`);
       newMessages.push({ role: "user", content: `Tool result (${toolCall.name}):\n${msg}` });
       events.push({
@@ -591,6 +604,7 @@ export async function toolsNode(
         messages: newMessages,
         events,
         plan,
+        toolTrace: newTrace,
         awaitingCheckpoint: checkpoint,
         finished: true,
       };
@@ -610,12 +624,14 @@ export async function toolsNode(
     const gateVerdict = evaluatePreGates(gateInput);
     if (!gateVerdict.ok) {
       if (gateVerdict.kind === "hard") {
+        trace(tool.name, false);
         error = gateVerdict.error;
         events.push({ type: "agent/error", error });
         finished = true;
         break;
       }
       if (gateVerdict.kind === "soft") {
+        trace(tool.name, false);
         newSummaries.push(`[${tool.name}] ${gateVerdict.error}`);
         newMessages.push({
           role: "user",
@@ -659,6 +675,7 @@ export async function toolsNode(
             tool: step.tool,
             params: { persistToProject: true, autoPrereq: true },
           });
+          trace(step.tool, step.result.success);
           const stepLine = step.result.success
             ? `[${step.tool}] ${step.result.summary ?? "自动补齐完成"}`
             : `[${step.tool}] 失败: ${step.result.error ?? "未知错误"}`;
@@ -703,6 +720,7 @@ export async function toolsNode(
               messages: newMessages,
               events,
               plan,
+              toolTrace: newTrace,
               awaitingCheckpoint: cp,
               finished: true,
             };
@@ -795,6 +813,7 @@ export async function toolsNode(
           messages: newMessages,
           events,
           plan,
+          toolTrace: newTrace,
           ...(reflectReset ? { reflectCount: 0 } : {}),
           awaitingConfirm: confirmReq,
           grantedConfirm: null,
@@ -813,6 +832,7 @@ export async function toolsNode(
 
     try {
       const result = await tool.execute(params, agentContext);
+      trace(tool.name, result.success);
       const line = result.success
         ? `[${tool.name}] ${result.summary ?? "完成"}`
         : `[${tool.name}] 失败: ${result.error ?? "未知错误"}`;
@@ -986,6 +1006,7 @@ export async function toolsNode(
           messages: newMessages,
           events,
           plan,
+          toolTrace: newTrace,
           ...(reflectReset ? { reflectCount: 0 } : {}),
           awaitingCheckpoint: checkpoint,
           finished: true,
@@ -993,6 +1014,7 @@ export async function toolsNode(
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
+      trace(tool.name, false);
       newSummaries.push(`[${tool.name}] 失败: ${errMsg}`);
       newMessages.push({ role: "user", content: `Tool result (${tool.name}):\n${errMsg}` });
       events.push({ type: "agent/observation", tool: tool.name, error: errMsg });
@@ -1015,6 +1037,7 @@ export async function toolsNode(
     messages: newMessages,
     events,
     error,
+    toolTrace: newTrace,
     ...(reflectReset ? { reflectCount: 0 } : {}),
     finished: finished || undefined,
     plan,

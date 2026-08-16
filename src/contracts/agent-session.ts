@@ -63,6 +63,20 @@ export interface AgentActiveWrite {
   completedSummary?: string;
 }
 
+/**
+ * 会话工具轨迹（W3-AP-ARCH-02）：一次工具调用的结局。
+ * 排障用（空转/乱搜时可一眼看「最近调了什么、成没成」），不进前端 UI。
+ * 落快照时截断到 MAX_TOOL_TRACE 条。
+ */
+export interface AgentToolTrace {
+  /** epoch ms */
+  at: number;
+  tool: string;
+  ok: boolean;
+  /** 该工具执行时的会话意图（跟聊继承；旧轨迹可能缺） */
+  intentKind?: IntentKind | null;
+}
+
 export interface AgentSessionSnapshot {
   version: 1;
   messages: LLMMessage[];
@@ -91,6 +105,8 @@ export interface AgentSessionSnapshot {
   activeWrite?: AgentActiveWrite | null;
   /** 本轮意图（跟聊短回复继承；旧快照缺省则本轮重判） */
   intentKind?: IntentKind | null;
+  /** 最近工具轨迹（排障用；旧快照缺字段当 []） */
+  toolTrace?: AgentToolTrace[];
 }
 
 export interface AgentSessionListItem {

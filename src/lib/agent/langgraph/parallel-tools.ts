@@ -23,6 +23,7 @@ import { findTool, parseToolArgs } from "@/lib/agent/core/tool-registry";
 import { advancePlanAfterTool } from "@/lib/agent/core/plan-progress";
 import { formatToolObservationForLlm } from "@/lib/agent/observation-memory";
 import type { AgentGraphStateType } from "@/lib/agent/langgraph/state";
+import type { AgentToolTrace } from "@/contracts/agent-session";
 import type { AgentGraphRuntime } from "@/lib/agent/langgraph/runtime";
 import {
   evaluatePhaseGate,
@@ -82,11 +83,21 @@ export async function runParallelReads(
   const newMessages: LLMMessage[] = [];
   const newSummaries: string[] = [];
   const newObservations: ToolObservation[] = [];
+  const newTrace: AgentToolTrace[] = [];
+  const trace = (toolName: string, ok: boolean) => {
+    newTrace.push({
+      at: Date.now(),
+      tool: toolName,
+      ok,
+      intentKind: state.intentKind ?? null,
+    });
+  };
   let toolCallCount = state.toolCallCount;
   let error: string | null = null;
   let plan = state.plan;
 
   const rejectGate = (toolName: string, err: string) => {
+    trace(toolName, false);
     newSummaries.push(`[${toolName}] 失败: ${err}`);
     newMessages.push({
       role: "user",
@@ -139,11 +150,13 @@ export async function runParallelReads(
     const gateVerdict = evaluatePreGates(gateInput);
     if (!gateVerdict.ok) {
       if (gateVerdict.kind === "hard") {
+        trace(tool.name, false);
         error = gateVerdict.error;
         events.push({ type: "agent/error", error });
         break;
       }
       if (gateVerdict.kind === "soft") {
+        trace(tool.name, false);
         newSummaries.push(`[${tool.name}] ${gateVerdict.error}`);
         newMessages.push({
           role: "user",
@@ -198,6 +211,7 @@ export async function runParallelReads(
   // 按原顺序记录结果
   for (const { tool, result } of results) {
     toolCallCount += 1;
+    trace(tool.name, result.success);
     const line = result.success
       ? `[${tool.name}] ${result.summary ?? "完成"}`
       : `[${tool.name}] 失败: ${result.error ?? "未知错误"}`;
@@ -249,6 +263,7 @@ export async function runParallelReads(
     messages: newMessages,
     events,
     error,
+    toolTrace: newTrace,
     ...(error ? { finished: true } : {}),
     plan,
   };

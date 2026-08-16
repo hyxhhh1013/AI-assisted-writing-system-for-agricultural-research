@@ -70,6 +70,7 @@ describe("routeAfterAgent plan continue", () => {
       grantedConfirm: null,
       intentKind: null,
       approvedCheckpointKinds: [],
+      toolTrace: [],
       ...overrides,
     };
   }

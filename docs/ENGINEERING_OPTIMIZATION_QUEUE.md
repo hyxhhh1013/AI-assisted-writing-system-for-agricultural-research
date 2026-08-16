@@ -249,7 +249,7 @@
 | **Phase 11e — Wave 3.10 车间图纸（工具表 / 会话轨迹 / 冻结旧扩写）** |
 | **W3-AP-RUNTIME** | **主轴：循环够用；单一挂载表 + 短轨迹 + 旧管冻结** | W3-AP-INTENT-QUALITY | 1.5d | **in_progress** | 2026-08-16；不换 LangGraph / Harness |
 | W3-AP-ARCH-01 | 工具注册表 `tools/registry.ts`；单测防 `tools/*.ts` 漏挂 | — | 0.5d | **done** | 2026-08-16；弃用 `build-argument-blueprint` 留名单 |
-| W3-AP-ARCH-02 | 会话快照 `toolTrace`（工具名/成败/intentKind，上限 50） | ARCH-01 | 0.5d | todo | 无新 Prisma 表；先不进前端 |
+| W3-AP-ARCH-02 | 会话快照 `toolTrace`（工具名/成败/intentKind，上限 50） | ARCH-01 | 0.5d | **done** | 2026-08-16；`contracts/agent-session` `AgentToolTrace` + `state` `MAX_TOOL_TRACE` + `nodes`/`parallel-tools` append；无新 Prisma 表；不进前端 |
 | W3-AP-ARCH-03 | 冻结 `POST /api/writing`：新写作规则只改 Agent | — | 0.5d | todo | 不删专家工具 7 步管 |
 | — | 任务单细节 | — | — | — | [`plans/W3-AP-RUNTIME.md`](./plans/W3-AP-RUNTIME.md) |
 
@@ -1117,6 +1117,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-15 | W3-AP-INTENT-SHADOW | AI | **cancelled**：跟聊「A/继续」已 inherit；任务单影子触发在 `source=regex`，测不到跟聊；无标注样本不上热路径 LLM 分类。Wave 3.9 收口。 |
 | 2026-08-16 | W3-AP-RUNTIME | AI | 规划生效：车间图纸。PR 序 ARCH-01 工具表 → ARCH-02 会话轨迹 → ARCH-03 冻结旧扩写。不换循环。见 `docs/plans/W3-AP-RUNTIME.md`；队列 Phase 11e |
 | 2026-08-16 | W3-AP-ARCH-01 | AI | 工具唯一挂载表 `tools/registry.ts`；`createAgentTools` 只读表。单测扫 `tools/*.ts` 防漏挂。弃用蓝图文件留 `UNREGISTERED_TOOL_FILES`。 |
+| 2026-08-16 | W3-AP-ARCH-02 | AI | 会话快照 `toolTrace`（`AgentToolTrace{at,tool,ok,intentKind}`，上限 50）；`nodes.ts`/`parallel-tools.ts` 每次工具结局 append，`state` reducer 截断。`agent-tool-trace.test.ts` + snapshot 往返/旧快照兜底用例。前序：cite-inspect 抽取 + guide 文案对齐两 commit 收口。 |
 
 ---
 
@@ -1127,8 +1128,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 
 | 优先级 | ID | 说明 |
 |--------|-----|------|
-| 现在 | W3-AP-ARCH-02 | 会话 `toolTrace` |
-| 下一刀 | W3-AP-ARCH-03 | 冻结旧扩写管道 |
+| 现在 | W3-AP-ARCH-03 | 冻结旧扩写管道 |
 | P3-legacy | W3-AP-WRITE-NO-RAG | 有项目文献摘要时跳过知识库 RAG（勿插进本波） |
 | backlog | Wave 4 | ENG-PR-094 已 done；LaTeX / SEC-04～08 见 [`MASTER_PLAN.md`](./MASTER_PLAN.md) |
 
