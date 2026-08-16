@@ -85,12 +85,15 @@ describe("goal-intents", () => {
     expect(isCitationCheckGoal(goal)).toBe(false);
     expect(isSectionDraftGoal(goal)).toBe(false);
     expect(shouldSkipPlanner(goal)).toBe(true);
-    expect(resolveApPipelineStep(goal, [])).toBe("citation_check");
+    // 起草未开始（无 write_section）→ 不套流水线门禁
+    expect(resolveApPipelineStep(goal, [])).toBeNull();
   });
 
-  it("resolves pipeline steps after validate and refine", () => {
+  it("resolves pipeline steps after drafting, validate and refine", () => {
     const goal = "按 academic-paper 流程继续：起草→引用检查→双语摘要→审查";
-    const afterValidate = [ok("validate_citations", { exportReady: false })];
+    const drafted = [ok("write_section", { persisted: true })];
+    expect(resolveApPipelineStep(goal, drafted)).toBe("citation_check");
+    const afterValidate = [...drafted, ok("validate_citations", { exportReady: false })];
     expect(resolveApPipelineStep(goal, afterValidate)).toBe("citation_fix");
     const blocked = checkCitationSideTripGate(
       goal,
@@ -108,9 +111,26 @@ describe("goal-intents", () => {
     ).toBe(true);
   });
 
+  it("keeps drafting tools unblocked on an empty project (no write_section yet)", () => {
+    const goal = "按 academic-paper 流程继续：起草→引用检查→双语摘要→审查";
+    // 空项目：连 validate 都没跑，不应进入流水线门禁
+    expect(resolveApPipelineStep(goal, [])).toBeNull();
+    expect(checkCitationSideTripGate(goal, "search_knowledge", []).ok).toBe(true);
+    expect(checkCitationSideTripGate(goal, "write_section", []).ok).toBe(true);
+    expect(checkCitationSideTripGate(goal, "generate_outline", []).ok).toBe(true);
+    // 跑了 validate（0 文献）仍不算起草完成，检索/写节依旧放行
+    const afterValidate = [
+      ok("validate_citations", { exportReady: false, gate: { refCount: 0, citationCount: 0 } }),
+    ];
+    expect(resolveApPipelineStep(goal, afterValidate)).toBeNull();
+    expect(checkCitationSideTripGate(goal, "search_knowledge", afterValidate).ok).toBe(true);
+    expect(checkCitationSideTripGate(goal, "write_section", afterValidate).ok).toBe(true);
+  });
+
   it("review step completes with either run_review_rounds or review_content", () => {
     const goal = "按 academic-paper 流程继续：起草→引用检查→双语摘要→审查";
     const beforeReview = [
+      ok("write_section", { persisted: true }),
       ok("validate_citations", { exportReady: false }),
       ok("refine_content", { persisted: true }),
       ok("write_bilingual_abstract"),
@@ -269,15 +289,23 @@ describe("intent continuation pickers", () => {
     expect(pickIntentStopAsk(ctx())).toBeNull();
   });
 
-  it("nudges academic-paper citation_fix step after validate with issues", () => {
-    const observations = [ok("validate_citations", { exportReady: false })];
+  it("nudges academic-paper citation_fix step after drafting + validate with issues", () => {
+    const observations = [
+      ok("write_section", { persisted: true }),
+      ok("validate_citations", { exportReady: false }),
+    ];
     expect(pickIntentNudge(ctx({ goal: AP_GOAL, observations }))).toContain(
       "refine_content",
     );
   });
 
-  it("nudges citation_check step and has no stop-ask", () => {
-    expect(pickIntentNudge(ctx({ goal: AP_GOAL }))).toContain("validate_citations");
+  it("does not nudge citation_check before drafting; nudges after drafting begins", () => {
+    expect(pickIntentNudge(ctx({ goal: AP_GOAL }))).toBeNull();
+    expect(
+      pickIntentNudge(
+        ctx({ goal: AP_GOAL, observations: [ok("write_section", { persisted: true })] }),
+      ),
+    ).toContain("validate_citations");
     expect(pickIntentStopAsk(ctx({ goal: AP_GOAL }))).toBeNull();
   });
 
@@ -309,7 +337,10 @@ describe("intent continuation pickers", () => {
     // 同一组合 goal：引用修正未写回（pipeline_fix）+ 文献未足（literature）同时成立。
     // NUDGE_ORDER 先 AP 流程 → nudge 应提 refine_content；
     // STOP_ORDER 先文献 → stopAsk 应优先问文献体量。
-    const observations = [ok("validate_citations", { exportReady: false })];
+    const observations = [
+      ok("write_section", { persisted: true }),
+      ok("validate_citations", { exportReady: false }),
+    ];
     const c = ctx({
       goal: "按 academic-paper 流程继续：起草→引用检查→双语摘要→审查，并检索导入 5 篇文献",
       observations,

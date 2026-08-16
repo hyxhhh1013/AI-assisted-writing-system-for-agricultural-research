@@ -66,6 +66,7 @@ export function validateIssueCount(o: ToolObservation): number {
   const d = o.data as {
     exportReady?: unknown;
     phase5Passed?: unknown;
+    gate?: { refCount?: unknown; citationCount?: unknown };
     grounding?: { suspiciousCount?: unknown };
   };
   const suspicious =
@@ -73,7 +74,16 @@ export function validateIssueCount(o: ToolObservation): number {
       ? d.grounding.suspiciousCount
       : 0;
   const blocked = d?.exportReady === false || d?.phase5Passed === false;
-  return blocked ? Math.max(suspicious, 1) : suspicious;
+  if (!blocked) return suspicious;
+  // 空项目（无文献且文内无引用）的「硬检未过」不是错引问题——只是还没导入文献，
+  // 不该算作 citation issue，否则会把空项目误路由到「引用修正」并封死检索/写节。
+  // gate 缺失（旧快照/简化测试数据）时保持原判定：blocked 即至少 1。
+  const gate = d?.gate;
+  const refCount = typeof gate?.refCount === "number" ? gate.refCount : -1;
+  const citationCount =
+    typeof gate?.citationCount === "number" ? gate.citationCount : -1;
+  if (refCount === 0 && citationCount === 0) return suspicious;
+  return Math.max(suspicious, 1);
 }
 
 /**

@@ -207,6 +207,9 @@ export function resolveApPipelineStep(
   if (!matchesIntent(intentKind, ["ap_full"], () => isAcademicPaperPipelineGoal(goal))) {
     return null;
   }
+  // 起草未开始（尚无 write_section 成功）→ 不套流水线门禁，放行检索/导入/大纲/写节。
+  // 空项目（无文献无正文）不该被顶到「引用检查/修正」，否则会封死补文献、写正文的入口。
+  if (!hasSuccessfulTool(observations, "write_section")) return null;
   if (!citationCheckReportReady(observations)) return "citation_check";
   // 仅当 validate 报告确实发现待修问题才进「引用修正」；写完自查的干净报告（0 问题）
   // 不应把起草中的会话顶到修正阶段（否则后续 write_section 会被 side-trip 门禁误拦）。
@@ -481,6 +484,13 @@ export function apPipelineNudge(
         "【系统】academic-paper 流程·④审查：调用 run_review_rounds（Phase 7 轮次）或 review_content 产出四维度审查报告。"
       );
     default:
+      // null 有两种情况：起草未开始，或全流程已完成
+      if (!hasSuccessfulTool(observations, "write_section")) {
+        return (
+          "【系统】academic-paper 流程·起草：先按需补配置/文献/大纲（缺什么先用工具补），"
+          + "再逐节 write_section 写正文；正文写完后再进入引用检查/摘要/审查。"
+        );
+      }
       return (
         "【系统】academic-paper 流程各步已完成。可 inspect_project 确认，或指定下一步。"
       );

@@ -144,6 +144,11 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 
 **修正（2026-08-07）**：进入「引用修正」意图/阶段必须满足**最近一次 validate 报告确实发现待修问题**（硬检未过 `exportReady/phase5Passed`，或语义可疑 `grounding.suspiciousCount > 0`；判定复用 `reflect.ts` 导出的 `validateIssueCount`）。写完自查的干净报告（0 问题）不再把会话顶进修正模式，后续 `write_section` 正常放行。覆盖链路：跟聊短确认、AP 流程 `citation_fix` 阶段、并行只读批门禁（`parallel-tools.ts` 同源）。
 
+**修正（2026-08-16）——空项目被顶进引用阶段、封死起草入口**：`resolveApPipelineStep` 原来没有「起草」阶段，空项目（0 文献 0 正文）也会直接返回 `citation_check`/`citation_fix`，`checkCitationSideTripGate` 因而把 `search_knowledge`/`import_reference`/`generate_outline`/`write_section` 全部拦下，agent 反复检索被拒、陷入空转。两处根治：
+
+- `resolveApPipelineStep`：**尚未成功 `write_section`（起草未开始）时返回 `null`**，不套流水线门禁，放行补文献/大纲/写正文；`apPipelineNudge` 的 `null` 分支给出「先补配置/文献/大纲再写正文」的起草提示（区别于「各步已完成」）。
+- `reflect.ts` `validateIssueCount`：**「无文献且文内无引用」的硬检未过（`gate.refCount===0 && gate.citationCount===0`）不再算 citation issue**，只当「还没导入文献」而非「错引要修」；`gate` 缺失（旧快照/简化测试）保持原判定。
+
 - **引用修正收敛（2026-08-08）**：修复「Agent 陷入 validate→改引→再 validate 打地鼠循环，不收尾、没下一步」——`validate_citations` 的 summary 按硬错/软可疑分级引导（硬检越界必须修；可判定且明显错引改引一次；缺摘要/语义勉强属软性可接受，**不要反复重验**），并在通过时明确「引用已符合要求，请汇报并给下一步」；`buildAgentSystemPrompt` 增加「引用修正要收敛，勿打地鼠循环」规则。双保险让 Agent 在改引循环里能停下并给出下一步计划。
 - **写章节缺文献照常写（2026-08-08 / RULES-01 2026-08-15）**：条文现只写在 `AGENT_RULES` id=`draft-missing-refs`；`buildAgentSystemPrompt` 与 `draftGoalNudge` 同读 `ruleText`。跟聊 goal 失真（「A/继续」）的写章节纪律由 `snapshot.intentKind` 继承（INTENT-01/02）。`checkDraftSearchGate` / 收尾兜底只认 `intentKind === "draft"`。
 
