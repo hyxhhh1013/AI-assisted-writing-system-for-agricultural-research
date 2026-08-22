@@ -1,4 +1,6 @@
 import type { AgentActiveWrite } from "@/contracts/agent-session";
+import type { EvidenceClaim } from "@/contracts/data-source";
+import { shouldPersistWritingDraft } from "@/contracts/writing-qa";
 import { resolveWritingDraftContext } from "@/contracts/writing";
 import { persistAgentDraft } from "@/lib/agent/project-persist";
 import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
@@ -23,23 +25,125 @@ import {
   listBlueprintSubsectionPathsForKey,
   prepareAgentWriteBlueprintContext,
 } from "@/lib/agent/blueprint-write-context";
+import {
+  compileSectionSpec,
+  type CompileSectionSpecResult,
+} from "@/lib/agent/section-compiler";
+import {
+  bindSectionEvidence,
+  evidenceUnboundFinding,
+  slimReferenceEvidenceForSpec,
+  type BindSectionEvidenceResult,
+} from "@/lib/agent/evidence-binder";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
+import type { AgentProjectSnapshot } from "@/lib/agent/project-loader";
 import {
   assessDataFoundation,
   resultsWriteBlockMessage,
   shouldBlockResultsWrite,
 } from "@/lib/agent/data-foundation";
 import { loadAgentPlotSources } from "@/lib/agent/plot-sources";
-import { reconcileResultsNumbers } from "@/lib/agent/results-number-reconcile";
+import {
+  appendQaNoteToSummary,
+  evaluateSectionWritingQa,
+} from "@/lib/agent/writing-qa-run";
+import { applyWritingPatches } from "@/lib/agent/writing-patches";
+import {
+  appendPatchNoteToSummary,
+  repairSectionDraft,
+} from "@/lib/agent/writing-patch-run";
+import {
+  buildSpecWriterDraft,
+  parseWriteSectionSpec,
+  type WriteSpecSource,
+} from "@/lib/agent/spec-write-context";
 import { getAgentModelConfig } from "@/lib/ai";
 import { isSectionValidForMode } from "@/lib/section-registry";
 import type { WritingInput } from "@/lib/validations";
 
+function bindCompiledSpec(
+  compiled: CompileSectionSpecResult | null,
+  project: AgentProjectSnapshot,
+): BindSectionEvidenceResult | null {
+  if (!compiled) return null;
+  return bindSectionEvidence({
+    spec: compiled.spec,
+    referenceEvidence: project.referenceEvidence,
+    referenceSourceNames: project.referenceSourceNames,
+    references: project.references,
+    dataClaims: project.dataClaims,
+  });
+}
+
+function resolveWriteSpec(
+  providedSpec: ReturnType<typeof parseWriteSectionSpec>,
+  compiled: CompileSectionSpecResult | null,
+  project: AgentProjectSnapshot,
+): {
+  bind: BindSectionEvidenceResult | null;
+  specSource: WriteSpecSource;
+  compileSource: CompileSectionSpecResult["source"] | "provided" | "empty";
+} {
+  if (providedSpec) {
+    return {
+      bind: bindSectionEvidence({
+        spec: providedSpec,
+        referenceEvidence: project.referenceEvidence,
+        referenceSourceNames: project.referenceSourceNames,
+        references: project.references,
+        dataClaims: project.dataClaims,
+      }),
+      specSource: "provided",
+      compileSource: "provided",
+    };
+  }
+  if (compiled) {
+    return {
+      bind: bindCompiledSpec(compiled, project),
+      specSource: "compiled",
+      compileSource: compiled.source,
+    };
+  }
+  return { bind: null, specSource: "empty", compileSource: "empty" };
+}
+
+function extraFromBind(bind: BindSectionEvidenceResult | null) {
+  const extra = bind
+    ? evidenceUnboundFinding(bind.unboundCardIds, {
+        hadBindablePool: bind.hadBindablePool,
+      })
+    : null;
+  return extra ? [extra] : undefined;
+}
+
+function qaWithBind(
+  text: string,
+  sectionKey: string,
+  bind: BindSectionEvidenceResult | null,
+  maxRefIndex?: number,
+  dataClaims?: EvidenceClaim[],
+  subsectionTitle?: string,
+) {
+  return evaluateSectionWritingQa({
+    text,
+    sectionKey,
+    extraFindings: extraFromBind(bind),
+    maxRefIndex,
+    dataClaims,
+    spec: bind?.spec ?? null,
+    subsectionTitle,
+  });
+}
+
+function refCeiling(existing: string[], added?: string[]): number {
+  return existing.length + (added?.length ?? 0);
+}
+
 export const writeSectionTool: ToolDefinition = {
   name: "write_section",
   description:
-    "调用 Writer 扩写管道为指定章节生成正文（含 RAG；默认写后自动核查修正一轮，可关）。有写作蓝图时系统会自动注入该节 purpose/keyPoints/配图；context/bullets 须对齐蓝图要点，勿另起炉灶。"
-    + "综述 literature_body：蓝图有多个子节时必须带 subsectionTitle 逐节写，禁止一次写完整章万字。",
+    "调用 Writer 扩写管道为指定章节生成正文（含 RAG；默认写后自动核查修正一轮，可关）。主路径是 SectionSpec（可传 sectionSpec，或由蓝图/context 编译）。"
+    + "context/bullets 只作适配，勿另起炉灶。综述 literature_body：蓝图有多个子节时必须带 subsectionTitle 逐节写。",
   parameters: {
     type: "object",
     properties: {
@@ -48,10 +152,14 @@ export const writeSectionTool: ToolDefinition = {
         description: "论文章节 key，如 introduction、methods、literature_body",
         enum: [...AGENT_WRITING_SECTIONS],
       },
+      sectionSpec: {
+        type: "string",
+        description: "SectionSpecV1 JSON。有则作为写节合同；context/bullets 只作补充",
+      },
       context: {
         type: "string",
         description:
-          "扩写要点或补充说明；有蓝图时应对齐该节蓝图 purpose/keyPoints（系统也会自动注入本节蓝图）",
+          "适配说明或旧要点；有 sectionSpec/蓝图时不必填。有蓝图应对齐该节 purpose/keyPoints",
       },
       bullets: {
         type: "string",
@@ -77,7 +185,7 @@ export const writeSectionTool: ToolDefinition = {
         description: "是否写回项目章节与新增参考文献（默认 true）",
       },
     },
-    required: ["section", "context"],
+    required: ["section"],
   },
   safety: "write",
   async execute(params, ctx: AgentContext) {
@@ -152,10 +260,11 @@ export const writeSectionTool: ToolDefinition = {
     }
 
     const context = String(params.context ?? "").trim();
-    const draftContext = resolveWritingDraftContext(context, bullets);
-    if (!draftContext.trim()) {
-      return { success: false, error: "context 或 bullets 不能为空" };
+    const providedSpec = parseWriteSectionSpec(params.sectionSpec);
+    if (params.sectionSpec != null && String(params.sectionSpec).trim() && !providedSpec) {
+      return { success: false, error: "sectionSpec 不是合法 SectionSpecV1 JSON" };
     }
+    const draftContext = resolveWritingDraftContext(context, bullets);
 
     const pipelineMode = params.pipelineMode === "full" ? "full" : "fast";
     const autoFixRaw = params.autoFix;
@@ -189,19 +298,53 @@ export const writeSectionTool: ToolDefinition = {
         : undefined,
     });
     if (resume.action === "reuse") {
-      if (project.mode === "research" && sectionRaw === "results") {
-        const recon = reconcileResultsNumbers(resume.draft, project.dataClaims);
-        if (!recon.ok) {
-          return { success: false, error: recon.message };
-        }
-      }
+      const compiled = providedSpec
+        ? null
+        : compileSectionSpec({
+            sectionKey: sectionRaw,
+            subsectionTitle: params.subsectionTitle
+              ? String(params.subsectionTitle)
+              : undefined,
+            context,
+            bullets,
+            mode: project.mode,
+            language: project.language,
+            blueprint: project.globalContext?.blueprint ?? null,
+            referenceSourceNames: project.referenceSourceNames,
+          });
+      const { bind } = resolveWriteSpec(providedSpec, compiled, project);
+      const maxRefIndex = refCeiling(project.references, resume.references);
+      const qa0 = qaWithBind(
+        resume.draft,
+        sectionRaw,
+        bind,
+        maxRefIndex,
+        project.dataClaims,
+        params.subsectionTitle ? String(params.subsectionTitle) : undefined,
+      );
+      const patched = applyWritingPatches(resume.draft, qa0.findings, {
+        maxRefIndex,
+        sectionKey: sectionRaw,
+      });
+      const resumeDraft = patched.draft;
+      const qaReport = resumeDraft === resume.draft
+        ? qa0
+        : qaWithBind(
+            resumeDraft,
+            sectionRaw,
+            bind,
+            maxRefIndex,
+            project.dataClaims,
+            params.subsectionTitle ? String(params.subsectionTitle) : undefined,
+          );
+      const blocked = !shouldPersistWritingDraft(qaReport);
       let persisted: { sectionKey: string; referencesAdded: number } | null = null;
-      if (persistToProject) {
+      if (persistToProject && !blocked) {
         persisted = await persistAgentDraft(
           ctx.userId,
           ctx.projectId,
           sectionRaw,
-          resume.draft,
+          resumeDraft,
           resume.references,
         );
       }
@@ -211,16 +354,24 @@ export const writeSectionTool: ToolDefinition = {
         success: true,
         data: {
           section: sectionRaw,
-          draft: resume.draft,
-          charCount: resume.draft.length,
+          draft: resumeDraft,
+          charCount: resumeDraft.length,
           newReferences: resume.references,
           pipelineMode: resume.pipelineMode,
           issueCount: 0,
           citationWarnings: 0,
           persisted,
           resumedFrom: resume.resumedFrom,
+          qaReport,
+          sectionSpec: bind?.spec ?? providedSpec ?? compiled?.spec ?? null,
+          specSource: providedSpec ? "provided" : compiled ? "compiled" : "empty",
+          writingPatches: patched.patches,
+          blocked: blocked || undefined,
         },
-        summary: resume.summary,
+        summary: appendPatchNoteToSummary(
+          appendQaNoteToSummary(resume.summary, qaReport),
+          { patches: patched.patches, refined: false },
+        ),
       };
     }
 
@@ -236,24 +387,62 @@ export const writeSectionTool: ToolDefinition = {
     // 嵌套 blueprint + 本节蓝图 hint + assignedSources→检索范围（与工作台扩写对齐）
     const {
       globalContext,
-      draftContext: draftWithBlueprint,
       selectedSourceIds,
     } = prepareAgentWriteBlueprintContext({
       project,
       sectionKey: sectionRaw,
-      draftContext,
+      draftContext: draftContext || context || "（按本节主张扩写）",
       subsectionTitle,
     });
+
+    const compiled = providedSpec
+      ? null
+      : compileSectionSpec({
+          sectionKey: sectionRaw,
+          subsectionTitle,
+          context,
+          bullets,
+          mode: project.mode,
+          language: project.language,
+          blueprint: globalContext.blueprint ?? null,
+          selectedSourceIds,
+          referenceSourceNames: project.referenceSourceNames,
+        });
+    const { bind, specSource, compileSource } = resolveWriteSpec(
+      providedSpec,
+      compiled,
+      project,
+    );
+    const boundSpec = bind?.spec ?? providedSpec ?? compiled?.spec ?? null;
+    if (!boundSpec && !draftContext.trim()) {
+      return {
+        success: false,
+        error: "请提供 sectionSpec、context/bullets，或先生成写作蓝图",
+      };
+    }
+    const draftForWriter = boundSpec
+      ? buildSpecWriterDraft({
+          spec: boundSpec,
+          context,
+          source: specSource === "provided" ? "provided" : compileSource,
+        })
+      : context || draftContext;
+    const ragIds = bind?.selectedSourceIds?.length
+      ? bind.selectedSourceIds
+      : selectedSourceIds;
+    const writerEvidence = boundSpec
+      ? slimReferenceEvidenceForSpec(project.referenceEvidence, boundSpec)
+      : (project.referenceEvidence ?? []);
 
     const data: WritingInput = {
       title: project.title,
       section: sectionRaw,
-      context: draftWithBlueprint,
-      bullets,
+      context: draftForWriter,
+      bullets: undefined,
       language: project.language,
       template: project.template as WritingInput["template"],
       existingReferences: project.references,
-      referenceEvidence: project.referenceEvidence ?? [],
+      referenceEvidence: writerEvidence,
       globalContext,
       mode: pipelineMode,
       retrievalMode: "balanced",
@@ -262,7 +451,8 @@ export const writeSectionTool: ToolDefinition = {
       citationStyle: project.citationStyle,
       subsectionTitle,
       dataClaims: project.dataClaims,
-      ...(selectedSourceIds?.length ? { selectedSourceIds } : {}),
+      writerProfile: "slim",
+      ...(ragIds?.length ? { selectedSourceIds: ragIds } : {}),
     };
 
     const progressState = createWriteProgressState();
@@ -318,7 +508,7 @@ export const writeSectionTool: ToolDefinition = {
     try {
       const result = await runAgentWriteSection({
         data,
-        context: draftWithBlueprint,
+        context: draftForWriter,
         dataClaims: project.dataClaims,
         globalContext,
         userId: ctx.userId,
@@ -343,21 +533,32 @@ export const writeSectionTool: ToolDefinition = {
       draftAcc.draft = result.draft;
       draftAcc.references = result.references;
 
-      if (project.mode === "research" && sectionRaw === "results") {
-        const recon = reconcileResultsNumbers(result.draft, project.dataClaims);
-        if (!recon.ok) {
-          await patchActive("aborted", true);
-          return { success: false, error: recon.message };
-        }
-      }
+      const maxRefIndex = refCeiling(project.references, result.references);
+      const repaired = await repairSectionDraft({
+        draft: result.draft,
+        sectionKey: sectionRaw,
+        extraFindings: extraFromBind(bind),
+        maxRefIndex,
+        userId: ctx.userId,
+        signal: ctx.signal,
+        projectMode: project.mode,
+        allowRefine: autoFix !== false && result.pipelineMode !== "full",
+        dataClaims: project.dataClaims,
+        spec: boundSpec,
+        subsectionTitle,
+      });
+
+      draftAcc.draft = repaired.draft;
+      const qaReport = repaired.qaReport;
+      const blocked = !shouldPersistWritingDraft(qaReport);
 
       let persisted: { sectionKey: string; referencesAdded: number } | undefined;
-      if (persistToProject) {
+      if (persistToProject && !blocked) {
         persisted = await persistAgentDraft(
           ctx.userId,
           ctx.projectId,
           sectionRaw,
-          result.draft,
+          repaired.draft,
           result.references,
         );
       }
@@ -369,14 +570,20 @@ export const writeSectionTool: ToolDefinition = {
             : "，自动核查通过"
           : "";
 
-      const summary = persisted
-        ? `已生成并写回 ${sectionRaw}（${result.draft.length} 字${fixNote}）`
-        : `已生成 ${sectionRaw}（${result.draft.length} 字，${result.pipelineMode}${fixNote}）`;
+      const summary = appendPatchNoteToSummary(
+        appendQaNoteToSummary(
+          persisted
+            ? `已生成并写回 ${sectionRaw}（${repaired.draft.length} 字${fixNote}）`
+            : `已生成 ${sectionRaw}（${repaired.draft.length} 字，${result.pipelineMode}${fixNote}）`,
+          qaReport,
+        ),
+        repaired,
+      );
 
       // 保留 completed 断点：刚写完就断线续跑时可去重，不必再烧 AI
       const completed = buildActive("completed", {
-        draftText: clipActiveWriteDraft(result.draft),
-        draftChars: result.draft.length,
+        draftText: clipActiveWriteDraft(repaired.draft),
+        draftChars: repaired.draft.length,
         pipelineMode: result.pipelineMode,
         references: result.references,
         completedSummary: summary,
@@ -388,14 +595,20 @@ export const writeSectionTool: ToolDefinition = {
         success: true,
         data: {
           section: sectionRaw,
-          draft: result.draft,
-          charCount: result.draft.length,
+          draft: repaired.draft,
+          charCount: repaired.draft.length,
           newReferences: result.references,
           pipelineMode: result.pipelineMode,
           verification: result.verification,
           issueCount: result.issueCount,
           citationWarnings: result.citationWarnings,
           persisted: persisted ?? null,
+          qaReport,
+          sectionSpec: boundSpec,
+          specSource,
+          writingPatches: repaired.patches,
+          writingRefined: repaired.refined || undefined,
+          blocked: blocked || undefined,
         },
         summary,
       };
