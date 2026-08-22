@@ -1,6 +1,7 @@
 /**
  * 写作模式 → 章节注册表（单一入口）
  * research → imrad.ts；review → review-structure.ts
+ * 工作台侧栏优先用 template-sections（与预览/导出同构）。
  */
 
 import type { ProjectWritingMode } from "@/contracts/writing-mode";
@@ -19,11 +20,11 @@ import {
   buildReviewWorkbenchSections,
   isReviewSectionKey,
 } from "@/lib/review-structure";
+import { getTemplateSections } from "@/lib/template-sections";
 
 export type AnySectionKey = string;
 
-// discussion 在 Nature 等模板中为独立章节，需在研究模式下可用
-const RESEARCH_KEYS = new Set<string>([...IMRAD_SECTION_KEYS, "discussion"]);
+const RESEARCH_KEYS = new Set<string>(IMRAD_SECTION_KEYS);
 const REVIEW_KEYS = new Set<string>(REVIEW_SECTION_KEYS);
 
 export function getProjectWritingMode(mode: ProjectWritingMode | undefined): ProjectWritingMode {
@@ -56,7 +57,6 @@ export function isSectionValidForMode(section: string, mode: ProjectWritingMode 
 export function getSectionOrderForMode(section: string, mode: ProjectWritingMode | undefined): number {
   const m = getProjectWritingMode(mode);
   if (m === "research" && RESEARCH_KEYS.has(section)) {
-    if (section === "discussion") return 4;
     return IMRAD_ORDER[section as keyof typeof IMRAD_ORDER];
   }
   if (m === "review" && isReviewSectionKey(section)) {
@@ -71,7 +71,6 @@ export function getSectionNumberForMode(
 ): number | undefined {
   const m = getProjectWritingMode(mode);
   if (m === "research" && RESEARCH_KEYS.has(section)) {
-    if (section === "discussion") return 4;
     return IMRAD_SECTION_NUMBER[section as keyof typeof IMRAD_SECTION_NUMBER];
   }
   if (m === "review" && isReviewSectionKey(section)) {
@@ -87,7 +86,6 @@ export function getSectionLabelForMode(
 ): string {
   const m = getProjectWritingMode(mode);
   if (m === "research" && RESEARCH_KEYS.has(section)) {
-    if (section === "discussion") return lang === "zh" ? "讨论 (Discussion)" : "Discussion";
     return getSectionLabel(section as keyof typeof IMRAD_ORDER, lang);
   }
   if (m === "review" && isReviewSectionKey(section)) {
@@ -100,6 +98,34 @@ export function buildWorkbenchSectionsForMode(mode: ProjectWritingMode | undefin
   return getProjectWritingMode(mode) === "research"
     ? buildImradWorkbenchSections(lang)
     : buildReviewWorkbenchSections(lang);
+}
+
+/**
+ * 工作台结构侧栏：与期刊预览 / 导出同构。
+ * research 按模板（含独立 discussion）；review 用综述四章 + 摘要。
+ */
+export function buildStructureSectionsForWorkbench(params: {
+  mode?: ProjectWritingMode;
+  template?: string;
+  lang?: "zh" | "en";
+}): { id: string; label: string; placeholder: string }[] {
+  const mode = getProjectWritingMode(params.mode);
+  const lang = params.lang ?? "zh";
+  const isZh = lang === "zh";
+  const defs = getTemplateSections(params.template || "sci", mode);
+  const abstractLabel = isZh ? "摘要" : "Abstract";
+  return [
+    {
+      id: "abstract",
+      label: abstractLabel,
+      placeholder: isZh ? "摘要内容…" : "Abstract content…",
+    },
+    ...defs.map((d) => ({
+      id: d.key,
+      label: `${d.sectionNumber}. ${d.label}`,
+      placeholder: isZh ? `${d.label}内容…` : `${d.label}…`,
+    })),
+  ];
 }
 
 export function buildSectionOptionsForMode(mode: ProjectWritingMode | undefined, lang: "zh" | "en" = "zh") {

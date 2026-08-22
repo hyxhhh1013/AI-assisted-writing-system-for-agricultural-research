@@ -113,10 +113,12 @@ describe("mapToIMRADSection", () => {
     expect(mapToIMRADSection("表征分析")).toBe("methods");
   });
 
-  it("maps 结果/讨论/分析 to results", () => {
+  it("maps 结果/分析 to results and standalone 讨论 to discussion", () => {
     expect(mapToIMRADSection("结果与讨论")).toBe("results");
     expect(mapToIMRADSection("性能分析")).toBe("results");
     expect(mapToIMRADSection("机理研究")).toBe("results");
+    expect(mapToIMRADSection("讨论")).toBe("discussion");
+    expect(mapToIMRADSection("Discussion")).toBe("discussion");
   });
 
   it("maps 结论/总结/展望 to conclusion", () => {

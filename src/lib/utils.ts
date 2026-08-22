@@ -45,8 +45,23 @@ const IMRAD_KEYWORDS: { key: string; patterns: RegExp[] }[] = [
     patterns: [/方法/i, /method/i, /材料/i, /material/i, /实验[设计方案]/i, /制备/i, /合成/i, /表征/i, /实验部分/i],
   },
   {
+    // 「结果与讨论」合并标题仍归 results（历史大纲）；独立「讨论」见下组
     key: "results",
-    patterns: [/结果/i, /讨论/i, /result/i, /discussion/i, /分析/i, /性能/i, /影响/i, /机理/i, /优化/i],
+    patterns: [
+      /结果与讨论/i,
+      /results?\s*(and|&)\s*discussion/i,
+      /结果/i,
+      /result/i,
+      /分析/i,
+      /性能/i,
+      /影响/i,
+      /机理/i,
+      /优化/i,
+    ],
+  },
+  {
+    key: "discussion",
+    patterns: [/讨论/i, /\bdiscussion\b/i],
   },
   {
     key: "conclusion",

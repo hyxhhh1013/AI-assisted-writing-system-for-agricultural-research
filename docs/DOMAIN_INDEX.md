@@ -172,7 +172,7 @@
 | DOCX | 工作台 hook | 引用硬检 + 双语 + 题注 | `useDocxExport`、`lib/export-readiness.ts`（浏览器安全）；bib_only 软告警走 API |
 | PDF 导出 | 工作台 / API | `POST /api/export/pdf`（同硬检） | `services/pdf-export.ts`、`export-readiness-server` |
 
-> **预览/导出章节渲染（2026-08-16）**：期刊预览（`sci-preview.tsx` → `components/shared/previews/*`）与 Word/PDF/Markdown 导出的章节列表共用 `lib/template-sections.ts`。改用 `getRenderableSections` 按「实际有内容」动态渲染——空节隐藏、按 1..N 重排编号；研究模式 `discussion` 独立成节（不再并入 results），nature 补 `conclusion`。解决 agent 写出的章节多于模板固定四项时预览仍只排四项的问题。
+> **预览/导出章节渲染（2026-08-16；侧栏对齐 2026-08-17）**：期刊预览与 Word/PDF/Markdown 导出共用 `lib/template-sections.ts` 的 `getRenderableSections`（空节隐藏、1..N 重排）。研究模式正文为 **引言 / 方法 / 结果 / 讨论 / 结论** 五节（`discussion` 独立，不再并入 results）。工作台结构侧栏经 `buildStructureSectionsForWorkbench` 与模板同构，避免侧栏仍显示「结果与讨论」四节导致 discussion 写不进去、预览只剩四块。
 
 ## Prompt 子系统
 

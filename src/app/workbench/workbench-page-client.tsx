@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense, useRef, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { buildWorkbenchSectionsForMode } from "@/lib/section-registry";
+import { buildStructureSectionsForWorkbench } from "@/lib/section-registry";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -244,8 +244,13 @@ function WorkbenchContent() {
   }, []);
 
   const structureSections = useMemo(
-    () => buildWorkbenchSectionsForMode(project.mode ?? "review", "zh"),
-    [project.mode],
+    () =>
+      buildStructureSectionsForWorkbench({
+        mode: project.mode,
+        template: project.template || "sci",
+        lang: "zh",
+      }),
+    [project.mode, project.template],
   );
 
   const writingMode = getProjectWritingMode(project.mode);

@@ -26,10 +26,11 @@ describe("review dual-track", () => {
     expect(keys).not.toContain("results");
   });
 
-  it("research mode keeps IMRAD sections", () => {
+  it("research mode keeps IMRAD sections including separate discussion", () => {
     const keys = getSectionKeysForMode("research");
     expect(keys).toContain("methods");
     expect(keys).toContain("results");
+    expect(keys).toContain("discussion");
     expect(keys).not.toContain("literature_body");
   });
 
@@ -100,6 +101,18 @@ describe("review dual-track", () => {
       "introduction",
       "background",
       "literature_body",
+      "conclusion",
+    ]);
+  });
+
+  it("workbench sections for research include separate discussion", () => {
+    const sections = buildWorkbenchSectionsForMode("research");
+    expect(sections.map((s) => s.id)).toEqual([
+      "abstract",
+      "introduction",
+      "methods",
+      "results",
+      "discussion",
       "conclusion",
     ]);
   });

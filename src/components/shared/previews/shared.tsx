@@ -58,7 +58,11 @@ type MdProps<T extends ElementType> = ComponentPropsWithoutRef<T> & { node?: unk
 // ==================== Shared Components ====================
 
 /** 顶层章节标题 — 子标题冲突时跳过 */
-const RESERVED_HEADINGS = new Set(["引言", "材料与方法", "结果与分析", "结论", "摘要", "参考文献", "Materials and Methods", "Results and Discussion", "Introduction", "Conclusion", "Abstract", "References"]);
+const RESERVED_HEADINGS = new Set([
+  "引言", "材料与方法", "结果与分析", "结果", "讨论", "结论", "摘要", "参考文献",
+  "Materials and Methods", "Results and Discussion", "Results", "Discussion",
+  "Introduction", "Conclusion", "Abstract", "References",
+]);
 
 /** 修正内容中的标题编号逻辑 */
 export function processContent(content: string, sectionNumber: number) {
