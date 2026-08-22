@@ -1,6 +1,10 @@
 import type { EvidenceClaim } from "@/contracts/data-source";
 import type { WritingInput } from "@/lib/validations";
 import {
+  buildSlimWriterSystemPrompt,
+  resolveSlimSectionPrompt,
+} from "@/lib/agent/writer-prompt";
+import {
   buildDomainExpertise,
   resolveSectionPrompt,
   buildWriterSystemPrompt,
@@ -35,6 +39,7 @@ export async function prepareWritingContext(
     evidenceSummary: manualEvidenceSummary,
     projectMode,
     citationStyle,
+    writerProfile,
   } = data;
 
   const isAbstract = section === "abstract";
@@ -157,7 +162,10 @@ export async function prepareWritingContext(
 
   const isGBT = template === "gbt7713";
   const isChinese = language !== "en";
-  const basePrompt = resolveSectionPrompt(section, projectMode, { isGBT, isChinese });
+  const useSlim = writerProfile === "slim";
+  const basePrompt = useSlim
+    ? resolveSlimSectionPrompt(section, projectMode, { isGBT, isChinese })
+    : resolveSectionPrompt(section, projectMode, { isGBT, isChinese });
 
   const resolvedSectionPrompt = subsectionTitle
     ? `请针对「${subsectionTitle}」这一子节进行扩写。只写这一小节的内容，不要扩写到该章节的其他子节。` +
@@ -203,22 +211,33 @@ ${globalContext.blueprint
 
   const domainExpertise = buildDomainExpertise(researchDirection);
 
-  const systemPrompt = buildWriterSystemPrompt({
-    section,
-    domainExpertise,
-    globalReferenceInfo,
-    template,
-    language,
-    contextText: contextText + refRangeHint,
-    sectionInstruction: resolvedSectionPrompt,
-    figureStart: typeof figureStart === "number" ? figureStart : 1,
-    evidenceSummary,
-    projectMode,
-    sectionNumber:
-      getSectionNumberForMode(section, projectMode) ??
-      getTemplateSectionNumber(template || "sci", section, projectMode),
-    citationStyle: typeof citationStyle === "string" ? citationStyle : "gbt7714",
-  });
+  const systemPrompt = useSlim
+    ? buildSlimWriterSystemPrompt({
+        section,
+        domainExpertise,
+        globalReferenceInfo,
+        language,
+        contextText: contextText + refRangeHint,
+        sectionInstruction: resolvedSectionPrompt,
+        evidenceSummary,
+        projectMode,
+      })
+    : buildWriterSystemPrompt({
+        section,
+        domainExpertise,
+        globalReferenceInfo,
+        template,
+        language,
+        contextText: contextText + refRangeHint,
+        sectionInstruction: resolvedSectionPrompt,
+        figureStart: typeof figureStart === "number" ? figureStart : 1,
+        evidenceSummary,
+        projectMode,
+        sectionNumber:
+          getSectionNumberForMode(section, projectMode) ??
+          getTemplateSectionNumber(template || "sci", section, projectMode),
+        citationStyle: typeof citationStyle === "string" ? citationStyle : "gbt7714",
+      });
 
   return {
     systemPrompt,

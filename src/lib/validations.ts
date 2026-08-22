@@ -62,6 +62,8 @@ export const writingSchema = z
         }),
       )
       .optional(),
+    /** Agent WRITE-QA-007：slim=短 prompt；缺省 legacy 保持专家工具扩写不变 */
+    writerProfile: z.enum(["legacy", "slim"]).optional(),
   })
   .superRefine((data, ctx) => {
     if (!isSectionValidForMode(data.section, data.projectMode)) {
