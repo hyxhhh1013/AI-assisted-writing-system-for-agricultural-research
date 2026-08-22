@@ -8,7 +8,7 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-08-22（Phase 14 WRITE-QA 规划生效：写作质量系统；Phase 13 FIG-QA 实施中）  
+> **最后更新**：2026-08-22（Phase 14 WRITE-QA 001–010 收口；Phase 13 FIG-QA 已收口）  
 > **实时 status 只看 §1 Phase 13 / Phase 14 与 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
@@ -221,11 +221,11 @@
 | WRITE-QA-003 | WQC 升级并挂到 `write_section` 热路径 | 001 | 1d | **done** | 2026-08-22；`writing-qa-run.ts` + write_section observation `qaReport`；不阻断 persist |
 | WRITE-QA-004 | Evidence Binder：项目文献池词重叠绑定 | 002 | 2d | **done** | 2026-08-22；`evidence-binder.ts`；不做 per-card RAG；收窄 selectedSourceIds + 精简摘要；蓝图要点不再打进 Writer bullets |
 | WRITE-QA-005 | `applyWritingPatches`（确定性优先，≤1 次定向 refine） | 003, 004 | 1.5d | **done** | 2026-08-22；`writing-patches.ts` + `writing-patch-run.ts`；写节写回前先确定性修补；full 管道不再二次 refine |
-| WRITE-QA-006 | persist 看 `block`；observation 带 `qaReport`；收口第 5 信号 | 005 | 1d | todo | |
-| WRITE-QA-007 | 压缩 Writer prompt：禁令迁到 QA code | 002, 005 | 1d | todo | 禁止再往 writing.ts 堆「禁止」 |
-| WRITE-QA-008 | Golden：引言/方法/结果/讨论/综述子节 + `eval:quality` | 003 | 1.5d | todo | LLM-judge 不进热路径 |
-| WRITE-QA-009 | `write_section` 主路径改吃 Spec；context 只作适配 | 002, 006 | 1d | todo | |
-| WRITE-QA-010 | 剖面收口：results + literature_body 子节 + introduction | 008, 009 | 1.5d | todo | 未闭环前禁止再堆写作禁令 |
+| WRITE-QA-006 | persist 看 `block`；observation 带 `qaReport`；收口第 5 信号 | 005 | 1d | **done** | 2026-08-22；`shouldPersistWritingDraft`；结果节编造数字 block 不写回；图/表号与 p 值不对账；拦截也算写节收口，避免 Agent 整节重试 |
+| WRITE-QA-007 | 压缩 Writer prompt：禁令迁到 QA code | 002, 005 | 1d | **done** | 2026-08-22；`writer-prompt.ts` slim；Agent `writerProfile=slim`；legacy 专家工具不变 |
+| WRITE-QA-008 | Golden：引言/方法/结果/讨论/综述子节 + `eval:quality` | 003 | 1.5d | **done** | 2026-08-22；`write-qa-fixtures.ts`；`eval:quality` 打印并门禁；LLM-judge 不进热路径 |
+| WRITE-QA-009 | `write_section` 主路径改吃 Spec；context 只作适配 | 002, 006 | 1d | **done** | 2026-08-22；`spec-write-context.ts`；可传 `sectionSpec`；Writer 看【本节主张】 |
+| WRITE-QA-010 | 剖面收口：results + literature_body 子节 + introduction | 008, 009 | 1.5d | **done** | 2026-08-22；`writing-profiles.ts`：缺口句 / 无数量 / 综述写成试验 |
 | — | 任务单细节 | — | — | — | [`plans/WRITE-QA-quality-system.md`](./plans/WRITE-QA-quality-system.md) |
 | **Phase 11b — Wave 3.7 Agent 写作质量（对齐 academic-paper Phase 4→7）** |
 | **W3-AP-QUALITY** | **质量主轴：引用接地→分节完整→文风质检→摘要/审查收口** | W3-AP-BEHAVIOR | 3～5w | **done** | 2026-08-06；子项全 done；详规 [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md) |
@@ -1166,17 +1166,26 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-22 | WRITE-QA-002 | AI | SectionSpec Compiler：bullets > 蓝图 keyPoints > context。字数带叠 DRAFT-COVER + 子节封顶。写节 observation 带 sectionSpec；无用户 bullets 时蓝图 cards 注入 Writer。证据槽仍空。 |
 | 2026-08-22 | WRITE-QA-004 | AI | Evidence Binder：对已入库题录/摘要/dataClaims 做词重叠，每卡 1–3 条。不按 card 跑 RAG。写节注入短【证据绑定】表、收窄 selectedSourceIds、精简 referenceEvidence。蓝图要点不再复制进 Writer bullets。未绑 card 记 evidence_unbound（有文献池时），不阻断 persist。 |
 | 2026-08-22 | WRITE-QA-005 | AI | applyWritingPatches 纯函数表 + repairSectionDraft：写回前先确定性修补（喉清/空话/越界引用/摘要引用/MD 标题/文末文献表/结果混讨论/overclaim）。仍有 repair 且非 full 时最多定向 refine 1 次，feedback 只含 code+片段。不阻断 persist。 |
+| 2026-08-22 | WRITE-QA-006 | AI | persist 看 shouldPersistWritingDraft（verdict≠block）。结果节精确数字不在 dataClaims → number_not_in_claims block，工具成功但未写回。收口看板第 5 信号文风质检（扫已写入章节）。 |
+| 2026-08-22 | WRITE-QA-007 | AI | Agent Writer 改 slim：`writer-prompt.ts` + `writerProfile=slim`。禁令改为 QA code 指针，去掉 FIGURE JSON / 书目格式 / 空话长禁令。专家工具不传 profile，仍 legacy。 |
+| 2026-08-22 | WRITE-QA 写节热修 | AI | 结果章「图 2.1 / p=0.05」不再误判 number_not_in_claims。`isWriteSectionSettled`：质检拦截不再催 write_section 整节重写。收口看板与 evidence binder 对脏章节/缺 variables 不抛错。 |
+| 2026-08-22 | WRITE-QA-008 | AI | 引言/方法/结果/讨论/综述子节 pass+fail golden；`eval:quality` 打印并门禁。LLM-judge 仍不进热路径。 |
+| 2026-08-22 | WRITE-QA-009 | AI | write_section 可传 sectionSpec；Writer 上下文由 Spec 主张表生成，context 只作【补充说明】。 |
+| 2026-08-22 | WRITE-QA-010 | AI | 引言缺缺口句 warn；结果无数量 warn；综述「本研究+试验」repair 并确定性改成「已有研究」。 |
+| 2026-08-22 | 修订大纲空检索红框 | AI | 事故门：`checkOutlineSearchGate` 拦「基于 N 条文献修订大纲」的 search_*；空检索改软成功；斜杠 query 拆空格；`resolveAgentLastFailure` 不弹无命中红框。 |
+| 2026-08-22 | AP 软可疑卡摘要 | AI | `citation_fix` 只认硬检未过；21 条软可疑不再拦 `write_bilingual_abstract`。门禁提示不当红框。 |
+| 2026-08-22 | 同章翻页空转 | AI | `checkCitationSpinGate`：硬检通过后禁 read_section/read_reference 分页抠 [n]；硬未过最多读 2 窗。翻页警告不当红框。 |
 
 ---
 
 ## 5. 推荐执行顺序（给「下一次 AI」）
 
-**当前主轴（2026-08-22）**：Phase 13 **FIG-QA 001–010 已收口**；Phase 14 **WRITE-QA** 实施中。Wave 3.10 已收口。  
+**当前主轴（2026-08-22）**：Phase 13 **FIG-QA 001–010 已收口**；Phase 14 **WRITE-QA 001–010 已收口**。Wave 3.10 已收口。  
 **即刻冻结**：不准再往 `goal-intents.ts` 加口语 `isXxxGoal` / `checkXxxGate`（领域不变量与事故型安全门除外）；不重开 SHADOW；不重写 LangGraph；不给 `POST /api/writing` 旧扩写管加功能；**禁止新增图表类型**（其余 8 类未做质量剖面）；禁止再开「某 chart_types 提质」散 PR；**禁止再往 `writing.ts` 堆「禁止」**（新规则进 WRITE-QA code 表）。
 
 | 优先级 | ID | 说明 |
 |--------|-----|------|
-| **now** | **WRITE-QA-006** | persist 看 `block`；observation 带 `qaReport`；收口看板第 5 信号。详规 [`plans/WRITE-QA-quality-system.md`](./plans/WRITE-QA-quality-system.md) |
+| **now** | Wave 4 / 观测 | WRITE-QA 与 FIG-QA 主轴已收口。详规见 [`MASTER_PLAN.md`](./MASTER_PLAN.md) |
 | backlog | Wave 4 | ENG-PR-094 已 done；LaTeX / SEC-04～08 见 [`MASTER_PLAN.md`](./MASTER_PLAN.md) |
 
 **明确不做**：重开 INTENT-SHADOW、LangGraph 重写 / 多 agent / DeepSeek Harness、热路径 LLM-judge、再堆口语门禁、运行时扫 `tools/` 磁盘、用 VLM 当数据图主质检、R 后端、解冻旧扩写管道、复刻十二代理 Conductor。

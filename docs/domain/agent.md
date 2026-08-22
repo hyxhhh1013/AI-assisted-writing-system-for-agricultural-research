@@ -1,6 +1,6 @@
 # Agent 编排（写作助手）
 
-> L3 域文档 · 更新：2026-08-22  
+> L3 域文档 · 更新：2026-08-22（修订大纲不再因空检索弹红框）  
 > 契约唯一权威源：`src/contracts/agent.ts`（SSE 事件）、`src/contracts/agent-session.ts`（会话消息）、`src/contracts/agent-intent.ts`（`IntentKind`）。
 
 ## 概览
@@ -39,14 +39,19 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 | `src/lib/agent/ingest-project-data.ts` | 表格入库合并 + 只 PATCH `dataSources`/`dataClaims`（`ingest_project_data`） |
 | `src/lib/agent/writing-progress.ts` | 写节进度翻译层（管道事件 → `agent/progress` label） |
 | `src/lib/agent/writing-quality.ts` | WQC 写作质检轻量：喉清开场 / 综上所述堆砌 / overclaim / 段长方差（确定性规则，warn 级不阻断） |
-| `src/lib/agent/writing-qa-run.ts` | WRITE-QA-003 写节热路径 QA：`evaluateSectionWritingQa` → `WritingQaReport`（不阻断 persist） |
+| `src/lib/agent/writing-qa-run.ts` | WRITE-QA-003 写节热路径 QA：`evaluateSectionWritingQa` → `WritingQaReport`（`block` 不 persist） |
 | `src/lib/agent/section-compiler.ts` | WRITE-QA-002：蓝图/要点/语域 → `SectionSpecV1` |
 | `src/lib/agent/evidence-binder.ts` | WRITE-QA-004：主张钉到项目题录/摘要/dataClaims（词重叠，不做 per-card RAG） |
 | `src/lib/agent/writing-patches.ts` | WRITE-QA-005：`applyWritingPatches` 纯函数表（喉清/空话/越界引用/摘要引用/MD 标题/文末文献表/结果混讨论/overclaim） |
 | `src/lib/agent/writing-patch-run.ts` | WRITE-QA-005：写节回修环；确定性之后最多 1 次定向 refine |
-| `src/lib/agent/quality-closure.ts` | 质量收口看板数据层：聚合节完整度/摘要/引用硬检/审查 4 信号（纯函数）。WRITE-QA-006 将加第 5 信号 prose QA |
+| `src/lib/agent/quality-closure.ts` | 质量收口看板：节完整度 / 摘要 / 引用硬检 / 审查 / 文风质检（WRITE-QA-006） |
+| `src/lib/agent/writer-prompt.ts` | WRITE-QA-007：Agent slim Writer；禁令改 QA code 指针，不堆「禁止」 |
+| `src/lib/agent/spec-write-context.ts` | WRITE-QA-009：Writer 上下文由 Spec 生成；`sectionSpec` JSON 解析 |
+| `src/lib/agent/writing-profiles.ts` | WRITE-QA-010：引言缺口 / 结果无数量 / 综述写成试验 |
+| `src/lib/quality-eval/write-qa-fixtures.ts` | WRITE-QA-008：分节 golden；`eval:quality` 规则尺 |
 | `src/lib/agent/core/agent-rules.ts` | `AGENT_RULES` 单一事实源；prompt/nudge/硬拦文案读同一 `text` |
 | `src/lib/agent/core/classify-intent.ts` | 每轮 `classifyIntent`：跟聊继承或正则；不上 LLM |
+| `src/lib/agent/ui-failure.ts` | 红框 `lastFailure`：检索无命中是软结果，不弹「再试一次」 |
 | `components/shared/agent/quality-closure-panel.tsx` | 质量收口看板 UI（工作台 agent Tab 顶部） |
 | `src/lib/agent/writing-runner.ts` | 复用写作管道；`onWritingEvent` 转发进度 |
 | `src/lib/agent/session-store.ts` | 会话持久化 + `tryAcquireAgentSession` 并发互斥 |
@@ -147,7 +152,11 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **跟聊误判**：写完自查通过（0 问题）后，用户回「好/继续」，`isCitationApplyGoal` 误当「同意引用修正」→ `checkCitationSideTripGate` 拦下后续 `write_section`（「当前是引用核查/修正任务…」）。
 - **AP 流程起草被顶**：`resolveApPipelineStep` 只要 validate 成功就返回 `citation_fix`，正在起草其它章节的 `write_section` 被误拦。
 
-**修正（2026-08-07）**：进入「引用修正」意图/阶段必须满足**最近一次 validate 报告确实发现待修问题**（硬检未过 `exportReady/phase5Passed`，或语义可疑 `grounding.suspiciousCount > 0`；判定复用 `reflect.ts` 导出的 `validateIssueCount`）。写完自查的干净报告（0 问题）不再把会话顶进修正模式，后续 `write_section` 正常放行。覆盖链路：跟聊短确认、AP 流程 `citation_fix` 阶段、并行只读批门禁（`parallel-tools.ts` 同源）。
+**修正（2026-08-07）**：进入「引用修正」意图/阶段必须满足**最近一次 validate 报告确实发现待修问题**。写完自查的干净报告（0 问题）不再把会话顶进修正模式，后续 `write_section` 正常放行。覆盖链路：跟聊短确认、AP 流程 `citation_fix` 阶段、并行只读批门禁（`parallel-tools.ts` 同源）。
+
+**修正（2026-08-22）——软可疑不再卡死双语摘要**：`citation_fix` / `isCitationApplyGoal` 只认硬检（`validateHasHardIssues`：`exportReady/phase5Passed` 未过，且非空项目）。`suspiciousCount > 0` 但硬检已过时，流程进入摘要，`write_bilingual_abstract` 放行。门禁文案「请先 read_section + refine_content…」不再弹红框。
+
+**修正（2026-08-22）——硬检通过后禁止分页空转**：`checkCitationSpinGate` 在 AP/引用/摘要收口下，validate 硬检已过则拦截继续 `read_section` / `read_reference`（无摘要题录读不出接地）。硬检未过最多读 2 次章节，然后必须 `refine_content`。连续同章翻页警告不当红框。
 
 **修正（2026-08-16）——空项目被顶进引用阶段、封死起草入口**：`resolveApPipelineStep` 原来没有「起草」阶段，空项目（0 文献 0 正文）也会直接返回 `citation_check`/`citation_fix`，`checkCitationSideTripGate` 因而把 `search_knowledge`/`import_reference`/`generate_outline`/`write_section` 全部拦下，agent 反复检索被拒、陷入空转。两处根治：
 
@@ -221,6 +230,8 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 
 **即刻冻结**：不准再往 `goal-intents.ts` 加口语 `isXxxGoal` / `checkXxxGate`。领域不变量（空数据、越界引用）与事故型安全门除外。
 
+**事故门（2026-08-22）——修订大纲被空检索打成红框**：用户说「基于 27 条文献修订大纲」时模型去补「生物炭/预处理」覆盖，`search_external` 0 命中曾 `success: false`，面板 `lastFailure` 循环「再试一次」。现：`checkOutlineSearchGate` 拦 search_*；空检索改为软成功；斜杠 query 拆空格；红框忽略无命中。用户要补文献须明确说「检索」。
+
 **已收口（2026-08-15）**：INTENT-01/02、RULES-01、QUALITY-CLAIM、QUALITY-JUDGE。`classifyIntent` 每轮一次；跟聊短回复继承 `snapshot.intentKind`。gate / `nudgeForKind` 只消费 kind。`AGENT_RULES` 单一事实源（5 条）。收口默认 claim grounding。`eval:quality` 规则分 + 可选 LLM 分（不进写节）。**INTENT-SHADOW cancelled**：跟聊 inherit 已覆盖「A/继续」；规定的影子触发在 `source=regex`，测不到跟聊；无标注样本则不上热路径 LLM 分类。
 
 ## 写作质量系统（2026-08-22 起，Wave 3.12）
@@ -231,7 +242,7 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 > **冻结**：不解冻 `POST /api/writing`；不复刻十二代理；禁止再往 `writing.ts` 堆「禁止」；热路径不用 LLM-judge。  
 > **与 3.7 关系**：CITE-GROUND / DRAFT-COVER / WQC / ABS-FLOW 是地板，本波不推倒。  
 > **契约（001 done）**：`src/contracts/section-spec.ts`（`SectionSpecV1`）+ `writing-qa.ts`（`WritingQaReport`）。旧 `write_section.context/bullets` 经 `liftWriteSectionInputToSpec` 升格；现有 WQC 经 `liftWritingQualityFindings` 升格。  
-> **热路径（002–005 done）**：`write_section` 编译 `sectionSpec` → 绑定项目文献池 → 写后 QA → `applyWritingPatches`（写回前）→ 仅当仍有 repair 且非 full 管道时定向 refine 1 次。Writer 看短【证据绑定】表 + 绑中摘要。默认**不阻断** persist（006 再按 `block` 拦截）。`verify_content` 同步带 `qaReport`。
+> **热路径（001–010 done）**：`write_section` 吃 `sectionSpec`（或编译）→ 绑定项目文献池 → **slim Writer** → QA（含引言/结果/综述剖面）→ 确定性修补 → 非 full 时最多定向 refine 1 次。`block` 不 persist。`eval:quality` 带分节 golden。专家工具扩写仍用 legacy 长 prompt。
 
 ## 车间图纸（2026-08-16 规划，Wave 3.10）
 

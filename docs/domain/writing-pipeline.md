@@ -9,6 +9,8 @@
 - **主路径**：Agent 对话写作（写节、引用核查、质检、收口都在这一条）。
 - **本管道（从）**：仅专家工具「协作扩写」人控流程（选文献→定要点→逐条扩写）仍走这里。
 - **纪律**：新的写作规则 / 引用规则 / 质检只改 Agent 侧；**禁止给本管道加功能**，仅 bug 修复与安全加固。改规则先改 `lib/prompts.ts`（Agent 侧）再改本文对应摘要。
+- **写作质量系统（Wave 3.12）**：[`plans/WRITE-QA-quality-system.md`](../plans/WRITE-QA-quality-system.md)。SectionSpec / 证据绑定 / 热路径 WQC / 补丁环全部做在 Agent 包装器；本管道不加新质检分支。
+- **WRITE-QA-007～010**：可选 `writerProfile=slim`（仅 Agent `write_section` 传入）。主路径吃 `sectionSpec`；`eval:quality` 带分节 golden。专家工具不传 profile，仍 legacy。禁止再往 `writing.ts` 堆「禁止」。
 
 ## 模式
 
