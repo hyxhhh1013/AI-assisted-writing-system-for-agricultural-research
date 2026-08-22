@@ -49,6 +49,7 @@ next-env.d.ts
 !/data/xrd/phase-reference.json
 # 图表目录占位（生成的 png/svg/pdf 仍忽略）
 !/data/charts/
+data/charts/*
 !/data/charts/.gitkeep
 prisma/dev.db
 prisma/dev.db-journal
