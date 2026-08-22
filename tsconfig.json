@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -19,9 +23,15 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"],
-      "@academic-paper-studio": ["./academic-paper-studio/index.ts"],
-      "@academic-paper-studio/*": ["./academic-paper-studio/*"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@academic-paper-studio": [
+        "./academic-paper-studio/index.ts"
+      ],
+      "@academic-paper-studio/*": [
+        "./academic-paper-studio/*"
+      ]
     }
   },
   "include": [
@@ -29,7 +39,19 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    "**/*.mts"
+    "**/*.mts",
+    ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "e2e", "playwright.config.ts", "deploy", "deploy-pkg", ".tmp", "backup_*", ".next/standalone/backup_*", "temp", ".next/dev"]
+  "exclude": [
+    "node_modules",
+    "e2e",
+    "playwright.config.ts",
+    "deploy",
+    "deploy-pkg",
+    ".tmp",
+    "backup_*",
+    ".next/standalone/backup_*",
+    "temp",
+    ".next/dev"
+  ]
 }
