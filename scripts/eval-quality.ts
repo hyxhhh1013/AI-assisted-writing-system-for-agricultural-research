@@ -14,6 +14,7 @@ import path from "path";
 import { BAD_PAPER, GOOD_PAPER } from "../src/lib/quality-eval/fixtures";
 import { evaluateQualityLlm } from "../src/lib/quality-eval/llm-judge";
 import { evaluateQuality } from "../src/lib/quality-eval/score";
+import { assertWriteQaGoldens, evaluateWriteQaGoldens } from "../src/lib/quality-eval/write-qa-fixtures";
 import type { QualityEvalInput, QualityLlmReport } from "../src/lib/quality-eval/types";
 
 function printRuleReport(title: string, input: QualityEvalInput): void {
@@ -56,6 +57,17 @@ async function main(): Promise<void> {
     console.log("无参数时输出内置 golden 好/坏样例对比。规则尺始终打印；LLM 尺无 key 则跳过。\n");
     await scoreOne("好样例", GOOD_PAPER, withLlm);
     await scoreOne("坏样例", BAD_PAPER, withLlm);
+
+    console.log("\n========== WRITE-QA 分节 golden ==========");
+    for (const row of evaluateWriteQaGoldens()) {
+      const mark = row.ok ? "OK" : "FAIL";
+      console.log(`  [${mark}] ${row.id}  ${row.report.verdict}  ${row.detail}`);
+    }
+    const gate = assertWriteQaGoldens();
+    if (!gate.ok) {
+      console.error("WRITE-QA golden 未通过：\n" + gate.failures.map((f) => `  - ${f}`).join("\n"));
+      process.exit(1);
+    }
     return;
   }
   const manifest = JSON.parse(fs.readFileSync(path.resolve(file), "utf-8")) as QualityEvalInput;
