@@ -39,7 +39,7 @@
 | 算法 | `lib/citation-gate.ts`（基于 `markOutOfBoundsCitations`） |
 | API | `GET|POST /api/citations/gate` |
 | 客户端 | `services/citations.ts` |
-| 导出 | `POST /api/export/pdf` 未过稿返回 422 `CITATION_GATE_BLOCKED` |
+| 导出 | `POST /api/export/pdf` 未过稿返回 422 `CITATION_GATE_BLOCKED`；`POST /api/export/readiness` 含 bib_only 软告警（不阻断） |
 | Passport | Phase 5 `done` 仅当 `citationGatePassed`；快照 `paperPassport.citationGate` |
 
 验收：越界编号无法标「可过稿」/导出 PDF。

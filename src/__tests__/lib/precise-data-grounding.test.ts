@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   evaluateBibOnlyPreciseData,
   extractPreciseData,
+  formatBibOnlyPreciseWarning,
 } from "@/lib/agent/precise-data-grounding";
 
 describe("extractPreciseData", () => {
@@ -59,5 +60,20 @@ describe("evaluateBibOnlyPreciseData", () => {
       bibOnlyIndexes: new Set([1]),
     });
     expect(findings).toEqual([]);
+  });
+});
+
+describe("formatBibOnlyPreciseWarning", () => {
+  it("returns empty for no findings", () => {
+    expect(formatBibOnlyPreciseWarning([])).toBe("");
+  });
+
+  it("summarizes findings without blocking wording", () => {
+    const text = formatBibOnlyPreciseWarning([
+      { number: 3, data: ["40%"], sentence: "提高 40%[3]。" },
+    ]);
+    expect(text).toMatch(/\[3\]/);
+    expect(text).toMatch(/40%/);
+    expect(text).toMatch(/不阻断导出/);
   });
 });

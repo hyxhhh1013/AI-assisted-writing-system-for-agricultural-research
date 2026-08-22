@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 import { renderProjectPdf } from "@/services/server-pdf";
 import type { ProjectData } from "@/contracts/project";
 import { getErrorMessage } from "@/lib/error-utils";
-import { assessExportReadiness } from "@/lib/export-readiness";
+import { assessExportReadinessAsync } from "@/lib/export-readiness-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,18 +39,25 @@ export async function POST(req: NextRequest) {
     }
 
     if (!allowExportGateBypass()) {
-      const readiness = assessExportReadiness(body);
+      const userId = req.headers.get("x-user-id") || undefined;
+      const readiness = await assessExportReadinessAsync(body, {
+        projectId: body.id,
+        userId,
+      });
       if (!readiness.ok) {
         return Response.json(
           {
             success: false,
             error: readiness.gate.hint,
             gate: readiness.gate,
+            warnings: readiness.warnings,
+            bibOnlyPrecise: readiness.bibOnlyPrecise,
             code: "CITATION_GATE_BLOCKED",
           },
           { status: 422 },
         );
       }
+      // soft warnings 经客户端 /api/export/readiness 已 toast；此处不阻断 PDF 字节流
     }
 
     const pdf = await renderProjectPdf(body);

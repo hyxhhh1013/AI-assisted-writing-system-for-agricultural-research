@@ -13,7 +13,7 @@
 <!-- API_INDEX:AUTO:START -->
 ## 路由表（自动生成）
 
-> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-08-10 08:16:26**（共 **105** 个 route 文件，validateBody **48**，SSE **11**，requireAdmin **23**）。
+> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-08-18 07:25:51**（共 **108** 个 route 文件，validateBody **49**，SSE **11**，requireAdmin **23**）。
 
 图例：zod = 使用 validateBody；SSE = 含 text/event-stream / ReadableStream；admin = 含 requireAdmin。
 
@@ -38,7 +38,7 @@
 | POST | `/api/projects/[id]/paper-passport/sync` | — | — | — |
 | PATCH | `/api/projects/[id]/references` | ✓ | — | — |
 | POST | `/api/projects/[id]/references/import-external` | ✓ | — | — |
-| GET | `/api/projects/[id]/references/source?refIndexes=` | — | — | — |
+| GET | `/api/projects/[id]/references/source` | — | — | — |
 | PATCH | `/api/projects/[id]/sections/[key]` | ✓ | — | — |
 
 ### AI 写作
@@ -69,6 +69,7 @@
 | GET, POST, PATCH, DELETE | `/api/knowledge` | ✓ | — | — |
 | POST | `/api/knowledge/analyze` | — | — | — |
 | POST | `/api/knowledge/import-bibliography` | ✓ | — | — |
+| POST | `/api/knowledge/ingest-external` | ✓ | — | — |
 | POST | `/api/knowledge/reindex` | ✓ | ✓ | — |
 | GET | `/api/knowledge/source` | — | — | — |
 
@@ -170,6 +171,7 @@
 | 方法 | 路径 | zod | SSE | admin |
 |------|------|-----|-----|-------|
 | POST | `/api/export/pdf` | — | — | — |
+| POST | `/api/export/readiness` | — | — | — |
 
 ### PDF
 

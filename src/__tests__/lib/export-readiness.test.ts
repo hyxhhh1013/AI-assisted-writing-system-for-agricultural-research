@@ -93,4 +93,25 @@ describe("assessExportReadiness", () => {
     expect(r.chartAssets).toHaveLength(1);
     expect(r.chartAssets[0].caption).toContain("产量");
   });
+
+  it("adds soft bib_only precise-data warnings without blocking ok", () => {
+    const r = assessExportReadiness(
+      baseProject({
+        abstract: "产率升至 42.5%[1]。",
+        sections: { introduction: "背景见文献[2]。" },
+      }),
+      { bibOnlyIndexes: new Set([1]) },
+    );
+    expect(r.ok).toBe(true);
+    expect(r.bibOnlyPrecise).toHaveLength(1);
+    expect(r.bibOnlyPrecise[0].number).toBe(1);
+    expect(r.warnings.length).toBeGreaterThan(0);
+    expect(r.warnings[0]).toMatch(/仅书目文献含精确数据/);
+  });
+
+  it("returns empty soft fields when bibOnlyIndexes omitted", () => {
+    const r = assessExportReadiness(baseProject());
+    expect(r.warnings).toEqual([]);
+    expect(r.bibOnlyPrecise).toEqual([]);
+  });
 });

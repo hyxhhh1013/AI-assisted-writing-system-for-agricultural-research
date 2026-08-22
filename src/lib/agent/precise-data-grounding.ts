@@ -102,3 +102,18 @@ export function evaluateBibOnlyPreciseData(params: {
 
   return [...byNumber.values()].sort((a, b) => a.number - b.number);
 }
+
+/** 导出 / validate_citations 共用的软告警文案（不阻断 exportReady） */
+export function formatBibOnlyPreciseWarning(
+  findings: readonly BibOnlyPreciseDataFinding[],
+): string {
+  if (findings.length === 0) return "";
+  const sample = findings
+    .slice(0, 5)
+    .map((f) => `[${f.number}]（${f.data.join("、")}）`)
+    .join("，");
+  return (
+    `仅书目文献含精确数据 ${findings.length} 处：${sample}。`
+    + `建议补原文或改定性表述（不阻断导出）。`
+  );
+}

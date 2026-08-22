@@ -8,7 +8,7 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-08-17（Phase 11e 已收口；WRITE-NO-RAG）  
+> **最后更新**：2026-08-17（Phase 11e 已收口；WRITE-NO-RAG + bib_only 导出前软告警）  
 > **实时 status 只看 §1 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
@@ -1122,18 +1122,17 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-16 | bib_only 精确数据告警 | AI | `precise-data-grounding.ts`（正则只认数字+单位，排除年份/编号误伤）+ `reference-mode.ts`（三态判定抽离，只对无摘要文献查全文）；接入 `validate_citations`，软信号不阻断 exportReady。7 单测绿。见 `domain/agent.md` §bib_only。 |
 | 2026-08-16 | W3-AP-ARCH-03 | AI | 冻结旧扩写管道：`route.ts`/`run-pipeline.ts` 文件头声明「新写作规则只改 Agent」，`DOMAIN_INDEX`/`writing-pipeline.md` 标注 Agent 主、扩写从。不删代码。Phase 11e 收口。 |
 | 2026-08-17 | W3-AP-WRITE-NO-RAG | AI | 有 soft-groundable 项目摘要时 `retrieveWritingContext` 跳过知识库 RAG；勾选来源或 `WRITING_FORCE_KNOWLEDGE_RAG=1` 强制检索；预览路径不变。 |
+| 2026-08-17 | W3-AP-BIB-EXPORT | AI | bib_only 精确数据软告警接入导出：`assessExportReadiness` + `POST /api/export/readiness`；Word/PDF 导出前 toast，不阻断 `ok`。 |
 
 ---
 
 ## 5. 推荐执行顺序（给「下一次 AI」）
 
-**当前主轴（2026-08-16）**：Wave 3.10（W3-AP-RUNTIME）**已收口**（ARCH-01/02/03 全 done）。Wave 3.9 已收口。INTENT-SHADOW **cancelled**。  
+**当前主轴（2026-08-17）**：Wave 3.10（W3-AP-RUNTIME）**已收口**。P3-legacy WRITE-NO-RAG / bib_only 导出前 **已 done**。Wave 3.9 已收口。INTENT-SHADOW **cancelled**。  
 **即刻冻结**：不准再往 `goal-intents.ts` 加口语 `isXxxGoal` / `checkXxxGate`（领域不变量与事故型安全门除外）；不重开 SHADOW；不重写 LangGraph；不给 `POST /api/writing` 旧扩写管加功能。
 
 | 优先级 | ID | 说明 |
 |--------|-----|------|
-| P3-legacy | W3-AP-WRITE-NO-RAG | 有项目文献摘要时跳过知识库 RAG |
-| P3-legacy | bib_only 精确数据告警·导出前 | 现只在 `validate_citations` 触发；导出前兜底需把 reference 详情传进 export-readiness |
 | backlog | Wave 4 | ENG-PR-094 已 done；LaTeX / SEC-04～08 见 [`MASTER_PLAN.md`](./MASTER_PLAN.md) |
 
 **明确不做**：重开 INTENT-SHADOW、LangGraph 重写 / 多 agent / DeepSeek Harness、热路径 LLM-judge、再堆口语门禁、运行时扫 `tools/` 磁盘。

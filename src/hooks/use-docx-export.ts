@@ -9,6 +9,7 @@ import { getRenderableSections } from "@/lib/template-sections";
 import { parseMarkdownBlocks, MarkdownBlock } from "@/lib/markdown-parser";
 import { formatFilenames } from "@/services/references";
 import { assessExportReadiness } from "@/lib/export-readiness";
+import { fetchExportReadiness } from "@/services/export-readiness";
 
 /** 清理文件名用于兜底显示 */
 function cleanRefForDocx(raw: string): string {
@@ -48,6 +49,16 @@ export function useDocxExport({ project, activeSection, editingContent, saveProj
     if (!readiness.ok) {
       toast.error(readiness.gate.hint || "引用编号未通过硬检，暂不可导出 Word");
       return;
+    }
+
+    // bib_only 精确数据软告警（不阻断）；失败降级为静默
+    try {
+      const full = await fetchExportReadiness(p);
+      if (full.warnings.length > 0) {
+        toast.warning(full.warnings.join("\n"));
+      }
+    } catch {
+      // soft-only；网络失败不挡导出
     }
 
     const template = p.template || "sci";

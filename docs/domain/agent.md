@@ -283,7 +283,8 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 
 - `lib/agent/precise-data-grounding.ts`：`extractPreciseData`（正则只认「数字+单位」，天然排除年份/纯编号/纯小数，避免误伤「in 2020」「[3]」「3 篇文献」）+ `evaluateBibOnlyPreciseData`（扫全文，命中 bib_only + 精确数据 → 告警）。
 - `lib/reference-mode.ts`：`resolveBibOnlyIndexes` / `resolveReferenceModes`，从 `source/route.ts` 抽离三态判定（full=知识库全文；abstract=有摘要；bib_only=仅书目）。性能折中：只对「无摘要」的文献查 `getFullText`。
-- 接入 `validate_citations`：结果并入 summary（`【仅书目精确数据】`，引导补原文或改定性表述）+ `data.bibOnlyPrecise`（结构化供前端）。**软信号，不阻断 exportReady**；硬检仍只看 citation-gate 的越界判断。
+- 接入 `validate_citations`：结果并入 summary（`【仅书目精确数据】`）+ `data.bibOnlyPrecise`。**软信号，不阻断 exportReady**。
+- **导出前兜底（2026-08-17，W3-AP-BIB-EXPORT）**：`assessExportReadiness`（浏览器可导入）接受可选 `bibOnlyIndexes`；服务端 `assessExportReadinessAsync`（`export-readiness-server.ts`）解析 bib_only 后再检。`POST /api/export/readiness` 供 Word/PDF 客户端 toast。硬检仍只看 citation-gate 越界。
 
 ### 论文质量评测集（两把尺）
 

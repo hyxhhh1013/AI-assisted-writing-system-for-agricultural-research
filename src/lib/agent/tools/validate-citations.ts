@@ -14,7 +14,7 @@ import {
   isCitationClaimGroundingCloseOut,
   shouldRunCitationClaimGrounding,
 } from "@/lib/agent/citation-claim-policy";
-import { evaluateBibOnlyPreciseData } from "@/lib/agent/precise-data-grounding";
+import { evaluateBibOnlyPreciseData, formatBibOnlyPreciseWarning } from "@/lib/agent/precise-data-grounding";
 import { resolveBibOnlyIndexes } from "@/lib/reference-mode";
 import { syncProjectPaperPassport } from "@/lib/project-paper-passport-sync";
 import { findReferenceRowsLite } from "@/lib/reference-rows";
@@ -167,14 +167,7 @@ export const validateCitationsTool: ToolDefinition = {
     }
 
     if (bibOnlyPrecise.length > 0) {
-      const sample = bibOnlyPrecise
-        .slice(0, 5)
-        .map((f) => `[${f.number}]（${f.data.join("、")}）`)
-        .join("，");
-      summary +=
-        `\n【仅书目精确数据】${bibOnlyPrecise.length} 条仅书目文献被引用了精确数据：${sample}。`
-        + "这些文献无全文无摘要，数据无源可核——请补原文（导入 PDF/摘要）或把该处改为定性表述。"
-        + "若为综述式概括引用（未引具体数字）可忽略。";
+      summary += `\n【仅书目精确数据】${formatBibOnlyPreciseWarning(bibOnlyPrecise)}`;
     }
 
     return {
