@@ -1,6 +1,6 @@
 # 禾书耕文（GrainScript）整体规划 v2
 
-> **状态**：生效中（2026-08-16：Wave 3.10 车间图纸进行中；3.9 已收口）  
+> **状态**：生效中（2026-08-17：Wave 3.10 车间图纸已收口；3.9 已收口）  
 > **取代**：分散的「部分规划」作为唯一战略主轴；任务状态以 `ENGINEERING_OPTIMIZATION_QUEUE.md` **§1 Phase 11 / 11b / 11c / 11d / 11e** 为准  
 > **北极星**：从「功能齐全的 AI 写作工具箱」→「可走完一篇论文全生命周期的科研写作系统」
 
@@ -19,7 +19,7 @@
 | Wave 3.7 Agent 写作质量 | ✅ 完成 | [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md)：引用接地/分节完整/WQC/摘要/审查/LIVE-EVAL 全落地（2026-08-06） |
 | Wave 3.8 Agent 单面 + 数据闭环 | ✅ 本波已落地 | [`plans/W3-AP-AGENT-HUB.md`](./plans/W3-AP-AGENT-HUB.md)：附件=唯一上传口；结果章硬门禁；Tab 收敛。队列 Phase 11c |
 | Wave 3.9 意图状态化 + 质量尺 | ✅ 已收口 | [`plans/W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md)：intentKind 进快照；规则 SSOT；收口默认 claim grounding；SHADOW cancelled。队列 Phase 11d |
-| Wave 3.10 车间图纸 | 🚧 进行中 | [`plans/W3-AP-RUNTIME.md`](./plans/W3-AP-RUNTIME.md)：工具表 SSOT + 会话轨迹 + 冻结旧扩写。不换循环。队列 Phase 11e |
+| Wave 3.10 车间图纸 | ✅ 已收口 | [`plans/W3-AP-RUNTIME.md`](./plans/W3-AP-RUNTIME.md)：工具表 SSOT + 会话轨迹 + 冻结旧扩写。不换循环。队列 Phase 11e |
 | Wave 4 导出抛光 | ⚠️ backlog | **W4-EXPORT** / ENG-PR-094 done；LaTeX/disclosure 等让路 |
 | 从 Demo→完整产品 | 📋 规划生效 | 见 [`PRODUCT_COMPLETION_PLAN.md`](./PRODUCT_COMPLETION_PLAN.md) |
 | `/academic-paper` | ➡️ 引导页 | **不是**第二套流水线；只引导进工作台 **Agent Tab** |

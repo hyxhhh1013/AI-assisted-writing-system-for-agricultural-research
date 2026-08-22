@@ -1,6 +1,6 @@
 # W3-AP-RUNTIME：把车间图纸画清楚（不换操作系统）
 
-> **状态**：规划生效（2026-08-16）  
+> **状态**：已收口（2026-08-16；ARCH-01/02/03 done）  
 > **队列**：[`ENGINEERING_OPTIMIZATION_QUEUE.md`](../ENGINEERING_OPTIMIZATION_QUEUE.md) §1 Phase 11e  
 > **域文档**：[`domain/agent.md`](../domain/agent.md)  
 > **前置**：Wave 3.9 已收口。同学已开始用 Agent 主入口。  
