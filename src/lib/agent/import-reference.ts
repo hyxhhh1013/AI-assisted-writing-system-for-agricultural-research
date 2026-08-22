@@ -11,6 +11,9 @@ import {
 } from "@/lib/reference-rows";
 import { syncProjectPaperPassport } from "@/lib/project-paper-passport-sync";
 import prisma from "@/lib/prisma";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("agent/import-reference");
 
 export interface ImportKnowledgeBridgeOptions {
   directionSlug?: string;
@@ -120,8 +123,11 @@ export async function importExternalReferenceToProject(
         researchDirection,
       });
       knowledge = { name: k.name, category: k.category, mode: k.mode };
-    } catch {
-      /* 知识库失败不阻断参考文献导入 */
+    } catch (e) {
+      log.fail("ingest external hit to knowledge failed", e, {
+        title: hit.title?.slice(0, 80),
+        doi: hit.doi,
+      });
     }
   }
 
@@ -214,8 +220,10 @@ export async function importExternalReferencesToProject(
       knowledgeCreated = k.created;
       knowledgeWithAbstract = k.withAbstract;
       knowledgeWithPdf = k.withPdf;
-    } catch {
-      /* 不阻断 */
+    } catch (e) {
+      log.fail("batch ingest external hits to knowledge failed", e, {
+        hitCount: acceptedHits.length,
+      });
     }
   }
 

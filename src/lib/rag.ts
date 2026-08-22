@@ -9,6 +9,7 @@ import {
   invalidateKnowledgeBibCache,
   listKnowledgeCategories,
 } from "@/lib/knowledge-metadata";
+import { EXTERNAL_ABSTRACT_CATEGORY } from "@/lib/knowledge-category-hints";
 import { cosineSimilarity } from "./similarity";
 import { buildRagSearchTerms, expandRagQueries, inferCategoriesFromQuery, collectIndexTermTf, shouldUseMultiQuery } from "@/lib/rag-query-expand";
 import { createLogger } from "@/lib/logger";
@@ -27,6 +28,11 @@ export interface RagChunk {
     pageStart?: number;
     pageEnd?: number;
     chunkIndex?: number;
+    /**
+     * 外部摘要 chunk 物理落在「外部摘要」索引，但 UI/范围检索归属此实验室分类。
+     * 有此字段时，按 preferredCategory 参与烟草/茶学等 scoped 检索。
+     */
+    preferredCategory?: string;
   };
 }
 
@@ -781,7 +787,62 @@ export class LocalRAG {
     if (this.subsetCache.size > SUBSET_CACHE_MAX) {
       this.subsetCache.delete(this.subsetCache.keys().next().value as string);
     }
-    return result;
+    return this.attachPreferredAbstracts(uniqueSorted, result);
+  }
+
+  /**
+   * 范围检索时把「外部摘要」里 preferredCategory 命中的 chunk 并入池。
+   * 物理索引仍在外部摘要；向量用 embRef 指向外部摘要下标（通常无 .emb → 纯 BM25）。
+   */
+  private async attachPreferredAbstracts(
+    scopeCats: string[],
+    base: {
+      chunks: RagChunk[];
+      index: InvertedIndex;
+      embRef: { category: string; localIndex: number }[];
+    },
+  ): Promise<{
+    chunks: RagChunk[];
+    index: InvertedIndex;
+    embRef: { category: string; localIndex: number }[];
+  }> {
+    const targets = scopeCats.filter(
+      (c) => c && c !== "全部" && c !== EXTERNAL_ABSTRACT_CATEGORY,
+    );
+    if (targets.length === 0) return base;
+
+    this.categoryPin.add(EXTERNAL_ABSTRACT_CATEGORY);
+    try {
+      await this.ensureCategoryLoaded(EXTERNAL_ABSTRACT_CATEGORY);
+      const absAll = this.categoryChunks.get(EXTERNAL_ABSTRACT_CATEGORY) || [];
+      if (absAll.length === 0) return base;
+
+      const targetSet = new Set(targets);
+      const already = new Set(base.chunks.map((c) => c.metadata.id));
+      const matching: { chunk: RagChunk; localIndex: number }[] = [];
+      for (let j = 0; j < absAll.length; j++) {
+        const c = absAll[j]!;
+        const pref = c.metadata.preferredCategory;
+        if (!pref || !targetSet.has(pref)) continue;
+        if (already.has(c.metadata.id)) continue;
+        matching.push({ chunk: c, localIndex: j });
+      }
+      if (matching.length === 0) return base;
+
+      const chunks = [...base.chunks, ...matching.map((m) => m.chunk)];
+      const embRef = [
+        ...base.embRef,
+        ...matching.map((m) => ({
+          category: EXTERNAL_ABSTRACT_CATEGORY,
+          localIndex: m.localIndex,
+        })),
+      ];
+      const index = await buildInvertedIndexAsync(chunks);
+      return { chunks, index, embRef };
+    } finally {
+      this.categoryPin.delete(EXTERNAL_ABSTRACT_CATEGORY);
+      this.evictCategoriesIfNeeded();
+    }
   }
 
   /** 确保 .emb 已加载（延迟到语义搜索时才加载，getFullText 不触发） */
@@ -1020,15 +1081,31 @@ export class LocalRAG {
       this.categoryPin.add(category);
       try {
         await this.ensureCategoryLoaded(category);
-        pool = this.categoryChunks.get(category) || [];
-        idx = this.categoryIndexes.get(category);
-        // 延迟加载 embedding 以备向量检索（仅首次触发 I/O，按需切片不灌入内存）
-        await this.ensureEmbeddingsLoaded(category);
+        const main = this.categoryChunks.get(category) || [];
+        const mainIdx = this.categoryIndexes.get(category) || new Map();
+        const base = {
+          chunks: main,
+          index: mainIdx,
+          embRef: main.map((_, i) => ({ category, localIndex: i })),
+        };
+        const merged = await this.attachPreferredAbstracts([category], base);
+        pool = merged.chunks;
+        idx = merged.index;
+        if (merged.chunks.length === main.length) {
+          singleCat = category;
+          poolEmbRef = null;
+          await this.ensureEmbeddingsLoaded(category);
+        } else {
+          singleCat = undefined;
+          poolEmbRef = merged.embRef;
+          await this.ensureEmbeddingsLoaded(category);
+          // 外部摘要通常无向量；ensure 无害
+          await this.ensureEmbeddingsLoaded(EXTERNAL_ABSTRACT_CATEGORY);
+        }
       } finally {
         this.categoryPin.delete(category);
         this.evictCategoriesIfNeeded();
       }
-      singleCat = category;
     } else {
       // 全库：逐分类打分再 RRF，避免 ensureAllLoaded 常驻双倍倒排索引
       return this.searchAllCategories(q, { limit, maxPerSource, perf, tStart, queryHints });

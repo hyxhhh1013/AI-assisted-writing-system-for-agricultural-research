@@ -1,7 +1,13 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterAll } from "vitest";
+import fs from "fs";
+import os from "os";
+import path from "path";
 
 const findMany = vi.fn();
 const groupBy = vi.fn();
+
+/** 测试可注入的 data 目录；缺省指向不存在路径 → 磁盘分类为空 */
+let fakeDataDir = path.join(os.tmpdir(), "km-test-nonexistent-data");
 
 vi.mock("@/lib/prisma", () => ({
   default: {
@@ -13,12 +19,30 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+vi.mock("@/lib/runtime-paths", () => ({
+  resolveProjectRuntimePath: (...parts: string[]) => {
+    const joined = parts.join("/");
+    if (joined === "data" || joined.startsWith("data/")) {
+      return joined === "data" ? fakeDataDir : path.join(fakeDataDir, parts.slice(1).join("/"));
+    }
+    return path.join(os.tmpdir(), "km-test-nonexistent", joined);
+  },
+}));
+
+const tmpDirs: string[] = [];
+afterAll(() => {
+  for (const dir of tmpDirs) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 describe("knowledge-metadata", () => {
   beforeEach(() => {
     vi.resetModules();
     findMany.mockReset();
     groupBy.mockReset();
     delete process.env.USE_METADATA_JSON_FALLBACK;
+    fakeDataDir = path.join(os.tmpdir(), "km-test-nonexistent-data");
   });
 
   it("listKnowledgeCategories reads distinct categories from Prisma", async () => {
@@ -33,6 +57,22 @@ describe("knowledge-metadata", () => {
 
     expect(cats).toEqual(["土壤", "植保"]);
     expect(findMany).toHaveBeenCalled();
+  });
+
+  it("listKnowledgeCategories merges disk index_*.json categories (外部摘要等仅索引分类)", async () => {
+    fakeDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "km-test-data-"));
+    tmpDirs.push(fakeDataDir);
+    fs.writeFileSync(
+      path.join(fakeDataDir, "index_外部摘要.json"),
+      JSON.stringify({ chunks: [] }),
+      "utf8",
+    );
+    findMany.mockResolvedValue([{ category: "土壤" }]);
+
+    const { listKnowledgeCategories } = await import("@/lib/knowledge-metadata");
+    const cats = await listKnowledgeCategories();
+
+    expect(cats).toEqual(["土壤", "外部摘要"]);
   });
 
   it("matchCategoryFromDirection picks best keyword match", async () => {

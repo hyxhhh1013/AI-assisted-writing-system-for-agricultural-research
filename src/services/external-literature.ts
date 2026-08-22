@@ -1,6 +1,8 @@
 import type {
   ExternalLiteratureHit,
   ImportExternalReferenceResponse,
+  IngestExternalKnowledgeRequest,
+  IngestExternalKnowledgeResponse,
   LiteratureSearchResponse,
 } from "@/contracts/literature";
 import type { ProjectReferenceRecord } from "@/contracts/project";
@@ -42,4 +44,20 @@ export async function importExternalReference(
   }
   const data = (await res.json()) as ImportExternalReferenceResponse;
   return data;
+}
+
+/** POST /api/knowledge/ingest-external — 加入知识库并尝试 OA 索引 */
+export async function ingestExternalToKnowledge(
+  body: IngestExternalKnowledgeRequest,
+): Promise<IngestExternalKnowledgeResponse> {
+  const res = await fetch("/api/knowledge/ingest-external", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "加入知识库失败");
+  }
+  return res.json() as Promise<IngestExternalKnowledgeResponse>;
 }

@@ -72,6 +72,7 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 - `localRAG`：BM25 + 余弦相似度，RRF 融合；**查询同义词扩展 + 多 query RRF**（`lib/rag-query-expand.ts`）
 - `getBibMap` / `getCategories` / `search` 走 Prisma 缓存
 - 写作上下文：`services/writing-context.ts` 组装 `contextText` + `refMapping`
+- **WRITE-NO-RAG（2026-08-17）**：`retrieveWritingContext` 在项目已有 soft-groundable 摘要（默认 ≥1）且未勾选知识库来源时**跳过** `searchWritingRagChunks`，避免离题库内文献抢引用位；`retrieveWritingPreview` **始终**走 RAG。强制检索：`WRITING_FORCE_KNOWLEDGE_RAG=1` 或 `WRITING_SKIP_KNOWLEDGE_RAG=0`。
 
 ### 检索性能（库变大后）
 
@@ -145,8 +146,22 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 - 大索引禁止 `readFileSync` 整文件加载（RAG-PR-002+）
 - 同名 PDF 出现在多个分类目录时，`scanFiles` 按 basename 去重**只保留首个目录副本**（其余不进索引，重建时打 ⚠ warning 列出冲突）；分类权威源是 Prisma `KnowledgeFile.category`，**不是目录名**——手动移动/复制文件到新目录不会改变分类
 - 外部导入 OA PDF（`external-knowledge-ingest.ts`）落盘前会检测跨分类同名：同名同分类复用、跨分类跳过下载，避免制造孤儿目录；增量索引失败时导入结果 `reason: "oa_pdf_index_failed"`
+- **知识库页「加入知识库」（2026-08-18）**：`POST /api/knowledge/ingest-external` 不依赖项目；有 OA → 下载+增量索引，有摘要 → 摘要 chunk，否则书目占位。UI：外部检索 Tab「加入知识库」+ 可选分类。
 - `listKnowledgeCategories()` 默认过滤「未分类」（UI 分类 Tab / `matchCategoryFromDirection` 用）；`LocalRAG.getCategories()` 传 `true` **纳入「未分类」**，确保 `papers/` 根目录 PDF（`index_未分类.json`）也能进检索
 - 外部导入无 PDF 摘要若目标分类已有 `.emb`（含真实 PDF 向量），`appendAbstractChunks` 会重定向到「外部摘要」分类，避免 chunk↔.emb 下标错位
+- **外部摘要入库（2026-08-18）**：Agent `import_reference` / `ingest-external` 写入的**无 PDF 摘要 chunk 一律落入 `index_外部摘要.json`**（避免混进烟草等 PDF 分类 `.emb`）。追加时若该分类残留错位 `.emb` 会删掉。
+- **自动归类（2026-08-18）**：Prisma `KnowledgeFile.category` 与 chunk `metadata.preferredCategory` 按研究方向 / 题名关键词自动落到实验室分类（烟草、茶学、热化学等）；检索某实验室分类时会并入匹配的外部摘要 chunk（BM25）。
+- **历史补建**：
+  - 本地 / 开发：`npm run rebuild:external-abstracts`（`--dry-run` / `--all`）
+  - **生产**（`data/` 不随部署包上传，须在服务器执行）：
+    ```bash
+    cd /home/ubuntu/grainscript
+    set -a && . ./.env && set +a
+    node scripts/rebuild-external-abstracts.cjs --all
+    pm2 reload grainscript   # 让 RAG 内存缓存重载
+    ```
+  - 或 Admin：`POST /api/admin/knowledge/rebuild-external-abstracts` body `{ "all": true }`
+- RAG `listKnowledgeCategories` 合并磁盘 `index_*.json`，避免 Prisma 未对齐时检索扫不到。全量重建保留摘要 chunk 时同步把物理分类写回「外部摘要」，并尽量保留 `preferredCategory`。
 - **全量重建保留纯摘要**：`index-pdfs.mjs` Stage 2 全量写盘时，会把旧 index 里「source 不在本次 PDF 扫描集合」的纯摘要 chunk 保留下来、统一软落到「外部摘要」分类（`scanFiles` 只扫 PDF，否则全量重建会丢这批外部导入的无 PDF 摘要）
 - 运行时 query 向量维度与 `.emb` 不一致（换 Embedding Model 未重建）会打一次性 `dim mismatch` 告警，随后向量检索退化为纯 BM25
 

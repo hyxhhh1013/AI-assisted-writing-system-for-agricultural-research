@@ -35,6 +35,8 @@ cp package.json deploy-pkg/
 cp -a prisma deploy-pkg/
 mkdir -p deploy-pkg/scripts
 cp -a scripts/deploy deploy-pkg/scripts/
+# 生产可直接 node 跑的摘要补建脚本（CommonJS，不依赖 tsx）
+cp scripts/rebuild-external-abstracts.cjs deploy-pkg/scripts/ 2>/dev/null || true
 
 echo "=== 3/3 压缩 ==="
 tar -czf deploy.tar.gz -C deploy-pkg .

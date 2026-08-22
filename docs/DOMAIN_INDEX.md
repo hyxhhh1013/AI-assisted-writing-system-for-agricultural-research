@@ -56,6 +56,7 @@
 | 文献浏览/搜索 | `src/app/knowledge/page.tsx` | `GET /api/knowledge` | `lib/knowledge-metadata.ts` |
 | RIS/BibTeX 书目导入 | 知识库页「导入书目」 | `POST /api/knowledge/import-bibliography` | `lib/bibliography-import.ts`, `lib/bib-import/*` |
 | 外部文献检索 | 知识库页「外部检索」Tab | `POST /api/literature/search` | `lib/literature-search.ts`, `services/external-literature.ts` |
+| 外部文献→知识库 | 知识库页「加入知识库」 | `POST /api/knowledge/ingest-external` | `lib/external-knowledge-ingest.ts`（OA PDF / 摘要 / 书目） |
 | 外部文献→参考文献 | 知识库页 | `POST /api/projects/:id/references/import-external` | `lib/ref-format.ts`、`lib/external-literature-format.ts`（GB/T 7714：≤3 作者全列，>3 前 3 + 等） |
 | 重建索引 | 知识库页 | `POST /api/knowledge/reindex` | `scripts/index-pdfs.mjs` |
 | 书目自动解析 | （索引 Stage 1） | — | `scripts/doc-type-registry.mjs`, `scripts/extractors/*` |
@@ -119,7 +120,7 @@
 | 全局搜索 | `admin-global-search.tsx` | `GET /api/admin/search` | Ctrl+K（用户/项目/文献/方向/Agent 会话） |
 | 仪表盘 | `admin/page.tsx` | `GET /api/admin/stats` | 单行 KPI + 告警 + 活动/分类；用量标签人性化（`admin-labels`） |
 | 用户/项目 | `admin/users`, `projects` | `/api/admin/users`, `projects` | `admin-data-table.tsx`, `use-admin-list.ts` |
-| 文献运维 | `admin/knowledge` | `GET/POST/DELETE /api/admin/knowledge`；`POST .../journal-metrics` | 索引状态、SSE 重索引、期刊 IF/分区导入 |
+| 文献运维 | `admin/knowledge` | `GET/POST/DELETE /api/admin/knowledge`；`POST .../rebuild-external-abstracts`；`POST .../journal-metrics` | 索引状态、外部摘要补建/自动归类、SSE 重索引、期刊 IF/分区导入 |
 | 研究方向 | `admin/directions` | `/api/admin/directions` | 归档/详情（资产·文献·路线图） |
 | 审查/查重记录 | `admin/reviews`, `plagiarism` | `/api/admin/reviews`, `plagiarism` | `admin-record-project-links.tsx` |
 | 使用统计 | `admin/usage` | `GET /api/admin/usage`, `usage/trends` | `services/admin-usage.ts` |

@@ -51,3 +51,27 @@ export interface ImportExternalReferenceResponse {
   references: import("@/contracts/project").ProjectReferenceRecord[];
   citation: string;
 }
+
+/** POST /api/knowledge/ingest-external — 外部文献直接入库 + 尝试 OA 索引 */
+export interface IngestExternalKnowledgeRequest {
+  hit: ExternalLiteratureHit;
+  /** 目标分类；缺省走方向/研究方向推断或「外部摘要」 */
+  category?: string;
+  directionSlug?: string;
+  researchDirection?: string;
+  /** 默认 true；false 时跳过 OA PDF 下载 */
+  tryOaPdf?: boolean;
+}
+
+export interface IngestExternalKnowledgeResponse {
+  name: string;
+  category: string;
+  created: boolean;
+  updated: boolean;
+  chunkCount: number;
+  mode: "pdf" | "abstract" | "bib_only";
+  reason?: string;
+  pdfBytes?: number;
+  /** 给人看的一句结果说明 */
+  message: string;
+}

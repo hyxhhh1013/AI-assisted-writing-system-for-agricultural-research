@@ -655,7 +655,14 @@ function stage2_filterAndWrite(allRawChunks, existingMetaByName, sizeByName = ne
         abstractOnlyChunks.push({
           ...c,
           embedding: undefined,
-          metadata: { ...(c.metadata || {}), category: ABSTRACT_ONLY_CATEGORY },
+          metadata: {
+            ...(c.metadata || {}),
+            category: ABSTRACT_ONLY_CATEGORY,
+            // 保留实验室归属，供 scoped RAG / UI；缺省时不强行改写
+            ...(c.metadata?.preferredCategory
+              ? { preferredCategory: c.metadata.preferredCategory }
+              : {}),
+          },
         });
       }
     }
@@ -664,6 +671,34 @@ function stage2_filterAndWrite(allRawChunks, existingMetaByName, sizeByName = ne
     if (!categoryMap.has(ABSTRACT_ONLY_CATEGORY)) categoryMap.set(ABSTRACT_ONLY_CATEGORY, []);
     categoryMap.get(ABSTRACT_ONLY_CATEGORY).push(...abstractOnlyChunks);
     console.log(`  Preserved ${abstractOnlyChunks.length} abstract-only chunks (无 PDF) → ${ABSTRACT_ONLY_CATEGORY}`);
+
+    // 同步 Prisma：把摘要源的 category/chunkCount 写回，避免 UI「未索引」且 RAG 分类对不上
+    const absBySource = new Map();
+    for (const c of abstractOnlyChunks) {
+      const src = c.metadata?.source;
+      if (!src) continue;
+      if (!absBySource.has(src)) absBySource.set(src, []);
+      absBySource.get(src).push(c);
+    }
+    for (const [name, chunks] of absBySource) {
+      const prev = existingMetaByName.get(name);
+      const preferred =
+        chunks.find((c) => c.metadata?.preferredCategory)?.metadata?.preferredCategory ||
+        (prev?.category && prev.category !== ABSTRACT_ONLY_CATEGORY ? prev.category : null) ||
+        ABSTRACT_ONLY_CATEGORY;
+      metadata.push({
+        name,
+        category: preferred,
+        chunkCount: chunks.length,
+        size: 0,
+        mtime: new Date().toISOString(),
+        documentType: prev?.documentType || "paper",
+        gbTag: prev?.gbTag || null,
+        bib: prev?.bib || null,
+        bibEdited: !!prev?.bibEdited,
+        parseWarning: null,
+      });
+    }
   }
 
   const activeCategories = new Set(categoryMap.keys());

@@ -111,6 +111,19 @@ ssh -i "E:/Edownload/cursor.pem" -o StrictHostKeyChecking=no ubuntu@159.75.106.2
 - 首页 `/`、`/login` 200；未认证 API 401（正常）
 - 按 §十 功能清单抽查
 
+### 6b. 外部摘要补建（按需）
+
+`data/` / `papers/` **不进部署包**。若线上已有「只入库未索引」的外部摘要，部署后在服务器执行：
+
+```bash
+cd /home/ubuntu/grainscript
+set -a && . ./.env && set +a
+node scripts/rebuild-external-abstracts.cjs --all
+pm2 reload grainscript
+```
+
+或 Admin：`POST /api/admin/knowledge/rebuild-external-abstracts`，body `{ "all": true }`。
+
 ---
 
 ## 四、踩坑清单（部署前必读）

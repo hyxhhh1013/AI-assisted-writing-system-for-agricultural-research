@@ -715,6 +715,17 @@ export const adminKnowledgeReindexSchema = z.object({
 });
 export type AdminKnowledgeReindexInput = z.infer<typeof adminKnowledgeReindexSchema>;
 
+/** Admin：补建外部摘要索引并自动归类 */
+export const adminRebuildExternalAbstractsSchema = z.object({
+  /** true：即使已有 chunk 也重算 preferredCategory / Prisma.category */
+  all: z.boolean().optional(),
+  dryRun: z.boolean().optional(),
+  researchDirection: z.string().trim().optional(),
+});
+export type AdminRebuildExternalAbstractsInput = z.infer<
+  typeof adminRebuildExternalAbstractsSchema
+>;
+
 export const adminSettingPutSchema = z.object({
   key: z.string().min(1, "缺少 key"),
   value: z.string(),
@@ -861,6 +872,15 @@ export const importExternalReferenceSchema = z.object({
   index: z.number().int().min(0).optional(),
 });
 export type ImportExternalReferenceInput = z.infer<typeof importExternalReferenceSchema>;
+
+export const ingestExternalKnowledgeSchema = z.object({
+  hit: externalLiteratureHitSchema,
+  category: z.string().trim().min(1).max(80).optional(),
+  directionSlug: z.string().trim().min(1).max(80).optional(),
+  researchDirection: z.string().trim().max(500).optional(),
+  tryOaPdf: z.boolean().optional(),
+});
+export type IngestExternalKnowledgeInput = z.infer<typeof ingestExternalKnowledgeSchema>;
 
 // === Direction ===
 

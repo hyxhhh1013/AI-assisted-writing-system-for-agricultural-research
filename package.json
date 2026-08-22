@@ -21,6 +21,7 @@
     "eval:quality": "npx --yes tsx scripts/eval-quality.ts",
     "eval:pipeline": "npx --yes tsx scripts/eval-pipeline-paper.ts",
     "index-docs": "node scripts/index-pdfs.mjs",
+    "rebuild:external-abstracts": "npx --yes tsx scripts/rebuild-external-abstracts.ts",
     "create-admin": "node scripts/create-admin.mjs",
     "rag:convert-index": "node scripts/convert-index-to-binary.mjs",
     "rag:convert-index:dry": "node scripts/convert-index-to-binary.mjs --dry-run",

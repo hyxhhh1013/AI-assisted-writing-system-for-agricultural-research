@@ -13,11 +13,15 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Copy, ExternalLink, Loader2, Search, BookMarked } from "lucide-react";
+import { Copy, Database, ExternalLink, Loader2, Search, BookMarked } from "lucide-react";
 import type { ExternalLiteratureHit } from "@/contracts/literature";
 import { formatExternalLiteratureHit } from "@/lib/external-literature-format";
 import { cn } from "@/lib/utils";
-import { importExternalReference, searchLiterature } from "@/services/external-literature";
+import {
+  importExternalReference,
+  ingestExternalToKnowledge,
+  searchLiterature,
+} from "@/services/external-literature";
 import { listProjects, type ProjectListItem } from "@/services/project";
 
 const SOURCE_LABELS: Record<ExternalLiteratureHit["source"], string> = {
@@ -31,33 +35,38 @@ function HitCard({
   hit,
   projectId,
   directionSlug,
+  category,
   onImported,
 }: {
   hit: ExternalLiteratureHit;
   projectId: string;
   directionSlug?: string;
-  onImported: (message: string, imported?: boolean) => void;
+  /** 知识库目标分类；空则服务端自动推断 */
+  category?: string;
+  onImported: (message: string, kind?: "reference" | "corpus" | "knowledge") => void;
 }) {
-  const [importing, setImporting] = useState(false);
+  const [importingRef, setImportingRef] = useState(false);
+  const [importingKb, setImportingKb] = useState(false);
   const citation = formatExternalLiteratureHit(hit);
   const link = hit.doi ? `https://doi.org/${hit.doi}` : hit.url;
+  const busy = importingRef || importingKb;
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(citation);
     onImported("已复制 GB/T 引用");
   };
 
-  const handleImport = async () => {
+  const handleImportRef = async () => {
     if (directionSlug) {
-      setImporting(true);
+      setImportingRef(true);
       try {
         const { importExternalToCorpus } = await import("@/services/direction-literature");
         await importExternalToCorpus(directionSlug, hit, "supporting");
-        onImported("已加入方向文献 corpus", true);
+        onImported("已加入方向文献 corpus", "corpus");
       } catch (e) {
-        onImported(e instanceof Error ? e.message : "导入失败", false);
+        onImported(e instanceof Error ? e.message : "导入失败");
       } finally {
-        setImporting(false);
+        setImportingRef(false);
       }
       return;
     }
@@ -65,14 +74,30 @@ function HitCard({
       onImported("请先选择项目");
       return;
     }
-    setImporting(true);
+    setImportingRef(true);
     try {
       await importExternalReference(projectId, hit);
-      onImported("已加入项目参考文献", true);
+      onImported("已加入项目参考文献（并尝试同步知识库）", "reference");
     } catch (e) {
-      onImported(e instanceof Error ? e.message : "导入失败", false);
+      onImported(e instanceof Error ? e.message : "导入失败");
     } finally {
-      setImporting(false);
+      setImportingRef(false);
+    }
+  };
+
+  const handleIngestKnowledge = async () => {
+    setImportingKb(true);
+    try {
+      const res = await ingestExternalToKnowledge({
+        hit,
+        category: category?.trim() || undefined,
+        directionSlug: directionSlug || undefined,
+      });
+      onImported(res.message, "knowledge");
+    } catch (e) {
+      onImported(e instanceof Error ? e.message : "加入知识库失败");
+    } finally {
+      setImportingKb(false);
     }
   };
 
@@ -114,17 +139,37 @@ function HitCard({
               查看
             </a>
           )}
-          <Button variant="outline" size="sm" onClick={() => void handleCopy()}>
+          <Button variant="outline" size="sm" onClick={() => void handleCopy()} disabled={busy}>
             <Copy className="mr-1 h-3.5 w-3.5" />
             复制 GB/T
           </Button>
-          <Button size="sm" disabled={importing || !projectId} onClick={() => void handleImport()}>
-            {importing ? (
+          {!directionSlug && (
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => void handleIngestKnowledge()}
+              title="有 OA 则下载 PDF 并增量索引；仅摘要则摘要入库；否则仅书目占位"
+            >
+              {importingKb ? (
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Database className="mr-1 h-3.5 w-3.5" />
+              )}
+              加入知识库
+            </Button>
+          )}
+          <Button
+            size="sm"
+            disabled={busy || (!directionSlug && !projectId)}
+            onClick={() => void handleImportRef()}
+          >
+            {importingRef ? (
               <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
             ) : (
               <BookMarked className="mr-1 h-3.5 w-3.5" />
             )}
-            加入参考文献
+            {directionSlug ? "加入 corpus" : "加入参考文献"}
           </Button>
         </div>
       </CardContent>
@@ -136,16 +181,21 @@ export function KnowledgeExternalSearch({
   fixedProjectId,
   directionSlug,
   compact = false,
+  categories,
   onReferenceImported,
   onCorpusImported,
+  onKnowledgeIngested,
 }: {
   /** 工作台内嵌：锁定当前项目，隐藏项目下拉 */
   fixedProjectId?: string;
   /** Direction 资产盘点：加入文献 corpus */
   directionSlug?: string;
   compact?: boolean;
+  /** 知识库页传入分类列表（不含「全部」） */
+  categories?: string[];
   onReferenceImported?: () => void;
   onCorpusImported?: () => void;
+  onKnowledgeIngested?: () => void;
 } = {}) {
   const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
@@ -154,7 +204,10 @@ export function KnowledgeExternalSearch({
   const [searched, setSearched] = useState(false);
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
   const [projectId, setProjectId] = useState(fixedProjectId ?? "");
+  const [category, setCategory] = useState<string>("");
   const [toast, setToast] = useState<string | null>(null);
+
+  const categoryOptions = (categories ?? []).filter((c) => c && c !== "全部");
 
   useEffect(() => {
     if (directionSlug || fixedProjectId) {
@@ -172,14 +225,16 @@ export function KnowledgeExternalSearch({
     });
   }, [searchParams, fixedProjectId, directionSlug]);
 
-  const showToast = useCallback((message: string, imported?: boolean) => {
-    setToast(message);
-    window.setTimeout(() => setToast(null), 3000);
-    if (imported) {
-      if (directionSlug) onCorpusImported?.();
-      else onReferenceImported?.();
-    }
-  }, [onReferenceImported, onCorpusImported, directionSlug]);
+  const showToast = useCallback(
+    (message: string, kind?: "reference" | "corpus" | "knowledge") => {
+      setToast(message);
+      window.setTimeout(() => setToast(null), 4500);
+      if (kind === "corpus") onCorpusImported?.();
+      else if (kind === "reference") onReferenceImported?.();
+      else if (kind === "knowledge") onKnowledgeIngested?.();
+    },
+    [onReferenceImported, onCorpusImported, onKnowledgeIngested],
+  );
 
   const handleSearch = async () => {
     const q = query.trim();
@@ -204,7 +259,10 @@ export function KnowledgeExternalSearch({
     <div className="space-y-4">
       {!compact && (
         <p className="text-sm text-muted-foreground">
-          聚合 OpenAlex、Semantic Scholar、CrossRef、PubMed。结果可加入项目参考文献（无需入库 RAG）。
+          聚合 OpenAlex、Semantic Scholar、CrossRef、PubMed。
+          <strong className="font-medium text-foreground">「加入知识库」</strong>
+          会尝试 OA PDF 下载并增量索引；仅有摘要则摘要入库；无 OA/摘要则仅书目占位。
+          「加入参考文献」写入当前项目（也会顺带尝试同步知识库）。
         </p>
       )}
 
@@ -224,6 +282,30 @@ export function KnowledgeExternalSearch({
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "检索"}
           </Button>
         </div>
+
+        {!directionSlug && categoryOptions.length > 0 && (
+          <div className="w-full md:w-48">
+            <Select
+              value={category || "__auto__"}
+              onValueChange={(value) => {
+                if (!value || value === "__auto__") setCategory("");
+                else setCategory(value);
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="入库分类" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__auto__">自动分类</SelectItem>
+                {categoryOptions.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {!fixedProjectId && !directionSlug && (
           <div className="w-full md:w-64">
@@ -249,7 +331,9 @@ export function KnowledgeExternalSearch({
       </div>
 
       {!fixedProjectId && !directionSlug && projects.length === 0 && (
-        <p className="text-sm text-amber-700">登录后创建项目，即可将外部文献加入参考文献。</p>
+        <p className="text-sm text-amber-700">
+          未创建项目时仍可「加入知识库」；「加入参考文献」需要先有项目。
+        </p>
       )}
 
       {toast && (
@@ -276,6 +360,7 @@ export function KnowledgeExternalSearch({
               hit={hit}
               projectId={projectId}
               directionSlug={directionSlug}
+              category={category}
               onImported={showToast}
             />
           ))}

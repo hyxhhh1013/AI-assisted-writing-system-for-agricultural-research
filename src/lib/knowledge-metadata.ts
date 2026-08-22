@@ -333,6 +333,9 @@ export async function getKnowledgeFileByName(name: string): Promise<KnowledgeFil
  * 知识库分类列表（不含「全部」）。
  * @param includeUncategorized 为 true 时纳入「未分类」（RAG 检索侧需要遍历 index_未分类.json；
  *   否则「未分类」目录下的 PDF 永远检索不到）。默认 false 供 UI/分类匹配使用。
+ *
+ * RAG 侧还会合并 `data/index_*.json` 磁盘分类，避免「外部摘要」等仅有索引文件、
+ * Prisma 尚未对齐时检索扫不到。
  */
 export async function listKnowledgeCategories(
   includeUncategorized = false,
@@ -345,14 +348,31 @@ export async function listKnowledgeCategories(
     Boolean(c) && (includeUncategorized || c !== "未分类");
   const fromDb = rows.map((r) => r.category).filter(keepCat);
 
+  const fromDisk = listCategoriesFromIndexFiles().filter(keepCat);
+
   if (!isMetadataJsonFallbackEnabled()) {
-    return Array.from(new Set(fromDb));
+    return Array.from(new Set([...fromDb, ...fromDisk]));
   }
 
   const fromJson = loadMetadataJsonFallback()
     .map((m) => m.category)
     .filter(keepCat);
-  return Array.from(new Set([...fromDb, ...fromJson]));
+  return Array.from(new Set([...fromDb, ...fromDisk, ...fromJson]));
+}
+
+/** 扫描 data/index_<分类>.json → 分类名（供 RAG 发现外部摘要等） */
+function listCategoriesFromIndexFiles(): string[] {
+  try {
+    const dataDir = resolveProjectRuntimePath("data");
+    if (!fs.existsSync(dataDir)) return [];
+    return fs
+      .readdirSync(dataDir)
+      .filter((f) => f.startsWith("index_") && f.endsWith(".json"))
+      .map((f) => f.slice("index_".length, -".json".length))
+      .filter((c) => Boolean(c) && !c.includes(".") && c !== "json");
+  } catch {
+    return [];
+  }
 }
 
 /** 按研究方向关键词匹配最相关的分类（大纲等场景） */

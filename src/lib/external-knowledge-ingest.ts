@@ -18,6 +18,10 @@ import {
 } from "@/lib/bib-import/import-names";
 import { normalizeBibliographyDoi } from "@/lib/bib-import/doi";
 import { matchCategoryFromDirection } from "@/lib/knowledge-metadata";
+import {
+  EXTERNAL_ABSTRACT_CATEGORY,
+  inferPrimaryCategoryFromText,
+} from "@/lib/knowledge-category-hints";
 import { resolveProjectRuntimePath } from "@/lib/runtime-paths";
 import { isSoftGroundable } from "@/lib/reference-evidence";
 import { downloadOaPdf, isOaAutoImportEnabled } from "@/lib/oa-download";
@@ -30,7 +34,9 @@ const log = createLogger("external-knowledge-ingest");
 
 const DATA_DIR = resolveProjectRuntimePath("data");
 const ARTICLES_DIR = resolveProjectRuntimePath(process.env.RAG_ARTICLES_DIR || "papers");
-const FALLBACK_CATEGORY = "外部摘要";
+/** @deprecated 使用 knowledge-category-hints 导出；此处 re-export 保持兼容 */
+export { EXTERNAL_ABSTRACT_CATEGORY } from "@/lib/knowledge-category-hints";
+const FALLBACK_CATEGORY = EXTERNAL_ABSTRACT_CATEGORY;
 const ABS_CHUNK_SIZE = 1200;
 
 export type ExternalKnowledgeIngestMode = "pdf" | "abstract" | "bib_only";
@@ -89,7 +95,10 @@ export async function resolveExternalIngestCategory(
   opts: Pick<
     ExternalKnowledgeIngestOptions,
     "category" | "directionSlug" | "researchDirection"
-  >,
+  > & {
+    /** 题名 / 期刊 / 摘要等，用于关键词自动归类 */
+    hintText?: string;
+  },
 ): Promise<string> {
   if (opts.category?.trim()) return opts.category.trim();
 
@@ -104,6 +113,13 @@ export async function resolveExternalIngestCategory(
 
   if (opts.researchDirection?.trim()) {
     const matched = await matchCategoryFromDirection(opts.researchDirection);
+    if (matched) return matched;
+  }
+
+  if (opts.hintText?.trim()) {
+    const fromHints = inferPrimaryCategoryFromText(opts.hintText);
+    if (fromHints) return fromHints;
+    const matched = await matchCategoryFromDirection(opts.hintText);
     if (matched) return matched;
   }
 
@@ -125,31 +141,49 @@ function loadCategoryChunks(category: string): RagChunk[] {
   }
 }
 
-/** 仅追加，不删除/重排，避免与 index_*.emb 下标错位 */
+/**
+ * 仅追加，不删除/重排。
+ * 物理索引一律写入「外部摘要」；`preferredCategory` 写入 metadata 供 UI / 范围检索归属实验室分类。
+ */
 function appendAbstractChunks(params: {
-  category: string;
+  /** UI / scoped 检索归属的实验室分类 */
+  preferredCategory: string;
   sourceName: string;
   title: string;
   abstract: string;
-}): { chunkCount: number; appended: boolean; category: string } {
+}): { chunkCount: number; appended: boolean; indexCategory: string; preferredCategory: string } {
   const { sourceName, title, abstract } = params;
-  let category = params.category;
-
-  // 目标分类已有 .emb（含真实 PDF 向量）：无向量摘要混入会导致 chunk↔.emb 下标错位，
-  // 且全量重建（只扫 papers/ PDF）会把这批摘要 chunk 丢掉；统一软落到「外部摘要」。
-  if (fs.existsSync(path.join(DATA_DIR, `index_${category}.emb`))) {
-    log.warn("abstract chunk redirected to fallback category (target has .emb)", {
-      from: category,
-      to: FALLBACK_CATEGORY,
+  const preferredCategory =
+    params.preferredCategory?.trim() || EXTERNAL_ABSTRACT_CATEGORY;
+  const indexCategory = EXTERNAL_ABSTRACT_CATEGORY;
+  if (preferredCategory !== indexCategory) {
+    log.info("abstract chunk indexed under external-abstract with preferred category", {
+      preferredCategory,
+      indexCategory,
       source: sourceName,
     });
-    category = FALLBACK_CATEGORY;
   }
 
-  const chunks = loadCategoryChunks(category);
+  const chunks = loadCategoryChunks(indexCategory);
   const existing = chunks.filter((c) => c.metadata?.source === sourceName);
   if (existing.length > 0) {
-    return { chunkCount: existing.length, appended: false, category };
+    // 已有 chunk：补写 preferredCategory，便于历史数据归属
+    let patched = false;
+    for (const c of existing) {
+      if (c.metadata.preferredCategory !== preferredCategory) {
+        c.metadata.preferredCategory = preferredCategory;
+        patched = true;
+      }
+    }
+    if (patched) {
+      fs.writeFileSync(indexPathFor(indexCategory), JSON.stringify(chunks), "utf-8");
+    }
+    return {
+      chunkCount: existing.length,
+      appended: false,
+      indexCategory,
+      preferredCategory,
+    };
   }
 
   const parts = splitAbstract(abstract, ABS_CHUNK_SIZE);
@@ -160,7 +194,8 @@ function appendAbstractChunks(params: {
         : part,
     metadata: {
       source: sourceName,
-      category,
+      category: indexCategory,
+      preferredCategory,
       id: `${sourceName}#abs${i}`,
       documentType: "paper",
       chunkIndex: i,
@@ -168,8 +203,25 @@ function appendAbstractChunks(params: {
   }));
 
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(indexPathFor(category), JSON.stringify([...chunks, ...toAdd]), "utf-8");
-  return { chunkCount: toAdd.length, appended: true, category };
+  // 摘要分类禁止保留错位 .emb（仅文本 BM25；向量需全量/分类重建时按 JSON 长度重算）
+  const embPath = path.join(DATA_DIR, `index_${indexCategory}.emb`);
+  if (fs.existsSync(embPath)) {
+    try {
+      fs.unlinkSync(embPath);
+      log.warn("removed stale .emb for abstract-only category after append", {
+        category: indexCategory,
+      });
+    } catch (e) {
+      log.warn("failed to remove stale abstract .emb", e);
+    }
+  }
+  fs.writeFileSync(indexPathFor(indexCategory), JSON.stringify([...chunks, ...toAdd]), "utf-8");
+  return {
+    chunkCount: toAdd.length,
+    appended: true,
+    indexCategory,
+    preferredCategory,
+  };
 }
 
 async function findDuplicateFile(hit: ExternalLiteratureHit): Promise<{
@@ -298,7 +350,8 @@ async function ingestOne(
 ): Promise<ExternalKnowledgeIngestResult & { indexMutated: boolean; reindexFile?: string }> {
   const title = hit.title?.trim() || "未命名文献";
   const bib = hitToBib(hit);
-  const category = await resolveExternalIngestCategory(opts);
+  const hintText = [title, hit.journal, hit.abstract].filter(Boolean).join(" ");
+  const category = await resolveExternalIngestCategory({ ...opts, hintText });
   const hasAbs = isSoftGroundable(hit.abstract);
   const tryOa = opts.tryOaPdf !== false;
 
@@ -385,28 +438,30 @@ async function ingestOne(
     let chunkCount = dup.chunkCount;
     let mode: ExternalKnowledgeIngestMode = chunkCount > 0 ? "abstract" : "bib_only";
     let indexMutated = false;
+    let mergedCategory = dup.category || category;
 
     if (hasAbs && chunkCount <= 0) {
-      const { chunkCount: n, appended } = appendAbstractChunks({
-        category: dup.category || category,
+      const { chunkCount: n, appended, preferredCategory } = appendAbstractChunks({
+        preferredCategory: dup.category || category,
         sourceName: dup.name,
         title,
         abstract: hit.abstract!.trim(),
       });
-      if (appended) {
+      if (appended || n > 0) {
         chunkCount = n;
         mode = "abstract";
-        indexMutated = true;
+        indexMutated = appended;
+        mergedCategory = preferredCategory;
         await prisma.knowledgeFile.update({
           where: { name: dup.name },
-          data: { chunkCount: n },
+          data: { chunkCount: n, category: preferredCategory },
         });
       }
     }
 
     return {
       name: dup.name,
-      category: dup.category || category,
+      category: mergedCategory,
       created: false,
       updated: true,
       chunkCount,
@@ -452,23 +507,23 @@ async function ingestOne(
 
   let chunkCount = 0;
   let indexMutated = false;
-  let softCategory = category;
+  let uiCategory = category;
   if (hasAbs) {
-    const { chunkCount: n, appended, category: finalCat } = appendAbstractChunks({
-      category,
+    const { chunkCount: n, appended, preferredCategory } = appendAbstractChunks({
+      preferredCategory: category,
       sourceName: name,
       title,
       abstract: hit.abstract!.trim(),
     });
     chunkCount = n;
     indexMutated = appended;
-    softCategory = finalCat;
+    uiCategory = preferredCategory;
   }
 
   await prisma.knowledgeFile.create({
     data: {
       name,
-      category: softCategory,
+      category: uiCategory,
       documentType: "paper",
       size: 0,
       chunkCount,
@@ -480,7 +535,7 @@ async function ingestOne(
 
   return {
     name,
-    category,
+    category: uiCategory,
     created: true,
     updated: false,
     chunkCount,
@@ -574,4 +629,137 @@ export async function ingestExternalHitsToKnowledge(
   }
 
   return { results, created, updated, withAbstract, withPdf };
+}
+
+export interface RebuildExternalAbstractsOptions {
+  /** 仅处理 chunkCount===0（默认 true）；false 时也会补 preferredCategory / 修正 UI 分类 */
+  onlyMissingChunks?: boolean;
+  /** 干跑：只统计不写盘 */
+  dryRun?: boolean;
+  /** 覆盖自动归类时的研究方向提示 */
+  researchDirection?: string;
+}
+
+export interface RebuildExternalAbstractsResult {
+  scanned: number;
+  indexed: number;
+  categoryUpdated: number;
+  skipped: number;
+  dryRun: boolean;
+  samples: Array<{ name: string; category: string; chunkCount: number; action: string }>;
+}
+
+/**
+ * 把已入库、无 PDF、有摘要的 KnowledgeFile 补建「外部摘要」索引，并自动归类到实验室分类。
+ * 物理 chunk 仍在 index_外部摘要.json；Prisma.category / metadata.preferredCategory = 实验室分类。
+ */
+export async function rebuildExternalAbstractIndexes(
+  opts: RebuildExternalAbstractsOptions = {},
+): Promise<RebuildExternalAbstractsResult> {
+  const onlyMissing = opts.onlyMissingChunks !== false;
+  const dryRun = opts.dryRun === true;
+  const rows = await prisma.knowledgeFile.findMany({
+    where: { size: 0 },
+    select: { name: true, category: true, chunkCount: true, bib: true },
+  });
+
+  let indexed = 0;
+  let categoryUpdated = 0;
+  let skipped = 0;
+  const samples: RebuildExternalAbstractsResult["samples"] = [];
+  let mutated = false;
+
+  for (const row of rows) {
+    let bib: KnowledgeBib & { abstract?: string } = {};
+    try {
+      bib = row.bib ? (JSON.parse(row.bib) as KnowledgeBib & { abstract?: string }) : {};
+    } catch {
+      skipped += 1;
+      continue;
+    }
+    const abstract = typeof bib.abstract === "string" ? bib.abstract.trim() : "";
+    if (!isSoftGroundable(abstract)) {
+      skipped += 1;
+      continue;
+    }
+
+    const title =
+      bib.title?.trim() ||
+      row.name.replace(/^\[(摘要|书目)\]\s*/, "").replace(/\.pdf$/i, "") ||
+      row.name;
+    const hintText = [title, bib.journal, abstract].filter(Boolean).join(" ");
+    const preferred = await resolveExternalIngestCategory({
+      researchDirection: opts.researchDirection,
+      hintText,
+      // 已有明确实验室分类则保留；「外部摘要/未分类」允许重算
+      category:
+        row.category &&
+        row.category !== EXTERNAL_ABSTRACT_CATEGORY &&
+        row.category !== "未分类"
+          ? row.category
+          : undefined,
+    });
+
+    const needsChunks = row.chunkCount <= 0;
+    if (onlyMissing && !needsChunks && row.category === preferred) {
+      skipped += 1;
+      continue;
+    }
+
+    if (dryRun) {
+      samples.push({
+        name: row.name,
+        category: preferred,
+        chunkCount: needsChunks ? 1 : row.chunkCount,
+        action: needsChunks ? "would_index" : "would_fix_category",
+      });
+      if (needsChunks) indexed += 1;
+      else categoryUpdated += 1;
+      continue;
+    }
+
+    const { chunkCount, appended, preferredCategory } = appendAbstractChunks({
+      preferredCategory: preferred,
+      sourceName: row.name,
+      title,
+      abstract,
+    });
+    if (appended) {
+      indexed += 1;
+      mutated = true;
+    }
+
+    const catChanged = row.category !== preferredCategory || row.chunkCount !== chunkCount;
+    if (catChanged) {
+      await prisma.knowledgeFile.update({
+        where: { name: row.name },
+        data: { category: preferredCategory, chunkCount, mtime: new Date() },
+      });
+      if (row.category !== preferredCategory) categoryUpdated += 1;
+      mutated = true;
+    }
+
+    if (samples.length < 30) {
+      samples.push({
+        name: row.name,
+        category: preferredCategory,
+        chunkCount,
+        action: appended ? "indexed" : catChanged ? "category_fixed" : "noop",
+      });
+    }
+  }
+
+  if (mutated && !dryRun) {
+    invalidateBibCache();
+    await localRAG.reload().catch((e) => log.warn("rag reload after rebuild abstracts", e));
+  }
+
+  return {
+    scanned: rows.length,
+    indexed,
+    categoryUpdated,
+    skipped,
+    dryRun,
+    samples,
+  };
 }

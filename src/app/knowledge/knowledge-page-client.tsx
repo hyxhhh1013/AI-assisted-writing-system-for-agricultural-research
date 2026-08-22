@@ -76,7 +76,10 @@ export default function KnowledgePageClient() {
         </TabsContent>
 
         <TabsContent value="external" className="mt-0">
-          <KnowledgeExternalSearch />
+          <KnowledgeExternalSearch
+            categories={kb.categoryOptions}
+            onKnowledgeIngested={() => void kb.fetchFiles()}
+          />
         </TabsContent>
       </Tabs>
 
