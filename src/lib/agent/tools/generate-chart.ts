@@ -1,10 +1,10 @@
 import type { ChartType } from "@/contracts/data-source";
-import type { ProjectChartAsset } from "@/contracts/figure";
 import {
   buildAgentPlotRefineHref,
   buildChartReplayFigureSpec,
   chartTypeToFigureId,
   encodeChartAssetReplay,
+  type ProjectChartAsset,
 } from "@/contracts/figure";
 import {
   insertOrReplaceAgentSectionImage,
@@ -26,6 +26,9 @@ import {
 } from "@/lib/agent/writing-sections";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import { parseChartTabular } from "@/lib/chart-tabular-parse";
+import { chartSpecToFigureSpec } from "@/contracts/chart-spec";
+import { compileChartSpec, chartSpecToPlotConfig } from "@/lib/chart-spec-compiler";
+import { liftAgentChartExtras } from "@/lib/chart-spec-extras";
 import {
   AGENT_CHART_TYPES,
   isAgentChartType,
@@ -190,18 +193,23 @@ async function generateOneChart(input: {
 
   const title = input.title || "图表";
   const caption = input.caption || title;
-  const style = {
-    preset: input.preset || "nature",
-    dpi: 600,
-    export_formats: "png,svg",
-  };
-  const config: Record<string, unknown> = {
-    chart_type: chartType,
+  const compiled = compileChartSpec({
+    chartType,
+    csv: input.csvData,
+    chartIndex: input.chartIndex,
     title,
-    ...(input.xLabel ? { x_label: input.xLabel } : {}),
-    ...(input.yLabel ? { y_label: input.yLabel } : {}),
-    style,
+    caption,
+    xLabel: input.xLabel,
+    yLabel: input.yLabel,
+    preset: input.preset || "nature",
+    extras: input.extras,
+    significance: input.extras.significance,
+  });
+  const fromSpec = chartSpecToPlotConfig(compiled.spec);
+  const config: Record<string, unknown> = {
     ...input.extras,
+    ...fromSpec,
+    title,
   };
 
   try {
@@ -212,23 +220,28 @@ async function generateOneChart(input: {
       mode: "generic",
     });
 
-    const figureSpecEnc = buildFigureSpecEnc({
-      csvData: input.csvData,
-      chartType,
-      title,
-      caption,
-      xLabel: input.xLabel,
-      yLabel: input.yLabel,
-      style: isRecord(input.extras.style)
-        ? (input.extras.style as Record<string, unknown>)
-        : style,
-    });
+    const finalSpec = generated.chartSpec ?? compiled.spec;
+    const figureSpecEnc =
+      encodeChartAssetReplay(chartSpecToFigureSpec(finalSpec))
+      || buildFigureSpecEnc({
+        csvData: input.csvData,
+        chartType,
+        title,
+        caption,
+        xLabel: finalSpec.encoding.xLabel,
+        yLabel: finalSpec.encoding.yLabel,
+        style: {
+          preset: finalSpec.journal.preset,
+          columns: finalSpec.journal.columns,
+        },
+      });
 
+    const blocked = generated.qaReport?.verdict === "block";
     let persisted: ProjectChartAsset | null = null;
     let insertedSection: string | undefined;
 
     let insertMode: "replaced" | "appended" | undefined;
-    if (input.sectionKey) {
+    if (!blocked && input.sectionKey) {
       const ins = await insertOrReplaceAgentSectionImage(
         input.ctx.userId,
         input.ctx.projectId!,
@@ -244,7 +257,7 @@ async function generateOneChart(input: {
       insertedSection = input.sectionKey;
     }
 
-    if (input.persistToProject) {
+    if (!blocked && input.persistToProject) {
       persisted = await persistAgentChart(input.ctx.userId, input.ctx.projectId!, {
         figureId: chartType,
         caption,
@@ -268,10 +281,21 @@ async function generateOneChart(input: {
         : undefined;
 
     const bits = [`已生成 ${chartType}「${title}」`];
+    if (generated.specPatches?.length) {
+      bits.push(`已自动修补 ${generated.specPatches.length} 项（渲 ${generated.renderCount ?? 1} 次）`);
+    }
+    if (blocked) bits.push("质量未过线，未入库也未插入章节");
     if (persisted) bits.push("已登记到项目图表库");
     if (insertMode === "replaced") bits.push(`已就地替换章节 ${insertedSection} 中的旧图`);
     else if (insertedSection) bits.push(`已插入章节 ${insertedSection}`);
     if (figureSpecEnc) bits.push("可回放编辑");
+    if (generated.exportManifest?.files.svg || generated.exportManifest?.files.pdf) {
+      bits.push("已导出 svg/pdf");
+    }
+    if (generated.exportManifest?.files.csv) bits.push("含源 CSV");
+    if (generated.exportManifest?.files.manifest) {
+      bits.push(`清单 ${generated.exportManifest.files.manifest}`);
+    }
 
     return {
       success: true,
@@ -285,9 +309,16 @@ async function generateOneChart(input: {
         persisted,
         insertedSection,
         insertMode,
+        blocked: blocked || undefined,
         hasReplay: Boolean(figureSpecEnc),
         href,
         figureSpecEnc,
+        qaReport: generated.qaReport,
+        exportManifest: generated.exportManifest,
+        csvUrl: generated.csvUrl,
+        chartSpec: finalSpec,
+        specPatches: generated.specPatches,
+        renderCount: generated.renderCount,
       },
       summary: bits.join("；"),
     };
@@ -305,7 +336,7 @@ export const generateChartTool: ToolDefinition = {
     + "期刊出图要点：①误差棒——数据列加 _sd/_se/_ci 后缀（如「产量,产量_sd」）自动渲染；"
     + "②轴标签带单位——务必传 x_label/y_label（如 y_label=\"产量 (kg/ha)\"）；"
     + "③多系列对比——多列数据即可，图例自动出现；④选型——对比/分组→bar_grouped，趋势→line，占比→pie，热区→heatmap，森林图→forest（四列：研究,估计值,CI下限,CI上限）；"
-    + "⑤显著性——bar_grouped 对比显著时传 configJson={\"significance\":[{\"category\":0,\"series\":0,\"value\":\"**\",\"label\":\"p<0.01\"},{\"fromCategory\":0,\"toCategory\":1,\"value\":\"*\"}]}（单柱星号/跨类括号；series 缺省=该类最高柱）。"
+    + "⑤显著性——bar_grouped 对比显著时传 significanceJson=[{\"category\":0,\"series\":0,\"value\":\"**\",\"label\":\"p<0.01\"},{\"fromCategory\":0,\"toCategory\":1,\"value\":\"*\"}]（单柱星号/跨类括号；series 缺省=该类最高柱）。不要传 fig_width/dpi/tight_layout。"
     + "改图务必传 replaceImageUrl（旧图 URL）就地替换，勿再追加一张。"
     + "无数据不要编造数值",
   parameters: {
@@ -355,11 +386,16 @@ export const generateChartTool: ToolDefinition = {
         description:
           "可选：论文章节 key（如 results）。提供则插入 Markdown 图片到该章节并关联资产",
       },
+      significanceJson: {
+        type: "string",
+        description:
+          "显著性标注 JSON 数组。例：[{\"category\":0,\"value\":\"**\"},{\"fromCategory\":0,\"toCategory\":1,\"value\":\"*\"}]",
+      },
       configJson: {
         type: "string",
         description:
-          "可选：额外 config 字段 JSON 对象字符串。bar_grouped 可传 significance 数组标注显著性，"
-          + "如 {\"significance\":[{\"category\":0,\"value\":\"**\"},{\"fromCategory\":0,\"toCategory\":1,\"value\":\"*\"}]}",
+          "已弃用：仅接受白名单字段（significance/dual_y/donut/show_values 等）。"
+          + "刊宽、DPI、tight_layout、style 会被丢弃。显著性请改用 significanceJson。",
       },
       preset: {
         type: "string",
@@ -516,17 +552,15 @@ export const generateChartTool: ToolDefinition = {
       }
     }
 
-    let extras: Record<string, unknown> = {};
-    if (params.configJson) {
-      try {
-        const parsed = JSON.parse(String(params.configJson)) as unknown;
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          extras = parsed as Record<string, unknown>;
-        }
-      } catch {
-        return { success: false, error: "configJson 必须是 JSON 对象字符串" };
-      }
+    const lifted = liftAgentChartExtras({
+      configJson: params.configJson,
+      significanceJson: params.significanceJson,
+    });
+    if (lifted.error) {
+      return { success: false, error: lifted.error };
     }
+    const extras = lifted.extras;
+    const extrasDropped = lifted.dropped;
 
     const indices = parseChartIndices(params);
     if (indices.length > MAX_BATCH_CHARTS) {
@@ -582,15 +616,18 @@ export const generateChartTool: ToolDefinition = {
           count: results.length,
           charts: results,
           errors: errors.length ? errors : undefined,
+          extrasDropped: extrasDropped.length ? extrasDropped : undefined,
         },
-        summary:
+        summary: noteDroppedExtras(
           `已生成 ${results.length} 张图`
           + (errors.length ? `（${errors.length} 张失败）` : ""),
+          extrasDropped,
+        ),
       };
     }
 
     // —— 单次：手写 csvData ——
-    return generateOneChart({
+    const one = await generateOneChart({
       ctx,
       csvData: String(params.csvData ?? "").trim(),
       chartType: String(params.chartType ?? "").trim(),
@@ -605,6 +642,13 @@ export const generateChartTool: ToolDefinition = {
       replaceImageUrl,
       replaceChartId,
     });
+    if (one.success) {
+      return {
+        ...one,
+        summary: noteDroppedExtras(one.summary, extrasDropped),
+      };
+    }
+    return one;
   },
 };
 
@@ -653,6 +697,8 @@ function parsePresetParam(
   return v === "agr_journal" || v === "print_bw" ? v : "nature";
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function noteDroppedExtras(summary: string | undefined, dropped: string[]): string | undefined {
+  if (!dropped.length) return summary;
+  const note = `已忽略非规格字段 ${dropped.join("、")}`;
+  return summary ? `${summary}；${note}` : note;
 }

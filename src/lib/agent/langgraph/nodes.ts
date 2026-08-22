@@ -44,14 +44,17 @@ import {
 } from "@/lib/agent/write-resume";
 import { buildFigureQaPolishNudge } from "@/lib/agent/figure-qa";
 import {
+  buildChartQaBlockNudge,
   buildFigureQaContinueNudge,
   buildReadFigureQaCall,
+  extractChartQaFindingCodes,
   extractFigureImageUrl,
   FIGURE_BRIEF_QUESTION,
-  FIGURE_GENERATE_TOOLS,
+  isChartQaBlocked,
   isFigureQaNeedsPolish,
   isFigureQaNeedsRegen,
   lastFigureQaNeedsReplace,
+  shouldInjectVisionFigureQa,
   shouldPauseForFigureBrief,
 } from "@/lib/agent/figure-loop";
 import { buildToolConfirmMessage } from "@/lib/agent/confirm-message";
@@ -896,8 +899,8 @@ export async function toolsNode(
         }
       }
 
-      // P0：出图成功后硬注入 read_figure(mode=qa)，不依赖模型自觉
-      if (result.success && FIGURE_GENERATE_TOOLS.has(tool.name)) {
+      // 机理图：出图后硬注入 read_figure(qa)。数据图看 qaReport，不跑 GLM-4V。
+      if (result.success && shouldInjectVisionFigureQa(tool.name)) {
         const imageUrl = extractFigureImageUrl(result);
         if (imageUrl) {
           const qaCall = buildReadFigureQaCall(imageUrl);
@@ -917,11 +920,18 @@ export async function toolsNode(
             newMessages.push({
               role: "user",
               content:
-                `System: 刚生成的图已自动排队识图质检 read_figure(mode=qa, imageUrl=${imageUrl})。`
+                `System: 刚生成的机理图已自动排队识图质检 read_figure(mode=qa, imageUrl=${imageUrl})。`
                 + "若 QA 判定需重生成，下一轮必须带 replaceImageUrl 重画，禁止同标题无 replace 再 append。",
             });
           }
         }
+      } else if (result.success && tool.name === "generate_chart" && isChartQaBlocked(result.data)) {
+        const imageUrl = extractFigureImageUrl(result) ?? "";
+        newMessages.push({
+          role: "user",
+          content: buildChartQaBlockNudge(imageUrl, extractChartQaFindingCodes(result.data)),
+        });
+        newSummaries.push("[figure-loop] 数据图 qaReport=block：按 findings 改 Spec 重出");
       }
 
       // P0：QA 判定需重生成 → 硬 nudge，禁止无 replace 再出图

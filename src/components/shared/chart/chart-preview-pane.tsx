@@ -149,6 +149,26 @@ export function ChartPreviewPane({
                 <Download className="h-3 w-3" /> PDF
               </Button>
             )}
+            {result.csvUrl && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs gap-1"
+                onClick={() => onDownload(result.csvUrl!, `${baseName}.csv`)}
+              >
+                <Download className="h-3 w-3" /> CSV
+              </Button>
+            )}
+            {result.manifestUrl && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs gap-1"
+                onClick={() => onDownload(result.manifestUrl!, `${baseName}.json`)}
+              >
+                <Download className="h-3 w-3" /> 清单
+              </Button>
+            )}
             <Button
               size="sm"
               className="h-8 text-xs gap-1 bg-[#1a5632] hover:bg-[#144228]"

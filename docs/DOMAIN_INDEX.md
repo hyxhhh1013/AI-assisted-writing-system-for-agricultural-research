@@ -37,10 +37,11 @@
 
 | 功能 | 页面 | API | 核心代码 |
 |------|------|-----|----------|
-| **AI Agent（主）** | 工作台 `agent` Tab | `POST /api/agent` SSE；`GET /api/agent/sessions`（`history=1`） | 工具挂载 `lib/agent/tools/registry.ts`；质量 [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md)；**Wave 3.9** [`W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md)；**Wave 3.10 车间图纸** [`W3-AP-RUNTIME.md`](./plans/W3-AP-RUNTIME.md) |
+| **AI Agent（主）** | 工作台 `agent` Tab | `POST /api/agent` SSE；`GET /api/agent/sessions`（`history=1`） | 工具挂载 `lib/agent/tools/registry.ts`；质量 [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md)；**Wave 3.9** [`W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md)；**Wave 3.10 车间图纸** [`W3-AP-RUNTIME.md`](./plans/W3-AP-RUNTIME.md)；**Wave 3.12 写作质量** [`WRITE-QA-quality-system.md`](./plans/WRITE-QA-quality-system.md) |
 | 扩写流水线（从·已冻结） | 工作台 `writing` Tab（专家工具） | `POST /api/writing` SSE；`POST /api/writing/retrieve-preview` | `api/writing/pipeline/*`, `services/writing-context.ts` |
 | 产品门禁评测 | 本地/CI | `npm run eval:gates`；可选 `npm run eval:pipeline` | `lib/eval/product-gates.ts`、`scripts/eval-pipeline-paper.ts` |
 | 论文质量评测 | 本地脚本 | `npm run eval:quality` | `lib/quality-eval/` 规则尺（CI 地板）+ `llm-judge.ts`（仅脚本，不进写节） |
+| **写作质量系统（WRITE-QA）** | 工作台 `agent` Tab | 写节 `sectionSpec` + `qaReport` + 写回前确定性修补（005；仍不按 block 拦截） | `lib/agent/writing-patches.ts` + `writing-patch-run.ts` + `section-compiler.ts` + `evidence-binder.ts`；详规 [`plans/WRITE-QA-quality-system.md`](./plans/WRITE-QA-quality-system.md) |
 | 证据中心 | 工作台 `data` | — | `evidence-hub-sections.tsx`、`data-panel.tsx` |
 | 配图编辑 | 写作面板内联 | — | `writing-figure-edit-links.tsx` |
 | 大纲生成 | 工作台 `outline` Tab | `POST /api/outline` SSE | `outline-panel.tsx`, `lib/prompts/outline.ts` |
@@ -80,7 +81,8 @@
 | Mermaid 机理草图 | `/plot` 示意图 · Mermaid | 前端 Mermaid → `save-chart` | `mermaid-mechanism-card.tsx` |
 | 多面板机理图 a/b/c | `/plot` 示意图 · 多面板 | `POST /api/mechanism-panel` | `mechanism_panel.py`、`mechanism-panel-card.tsx` |
 | 仪器 .xy/.ras | XRD 各工具上传 | 经 `load_dataframe` | `instrument_io.py`、`lib/xrd-file-ext.ts` |
-| 科研作图队列 | — | — | [`plans/FIG-PR-scientific-plotting.md`](./plans/FIG-PR-scientific-plotting.md) |
+| 科研作图队列（类型能力，已收口） | — | — | [`plans/FIG-PR-scientific-plotting.md`](./plans/FIG-PR-scientific-plotting.md) |
+| **图表质量系统（001–010 收口）** | — | `POST /api/chart` 回传 `qaReport` + `exportManifest` | compiler + layout_solver；`npm run test:figures`；三件套 bar/line/heatmap；[`plans/FIG-QA-quality-system.md`](./plans/FIG-QA-quality-system.md) |
 
 详见 [`domain/figures-and-python.md`](./domain/figures-and-python.md)。
 

@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 const PUBLIC_CHARTS_DIR = path.join(process.cwd(), "public", "charts");
 
 const SAFE_FILENAME =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|svg|pdf|tiff?)$/i;
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|svg|pdf|tiff?|csv|json)$/i;
 
 const MIME: Record<string, string> = {
   png: "image/png",
@@ -16,6 +16,8 @@ const MIME: Record<string, string> = {
   pdf: "application/pdf",
   tif: "image/tiff",
   tiff: "image/tiff",
+  csv: "text/csv; charset=utf-8",
+  json: "application/json; charset=utf-8",
 };
 
 export async function GET(

@@ -276,6 +276,10 @@
 
 `Accept: text/event-stream` 时事件：`progress` | `done` | `error`（非 WritingSSE 联合类型）。
 
+### POST /api/chart（FIG-QA）
+
+响应在 PNG/`imageUrl` 之外带 `qaReport`、`exportManifest`（刊规包 + png/svg/pdf/csv/清单 URL + qa 摘要）。同源文件：`GET /api/charts/{uuid}.{png|svg|pdf|csv|json}`。
+
 ### 尚未接入 validateBody 的常见路由
 
 脚本标记为「—」的条目，改接口时请优先补 zod schema。典型：部分 `chart` / `xrd` / `export` / 只读 GET。

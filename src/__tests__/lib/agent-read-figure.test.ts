@@ -160,7 +160,7 @@ describe("readFigureTool", () => {
       source: "image_vision",
     });
     const r = await readFigureTool.execute(
-      { imageUrl: "/api/charts/1234567890abcdef.png", mode: "qa" },
+      { imageUrl: "/api/charts/1234567890abcdef.png", mode: "qa", figureId: "mechanism" },
       ctx,
     );
     expect(r.error ?? null).toBeNull();
@@ -180,7 +180,7 @@ describe("readFigureTool", () => {
       source: "image_vision",
     });
     const r = await readFigureTool.execute(
-      { imageUrl: "/api/charts/1234567890abcdef.png", mode: "qa" },
+      { imageUrl: "/api/charts/1234567890abcdef.png", mode: "qa", figureId: "mechanism" },
       ctx,
     );
     expect(r.success).toBe(true);
@@ -192,5 +192,14 @@ describe("readFigureTool", () => {
     expect(data.needsRegen).toBeFalsy();
     expect(data.needsPolish).toBe(true);
     expect(data.qaVerdict).toBe("polish");
+  });
+
+  it("mode=qa 对数据图跳过识图，不调 GLM-4V", async () => {
+    const r = await readFigureTool.execute({ sectionKey: "results", mode: "qa" }, ctx);
+    expect(r.success).toBe(true);
+    expect(mDescribe.describeImage).not.toHaveBeenCalled();
+    const data = r.data as { skippedVision?: boolean; qaVerdict?: string };
+    expect(data.skippedVision).toBe(true);
+    expect(data.qaVerdict).toBe("pass");
   });
 });

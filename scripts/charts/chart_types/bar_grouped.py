@@ -1,6 +1,4 @@
 """分组柱状图 — 多组数据并列对比，支持误差棒、数值标注与显著性标记（星号/括号）"""
-import json
-
 from chart_base import ChartModule
 from plot_utils import _normalize_label
 
@@ -75,16 +73,8 @@ class GroupedBarChart(ChartModule):
           {"fromCategory": 0, "toCategory": 1, "value": "**"}             # 跨类括号
         tops: (ci, si) -> 柱顶 y（含误差棒上沿）
         """
-        raw = config.get("significance")
-        if raw in (None, "", []):
-            return
-        sig = raw
-        if isinstance(sig, str):
-            try:
-                sig = json.loads(sig)
-            except (TypeError, ValueError):
-                return
-        if not isinstance(sig, list) or not sig:
+        sig = self.read_significance(config)
+        if not sig:
             return
 
         fs = max(float(style.get("font_size", 8)) - 1, 6)

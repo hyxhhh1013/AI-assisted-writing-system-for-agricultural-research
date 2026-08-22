@@ -13,6 +13,33 @@ export const FIGURE_GENERATE_TOOLS = new Set([
   "generate_chart",
 ]);
 
+/** 仅这些出图工具自动排队 GLM-4V 识图 QA（FIG-QA-008） */
+export const FIGURE_VISION_QA_TOOLS = new Set(["draft_mechanism_figure"]);
+
+const SCHEMATIC_FIGURE_IDS = new Set([
+  "flow",
+  "mechanism_panel",
+  "mechanism",
+  "mol",
+  "molecule",
+  "mermaid",
+]);
+
+export function isSchematicFigureId(figureId: string | undefined | null): boolean {
+  if (!figureId) return false;
+  return SCHEMATIC_FIGURE_IDS.has(figureId.trim());
+}
+
+export function shouldInjectVisionFigureQa(toolName: string): boolean {
+  return FIGURE_VISION_QA_TOOLS.has(toolName);
+}
+
+export function isChartQaBlocked(data: unknown): boolean {
+  if (!data || typeof data !== "object") return false;
+  const d = data as { blocked?: unknown; qaReport?: { verdict?: unknown } };
+  return d.blocked === true || d.qaReport?.verdict === "block";
+}
+
 export const FIGURE_BRIEF_QUESTION =
   "出机理图/概念图前请确认（可直接回复选项字母或简短说明）：\n"
   + "1) 版式：A 单栏流程  B 多面板 a/b/c\n"
@@ -112,7 +139,15 @@ export function lastFigureQaNeedsReplace(
     const o = observations[i];
     if (!o) continue;
     if (FIGURE_GENERATE_TOOLS.has(o.tool) && o.success) {
-      // 出图成功后视为已响应过一次 qa（无论是否真 replace）
+      if (o.tool === "generate_chart" && isChartQaBlocked(o.data)) {
+        const url =
+          typeof o.data === "object" && o.data && "imageUrl" in o.data
+            && typeof (o.data as { imageUrl?: unknown }).imageUrl === "string"
+            ? (o.data as { imageUrl: string }).imageUrl
+            : "";
+        return url ? { imageUrl: url } : null;
+      }
+      // 出图成功（数据图过线 / 机理图已画）视为已响应过一次 qa
       return null;
     }
     if (o.tool === "read_figure" && o.success && o.data && typeof o.data === "object") {
@@ -202,9 +237,34 @@ export function checkFigureReplaceRequired(input: {
 /** QA 未通过且模型试图空口收尾时注入的硬续跑提示 */
 export function buildFigureQaContinueNudge(imageUrl: string): string {
   return (
-    "System: 识图质检判定「需重生成」，禁止只写分析就收尾。"
-    + `请立刻调用 draft_mechanism_figure 或 generate_chart，并传 replaceImageUrl="${imageUrl}" 就地替换；`
-    + "按 QA 建议补分叉/结构，不要再 append 新图，也不要长篇推演。"
+    "System: 上一张图质量未过线，禁止只写分析就收尾。"
+    + `请立刻重出并传 replaceImageUrl="${imageUrl}" 就地替换。`
+    + "数据图按 qaReport findings 改 Spec；机理图按识图意见改结构。不要再 append，也不要长篇推演。"
+  );
+}
+
+export function extractChartQaFindingCodes(data: unknown): string[] {
+  if (!data || typeof data !== "object") return [];
+  const report = (data as { qaReport?: { findings?: unknown } }).qaReport;
+  if (!report || !Array.isArray(report.findings)) return [];
+  const codes: string[] = [];
+  for (const item of report.findings) {
+    if (!item || typeof item !== "object") continue;
+    const f = item as { action?: unknown; code?: unknown };
+    if (f.action === "block" && typeof f.code === "string" && f.code) {
+      codes.push(f.code);
+    }
+  }
+  return codes;
+}
+
+export function buildChartQaBlockNudge(imageUrl: string, codes: string[]): string {
+  const list = codes.length ? codes.join("、") : "见 qaReport.findings";
+  return (
+    "System: 数据图 qaReport.verdict=block，禁止只写分析就收尾。"
+    + `缺陷：${list}。请按 findings 改轴标签/单位/显著性下标后重出`
+    + (imageUrl ? `（可带 replaceImageUrl="${imageUrl}"）` : "")
+    + "。不要对柱状/折线/热力等数据图调用 read_figure(mode=qa)。"
   );
 }
 

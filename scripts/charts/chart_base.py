@@ -59,8 +59,22 @@ class ChartModule:
 
     def prepare(self, config: dict) -> dict[str, Any]:
         """解析样式并应用 rcParams。"""
+        self._config = config
         style = resolve_style(config)
         apply_publication_style(style)
+        spec = config.get("chartSpec") if isinstance(config, dict) else None
+        if isinstance(spec, dict):
+            layout = spec.get("layout") if isinstance(spec.get("layout"), dict) else {}
+            journal = spec.get("journal") if isinstance(spec.get("journal"), dict) else {}
+            if layout.get("xTickRotation") not in (None, ""):
+                style["x_tick_rotation"] = layout["xTickRotation"]
+            if layout.get("showValues") is True:
+                style["show_values"] = True
+            loc = layout.get("legend")
+            if loc and loc != "auto":
+                style["legend_loc"] = loc
+            if journal.get("columns") in (1, 2) and "fig_width" not in (config.get("style") or {}):
+                style["columns"] = journal["columns"]
         return style
 
     def new_figure(self, style: dict[str, Any]):
@@ -129,7 +143,27 @@ class ChartModule:
         apply_legend(ax, style, has_legend)
 
     def save(self, fig, output_path: str, style: dict[str, Any]) -> list[str]:
-        return save_figure(fig, output_path, style)
+        from layout_solver import run_layout_and_save
+
+        config = getattr(self, "_config", {})
+        return run_layout_and_save(fig, output_path, style, config if isinstance(config, dict) else {})
+
+    def read_significance(self, config: dict) -> list:
+        """config.significance，否则 ChartSpec.annotations.significance。"""
+        raw = config.get("significance") if isinstance(config, dict) else None
+        if raw in (None, "", []):
+            spec = config.get("chartSpec") if isinstance(config, dict) else None
+            if isinstance(spec, dict):
+                ann = spec.get("annotations") if isinstance(spec.get("annotations"), dict) else {}
+                raw = ann.get("significance") if isinstance(ann, dict) else None
+        if raw in (None, "", []):
+            return []
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw)
+            except (TypeError, ValueError):
+                return []
+        return raw if isinstance(raw, list) else []
 
     def dataset_errors(self, ds: dict, n: int) -> list[float] | None:
         raw = ds.get("errors") or ds.get("error") or ds.get("yerr")
@@ -182,16 +216,8 @@ class ChartModule:
           {"category": i, "value": "**", "label": "p<0.01"}          # 单类顶部
           {"fromCategory": a, "toCategory": b, "value": "*"}          # 跨类括号
         """
-        raw = config.get("significance")
-        if raw in (None, "", []):
-            return
-        sig = raw
-        if isinstance(sig, str):
-            try:
-                sig = json.loads(sig)
-            except (TypeError, ValueError):
-                return
-        if not isinstance(sig, list) or not sig:
+        sig = self.read_significance(config)
+        if not sig:
             return
 
         fs = max(float(style.get("font_size", 8)) - 1, 6)

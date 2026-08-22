@@ -233,8 +233,11 @@ export interface ChartPanelResult {
   imageUrl: string;
   svgUrl?: string;
   pdfUrl?: string;
+  csvUrl?: string;
+  manifestUrl?: string;
   caption: string;
   styleValidation?: import("@/services/charts").ChartStyleValidation;
+  qaReport?: import("@/contracts/chart-qa").ChartQaReport;
   figWidth?: number;
   columns?: number;
   preset?: string;
@@ -511,8 +514,11 @@ export function useChartPanel(
         imageUrl: data.imageUrl ?? "",
         svgUrl: data.svgUrl,
         pdfUrl: data.pdfUrl,
+        csvUrl: data.csvUrl ?? data.exportManifest?.files.csv,
+        manifestUrl: data.exportManifest?.files.manifest,
         caption: title || chartName,
         styleValidation: data.styleValidation,
+        qaReport: data.qaReport,
         figWidth: data.figWidth,
         columns: data.columns,
         preset: data.preset,
@@ -520,9 +526,15 @@ export function useChartPanel(
       if (projectId && projectId !== "default") {
         writeStylePreset(projectId, fieldValues, styleFields);
       }
+      const qa = data.qaReport;
+      const qaNotes = qa?.findings.filter((f) => f.action === "block" || f.action === "repair") ?? [];
       const warns =
         data.styleValidation?.checks?.filter((c) => c.level === "warn" || c.level === "fail") ?? [];
-      if (warns.length > 0) {
+      if (qaNotes.length > 0) {
+        toast.message(qa?.verdict === "block" ? "已出图（质量未过线）" : "已出图（已自动修补）", {
+          description: qaNotes.map((f) => f.message).slice(0, 2).join("；"),
+        });
+      } else if (warns.length > 0) {
         toast.message("已出图（刊规提示）", {
           description: warns.map((w) => w.message).slice(0, 2).join("；"),
         });

@@ -8,8 +8,8 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-08-17（Phase 11e 已收口；WRITE-NO-RAG + bib_only 导出前软告警）  
-> **实时 status 只看 §1 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
+> **最后更新**：2026-08-22（Phase 14 WRITE-QA 规划生效：写作质量系统；Phase 13 FIG-QA 实施中）  
+> **实时 status 只看 §1 Phase 13 / Phase 14 与 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
 
@@ -201,6 +201,32 @@
 | FIG-PR-026 | XRD 相检索 MVP（内置参考库 + 工作流） | 001 | 1d | **done** | 2026-07-27；`/api/xrd/phase-search` + workflow 相检索 |
 | W3-AP-CHART-XRD | Agent XRD 桥接：Scherrer/相检索/峰表 | W3-AP-CHART-BRIDGE | 0.5d | **done** | 2026-07-27；`generate_xrd_analysis` + P6 剧本 |
 | — | 任务单细节 | — | — | — | [`plans/FIG-PR-scientific-plotting.md`](./plans/FIG-PR-scientific-plotting.md) |
+| **Phase 13 — 图表质量系统（FIG-QA：编译器 + 布局 + 确定性质检）** |
+| **FIG-QA-000** | **规划：诊断 + 质量合同 + ChartSpec 架构** | — | 0.5d | **done** | 2026-08-22；[`plans/FIG-QA-quality-system.md`](./plans/FIG-QA-quality-system.md) |
+| FIG-QA-001 | `ChartSpecV1` + `ChartQaReport` 契约；旧 FigureSpec 适配器 | 000 | 1d | **done** | 2026-08-22；`contracts/chart-spec.ts` + `chart-qa.ts` + `scripts/charts/chart_spec.py` |
+| FIG-QA-002 | Spec Compiler：CSV/chartIndex → 合法 Spec（单位、误差列、刊规包） | 001 | 1.5d | **done** | 2026-08-22；`lib/chart-spec-compiler.ts`；runner 热路径挂 chartSpec |
+| FIG-QA-003 | 统一 `save_figure`；消灭 dpi=200 / 分叉 tight_layout | 001 | 1d | **done** | 2026-08-22；不再 bbox_inches=tight；legacy 走 solver |
+| FIG-QA-004 | Layout Solver + bbox QA（重叠/裁切/图例） | 003 | 2d | **done** | 2026-08-22；`layout_solver.py` + `qa_report.py`；ChartModule.save 唯一出口 |
+| FIG-QA-005 | 自动补丁环 `applyChartSpecPatches`（≤2 次重渲染） | 002, 004 | 1d | **done** | 2026-08-22；runner 最多再渲 2 次；block 不入库不插节 |
+| FIG-QA-006 | Golden fixtures + `test:figures` | 004 | 1.5d | **done** | 2026-08-22；`npm run test:figures`；无像素金标 |
+| FIG-QA-007 | `generate_chart` 主路径改吃 Spec；禁裸 configJson | 002, 005 | 1d | **done** | 2026-08-22；`liftAgentChartExtras` 白名单；significanceJson |
+| FIG-QA-008 | 拆 QA：数据图看 qaReport；机理图才走 vision | 007 | 0.5d | **done** | 2026-08-22；generate_chart 不再排队 read_figure(qa) |
+| FIG-QA-009 | 刊规包 + 导出清单（svg/pdf + source csv + qa 摘要） | 001, 003 | 1d | **done** | 2026-08-22；`chart-export.ts` 刊规包；`{uuid}.csv/.json` 清单 |
+| FIG-QA-010 | 类型质量剖面：bar_grouped / line / heatmap 先收口 | 006, 007 | 1.5d | **done** | 2026-08-22；热力不撑刊宽；三件套 profile 夹具；其余类型仍冻结扩新 |
+| — | 任务单细节 | — | — | — | [`plans/FIG-QA-quality-system.md`](./plans/FIG-QA-quality-system.md) |
+| **Phase 14 — 写作质量系统（WRITE-QA：编译器 + 证据绑定 + 确定性质检）** |
+| **WRITE-QA-000** | **规划：诊断 + 质量合同 + SectionSpec 架构** | — | 0.5d | **done** | 2026-08-22；[`plans/WRITE-QA-quality-system.md`](./plans/WRITE-QA-quality-system.md) |
+| WRITE-QA-001 | `SectionSpecV1` + `WritingQaReport` 契约；旧 context/bullets 适配器 | 000 | 1d | **done** | 2026-08-22；`contracts/section-spec.ts` + `writing-qa.ts`；未改 write_section 热路径 |
+| WRITE-QA-002 | Spec Compiler：蓝图 + 语域约束 + 字数带 | 001 | 1.5d | **done** | 2026-08-22；`section-compiler.ts`；写节 observation 带 sectionSpec |
+| WRITE-QA-003 | WQC 升级并挂到 `write_section` 热路径 | 001 | 1d | **done** | 2026-08-22；`writing-qa-run.ts` + write_section observation `qaReport`；不阻断 persist |
+| WRITE-QA-004 | Evidence Binder：项目文献池词重叠绑定 | 002 | 2d | **done** | 2026-08-22；`evidence-binder.ts`；不做 per-card RAG；收窄 selectedSourceIds + 精简摘要；蓝图要点不再打进 Writer bullets |
+| WRITE-QA-005 | `applyWritingPatches`（确定性优先，≤1 次定向 refine） | 003, 004 | 1.5d | **done** | 2026-08-22；`writing-patches.ts` + `writing-patch-run.ts`；写节写回前先确定性修补；full 管道不再二次 refine |
+| WRITE-QA-006 | persist 看 `block`；observation 带 `qaReport`；收口第 5 信号 | 005 | 1d | todo | |
+| WRITE-QA-007 | 压缩 Writer prompt：禁令迁到 QA code | 002, 005 | 1d | todo | 禁止再往 writing.ts 堆「禁止」 |
+| WRITE-QA-008 | Golden：引言/方法/结果/讨论/综述子节 + `eval:quality` | 003 | 1.5d | todo | LLM-judge 不进热路径 |
+| WRITE-QA-009 | `write_section` 主路径改吃 Spec；context 只作适配 | 002, 006 | 1d | todo | |
+| WRITE-QA-010 | 剖面收口：results + literature_body 子节 + introduction | 008, 009 | 1.5d | todo | 未闭环前禁止再堆写作禁令 |
+| — | 任务单细节 | — | — | — | [`plans/WRITE-QA-quality-system.md`](./plans/WRITE-QA-quality-system.md) |
 | **Phase 11b — Wave 3.7 Agent 写作质量（对齐 academic-paper Phase 4→7）** |
 | **W3-AP-QUALITY** | **质量主轴：引用接地→分节完整→文风质检→摘要/审查收口** | W3-AP-BEHAVIOR | 3～5w | **done** | 2026-08-06；子项全 done；详规 [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md) |
 | W3-AP-ENTRY-WIZARD | 新建向导：入口三档 full/outline_ready/data_ready + 配置迁入 | W3-AP-CONFIG-QA | 0.5d | **done** | 2026-08-06；`entry-mode.ts` + `create-project-wizard.tsx`（`create-project-dialog` 挂载）+ `agent-panel` 前缀注入 + `update_paper_config` 可调；补 `agent-entry-mode.test.ts` 独立覆盖 |
@@ -266,6 +292,8 @@
 | `docs/plans/W3-AP-AGENT-HUB.md` | Wave 3.8 Agent 单面 + 数据闭环；合并时同步 §1 Phase 11c |
 | `docs/plans/W3-AP-INTENT-QUALITY.md` | Wave 3.9 意图状态化 + 规则 SSOT + 质量尺；合并时同步 §1 Phase 11d |
 | `docs/plans/W3-AP-RUNTIME.md` | Wave 3.10 车间图纸；合并时同步 §1 Phase 11e |
+| `docs/plans/FIG-QA-quality-system.md` | Wave 3.11 图表质量系统；合并时同步 §1 Phase 13 |
+| `docs/plans/WRITE-QA-quality-system.md` | Wave 3.12 写作质量系统；合并时同步 §1 Phase 14 |
 
 ### 1.2 已完成（勿重复开 PR）
 
@@ -1123,19 +1151,35 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-16 | W3-AP-ARCH-03 | AI | 冻结旧扩写管道：`route.ts`/`run-pipeline.ts` 文件头声明「新写作规则只改 Agent」，`DOMAIN_INDEX`/`writing-pipeline.md` 标注 Agent 主、扩写从。不删代码。Phase 11e 收口。 |
 | 2026-08-17 | W3-AP-WRITE-NO-RAG | AI | 有 soft-groundable 项目摘要时 `retrieveWritingContext` 跳过知识库 RAG；勾选来源或 `WRITING_FORCE_KNOWLEDGE_RAG=1` 强制检索；预览路径不变。 |
 | 2026-08-17 | W3-AP-BIB-EXPORT | AI | bib_only 精确数据软告警接入导出：`assessExportReadiness` + `POST /api/export/readiness`；Word/PDF 导出前 toast，不阻断 `ok`。 |
+| 2026-08-22 | FIG-QA-000 | AI | 图表质量系统规划：根因是「调模板」而非「编译器」。目标态 ChartSpec → Layout Solver → 确定性质检 → spec patch。挂 Phase 13。见 `docs/plans/FIG-QA-quality-system.md` |
+| 2026-08-22 | FIG-QA-001 | AI | ChartSpecV1 + ChartQaReport 契约；FigureSpec 升格/回写适配；styleValidation 可 lift。未改 generate_chart 热路径。 |
+| 2026-08-22 | FIG-QA-002/003/004 | AI | 原地绞杀：compiler 挂 runner；save_figure 停用 tight；ChartModule.save → layout_solver → qaReport。Agent / /plot 同源。 |
+| 2026-08-22 | FIG-QA-005 | AI | applyChartSpecPatches：重叠→转 35°、图例外置、列名补单位。chart-runner 最多再渲 2 次；block 不入库。 |
+| 2026-08-22 | FIG-QA-006 | AI | Golden fixtures 11 类 + CJK + 显著性；`npm run test:figures` 断言无 block + 几何快照。不做像素金标。 |
+| 2026-08-22 | FIG-QA-007 | AI | generate_chart 禁裸 configJson：significanceJson 一等参数；白名单 extras；刊宽/DPI/tight_layout 丢弃。 |
+| 2026-08-22 | FIG-QA-008 | AI | 数据图看 qaReport；机理图才自动 read_figure(qa)。read_figure 对柱/线/热力跳过 GLM-4V。 |
+| 2026-08-22 | FIG-QA-009 | AI | 刊规包 SSOT（栏宽 mm 对齐 Python）+ 出图旁路 csv/json 清单；POST /api/chart 回传 exportManifest。 |
+| 2026-08-22 | FIG-QA-010 | AI | 三件套收口：热力不撑刊宽、折线先 set_xticks、显著性读 ChartSpec；agr_journal 双栏宽 ±8% + svg/pdf；`test:figures` 15 条。 |
+| 2026-08-22 | WRITE-QA-000 | AI | 写作质量系统规划：根因是「调 Writer 模板」而非「编译器」。目标态 SectionSpec → Evidence Binder → 确定性质检 → writing patch。挂 Phase 14。见 `docs/plans/WRITE-QA-quality-system.md` |
+| 2026-08-22 | WRITE-QA-001 | AI | SectionSpecV1 + WritingQaReport 契约；context/bullets 与蓝图 keyPoints 升格；WQC findings 可 lift。未改 write_section 热路径。 |
+| 2026-08-22 | WRITE-QA-003 | AI | 写节热路径挂 evaluateSectionWritingQa：WQC + 空话/Results 混讨论/摘要引用/MD 标题/文末文献表/句长过齐。observation 带 qaReport，默认不阻断写回。 |
+| 2026-08-22 | WRITE-QA-002 | AI | SectionSpec Compiler：bullets > 蓝图 keyPoints > context。字数带叠 DRAFT-COVER + 子节封顶。写节 observation 带 sectionSpec；无用户 bullets 时蓝图 cards 注入 Writer。证据槽仍空。 |
+| 2026-08-22 | WRITE-QA-004 | AI | Evidence Binder：对已入库题录/摘要/dataClaims 做词重叠，每卡 1–3 条。不按 card 跑 RAG。写节注入短【证据绑定】表、收窄 selectedSourceIds、精简 referenceEvidence。蓝图要点不再复制进 Writer bullets。未绑 card 记 evidence_unbound（有文献池时），不阻断 persist。 |
+| 2026-08-22 | WRITE-QA-005 | AI | applyWritingPatches 纯函数表 + repairSectionDraft：写回前先确定性修补（喉清/空话/越界引用/摘要引用/MD 标题/文末文献表/结果混讨论/overclaim）。仍有 repair 且非 full 时最多定向 refine 1 次，feedback 只含 code+片段。不阻断 persist。 |
 
 ---
 
 ## 5. 推荐执行顺序（给「下一次 AI」）
 
-**当前主轴（2026-08-17）**：Wave 3.10（W3-AP-RUNTIME）**已收口**。P3-legacy WRITE-NO-RAG / bib_only 导出前 **已 done**。Wave 3.9 已收口。INTENT-SHADOW **cancelled**。  
-**即刻冻结**：不准再往 `goal-intents.ts` 加口语 `isXxxGoal` / `checkXxxGate`（领域不变量与事故型安全门除外）；不重开 SHADOW；不重写 LangGraph；不给 `POST /api/writing` 旧扩写管加功能。
+**当前主轴（2026-08-22）**：Phase 13 **FIG-QA 001–010 已收口**；Phase 14 **WRITE-QA** 实施中。Wave 3.10 已收口。  
+**即刻冻结**：不准再往 `goal-intents.ts` 加口语 `isXxxGoal` / `checkXxxGate`（领域不变量与事故型安全门除外）；不重开 SHADOW；不重写 LangGraph；不给 `POST /api/writing` 旧扩写管加功能；**禁止新增图表类型**（其余 8 类未做质量剖面）；禁止再开「某 chart_types 提质」散 PR；**禁止再往 `writing.ts` 堆「禁止」**（新规则进 WRITE-QA code 表）。
 
 | 优先级 | ID | 说明 |
 |--------|-----|------|
+| **now** | **WRITE-QA-006** | persist 看 `block`；observation 带 `qaReport`；收口看板第 5 信号。详规 [`plans/WRITE-QA-quality-system.md`](./plans/WRITE-QA-quality-system.md) |
 | backlog | Wave 4 | ENG-PR-094 已 done；LaTeX / SEC-04～08 见 [`MASTER_PLAN.md`](./MASTER_PLAN.md) |
 
-**明确不做**：重开 INTENT-SHADOW、LangGraph 重写 / 多 agent / DeepSeek Harness、热路径 LLM-judge、再堆口语门禁、运行时扫 `tools/` 磁盘。
+**明确不做**：重开 INTENT-SHADOW、LangGraph 重写 / 多 agent / DeepSeek Harness、热路径 LLM-judge、再堆口语门禁、运行时扫 `tools/` 磁盘、用 VLM 当数据图主质检、R 后端、解冻旧扩写管道、复刻十二代理 Conductor。
 
 ---
 

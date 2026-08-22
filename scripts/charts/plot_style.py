@@ -514,12 +514,33 @@ def style_axes(ax, style: dict[str, Any], *, grid_axis: str = "y") -> None:
 def apply_legend(ax, style: dict[str, Any], has_legend: bool) -> None:
     if not has_legend:
         return
-    loc = style.get("legend_loc") or "best"
-    ax.legend(
-        loc=loc,
-        frameon=bool(style.get("legend_frame", False)),
-        edgecolor="#ddd" if style.get("legend_frame") else "none",
-    )
+    loc = str(style.get("legend_loc") or "best")
+    if loc in ("auto", "none"):
+        if loc == "none":
+            old = ax.get_legend()
+            if old:
+                old.remove()
+            return
+        loc = "best"
+    frame = bool(style.get("legend_frame", False))
+    kw: dict[str, Any] = {
+        "frameon": frame,
+        "edgecolor": "#ddd" if frame else "none",
+    }
+    old = ax.get_legend()
+    if old:
+        old.remove()
+    if loc == "outer-right":
+        style["_need_right_margin"] = True
+        ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0.0, **kw)
+        return
+    if loc == "outer-bottom":
+        style["_need_bottom_margin"] = True
+        handles, labels = ax.get_legend_handles_labels()
+        ncol = max(1, min(len(labels), 4))
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.22), ncol=ncol, **kw)
+        return
+    ax.legend(loc=loc, **kw)
 
 
 def bar_error_kw(style: dict[str, Any]) -> dict:
@@ -563,12 +584,17 @@ def validate_style(style: dict[str, Any], fig=None) -> dict[str, Any]:
     min_lw = float(style.get("min_linewidth") or 0.5)
 
     target_w = journal_fig_width_inch(jkey, cols)
-    # 宽度容差 ±8%
+    if fig is not None:
+        try:
+            width_in = float(fig.get_size_inches()[0])
+        except Exception:
+            pass
+    # 宽度容差 ±8%（对照刊规包）
     if width_in <= 0:
         checks.append({"level": "fail", "code": "width_missing", "message": "缺少 fig_width"})
-    elif abs(width_in - target_w) / target_w > 0.12 and preset != "slide":
+    elif preset != "slide" and target_w > 0 and abs(width_in - target_w) / target_w > 0.08:
         checks.append({
-            "level": "warn",
+            "level": "fail" if abs(width_in - target_w) / target_w > 0.15 else "warn",
             "code": "width_off_spec",
             "message": f"图宽 {width_in:.2f} in，刊规约 {target_w:.2f} in（{cols} 栏）",
         })
@@ -640,7 +666,7 @@ def validate_style(style: dict[str, Any], fig=None) -> dict[str, Any]:
 
 
 def save_figure(fig, output_path: str, style: dict[str, Any]) -> list[str]:
-    """保存 PNG 预览 + 可选 SVG/PDF/TIFF；PDF 强制 fonttype 42。"""
+    """保存 PNG + 可选 SVG/PDF/TIFF。不使用 bbox_inches=tight（会裁掉刊宽）。"""
     dpi = int(style.get("dpi", 300))
     formats = _parse_formats(style.get("export_formats"))
 
@@ -650,25 +676,24 @@ def save_figure(fig, output_path: str, style: dict[str, Any]) -> list[str]:
         output_path = base + ext
 
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-    fig.tight_layout(pad=1.2)
 
     # 确保 PDF 可编辑字体
     plt.rcParams["pdf.fonttype"] = 42
     plt.rcParams["svg.fonttype"] = "none"
 
+    pad = float(style.get("save_pad_inches", 0.04))
     saved: list[str] = []
     for fmt in formats:
         path = f"{base}.{fmt}"
-        kw: dict[str, Any] = {"bbox_inches": "tight", "facecolor": "white", "edgecolor": "none"}
+        kw: dict[str, Any] = {"facecolor": "white", "edgecolor": "none", "pad_inches": pad}
         if fmt in ("png", "tif", "tiff", "jpg", "jpeg"):
             kw["dpi"] = dpi
         fig.savefig(path, **kw)
         saved.append(path)
 
     if output_path not in saved and os.path.splitext(output_path)[1].lstrip(".").lower() == "png":
-        # 主输出路径若未在列表中，复制/再存一份
         if not os.path.exists(output_path):
-            fig.savefig(output_path, dpi=dpi, bbox_inches="tight", facecolor="white", edgecolor="none")
+            fig.savefig(output_path, dpi=dpi, facecolor="white", edgecolor="none", pad_inches=pad)
         if output_path not in saved:
             saved.append(output_path)
 

@@ -15,11 +15,6 @@ class HeatmapChart(ChartModule):
         title = config.get("title", "")
         x_label = config.get("x_label", "")
         y_label = config.get("y_label", "")
-        diverging = config.get("diverging") in (True, "true", "1", 1)
-        cmap = str(config.get("cmap") or ("RdBu_r" if diverging else "YlGnBu"))
-        annotate = config.get("heatmap_annotate") in (True, "true", "1", 1)
-        annotate_format = str(config.get("annotate_format") or ("2g" if not diverging else "2f"))
-
         if not datasets:
             raise ValueError("热力图需要至少一列数值")
 
@@ -32,14 +27,29 @@ class HeatmapChart(ChartModule):
             matrix.append(row)
         matrix_np = np.array(matrix, dtype=float)
 
+        explicit_div = config.get("diverging")
+        if explicit_div in (True, "true", "1", 1):
+            diverging = True
+        elif explicit_div in (False, "false", "0", 0):
+            diverging = False
+        else:
+            diverging = bool(np.nanmin(matrix_np) < 0 < np.nanmax(matrix_np))
+        cmap = str(config.get("cmap") or ("RdBu_r" if diverging else "YlGnBu"))
+        annotate = config.get("heatmap_annotate") in (True, "true", "1", 1) or (
+            config.get("heatmap_annotate") is None
+            and style.get("show_values") in (True, "1", "true", "yes", "on")
+        ) or (
+            config.get("heatmap_annotate") is None
+            and matrix_np.size <= 36
+        )
+        annotate_format = str(config.get("annotate_format") or ("2g" if not diverging else "2f"))
+
         x_labels = [_normalize_label(ds.get("label", f"C{i+1}")) for i, ds in enumerate(datasets)]
         y_labels = [_normalize_label(str(lbl)) for lbl in labels]
 
-        w = float(style.get("fig_width", 3.5))
-        h = float(style.get("fig_height", 2.5))
-        aspect = max(len(x_labels) / max(len(y_labels), 1), 0.6)
-        fig_w = max(w, w * aspect * 0.85)
-        fig, ax = plt.subplots(figsize=(fig_w, h))
+        # 刊宽不得被矩阵长宽比撑破（FIG-QA-010）；色条占右侧边距
+        style["_need_right_margin"] = True
+        fig, ax = self.new_figure(style)
 
         norm = None
         if diverging:
@@ -50,8 +60,9 @@ class HeatmapChart(ChartModule):
         cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
         fs = max(float(style.get("font_size", 8)) - 1, 6)
         cbar.ax.tick_params(labelsize=fs)
-        if y_label:
-            cbar.set_label(_normalize_label(y_label), fontsize=fs)
+        scale_label = str(config.get("cmap_label") or "").strip()
+        if scale_label:
+            cbar.set_label(_normalize_label(scale_label), fontsize=fs)
 
         ax.set_xticks(range(len(x_labels)))
         ax.set_xticklabels(x_labels, fontsize=fs)

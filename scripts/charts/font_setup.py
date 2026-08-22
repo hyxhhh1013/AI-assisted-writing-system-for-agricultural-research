@@ -88,3 +88,43 @@ def apply_cjk_font_rcparams() -> str:
     plt.rcParams["font.sans-serif"] = stack
     plt.rcParams["axes.unicode_minus"] = False
     return stack[0] if stack else "DejaVu Sans"
+
+
+_CJK_NAME_KEYS = (
+    "yahei", "simhei", "simsun", "cjk", "noto sans sc", "noto serif sc",
+    "pingfang", "heiti", "wenquanyi", "source han", "stxihei", "stheiti",
+)
+
+
+def cjk_font_available() -> str | None:
+    """已安装且排在拉丁之前的 CJK 字体名；没有则 None（CI 可 skip）。"""
+    stack = build_sans_serif_stack()
+    for name in stack:
+        lower = name.lower()
+        if any(k in lower for k in _CJK_NAME_KEYS):
+            return name
+    return None
+
+
+def missing_cjk_glyphs(text: str, font_name: str | None = None) -> list[str]:
+    """返回首选字体缺 glyph 的非 ASCII 字符。不做像素连通域。"""
+    from matplotlib.font_manager import FontProperties, findfont
+    from matplotlib.ft2font import FT2Font
+
+    name = font_name or cjk_font_available()
+    if not name:
+        return []
+    path = findfont(FontProperties(family=name), fallback_to_default=False)
+    font = FT2Font(path)
+    missing: list[str] = []
+    seen: set[str] = set()
+    for ch in text:
+        if ord(ch) < 128 or ch in seen:
+            continue
+        seen.add(ch)
+        try:
+            if font.get_char_index(ord(ch)) == 0:
+                missing.append(ch)
+        except Exception:
+            missing.append(ch)
+    return missing

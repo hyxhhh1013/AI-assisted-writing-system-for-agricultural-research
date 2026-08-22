@@ -1,5 +1,19 @@
 # 图表与 Python 子进程（L3 业务）
 
+## 质量系统（2026-08-22 起，主轴）
+
+> **根因**：类型/预设已齐，但出图仍是「调 matplotlib 模板 + 机理图识图事后看」；质量债被「Agent=草稿、/plot=精修」锁死。  
+> **目标态**：`ChartSpec` 编译 → Layout Solver → 确定性质检 → spec 补丁回修。  
+> **队列**：Phase 13 `FIG-QA-001～010`；详规 [`plans/FIG-QA-quality-system.md`](../plans/FIG-QA-quality-system.md)。  
+> **冻结**：质量未闭环前禁止新增图表类型；禁止再开单类型「提质」散 PR。  
+> **契约（001 done）**：`src/contracts/chart-spec.ts`（`ChartSpecV1`）+ `chart-qa.ts`（`ChartQaReport`）；旧 `FigureSpec` 经 `figureSpecToChartSpec` 升格。Python 镜像 `scripts/charts/chart_spec.py`。  
+> **热路径（002–005 done）**：`attachCompiledSpec` → `ChartModule.save` → layout_solver → `save_figure`（不再 tight）→ `qaReport`。若 `verdict=repair`，`applyChartSpecPatches` 改 Spec 再渲（最多 2 次）。`block` 不入库、不插章节。XRD 旧脚本仍有分叉。  
+> **回归（006 done）**：`npm run test:figures` → `scripts/charts/test_figures.py` + `_fixtures/qa/`（11 类 + 长中文刻度 + 显著性）。断言 `qaReport` 无 block、求解后无刻度重叠/图例挡数据；CJK 用 glyph 探测（无 CJK 字体则 skip）。**不**做像素金标，**不**挂进 `npm run check`。  
+> **Agent 参数面（007 done）**：`generate_chart` 显著性走 `significanceJson`；`configJson` 仅白名单（`src/lib/chart-spec-extras.ts`）。刊宽 / DPI / `tight_layout` 丢弃并写入 observation。  
+> **QA 分流（008 done）**：数据图只看 `qaReport`（`block` 续跑改 Spec）；`read_figure(mode=qa)` 仅机理图/流程/分子。柱状/折线/热力会跳过 GLM-4V。  
+> **刊规包 / 导出清单（009 done）**：`src/contracts/chart-export.ts`（栏宽 mm 与 Python 对齐）。出图后写 `{uuid}.csv` + `{uuid}.json`；`POST /api/chart` / `generate_chart` 回传 `exportManifest`。`GET /api/charts/:file` 可取 csv/json。  
+> **三件套收口（010 done）**：`bar_grouped` / `line` / `heatmap` 为质量剖面。热力不再按矩阵长宽比撑刊宽；折线先 `set_xticks`；显著性读 `chartSpec.annotations`。`test:figures` 含 agr_journal 双栏 ±8% + svg/pdf、误差折线、热力刊宽。其余类型仍禁止扩新。
+
 ## S2 逐类提质（2026-08-06 起）
 
 **通用**：`config.significance` 标注显著性（星号/括号，自动避让、含误差上沿）；误差棒数据列后缀 `_sd/_se/_ci` 自动渲染；agent 经 `generate_chart(configJson={...})` 传入。

@@ -3,6 +3,7 @@ import path from "node:path";
 import type { ProjectChartAsset } from "@/contracts/figure";
 import { parseProjectCharts } from "@/contracts/figure";
 import { describeImage } from "@/lib/agent/attachments/describe-image";
+import { isSchematicFigureId } from "@/lib/agent/figure-loop";
 import { FIGURE_QA_PROMPT, parseFigureQaVerdict } from "@/lib/agent/figure-qa";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import prisma from "@/lib/prisma";
@@ -90,10 +91,9 @@ function loadCharts(chartsRaw: unknown): ProjectChartAsset[] {
 export const readFigureTool: ToolDefinition = {
   name: "read_figure",
   description:
-    "回看已生成的图表/配图/机理图（GLM-4V 识图）。"
-    + "生成后自检请传 imageUrl（来自 draft_mechanism_figure / generate_chart）且 mode=qa；"
-    + "也可按 sectionKey（+ index/figureId）定位。"
-    + "mode=qa 两级质检：硬伤→需重生成；观感问题→可接受·建议精修；通过→可接受。",
+    "回看已生成的配图。"
+    + "mode=qa 仅用于机理图/流程图/分子式（draft_mechanism_figure）；数据图请看 generate_chart 的 qaReport，不要对柱状/折线/热力跑识图 QA。"
+    + "describe 可理解任意已生成图。也可按 sectionKey（+ index/figureId）定位。",
   parameters: {
     type: "object",
     properties: {
@@ -193,6 +193,41 @@ export const readFigureTool: ToolDefinition = {
       return {
         success: false,
         error: `图文件不存在（${imageUrl}）。若刚生成，稍后重试；或检查 data/charts 目录`,
+      };
+    }
+
+    let figureId = String(params.figureId ?? asset?.figureId ?? "").trim();
+    if (mode === "qa" && !figureId && ctx.projectId) {
+      const project = await prisma.project.findFirst({
+        where: { id: ctx.projectId, userId: ctx.userId },
+        select: { charts: true },
+      });
+      if (project) {
+        const hit = loadCharts(project.charts).find((c) => c.imageUrl === imageUrl);
+        if (hit?.figureId) {
+          figureId = hit.figureId;
+          asset = hit;
+        }
+      }
+    }
+
+    if (mode === "qa" && !isSchematicFigureId(figureId)) {
+      return {
+        success: true,
+        summary: `已跳过识图 QA（数据图${figureId ? ` ${figureId}` : ""}）。请看 generate_chart.qaReport。`,
+        data: {
+          description:
+            "数据图不走机理图识图质检。单位/重叠/刊规见 generate_chart 返回的 qaReport。",
+          mode,
+          skippedVision: true,
+          needsRegen: false,
+          needsPolish: false,
+          qaVerdict: "pass",
+          caption: asset?.caption ?? "",
+          figureId,
+          sectionKey: asset?.sectionKey ?? "",
+          imageUrl,
+        },
       };
     }
 

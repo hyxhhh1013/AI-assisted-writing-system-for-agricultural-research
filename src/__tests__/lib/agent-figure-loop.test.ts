@@ -10,8 +10,11 @@ import {
   getMechanismTemplate,
   isFigureQaNeedsRegen,
   isMultiFigureGoal,
+  isChartQaBlocked,
+  isSchematicFigureId,
   lastFigureQaNeedsReplace,
   listMechanismTemplateIds,
+  shouldInjectVisionFigureQa,
   resolveReplaceForAntiStack,
   shouldPauseForFigureBrief,
 } from "@/lib/agent/figure-loop";
@@ -165,8 +168,36 @@ describe("figure-loop", () => {
     expect(t?.panels?.[0]?.steps?.[0]).toMatch(/含氧|前体|脱水/);
   });
 
+  it("vision QA only for mechanism tools; data chart block is qaReport", () => {
+    expect(shouldInjectVisionFigureQa("draft_mechanism_figure")).toBe(true);
+    expect(shouldInjectVisionFigureQa("generate_chart")).toBe(false);
+    expect(isSchematicFigureId("flow")).toBe(true);
+    expect(isSchematicFigureId("bar_grouped")).toBe(false);
+    expect(isChartQaBlocked({ blocked: true })).toBe(true);
+    expect(isChartQaBlocked({ qaReport: { verdict: "pass" } })).toBe(false);
+    expect(
+      lastFigureQaNeedsReplace([
+        {
+          tool: "generate_chart",
+          success: true,
+          data: { blocked: true, imageUrl: "/api/charts/bad-bar.png" },
+        },
+      ]),
+    ).toEqual({ imageUrl: "/api/charts/bad-bar.png" });
+    expect(
+      lastFigureQaNeedsReplace([
+        {
+          tool: "generate_chart",
+          success: true,
+          data: { imageUrl: "/api/charts/ok-bar.png", qaReport: { verdict: "pass" } },
+        },
+      ]),
+    ).toBeNull();
+  });
+
   it("buildFigureQaContinueNudge forces replaceImageUrl", () => {
     const n = buildFigureQaContinueNudge("/api/charts/x.png");
+    expect(n).toMatch(/质量未过线/);
     expect(n).toMatch(/禁止只写分析就收尾/);
     expect(n).toMatch(/replaceImageUrl="\/api\/charts\/x\.png"/);
   });

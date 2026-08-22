@@ -1,7 +1,7 @@
 # 禾书耕文（GrainScript）整体规划 v2
 
-> **状态**：生效中（2026-08-17：Wave 3.10 车间图纸已收口；3.9 已收口）  
-> **取代**：分散的「部分规划」作为唯一战略主轴；任务状态以 `ENGINEERING_OPTIMIZATION_QUEUE.md` **§1 Phase 11 / 11b / 11c / 11d / 11e** 为准  
+> **状态**：生效中（2026-08-22：Phase 13 FIG-QA 001–010 收口；Phase 14 WRITE-QA 实施中；Wave 3.10 已收口）  
+> **取代**：分散的「部分规划」作为唯一战略主轴；任务状态以 `ENGINEERING_OPTIMIZATION_QUEUE.md` **§1 Phase 13 / Phase 14 与 Phase 11 各波次** 为准  
 > **北极星**：从「功能齐全的 AI 写作工具箱」→「可走完一篇论文全生命周期的科研写作系统」
 
 ---
@@ -20,6 +20,8 @@
 | Wave 3.8 Agent 单面 + 数据闭环 | ✅ 本波已落地 | [`plans/W3-AP-AGENT-HUB.md`](./plans/W3-AP-AGENT-HUB.md)：附件=唯一上传口；结果章硬门禁；Tab 收敛。队列 Phase 11c |
 | Wave 3.9 意图状态化 + 质量尺 | ✅ 已收口 | [`plans/W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md)：intentKind 进快照；规则 SSOT；收口默认 claim grounding；SHADOW cancelled。队列 Phase 11d |
 | Wave 3.10 车间图纸 | ✅ 已收口 | [`plans/W3-AP-RUNTIME.md`](./plans/W3-AP-RUNTIME.md)：工具表 SSOT + 会话轨迹 + 冻结旧扩写。不换循环。队列 Phase 11e |
+| Wave 3.11 图表质量系统 | ✅ 001–010 收口 | [`plans/FIG-QA-quality-system.md`](./plans/FIG-QA-quality-system.md)：ChartSpec → Layout Solver → 确定性质检 → spec 补丁。三件套 bar/line/heatmap 已过剖面。不挡 Wave 4 导出 |
+| Wave 3.12 写作质量系统 | 📋 规划生效 | [`plans/WRITE-QA-quality-system.md`](./plans/WRITE-QA-quality-system.md)：SectionSpec → Evidence Binder → 确定性质检 → writing patch。队列 Phase 14。不解冻旧扩写。不挡 FIG-QA / Wave 4 |
 | Wave 4 导出抛光 | ⚠️ backlog | **W4-EXPORT** / ENG-PR-094 done；LaTeX/disclosure 等让路 |
 | 从 Demo→完整产品 | 📋 规划生效 | 见 [`PRODUCT_COMPLETION_PLAN.md`](./PRODUCT_COMPLETION_PLAN.md) |
 | `/academic-paper` | ➡️ 引导页 | **不是**第二套流水线；只引导进工作台 **Agent Tab** |
@@ -182,19 +184,18 @@ Wave 2 产品化三项已完成。
 | **W3-AP-CONFIG-QA** | ✅ done | Phase0 一问一答配置 |
 | **W3-AP-WORK-MEMORY** | ✅ done | 主张/决策/待办落盘 |
 
-### Wave 3.7 — Agent 写作质量（当前主轴）
+### Wave 3.7 — Agent 写作质量（完整度面，已收口）
 
 | 项 | 状态 | 说明 |
 |----|------|------|
-| **W3-AP-QUALITY** | 📋 todo | 主轴；详规 [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md) |
+| **W3-AP-QUALITY** | ✅ done | 引用接地 / 分节完整 / WQC / 摘要 / 审查；详规 [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md) |
 | W3-AP-CITE-GROUND | ✅ done | 语义可疑引用告警；`citation-grounding` |
 | W3-AP-DRAFT-COVER | ✅ done | 分节完整 / 薄节；`draft-coverage` |
-| W3-AP-WQC | todo | AI 腔 / overclaim 轻量质检 |
-| W3-AP-WQC | todo | AI 腔 / overclaim 轻量质检 |
-| W3-AP-ABS-FLOW / REVIEW-FLOW | todo | 摘要与可选审查收口 |
-| W3-AP-CHART-CJK / ENTRY-WIZARD | todo | 收口已有实现 |
+| W3-AP-WQC | ✅ done | 4 条短语规则，挂在 `verify_content`（正文闭环见 Wave 3.12） |
+| W3-AP-ABS-FLOW / REVIEW-FLOW | ✅ done | 摘要与可选审查收口 |
+| W3-AP-CHART-CJK / ENTRY-WIZARD | ✅ done | 2026-08-06 收口 |
 
-原则：先质量后扩模式；不做 Conductor / plan 苏格拉底 / 五人组外审 / LaTeX disclosure（本波）。
+原则：先质量后扩模式；不做 Conductor / plan 苏格拉底 / 五人组外审 / LaTeX disclosure（本波）。正文生成质量见 **Wave 3.12 WRITE-QA**。
 
 ### Wave 3.8 — Agent 单面 + 数据闭环 ✅
 
@@ -213,6 +214,22 @@ Wave 2 产品化三项已完成。
 | W3-AP-INTENT-SHADOW | cancelled | 跟聊 inherit 已覆盖；regex 影子测不到跟聊；无标注样本 |
 
 原则：冻口语门禁；冻 LangGraph 拓扑；不把 LLM-judge 接进热路径；不重开 SHADOW。
+
+### Wave 3.12 — 写作质量系统（规划生效）
+
+把写节从「超长 prompt + Writer 一锅生成」升级为编译器。详规 [`plans/WRITE-QA-quality-system.md`](./plans/WRITE-QA-quality-system.md)。队列 Phase 14。
+
+| 项 | 状态 | 说明 |
+|----|------|------|
+| **WRITE-QA-000** | ✅ done | 本计划 + 队列挂载 |
+| WRITE-QA-001 | ✅ done | `SectionSpecV1` + `WritingQaReport`；旧 context/bullets 适配 |
+| WRITE-QA-003 | ✅ done | 写节热路径 `qaReport`，默认不阻断 persist |
+| WRITE-QA-002 | ✅ done | 蓝图/要点编译 `SectionSpec`；写节 observation 带回 |
+| WRITE-QA-004 | ✅ done | 项目文献池词重叠绑定；不做 per-card RAG；收窄检索+精简摘要 |
+| WRITE-QA-005 | ✅ done | 确定性补丁表 + 最多 1 次定向 refine；写回前修补；full 不再二次 refine |
+| WRITE-QA-006～010 | todo | persist/看板 → prompt 瘦身 → golden → 主路径吃 Spec → 剖面收口 |
+
+原则：不解冻 `POST /api/writing`；不复刻十二代理；不往 `writing.ts` 再堆「禁止」；热路径只用确定性 QA。与 FIG-QA 文件面不重叠，可并行。
 
 ### Wave 4 — 导出与抛光（backlog）
 
@@ -235,7 +252,7 @@ Wave 2 产品化三项已完成。
 | 1 RESEARCH | RAG + 外部检索 + 210 文献注入 | 0–1 | ✅ |
 | 2 ARCHITECTURE | outline + writing blueprint + userSkeleton | 1 | ✅ |
 | 3 ARGUMENTATION | Argument Blueprint | 3 | ✅ MVP |
-| 4 DRAFTING | writing pipeline + Agent write tools | 2 / **3.7** | ✅ 能写；**质量收口中** |
+| 4 DRAFTING | writing pipeline + Agent write tools | 2 / 3.7 / **3.12** | ✅ 能写；**WRITE-QA 质量系统规划中** |
 | 5a CITATIONS | validateCitations + CITE-GATE + **CITE-GROUND** | 3 / **3.7** | ✅ 编号；**语义接地 done** |
 | 5b ABSTRACT | 双语摘要 API + ABS-FLOW | 3 / **3.7** | ✅ API；**Agent 收口路径 todo** |
 | 6 PEER REVIEW | review-service + max-2 + REVIEW-FLOW | 3 / **3.7** | ✅ 内审；外审五人组不做 |

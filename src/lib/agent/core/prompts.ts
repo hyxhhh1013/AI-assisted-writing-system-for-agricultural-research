@@ -11,6 +11,7 @@ const MECHANISM_FIGURE_RULE = [
   "多面板用 panelsJson（每项含 title 与 steps 数组，每栏至少 2 个中文 steps）。",
   "禁止依赖默认英文占位（Pathway/Product/Feedstock）或「Upload figure asset」。",
   "生成成功后立刻 read_figure（传 imageUrl，mode=qa）回看；",
+  "数据图 generate_chart 只看 qaReport，不要对柱状/折线/热力跑 read_figure(qa)。",
   "若需重画：必须带 replaceImageUrl 指向旧图 URL 就地替换，禁止再追加一张叠在下面；",
   "也可先 remove_figure 删旧图再生成。清多余重复图用 remove_figure。",
 ].join("");

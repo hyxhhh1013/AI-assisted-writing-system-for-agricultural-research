@@ -1,6 +1,6 @@
 # Agent 编排（写作助手）
 
-> L3 域文档 · 更新：2026-08-16  
+> L3 域文档 · 更新：2026-08-22  
 > 契约唯一权威源：`src/contracts/agent.ts`（SSE 事件）、`src/contracts/agent-session.ts`（会话消息）、`src/contracts/agent-intent.ts`（`IntentKind`）。
 
 ## 概览
@@ -39,7 +39,12 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 | `src/lib/agent/ingest-project-data.ts` | 表格入库合并 + 只 PATCH `dataSources`/`dataClaims`（`ingest_project_data`） |
 | `src/lib/agent/writing-progress.ts` | 写节进度翻译层（管道事件 → `agent/progress` label） |
 | `src/lib/agent/writing-quality.ts` | WQC 写作质检轻量：喉清开场 / 综上所述堆砌 / overclaim / 段长方差（确定性规则，warn 级不阻断） |
-| `src/lib/agent/quality-closure.ts` | 质量收口看板数据层：聚合节完整度/摘要/引用硬检/审查 4 信号（纯函数） |
+| `src/lib/agent/writing-qa-run.ts` | WRITE-QA-003 写节热路径 QA：`evaluateSectionWritingQa` → `WritingQaReport`（不阻断 persist） |
+| `src/lib/agent/section-compiler.ts` | WRITE-QA-002：蓝图/要点/语域 → `SectionSpecV1` |
+| `src/lib/agent/evidence-binder.ts` | WRITE-QA-004：主张钉到项目题录/摘要/dataClaims（词重叠，不做 per-card RAG） |
+| `src/lib/agent/writing-patches.ts` | WRITE-QA-005：`applyWritingPatches` 纯函数表（喉清/空话/越界引用/摘要引用/MD 标题/文末文献表/结果混讨论/overclaim） |
+| `src/lib/agent/writing-patch-run.ts` | WRITE-QA-005：写节回修环；确定性之后最多 1 次定向 refine |
+| `src/lib/agent/quality-closure.ts` | 质量收口看板数据层：聚合节完整度/摘要/引用硬检/审查 4 信号（纯函数）。WRITE-QA-006 将加第 5 信号 prose QA |
 | `src/lib/agent/core/agent-rules.ts` | `AGENT_RULES` 单一事实源；prompt/nudge/硬拦文案读同一 `text` |
 | `src/lib/agent/core/classify-intent.ts` | 每轮 `classifyIntent`：跟聊继承或正则；不上 LLM |
 | `components/shared/agent/quality-closure-panel.tsx` | 质量收口看板 UI（工作台 agent Tab 顶部） |
@@ -218,6 +223,16 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 
 **已收口（2026-08-15）**：INTENT-01/02、RULES-01、QUALITY-CLAIM、QUALITY-JUDGE。`classifyIntent` 每轮一次；跟聊短回复继承 `snapshot.intentKind`。gate / `nudgeForKind` 只消费 kind。`AGENT_RULES` 单一事实源（5 条）。收口默认 claim grounding。`eval:quality` 规则分 + 可选 LLM 分（不进写节）。**INTENT-SHADOW cancelled**：跟聊 inherit 已覆盖「A/继续」；规定的影子触发在 `source=regex`，测不到跟聊；无标注样本则不上热路径 LLM 分类。
 
+## 写作质量系统（2026-08-22 起，Wave 3.12）
+
+> **根因**：完整度/引用地板已齐，但写节仍是「超长 prompt + Writer 一锅生成 + 事后 LLM 审查」；质量债被「Agent 能写、人再改」锁死。  
+> **目标态**：`SectionSpec` 编译 → Evidence Binder → 确定性质检 → writing patch。  
+> **队列**：Phase 14 `WRITE-QA-001～010`；详规 [`plans/WRITE-QA-quality-system.md`](../plans/WRITE-QA-quality-system.md)。  
+> **冻结**：不解冻 `POST /api/writing`；不复刻十二代理；禁止再往 `writing.ts` 堆「禁止」；热路径不用 LLM-judge。  
+> **与 3.7 关系**：CITE-GROUND / DRAFT-COVER / WQC / ABS-FLOW 是地板，本波不推倒。  
+> **契约（001 done）**：`src/contracts/section-spec.ts`（`SectionSpecV1`）+ `writing-qa.ts`（`WritingQaReport`）。旧 `write_section.context/bullets` 经 `liftWriteSectionInputToSpec` 升格；现有 WQC 经 `liftWritingQualityFindings` 升格。  
+> **热路径（002–005 done）**：`write_section` 编译 `sectionSpec` → 绑定项目文献池 → 写后 QA → `applyWritingPatches`（写回前）→ 仅当仍有 repair 且非 full 管道时定向 refine 1 次。Writer 看短【证据绑定】表 + 绑中摘要。默认**不阻断** persist（006 再按 `block` 拦截）。`verify_content` 同步带 `qaReport`。
+
 ## 车间图纸（2026-08-16 规划，Wave 3.10）
 
 产品方向：循环够用；缺的是单一工具登记、可追查的短轨迹、旧扩写管不再加功能。不换 LangGraph / DeepSeek Harness。
@@ -235,16 +250,16 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 | 层 | 行为 |
 |----|------|
 | L1 草稿 | `draft_mechanism_figure` / `generate_chart`；多机理图任务前 **FigureBrief clarify**（版式/配色/分子式/素材）；可选 `templateId` 农科模板 |
-| L2 硬闭环 | 出图成功后 **toolsNode 自动注入** `read_figure(mode=qa)`；并行读图批也会补 QA nudge；QA 未通过则**禁止空口收尾**（`routeAfterAgent` 强制续跑）+ 门禁强制 `replaceImageUrl`；同 caption/section 无 replace 时工具内自动就地替换（防叠图） |
+| L2 硬闭环 | **机理图**出图后 toolsNode 自动注入 `read_figure(mode=qa)`；**数据图**看 `generate_chart.qaReport`（`block` 强制按 findings 重出，不跑 GLM-4V）。QA 未通过则禁止空口收尾 + 门禁 `replaceImageUrl`；同 caption/section 无 replace 时工具内自动就地替换（防叠图） |
 | L3 精修 | **配图坞**（输入框上方常驻最近出图，免翻聊天）+ 结果卡：落点说明（默认**节末落盘**）+「查看正文位置」+ 结构化「按意见改」（含分叉/三面板/脱氧等快捷）+ `/plot?chartAssetId=&replaceImageUrl=` 深链（优先资产快照回放，精修回写默认真地替换）；编辑器「本节插图」可挪位 |
-| 图质检两级（2026-08-09） | `figure-qa.ts`：硬伤→`needsRegen`（强制 replace 重画）；观感→`needsPolish`（不强制重画，nudge 去 `/plot`）；通过→`pass`。规则含节点文案过载、多栏严重失衡等，灰区默认建议精修而非一律放行 |
+| 图质检两级（2026-08-09；008 收窄） | 机理图走 `figure-qa.ts`（硬伤→`needsRegen`，观感→`needsPolish`）。数据图只看 `qaReport`；`read_figure(mode=qa)` 对柱状/折线等会跳过识图。 |
 | 精修回放加固（2026-08-10） | 根因：`uiTranscript` 未持久化 `plotHref`；长 `figureSpec` URL 易截断；`target=_blank` 新标签读不到 opener 的 `sessionStorage`。现：transcript 保留深链+轻量快照；`GET .../charts`；点击精修用 **`localStorage`** 暂存（`plot-prefill-stash.ts`）；绘图页按 assetId/imageUrl 回放并 remount 预填 |
 
 | 工具 | 作用 |
 |------|------|
-| `draft_mechanism_figure` / `generate_chart` | 出图并写入图表库；可插章节。**改图传 `replaceImageUrl`/`replaceChartId` 就地替换**；同标题已有图自动 replace |
+| `draft_mechanism_figure` / `generate_chart` | 出图并写入图表库；可插章节。**改图传 `replaceImageUrl`/`replaceChartId` 就地替换**；同标题已有图自动 replace。数据图走 ChartSpec：显著性用 `significanceJson`；`configJson` 仅白名单（刊宽/DPI/`tight_layout` 会丢弃） |
 | `remove_figure` | 删图表资产 + 默认去掉正文对应 `![](url)`（清重复旧图）；**需用户确认** |
-| `read_figure` | GLM-4V 回看；`mode=qa` 查占位/英文模板/空栏；`needsRegen` 驱动门禁 |
+| `read_figure` | `describe` 可识任意图；`mode=qa` **仅机理图**（占位/英文模板/空栏）。数据图跳过识图，看 `qaReport` |
 
 实现：`lib/agent/figure-loop.ts`、`langgraph/tool-gates.ts`（`figureReplaceGate`）、`langgraph/nodes.ts`（自动排队 QA / FigureBrief）。视觉 provider：`callAI({ provider: "vision" })`。
 

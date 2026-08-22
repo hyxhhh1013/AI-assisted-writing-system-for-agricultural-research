@@ -58,6 +58,7 @@ export function isPlotReplayTool(tool: string): tool is PlotReplayTool {
   return PLOT_REPLAY_TOOLS.has(tool);
 }
 
+/** 回放快照（/plot prefill）。新出图中间表示见 `ChartSpecV1`（contracts/chart-spec.ts），由适配器升格，本结构暂不删。 */
 export interface FigureSpec {
   tool: PlotReplayTool;
   config: Record<string, unknown>;

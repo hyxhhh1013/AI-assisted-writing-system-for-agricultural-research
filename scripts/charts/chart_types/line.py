@@ -87,6 +87,7 @@ class LineChart(ChartModule):
             ax.set_xticks(range(len(labels)))
             ax.set_xticklabels(labels_display)
         else:
+            ax.set_xticks(numeric_x)
             ax.set_xticklabels(labels_display)
 
         self.finalize_axes(
@@ -111,17 +112,8 @@ class LineChart(ChartModule):
           {"fromX": a, "toX": b, "value": "*"}                       # x 区间括号（该区间内所有序列的最大值处）
         series_tops: list[(x_vals, d, tops)]（tops 含误差上沿）
         """
-        raw = config.get("significance")
-        if raw in (None, "", []):
-            return
-        sig = raw
-        if isinstance(sig, str):
-            try:
-                import json as _json
-                sig = _json.loads(sig)
-            except (TypeError, ValueError):
-                return
-        if not isinstance(sig, list) or not sig:
+        sig = self.read_significance(config)
+        if not sig:
             return
 
         fs = max(float(style.get("font_size", 8)) - 1, 6)

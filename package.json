@@ -16,6 +16,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "test:figures": "node scripts/test-figures.mjs",
     "eval:gates": "vitest run src/__tests__/eval",
     "eval:agent": "vitest run src/__tests__/eval/agent-scripts.eval.test.ts",
     "eval:quality": "npx --yes tsx scripts/eval-quality.ts",

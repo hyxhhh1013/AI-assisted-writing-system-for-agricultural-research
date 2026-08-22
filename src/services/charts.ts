@@ -1,5 +1,7 @@
 /** POST /api/chart — 通用图表生成（FormData） */
 
+import type { ChartExportManifest } from "@/contracts/chart-export";
+import type { ChartQaReport } from "@/contracts/chart-qa";
 import type { ChartStyleConfig } from "@/contracts/chart-style";
 
 export interface ChartGenericFileConfig {
@@ -40,14 +42,19 @@ export interface ChartGenerateResponse {
   imageUrl?: string;
   svgUrl?: string;
   pdfUrl?: string;
+  csvUrl?: string;
   fileName?: string;
   baseName?: string;
   caption?: string;
   error?: string;
   styleValidation?: ChartStyleValidation;
+  qaReport?: ChartQaReport;
+  specPatches?: Array<{ code: string; path: string }>;
+  renderCount?: number;
   figWidth?: number;
   columns?: number;
   preset?: string;
+  exportManifest?: ChartExportManifest;
 }
 
 export async function postChartForm(body: FormData): Promise<ChartGenerateResponse> {

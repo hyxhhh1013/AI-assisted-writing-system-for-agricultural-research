@@ -1,0 +1,142 @@
+{
+  "cases": [
+    {
+      "id": "bar_grouped",
+      "chartType": "bar_grouped",
+      "csv": "bar_grouped.csv",
+      "xLabel": "处理",
+      "yLabel": "产量 (kg/ha)",
+      "profile": "core",
+      "minTexts": 4
+    },
+    {
+      "id": "bar_grouped_cjk",
+      "chartType": "bar_grouped",
+      "csv": "bar_grouped_cjk.csv",
+      "xLabel": "处理",
+      "yLabel": "产量 (kg/ha)",
+      "cjk": true,
+      "profile": "core",
+      "minTexts": 4
+    },
+    {
+      "id": "bar_grouped_sig",
+      "chartType": "bar_grouped",
+      "csv": "bar_grouped.csv",
+      "xLabel": "处理",
+      "yLabel": "产量 (kg/ha)",
+      "profile": "core",
+      "significance": [
+        { "category": 0, "value": "*" },
+        { "fromCategory": 0, "toCategory": 2, "value": "**" }
+      ],
+      "minTexts": 5
+    },
+    {
+      "id": "bar_grouped_agr",
+      "chartType": "bar_grouped",
+      "csv": "bar_grouped.csv",
+      "xLabel": "处理",
+      "yLabel": "产量 (kg/ha)",
+      "preset": "agr_journal",
+      "columns": 2,
+      "exportFormats": ["png", "svg", "pdf"],
+      "assertWidth": true,
+      "assertExports": ["png", "svg", "pdf"],
+      "profile": "core",
+      "minTexts": 4
+    },
+    {
+      "id": "bar_stacked",
+      "chartType": "bar_stacked",
+      "csv": "bar_stacked.csv",
+      "xLabel": "处理",
+      "yLabel": "生物量 (g)",
+      "minTexts": 4
+    },
+    {
+      "id": "bar_pct_stacked",
+      "chartType": "bar_pct_stacked",
+      "csv": "bar_pct_stacked.csv",
+      "xLabel": "处理",
+      "yLabel": "占比 (%)",
+      "minTexts": 4
+    },
+    {
+      "id": "line",
+      "chartType": "line",
+      "csv": "line.csv",
+      "xLabel": "时间 (d)",
+      "yLabel": "含量 (mg/g)",
+      "profile": "core",
+      "minTexts": 4
+    },
+    {
+      "id": "line_sd",
+      "chartType": "line",
+      "csv": "line_sd.csv",
+      "xLabel": "时间 (d)",
+      "yLabel": "含量 (mg/g)",
+      "profile": "core",
+      "minTexts": 4
+    },
+    {
+      "id": "scatter",
+      "chartType": "scatter",
+      "csv": "scatter.csv",
+      "xLabel": "温度 (°C)",
+      "yLabel": "释放量 (mg/g)",
+      "minTexts": 3
+    },
+    {
+      "id": "pie",
+      "chartType": "pie",
+      "csv": "pie.csv",
+      "xLabel": "组分",
+      "yLabel": "占比",
+      "minTexts": 2
+    },
+    {
+      "id": "heatmap",
+      "chartType": "heatmap",
+      "csv": "heatmap.csv",
+      "xLabel": "元素",
+      "yLabel": "指标",
+      "profile": "core",
+      "assertWidth": true,
+      "minTexts": 3
+    },
+    {
+      "id": "area",
+      "chartType": "area",
+      "csv": "area.csv",
+      "xLabel": "时间 (d)",
+      "yLabel": "累积 (t/ha)",
+      "minTexts": 3
+    },
+    {
+      "id": "forest",
+      "chartType": "forest",
+      "csv": "forest.csv",
+      "xLabel": "效应量",
+      "yLabel": "研究",
+      "minTexts": 3
+    },
+    {
+      "id": "radar",
+      "chartType": "radar",
+      "csv": "radar.csv",
+      "xLabel": "指标",
+      "yLabel": "得分",
+      "minTexts": 3
+    },
+    {
+      "id": "stack_offset",
+      "chartType": "stack_offset",
+      "csv": "stack_offset.csv",
+      "xLabel": "波数 (cm-1)",
+      "yLabel": "Intensity (a.u.)",
+      "minTexts": 3
+    }
+  ]
+}

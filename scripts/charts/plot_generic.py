@@ -44,6 +44,11 @@ def _ok_payload(output_path: str, config: dict, series_count: int = 0) -> dict:
         payload["preset"] = style.get("preset")
     except Exception:
         pass
+    try:
+        from qa_report import get_last_qa
+        payload["qaReport"] = get_last_qa()
+    except Exception:
+        pass
     return payload  # noqa: E402
 
 apply_cjk_font_rcparams()
@@ -154,9 +159,9 @@ def _plot_inline_legacy(labels, datasets, config, output_path):
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.grid(axis="y", alpha=0.25)
-    plt.tight_layout()
-    fig.savefig(output_path, dpi=200, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
+    from layout_solver import run_layout_and_save
+    from plot_style import resolve_style as _resolve_style
+    run_layout_and_save(fig, output_path, _resolve_style(config), config)
 
 
 def plot_chart(data_path: str, config: dict, output_path: str):

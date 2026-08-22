@@ -57,9 +57,14 @@ export async function POST(req: NextRequest) {
       fileName: generated.fileName,
       baseName: generated.baseName,
       styleValidation: generated.styleValidation,
+      qaReport: generated.qaReport,
+      specPatches: generated.specPatches,
+      renderCount: generated.renderCount,
       figWidth: generated.figWidth,
       columns: generated.columns,
       preset: generated.preset,
+      csvUrl: generated.csvUrl,
+      exportManifest: generated.exportManifest,
     });
   } catch (error: unknown) {
     logger.error("Chart API error:", error);
