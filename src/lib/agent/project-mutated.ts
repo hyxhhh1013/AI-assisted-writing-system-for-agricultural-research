@@ -71,6 +71,9 @@ export function extractProjectMutated(
     if (data.persisted === false || data.persisted === "false") {
       return null;
     }
+    if (tool === "write_section" && (data.blocked === true || data.persisted == null)) {
+      return null;
+    }
     // import_reference 预览 / 待确认
     if (
       tool === "import_reference"

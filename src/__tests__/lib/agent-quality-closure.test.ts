@@ -23,7 +23,8 @@ describe("buildQualityClosure", () => {
       reviewDone: true,
     });
     expect(r.readyToClose).toBe(true);
-    expect(r.okCount).toBe(4);
+    expect(r.okCount).toBe(5);
+    expect(r.signals.find((s) => s.key === "prose")?.status).toBe("ok");
     expect(r.summary).toContain("就绪");
   });
 
@@ -83,5 +84,32 @@ describe("buildQualityClosure", () => {
     });
     expect(r.signals.find((s) => s.key === "review")?.status).toBe("missing");
     expect(r.summary).toContain("审查");
+  });
+
+  it("正文空话套话 → prose warn，四灯全绿也不能收口", () => {
+    const r = buildQualityClosure({
+      sections: {
+        ...fullSections(),
+        introduction:
+          "该方法具有重要的意义，也展现出较大的潜力。".padEnd(1200, "述"),
+      },
+      mode: "research",
+      language: "zh",
+      citationPassed: true,
+      reviewDone: true,
+    });
+    expect(r.signals.find((s) => s.key === "prose")?.status).toBe("warn");
+    expect(r.readyToClose).toBe(false);
+    expect(r.summary).toContain("可优化");
+  });
+
+  it("非字符串章节不抛错", () => {
+    expect(() =>
+      buildQualityClosure({
+        sections: { introduction: { html: "<p>x</p>" } } as unknown as Record<string, string>,
+        mode: "research",
+        language: "zh",
+      }),
+    ).not.toThrow();
   });
 });

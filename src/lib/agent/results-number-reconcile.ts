@@ -7,6 +7,9 @@ import type { EvidenceClaim } from "@/contracts/data-source";
 
 const DECIMAL_RE = /(?<![.\d])(\d+\.\d+)(?!\d)/g;
 const HEDGE_RE = /约|大约|近|左右|数量级|~|≈/;
+/** 图/表号、p 值、相关系数：不是新编造的试验结果 */
+const STRUCTURAL_NUMBER_RE =
+  /图\s*|表\s*|Fig(?:ure)?\.?\s*|Tab(?:le)?\.?\s*|式\s*|附录|[Pp]\s*[=<>＜＞≤≥]|[Rr]²|[Rr]\s*=/;
 
 export interface ResultNumberHit {
   raw: string;
@@ -38,7 +41,7 @@ export function extractPreciseResultNumbers(text: string): ResultNumberHit[] {
     if (!Number.isFinite(value)) continue;
     const start = m.index;
     const window = text.slice(Math.max(0, start - 8), start + raw.length + 8);
-    if (HEDGE_RE.test(window)) continue;
+    if (HEDGE_RE.test(window) || STRUCTURAL_NUMBER_RE.test(window)) continue;
     hits.push({ raw, value, index: start });
   }
   return hits;

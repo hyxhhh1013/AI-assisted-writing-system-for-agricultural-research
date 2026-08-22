@@ -1,4 +1,5 @@
 import type { AgentCheckpointRequest, AgentSSEEvent } from "@/contracts/agent";
+import { isWriteSectionSettled } from "@/contracts/writing-qa";
 import {
   buildAgentBriefingMessage,
   buildAgentSystemPrompt,
@@ -321,8 +322,7 @@ export async function agentNode(
       (o) =>
         o.tool === "write_section"
         && o.success
-        && o.data != null
-        && (o.data as { persisted?: unknown }).persisted != null,
+        && isWriteSectionSettled(o.data),
     );
 
     // 意图收尾续跑 / 停下问用户：由 goal-intents 的意图表统一驱动（见 pickIntentNudge / pickIntentStopAsk）

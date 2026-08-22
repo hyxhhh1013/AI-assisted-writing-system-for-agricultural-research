@@ -11,6 +11,11 @@ function expandCitationGroupUnchecked(raw: string): number[] {
   return expandCitationGroup(raw); // 无上限校验，等价于不传 refCount
 }
 
+/** 每次新建，避免模块级 /g lastIndex 串扰 */
+function citationGroupRe(): RegExp {
+  return new RegExp(CITATION_GROUP_RE.source, CITATION_GROUP_RE.flags);
+}
+
 /** 按全文阅读顺序收集首次出现的引用编号（1-based，且在合法范围内） */
 export function collectCitationFirstAppearance(
   fullText: string,
@@ -21,7 +26,8 @@ export function collectCitationFirstAppearance(
   );
   const order: number[] = [];
   let m: RegExpExecArray | null;
-  while ((m = CITATION_GROUP_RE.exec(normalized)) !== null) {
+  const re = citationGroupRe();
+  while ((m = re.exec(normalized)) !== null) {
     for (const num of expandCitationGroup(m[1], refCount)) {
       if (!order.includes(num)) order.push(num);
     }
@@ -35,7 +41,8 @@ export function collectInvalidCitationNumbers(fullText: string, refCount: number
   );
   const invalid: number[] = [];
   let m: RegExpExecArray | null;
-  while ((m = CITATION_GROUP_RE.exec(normalized)) !== null) {
+  const re = citationGroupRe();
+  while ((m = re.exec(normalized)) !== null) {
     for (const num of expandCitationGroupUnchecked(m[1])) {
       if ((num < 1 || num > refCount) && !invalid.includes(num)) invalid.push(num);
     }

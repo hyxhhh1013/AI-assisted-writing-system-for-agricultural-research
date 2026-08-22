@@ -26,8 +26,8 @@ const STATUS_STYLE: Record<
 };
 
 /**
- * 论文质量收口看板：聚合 节完整度 / 摘要 / 引用硬检 / 审查 四个质量信号，
- * 一行展示「还差什么、能否导出」。数据：节完整度前端算，引用/审查走 services。
+ * 论文质量收口看板：节完整度 / 摘要 / 引用硬检 / 审查 / 文风质检。
+ * 一行展示「还差什么、能否导出」。文风质检对已写入章节做确定性 QA。
  */
 export function QualityClosurePanel({
   projectId,
@@ -59,17 +59,25 @@ export function QualityClosurePanel({
     };
   }, [projectId]);
 
-  const result = useMemo(
-    () =>
-      buildQualityClosure({
+  const result = useMemo(() => {
+    try {
+      return buildQualityClosure({
         sections: sections ?? {},
         mode,
         language,
         citationPassed,
         reviewDone,
-      }),
-    [sections, mode, language, citationPassed, reviewDone],
-  );
+      });
+    } catch {
+      return {
+        signals: [],
+        okCount: 0,
+        total: 0,
+        readyToClose: false,
+        summary: "质检暂不可用",
+      };
+    }
+  }, [sections, mode, language, citationPassed, reviewDone]);
 
   return (
     <div className="rounded-xl border border-border/60 bg-white px-3 py-2">

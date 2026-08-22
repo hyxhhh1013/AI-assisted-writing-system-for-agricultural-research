@@ -1,11 +1,13 @@
 /**
  * 论文质量收口看板的数据层（纯函数，无 UI 依赖，可单测）。
- * 聚合 4 个质量信号：节完整度 / 摘要 / 引用硬检 / 审查。
- * 对应 academic-paper skill 的「收口」语义：全部达标后可导出。
+ * 聚合 5 个质量信号：节完整度 / 摘要 / 引用硬检 / 审查 / 文风质检。
+ * WRITE-QA-006：第 5 信号避免「四灯全绿、正文仍空话」。
  */
+import type { WritingQaReport } from "@/contracts/writing-qa";
+import { evaluateSectionWritingQa } from "@/lib/agent/writing-qa-run";
 import { evaluateDraftCoverage } from "@/lib/draft-coverage";
 
-export type QualitySignalKey = "coverage" | "abstract" | "citation" | "review";
+export type QualitySignalKey = "coverage" | "abstract" | "citation" | "review" | "prose";
 export type QualitySignalStatus = "ok" | "warn" | "missing";
 
 export interface QualitySignal {
@@ -23,6 +25,8 @@ export interface QualityClosureInput {
   citationPassed?: boolean | null;
   /** 是否已跑过审查轮次 */
   reviewDone?: boolean;
+  /** 最近一次写节 qaReport；缺省则扫已写入章节 */
+  lastProseQa?: WritingQaReport | null;
 }
 
 export interface QualityClosureResult {
@@ -33,10 +37,90 @@ export interface QualityClosureResult {
   summary: string;
 }
 
+const MAX_PROSE_FINDINGS = 12;
+
+function asSectionText(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+/** 对已写入各节跑确定性 QA，聚合为全文 prose 信号。 */
+export function evaluateProjectProseQa(
+  sections: Record<string, string> | undefined,
+): WritingQaReport | null {
+  const entries = Object.entries(sections ?? {})
+    .map(([key, value]) => [key, asSectionText(value)] as const)
+    .filter(([, text]) => text.trim().length > 0);
+  if (entries.length === 0) return null;
+  const findings: WritingQaReport["findings"] = [];
+  let charCount = 0;
+  for (const [key, text] of entries) {
+    let report: WritingQaReport;
+    try {
+      report = evaluateSectionWritingQa({ text, sectionKey: key });
+    } catch {
+      continue;
+    }
+    charCount += report.charCount ?? text.length;
+    for (const f of report.findings) {
+      if (findings.length >= MAX_PROSE_FINDINGS) break;
+      findings.push({
+        ...f,
+        message: `[${key}] ${f.message}`,
+      });
+    }
+  }
+  return {
+    verdict: findings.some((f) => f.action === "block")
+      ? "block"
+      : findings.some((f) => f.action === "repair")
+        ? "repair"
+        : "pass",
+    findings,
+    charCount,
+  };
+}
+
+function proseSignal(
+  report: WritingQaReport | null,
+): QualitySignal {
+  if (!report) {
+    return {
+      key: "prose",
+      status: "missing",
+      label: "文风质检",
+      detail: "未写正文",
+    };
+  }
+  const repair = report.findings.filter((f) => f.action === "repair" || f.action === "block");
+  if (report.verdict === "block") {
+    return {
+      key: "prose",
+      status: "warn",
+      label: "文风质检",
+      detail: `不可写回：${repair.map((f) => f.code).slice(0, 3).join("、") || "block"}`,
+    };
+  }
+  if (report.verdict === "repair") {
+    return {
+      key: "prose",
+      status: "warn",
+      label: "文风质检",
+      detail: `${repair.length} 条待修补（${repair.map((f) => f.code).slice(0, 3).join("、")}）`,
+    };
+  }
+  const warns = report.findings.filter((f) => f.action === "warn");
+  return {
+    key: "prose",
+    status: "ok",
+    label: "文风质检",
+    detail: warns.length > 0 ? `通过（${warns.length} 条提示）` : "通过",
+  };
+}
+
 export function buildQualityClosure(input: QualityClosureInput): QualityClosureResult {
   const sectionChars: Record<string, number> = {};
   for (const [key, content] of Object.entries(input.sections ?? {})) {
-    sectionChars[key] = (content ?? "").length;
+    sectionChars[key] = asSectionText(content).length;
   }
 
   const coverage = evaluateDraftCoverage({
@@ -47,7 +131,6 @@ export function buildQualityClosure(input: QualityClosureInput): QualityClosureR
 
   const signals: QualitySignal[] = [];
 
-  // 节完整度：必写节无缺口且无偏薄 → ok
   const coverageOk =
     coverage.requiredGaps.length === 0 && coverage.thinKeys.length === 0;
   signals.push({
@@ -59,7 +142,6 @@ export function buildQualityClosure(input: QualityClosureInput): QualityClosureR
       : `必写 ${coverage.okRequiredCount}/${coverage.requiredCount}${coverage.requiredGaps.length > 0 ? `，缺 ${coverage.requiredGaps.join("、")}` : ""}${coverage.thinKeys.length > 0 ? `，偏薄 ${coverage.thinKeys.join("、")}` : ""}`,
   });
 
-  // 摘要：复用 coverage 的 abstract 节状态
   const abs = coverage.sections.find((s) => s.key === "abstract");
   const absStatus = abs?.status ?? "empty";
   signals.push({
@@ -74,7 +156,6 @@ export function buildQualityClosure(input: QualityClosureInput): QualityClosureR
           : "未写",
   });
 
-  // 引用硬检
   signals.push({
     key: "citation",
     status:
@@ -92,13 +173,17 @@ export function buildQualityClosure(input: QualityClosureInput): QualityClosureR
           : "未知",
   });
 
-  // 审查
   signals.push({
     key: "review",
     status: input.reviewDone ? "ok" : "missing",
     label: "审查",
     detail: input.reviewDone ? "已审查" : "未审查",
   });
+
+  const prose = input.lastProseQa === undefined
+    ? evaluateProjectProseQa(input.sections)
+    : input.lastProseQa;
+  signals.push(proseSignal(prose));
 
   const okCount = signals.filter((s) => s.status === "ok").length;
   const total = signals.length;

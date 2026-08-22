@@ -1,6 +1,7 @@
 import { callAINonStreaming, getAgentModelConfig } from "@/lib/ai";
 import { buildVerifierPrompt, buildVerifierSystemPrompt } from "@/lib/prompts";
 import { checkWritingQuality } from "@/lib/agent/writing-quality";
+import { evaluateSectionWritingQa } from "@/lib/agent/writing-qa-run";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 
 export const verifyContentTool: ToolDefinition = {
@@ -44,8 +45,9 @@ export const verifyContentTool: ToolDefinition = {
       projectMode,
     });
 
-    // W3-AP-WQC：确定性文风质检（喉清开场/综上所述/overclaim/段长方差），warn 级不阻断
+    // WRITE-QA-003：确定性文风质检（WQC + 语域规则），warn 级不阻断
     const quality = checkWritingQuality(draftText);
+    const qaReport = evaluateSectionWritingQa({ text: draftText });
     const qualitySevere = quality.some((f) => f.severe);
 
     const report = await callAINonStreaming({
@@ -61,7 +63,7 @@ export const verifyContentTool: ToolDefinition = {
 
     return {
       success: true,
-      data: { report, quality, qualitySevere },
+      data: { report, quality, qualitySevere, qaReport },
       summary:
         quality.length > 0
           ? `Verifier 报告已生成（${report.length} 字）· 文风质检 ${quality.length} 条${qualitySevere ? "（含严重 overclaim，建议转 review）" : ""}`

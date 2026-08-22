@@ -53,6 +53,23 @@ describe("extractProjectMutated", () => {
     ).toBeNull();
   });
 
+  it("skips write_section when QA blocked and nothing persisted", () => {
+    expect(
+      extractProjectMutated("write_section", {
+        success: true,
+        data: { persisted: null, blocked: true },
+      }),
+    ).toBeNull();
+  });
+
+  it("detects write_section when draft persisted", () => {
+    const info = extractProjectMutated("write_section", {
+      success: true,
+      data: { persisted: { sectionKey: "introduction", referencesAdded: 0 } },
+    });
+    expect(info?.tool).toBe("write_section");
+  });
+
   it("detects ingest_project_data when persisted", () => {
     const info = extractProjectMutated("ingest_project_data", {
       success: true,

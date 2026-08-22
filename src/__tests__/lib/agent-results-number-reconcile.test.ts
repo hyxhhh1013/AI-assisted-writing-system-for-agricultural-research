@@ -36,4 +36,9 @@ describe("reconcileResultsNumbers", () => {
   it("整数不拦（只拦精确小数）", () => {
     expect(reconcileResultsNumbers("共 12 个处理。", [claim34]).ok).toBe(true);
   });
+
+  it("图/表号和 p 值不拦", () => {
+    expect(reconcileResultsNumbers("见图 2.1 与表 3.2。", [claim34]).ok).toBe(true);
+    expect(reconcileResultsNumbers("差异显著（p = 0.05）。", [claim34]).ok).toBe(true);
+  });
 });

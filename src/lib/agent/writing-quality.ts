@@ -4,6 +4,7 @@
  * 规则清单（中文）：喉清开场 / 综上所述堆砌 / overclaim / 段长方差过低。
  * 全部 warn 级、默认不阻断写回；overclaim 命中 ≥3 时标 severe，上层可升级到 review。
  * 对应 `docs/plans/W3-AP-QUALITY.md` §S3。
+ * WRITE-QA-003：写节热路径请用 `evaluateSectionWritingQa`（本文件 + 语域规则）。
  */
 
 export type WqcRule =
@@ -25,7 +26,7 @@ export interface WqcFinding {
 }
 
 /** 喉清开场：句首套话，直接进论据更佳 */
-const THROAT_CLEAR_PHRASES = [
+export const THROAT_CLEAR_PHRASES = [
   "众所周知",
   "值得注意的是",
   "需要注意的是",
@@ -33,10 +34,13 @@ const THROAT_CLEAR_PHRASES = [
   "显而易见",
   "需要指出的是",
   "首先需要指出",
+  "本节将讨论",
+  "本节将介绍",
+  "下文将分析",
 ];
 
 /** 结论连接词堆砌 */
-const CONNECTIVE_PHRASES = [
+export const CONNECTIVE_PHRASES = [
   "综上所述",
   "总而言之",
   "总体而言",
@@ -47,7 +51,7 @@ const CONNECTIVE_PHRASES = [
 ];
 
 /** overclaim 绝对化表述（避开「完全/彻底」等科研中可能合法的词） */
-const OVERCLAIM_PHRASES = [
+export const OVERCLAIM_PHRASES = [
   "绝对",
   "必定",
   "毫无疑问",
