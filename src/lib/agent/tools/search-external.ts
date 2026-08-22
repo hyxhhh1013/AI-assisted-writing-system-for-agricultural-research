@@ -58,11 +58,11 @@ export const searchExternalTool: ToolDefinition = {
         .map(([k, v]) => `${k}:${v}`)
         .join(", ");
       return {
-        success: false,
-        error:
-          `外部检索「${query}」无命中（源计数 ${srcHint || "全部失败"}）。`
-          + `可换英文关键词（如 biochar pyrolysis）、缩短查询，或检查网络。`,
+        success: true,
         data: { query, variants, sourceCounts, count: 0, items: [] },
+        summary:
+          `外部检索「${query}」无命中（源计数 ${srcHint || "全部为空"}，变体 ${variants.join(" / ") || "无"}）。`
+          + "这不是任务失败：请改用空格分隔的短英文词，或停止检索、用现有文献继续 generate_outline / write_section。",
       };
     }
 

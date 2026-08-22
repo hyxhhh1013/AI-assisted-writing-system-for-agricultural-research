@@ -61,8 +61,11 @@ function sectionOf(o: ToolObservation): string | undefined {
   return undefined;
 }
 
-/** 一次成功 validate_citations 的问题数（硬检未过算至少 1；否则看语义可疑数） */
-export function validateIssueCount(o: ToolObservation): number {
+function validateReportFields(o: ToolObservation): {
+  suspicious: number;
+  blocked: boolean;
+  emptyProject: boolean;
+} {
   const d = o.data as {
     exportReady?: unknown;
     phase5Passed?: unknown;
@@ -74,15 +77,36 @@ export function validateIssueCount(o: ToolObservation): number {
       ? d.grounding.suspiciousCount
       : 0;
   const blocked = d?.exportReady === false || d?.phase5Passed === false;
-  if (!blocked) return suspicious;
-  // 空项目（无文献且文内无引用）的「硬检未过」不是错引问题——只是还没导入文献，
-  // 不该算作 citation issue，否则会把空项目误路由到「引用修正」并封死检索/写节。
-  // gate 缺失（旧快照/简化测试数据）时保持原判定：blocked 即至少 1。
   const gate = d?.gate;
   const refCount = typeof gate?.refCount === "number" ? gate.refCount : -1;
   const citationCount =
     typeof gate?.citationCount === "number" ? gate.citationCount : -1;
-  if (refCount === 0 && citationCount === 0) return suspicious;
+  return {
+    suspicious,
+    blocked,
+    emptyProject: refCount === 0 && citationCount === 0,
+  };
+}
+
+/**
+ * 硬检未过（越界编号等）。语义可疑 / 缺摘要是软提示，不算硬问题。
+ * 空项目（0 文献 0 引用）的「未过」不算错引。
+ */
+export function validateHasHardIssues(o: ToolObservation): boolean {
+  const { blocked, emptyProject } = validateReportFields(o);
+  if (!blocked) return false;
+  if (emptyProject) return false;
+  return true;
+}
+
+/** 一次成功 validate_citations 的问题数（硬检未过算至少 1；否则看语义可疑数） */
+export function validateIssueCount(o: ToolObservation): number {
+  const { suspicious, blocked, emptyProject } = validateReportFields(o);
+  if (!blocked) return suspicious;
+  // 空项目（无文献且文内无引用）的「硬检未过」不是错引问题——只是还没导入文献，
+  // 不该算作 citation issue，否则会把空项目误路由到「引用修正」并封死检索/写节。
+  // gate 缺失（旧快照/简化测试数据）时保持原判定：blocked 即至少 1。
+  if (emptyProject) return suspicious;
   return Math.max(suspicious, 1);
 }
 

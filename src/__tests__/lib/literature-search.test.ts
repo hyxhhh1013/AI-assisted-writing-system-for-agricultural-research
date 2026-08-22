@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { parseDoiFromQuery, searchExternalLiterature } from "@/lib/literature-search";
+import {
+  normalizeExternalSearchQuery,
+  parseDoiFromQuery,
+  searchExternalLiterature,
+} from "@/lib/literature-search";
 import { formatExternalLiteratureHit } from "@/lib/external-literature-format";
 
 describe("parseDoiFromQuery", () => {
@@ -15,6 +19,15 @@ describe("parseDoiFromQuery", () => {
 
   it("returns null for keyword", () => {
     expect(parseDoiFromQuery("biochar soil")).toBeNull();
+  });
+});
+
+describe("normalizeExternalSearchQuery", () => {
+  it("splits slash compounds so OpenAlex can match", () => {
+    expect(normalizeExternalSearchQuery("biochar/pretreatment")).toBe(
+      "biochar pretreatment",
+    );
+    expect(normalizeExternalSearchQuery("生物炭／预处理")).toBe("生物炭 预处理");
   });
 });
 

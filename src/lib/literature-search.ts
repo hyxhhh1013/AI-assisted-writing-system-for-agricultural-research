@@ -36,6 +36,11 @@ async function withSoftTimeout<T>(
   }
 }
 
+/** 斜杠复合词（biochar/pretreatment）外部库几乎 0 命中，先拆成空格 */
+export function normalizeExternalSearchQuery(raw: string): string {
+  return raw.replace(/[\/／|]+/g, " ").replace(/[\s\n\r]+/g, " ").trim().slice(0, 300);
+}
+
 /** 从用户输入提取 DOI（含 doi.org URL） */
 export function parseDoiFromQuery(raw: string): string | null {
   const trimmed = raw.trim();
@@ -512,7 +517,7 @@ export async function searchExternalLiterature(
 ): Promise<ExternalLiteratureHit[]> {
   const limit = Math.min(Math.max(options?.limit ?? 10, 1), 25);
   const mode = options?.mode ?? "fast";
-  const query = rawQuery.replace(/[\s\n\r]+/g, " ").trim().slice(0, 300);
+  const query = normalizeExternalSearchQuery(rawQuery);
   if (query.length < 2) return [];
 
   const doi = parseDoiFromQuery(query);
@@ -533,7 +538,7 @@ export async function searchExternalLiteratureWithStats(
 }> {
   const limit = Math.min(Math.max(options?.limit ?? 10, 1), 25);
   const mode = options?.mode ?? "fast";
-  const query = rawQuery.replace(/[\s\n\r]+/g, " ").trim().slice(0, 300);
+  const query = normalizeExternalSearchQuery(rawQuery);
   if (query.length < 2) {
     return { hits: [], variants: [], sourceCounts: { ...EMPTY_SOURCE_COUNTS } };
   }
@@ -572,6 +577,7 @@ function buildExternalQueryVariants(query: string): string[] {
 
   const fallbacks: Array<[RegExp, string]> = [
     [/生物炭/, "biochar"],
+    [/预处理|前处理/, "pretreatment"],
     [/热解|裂解/, "pyrolysis"],
     [/土壤/, "soil"],
     [/控释|缓释/, "controlled release fertilizer"],

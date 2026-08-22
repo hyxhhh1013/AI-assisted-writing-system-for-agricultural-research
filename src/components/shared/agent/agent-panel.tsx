@@ -12,6 +12,7 @@ import type { AgentProjectMutatedInfo } from "@/lib/agent/project-mutated";
 import type { AgentSectionPersistedInfo } from "@/lib/agent/section-persisted";
 import { isAgentWritePublicEnabled } from "@/lib/agent/core/safety";
 import { suggestNextAgentActions } from "@/lib/agent/project-briefing";
+import { resolveAgentLastFailure } from "@/lib/agent/ui-failure";
 import {
   evaluateDraftCoverage,
   sectionCharsFromFills,
@@ -259,21 +260,10 @@ export function AgentPanel({
     return phaseGoal;
   }, [agent.messages, phaseGoal]);
 
-  let lastFailure: string | null = null;
-  if (agent.status === "error") {
-    lastFailure = "执行失败，可再试一次。";
-    for (let i = agent.messages.length - 1; i >= 0; i--) {
-      const m = agent.messages[i];
-      if (m.kind === "observation" && m.error) {
-        lastFailure = m.error;
-        break;
-      }
-      if (m.kind === "summary" && /失败|错误|无法/.test(m.summary.text)) {
-        lastFailure = m.summary.text.slice(0, 160);
-        break;
-      }
-    }
-  }
+  const lastFailure = resolveAgentLastFailure({
+    status: agent.status,
+    messages: agent.messages,
+  });
 
   useEffect(() => {
     let cancelled = false;

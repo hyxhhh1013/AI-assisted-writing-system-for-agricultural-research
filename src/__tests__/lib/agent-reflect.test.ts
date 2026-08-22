@@ -3,6 +3,7 @@ import type { ToolObservation } from "@/lib/agent/types";
 import {
   analyzeReflection,
   MAX_REFLECT_ROUNDS,
+  validateHasHardIssues,
 } from "@/lib/agent/core/reflect";
 import {
   routeAfterAgent,
@@ -33,6 +34,36 @@ const VALIDATE_ISSUES = obs("validate_citations", {
 const REFINE = obs("refine_content", {
   sectionKey: "literature_body",
   persisted: { sectionKey: "literature_body" },
+});
+
+describe("validateHasHardIssues", () => {
+  it("treats exportReady + suspicious-only as soft", () => {
+    expect(
+      validateHasHardIssues(
+        obs("validate_citations", {
+          exportReady: true,
+          phase5Passed: true,
+          grounding: { suspiciousCount: 21 },
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it("treats exportReady false as hard unless the project is empty", () => {
+    expect(
+      validateHasHardIssues(
+        obs("validate_citations", { exportReady: false, phase5Passed: false }),
+      ),
+    ).toBe(true);
+    expect(
+      validateHasHardIssues(
+        obs("validate_citations", {
+          exportReady: false,
+          gate: { refCount: 0, citationCount: 0 },
+        }),
+      ),
+    ).toBe(false);
+  });
 });
 
 describe("analyzeReflection", () => {

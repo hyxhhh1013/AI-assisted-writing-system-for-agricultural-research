@@ -4,6 +4,7 @@ import { searchExternalTool } from "@/lib/agent/tools/search-external";
 import { shouldRequestConfirmation } from "@/lib/agent/core/safety";
 import { importReferenceTool } from "@/lib/agent/tools/import-reference";
 import type { AgentContext } from "@/lib/agent/types";
+import { searchExternalLiteratureWithStats } from "@/lib/literature-search";
 
 vi.mock("@/lib/literature-search", () => ({
   searchExternalLiterature: vi.fn(async () => [
@@ -81,6 +82,21 @@ describe("agent literature bridge (P1)", () => {
     // 保留摘要供入库 soft-grounded / 知识库摘要索引
     expect(hit.abstract).toBeTruthy();
     expect(data.suggestedCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it("empty search is a soft miss, not a tool failure", async () => {
+    vi.mocked(searchExternalLiteratureWithStats).mockResolvedValueOnce({
+      hits: [],
+      variants: ["biochar pretreatment"],
+      sourceCounts: { openalex: 0, "semantic-scholar": 0, crossref: 0, pubmed: 0 },
+    });
+    const result = await searchExternalTool.execute(
+      { query: "biochar/pretreatment" },
+      baseCtx,
+    );
+    expect(result.success).toBe(true);
+    expect(result.summary).toMatch(/无命中/);
+    expect(result.summary).toMatch(/不是任务失败/);
   });
 
   it("import_reference is gated by shouldRequestConfirmation", () => {

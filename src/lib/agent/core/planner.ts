@@ -99,7 +99,7 @@ function fallbackPlan(goal: string): AgentPlan {
   if (wantsOutline && !wantsWrite) {
     return {
       subtasks: [
-        { id: "1", title: "检索主题相关文献要点", status: "pending", toolHints: ["search_knowledge"] },
+        { id: "1", title: "list_references / inspect 看现有文献", status: "pending", toolHints: ["list_references", "inspect_project"] },
         { id: "2", title: "generate_outline 生成并写回大纲", status: "pending", toolHints: ["generate_outline"] },
         { id: "3", title: "generate_writing_blueprint 写回写作蓝图", status: "pending", toolHints: ["generate_writing_blueprint"] },
       ],

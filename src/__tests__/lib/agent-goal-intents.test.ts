@@ -2,10 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   checkAbstractFinishGate,
   checkCitationCheckGate,
+  checkCitationSpinGate,
   checkCitationSideTripGate,
   checkDiagnoseInspectGate,
   checkDraftSearchGate,
+  checkOutlineSearchGate,
   checkReviewRequestGate,
+  isExistingRefsOnlyGoal,
+  isOutlineRevisionGoal,
+  mergeGoalWithIntentHint,
   checkClassificationRetrieveGate,
   citationCheckReportReady,
   hasCitationRefineSuccess,
@@ -63,6 +68,21 @@ describe("goal-intents", () => {
     expect(parseLiteratureImportTarget("找几篇热解相关文献")).toBe(15);
   });
 
+  it("treats 基于 N 条文献修订大纲 as outline revision, not a search", () => {
+    const goal = "基于 27 条文献修订大纲";
+    expect(isOutlineRevisionGoal(goal)).toBe(true);
+    expect(isExistingRefsOnlyGoal("先用现有 27 篇修订大纲，不要再 search_external")).toBe(
+      true,
+    );
+    expect(checkOutlineSearchGate(goal, "search_external").ok).toBe(false);
+    expect(checkOutlineSearchGate(goal, "generate_outline").ok).toBe(true);
+    expect(checkOutlineSearchGate("检索并导入文献后生成大纲", "search_external").ok).toBe(
+      true,
+    );
+    expect(shouldSkipPlanner(goal)).toBe(true);
+    expect(mergeGoalWithIntentHint(goal, null)).toMatch(/禁止 search_external/);
+  });
+
   it("skips planner for diagnose and simple section draft", () => {
     expect(shouldSkipPlanner("看看项目现在卡在哪")).toBe(true);
     expect(shouldSkipPlanner("写引言")).toBe(true);
@@ -87,6 +107,59 @@ describe("goal-intents", () => {
     expect(shouldSkipPlanner(goal)).toBe(true);
     // 起草未开始（无 write_section）→ 不套流水线门禁
     expect(resolveApPipelineStep(goal, [])).toBeNull();
+  });
+
+  it("stops paging the same section after hard-pass validate", () => {
+    const goal = "按 academic-paper 流程继续：起草→引用检查→双语摘要→审查";
+    const softOnly = [
+      ok("write_section", { persisted: true }),
+      ok("validate_citations", {
+        exportReady: true,
+        phase5Passed: true,
+        grounding: { suspiciousCount: 2 },
+      }),
+    ];
+    expect(checkCitationSpinGate(goal, "read_section", softOnly).ok).toBe(false);
+    expect(checkCitationSpinGate(goal, "read_reference", softOnly).ok).toBe(false);
+    expect(checkCitationSpinGate(goal, "write_bilingual_abstract", softOnly).ok).toBe(
+      true,
+    );
+    expect(
+      checkCitationSpinGate("写引言", "read_section", softOnly, "draft").ok,
+    ).toBe(true);
+  });
+
+  it("allows two section reads when hard citation issues remain, then stops", () => {
+    const goal = "按 academic-paper 流程继续：起草→引用检查→双语摘要→审查";
+    const hard = [
+      ok("write_section", { persisted: true }),
+      ok("validate_citations", { exportReady: false, phase5Passed: false }),
+    ];
+    expect(checkCitationSpinGate(goal, "read_section", hard).ok).toBe(true);
+    expect(
+      checkCitationSpinGate(goal, "read_section", [
+        ...hard,
+        ok("read_section"),
+        ok("read_section"),
+      ]).ok,
+    ).toBe(false);
+  });
+
+  it("soft-only suspicious citations do not trap AP flow in citation_fix", () => {
+    const goal = "按 academic-paper 流程继续：起草→引用检查→双语摘要→审查";
+    const softOnly = [
+      ok("write_section", { persisted: true }),
+      ok("validate_citations", {
+        exportReady: true,
+        phase5Passed: true,
+        grounding: { suspiciousCount: 21 },
+      }),
+    ];
+    expect(resolveApPipelineStep(goal, softOnly)).toBe("abstract");
+    expect(
+      checkCitationSideTripGate(goal, "write_bilingual_abstract", softOnly).ok,
+    ).toBe(true);
+    expect(isCitationApplyGoal("好", softOnly)).toBe(false);
   });
 
   it("resolves pipeline steps after drafting, validate and refine", () => {

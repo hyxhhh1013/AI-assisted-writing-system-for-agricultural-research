@@ -8,7 +8,7 @@
 import type { IntentClosureKind, IntentKind } from "@/contracts/agent-intent";
 import { withRule } from "@/lib/agent/core/agent-rules";
 import type { ToolObservation } from "@/lib/agent/types";
-import { validateIssueCount } from "@/lib/agent/core/reflect";
+import { validateHasHardIssues } from "@/lib/agent/core/reflect";
 
 export type { IntentKind, IntentClosureKind } from "@/contracts/agent-intent";
 
@@ -79,6 +79,23 @@ export function isDiagnoseStyleGoal(goal: string): boolean {
 /** 明确要求检索/导入文献 */
 export function isLiteratureHuntGoal(goal: string): boolean {
   return /检索|搜索|搜一篇|搜几篇|导入.*文献|找.*文献|search.*paper|文献库|导入\s*\d|补充.*文献|找几篇|备齐.*文献|扩充.*文献/.test(
+    goal,
+  );
+}
+
+/**
+ * 事故门：用户要按已有文献改大纲，不是再搜一轮。
+ * 「基于 N 条文献修订大纲」曾被模型当成覆盖缺口去 search_external，空检索再把整轮打成失败。
+ */
+export function isOutlineRevisionGoal(goal: string): boolean {
+  return /修订大纲|改(一?下)?大纲|更新大纲|生成大纲|基于.{0,16}文献.{0,12}(大纲|提纲|结构)/.test(
+    goal,
+  );
+}
+
+/** 用户明确只要现有文献，不要再检索 */
+export function isExistingRefsOnlyGoal(goal: string): boolean {
+  return /用现有(文献|材料|的)|先用现有|不要再(检索|搜索|search)|不要\s*search_external/i.test(
     goal,
   );
 }
@@ -186,14 +203,14 @@ function hasSuccessfulReview(observations: readonly ToolObservation[]): boolean 
   );
 }
 
-/** 最近一次成功 validate_citations 是否发现问题（硬检未过或语义可疑） */
-function lastValidateHasIssues(
+/** 最近一次成功 validate_citations 是否仍有必须改的硬检（越界等；软可疑不算） */
+function lastValidateHasHardIssues(
   observations: readonly ToolObservation[],
 ): boolean {
   for (let i = observations.length - 1; i >= 0; i--) {
     const o = observations[i];
     if (o.tool !== "validate_citations" || !o.success) continue;
-    return validateIssueCount(o) > 0;
+    return validateHasHardIssues(o);
   }
   return false;
 }
@@ -213,7 +230,7 @@ export function resolveApPipelineStep(
   if (!citationCheckReportReady(observations)) return "citation_check";
   // 仅当 validate 报告确实发现待修问题才进「引用修正」；写完自查的干净报告（0 问题）
   // 不应把起草中的会话顶到修正阶段（否则后续 write_section 会被 side-trip 门禁误拦）。
-  if (lastValidateHasIssues(observations) && !hasCitationRefineSuccess(observations)) {
+  if (lastValidateHasHardIssues(observations) && !hasCitationRefineSuccess(observations)) {
     return "citation_fix";
   }
   if (!hasSuccessfulAbstractWrite(observations)) return "abstract";
@@ -254,7 +271,7 @@ export function isCitationApplyGoal(
   if (!citationCheckReportReady(observations)) return false;
   // 写完自查的干净报告（0 问题）不算「待修正」：跟聊「好/继续」只是泛认可，
   // 不应被解释为「同意执行引用修正」（否则 checkCitationSideTripGate 会误拦 write_section）。
-  if (!lastValidateHasIssues(observations)) return false;
+  if (!lastValidateHasHardIssues(observations)) return false;
   const g = goal.trim();
   if (CITATION_APPLY_SHORT.test(g)) return true;
   return /执行.*修正|按.*方案.*改|开始.*refine|应用.*修正|修正.*引用|改引|refine_content/i.test(
@@ -301,7 +318,8 @@ export function shouldSkipPlanner(
       || isAcademicPaperPipelineGoal(goal)
       || isCitationCheckGoal(goal)
       || isCitationApplyGoal(goal, observations)
-      || (isSectionDraftGoal(goal) && !isReviewWritingGoal(goal)),
+      || (isSectionDraftGoal(goal) && !isReviewWritingGoal(goal))
+      || (isOutlineRevisionGoal(goal) && !isLiteratureHuntGoal(goal)),
   );
 }
 
@@ -390,6 +408,43 @@ export function checkDraftSearchGate(
       "当前目标是写章节，不是检索。请先 inspect / read_project_asset(outline) / list_references，"
       + "再 write_section（缺蓝图时系统会自动补齐）；若确需新文献，请用户明确说「检索」或「找文献」。",
   };
+}
+
+/**
+ * 事故门：修订/沿用现有文献做大纲时禁止 search_*。
+ * 空检索曾被标成工具失败，前端红框循环「再试一次」。
+ */
+export function checkOutlineSearchGate(
+  goal: string,
+  toolName: string,
+): GoalIntentGateResult {
+  if (toolName !== "search_external" && toolName !== "search_knowledge") {
+    return { ok: true };
+  }
+  if (isExistingRefsOnlyGoal(goal)) {
+    return {
+      ok: false,
+      error:
+        "用户要求用现有文献、不要再检索。请 list_references 后立刻 generate_outline；"
+        + "某主题缺文献就在大纲里标「待补」，不要 search_external。",
+    };
+  }
+  if (isOutlineRevisionGoal(goal) && !isLiteratureHuntGoal(goal)) {
+    return {
+      ok: false,
+      error:
+        "本轮是修订/生成大纲：请 list_references 或 inspect 后立刻 generate_outline。"
+        + "禁止 search_external / search_knowledge；覆盖缺口写进大纲备注即可。",
+    };
+  }
+  return { ok: true };
+}
+
+export function outlineRevisionNudge(): string {
+  return (
+    "【系统】本轮是修订/生成大纲：list_references 或 inspect 后立刻 generate_outline（可用 userSkeleton）。"
+    + "禁止 search_external / search_knowledge；某主题文献少就在大纲里标「待补」，不要把空检索当成任务失败。"
+  );
 }
 
 /** 诊断任务开场系统提示（注入 messages） */
@@ -638,6 +693,52 @@ export function checkCitationCheckGate(
   return { ok: true };
 }
 
+/**
+ * 事故门：硬检已过后禁止分页重读 / 逐条抠无摘要文献。
+ * 曾出现「连续 4 次读取同一章节（不同窗口）」空转，红框停住、摘要写不了。
+ */
+export function checkCitationSpinGate(
+  goal: string,
+  toolName: string,
+  observations: readonly ToolObservation[],
+  intentKind?: IntentKind | null,
+): GoalIntentGateResult {
+  if (toolName !== "read_section" && toolName !== "read_reference") {
+    return { ok: true };
+  }
+  if (!hasSuccessfulValidateCitations(observations)) return { ok: true };
+
+  const inCloseOut = matchesIntent(
+    intentKind,
+    ["citation", "citation_apply", "ap_full", "abstract_finish"],
+    () =>
+      isCitationFlowGoal(goal, observations)
+      || isAcademicPaperPipelineGoal(goal)
+      || isAbstractFinishGoal(goal),
+  );
+  if (!inCloseOut) return { ok: true };
+
+  if (lastValidateHasHardIssues(observations)) {
+    const reads = countSuccessfulTool(observations, "read_section");
+    if (toolName === "read_section" && reads >= 2) {
+      return {
+        ok: false,
+        error:
+          "硬检未过：不要再分页 read_section。用已读正文立刻 refine_content 写回越界编号，"
+          + "不要逐条读无摘要文献。",
+      };
+    }
+    return { ok: true };
+  }
+
+  return {
+    ok: false,
+    error:
+      "硬检已通过，剩余为软可疑/缺摘要/语义 contradict。停止 read_section / read_reference。"
+      + "立刻 write_bilingual_abstract，或用中文汇报 [n] 后问用户是否改引。无摘要题录读不出接地证据。",
+  };
+}
+
 /** 收口/摘要阶段禁止的旁路工具（检索/导入与摘要写作互斥） */
 const ABSTRACT_FINISH_BLOCKED_TOOLS = new Set([
   "search_external",
@@ -804,7 +905,14 @@ export function mergeFollowUpGoalHint(
   observations: readonly ToolObservation[],
   intentKind?: IntentKind | null,
 ): string | null {
-  if (intentKind !== undefined) return nudgeForKind(intentKind, goal, observations);
+  if (intentKind !== undefined) {
+    return (
+      nudgeForKind(intentKind, goal, observations)
+      ?? (isOutlineRevisionGoal(goal) && !isLiteratureHuntGoal(goal)
+        ? outlineRevisionNudge()
+        : null)
+    );
+  }
   if (isAcademicPaperPipelineGoal(goal)) {
     return apPipelineNudge(goal, observations);
   }
@@ -820,6 +928,9 @@ export function mergeFollowUpGoalHint(
   if (isReferenceClassificationGoal(goal)) {
     return referenceClassificationNudge();
   }
+  if (isOutlineRevisionGoal(goal) && !isLiteratureHuntGoal(goal)) {
+    return outlineRevisionNudge();
+  }
   if (isSectionDraftGoal(goal)) {
     return draftGoalNudge(goal);
   }
@@ -832,7 +943,11 @@ export function mergeGoalWithIntentHint(
   intentKind?: IntentKind | null,
 ): string {
   if (intentKind !== undefined) {
-    const hint = nudgeForKind(intentKind, goal, []);
+    const hint =
+      nudgeForKind(intentKind, goal, [])
+      ?? (isOutlineRevisionGoal(goal) && !isLiteratureHuntGoal(goal)
+        ? outlineRevisionNudge()
+        : null);
     return hint ? `${goal}\n\n${hint}` : goal;
   }
   if (isAcademicPaperPipelineGoal(goal)) {
@@ -846,6 +961,9 @@ export function mergeGoalWithIntentHint(
   }
   if (isReferenceClassificationGoal(goal)) {
     return `${goal}\n\n${referenceClassificationNudge()}`;
+  }
+  if (isOutlineRevisionGoal(goal) && !isLiteratureHuntGoal(goal)) {
+    return `${goal}\n\n${outlineRevisionNudge()}`;
   }
   if (isLiteratureHuntGoal(goal)) {
     return `${goal}\n\n${literatureHuntNudge(goal)}`;

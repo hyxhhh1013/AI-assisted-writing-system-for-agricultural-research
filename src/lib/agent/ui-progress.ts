@@ -76,8 +76,8 @@ export function humanizeToolNotice(error: string): string {
   if (/未改变项目状态/.test(error)) {
     return "已读完一批上下文，正在整理后继续…若停住了，你可以直接说「继续写」或换个要求。";
   }
-  if (/连续多次读取同一章节|同一章节窗口/.test(error)) {
-    return "这一段已经读过了，正在换个角度继续…";
+  if (/连续.+\d+ 次读取同一章节|同一章节窗口|停止空转读取|已因连续重复读取被隔离/.test(error)) {
+    return "这一段已经读过了。硬检若已通过，可以直接写摘要，不必再翻页。";
   }
   if (/连续调用.*参数实质相同|停止重复/.test(error)) {
     return "这个步骤刚做过，正在调整策略…";

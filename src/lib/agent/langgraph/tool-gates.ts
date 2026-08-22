@@ -17,10 +17,12 @@ import { checkReadBeforeWrite } from "@/lib/agent/core/read-before-write";
 import {
   checkAbstractFinishGate,
   checkCitationCheckGate,
+  checkCitationSpinGate,
   checkCitationSideTripGate,
   checkClassificationRetrieveGate,
   checkDiagnoseInspectGate,
   checkDraftSearchGate,
+  checkOutlineSearchGate,
   checkReviewRequestGate,
 } from "@/lib/agent/core/goal-intents";
 import {
@@ -99,7 +101,9 @@ export const intentGate: PreToolGate = ({ state, tool, params, recentObservation
   const gates: Array<() => { ok: boolean; error?: string }> = [
     () => checkDiagnoseInspectGate(state.goal, tool.name, recentObservations, state.intentKind),
     () => checkDraftSearchGate(state.goal, tool.name, recentObservations, state.intentKind),
+    () => checkOutlineSearchGate(state.goal, tool.name),
     () => checkCitationCheckGate(state.goal, tool.name, recentObservations, state.intentKind),
+    () => checkCitationSpinGate(state.goal, tool.name, recentObservations, state.intentKind),
     () => checkCitationSideTripGate(state.goal, tool.name, recentObservations, state.intentKind),
     () => checkAbstractFinishGate(state.goal, tool.name, recentObservations, state.intentKind),
     () => checkReviewRequestGate(state.goal, tool.name, recentObservations, state.intentKind),
