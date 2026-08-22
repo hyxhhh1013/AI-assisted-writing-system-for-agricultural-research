@@ -8,7 +8,7 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-08-16（Phase 11e Wave 3.10 车间图纸；ARCH-01 进行中）  
+> **最后更新**：2026-08-17（Phase 11e 已收口；WRITE-NO-RAG）  
 > **实时 status 只看 §1 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
@@ -251,6 +251,7 @@
 | W3-AP-ARCH-01 | 工具注册表 `tools/registry.ts`；单测防 `tools/*.ts` 漏挂 | — | 0.5d | **done** | 2026-08-16；弃用 `build-argument-blueprint` 留名单 |
 | W3-AP-ARCH-02 | 会话快照 `toolTrace`（工具名/成败/intentKind，上限 50） | ARCH-01 | 0.5d | **done** | 2026-08-16；`contracts/agent-session` `AgentToolTrace` + `state` `MAX_TOOL_TRACE` + `nodes`/`parallel-tools` append；无新 Prisma 表；不进前端 |
 | W3-AP-ARCH-03 | 冻结 `POST /api/writing`：新写作规则只改 Agent | — | 0.5d | **done** | 2026-08-16；`route.ts`/`run-pipeline.ts` 文件头冻结声明 + `DOMAIN_INDEX`/`writing-pipeline.md` 主从标注；不删专家工具 7 步管 |
+| W3-AP-WRITE-NO-RAG | 有项目文献摘要时跳过知识库 RAG | — | 0.5d | **done** | 2026-08-17；`shouldSkipKnowledgeRag` + `retrieveWritingContext`；勾选来源 / `WRITING_FORCE_KNOWLEDGE_RAG=1` 不跳；预览仍走 RAG |
 | — | 任务单细节 | — | — | — | [`plans/W3-AP-RUNTIME.md`](./plans/W3-AP-RUNTIME.md) |
 
 
@@ -1120,6 +1121,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-16 | W3-AP-ARCH-02 | AI | 会话快照 `toolTrace`（`AgentToolTrace{at,tool,ok,intentKind}`，上限 50）；`nodes.ts`/`parallel-tools.ts` 每次工具结局 append，`state` reducer 截断。`agent-tool-trace.test.ts` + snapshot 往返/旧快照兜底用例。前序：cite-inspect 抽取 + guide 文案对齐两 commit 收口。 |
 | 2026-08-16 | bib_only 精确数据告警 | AI | `precise-data-grounding.ts`（正则只认数字+单位，排除年份/编号误伤）+ `reference-mode.ts`（三态判定抽离，只对无摘要文献查全文）；接入 `validate_citations`，软信号不阻断 exportReady。7 单测绿。见 `domain/agent.md` §bib_only。 |
 | 2026-08-16 | W3-AP-ARCH-03 | AI | 冻结旧扩写管道：`route.ts`/`run-pipeline.ts` 文件头声明「新写作规则只改 Agent」，`DOMAIN_INDEX`/`writing-pipeline.md` 标注 Agent 主、扩写从。不删代码。Phase 11e 收口。 |
+| 2026-08-17 | W3-AP-WRITE-NO-RAG | AI | 有 soft-groundable 项目摘要时 `retrieveWritingContext` 跳过知识库 RAG；勾选来源或 `WRITING_FORCE_KNOWLEDGE_RAG=1` 强制检索；预览路径不变。 |
 
 ---
 

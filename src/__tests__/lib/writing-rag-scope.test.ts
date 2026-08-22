@@ -5,6 +5,7 @@ import {
   filterChunksByTopicRelevance,
   mergeScopeSourceKeys,
   scoreChunkTopicRelevance,
+  shouldSkipKnowledgeRag,
   toRagSearchScope,
 } from "@/services/writing-context";
 import type { RagChunk } from "@/lib/rag";
@@ -135,5 +136,49 @@ describe("stripDisallowedCitations / grounded allow-list", () => {
 
   it("stripOutOfRangeCitations still allows 1..N", () => {
     expect(stripOutOfRangeCitations("见[1][2][9]", 2)).toBe("见[1][2]");
+  });
+});
+
+describe("shouldSkipKnowledgeRag (W3-AP-WRITE-NO-RAG)", () => {
+  const longAbs = "摘要".repeat(50); // >= 80 chars
+
+  it("skips when soft-groundable abstracts exist", () => {
+    expect(
+      shouldSkipKnowledgeRag({
+        referenceEvidence: [{ index: 1, abstract: longAbs }],
+        forceKnowledgeRag: false,
+        skipKnowledgeRagDisabled: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not skip when user selected knowledge sources", () => {
+    expect(
+      shouldSkipKnowledgeRag({
+        referenceEvidence: [{ index: 1, abstract: longAbs }],
+        selectedSourceIds: ["paper.pdf"],
+        forceKnowledgeRag: false,
+        skipKnowledgeRagDisabled: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("does not skip when forceKnowledgeRag", () => {
+    expect(
+      shouldSkipKnowledgeRag({
+        referenceEvidence: [{ index: 1, abstract: longAbs }],
+        forceKnowledgeRag: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("does not skip when abstracts too short", () => {
+    expect(
+      shouldSkipKnowledgeRag({
+        referenceEvidence: [{ index: 1, abstract: "太短" }],
+        forceKnowledgeRag: false,
+        skipKnowledgeRagDisabled: false,
+      }),
+    ).toBe(false);
   });
 });

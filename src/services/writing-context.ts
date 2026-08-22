@@ -11,6 +11,9 @@ import type {
 } from "@/contracts/writing-retrieve-preview";
 import type { SoftReferenceEvidence } from "@/contracts/project";
 import { formatSoftEvidenceBlock, isSoftGroundable } from "@/lib/reference-evidence";
+import { inferCategoriesFromTitle } from "@/lib/knowledge-category-hints";
+
+export { inferCategoriesFromTitle } from "@/lib/knowledge-category-hints";
 
 export interface WritingContext {
   contextText: string;
@@ -30,6 +33,8 @@ export interface WritingContext {
   topicFiltered?: boolean;
   /** 主题过滤过严、退回 soft top-K */
   topicSoftKept?: boolean;
+  /** W3-AP-WRITE-NO-RAG：因项目摘要充足而跳过知识库 RAG */
+  skippedKnowledgeRag?: boolean;
 }
 
 const RESEARCH_SECTION_KEYWORDS: Record<string, string> = {
@@ -115,28 +120,6 @@ export function toRagSearchScope(
   if (categories.length === 0) return {};
   if (categories.length === 1) return { category: categories[0] };
   return { categories };
-}
-
-/** 题目/方向 → 知识库分类提示（无已有文献时收窄检索） */
-const TITLE_CATEGORY_HINTS: Array<{ pattern: RegExp; category: string }> = [
-  { pattern: /茶|绿茶|红茶|乌龙|普洱|香气|挥发性|杀青|摊放|茶汤/, category: "茶学" },
-  { pattern: /烟花|烟火|推进剂|含能|火药|燃烧剂|高氯酸/, category: "烟花" },
-  { pattern: /烤烟|烟草|烟叶|植烟|卷烟/, category: "烟草" },
-  { pattern: /热解|共热解|热化学|裂解|生物质.*塑料|碳纳米|秸秆.*热解|营养元素.*迁移|生物炭|biochar/i, category: "热化学" },
-  { pattern: /控释|缓释|包衣|包膜|肥料|氮素淋|生物炭基肥/, category: "控释肥类" },
-];
-
-/**
- * 从标题/方向推断可能相关的知识库分类（可与已有文献分类并集）。
- */
-export function inferCategoriesFromTitle(...texts: Array<string | undefined>): string[] {
-  const blob = texts.filter(Boolean).join(" ");
-  if (!blob.trim()) return [];
-  const cats = new Set<string>();
-  for (const { pattern, category } of TITLE_CATEGORY_HINTS) {
-    if (pattern.test(blob)) cats.add(category);
-  }
-  return Array.from(cats);
 }
 
 /**
@@ -596,6 +579,46 @@ export async function retrieveWritingPreview(
   return buildRetrievePreviewFromChunks(chunks, params.existingReferences || [], query);
 }
 
+/**
+ * 有足够项目文献摘要时跳过知识库 RAG（W3-AP-WRITE-NO-RAG）。
+ *
+ * - 用户勾选了知识库来源（`selectedSourceIds` 非空）→ 不跳过
+ * - `WRITING_FORCE_KNOWLEDGE_RAG=1` 或 `WRITING_SKIP_KNOWLEDGE_RAG=0` → 不跳过
+ * - soft-groundable 摘要数 ≥ 阈值 → 跳过（默认阈值 1）
+ *
+ * 仅作用于 `retrieveWritingContext`（正式写节）；预览检索始终走 RAG。
+ */
+export const MIN_SOFT_ABSTRACTS_TO_SKIP_KNOWLEDGE_RAG = 1;
+
+export function shouldSkipKnowledgeRag(params: {
+  referenceEvidence?: SoftReferenceEvidence[];
+  selectedSourceIds?: string[];
+  /** 单测注入；缺省读环境变量 */
+  forceKnowledgeRag?: boolean;
+  skipKnowledgeRagDisabled?: boolean;
+  minSoftAbstracts?: number;
+}): boolean {
+  if (params.selectedSourceIds !== undefined && params.selectedSourceIds.length > 0) {
+    return false;
+  }
+  const force =
+    params.forceKnowledgeRag
+    ?? process.env.WRITING_FORCE_KNOWLEDGE_RAG === "1";
+  if (force) return false;
+  const skipDisabled =
+    params.skipKnowledgeRagDisabled
+    ?? (process.env.WRITING_SKIP_KNOWLEDGE_RAG === "0"
+      || process.env.WRITING_SKIP_KNOWLEDGE_RAG === "false");
+  if (skipDisabled) return false;
+
+  const min =
+    params.minSoftAbstracts ?? MIN_SOFT_ABSTRACTS_TO_SKIP_KNOWLEDGE_RAG;
+  const softCount = (params.referenceEvidence ?? []).filter((e) =>
+    isSoftGroundable(e.abstract),
+  ).length;
+  return softCount >= min;
+}
+
 export async function retrieveWritingContext(
   params: WritingRequest & { referenceEvidence?: SoftReferenceEvidence[] },
   existingReferences: string[],
@@ -603,22 +626,33 @@ export async function retrieveWritingContext(
   const { retrievalMode = "balanced", selectedSourceIds } = params;
   const { limit: ragLimit, maxPerSource: ragMaxPerSource } = getRetrievalConfig(retrievalMode);
 
-  const {
-    chunks: rawChunks,
-    expandedToFullLibrary,
-    topicFiltered,
-    topicSoftKept,
-  } = await searchWritingRagChunks({
-    title: params.title,
-    section: params.section,
-    context: params.context,
-    bullets: params.bullets,
-    researchDirection: params.researchDirection,
-    retrievalMode,
-    projectMode: params.projectMode,
-    existingReferences,
+  const skipRag = shouldSkipKnowledgeRag({
+    referenceEvidence: params.referenceEvidence,
     selectedSourceIds,
   });
+
+  let rawChunks: RagChunk[] = [];
+  let expandedToFullLibrary = false;
+  let topicFiltered: boolean | undefined;
+  let topicSoftKept: boolean | undefined;
+
+  if (!skipRag) {
+    const searched = await searchWritingRagChunks({
+      title: params.title,
+      section: params.section,
+      context: params.context,
+      bullets: params.bullets,
+      researchDirection: params.researchDirection,
+      retrievalMode,
+      projectMode: params.projectMode,
+      existingReferences,
+      selectedSourceIds,
+    });
+    rawChunks = searched.chunks;
+    expandedToFullLibrary = searched.expandedToFullLibrary;
+    topicFiltered = searched.topicFiltered;
+    topicSoftKept = searched.topicSoftKept;
+  }
 
   const contextChunks = filterChunksBySelection(rawChunks, selectedSourceIds);
 
@@ -656,9 +690,11 @@ export async function retrieveWritingContext(
             return `[参考来源 [${globalIndex}]: ${formatRagCitation(c)}]\n${cleanedContent}`;
           })
           .join("\n\n")
-      : selectedSourceIds !== undefined && selectedSourceIds.length === 0
-        ? "（未选择任何文献来源，请根据通用学术知识扩写，避免编造具体数据）"
-        : "（未找到直接相关的文献参考，请根据通用学术知识扩写）";
+      : skipRag
+        ? "（已跳过知识库检索：项目文献摘要充足，请优先依据【项目文献摘要】概括引用，禁止编造精确数据）"
+        : selectedSourceIds !== undefined && selectedSourceIds.length === 0
+          ? "（未选择任何文献来源，请根据通用学术知识扩写，避免编造具体数据）"
+          : "（未找到直接相关的文献参考，请根据通用学术知识扩写）";
 
   const softEvidence = (params.referenceEvidence ?? []).filter((e) =>
     isSoftGroundable(e.abstract),
@@ -671,7 +707,7 @@ export async function retrieveWritingContext(
   if (softEvidence.length > 0) {
     const softBlock = softEvidence.map(formatSoftEvidenceBlock).join("\n\n");
     contextText =
-      contextText && !contextText.startsWith("（未")
+      contextText && !contextText.startsWith("（未") && !contextText.startsWith("（已跳过")
         ? `${contextText}\n\n【项目文献摘要 · 可概括引用】\n${softBlock}`
         : `【项目文献摘要 · 可概括引用】\n${softBlock}`;
   }
@@ -701,5 +737,6 @@ export async function retrieveWritingContext(
     expandedToFullLibrary,
     topicFiltered,
     topicSoftKept,
+    skippedKnowledgeRag: skipRag || undefined,
   };
 }
