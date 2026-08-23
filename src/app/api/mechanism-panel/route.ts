@@ -6,6 +6,7 @@ import { randomUUID } from "crypto";
 import { getErrorMessage } from "@/lib/error-utils";
 import { PYTHON_CMD } from "@/services/xrd-runner";
 import { ensureChartsDir } from "@/lib/charts-dir";
+import { refinePlotPanelConfig } from "@/lib/mechanism-spec-run";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -64,6 +65,9 @@ export async function POST(req: NextRequest) {
     if (!Array.isArray(config.panels) || config.panels.length === 0) {
       return NextResponse.json({ error: "至少需要一个 panel" }, { status: 400 });
     }
+
+    const refined = refinePlotPanelConfig(config);
+    config = refined.config;
 
     const configPath = path.join(tmpDir, "config.json");
     fs.writeFileSync(configPath, JSON.stringify(config), "utf-8");
@@ -124,6 +128,10 @@ export async function POST(req: NextRequest) {
       imageUrl: `/api/charts/${outputName}`,
       svgUrl: fs.existsSync(siblingSvg) ? `/api/charts/${id}.svg` : undefined,
       pdfUrl: fs.existsSync(siblingPdf) ? `/api/charts/${id}.pdf` : undefined,
+      qaReport: refined.qaReport,
+      mechanismSpec: refined.spec,
+      specPatches: refined.patches,
+      panels: config.panels,
     });
   } catch (error: unknown) {
     return NextResponse.json(

@@ -6,6 +6,7 @@ import { randomUUID } from "crypto";
 import { getErrorMessage } from "@/lib/error-utils";
 import { PYTHON_CMD } from "@/services/xrd-runner";
 import { ensureChartsDir } from "@/lib/charts-dir";
+import { refinePlotFlow } from "@/lib/mechanism-spec-run";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -67,12 +68,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "至少需要一个节点" }, { status: 400 });
     }
 
+    const refined = refinePlotFlow({
+      title: body.title,
+      preset: body.preset,
+      nodes: body.nodes,
+      edges: body.edges ?? [],
+    });
+    const renderNodes = refined?.nodes ?? body.nodes;
+    const renderEdges = refined?.edges ?? body.edges ?? [];
+
     const tmpDir = path.join(process.cwd(), ".tmp", randomUUID());
     fs.mkdirSync(tmpDir, { recursive: true });
 
     const configPath = path.join(tmpDir, "config.json");
     const pyBody = {
       ...body,
+      nodes: renderNodes,
+      edges: renderEdges,
       preset: body.preset || "nature",
       export_formats: body.export_formats || "png,svg,pdf",
     };
@@ -158,6 +170,11 @@ export async function POST(req: NextRequest) {
           ? pdfUrl
           : undefined,
       preset: pyResult.preset || pyBody.preset,
+      nodes: renderNodes,
+      edges: renderEdges,
+      qaReport: refined?.qaReport,
+      mechanismSpec: refined?.spec,
+      specPatches: refined?.patches,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? getErrorMessage(error) : "未知错误";

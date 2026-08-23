@@ -3,8 +3,7 @@ import {
   encodeFigureSpecParam,
 } from "@/contracts/figure";
 import type { ProjectChartAsset } from "@/contracts/figure";
-import { buildMechanismQaReport, type MechanismQaReport } from "@/contracts/mechanism-qa";
-import type { MechanismLayout, MechanismSpecV1 } from "@/contracts/mechanism-spec";
+import type { MechanismLayout } from "@/contracts/mechanism-spec";
 import {
   insertOrReplaceAgentSectionImage,
   listAgentCharts,
@@ -30,14 +29,10 @@ import {
   buildMechanismPanelConfig,
   compileMechanismSpec,
   defaultStepsForPanelTitle,
-  inspectMechanismSpec,
   mechanismSpecToRenderConfig,
   pathwayTokensFromTitle,
 } from "@/lib/mechanism-spec-compiler";
-import {
-  applyMechanismSpecPatches,
-  type MechanismSpecPatch,
-} from "@/lib/mechanism-spec-patches";
+import { refineMechanismSpec } from "@/lib/mechanism-spec-run";
 
 export {
   buildFlowDiagramConfig,
@@ -56,8 +51,6 @@ export type MechanismPanelInput = {
 };
 
 export type MechanismPanelSpec = MechanismPanelInput;
-
-const MAX_PATCH_ROUNDS = 2;
 
 function parseJsonArray(raw: unknown): unknown[] | null {
   if (Array.isArray(raw)) return raw;
@@ -96,28 +89,6 @@ function parsePanelSpecs(raw: unknown): MechanismPanelInput[] {
     });
   }
   return out;
-}
-
-function refineMechanismSpec(spec: MechanismSpecV1): {
-  spec: MechanismSpecV1;
-  qaReport: MechanismQaReport;
-  patches: MechanismSpecPatch[];
-} {
-  let current = spec;
-  const allPatches: MechanismSpecPatch[] = [];
-  let findings = inspectMechanismSpec(current);
-  for (let i = 0; i < MAX_PATCH_ROUNDS; i++) {
-    const applied = applyMechanismSpecPatches(current, findings);
-    if (applied.patches.length === 0) break;
-    allPatches.push(...applied.patches);
-    current = applied.spec;
-    findings = inspectMechanismSpec(current);
-  }
-  return {
-    spec: current,
-    qaReport: buildMechanismQaReport(findings),
-    patches: allPatches,
-  };
 }
 
 /**

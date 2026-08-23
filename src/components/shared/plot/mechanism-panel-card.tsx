@@ -14,11 +14,13 @@ import {
   type MechanismPanelBlock,
   type MechanismPanelColumn,
   type MechanismPanelConfig,
+  type MechanismPanelResponse,
 } from "@/services/mechanism-panel";
 import { getErrorMessage } from "@/lib/error-utils";
 import { buildPlotInsertReplay } from "@/contracts/figure";
 import { PlotWorkspace } from "@/components/shared/plot/plot-workspace";
 import { PlotPreviewPane } from "@/components/shared/plot/plot-preview-pane";
+import { MechanismQaBanner } from "@/components/shared/plot/mechanism-qa-banner";
 import { FlowSubgraphEditor } from "@/components/shared/plot/flow-subgraph-editor";
 import type { PlotToolProps } from "@/components/shared/plot/plot-tool-props";
 import type { FlowEdge, FlowNode } from "@/services/mol-diagram";
@@ -109,12 +111,7 @@ export function MechanismPanelCard({
   const imgKeySeq = useRef(0);
   const [loading, setLoading] = useState(false);
   const [dragBlockIdx, setDragBlockIdx] = useState<number | null>(null);
-  const [result, setResult] = useState<{
-    imageBase64: string;
-    imageUrl: string;
-    svgUrl?: string;
-    pdfUrl?: string;
-  } | null>(null);
+  const [result, setResult] = useState<MechanismPanelResponse | null>(null);
 
   useEffect(() => {
     if (!prefill || prefill.figureId !== "mechanism_panel") return;
@@ -236,8 +233,15 @@ export function MechanismPanelCard({
         config,
         Object.keys(usedAssets).length ? usedAssets : undefined,
       );
+      if (json.panels && json.panels.length > 0) {
+        setPanels(json.panels);
+      }
       setResult(json);
-      toast.success("多面板机理图已生成");
+      toast.success(
+        json.specPatches && json.specPatches.length > 0
+          ? "多面板已生成，括号条件已提升到边上"
+          : "多面板机理图已生成",
+      );
     } catch (err: unknown) {
       toast.error(getErrorMessage(err));
     } finally {
@@ -516,6 +520,11 @@ export function MechanismPanelCard({
           emptyHint="选择三栏模板，上传素材或编辑流程子图后生成。"
           footer={
             result ? (
+              <div className="flex w-full flex-col gap-2">
+                <MechanismQaBanner
+                  report={result.qaReport}
+                  patchCount={result.specPatches?.length ?? 0}
+                />
               <div className="flex flex-wrap items-center gap-2">
                 <span className="mr-auto text-xs font-medium text-[#6b7c72]">导出与插入</span>
                 <Button
@@ -569,6 +578,7 @@ export function MechanismPanelCard({
                 >
                   <BarChart3 className="h-3 w-3" /> 插入论文
                 </Button>
+              </div>
               </div>
             ) : undefined
           }

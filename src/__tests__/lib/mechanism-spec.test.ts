@@ -8,6 +8,7 @@ import {
   splitNodeCondition,
 } from "@/lib/mechanism-spec-compiler";
 import { applyMechanismSpecPatches } from "@/lib/mechanism-spec-patches";
+import { refinePlotFlow, refinePlotPanelConfig } from "@/lib/mechanism-spec-run";
 
 describe("MechanismSpec compiler", () => {
   it("lifts parenthetical conditions onto incoming edges", () => {
@@ -125,6 +126,73 @@ describe("MechanismSpec compiler", () => {
     expect(panels).toHaveLength(2);
     const flow0 = panels[0]?.blocks.find((b) => b.type === "flow_subgraph");
     expect(flow0?.edges?.some((e) => e.label === "酸位")).toBe(true);
+  });
+
+  it("refinePlotFlow keeps topology and lifts conditions for /plot", () => {
+    const refined = refinePlotFlow({
+      title: "热解",
+      nodes: [
+        { id: "a", label: "原料", role: "start_end", color: "#111" },
+        { id: "b", label: "催化热解（约500℃）", role: "process" },
+        { id: "c", label: "产物", role: "start_end" },
+      ],
+      edges: [
+        { from: "a", to: "b" },
+        { from: "b", to: "c" },
+      ],
+    });
+    expect(refined).not.toBeNull();
+    expect(refined?.nodes.map((n) => n.id)).toEqual(["a", "b", "c"]);
+    expect(refined?.nodes.find((n) => n.id === "b")?.label).toBe("催化热解");
+    expect(refined?.nodes.find((n) => n.id === "a")?.color).toBe("#111");
+    expect(refined?.edges.find((e) => e.to === "b")?.label).toBe("约500℃");
+  });
+
+  it("refinePlotPanelConfig patches subgraphs and keeps extra blocks", () => {
+    const { config, qaReport } = refinePlotPanelConfig({
+      title: "两栏",
+      preset: "nature",
+      panels: [
+        {
+          id: "a",
+          title: "脱氧",
+          blocks: [
+            { type: "text", content: "酸位" },
+            {
+              type: "flow_subgraph",
+              nodes: [
+                { id: "1", label: "前体" },
+                { id: "2", label: "脱水（酸位）" },
+              ],
+              edges: [{ from: "1", to: "2" }],
+            },
+          ],
+        },
+        {
+          id: "b",
+          title: "产物",
+          blocks: [
+            {
+              type: "flow_subgraph",
+              nodes: [
+                { id: "1", label: "中间体" },
+                { id: "2", label: "产物" },
+              ],
+              edges: [{ from: "1", to: "2" }],
+            },
+            { type: "callout", content: "择形" },
+          ],
+        },
+      ],
+    });
+    const panels = config.panels as Array<{
+      blocks: Array<{ type: string; content?: string; edges?: Array<{ label?: string }> }>;
+    }>;
+    expect(panels[0]?.blocks[0]?.type).toBe("text");
+    expect(panels[1]?.blocks[1]?.type).toBe("callout");
+    const flow0 = panels[0]?.blocks.find((b) => b.type === "flow_subgraph");
+    expect(flow0?.edges?.some((e) => e.label === "酸位")).toBe(true);
+    expect(qaReport.verdict).not.toBe("block");
   });
 
   it("parseMechanismSpec round-trips a compiled flow", () => {

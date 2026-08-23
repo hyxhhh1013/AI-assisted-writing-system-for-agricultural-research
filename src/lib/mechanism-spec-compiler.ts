@@ -418,7 +418,7 @@ function inspectGraphFindings(
   const hay = `${ctx.title} ${ctx.claim} ${ctx.notes} ${graph.nodes.map((n) => n.label).join(" ")}`;
   if (CONDITION_HINT.test(hay)) {
     const { labeled, total } = labeledEdgeRatio(graph);
-    if (total >= 2 && labeled / total < 0.5) {
+    if (total >= 1 && labeled / total < 0.5) {
       findings.push({
         code: "missing_edge_condition",
         layer: "L4",

@@ -1,11 +1,19 @@
 /** 分子结构图 API 类型定义与服务封装 */
 
+import type { MechanismQaReport } from "@/contracts/mechanism-qa";
+import type { MechanismSpecV1 } from "@/contracts/mechanism-spec";
+
 export interface MolDiagramResponse {
   imageBase64: string;
   imageUrl: string;
   svgUrl?: string;
   pdfUrl?: string;
   preset?: string;
+  qaReport?: MechanismQaReport;
+  mechanismSpec?: MechanismSpecV1;
+  specPatches?: Array<{ code: string; path: string }>;
+  nodes?: FlowNode[];
+  edges?: FlowEdge[];
 }
 
 export interface MolAtom {

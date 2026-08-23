@@ -214,6 +214,7 @@
 | FIG-QA-009 | 刊规包 + 导出清单（svg/pdf + source csv + qa 摘要） | 001, 003 | 1d | **done** | 2026-08-22；`chart-export.ts` 刊规包；`{uuid}.csv/.json` 清单 |
 | FIG-QA-010 | 类型质量剖面：bar_grouped / line / heatmap 先收口 | 006, 007 | 1.5d | **done** | 2026-08-22；热力不撑刊宽；三件套 profile 夹具；其余类型仍冻结扩新 |
 | **FIG-MECH-QA-001** | **机理图 MechanismSpec + 边条件 + 确定性质检 + 双布局候选** | FIG-QA-008 | 1.5d | **done** | 2026-08-23；`contracts/mechanism-spec.ts` + `mechanism-qa.ts`；compiler/patches；`draft_mechanism_figure` 热路径；不接文生图 |
+| **FIG-MECH-QA-002** | **/plot 流程图/多面板走同一套 Spec 修补并回放画布** | FIG-MECH-QA-001 | 0.5d | **done** | 2026-08-23；`mechanism-spec-run.ts`；flow-diagram / mechanism-panel 回传 qaReport；画布同步 |
 | — | 任务单细节 | — | — | — | [`plans/FIG-QA-quality-system.md`](./plans/FIG-QA-quality-system.md) |
 | **Phase 14 — 写作质量系统（WRITE-QA：编译器 + 证据绑定 + 确定性质检）** |
 | **WRITE-QA-000** | **规划：诊断 + 质量合同 + SectionSpec 架构** | — | 0.5d | **done** | 2026-08-22；[`plans/WRITE-QA-quality-system.md`](./plans/WRITE-QA-quality-system.md) |
@@ -1182,7 +1183,9 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-23 | Agent 状态空白 | AI | `isRunning` 改看 SSE inFlight；LLM 开始立刻 live 推 thinking；写节完成卡不再挡住思考/导入进度。 |
 | 2026-08-23 | 蓝图口头收口 | AI | 计划匹配：有 toolHints 只认 hints；读工具/大纲不得误勾「写作蓝图」。口头宣布未调用则续跑，不空完成。 |
 | 2026-08-23 | FIG-MECH-QA-001 | AI | 机理图补上 ChartSpec 同构：MechanismSpec（主张进 caption、括号条件上边）→ 确定性质检 → ≤2 次补丁；block 不入库；未锁布局出 chain/fork 候选只入库推荐稿。识图只扫残余。不接文生图。 |
+| 2026-08-23 | FIG-MECH-QA-002 | AI | /plot 流程与多面板出图前 refinePlot*：边上条件、英文占位修补后回写画布；API 回传 qaReport。不挡出图。 |
 | 2026-08-23 | W3-AP-OUTLINE-HUMAN | AI | 大纲 persist 一律暂停确认（含自动补齐、普通 goal、曾批准后再生成）。`generate_outline` 服务端读大纲/框架附件锁一级标题，长论文不当骨架。 |
+| 2026-08-23 | 写引言口头收口 | AI | 「开始吧」未当跟聊 → intent=null、plan=null；口头「撰写引言…」不在宣布表。补：跟聊词、write_section 宣布续跑、ap_full 未写回当 draft 未完成、SSE 中断不伪装完成。 |
 
 ---
 

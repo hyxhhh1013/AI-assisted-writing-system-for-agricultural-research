@@ -15,6 +15,7 @@ import type { FlowPanelPrefill } from "@/contracts/figure";
 import { buildPlotInsertReplay } from "@/contracts/figure";
 import { PlotWorkspace } from "@/components/shared/plot/plot-workspace";
 import { PlotPreviewPane } from "@/components/shared/plot/plot-preview-pane";
+import { MechanismQaBanner } from "@/components/shared/plot/mechanism-qa-banner";
 import { FlowCanvas } from "@/components/shared/plot/flow-canvas";
 import type { PlotToolProps } from "@/components/shared/plot/plot-tool-props";
 import { downloadText, flowToDot, flowToMermaid, mermaidToFlow } from "@/lib/flow-diagram-io";
@@ -155,6 +156,8 @@ export function FlowCard({
     imageUrl: string;
     svgUrl?: string;
     pdfUrl?: string;
+    qaReport?: import("@/contracts/mechanism-qa").MechanismQaReport;
+    specPatches?: Array<{ code: string; path: string }>;
   } | null>(null);
   const [title, setTitle] = useState(TEMPLATES.blank.title);
   const [direction, setDirection] = useState<"vertical" | "horizontal">("vertical");
@@ -260,13 +263,29 @@ export function FlowCard({
         nodes: validNodes,
         edges: edges.filter((e) => e.from && e.to),
       });
+      if (json.nodes && json.nodes.length >= 2) {
+        setNodes(json.nodes.map((n) => ({
+          id: n.id,
+          label: n.label,
+          shape: n.shape,
+          role: n.role,
+          color: n.color,
+        })));
+      }
+      if (json.edges) setEdges(json.edges);
       setResult({
         imageBase64: json.imageBase64,
         imageUrl: json.imageUrl,
         svgUrl: json.svgUrl,
         pdfUrl: json.pdfUrl,
+        qaReport: json.qaReport,
+        specPatches: json.specPatches,
       });
-      toast.success("流程图生成成功");
+      toast.success(
+        json.specPatches && json.specPatches.length > 0
+          ? "流程图已生成，括号条件已提升到边上"
+          : "流程图生成成功",
+      );
     } catch (err: unknown) {
       toast.error(err instanceof Error ? getErrorMessage(err) : "生成失败");
     } finally {
@@ -619,6 +638,11 @@ export function FlowCard({
           imageAlt={`流程图 — ${title}`}
           footer={
             result ? (
+              <div className="flex w-full flex-col gap-2">
+                <MechanismQaBanner
+                  report={result.qaReport}
+                  patchCount={result.specPatches?.length ?? 0}
+                />
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
@@ -670,6 +694,7 @@ export function FlowCard({
                 >
                   <BarChart3 className="h-3 w-3" /> 插入论文
                 </Button>
+              </div>
               </div>
             ) : undefined
           }

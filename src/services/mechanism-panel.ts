@@ -1,5 +1,8 @@
 /** 多面板机理图合成 */
 
+import type { MechanismQaReport } from "@/contracts/mechanism-qa";
+import type { MechanismSpecV1 } from "@/contracts/mechanism-spec";
+
 export interface MechanismPanelBlock {
   type: "text" | "image" | "molecule" | "flow_subgraph" | "callout";
   content?: string;
@@ -37,6 +40,10 @@ export interface MechanismPanelResponse {
   imageUrl: string;
   svgUrl?: string;
   pdfUrl?: string;
+  qaReport?: MechanismQaReport;
+  mechanismSpec?: MechanismSpecV1;
+  specPatches?: Array<{ code: string; path: string }>;
+  panels?: MechanismPanelColumn[];
 }
 
 export async function renderMechanismPanel(
