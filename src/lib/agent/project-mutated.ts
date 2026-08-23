@@ -74,6 +74,12 @@ export function extractProjectMutated(
     if (tool === "write_section" && (data.blocked === true || data.persisted == null)) {
       return null;
     }
+    if (
+      (tool === "draft_mechanism_figure" || tool === "generate_chart")
+      && data.blocked === true
+    ) {
+      return null;
+    }
     // import_reference 预览 / 待确认
     if (
       tool === "import_reference"

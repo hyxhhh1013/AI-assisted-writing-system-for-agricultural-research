@@ -53,6 +53,15 @@ describe("extractProjectMutated", () => {
     ).toBeNull();
   });
 
+  it("skips draft_mechanism_figure when qaReport blocked", () => {
+    expect(
+      extractProjectMutated("draft_mechanism_figure", {
+        success: true,
+        data: { blocked: true, qaReport: { verdict: "block" } },
+      }),
+    ).toBeNull();
+  });
+
   it("skips write_section when QA blocked and nothing persisted", () => {
     expect(
       extractProjectMutated("write_section", {

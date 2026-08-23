@@ -193,6 +193,15 @@ describe("figure-loop", () => {
         },
       ]),
     ).toBeNull();
+    expect(
+      lastFigureQaNeedsReplace([
+        {
+          tool: "draft_mechanism_figure",
+          success: true,
+          data: { blocked: true, imageUrl: "/api/charts/bad-flow.png" },
+        },
+      ]),
+    ).toEqual({ imageUrl: "/api/charts/bad-flow.png" });
   });
 
   it("buildFigureQaContinueNudge forces replaceImageUrl", () => {

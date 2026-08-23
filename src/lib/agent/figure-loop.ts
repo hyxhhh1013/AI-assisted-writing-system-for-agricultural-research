@@ -139,7 +139,10 @@ export function lastFigureQaNeedsReplace(
     const o = observations[i];
     if (!o) continue;
     if (FIGURE_GENERATE_TOOLS.has(o.tool) && o.success) {
-      if (o.tool === "generate_chart" && isChartQaBlocked(o.data)) {
+      if (
+        (o.tool === "generate_chart" || o.tool === "draft_mechanism_figure")
+        && isChartQaBlocked(o.data)
+      ) {
         const url =
           typeof o.data === "object" && o.data && "imageUrl" in o.data
             && typeof (o.data as { imageUrl?: unknown }).imageUrl === "string"
@@ -265,6 +268,15 @@ export function buildChartQaBlockNudge(imageUrl: string, codes: string[]): strin
     + `缺陷：${list}。请按 findings 改轴标签/单位/显著性下标后重出`
     + (imageUrl ? `（可带 replaceImageUrl="${imageUrl}"）` : "")
     + "。不要对柱状/折线/热力等数据图调用 read_figure(mode=qa)。"
+  );
+}
+
+export function buildMechanismQaBlockNudge(codes: string[]): string {
+  const list = codes.length ? codes.join("、") : "见 qaReport.findings";
+  return (
+    "System: 机理图 qaReport.verdict=block，未入库。禁止只写分析就收尾。"
+    + `缺陷：${list}。请按 findings 改节点短语、边上条件或去掉英文占位后重出。`
+    + "不要整图重掷，也不要改用文生图。"
   );
 }
 

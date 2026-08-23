@@ -8,7 +8,7 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-08-22（Phase 14 WRITE-QA 001–010 收口；Phase 13 FIG-QA 已收口）  
+> **最后更新**：2026-08-23（W3-AP-OUTLINE-HUMAN：大纲写回一律确认 + 框架附件锁骨架）  
 > **实时 status 只看 §1 Phase 13 / Phase 14 与 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
@@ -213,6 +213,7 @@
 | FIG-QA-008 | 拆 QA：数据图看 qaReport；机理图才走 vision | 007 | 0.5d | **done** | 2026-08-22；generate_chart 不再排队 read_figure(qa) |
 | FIG-QA-009 | 刊规包 + 导出清单（svg/pdf + source csv + qa 摘要） | 001, 003 | 1d | **done** | 2026-08-22；`chart-export.ts` 刊规包；`{uuid}.csv/.json` 清单 |
 | FIG-QA-010 | 类型质量剖面：bar_grouped / line / heatmap 先收口 | 006, 007 | 1.5d | **done** | 2026-08-22；热力不撑刊宽；三件套 profile 夹具；其余类型仍冻结扩新 |
+| **FIG-MECH-QA-001** | **机理图 MechanismSpec + 边条件 + 确定性质检 + 双布局候选** | FIG-QA-008 | 1.5d | **done** | 2026-08-23；`contracts/mechanism-spec.ts` + `mechanism-qa.ts`；compiler/patches；`draft_mechanism_figure` 热路径；不接文生图 |
 | — | 任务单细节 | — | — | — | [`plans/FIG-QA-quality-system.md`](./plans/FIG-QA-quality-system.md) |
 | **Phase 14 — 写作质量系统（WRITE-QA：编译器 + 证据绑定 + 确定性质检）** |
 | **WRITE-QA-000** | **规划：诊断 + 质量合同 + SectionSpec 架构** | — | 0.5d | **done** | 2026-08-22；[`plans/WRITE-QA-quality-system.md`](./plans/WRITE-QA-quality-system.md) |
@@ -253,6 +254,7 @@
 | W3-AP-FIG-UX | Agent 改图表单 + 节末落盘说明/跳转 + 编辑器插图挪位 | W3-AP-FIG-LOOP | 0.5d | **done** | 2026-08-09；表单为主，位置后挪 |
 | W3-AP-FIG-DOCK-P2 | 配图坞免翻聊天 + /plot 回写 replace + 改图快捷项 | W3-AP-FIG-UX | 0.5d | **done** | 2026-08-09；输入区上方坞；plot?replaceImageUrl |
 | W3-AP-ATTACH-UX | 附件提取时序提示 + 写作进度可见性 + extract_failed 自动重试 + xlsx Turbopack 兼容 | W3-AP-WRITE-DISCIPLINE | 0.5d | **done** | 2026-08-08；manifest/read_attachment 提示「提取中稍后重试」+ WritingStatusCard 0 字显示「等待 AI 输出」+ `retryAttachmentExtraction` + xlsx 改 `fs.readFileSync`→`XLSX.read`；全量 1020 通过 |
+| W3-AP-OUTLINE-HUMAN | 大纲写回一律 `outline_approve`；框架附件锁一级标题 | W3-AP-PREREQ-CHECKPOINT | 0.5d | **done** | 2026-08-23；不看「整篇」话术；`outline-from-attachment.ts`；新大纲作废旧批准 |
 | **Phase 11c — Wave 3.8 Agent 单面工作台 + 数据闭环** |
 | **W3-AP-AGENT-HUB** | **主轴：附件=唯一上传口；数据根基；结果章硬门禁；Tab 收敛** | W3-AP-QUALITY | 1～2w | **done** | 2026-08-15；DATA-01～04 + HUB-01～03 |
 | W3-AP-DATA-01 | 数据根基判定 + 研究型 results 硬门禁 + inspect/简报同源 | — | 0.5d | **done** | 2026-08-15；`data-foundation.ts`；research+results+empty 拒写 |
@@ -1175,17 +1177,23 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-22 | 修订大纲空检索红框 | AI | 事故门：`checkOutlineSearchGate` 拦「基于 N 条文献修订大纲」的 search_*；空检索改软成功；斜杠 query 拆空格；`resolveAgentLastFailure` 不弹无命中红框。 |
 | 2026-08-22 | AP 软可疑卡摘要 | AI | `citation_fix` 只认硬检未过；21 条软可疑不再拦 `write_bilingual_abstract`。门禁提示不当红框。 |
 | 2026-08-22 | 同章翻页空转 | AI | `checkCitationSpinGate`：硬检通过后禁 read_section/read_reference 分页抠 [n]；硬未过最多读 2 窗。翻页警告不当红框。 |
+| 2026-08-23 | DeepSeek thinking 400 | AI | V4 默认 thinking + Agent tools 要求回传 `reasoning_content`。`buildChatCompletionsBody` 对 DeepSeek+tools 关 thinking；流式不再把思维链拼进正文。 |
+| 2026-08-23 | 导入确认看摘要 | AI | 确认卡候选项可展开作者/摘要/原文链接（`import-confirm-list`）；数据已在 `importItems`，不再只露截断标题。 |
+| 2026-08-23 | Agent 状态空白 | AI | `isRunning` 改看 SSE inFlight；LLM 开始立刻 live 推 thinking；写节完成卡不再挡住思考/导入进度。 |
+| 2026-08-23 | 蓝图口头收口 | AI | 计划匹配：有 toolHints 只认 hints；读工具/大纲不得误勾「写作蓝图」。口头宣布未调用则续跑，不空完成。 |
+| 2026-08-23 | FIG-MECH-QA-001 | AI | 机理图补上 ChartSpec 同构：MechanismSpec（主张进 caption、括号条件上边）→ 确定性质检 → ≤2 次补丁；block 不入库；未锁布局出 chain/fork 候选只入库推荐稿。识图只扫残余。不接文生图。 |
+| 2026-08-23 | W3-AP-OUTLINE-HUMAN | AI | 大纲 persist 一律暂停确认（含自动补齐、普通 goal、曾批准后再生成）。`generate_outline` 服务端读大纲/框架附件锁一级标题，长论文不当骨架。 |
 
 ---
 
 ## 5. 推荐执行顺序（给「下一次 AI」）
 
-**当前主轴（2026-08-22）**：Phase 13 **FIG-QA 001–010 已收口**；Phase 14 **WRITE-QA 001–010 已收口**。Wave 3.10 已收口。  
+**当前主轴（2026-08-23）**：Phase 13 **FIG-QA 001–010 已收口**；**FIG-MECH-QA-001 已收口**；Phase 14 **WRITE-QA 001–010 已收口**；**W3-AP-OUTLINE-HUMAN 已收口**。Wave 3.10 已收口。  
 **即刻冻结**：不准再往 `goal-intents.ts` 加口语 `isXxxGoal` / `checkXxxGate`（领域不变量与事故型安全门除外）；不重开 SHADOW；不重写 LangGraph；不给 `POST /api/writing` 旧扩写管加功能；**禁止新增图表类型**（其余 8 类未做质量剖面）；禁止再开「某 chart_types 提质」散 PR；**禁止再往 `writing.ts` 堆「禁止」**（新规则进 WRITE-QA code 表）。
 
 | 优先级 | ID | 说明 |
 |--------|-----|------|
-| **now** | Wave 4 / 观测 | WRITE-QA 与 FIG-QA 主轴已收口。详规见 [`MASTER_PLAN.md`](./MASTER_PLAN.md) |
+| **now** | Wave 4 / 观测 | WRITE-QA、FIG-QA、FIG-MECH-QA 主轴已收口。详规见 [`MASTER_PLAN.md`](./MASTER_PLAN.md) |
 | backlog | Wave 4 | ENG-PR-094 已 done；LaTeX / SEC-04～08 见 [`MASTER_PLAN.md`](./MASTER_PLAN.md) |
 
 **明确不做**：重开 INTENT-SHADOW、LangGraph 重写 / 多 agent / DeepSeek Harness、热路径 LLM-judge、再堆口语门禁、运行时扫 `tools/` 磁盘、用 VLM 当数据图主质检、R 后端、解冻旧扩写管道、复刻十二代理 Conductor。

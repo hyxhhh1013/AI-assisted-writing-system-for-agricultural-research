@@ -3,6 +3,8 @@ import {
   encodeFigureSpecParam,
 } from "@/contracts/figure";
 import type { ProjectChartAsset } from "@/contracts/figure";
+import { buildMechanismQaReport, type MechanismQaReport } from "@/contracts/mechanism-qa";
+import type { MechanismLayout, MechanismSpecV1 } from "@/contracts/mechanism-spec";
 import {
   insertOrReplaceAgentSectionImage,
   listAgentCharts,
@@ -21,89 +23,41 @@ import {
   parsePersistToProject,
 } from "@/lib/agent/writing-sections";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
+import {
+  buildAlternateLayoutSpec,
+  buildFlowDiagramConfig,
+  buildForkFlow,
+  buildMechanismPanelConfig,
+  compileMechanismSpec,
+  defaultStepsForPanelTitle,
+  inspectMechanismSpec,
+  mechanismSpecToRenderConfig,
+  pathwayTokensFromTitle,
+} from "@/lib/mechanism-spec-compiler";
+import {
+  applyMechanismSpecPatches,
+  type MechanismSpecPatch,
+} from "@/lib/mechanism-spec-patches";
+
+export {
+  buildFlowDiagramConfig,
+  buildForkFlow,
+  buildMechanismPanelConfig,
+  defaultStepsForPanelTitle,
+  pathwayTokensFromTitle,
+};
 
 /** 多面板单栏输入：每栏必须有中文流程步骤，禁止依赖「Upload figure asset」占位 */
-export type MechanismPanelSpec = {
+export type MechanismPanelInput = {
   title: string;
-  /** 该栏流程节点（≥2）；优先使用 */
   steps?: string[];
-  /** 可选短要点（≤3 行），渲染为 text，勿与标题重复 */
   bullets?: string[];
-  /** 该栏 callout（仅一处；勿与整图 footnote 重复） */
   note?: string;
 };
 
-type FlowNode = { id: string; label: string; role: "start_end" | "process" | "decision" };
-type FlowEdge = { from: string; to: string; label?: string };
+export type MechanismPanelSpec = MechanismPanelInput;
 
-/** 从栏标题拆出路径词（「脱氧路径：脱水/脱羧/脱羰」→ ["脱水","脱羧","脱羰"]） */
-export function pathwayTokensFromTitle(title: string): string[] {
-  const raw = title.trim();
-  if (!raw) return [];
-  const afterColon = raw.split(/[:：]/).slice(1).join("：").trim();
-  const source = afterColon || raw;
-  const parts = source
-    .split(/[\/、·,，|]/)
-    .map((s) => s.trim())
-    .filter((s) => s.length >= 2 && s.length <= 24);
-  return parts.slice(0, 4);
-}
-
-/** 无 steps 时用标题生成可读中文链，避免英文 Pathway/Product 模板 */
-export function defaultStepsForPanelTitle(title: string): string[] {
-  const tokens = pathwayTokensFromTitle(title);
-  const head = title.split(/[:：]/)[0]?.trim() || title.trim() || "过程";
-  if (tokens.length >= 2) {
-    return ["含氧前体", ...tokens, "目标产物"].slice(0, 6);
-  }
-  if (tokens.length === 1) {
-    return ["反应物", tokens[0]!, "产物"];
-  }
-  return [`输入·${head}`, head, `输出·${head}`];
-}
-
-function buildChainNodes(steps: string[]): { nodes: FlowNode[]; edges: FlowEdge[] } {
-  const nodes: FlowNode[] = steps.map((label, i) => ({
-    id: String(i + 1),
-    label,
-    role: i === 0 || i === steps.length - 1 ? "start_end" : "process",
-  }));
-  const edges: FlowEdge[] = steps.slice(1).map((_, i) => ({
-    from: String(i + 1),
-    to: String(i + 2),
-  }));
-  return { nodes, edges };
-}
-
-/**
- * ≥4 步时默认分叉汇合（概念框架更像机理，而非单列清单）：
- * start → hub → 并行中段 → end
- */
-export function buildForkFlow(steps: string[]): { nodes: FlowNode[]; edges: FlowEdge[] } {
-  if (steps.length < 4) return buildChainNodes(steps);
-  const start = steps[0]!;
-  const hub = steps[1]!;
-  const end = steps[steps.length - 1]!;
-  const mids = steps.slice(2, -1);
-  const nodes: FlowNode[] = [
-    { id: "1", label: start, role: "start_end" },
-    { id: "2", label: hub, role: "process" },
-    ...mids.map((label, i) => ({
-      id: String(i + 3),
-      label,
-      role: "process" as const,
-    })),
-    { id: String(mids.length + 3), label: end, role: "start_end" },
-  ];
-  const endId = String(mids.length + 3);
-  const edges: FlowEdge[] = [{ from: "1", to: "2" }];
-  for (let i = 0; i < mids.length; i++) {
-    const midId = String(i + 3);
-    edges.push({ from: "2", to: midId });
-    edges.push({ from: midId, to: endId });
-  }
-  return { nodes, edges };
-}
+const MAX_PATCH_ROUNDS = 2;
 
 function parseJsonArray(raw: unknown): unknown[] | null {
   if (Array.isArray(raw)) return raw;
@@ -118,121 +72,10 @@ function parseJsonArray(raw: unknown): unknown[] | null {
   return null;
 }
 
-function parseFlowNodes(raw: unknown): FlowNode[] | null {
-  const arr = parseJsonArray(raw);
-  if (!arr || arr.length < 2) return null;
-  const nodes: FlowNode[] = [];
-  for (let i = 0; i < arr.length; i++) {
-    const item = arr[i];
-    if (!item || typeof item !== "object") return null;
-    const o = item as Record<string, unknown>;
-    const label = String(o.label ?? o.text ?? "").trim();
-    if (!label) return null;
-    const roleRaw = String(o.role ?? "").toLowerCase();
-    const role: FlowNode["role"] =
-      roleRaw === "start_end" || roleRaw === "decision" || roleRaw === "process"
-        ? roleRaw
-        : i === 0 || i === arr.length - 1
-          ? "start_end"
-          : "process";
-    nodes.push({
-      id: String(o.id ?? i + 1),
-      label,
-      role,
-    });
-  }
-  return nodes;
-}
-
-function parseFlowEdges(raw: unknown, nodeIds: Set<string>): FlowEdge[] | null {
-  const arr = parseJsonArray(raw);
-  if (!arr || arr.length === 0) return null;
-  const edges: FlowEdge[] = [];
-  for (const item of arr) {
-    if (!item || typeof item !== "object") continue;
-    const o = item as Record<string, unknown>;
-    const from = String(o.from ?? o.source ?? "").trim();
-    const to = String(o.to ?? o.target ?? "").trim();
-    if (!from || !to || !nodeIds.has(from) || !nodeIds.has(to)) continue;
-    const label = o.label != null ? String(o.label).trim() : "";
-    edges.push(label ? { from, to, label } : { from, to });
-  }
-  return edges.length > 0 ? edges : null;
-}
-
-/** 流程图 config（Graphviz 风格，flow_diagram_v2.py 消费） */
-export function buildFlowDiagramConfig(input: {
-  title: string;
-  notes: string;
-  flowSteps?: string[];
-  /** chain=单链；fork=分叉汇合（≥4 步默认）；custom=用 nodes/edges */
-  layout?: "chain" | "fork" | "custom";
-  nodesJson?: unknown;
-  edgesJson?: unknown;
-}): Record<string, unknown> {
-  const customNodes = parseFlowNodes(input.nodesJson);
-  if (customNodes) {
-    const ids = new Set(customNodes.map((n) => n.id));
-    const customEdges =
-      parseFlowEdges(input.edgesJson, ids)
-      ?? customNodes.slice(1).map((_, i) => ({
-        from: customNodes[i]!.id,
-        to: customNodes[i + 1]!.id,
-      }));
-    return {
-      title: input.title,
-      preset: "nature",
-      direction: "vertical",
-      look: "journal",
-      nodes: customNodes,
-      edges: customEdges,
-    };
-  }
-
-  const steps = (input.flowSteps ?? [])
-    .map((s) => String(s).trim())
-    .filter(Boolean)
-    .slice(0, 8);
-
-  if (steps.length >= 2) {
-    const layout =
-      input.layout === "chain" || input.layout === "fork"
-        ? input.layout
-        : steps.length >= 4
-          ? "fork"
-          : "chain";
-    const { nodes, edges } =
-      layout === "fork" ? buildForkFlow(steps) : buildChainNodes(steps);
-    return {
-      title: input.title,
-      preset: "nature",
-      direction: "vertical",
-      look: "journal",
-      nodes,
-      edges,
-    };
-  }
-
-  // 未提供步骤：用标题生成中文链（禁止英文 Feedstock 模板）
-  const fallback = defaultStepsForPanelTitle(input.title || "转化过程");
-  const { nodes, edges } = buildChainNodes(fallback);
-  if (input.notes) {
-    edges[0] = { ...edges[0]!, label: input.notes.slice(0, 24) };
-  }
-  return {
-    title: input.title,
-    preset: "nature",
-    direction: "vertical",
-    look: "journal",
-    nodes,
-    edges,
-  };
-}
-
-function parsePanelSpecs(raw: unknown): MechanismPanelSpec[] {
+function parsePanelSpecs(raw: unknown): MechanismPanelInput[] {
   const arr = parseJsonArray(raw);
   if (!arr) return [];
-  const out: MechanismPanelSpec[] = [];
+  const out: MechanismPanelInput[] = [];
   for (const item of arr) {
     if (!item || typeof item !== "object") continue;
     const o = item as Record<string, unknown>;
@@ -255,68 +98,26 @@ function parsePanelSpecs(raw: unknown): MechanismPanelSpec[] {
   return out;
 }
 
-/** 多面板机理图：每栏 flow_subgraph（中文步骤），不再塞无素材 image 占位 */
-export function buildMechanismPanelConfig(input: {
-  title: string;
-  panelTitles: string[];
-  notes: string;
-  panels?: MechanismPanelSpec[];
-}): Record<string, unknown> {
-  let panelsIn = (input.panels ?? []).slice(0, 3);
-  if (panelsIn.length < 2) {
-    const titles =
-      input.panelTitles.length >= 2
-        ? input.panelTitles.slice(0, 3)
-        : ["组成与结构", "活性位与路径", "产物导向"];
-    while (titles.length < 2) titles.push(`路径 ${titles.length + 1}`);
-    panelsIn = titles.map((title) => ({ title }));
+function refineMechanismSpec(spec: MechanismSpecV1): {
+  spec: MechanismSpecV1;
+  qaReport: MechanismQaReport;
+  patches: MechanismSpecPatch[];
+} {
+  let current = spec;
+  const allPatches: MechanismSpecPatch[] = [];
+  let findings = inspectMechanismSpec(current);
+  for (let i = 0; i < MAX_PATCH_ROUNDS; i++) {
+    const applied = applyMechanismSpecPatches(current, findings);
+    if (applied.patches.length === 0) break;
+    allPatches.push(...applied.patches);
+    current = applied.spec;
+    findings = inspectMechanismSpec(current);
   }
-
-  const ids = ["a", "b", "c"].slice(0, panelsIn.length);
-  const globalNote = input.notes.trim();
-  let noteUsed = false;
-
-  const panels = ids.map((id, i) => {
-    const spec = panelsIn[i]!;
-    const steps =
-      spec.steps && spec.steps.length >= 2
-        ? spec.steps.slice(0, 8)
-        : defaultStepsForPanelTitle(spec.title);
-    const { nodes, edges } =
-      steps.length >= 4 ? buildForkFlow(steps) : buildChainNodes(steps);
-
-    const blocks: Array<Record<string, unknown>> = [];
-    if (spec.bullets?.length) {
-      blocks.push({
-        type: "text",
-        content: spec.bullets.join("；"),
-      });
-    }
-    blocks.push({
-      type: "flow_subgraph",
-      direction: "vertical",
-      nodes,
-      edges,
-    });
-
-    const panelNote = spec.note?.trim();
-    if (panelNote) {
-      blocks.push({ type: "callout", content: panelNote });
-      noteUsed = true;
-    } else if (globalNote && i === panelsIn.length - 1 && !noteUsed) {
-      // 整图 notes 只落在最后一栏 callout 一次，避免与 footnote 重复
-      blocks.push({ type: "callout", content: globalNote });
-      noteUsed = true;
-    }
-
-    return {
-      id,
-      title: spec.title,
-      blocks,
-    };
-  });
-
-  return { title: input.title, preset: "nature", panels };
+  return {
+    spec: current,
+    qaReport: buildMechanismQaReport(findings),
+    patches: allPatches,
+  };
 }
 
 /**
@@ -328,17 +129,19 @@ export const draftMechanismFigureTool: ToolDefinition = {
   name: "draft_mechanism_figure",
   description:
     "根据文字描述生成期刊级机理图/流程图并写入项目图表库。"
+    + "先编译 MechanismSpec：主张进 caption，温度/催化剂等条件上边，节点只留过程短语。"
     + "kind=flow：传 flowSteps（中文，≥2）或 nodesJson+edgesJson；≥4 步默认分叉汇合。"
     + "kind=mechanism_panel：优先 panelsJson=[{title,steps,bullets?,note?},...]（2～3 栏，每栏中文 steps）；"
     + "禁止依赖 Upload 占位或英文 Pathway 模板。"
-    + "生成后务必 read_figure(imageUrl=…, mode=qa) 回看；若有占位/英文模板/空栏，用更具体 steps 重生成。"
+    + "未指定 layout 且 ≥4 步时会额外出一套版式候选（chain/fork），只入库推荐稿。"
+    + "qaReport.block 不入库、不插章节；按 findings 改 Spec 再出，不要整图重掷。"
     + "改图务必传 replaceImageUrl（旧图 URL）就地替换，勿追加第二张。"
     + "同标题/同章节已有图时，不传 replace 会自动就地替换（防叠图）。"
     + "农科常用模板可传 templateId："
     + listMechanismTemplateIds().join("/")
     + "。"
     + "传 sectionKey 可插入或替换章节图片。"
-    + "出图后系统会自动 read_figure(qa)；期刊观感请在 /plot 精修。",
+    + "期刊观感请在 /plot 精修。不使用文生图当主渲染器。",
   safety: "write",
   parameters: {
     type: "object",
@@ -349,6 +152,15 @@ export const draftMechanismFigureTool: ToolDefinition = {
         description: "mechanism_panel=多栏合成；flow=Graphviz 流程；mechanism=Mermaid 草图",
       },
       title: { type: "string", description: "图标题（中文）" },
+      claim: {
+        type: "string",
+        description: "这张图要辩护的一句话，写入 caption，不要画进节点",
+      },
+      preset: {
+        type: "string",
+        enum: ["nature", "agr_journal", "print_bw"],
+        description: "刊规配色；默认 nature",
+      },
       templateId: {
         type: "string",
         description:
@@ -377,12 +189,12 @@ export const draftMechanismFigureTool: ToolDefinition = {
       flowSteps: {
         type: "array",
         items: { type: "string" },
-        description: "kind=flow 的中文步骤（2~8）。≥4 步默认分叉汇合；layout=chain 可强制单链",
+        description: "kind=flow 的中文步骤（2~8）。括号内条件会提升到边上。≥4 步默认分叉；layout=chain 可强制单链",
       },
       layout: {
         type: "string",
         enum: ["chain", "fork"],
-        description: "flow 布局：chain 单链；fork 分叉汇合（默认 ≥4 步）",
+        description: "flow 布局：chain 单链；fork 分叉汇合（默认 ≥4 步）。指定后不再出第二套候选",
       },
       nodesJson: {
         type: "string",
@@ -424,7 +236,6 @@ export const draftMechanismFigureTool: ToolDefinition = {
       return { success: false, error: "draft_mechanism_figure 需要关联 projectId" };
     }
 
-    // 模板：提升农科机理草稿下限；参数可覆盖
     const template = getMechanismTemplate(String(params.templateId ?? ""));
     let kindRaw = String(params.kind || template?.kind || "mechanism_panel");
     if (template && (!params.kind || String(params.kind) === template.kind)) {
@@ -465,7 +276,6 @@ export const draftMechanismFigureTool: ToolDefinition = {
       };
     }
 
-    // P0 防叠图：同标题/同章节已有图且未传 replace → 自动填 replaceImageUrl
     const existingCharts = await listAgentCharts(ctx.projectId);
     const anti = resolveReplaceForAntiStack({
       params: {
@@ -479,7 +289,6 @@ export const draftMechanismFigureTool: ToolDefinition = {
     const replaceChartId = String(anti.params.replaceChartId ?? "").trim();
     const autoReplaced = anti.autoReplaced;
 
-    // ── Mermaid 草图：需浏览器渲染，返回 /plot 深链 ──
     if (kind === "mechanism") {
       const mermaid =
         typeof params.mermaid === "string" && params.mermaid.trim()
@@ -504,7 +313,6 @@ export const draftMechanismFigureTool: ToolDefinition = {
       };
     }
 
-    // ── flow / mechanism_panel：直接出图 ──
     const flowStepsRaw = Array.isArray(params.flowSteps)
       ? params.flowSteps.map((s) => String(s).trim()).filter(Boolean).slice(0, 8)
       : [];
@@ -513,35 +321,83 @@ export const draftMechanismFigureTool: ToolDefinition = {
         ? flowStepsRaw
         : (template?.flowSteps ?? []).slice(0, 8);
     const layoutRaw = String(params.layout || "").toLowerCase();
-    const layout =
+    const layout: MechanismLayout | undefined =
       layoutRaw === "chain" || layoutRaw === "fork" ? layoutRaw : undefined;
+    const claim = String(params.claim ?? "").trim();
+    const preset = String(params.preset ?? "").trim();
 
-    let config: Record<string, unknown>;
-    let figureId: "flow" | "mechanism_panel";
-    if (kind === "flow") {
-      config = buildFlowDiagramConfig({
-        title,
-        notes,
-        flowSteps,
-        layout,
-        nodesJson: params.nodesJson,
-        edgesJson: params.edgesJson,
-      });
-      figureId = "flow";
-    } else {
-      config = buildMechanismPanelConfig({
-        title,
-        panelTitles,
-        notes,
-        panels: panelSpecs.length >= 2 ? panelSpecs : undefined,
-      });
-      figureId = "mechanism_panel";
+    const compiled = compileMechanismSpec({
+      kind,
+      title,
+      claim: claim || undefined,
+      notes,
+      preset: preset || undefined,
+      layout,
+      flowSteps,
+      nodesJson: params.nodesJson,
+      edgesJson: params.edgesJson,
+      panelTitles,
+      panels: panelSpecs.length >= 2 ? panelSpecs : undefined,
+    });
+    const refined = refineMechanismSpec(compiled.spec);
+    const spec = refined.spec;
+    const qaReport = refined.qaReport;
+    const blocked = qaReport.verdict === "block";
+    const figureId = spec.kind;
+    const config = mechanismSpecToRenderConfig(spec);
+    const figureSpecEnc = encodeFigureSpecParam({ tool: figureId, caption: spec.caption, config });
+
+    if (blocked) {
+      return {
+        success: true,
+        data: {
+          kind: spec.kind,
+          title: spec.caption,
+          blocked: true,
+          mechanismSpec: spec,
+          qaReport,
+          specPatches: refined.patches,
+          figureSpecEnc,
+          next: {
+            hint: "按 qaReport.findings 改节点/边/steps 后重出，不要整图重掷",
+          },
+        },
+        summary:
+          `机理图「${spec.caption}」质量未过线（${qaReport.findings
+            .filter((f) => f.action === "block")
+            .map((f) => f.code)
+            .join("、") || "block"}），未入库也未插入章节。按 findings 改 Spec 再出。`,
+      };
     }
 
-    const figureSpecEnc = encodeFigureSpecParam({ tool: figureId, caption: title, config });
-
     try {
-      const generated = await runMechanismGeneration(kind, config);
+      const generated = await runMechanismGeneration(spec.kind, config);
+
+      let alternate:
+        | {
+            layout: MechanismLayout;
+            imageUrl: string;
+            svgUrl?: string;
+            pdfUrl?: string;
+          }
+        | undefined;
+      const altSpec = buildAlternateLayoutSpec(spec);
+      if (altSpec) {
+        try {
+          const alt = await runMechanismGeneration(
+            altSpec.kind,
+            mechanismSpecToRenderConfig(altSpec),
+          );
+          alternate = {
+            layout: altSpec.layout,
+            imageUrl: alt.imageUrl,
+            svgUrl: alt.svgUrl,
+            pdfUrl: alt.pdfUrl,
+          };
+        } catch {
+          /* 候选失败不影响主稿 */
+        }
+      }
 
       let insertMode: "replaced" | "appended" | undefined;
       let retiredId: string | undefined;
@@ -551,7 +407,7 @@ export const draftMechanismFigureTool: ToolDefinition = {
           ctx.projectId,
           {
             sectionKey,
-            caption: title,
+            caption: spec.caption,
             imageUrl: generated.imageUrl,
             replaceImageUrl: replaceImageUrl || undefined,
             replaceChartId: replaceChartId || undefined,
@@ -576,7 +432,7 @@ export const draftMechanismFigureTool: ToolDefinition = {
       if (persistToProject) {
         persisted = await persistAgentChart(ctx.userId, ctx.projectId, {
           figureId,
-          caption: title,
+          caption: spec.caption,
           imageUrl: generated.imageUrl,
           svgUrl: generated.svgUrl,
           pdfUrl: generated.pdfUrl,
@@ -585,7 +441,6 @@ export const draftMechanismFigureTool: ToolDefinition = {
         });
       }
 
-      // 优先 chartAssetId，避免长 figureSpec 塞 URL 被截断后无法回放
       const href = buildAgentPlotRefineHref({
         projectId: ctx.projectId,
         figureId,
@@ -595,8 +450,17 @@ export const draftMechanismFigureTool: ToolDefinition = {
       });
 
       const bits = [
-        `已生成${kind === "flow" ? "流程图" : "多面板机理图"}「${title}」`,
+        `已生成${spec.kind === "flow" ? "流程图" : "多面板机理图"}「${spec.caption}」`,
+        `版式 ${spec.layout}`,
       ];
+      if (refined.patches.length) {
+        bits.push(`已自动修补 ${refined.patches.length} 项`);
+      }
+      if (alternate) {
+        bits.push(
+          `另有 ${alternate.layout} 版式候选（${alternate.imageUrl}），说一声可带 layout=${alternate.layout} 就地替换`,
+        );
+      }
       if (persisted) bits.push("已登记到项目图表库");
       if (insertMode === "replaced" || autoReplaced) {
         bits.push(`已就地替换旧图（防叠图${autoReplaced ? "·自动" : ""}）`);
@@ -606,15 +470,15 @@ export const draftMechanismFigureTool: ToolDefinition = {
       if (retiredId) bits.push("已删除旧图表资产");
       if (template) bits.push(`模板 ${String(params.templateId)}`);
       bits.push(
-        "系统将自动 read_figure(qa)；期刊观感请打开 href 在绘图页精修。"
+        "系统将自动 read_figure(qa) 扫残余观感；期刊精修请打开 href。"
         + `若改图请带 replaceImageUrl="${generated.imageUrl}"`,
       );
 
       return {
         success: true,
         data: {
-          kind,
-          title,
+          kind: spec.kind,
+          title: spec.caption,
           imageUrl: generated.imageUrl,
           svgUrl: generated.svgUrl,
           pdfUrl: generated.pdfUrl,
@@ -624,6 +488,16 @@ export const draftMechanismFigureTool: ToolDefinition = {
           retiredId,
           href,
           figureSpecEnc,
+          mechanismSpec: spec,
+          qaReport,
+          specPatches: refined.patches,
+          layout: spec.layout,
+          candidates: alternate
+            ? [
+                { layout: spec.layout, imageUrl: generated.imageUrl, recommended: true },
+                { layout: alternate.layout, imageUrl: alternate.imageUrl, recommended: false },
+              ]
+            : undefined,
           next: {
             tool: "read_figure",
             params: { imageUrl: generated.imageUrl, mode: "qa" },
@@ -641,7 +515,7 @@ export const draftMechanismFigureTool: ToolDefinition = {
       return {
         success: false,
         error: message,
-        data: { href: fallbackHref, figureSpecEnc },
+        data: { href: fallbackHref, figureSpecEnc, mechanismSpec: spec, qaReport },
         summary: `出图失败，已改为返回绘图页链接：${fallbackHref}`,
       };
     }

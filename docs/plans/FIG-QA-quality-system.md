@@ -78,7 +78,7 @@ Agent 或 `/plot` 提交的是 **语义意图**，不是一锅 rcParams。系统
 | **L2** | 布局几何 | 文本/标注/图例 bbox 互不重叠；不 `clip_on` 裁字；刻度过密则旋转或抽稀；panel (a)(b) 在左上且不挡数据 | **新建** Layout Solver + bbox QA |
 | **L3** | 可及性 | CJK 字体在拉丁之前；无 tofu（像素连通域或 font glyph 探测）；灰度相邻对比；不靠红绿唯一编码 | `font_setup` + 像素 QA |
 | **L4** | 科学主张 | 每面板一句 claim；显著性条目能对上数据下标；题注与 spec.caption 一致 | Agent / 导出清单 |
-| **L5** | 示意残余 | 占位框、英文模板节点、空栏——**仅** flow / mechanism | 现有 `figure-qa.ts` 收窄 scope |
+| **L5** | 示意残余 | 占位框、英文模板节点、空栏、缺边条件——**仅** flow / mechanism | 主尺 `MechanismSpec` + `mechanism-qa.ts`；`figure-qa.ts` 只扫残余观感。**不**用文生图当主渲染器 |
 
 判定三态与现网对齐，但 **code 必须机器可读**：
 

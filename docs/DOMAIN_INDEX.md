@@ -44,7 +44,7 @@
 | **写作质量系统（WRITE-QA）** | 工作台 `agent` Tab | Spec 主路径 + slim Writer + `qaReport`；`block` 不写回；`eval:quality` 分节 golden | `writer-prompt.ts` + `writing-qa-run.ts` + `writing-profiles.ts` + `quality-eval/write-qa-fixtures.ts`；详规 [`plans/WRITE-QA-quality-system.md`](./plans/WRITE-QA-quality-system.md) |
 | 证据中心 | 工作台 `data` | — | `evidence-hub-sections.tsx`、`data-panel.tsx` |
 | 配图编辑 | 写作面板内联 | — | `writing-figure-edit-links.tsx` |
-| 大纲生成 | 工作台 `outline` Tab | `POST /api/outline` SSE | `outline-panel.tsx`, `lib/prompts/outline.ts` |
+| 大纲生成 | 工作台 `outline` Tab / Agent | `POST /api/outline` SSE；Agent `generate_outline` | `outline-panel.tsx`、`lib/prompts/outline.ts`；Agent：写回一律 `outline_approve`；框架附件锁骨架 `lib/agent/outline-from-attachment.ts` |
 | 一致性检查 | 工作台 | `POST /api/consistency` | `consistency/fix` |
 | 翻译 | — | `POST /api/translate` | — |
 
@@ -83,6 +83,7 @@
 | 仪器 .xy/.ras | XRD 各工具上传 | 经 `load_dataframe` | `instrument_io.py`、`lib/xrd-file-ext.ts` |
 | 科研作图队列（类型能力，已收口） | — | — | [`plans/FIG-PR-scientific-plotting.md`](./plans/FIG-PR-scientific-plotting.md) |
 | **图表质量系统（001–010 收口）** | — | `POST /api/chart` 回传 `qaReport` + `exportManifest` | compiler + layout_solver；`npm run test:figures`；三件套 bar/line/heatmap；[`plans/FIG-QA-quality-system.md`](./plans/FIG-QA-quality-system.md) |
+| **机理图质量（FIG-MECH-QA）** | Agent `draft_mechanism_figure` · `/plot` 示意图 | `POST /api/flow-diagram` · `POST /api/mechanism-panel` | `MechanismSpecV1` → 边条件编译 → 确定性质检 → spec 补丁；未锁布局出 chain/fork 候选；**不**接文生图 |
 
 详见 [`domain/figures-and-python.md`](./domain/figures-and-python.md)。
 

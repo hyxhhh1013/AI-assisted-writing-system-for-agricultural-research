@@ -1,6 +1,6 @@
 # Agent 编排（写作助手）
 
-> L3 域文档 · 更新：2026-08-22（修订大纲不再因空检索弹红框）  
+> L3 域文档 · 更新：2026-08-23（大纲写回一律人确认；框架附件锁一级标题）  
 > 契约唯一权威源：`src/contracts/agent.ts`（SSE 事件）、`src/contracts/agent-session.ts`（会话消息）、`src/contracts/agent-intent.ts`（`IntentKind`）。
 
 ## 概览
@@ -23,6 +23,7 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 - **refiner**：写作后润色（默认 DeepSeek）
 - **planner**：规划步骤生成子任务列表（默认智谱，若启用；未配置回落 DeepSeek）。规划是短任务，走便宜模型省成本
 - 调用侧：`callAINonStreamingWithTools` / `callAIStreamingWithTools` 接受 `role` 参数（默认 writer），`planner.ts` 传 `role: "planner"`
+- **DeepSeek V4 + tools**：`buildChatCompletionsBody` 关闭 thinking。V4 默认 thinking 开着时，带 tools 的后续请求必须回传上一轮 `reasoning_content`；本仓库把 Plan/工具观察写成普通 assistant/user，回传不了，会 400（`reasoning_content in the thinking mode must be passed back`）。无 tools 的写节/审查不受影响。
 
 ## 关键文件
 
@@ -62,8 +63,12 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 
 | 事件 | 说明 | 实时/快照 |
 |------|------|-----------|
-| `agent/status` | 状态机：planning/thinking/executing/finalizing/awaiting_checkpoint/completed/error/cancelled | 快照 |
+| `agent/status` | 状态机：planning/thinking/executing/finalizing/awaiting_checkpoint/completed/error/cancelled | 快照；**thinking 在 LLM 开始时额外 live 推一次**，避免空转数十秒无气泡 |
 | `agent/plan` | Plan 子任务列表 + 焦点 | 快照 |
+
+**计划推进（2026-08-23）**：`advancePlanAfterTool` 有 `toolHints` 时只认 hints，不再用标题里的「大纲/文献」串味。`list_references` / `generate_outline` 不得把「依据大纲生成写作蓝图」标完成。口头宣布要生成蓝图但未调用工具时注入续跑，禁止空 `agent/complete`。
+
+**大纲人控（2026-08-23）**：`generate_outline` 一旦 `persistToProject` 写回，**一律**弹 `outline_approve`（不再要求 goal 像「整篇/从零」；新大纲作废本轮旧批准）。`generate_outline` 服务端读取本会话文档附件：文件名含大纲/提纲/框架等，或短文档能抽出 ≥3 个一级标题，则锁为 `userSkeleton` 并注入附件摘录，禁止默认综述/IMRaD 另起炉灶。指定 `attachmentId` 未就绪则报错，不静默回落。长论文 PDF 不自动当框架。表格仍走 `ingest_project_data`，不进大纲骨架。实现：`lib/agent/outline-from-attachment.ts` + `core/checkpoints.ts`。
 | `agent/thought` | 完整思考（终） | 快照 |
 | `agent/thought_delta` | LLM 回复逐 token 增量 | **实时**（不持久化） |
 | `agent/action` | 工具被调用（params）。不需确认的工具经 `emitLiveEvent` **实时**推送（长工具如 `write_section` 执行期间前端即时显示工具卡）；需确认工具仍走快照（确认路径直接 yield） | 实时（不需确认）/ 快照（需确认） |
@@ -114,7 +119,8 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 
 - 确认生成（`nodes.ts` → `lib/agent/import-confirm.ts`）：`buildImportReferenceConfirmParams` 在 `enrichImportReferenceParams` 之上注入 `params.importItems` = 候选文献数组（`resolveImportReferenceCandidates` = 模型请求的 hits（`hitIndices`→last-search / `hitsJson` / `hitJson` / `doi`）∪ 最近一次检索全部命中，按 id/doi 去重，≤25）。
 - `agent/confirm` 事件携带含 `importItems` 的 params，随快照持久化进 DB `awaitingConfirm`。
-- 前端确认卡（`agent-panel.tsx`）：`importItems` 存在时渲染 checkbox 列表（默认全选）+ 全选/全不选 + 「确认导入 N 篇」。
+- 前端确认卡（`import-confirm-list.tsx`，由 `agent-panel` 挂载）：`importItems` 存在时渲染 checkbox 列表（默认全选）+ 全选/全不选 + 「确认导入 N 篇」。点标题可展开作者、摘要（检索未带摘要则提示打开原文）和 DOI/OA 链接；不再用截断标题 preview 顶替正文。
+- **进行中 UI（2026-08-23）**：`use-agent` 的 `isRunning` 看 SSE 是否还在飞（`inFlight`），不再只看最后一条 `agent/status`。V4 关 thinking 后 LLM 可能长时间无 `thought_delta`，节点开始时 live 推 `thinking`；写节完成卡不再挡住底部「正在思考/导入」指示器。
 - 用户批准：`use-agent.ts resolveConfirm(true, selectedIndices)` 回传 `confirmDecision.selectedIndices`（0 起索引数组）；`run-graph.ts` 把 `selectedIndices` 并入 `trustedParams` 重放。
 - 工具执行（`tools/import-reference.ts`）：有 `selectedIndices` + `importItems` 时按勾选调 `importExternalReferencesToProject` 批量落库（自带 DOI/题录去重 + 批量入知识库），**跳过相关度门禁**（用户已亲眼确认）；未勾选任何 → 报「未勾选任何文献」。
 - **批量导入进度（2026-08-07）**：`importExternalReferencesToProject` / `ingestExternalHitsToKnowledge` 支持 `onProgress(done,total,title)`，工具经 `ctx.emitLiveEvent` 发 `agent/progress`（`stage="importing"`，新增 `done`/`total` 字段，`label`="正在导入文献 i/N"，`detail`=标题）。前端 `use-agent` 渲染动画进度卡（进度条 + 百分比 + **逐篇状态列表**：✓已导入 / 当前处理中动画 / ○待处理），observation/complete/error 后清空——解决批量导入 OA 下载期间 UI「干等/卡住」。
@@ -138,7 +144,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **破坏性删除需确认（2026-08-11）**：`remove_figure` / `remove_references` 标 `requiresConfirmation` + `safety: "destructive"`，确认卡文案见 `confirm-message.ts`。
 - **写作蓝图「结构无效」修复（2026-08-09）**：首因是 prompt 示例 `language: Chinese/English`（schema 仅 `zh|en`）。复查后发现仍会因 `dataSource`/`projectMode` 非法枚举、`keyPoints` 写成字符串、`estimatedWordCount` 写成 `"6000-12000"`、缺 `version`/空 items 等失败。现：① prompt 按 review/research 分示例并写明枚举约束；② `blueprint-coerce.ts` 纠偏上述偏差并在必要时合成最小合法 figure/guides；③ 错误文案带字段路径。API 与 `generate_writing_blueprint` 共用。
 - **蓝图文献源 + 分析笔记进 Writer（2026-08-09）**：`sectionGuides.assignedSources`（文件名或 `[n]`）经 `blueprint-write-context` 解析为 `selectedSourceIds`，Agent `write_section` 限 RAG 范围（解析为空则不限，避免误清空）。`loadAgentProject` 加载 `analysisResults` 进 `globalContext.analysisResults`，与工作台扩写一致。
-- **自动补齐插入批准检查点（2026-08-08）**：修复「写前置自动补齐绕过 outline/blueprint 批准检查点」——ap-full 目标（写整篇/从零推进）下，自动补齐生成大纲/蓝图若直接连跑，用户看不到确认弹窗。现统一走 `ensureNextWritePrerequisite`（一次只补一个缺失前置），`toolsNode` 循环补齐 + 每步 `buildPrereqCheckpoint` 命中 outline/blueprint 即暂停；resume 后继续补下一个 / 执行写工具。普通目标（非 ap-full）同循环一次补完、不插入批准暂停。
+- **自动补齐插入批准检查点（2026-08-08；2026-08-23 大纲一律确认）**：`ensureNextWritePrerequisite` 一次只补一个缺失前置；`buildPrereqCheckpoint` 在大纲写回后**无论 goal 是否 ap-full**都暂停 `outline_approve`。蓝图检查点仍仅 ap-full。resume 后继续补下一个 / 执行写工具。
 - **蓝图常驻入口（2026-08-07）**：工作台侧栏头（非 Agent Tab）与 Agent 面板头均新增「蓝图」按钮（Map 图标），随时可打开蓝图工作台；无蓝图时点击自动切到「章节结构」侧栏引导生成。
 - **文献分类编码持久化（2026-08-07）**：新增写工具 `save_reference_classification`（`tools/save-reference-classification.ts`），把「文献分类编码」结果批量 upsert 到 `ReferenceSource`（refIndex 1 基 → sourceName/category/citation），与前端「引用-文献映射」同一张表。`list_references` 输出附带 `category`/`sourceName`，写作时 Agent 能看到分类。属 `PROJECT_MUTATING_TOOLS`，保存后工作台刷新。之前 Agent 只能靠多次关键词检索在对话里"分类"、结果不落库，现已闭环。
 - **删除不相关文献（2026-08-07）**：新增写工具 `remove_references`（`tools/remove-references.ts`），按引用编号（1 基 [n]）删除不相关/误导入文献，自动重排后续编号，并同步清理/重排 `ReferenceSource` 分类映射。若正文已引用被删编号，工具说明要求随后 `validate_citations` 检查越界引用。
@@ -260,15 +266,15 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 
 | 层 | 行为 |
 |----|------|
-| L1 草稿 | `draft_mechanism_figure` / `generate_chart`；多机理图任务前 **FigureBrief clarify**（版式/配色/分子式/素材）；可选 `templateId` 农科模板 |
-| L2 硬闭环 | **机理图**出图后 toolsNode 自动注入 `read_figure(mode=qa)`；**数据图**看 `generate_chart.qaReport`（`block` 强制按 findings 重出，不跑 GLM-4V）。QA 未通过则禁止空口收尾 + 门禁 `replaceImageUrl`；同 caption/section 无 replace 时工具内自动就地替换（防叠图） |
+| L1 草稿 | `draft_mechanism_figure` 先编译 `MechanismSpecV1`（主张进 caption，步骤括号条件上边）；多机理图任务前 **FigureBrief clarify**；可选 `templateId`。未锁 `layout` 且 ≥4 步会带 chain/fork 两套候选，只入库推荐稿。**不用文生图当主渲染器** |
+| L2 硬闭环 | **机理图**先看 `draft_mechanism_figure.qaReport`（`block` 不入库、按 findings 改 Spec）；过线后 toolsNode 才注入 `read_figure(mode=qa)` 扫残余观感。**数据图**看 `generate_chart.qaReport`（不跑 GLM-4V）。QA 未通过则禁止空口收尾 + 门禁 `replaceImageUrl`；同 caption/section 无 replace 时工具内自动就地替换（防叠图） |
 | L3 精修 | **配图坞**（输入框上方常驻最近出图，免翻聊天）+ 结果卡：落点说明（默认**节末落盘**）+「查看正文位置」+ 结构化「按意见改」（含分叉/三面板/脱氧等快捷）+ `/plot?chartAssetId=&replaceImageUrl=` 深链（优先资产快照回放，精修回写默认真地替换）；编辑器「本节插图」可挪位 |
-| 图质检两级（2026-08-09；008 收窄） | 机理图走 `figure-qa.ts`（硬伤→`needsRegen`，观感→`needsPolish`）。数据图只看 `qaReport`；`read_figure(mode=qa)` 对柱状/折线等会跳过识图。 |
+| 图质检两级（2026-08-09；008 收窄；MECH-QA 2026-08-23） | 机理图主尺是 `MechanismSpec` + `qaReport`（`contracts/mechanism-spec.ts` / `mechanism-qa.ts`）。识图 `figure-qa.ts` 只扫残余观感。数据图只看 ChartSpec `qaReport`。 |
 | 精修回放加固（2026-08-10） | 根因：`uiTranscript` 未持久化 `plotHref`；长 `figureSpec` URL 易截断；`target=_blank` 新标签读不到 opener 的 `sessionStorage`。现：transcript 保留深链+轻量快照；`GET .../charts`；点击精修用 **`localStorage`** 暂存（`plot-prefill-stash.ts`）；绘图页按 assetId/imageUrl 回放并 remount 预填 |
 
 | 工具 | 作用 |
 |------|------|
-| `draft_mechanism_figure` / `generate_chart` | 出图并写入图表库；可插章节。**改图传 `replaceImageUrl`/`replaceChartId` 就地替换**；同标题已有图自动 replace。数据图走 ChartSpec：显著性用 `significanceJson`；`configJson` 仅白名单（刊宽/DPI/`tight_layout` 会丢弃） |
+| `draft_mechanism_figure` / `generate_chart` | 出图并写入图表库；可插章节。**改图传 `replaceImageUrl`/`replaceChartId` 就地替换**；同标题已有图自动 replace。机理图走 MechanismSpec（`claim` / 边条件 / `qaReport` / 版式候选）。数据图走 ChartSpec：显著性用 `significanceJson`；`configJson` 仅白名单（刊宽/DPI/`tight_layout` 会丢弃） |
 | `remove_figure` | 删图表资产 + 默认去掉正文对应 `![](url)`（清重复旧图）；**需用户确认** |
 | `read_figure` | `describe` 可识任意图；`mode=qa` **仅机理图**（占位/英文模板/空栏）。数据图跳过识图，看 `qaReport` |
 

@@ -10,7 +10,8 @@
 > **热路径（002–005 done）**：`attachCompiledSpec` → `ChartModule.save` → layout_solver → `save_figure`（不再 tight）→ `qaReport`。若 `verdict=repair`，`applyChartSpecPatches` 改 Spec 再渲（最多 2 次）。`block` 不入库、不插章节。XRD 旧脚本仍有分叉。  
 > **回归（006 done）**：`npm run test:figures` → `scripts/charts/test_figures.py` + `_fixtures/qa/`（11 类 + 长中文刻度 + 显著性）。断言 `qaReport` 无 block、求解后无刻度重叠/图例挡数据；CJK 用 glyph 探测（无 CJK 字体则 skip）。**不**做像素金标，**不**挂进 `npm run check`。  
 > **Agent 参数面（007 done）**：`generate_chart` 显著性走 `significanceJson`；`configJson` 仅白名单（`src/lib/chart-spec-extras.ts`）。刊宽 / DPI / `tight_layout` 丢弃并写入 observation。  
-> **QA 分流（008 done）**：数据图只看 `qaReport`（`block` 续跑改 Spec）；`read_figure(mode=qa)` 仅机理图/流程/分子。柱状/折线/热力会跳过 GLM-4V。  
+> **QA 分流（008 done）**：数据图只看 `qaReport`（`block` 续跑改 Spec）；`read_figure(mode=qa)` 仅机理图/流程/分子扫残余观感。柱状/折线/热力会跳过 GLM-4V。  
+> **机理图质量（FIG-MECH-QA-001）**：`draft_mechanism_figure` 先编译 `MechanismSpecV1`（主张进 caption，括号条件上边），确定性质检 + ≤2 次 spec 补丁；`block` 不入库。未指定 layout 且 ≥4 步时额外渲一套 chain/fork 候选，只入库推荐稿。主渲染器仍是 Graphviz / `mechanism_panel`，**不**接文生图。  
 > **刊规包 / 导出清单（009 done）**：`src/contracts/chart-export.ts`（栏宽 mm 与 Python 对齐）。出图后写 `{uuid}.csv` + `{uuid}.json`；`POST /api/chart` / `generate_chart` 回传 `exportManifest`。`GET /api/charts/:file` 可取 csv/json。  
 > **三件套收口（010 done）**：`bar_grouped` / `line` / `heatmap` 为质量剖面。热力不再按矩阵长宽比撑刊宽；折线先 `set_xticks`；显著性读 `chartSpec.annotations`。`test:figures` 含 agr_journal 双栏 ±8% + svg/pdf、误差折线、热力刊宽。其余类型仍禁止扩新。
 
@@ -86,8 +87,8 @@
 - 农科模板：生物质热解路径、双路径产物等
 - 多面板：优先每栏 `flow_subgraph`（中文 steps）；有真实素材时才挂 image。**Agent 默认不再输出「Upload figure asset」空占位**
 - Agent 三层定位：
-  1. **草稿**：`draft_mechanism_figure` / `generate_chart`（可 `templateId` 农科模板）→ PNG 入库
-  2. **硬闭环**：出图后系统自动 `read_figure(qa)`（两级：`需重生成` / `可接受·建议精修` / `可接受`）；硬伤必须 `replaceImageUrl`；建议精修不强制重画、引导 `/plot`；同标题防叠图自动 replace；`remove_figure` 清旧图
+  1. **草稿**：`draft_mechanism_figure` 编译 `MechanismSpec`（可 `templateId` 农科模板；`claim` / 边条件 / `preset`）→ Graphviz 或多面板 PNG 入库
+  2. **硬闭环**：先看 `qaReport`（英文占位 / 空栏 / 节点过载 / 缺边条件）；`block` 不入库。过线后再自动 `read_figure(qa)` 扫残余观感；硬伤必须 `replaceImageUrl`；建议精修不强制重画、引导 `/plot`；同标题防叠图自动 replace；`remove_figure` 清旧图
   3. **个性化（Agent 表单为主）**：输入框上方**配图坞**随时「按意见改」；表单快捷项（分叉/三面板/模板）→ `replaceImageUrl` 重画；复杂观感进 `/plot?replaceImageUrl=`，插入对话框默认**就地替换**正文旧图。**插图位置**：默认节末落盘，编辑器「本节插图」条可挪位（不做智能章节锚定）
   4. **精修回放（2026-08-09；2026-08-10 加固）**：`/plot` 深链优先 `chartAssetId`；点击精修时用 **`localStorage`** 暂存 `figureSpecEnc`（`target=_blank` 新标签读不到 `sessionStorage`）；`GET /api/projects/:id/charts` 供绘图页按资产/图片 URL 回放；`uiTranscript` 持久化 `plotHref` + 轻量快照字段。配图坞无稳链时从资产重建，禁止落空 `/plot`
 
