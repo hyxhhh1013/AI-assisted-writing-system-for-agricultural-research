@@ -185,4 +185,6 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 | OpenAlex 刊级 | `node scripts/enrich-journal-openalex-sources.mjs [--all]` → `oa2yrCitedness`、`hIndex` |
 | 索引后自动 | `ENRICH_OPENALEX_AFTER_INDEX=true` 或 `index-pdfs.mjs --enrich-metrics` |
 
-**JCR 影响因子**须来自实验室表（`issn` 或 `journal/刊名` 列 + `影响因子` 等别名）。**OpenAlex 不提供 IF**，仅补被引与 2yr 均值。模板：`data/journal-metrics.example.csv`。
+**JCR 影响因子**须来自实验室表（`issn` 或 `journal/刊名` 列 + `影响因子` 等别名）。**OpenAlex 不提供 IF**，仅补被引与 2yr 均值。模板：`data/journal-metrics.example.csv`。覆盖率 = 有数值 IF 的篇数 / 全部文献；未导入表时健康页会显示 0%，并统计「有刊名/ISSN」篇数便于判断是没导入还是书目缺 ISSN。
+
+**删除权限**：`DELETE /api/knowledge` 仅管理员；普通用户可上传/改分类/改书目，不能删库。

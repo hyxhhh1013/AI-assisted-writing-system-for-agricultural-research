@@ -37,7 +37,7 @@ export function loadMetadataJsonFallback(): KnowledgeFileRecord[] {
   }
 }
 
-function parseBibField(bib: string | null): KnowledgeBib | null {
+export function parseBibField(bib: string | null): KnowledgeBib | null {
   if (!bib) return null;
   try {
     return JSON.parse(bib) as KnowledgeBib;

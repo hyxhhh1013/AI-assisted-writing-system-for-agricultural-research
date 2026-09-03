@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, RefreshCw, Database, Upload, Globe, BookOpen } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { siteTheme } from "@/lib/site-theme";
+import { useAuth } from "@/lib/auth-context";
 import { useKnowledgeList } from "@/hooks/use-knowledge-list";
 import { KnowledgeReindexProgress } from "@/components/shared/knowledge/knowledge-reindex-progress";
 import { KnowledgeBatchToolbar } from "@/components/shared/knowledge/knowledge-batch-toolbar";
@@ -20,6 +21,8 @@ import { KnowledgeBibliographyImportDialog } from "@/components/shared/knowledge
 export default function KnowledgePageClient() {
   const router = useRouter();
   const kb = useKnowledgeList();
+  const { user } = useAuth();
+  const canDeleteKnowledge = user?.role === "admin";
   const [mainTab, setMainTab] = useState<"local" | "external">("local");
   const [isBibImportOpen, setIsBibImportOpen] = useState(false);
 
@@ -69,10 +72,10 @@ export default function KnowledgePageClient() {
             indexProgress={kb.indexProgress}
             onCancel={kb.handleCancelReindex}
           />
-          <KnowledgeBatchToolbar {...kb} />
+          <KnowledgeBatchToolbar {...kb} canDeleteKnowledge={canDeleteKnowledge} />
           <KnowledgeSearchFilters kb={kb} />
           <KnowledgeBibFilters kb={kb} />
-          <KnowledgeFileTable router={router} kb={kb} />
+          <KnowledgeFileTable router={router} kb={{ ...kb, canDeleteKnowledge }} />
         </TabsContent>
 
         <TabsContent value="external" className="mt-0">

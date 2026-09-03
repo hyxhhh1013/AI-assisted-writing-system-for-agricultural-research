@@ -6,6 +6,8 @@ import {
   shouldPauseForBlueprintApprove,
   decisionMessage,
   revokeApprovedKind,
+  buildOutlineCheckpoint,
+  buildBlueprintCheckpoint,
 } from "@/lib/agent/core/checkpoints";
 import { applyEntryModeToGoal } from "@/lib/agent/entry-mode";
 
@@ -116,6 +118,20 @@ describe("agent checkpoints", () => {
         approvedKinds: ["config_confirm"],
       }),
     ).toBe(false);
+  });
+
+  it("keeps a readable outline in the checkpoint instead of clipping at 2000", () => {
+    const body = "## 引言\n".repeat(400);
+    const cp = buildOutlineCheckpoint(body);
+    expect(cp.preview?.length ?? 0).toBeGreaterThan(2000);
+    expect(cp.message).toContain("写作停在你这里");
+  });
+
+  it("keeps a readable blueprint preview instead of clipping at 2000", () => {
+    const body = "主张：生物炭改良盐碱地。\n".repeat(300);
+    const cp = buildBlueprintCheckpoint(body);
+    expect(cp.preview?.length ?? 0).toBeGreaterThan(2000);
+    expect(cp.message).toContain("过目主张");
   });
 
   it("revokes outline approval after a new persist", () => {

@@ -195,6 +195,7 @@ export const generateOutlineTool: ToolDefinition = {
       success: true,
       data: {
         chars,
+        outline,
         preview: outline.slice(0, 1200),
         persisted: persist,
         ...(framework

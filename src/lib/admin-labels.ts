@@ -69,7 +69,7 @@ export function adminModeLabel(mode: string): string {
 export const ADMIN_FEATURE_LABEL: Record<string, string> = {
   "ai:deepseek": "DeepSeek",
   "ai:zhipu": "智谱",
-  "ai:vision": "智谱视觉",
+  "ai:vision": "DeepSeek 视觉",
   writing: "扩写",
   outline: "大纲",
   review: "审查",

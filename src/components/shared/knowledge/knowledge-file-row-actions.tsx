@@ -25,6 +25,7 @@ import type { ReindexRequest } from "@/contracts/reindex";
 interface KnowledgeFileRowActionsProps {
   file: KnowledgeFile;
   isIndexing: boolean;
+  canDelete?: boolean;
   onReindex: (fileName: string, options: ReindexRequest) => void;
   onEditMetadata: (file: KnowledgeFile) => void;
   onEditCategory: (file: KnowledgeFile) => void;
@@ -35,6 +36,7 @@ interface KnowledgeFileRowActionsProps {
 export function KnowledgeFileRowActions({
   file,
   isIndexing,
+  canDelete = false,
   onReindex,
   onEditMetadata,
   onEditCategory,
@@ -100,12 +102,14 @@ export function KnowledgeFileRowActions({
             </DropdownMenuItem>
           </>
         )}
-        <DropdownMenuItem
-          className="text-destructive focus:text-destructive"
-          onClick={() => onDelete(file)}
-        >
-          <Trash2 className="mr-2 h-4 w-4" /> 删除文献
-        </DropdownMenuItem>
+        {canDelete && (
+          <DropdownMenuItem
+            className="text-destructive focus:text-destructive"
+            onClick={() => onDelete(file)}
+          >
+            <Trash2 className="mr-2 h-4 w-4" /> 删除文献
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

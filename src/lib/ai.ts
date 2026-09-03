@@ -205,6 +205,10 @@ export function buildChatCompletionsBody(
       body.thinking = { type: "disabled" };
     }
   }
+  // 视觉走 DeepSeek V4 Flash Vision；识图不需要 thinking，关了更快更稳。
+  if (options.provider === "vision") {
+    body.thinking = { type: "disabled" };
+  }
   return body;
 }
 

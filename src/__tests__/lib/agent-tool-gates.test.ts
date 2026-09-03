@@ -242,6 +242,42 @@ describe("evaluatePostGates", () => {
     }
   });
 
+  it("outline checkpoint uses full outline field over short preview", () => {
+    const v = evaluatePostGates(
+      makePostInput({
+        tool: makeTool("generate_outline"),
+        state: makeState({ goal: "生成大纲" }),
+        result: {
+          success: true,
+          data: { persisted: true, preview: "短", outline: "## 摘要\n完整大纲正文" },
+        },
+      }),
+    );
+    expect(v).toMatchObject({ ok: false, kind: "checkpoint" });
+    if (!v.ok && v.kind === "checkpoint") {
+      expect(v.checkpoint.preview).toContain("完整大纲正文");
+    }
+  });
+
+  it("全文目标下写作蓝图用 data.preview 而不是一句 summary", () => {
+    const v = evaluatePostGates(
+      makePostInput({
+        tool: makeTool("generate_writing_blueprint"),
+        state: makeState({ goal: "整篇论文从零开始写" }),
+        result: {
+          success: true,
+          summary: "已写回写作蓝图",
+          data: { persisted: true, preview: "# 主张\n## 各节要点\n### 引言" },
+        },
+      }),
+    );
+    expect(v).toMatchObject({ ok: false, kind: "checkpoint" });
+    if (!v.ok && v.kind === "checkpoint") {
+      expect(v.checkpoint.kind).toBe("blueprint_approve");
+      expect(v.checkpoint.preview).toContain("各节要点");
+    }
+  });
+
   it("antispam 停滞熔断触发时累计 breakCount（供二次熔断硬停机）", () => {
     const tracker = createAntispamTracker(null);
     const input = makePostInput({

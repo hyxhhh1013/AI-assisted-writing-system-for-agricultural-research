@@ -31,7 +31,7 @@ export interface VisionDescription {
   error?: string;
 }
 
-/** 用 GLM-4V 理解一张图片 Buffer（PDF 渲染页、图片附件共用） */
+/** 用视觉模型理解一张图片 Buffer（PDF 渲染页、图片附件共用） */
 export async function describeImageBuffer(
   data: Buffer,
   mime: string,
@@ -72,7 +72,7 @@ export async function describeImageBuffer(
   }
 }
 
-/** 图片附件 → 结构化文本描述（GLM-4V）。无视觉 key 或失败降级 extract_failed。 */
+/** 图片附件 → 结构化文本描述。无视觉 key 或失败降级 extract_failed。 */
 export async function describeImage(
   filePath: string,
   options?: { prompt?: string },

@@ -32,6 +32,8 @@ import {
   shouldPauseForBlueprintApprove,
   shouldPauseForOutlineApprove,
 } from "@/lib/agent/core/checkpoints";
+import { blueprintPreviewFromToolData } from "@/lib/agent/blueprint-review";
+import { outlineTextFromToolData } from "@/lib/agent/outline-review";
 import { checkFigureReplaceRequired } from "@/lib/agent/figure-loop";
 import type { AgentGraphStateType } from "./state";
 import type { AntispamTracker } from "@/lib/agent/core/antispam";
@@ -219,12 +221,7 @@ export const outlineApproveGate: PostToolGate = ({ tool, result, state }) => {
   ) {
     return { ok: true };
   }
-  const preview =
-    typeof result.data === "object"
-    && result.data
-    && "preview" in result.data
-      ? String((result.data as { preview?: unknown }).preview ?? "")
-      : result.summary ?? "";
+  const preview = outlineTextFromToolData(result.data, result.summary ?? "");
   return { ok: false, kind: "checkpoint", checkpoint: buildOutlineCheckpoint(preview), updateFocus: true };
 };
 
@@ -245,12 +242,7 @@ export const blueprintApproveGate: PostToolGate = ({ tool, result, state }) => {
   ) {
     return { ok: true };
   }
-  const preview =
-    typeof result.data === "object"
-    && result.data
-    && "preview" in result.data
-      ? String((result.data as { preview?: unknown }).preview ?? "")
-      : result.summary ?? "";
+  const preview = blueprintPreviewFromToolData(result.data, result.summary ?? "");
   return { ok: false, kind: "checkpoint", checkpoint: buildBlueprintCheckpoint(preview), updateFocus: true };
 };
 

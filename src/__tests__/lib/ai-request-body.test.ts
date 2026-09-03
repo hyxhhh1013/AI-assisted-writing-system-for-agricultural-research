@@ -50,6 +50,16 @@ describe("buildChatCompletionsBody", () => {
     expect(body.thinking).toBeUndefined();
   });
 
+  it("disables thinking for DeepSeek vision calls", () => {
+    const body = buildChatCompletionsBody({
+      provider: "vision",
+      model: "deepseek-v4-flash-vision-exp",
+      messages: [{ role: "user", content: "请理解这张图片" }],
+      stream: false,
+    });
+    expect(body.thinking).toEqual({ type: "disabled" });
+  });
+
   it("echoes non-empty reasoning_content and omits empty", () => {
     const body = buildChatCompletionsBody({
       provider: "deepseek",

@@ -22,6 +22,11 @@ export const ZHIPU_MODEL_OPTIONS = [
   "glm-4-air",
 ] as const;
 
+/** DeepSeek 多模态（图片只走这条，不占用智谱） */
+export const DEEPSEEK_VISION_MODEL_OPTIONS = [
+  "deepseek-v4-flash-vision-exp",
+] as const;
+
 export const MODEL_PROVIDERS = {
   deepseek: {
     name: "DeepSeek",
@@ -43,13 +48,13 @@ export const MODEL_PROVIDERS = {
     enabled: !!process.env.ZHIPU_API_KEY,
   },
   vision: {
-    name: "智谱视觉",
-    model: process.env.ZHIPU_VISION_MODEL || "glm-4v",
-    baseUrl: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
-    apiKeyEnvVar: "ZHIPU_API_KEY",
-    modelSettingKey: "ZHIPU_VISION_MODEL",
-    getApiKey: () => process.env.ZHIPU_API_KEY,
-    enabled: !!process.env.ZHIPU_API_KEY,
+    name: "DeepSeek 视觉",
+    model: process.env.DEEPSEEK_VISION_MODEL || "deepseek-v4-flash-vision-exp",
+    baseUrl: "https://api.deepseek.com/chat/completions",
+    apiKeyEnvVar: "DEEPSEEK_API_KEY",
+    modelSettingKey: "DEEPSEEK_VISION_MODEL",
+    getApiKey: () => process.env.DEEPSEEK_API_KEY,
+    enabled: true,
   },
 } as const;
 
@@ -58,7 +63,7 @@ export type ModelProviderKey = keyof typeof MODEL_PROVIDERS;
 export const ALL_PROVIDERS = Object.entries(MODEL_PROVIDERS).map(([key, config]) => ({
   key,
   ...config,
-  enabled: key === "deepseek" ? true : !!config.getApiKey(),
+  enabled: key === "deepseek" || key === "vision" ? true : !!config.getApiKey(),
 }));
 
 export function getModelConfig(provider: ModelProviderKey): ModelProvider {

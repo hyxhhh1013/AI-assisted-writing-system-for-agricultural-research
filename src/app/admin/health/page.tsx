@@ -239,6 +239,7 @@ export default function AdminHealthPage() {
                 {jm.withImpactFactor}/{jm.fileCount}
               </strong>
               （{jm.coveragePct}%）· 任意指标 {jm.withAnyMetrics}
+              {" · "}有刊名/ISSN {jm.withIssnOrJournal ?? 0}
             </p>
             {jm.lastImport ? (
               <p className="text-xs text-[#9aa8a0]">
@@ -247,7 +248,9 @@ export default function AdminHealthPage() {
                 {new Date(jm.lastImport.at).toLocaleString("zh-CN")}
               </p>
             ) : (
-              <p className="text-xs text-[#9aa8a0]">尚无导入记录（在文献管理上传 CSV/Excel）</p>
+              <p className="text-xs text-[#9aa8a0]">
+                尚无导入记录。OpenAlex 不含 JCR IF，需在文献管理上传实验室 CSV/Excel。
+              </p>
             )}
             <Link href="/admin/knowledge">
               <Button variant="outline" size="sm" className="h-7 text-xs">

@@ -31,6 +31,7 @@ function baseHealth(over: Partial<AdminHealthData> = {}): AdminHealthData {
       withAnyMetrics: 50,
       withImpactFactor: 50,
       coveragePct: 50,
+      withIssnOrJournal: 80,
       lastImport: null,
     },
     ...over,
@@ -58,6 +59,7 @@ describe("buildAdminHealthAlerts", () => {
           withAnyMetrics: 5,
           withImpactFactor: 5,
           coveragePct: 5,
+          withIssnOrJournal: 40,
           lastImport: null,
         },
         agent: {
@@ -68,7 +70,7 @@ describe("buildAdminHealthAlerts", () => {
         },
       }),
     );
-    expect(alerts.some((a) => a.message.includes("期刊 IF"))).toBe(true);
+    expect(alerts.some((a) => a.message.includes("尚未导入实验室期刊 IF"))).toBe(true);
     expect(alerts.some((a) => a.href.includes("agent-sessions"))).toBe(true);
   });
 

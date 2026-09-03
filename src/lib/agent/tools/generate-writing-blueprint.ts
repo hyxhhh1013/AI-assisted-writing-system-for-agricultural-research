@@ -1,4 +1,5 @@
 import type { WritingBlueprint } from "@/contracts/writing-blueprint";
+import { formatBlueprintPreview } from "@/lib/agent/blueprint-review";
 import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import { callAI, getAgentModelConfig } from "@/lib/ai";
@@ -160,6 +161,7 @@ export const generateWritingBlueprintTool: ToolDefinition = {
         sectionGuideCount: blueprint.sectionGuides.length,
         figureItems: blueprint.figurePlan.items.length,
         persisted: persist,
+        preview: formatBlueprintPreview(blueprint),
       },
       summary: persist
         ? `已写回写作蓝图：${blueprint.sectionGuides.length} 节指导，图表计划 ${blueprint.figurePlan.items.length} 项`

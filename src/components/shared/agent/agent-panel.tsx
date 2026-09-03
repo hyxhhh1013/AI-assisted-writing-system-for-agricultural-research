@@ -3,7 +3,6 @@
 import { Bot, CheckCircle2, ChevronDown, ChevronLeft, Circle, FileText, Loader2, Map as MapIcon, RotateCcw } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useAgent } from "@/hooks/use-agent";
 import type { AgentChartPersistedInfo } from "@/lib/agent/chart-persisted";
@@ -31,6 +30,11 @@ import {
   sectionKeyFromWriteTip,
 } from "@/lib/agent/continue-hint";
 import { AgentConfigQa } from "@/components/shared/agent/agent-config-qa";
+import { AgentOutlineReview } from "@/components/shared/agent/agent-outline-review";
+import { AgentBlueprintReview } from "@/components/shared/agent/agent-blueprint-review";
+import { AgentClarifyCard } from "@/components/shared/agent/agent-clarify-card";
+import { AgentToolConfirm } from "@/components/shared/agent/agent-tool-confirm";
+import { AgentHitlBanner } from "@/components/shared/agent/agent-hitl-banner";
 import { AgentCitationReportCard } from "@/components/shared/agent/agent-citation-report";
 import { AgentPlanCard } from "@/components/shared/agent/agent-plan";
 import { WritingStatusCard } from "@/components/shared/agent/writing-status-card";
@@ -59,7 +63,6 @@ import type { FigureReviseFormValue, FigureReviseTarget } from "@/contracts/figu
 import { parseProjectCharts } from "@/contracts/figure";
 import { getProjectWritingMode, getSectionLabelForMode } from "@/lib/section-registry";
 import { AgentFigureDock } from "@/components/shared/agent/agent-figure-dock";
-import { ImportConfirmList } from "@/components/shared/agent/import-confirm-list";
 import { parseImportConfirmItems } from "@/lib/agent/import-confirm-view";
 
 const easeOut = [0.22, 1, 0.36, 1] as const;
@@ -99,6 +102,8 @@ interface AgentPanelProps {
   onCollapse?: () => void;
   /** 打开蓝图工作台（blueprint_approve 检查点时查看/编辑完整蓝图） */
   onOpenBlueprint?: () => void;
+  /** 打开论证提纲页（outline_approve 过目后对照编辑） */
+  onOpenOutline?: () => void;
   /** 跳到正文章节（配图结果卡「查看正文位置」） */
   onJumpToSection?: (sectionKey: string) => void;
 }
@@ -132,6 +137,7 @@ export function AgentPanel({
   onProjectMutated,
   onCollapse,
   onOpenBlueprint,
+  onOpenOutline,
   onJumpToSection,
 }: AgentPanelProps) {
   const agent = useAgent({
@@ -146,9 +152,7 @@ export function AgentPanel({
   const [quickPrompts, setQuickPrompts] = useState<string[]>([]);
   const [phasePack, setPhasePack] = useState<PhaseTaskPack | null>(null);
   const [phaseGoal, setPhaseGoal] = useState<string | null>(null);
-  const [reviseNote, setReviseNote] = useState("");
-  const [showRevise, setShowRevise] = useState(false);
-  const [clarifyNote, setClarifyNote] = useState("");
+  const [hitlPageOpen, setHitlPageOpen] = useState(false);
   const [configSaving, setConfigSaving] = useState(false);
   /** 手动打开问答（不依赖检查点也能填） */
   const [manualConfigQa, setManualConfigQa] = useState(false);
@@ -174,6 +178,8 @@ export function AgentPanel({
     agent.pendingCheckpoint?.kind === "clarify";
   const isBlueprintCheckpoint =
     agent.pendingCheckpoint?.kind === "blueprint_approve";
+  const isOutlineCheckpoint =
+    agent.pendingCheckpoint?.kind === "outline_approve";
   /** 仅手动展开或检查点时出完整表单；缺配置时先给轻量邀请，避免一进 Tab 整块砸脸 */
   const showConfigQa =
     Boolean(projectId) && (isConfigCheckpoint || manualConfigQa);
@@ -375,6 +381,20 @@ export function AgentPanel({
       onProjectMutated,
     ],
   );
+
+  useEffect(() => {
+    const kind = agent.pendingCheckpoint?.kind;
+    if (kind === "outline_approve" || kind === "blueprint_approve" || agent.pendingConfirm) {
+      setHitlPageOpen(true);
+      return;
+    }
+    setHitlPageOpen(false);
+  }, [
+    agent.pendingCheckpoint?.id,
+    agent.pendingCheckpoint?.kind,
+    agent.pendingConfirm?.tool,
+    agent.pendingConfirm?.message,
+  ]);
 
   /** 是否贴近底部：贴近时新消息自动滚到底；往上翻历史时不再被拽下去 */
   const [atBottom, setAtBottom] = useState(true);
@@ -1183,128 +1203,66 @@ export function AgentPanel({
             transition={{ duration: 0.32, ease: easeOut }}
             className="shrink-0 border-t border-[#1a5632]/15 bg-[#f6f8f6] px-3 py-2.5"
           >
-            <p className="text-xs font-medium text-[#122820]">{agent.pendingCheckpoint.title}</p>
-            <p className="mt-0.5 text-[11px] text-[#3d4f46]/90">{agent.pendingCheckpoint.message}</p>
+            {!isOutlineCheckpoint && !isBlueprintCheckpoint && !isClarifyCheckpoint && !isConfigCheckpoint ? (
+              <>
+                <p className="text-xs font-medium text-[#122820]">{agent.pendingCheckpoint.title}</p>
+                <p className="mt-0.5 text-[11px] text-[#3d4f46]/90">{agent.pendingCheckpoint.message}</p>
+              </>
+            ) : null}
             {isConfigCheckpoint ? (
-              <div className="mt-2 max-h-[min(40vh,18rem)] overflow-y-auto">
-                <AgentConfigQa
-                  projectTitle={projectTitle ?? undefined}
-                  existing={paperConfig}
-                  saving={configSaving}
-                  onComplete={handleConfigSaveAndApprove}
-                  onSkip={() => void agent.resolveCheckpoint("approve")}
+              <div className="mt-1 space-y-2">
+                <AgentHitlBanner
+                  title="先把论文信息聊清楚"
+                  detail="题目、类型、语言这些定了，后面大纲和写作才不会跑偏。答完确认即可继续；也可先跳过。"
                 />
-              </div>
-            ) : isClarifyCheckpoint ? (
-              <div className="mt-2 space-y-2">
-                <Textarea
-                  value={clarifyNote}
-                  onChange={(e) => setClarifyNote(e.target.value)}
-                  placeholder="输入你的回答…"
-                  className="min-h-[56px] resize-none text-xs"
-                />
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="h-8 flex-1 text-xs"
-                    onClick={() => {
-                      void agent.resolveCheckpoint("approve", clarifyNote.trim() || undefined);
-                      setClarifyNote("");
-                    }}
-                  >
-                    提交回答
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 text-xs"
-                    onClick={() => {
-                      setClarifyNote("");
-                      void agent.resolveCheckpoint("approve", "请继续");
-                    }}
-                  >
-                    跳过
-                  </Button>
+                <div className="max-h-[min(52vh,24rem)] overflow-y-auto">
+                  <AgentConfigQa
+                    projectTitle={projectTitle ?? undefined}
+                    existing={paperConfig}
+                    saving={configSaving}
+                    onComplete={handleConfigSaveAndApprove}
+                    onSkip={() => void agent.resolveCheckpoint("approve")}
+                  />
                 </div>
               </div>
-            ) : (
-              <>
-                {agent.pendingCheckpoint.preview ? (
-                  <pre className="mt-2 max-h-24 overflow-y-auto whitespace-pre-wrap rounded-md border border-border/50 bg-white/90 p-2 text-[10px] text-[#3d4f46]">
-                    {agent.pendingCheckpoint.preview}
-                  </pre>
-                ) : null}
-                {isBlueprintCheckpoint && onOpenBlueprint ? (
-                  <div className="mt-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-8 w-full text-xs"
-                      onClick={onOpenBlueprint}
-                    >
-                      <FileText className="mr-1.5 h-3.5 w-3.5" />
-                      打开蓝图工作台（查看 / 编辑）
-                    </Button>
-                  </div>
-                ) : null}
-                {showRevise ? (
-                  <div className="mt-2 space-y-2">
-                    <Textarea
-                      value={reviseNote}
-                      onChange={(e) => setReviseNote(e.target.value)}
-                      placeholder="想怎么改？可留空"
-                      className="min-h-[56px] resize-none text-xs"
-                    />
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="h-8 flex-1 text-xs"
-                        onClick={() => {
-                          void agent.resolveCheckpoint("revise", reviseNote.trim() || undefined);
-                          setShowRevise(false);
-                          setReviseNote("");
-                        }}
-                      >
-                        提交修改意见
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 text-xs"
-                        onClick={() => setShowRevise(false)}
-                      >
-                        取消
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mt-2 flex gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="h-8 flex-1 text-xs"
-                      onClick={() => void agent.resolveCheckpoint("approve")}
-                    >
-                      批准
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-8 flex-1 text-xs"
-                      onClick={() => setShowRevise(true)}
-                    >
-                      需修改
-                    </Button>
-                  </div>
-                )}
-              </>
-            )}
+            ) : isClarifyCheckpoint ? (
+              <div className="mt-1">
+                <AgentClarifyCard
+                  key={agent.pendingCheckpoint.id}
+                  question={agent.pendingCheckpoint.message}
+                  onSubmit={(answer) =>
+                    void agent.resolveCheckpoint("approve", answer || undefined)
+                  }
+                  onSkip={() => void agent.resolveCheckpoint("approve", "请继续")}
+                />
+              </div>
+            ) : isOutlineCheckpoint ? (
+              <div className="mt-1">
+                <AgentOutlineReview
+                  key={agent.pendingCheckpoint.id}
+                  preview={agent.pendingCheckpoint.preview}
+                  projectOutline={project?.outline}
+                  open={hitlPageOpen}
+                  onOpenChange={setHitlPageOpen}
+                  onApprove={() => void agent.resolveCheckpoint("approve")}
+                  onRevise={(note) => void agent.resolveCheckpoint("revise", note)}
+                  onOpenOutlineTab={onOpenOutline}
+                />
+              </div>
+            ) : isBlueprintCheckpoint ? (
+              <div className="mt-1">
+                <AgentBlueprintReview
+                  key={agent.pendingCheckpoint.id}
+                  preview={agent.pendingCheckpoint.preview}
+                  projectBlueprintJson={project?.writingBlueprint}
+                  open={hitlPageOpen}
+                  onOpenChange={setHitlPageOpen}
+                  onApprove={() => void agent.resolveCheckpoint("approve")}
+                  onRevise={(note) => void agent.resolveCheckpoint("revise", note)}
+                  onOpenBlueprintTab={onOpenBlueprint}
+                />
+              </div>
+            ) : null}
           </motion.div>
         ) : null}
 
@@ -1317,47 +1275,20 @@ export function AgentPanel({
             transition={{ duration: 0.32, ease: easeOut }}
             className="shrink-0 border-t border-[#1a5632]/15 bg-[#f6f8f6] px-3 py-2.5"
           >
-            <p className="text-xs font-medium text-[#122820]">
-              {agent.pendingConfirm.tool === "import_reference" ? "确认导入文献" : "需要你确认"}
-            </p>
-            <p className="mt-0.5 text-[11px] text-[#3d4f46]/90">{agent.pendingConfirm.message}</p>
-            {!isImportBatchConfirm && agent.pendingConfirm.preview ? (
-              <pre className="mt-2 max-h-20 overflow-y-auto whitespace-pre-wrap rounded-md border border-border/50 bg-white/90 p-2 text-[10px] leading-relaxed text-[#3d4f46]">
-                {agent.pendingConfirm.preview}
-              </pre>
-            ) : null}
-            {isImportBatchConfirm ? (
-              <ImportConfirmList
-                items={confirmImportItems}
-                selected={importSelection}
-                onToggle={toggleImportItem}
-                onSetAll={setAllImport}
-              />
-            ) : null}
-            <div className="mt-2 flex gap-2">
-              <Button
-                type="button"
-                size="sm"
-                className="h-8 flex-1 text-xs"
-                disabled={isImportBatchConfirm && importSelectedCount === 0}
-                onClick={() => void handleConfirmImport()}
-              >
-                {isImportBatchConfirm
-                  ? `确认导入 ${importSelectedCount} 篇`
-                  : agent.pendingConfirm.tool === "import_reference"
-                    ? "确认导入"
-                    : "确认"}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-8 text-xs"
-                onClick={() => void agent.resolveConfirm(false)}
-              >
-                取消
-              </Button>
-            </div>
+            <AgentToolConfirm
+              tool={agent.pendingConfirm.tool}
+              message={agent.pendingConfirm.message}
+              preview={agent.pendingConfirm.preview}
+              open={hitlPageOpen}
+              onOpenChange={setHitlPageOpen}
+              importItems={isImportBatchConfirm ? confirmImportItems : []}
+              importSelected={importSelection}
+              onToggleImport={toggleImportItem}
+              onSetAllImport={setAllImport}
+              importSelectedCount={importSelectedCount}
+              onConfirm={() => void handleConfirmImport()}
+              onCancel={() => void agent.resolveConfirm(false)}
+            />
           </motion.div>
         ) : null}
       </AnimatePresence>

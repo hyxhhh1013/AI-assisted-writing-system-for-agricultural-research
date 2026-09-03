@@ -10,7 +10,7 @@ describe("admin labels", () => {
   it("maps usage features", () => {
     expect(adminFeatureLabel("ai:deepseek")).toBe("DeepSeek");
     expect(adminFeatureLabel("ai:zhipu")).toBe("智谱");
-    expect(adminFeatureLabel("ai:vision")).toBe("智谱视觉");
+    expect(adminFeatureLabel("ai:vision")).toBe("DeepSeek 视觉");
     expect(adminFeatureLabel("writing")).toBe("扩写");
   });
 

@@ -66,7 +66,8 @@
 
 | 方法 | 路径 | zod | SSE | admin |
 |------|------|-----|-----|-------|
-| GET, POST, PATCH, DELETE | `/api/knowledge` | ✓ | — | — |
+| GET, POST, PATCH | `/api/knowledge` | ✓ | — | — |
+| DELETE | `/api/knowledge` | ✓ | — | ✓ |
 | POST | `/api/knowledge/analyze` | — | — | — |
 | POST | `/api/knowledge/import-bibliography` | ✓ | — | — |
 | POST | `/api/knowledge/ingest-external` | ✓ | — | — |
@@ -270,6 +271,7 @@
 ### 知识库重建索引 SSE
 
 - `POST /api/knowledge/reindex`：spawn `node scripts/index-pdfs.mjs --progress`；请求体见 `reindexRequestSchema`（`files?`, `forceStage1?`, `forceStage3?`）。
+- `DELETE /api/knowledge`：仅管理员（`requireAdmin`）。登录用户可 GET/POST/PATCH；删除文献走 Admin 页或知识库页（按钮仅 admin 可见）。
 - 事件类型见 `src/contracts/reindex.ts`；必须以 `complete` 结束，否则客户端报「索引流意外结束」。
 - 详情与排障：[`domain/rag-and-knowledge.md`](./domain/rag-and-knowledge.md)。
 

@@ -51,11 +51,16 @@ describe("buildPrereqCheckpoint（自动补齐批准检查点）", () => {
       baseState({ goal: "整篇论文自主推进", approvedCheckpointKinds: [] }),
       {
         tool: "generate_writing_blueprint",
-        result: { success: true, data: { persisted: true }, summary: "已写回写作蓝图" },
+        result: {
+          success: true,
+          data: { persisted: true, preview: "# 主张\n## 各节要点\n### 引言" },
+          summary: "已写回写作蓝图",
+        },
       },
     );
     expect(cp).not.toBeNull();
     expect(cp!.kind).toBe("blueprint_approve");
+    expect(cp!.preview).toContain("各节要点");
   });
 
   it("普通目标自动补齐大纲也触发检查点", () => {

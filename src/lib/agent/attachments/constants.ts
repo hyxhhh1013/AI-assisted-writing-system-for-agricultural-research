@@ -1,6 +1,6 @@
 export const MAX_ATTACHMENT_MB = 20;
 export const MAX_ATTACHMENT_BYTES = MAX_ATTACHMENT_MB * 1024 * 1024;
-/** 视觉模型（GLM-4V）单张图片大小上限：超过直接失败，避免大图转 base64 打爆超时 */
+/** 视觉模型单张图片大小上限：超过直接失败，避免大图转 base64 打爆超时 */
 export const MAX_VISION_IMAGE_BYTES = 8 * 1024 * 1024;
 /** PDF 图表理解：渲染前 N 页用视觉模型逐页理解（论文图表多在开头几页，控制成本） */
 export const MAX_PDF_VISION_PAGES = 5;

@@ -52,11 +52,20 @@ export function buildAdminHealthAlerts(health: AdminHealthData): AdminHealthAler
 
   const jm = health.journalMetrics;
   if (jm && jm.fileCount >= 10 && jm.coveragePct < 20) {
-    alerts.push({
-      message: `期刊 IF 覆盖仅 ${jm.coveragePct}%（${jm.withImpactFactor}/${jm.fileCount}）`,
-      href: "/admin/knowledge",
-      label: "导入指标",
-    });
+    const eligible = jm.withIssnOrJournal ?? 0;
+    if (!jm.lastImport) {
+      alerts.push({
+        message: `尚未导入实验室期刊 IF 表（覆盖 ${jm.coveragePct}%；有刊名/ISSN ${eligible} 篇）`,
+        href: "/admin/knowledge",
+        label: "导入指标",
+      });
+    } else {
+      alerts.push({
+        message: `期刊 IF 覆盖仅 ${jm.coveragePct}%（${jm.withImpactFactor}/${jm.fileCount}，可匹配 ${eligible} 篇）`,
+        href: "/admin/knowledge",
+        label: "导入指标",
+      });
+    }
   }
 
   const agent = health.agent;

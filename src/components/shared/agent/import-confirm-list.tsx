@@ -15,17 +15,21 @@ export function ImportConfirmList({
   selected,
   onToggle,
   onSetAll,
+  className,
+  listClassName,
 }: {
   items: ExternalLiteratureHit[];
   selected: Set<number> | null;
   onToggle: (idx: number, checked: boolean) => void;
   onSetAll: (checked: boolean) => void;
+  className?: string;
+  listClassName?: string;
 }) {
   const [openIdx, setOpenIdx] = useState<number | null>(null);
   const selectedCount = selected?.size ?? 0;
 
   return (
-    <div className="mt-2">
+    <div className={cn("mt-2", className)}>
       <div className="mb-1 flex items-center justify-between">
         <span className="text-[10px] text-[#3d4f46]/80">
           已收集 {items.length} 篇，已选 {selectedCount} 篇 · 点开可看摘要
@@ -47,7 +51,7 @@ export function ImportConfirmList({
           </button>
         </div>
       </div>
-      <div className="max-h-64 overflow-y-auto rounded-md border border-border/50 bg-white/90">
+      <div className={cn("max-h-[min(48vh,22rem)] overflow-y-auto rounded-md border border-border/50 bg-white/90", listClassName)}>
         {items.map((item, i) => {
           const checked = selected?.has(i) ?? false;
           const open = openIdx === i;

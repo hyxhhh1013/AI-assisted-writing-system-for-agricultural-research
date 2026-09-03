@@ -74,14 +74,26 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 
 **确认/检查点不是孤儿会话（2026-08-23）**：`import_reference` 等人勾选、以及 `outline_approve` 等检查点期间，SSE 会按终态结束（`inFlight=false`）但 DB session 仍 `running`。不得把「接上进度 / 强制结束」叠在确认卡上。`shouldShowOrphanedSession`：有 `pendingConfirm` / `pendingCheckpoint` 或 `status=awaiting_checkpoint` 时隐藏孤儿条。项目打开时若最近会话仍 `running` 且快照带 `awaitingCheckpoint` / `awaitingConfirm`，历史接口随 transcript 一并返回，前端直接恢复确认卡，不必先点「接上进度」。
 
-**大纲人控（2026-08-23）**：`generate_outline` 一旦 `persistToProject` 写回，**一律**弹 `outline_approve`（不再要求 goal 像「整篇/从零」；新大纲作废本轮旧批准）。`generate_outline` 服务端读取本会话文档附件：文件名含大纲/提纲/框架等，或短文档能抽出 ≥3 个一级标题，则锁为 `userSkeleton` 并注入附件摘录，禁止默认综述/IMRaD 另起炉灶。指定 `attachmentId` 未就绪则报错，不静默回落。长论文 PDF 不自动当框架。表格仍走 `ingest_project_data`，不进大纲骨架。实现：`lib/agent/outline-from-attachment.ts` + `core/checkpoints.ts`。
+**大纲人控（2026-08-23；过目页 2026-09-03）**：`generate_outline` 一旦 `persistToProject` 写回，**一律**弹 `outline_approve`（不再要求 goal 像「整篇/从零」；新大纲作废本轮旧批准）。检查点带全文（优先 `data.outline`，上限 24k），侧栏是「需要你拍板」收口卡，过目页用 Dialog 通读标题芯片 + 正文，批准或留下改结构意见。`generate_outline` 服务端读取本会话文档附件：文件名含大纲/提纲/框架等，或短文档能抽出 ≥3 个一级标题，则锁为 `userSkeleton` 并注入附件摘录，禁止默认综述/IMRaD 另起炉灶。指定 `attachmentId` 未就绪则报错，不静默回落。长论文 PDF 不自动当框架。表格仍走 `ingest_project_data`，不进大纲骨架。实现：`lib/agent/outline-from-attachment.ts` + `core/checkpoints.ts` + `components/shared/agent/agent-outline-review.tsx`。
+
+**人控过目页家族（2026-09-03）**：所有「等人拍板」不再用 96px `<pre>` + 批准/需修改。共用 `AgentHitlBanner`（需要你拍板 · 已暂停），自动打开 Dialog 通读后再点 CTA：
+
+| 节点 | 组件 | 用户看到什么 |
+|------|------|----------------|
+| `outline_approve` | `agent-outline-review.tsx` | 大纲全文 + 标题芯片 + 改结构 |
+| `blueprint_approve` | `agent-blueprint-review.tsx` | 主张 / 各节要点 / 配图计划 + 改蓝图 |
+| `clarify`（`ask_user`） | `agent-clarify-card.tsx` | 问题引用块 + 大回答框（侧栏即可，不弹层） |
+| `config_confirm` | `agent-config-qa.tsx` + HITL 眉题 | 一问一答表单，检查点时加高 |
+| `import_reference` / `remove_figure` / `remove_references` | `agent-tool-confirm.tsx` | 导入勾选列表或删除对象全文；破坏性操作用红色眉题 |
+
+`generate_writing_blueprint` 的 `data.preview` 为 `formatBlueprintPreview` 全文（上限同大纲 24k）。实现：`lib/agent/hitl.ts`、`lib/agent/blueprint-review.ts`。
 | `agent/thought` | 完整思考（终） | 快照 |
 | `agent/thought_delta` | LLM 回复逐 token 增量 | **实时**（不持久化） |
 | `agent/action` | 工具被调用（params）。不需确认的工具经 `emitLiveEvent` **实时**推送（长工具如 `write_section` 执行期间前端即时显示工具卡）；需确认工具仍走快照（确认路径直接 yield） | 实时（不需确认）/ 快照（需确认） |
 | `agent/observation` | 工具结果（result/error） | 快照 |
 | `agent/progress` | **长工具执行期实时进度**（`label` 兼容 + 结构化 `stage`/`detail`/`chars`/`elapsedMs`/`info`/`warnings`） | **实时**（不持久化） |
 | `agent/confirm` | 写操作需用户确认（import_reference 等） | 快照 |
-| `agent/checkpoint` | S2 检查点（config_confirm / outline_approve / clarify） | 快照 |
+| `agent/checkpoint` | S2 检查点（config_confirm / outline_approve / blueprint_approve / clarify） | 快照 |
 | `agent/complete` | 完成摘要 `AgentSummary` | 快照 |
 | `agent/error` | 错误 | 快照 |
 | `agent/session` | 会话 id + 状态（running/interrupted/completed/error） | 快照 |
@@ -125,7 +137,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 
 - 确认生成（`nodes.ts` → `lib/agent/import-confirm.ts`）：`buildImportReferenceConfirmParams` 在 `enrichImportReferenceParams` 之上注入 `params.importItems` = 候选文献数组（`resolveImportReferenceCandidates` = 模型请求的 hits（`hitIndices`→last-search / `hitsJson` / `hitJson` / `doi`）∪ 最近一次检索全部命中，按 id/doi 去重，≤25）。
 - `agent/confirm` 事件携带含 `importItems` 的 params，随快照持久化进 DB `awaitingConfirm`。
-- 前端确认卡（`import-confirm-list.tsx`，由 `agent-panel` 挂载）：`importItems` 存在时渲染 checkbox 列表（默认全选）+ 全选/全不选 + 「确认导入 N 篇」。点标题可展开作者、摘要（检索未带摘要则提示打开原文）和 DOI/OA 链接；不再用截断标题 preview 顶替正文。
+- 前端确认卡（`agent-tool-confirm.tsx` 挂 `import-confirm-list.tsx`）：`importItems` 存在时自动打开确认页，checkbox 列表（默认全选）+ 全选/全不选 + 「确认导入 N 篇」。点标题可展开作者、摘要（检索未带摘要则提示打开原文）和 DOI/OA 链接；侧栏只留「打开确认页」收口卡。不再用截断标题 preview 顶替正文。
 - **进行中 UI（2026-08-23）**：`use-agent` 的 `isRunning` 看 SSE 是否还在飞（`inFlight`），不再只看最后一条 `agent/status`。V4 关 thinking 后 LLM 可能长时间无 `thought_delta`，节点开始时 live 推 `thinking`；写节完成卡不再挡住底部「正在思考/导入」指示器（`displayProgress` 只在 `isWriteStatusLive` 时抑制）。
 - **侧栏高度断点（2026-09-03）**：质量收口看板在 Agent Tab 顶部、与 `AgentPanel` 兄弟排布。面板必须包在 `flex-1 min-h-0 overflow-hidden` 里，否则 `h-full` + 收口条会超出父级、`overflow-hidden` 裁掉输入框。收口芯片改为单行横滑；顶栏 Plan 用 `compact` 限高；配置问答 max-height 从 52vh 收到约 16–18rem，避免把对话区挤没。
 - 用户批准：`use-agent.ts resolveConfirm(true, selectedIndices)` 回传 `confirmDecision.selectedIndices`（0 起索引数组）；`run-graph.ts` 把 `selectedIndices` 并入 `trustedParams` 重放。
@@ -137,8 +149,8 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 
 ## 蓝图批准检查点 blueprint_approve（2026-08-07）
 
-`generate_writing_blueprint` / `build_argument_blueprint` 持久化后，若为 academic-paper 全流程目标（`isApFullStyleGoal`，entryMode=full 前缀含 `academic-paper` 即命中）且本轮未批准过 → 后置门禁 `blueprintApproveGate` 暂停，`buildBlueprintCheckpoint` 弹出「一起确认写作蓝图」（预览 + 批准/需修改）。批准后 `decisionMessage("blueprint_approve","approve")` 指示模型严格按蓝图推进。`run-graph.ts` 恢复时按 checkpointId 含 `blueprint` 映射 `blueprint_approve`。前端复用通用检查点 UI（与 outline 一致）。
-- **查看/编辑完整蓝图（2026-08-07）**：`blueprint_approve` 检查点卡额外显示「打开蓝图工作台（查看 / 编辑）」按钮（`agent-panel` 新增 `onOpenBlueprint` 回调，由 workbench 接 `handleOpenBlueprintDialog` 打开既有 `BlueprintWorkspaceDialog`）。`generate_writing_blueprint` 属 `PROJECT_MUTATING_TOOLS`，生成后工作台自动刷新 `writingBlueprint`，确保按钮打开的是最新蓝图。
+`generate_writing_blueprint` 持久化后，若为 academic-paper 全流程目标（`isApFullStyleGoal`，entryMode=full 前缀含 `academic-paper` 即命中）且本轮未批准过 → 后置门禁 `blueprintApproveGate` 暂停。`buildBlueprintCheckpoint` 带 `formatBlueprintPreview` 全文（上限 24k）。前端不再复用「96px 预览 + 批准/需修改」：侧栏人控卡 + Dialog 结构化展示主张/各节要点/配图计划（优先 `project.writingBlueprint`），批准或留下改蓝图意见；仍可「在蓝图工作台打开」。批准后 `decisionMessage("blueprint_approve","approve")` 指示模型严格按蓝图推进。`run-graph.ts` 恢复时按 checkpointId 含 `blueprint` 映射 `blueprint_approve`。
+- **查看/编辑完整蓝图（2026-08-07；过目页 2026-09-03）**：`blueprint_approve` 过目页内「在蓝图工作台打开」（`agent-panel` 的 `onOpenBlueprint`，由 workbench 接 `handleOpenBlueprintDialog`）。`generate_writing_blueprint` 属 `PROJECT_MUTATING_TOOLS`，生成后工作台自动刷新 `writingBlueprint`，确保打开的是最新蓝图。
 - **对话里「看看蓝图」调出工作台（2026-08-07）**：只读工具 `open_blueprint_workspace`。仅当用户明确要求打开/编辑时调用；**禁止**在 `generate_writing_blueprint` 后自动调用。前端仅对本轮**新追加**的成功 observation 自动打开（`blueprint-open-guard`）；会话恢复/面板重挂载不因历史记录误弹。observation 卡另有「打开蓝图工作台」按钮可手点。
 - **工作台随内容自适应（2026-08-07）**：蓝图 schema 新增可选 `projectMode`/`language`（生成时用项目兜底填充）；工作台按顶层章节把 `sectionGuides` 树形分组（`" > "` 层级，顶层可折叠）、按论文类型显示徽标与配图提示（综述→概念图/对比表，研究→方法流程图/结果数据图）、空区块（前置条件/配图/章节导览/写作顺序）自动隐藏。分组纯函数 `groupSectionGuides` 在 `lib/blueprint-utils.ts`。
 - **蓝图顺序注入 Agent 简报（2026-08-08）**：修复「蓝图建议写作顺序与实际写作顺序不一致」——此前 `project-briefing` 只给 LLM「写作蓝图：有 + thesis 摘要」，`writingOrder` 与 `sectionGuides` 未进 Agent 决策输入，Agent 靠直觉/大纲顺序写。现在 `loadAgentProject` 额外提取 `blueprintWritingOrder`/`blueprintSectionGuides`（`project-loader.ts`），简报注入「建议写作顺序（蓝图）：1. x → 2. y → …」+「各节写作要点（蓝图）」区块（`project-briefing.ts`）。Agent 写作前即可见蓝图建议顺序并按序推进。
@@ -275,7 +287,7 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 | 层 | 行为 |
 |----|------|
 | L1 草稿 | `draft_mechanism_figure` 先编译 `MechanismSpecV1`（主张进 caption，步骤括号条件上边）；多机理图任务前 **FigureBrief clarify**；可选 `templateId`。未锁 `layout` 且 ≥4 步会带 chain/fork 两套候选，只入库推荐稿。**不用文生图当主渲染器** |
-| L2 硬闭环 | **机理图**先看 `draft_mechanism_figure.qaReport`（`block` 不入库、按 findings 改 Spec）；过线后 toolsNode 才注入 `read_figure(mode=qa)` 扫残余观感。**数据图**看 `generate_chart.qaReport`（不跑 GLM-4V）。QA 未通过则禁止空口收尾 + 门禁 `replaceImageUrl`；同 caption/section 无 replace 时工具内自动就地替换（防叠图） |
+| L2 硬闭环 | **机理图**先看 `draft_mechanism_figure.qaReport`（`block` 不入库、按 findings 改 Spec）；过线后 toolsNode 才注入 `read_figure(mode=qa)` 扫残余观感。**数据图**看 `generate_chart.qaReport`（不跑视觉识图）。QA 未通过则禁止空口收尾 + 门禁 `replaceImageUrl`；同 caption/section 无 replace 时工具内自动就地替换（防叠图） |
 | L3 精修 | **配图坞**（输入框上方常驻最近出图，免翻聊天）+ 结果卡：落点说明（默认**节末落盘**）+「查看正文位置」+ 结构化「按意见改」（含分叉/三面板/脱氧等快捷）+ `/plot?chartAssetId=&replaceImageUrl=` 深链（优先资产快照回放，精修回写默认真地替换）；编辑器「本节插图」可挪位 |
 | 图质检两级（2026-08-09；008 收窄；MECH-QA 2026-08-23） | 机理图主尺是 `MechanismSpec` + `qaReport`（`contracts/mechanism-spec.ts` / `mechanism-qa.ts`）。识图 `figure-qa.ts` 只扫残余观感。数据图只看 ChartSpec `qaReport`。 |
 | 精修回放加固（2026-08-10） | 根因：`uiTranscript` 未持久化 `plotHref`；长 `figureSpec` URL 易截断；`target=_blank` 新标签读不到 opener 的 `sessionStorage`。现：transcript 保留深链+轻量快照；`GET .../charts`；点击精修用 **`localStorage`** 暂存（`plot-prefill-stash.ts`）；绘图页按 assetId/imageUrl 回放并 remount 预填 |
@@ -286,7 +298,7 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 | `remove_figure` | 删图表资产 + 默认去掉正文对应 `![](url)`（清重复旧图）；**需用户确认** |
 | `read_figure` | `describe` 可识任意图；`mode=qa` **仅机理图**（占位/英文模板/空栏）。数据图跳过识图，看 `qaReport` |
 
-实现：`lib/agent/figure-loop.ts`、`langgraph/tool-gates.ts`（`figureReplaceGate`）、`langgraph/nodes.ts`（自动排队 QA / FigureBrief）。视觉 provider：`callAI({ provider: "vision" })`。
+实现：`lib/agent/figure-loop.ts`、`langgraph/tool-gates.ts`（`figureReplaceGate`）、`langgraph/nodes.ts`（自动排队 QA / FigureBrief）。视觉 provider：`callAI({ provider: "vision" })`（DeepSeek `deepseek-v4-flash-vision-exp`，复用写作 Key）。
 
 ## 循环防护与写回保护（2026-08-06 修复）
 

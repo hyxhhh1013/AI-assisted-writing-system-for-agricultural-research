@@ -21,7 +21,17 @@ export function parseMetricsJson(raw: string | null | undefined): JournalMetrics
 
   try {
 
-    return JSON.parse(raw) as JournalMetrics;
+    const parsed = JSON.parse(raw) as JournalMetrics & {
+      impactFactor?: unknown;
+      impactFactorYear?: unknown;
+    };
+    const impactFactor = coerceFiniteNumber(parsed.impactFactor);
+    const impactFactorYear = coerceFiniteNumber(parsed.impactFactorYear);
+    return {
+      ...parsed,
+      impactFactor,
+      impactFactorYear,
+    };
 
   } catch {
 
@@ -29,6 +39,15 @@ export function parseMetricsJson(raw: string | null | undefined): JournalMetrics
 
   }
 
+}
+
+function coerceFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const n = Number(value.trim());
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
 }
 
 
@@ -540,5 +559,11 @@ export function lookupMetricsForBib(
   return null;
 
 }
+
+/** 书目是否具备 ISSN 或刊名（可被实验室期刊表匹配） */
+export function bibHasIssnOrJournal(bib: KnowledgeBib | null | undefined): boolean {
+  return collectIssnKeys(bib).length > 0 || Boolean(journalKeyFromBib(bib));
+}
+
 
 

@@ -42,7 +42,7 @@ class NodeCanvasFactory {
 }
 
 /**
- * 把 PDF 前 N 页渲染为图片并用 GLM-4V 逐页理解（图表/坐标轴/趋势）。
+ * 把 PDF 前 N 页渲染为图片并用视觉模型逐页理解（图表/坐标轴/趋势）。
  * 纯文字 PDF 走 pdf-parse；本函数只补「页面视觉」这一层。
  */
 export async function describePdfPages(
@@ -59,7 +59,7 @@ export async function describePdfPages(
     }
 
     const factory = new NodeCanvasFactory();
-    // 并发渲染 + 并发视觉理解：GLM-4V 调用走 callAI 的 per-key 信号量（默认 4），
+    // 并发渲染 + 并发视觉理解：视觉调用走 callAI 的 per-key 信号量（默认 4），
     // 不会打爆上游；串行会拖到 5×单页耗时，并行可压到一批。
     const pageNumbers = Array.from({ length: pageCount }, (_, i) => i + 1);
     const results = await Promise.all(

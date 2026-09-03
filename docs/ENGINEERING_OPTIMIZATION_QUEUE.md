@@ -8,7 +8,7 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-09-03（Agent 侧栏高度断点：收口条与面板叠高裁输入框）  
+> **最后更新**：2026-09-03（人控过目页：蓝图/澄清/导入/删除与大纲同一套交互）  
 > **实时 status 只看 §1 Phase 13 / Phase 14 与 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
@@ -1193,6 +1193,9 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-23 | 会话 running 界面空白 | AI | SSE 已断、DB 仍 running → 跟聊 409，界面无进度且叠「写研究现状」气泡。跟聊/续跑先回收 running；409 回滚用户气泡；出示接上/强制结束。续跑条只认本轮 write 观察。 |
 | 2026-08-23 | 收尾示例串味 | AI | 计划在出图，收尾却写「例如先写引言」→ 续跑条当成口头未写节。去掉该示例；宣布检测忽略收尾套话；有未完成计划时「继续推进」只发「继续」。 |
 | 2026-09-03 | Agent 侧栏高度断点 | AI | 质量收口条与 `AgentPanel` 兄弟叠 `h-full` 裁掉输入框；写节完成卡误挡思考指示器。改为 `flex-1 min-h-0` 包面板、`isWriteStatusLive` 才抑制指示器、Plan/配置问答/收口芯片限高。 |
+| 2026-09-03 | 视觉/IF/删库 | AI | 识图改 `deepseek-v4-flash-vision-exp`（复用 DeepSeek Key）；健康页区分「未导入 IF 表」与低覆盖，并统计有刊名/ISSN 篇数；`DELETE /api/knowledge` 仅管理员，前台删除按钮对普通用户隐藏。 |
+| 2026-09-03 | 大纲过目页 | AI | `outline_approve` 不再塞 96px 预览。侧栏人控卡 + Dialog 通读全文/标题跳转/改结构芯片；检查点带 `data.outline` 全文。 |
+| 2026-09-03 | 人控过目页家族 | AI | 蓝图/澄清/配置/导入/删图删文献不再用小预览+批准。共用 HITL 眉题；蓝图与确认自动打开 Dialog 通读；蓝图检查点带 `formatBlueprintPreview` 全文。 |
 
 ---
 

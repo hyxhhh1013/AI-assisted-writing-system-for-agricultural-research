@@ -3,6 +3,7 @@ import type {
   AgentCheckpointKind,
   AgentCheckpointRequest,
 } from "@/contracts/agent";
+import { capOutlinePreview } from "@/lib/agent/outline-review";
 import {
   isAcademicPaperPipelineGoal,
   isSectionDraftGoal,
@@ -64,14 +65,13 @@ export function shouldPauseForConfigConfirm(input: {
 }
 
 export function buildOutlineCheckpoint(preview: string): AgentCheckpointRequest {
-  const trimmed = preview.trim();
   return {
     id: `cp_outline_${Date.now()}`,
     kind: "outline_approve",
     title: "一起确认大纲",
     message:
-      "我已把大纲写回项目。请你过目：满意就点「批准并继续」，我会再问你下一步（论证 / 写某一节）；要改就点「需修改」并告诉我怎么改。",
-    preview: trimmed.slice(0, 2000) + (trimmed.length > 2000 ? "…" : ""),
+      "大纲已写回项目。写作停在你这里：过目结构后点批准，我才会生成蓝图或写正文；要改结构请留下意见。",
+    preview: capOutlinePreview(preview),
   };
 }
 
@@ -91,14 +91,13 @@ export function shouldPauseForBlueprintApprove(input: {
 }
 
 export function buildBlueprintCheckpoint(preview: string): AgentCheckpointRequest {
-  const trimmed = preview.trim();
   return {
     id: `cp_blueprint_${Date.now()}`,
     kind: "blueprint_approve",
     title: "一起确认写作蓝图",
     message:
-      "写作蓝图已生成（叙事、各节要点与主张/证据、配图计划）。过目后点「批准」，我就按蓝图往下写；要改就点「需修改」并告诉我怎么调整。",
-    preview: trimmed.slice(0, 2000) + (trimmed.length > 2000 ? "…" : ""),
+      "写作蓝图已写回项目。过目主张、各节要点和配图计划后点批准，我才按蓝图写正文；要改请留下意见。",
+    preview: capOutlinePreview(preview),
   };
 }
 
@@ -117,7 +116,7 @@ export function buildClarifyCheckpoint(question: string): AgentCheckpointRequest
   return {
     id: `cp_clarify_${Date.now()}`,
     kind: "clarify",
-    title: "需要你确认一下",
+    title: "需要你补充一点信息",
     message: question,
   };
 }

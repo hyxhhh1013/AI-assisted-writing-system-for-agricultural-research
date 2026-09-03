@@ -20,6 +20,7 @@ import {
 import type { AiProviderKey } from "@/contracts/admin";
 import {
   DEEPSEEK_MODEL_OPTIONS,
+  DEEPSEEK_VISION_MODEL_OPTIONS,
   ZHIPU_MODEL_OPTIONS,
 } from "@/lib/models";
 
@@ -36,7 +37,7 @@ const PROVIDERS: {
   {
     provider: "deepseek",
     name: "DeepSeek",
-    hint: "AI 写作、Agent、大纲、翻译等",
+    hint: "AI 写作、Agent、大纲、翻译；识图走同 Key 的视觉模型",
     apiKeyPrefix: "DEEPSEEK_API_KEY",
     modelKey: "DEEPSEEK_MODEL",
     modelOptions: DEEPSEEK_MODEL_OPTIONS,
@@ -148,6 +149,20 @@ export default function AdminSettingsPage() {
     setEditKind("model");
     setEditOptions(provider.modelOptions);
     setCustomModel(current !== "" && !provider.modelOptions.includes(current));
+    setShowEdit(true);
+  };
+
+  const openEditVisionModel = () => {
+    const existing = settings.find((x) => x.key === "DEEPSEEK_VISION_MODEL");
+    const current = existing?.maskedValue ?? "";
+    setEditProvider("deepseek");
+    setEditKey("DEEPSEEK_VISION_MODEL");
+    setEditValue(current);
+    setEditKind("model");
+    setEditOptions(DEEPSEEK_VISION_MODEL_OPTIONS);
+    setCustomModel(
+      current !== "" && !(DEEPSEEK_VISION_MODEL_OPTIONS as readonly string[]).includes(current),
+    );
     setShowEdit(true);
   };
 
@@ -269,6 +284,9 @@ export default function AdminSettingsPage() {
       <div className="grid gap-4 md:grid-cols-2">
         {PROVIDERS.map((p) => {
           const status = aiStatus?.providers.find((x) => x.provider === p.provider);
+          const visionStatus = p.provider === "deepseek"
+            ? aiStatus?.providers.find((x) => x.provider === "vision")
+            : undefined;
           const ready = Boolean(status && (status.enabled || status.keyCount > 0));
           const dbKeys = settings.filter(
             (x) => x.key === p.apiKeyPrefix || x.key.startsWith(`${p.apiKeyPrefix}_`),
@@ -312,6 +330,23 @@ export default function AdminSettingsPage() {
                   )}
                 </span>
               </div>
+              {visionStatus && (
+                <div className="rounded-lg bg-[#faf9f6] px-3 py-2 flex items-center justify-between gap-2">
+                  <span className="text-xs text-[#6b7c72] shrink-0">视觉模型</span>
+                  <span className="flex items-center gap-2 min-w-0">
+                    <code className="text-xs font-mono text-[#122820] truncate">{visionStatus.model}</code>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full shrink-0 ${
+                      visionStatus.modelSource === "db"
+                        ? "bg-[#1a5632]/10 text-[#1a5632]"
+                        : visionStatus.modelSource === "env"
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-[#e8e4dc] text-[#6b7c72]"
+                    }`}>
+                      {SOURCE_LABEL[visionStatus.modelSource]}
+                    </span>
+                  </span>
+                </div>
+              )}
 
               {/* Key 概览（env + DB，脱敏只读） */}
               <div>
@@ -348,10 +383,15 @@ export default function AdminSettingsPage() {
                 )}
               </div>
 
-              <div className="flex items-center gap-2 mt-auto">
+              <div className="flex items-center gap-2 mt-auto flex-wrap">
                 <Button size="sm" variant="outline" className="gap-1 flex-1" onClick={() => openEditModel(p)}>
                   <Settings2 className="h-3.5 w-3.5" />配置模型
                 </Button>
+                {p.provider === "deepseek" && (
+                  <Button size="sm" variant="outline" className="gap-1 flex-1" onClick={openEditVisionModel}>
+                    <Settings2 className="h-3.5 w-3.5" />配置视觉模型
+                  </Button>
+                )}
                 <Button size="sm" className="gap-1 flex-1" onClick={() => openAddKey(p)}>
                   <Plus className="h-3.5 w-3.5" />添加 Key
                 </Button>

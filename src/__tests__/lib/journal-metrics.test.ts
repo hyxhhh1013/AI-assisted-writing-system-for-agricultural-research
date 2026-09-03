@@ -6,6 +6,8 @@ import {
   mergeJournalMetrics,
   normalizeIssn,
   parseJournalMetricsCsv,
+  parseMetricsJson,
+  bibHasIssnOrJournal,
 } from "@/lib/journal-metrics";
 
 describe("normalizeIssn", () => {
@@ -43,6 +45,14 @@ describe("parseJournalMetricsCsv", () => {
   });
 });
 
+describe("parseMetricsJson", () => {
+  it("coerces string impactFactor in stored JSON", () => {
+    const m = parseMetricsJson('{"impactFactor":"4.2","jcrQuartile":"Q2"}');
+    expect(m?.impactFactor).toBe(4.2);
+    expect(m?.jcrQuartile).toBe("Q2");
+  });
+});
+
 describe("lookupMetricsForBib", () => {
   it("matches bib issn", () => {
     const lookup = parseJournalMetricsCsv("issn,impactFactor\n1234-5678,3.1");
@@ -56,6 +66,12 @@ describe("lookupMetricsForBib", () => {
     );
     const m = lookupMetricsForBib({ journal: "Nature Plants, 2023" }, lookup);
     expect(m?.impactFactor).toBe(15);
+  });
+
+  it("detects matchable bib keys", () => {
+    expect(bibHasIssnOrJournal({ issn: "1234-5678" })).toBe(true);
+    expect(bibHasIssnOrJournal({ journal: "土壤学报" })).toBe(true);
+    expect(bibHasIssnOrJournal({ title: "only title" })).toBe(false);
   });
 });
 

@@ -10,7 +10,7 @@
 > **热路径（002–005 done）**：`attachCompiledSpec` → `ChartModule.save` → layout_solver → `save_figure`（不再 tight）→ `qaReport`。若 `verdict=repair`，`applyChartSpecPatches` 改 Spec 再渲（最多 2 次）。`block` 不入库、不插章节。XRD 旧脚本仍有分叉。  
 > **回归（006 done）**：`npm run test:figures` → `scripts/charts/test_figures.py` + `_fixtures/qa/`（11 类 + 长中文刻度 + 显著性）。断言 `qaReport` 无 block、求解后无刻度重叠/图例挡数据；CJK 用 glyph 探测（无 CJK 字体则 skip）。**不**做像素金标，**不**挂进 `npm run check`。  
 > **Agent 参数面（007 done）**：`generate_chart` 显著性走 `significanceJson`；`configJson` 仅白名单（`src/lib/chart-spec-extras.ts`）。刊宽 / DPI / `tight_layout` 丢弃并写入 observation。  
-> **QA 分流（008 done）**：数据图只看 `qaReport`（`block` 续跑改 Spec）；`read_figure(mode=qa)` 仅机理图/流程/分子扫残余观感。柱状/折线/热力会跳过 GLM-4V。  
+> **QA 分流（008 done）**：数据图只看 `qaReport`（`block` 续跑改 Spec）；`read_figure(mode=qa)` 仅机理图/流程/分子扫残余观感。柱状/折线/热力会跳过视觉识图。  
 > **机理图质量（FIG-MECH-QA-001）**：`draft_mechanism_figure` 先编译 `MechanismSpecV1`（主张进 caption，括号条件上边），确定性质检 + ≤2 次 spec 补丁；`block` 不入库。未指定 layout 且 ≥4 步时额外渲一套 chain/fork 候选，只入库推荐稿。主渲染器仍是 Graphviz / `mechanism_panel`，**不**接文生图。  
 > **/plot 回放（FIG-MECH-QA-002）**：`POST /api/flow-diagram` 与 `POST /api/mechanism-panel` 出图前走同一套 `refinePlotFlow` / `refinePlotPanelConfig`（保留用户拓扑，只上边条件、改英文占位）。回传 `qaReport` + 修补后的 nodes/panels；`/plot` 画布同步并显示质检条。不因 QA 拒绝出图。  
 > **刊规包 / 导出清单（009 done）**：`src/contracts/chart-export.ts`（栏宽 mm 与 Python 对齐）。出图后写 `{uuid}.csv` + `{uuid}.json`；`POST /api/chart` / `generate_chart` 回传 `exportManifest`。`GET /api/charts/:file` 可取 csv/json。  

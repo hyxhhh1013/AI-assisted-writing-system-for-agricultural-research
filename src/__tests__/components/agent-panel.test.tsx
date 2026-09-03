@@ -140,6 +140,7 @@ describe("AgentPanel × 导入确认卡", () => {
     });
     render(<AgentPanel />);
     expect(screen.getByText("Catalytic pyrolysis review")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /确认导入 1 篇/ })).toBeTruthy();
     expect(screen.queryByText(/This paper reviews/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Catalytic pyrolysis review/ }));
     expect(screen.getByText(/This paper reviews biomass catalytic pyrolysis/)).toBeTruthy();
@@ -217,8 +218,61 @@ describe("AgentPanel × 继续推进条", () => {
       messages: [{ kind: "user", text: "写大纲" }],
     });
     render(<AgentPanel projectId="p1" />);
-    expect(screen.getByText("确认大纲")).toBeTruthy();
+    expect(screen.getByText("一起过目这份大纲")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /强制结束/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /接上进度/ })).toBeNull();
+  });
+
+  it("大纲检查点出示人控过目入口", () => {
+    mockAgent = makeAgent({
+      isRunning: false,
+      status: "awaiting_checkpoint",
+      pendingCheckpoint: {
+        id: "cp1",
+        kind: "outline_approve",
+        title: "一起确认大纲",
+        message: "请确认",
+        preview: "## 摘要\n要点\n## 引言\n背景",
+      },
+      messages: [{ kind: "user", text: "写大纲" }],
+    });
+    render(<AgentPanel projectId="p1" />);
+    expect(screen.getByRole("button", { name: "批准这份大纲，继续" })).toBeTruthy();
+    expect(screen.getByText("一起确认大纲")).toBeTruthy();
+  });
+
+  it("蓝图检查点出示人控过目入口", () => {
+    mockAgent = makeAgent({
+      isRunning: false,
+      status: "awaiting_checkpoint",
+      pendingCheckpoint: {
+        id: "cp2",
+        kind: "blueprint_approve",
+        title: "一起确认写作蓝图",
+        message: "请确认",
+        preview: "# 主张\n各节要点\n### 引言\n提出问题",
+      },
+      messages: [{ kind: "user", text: "写蓝图" }],
+    });
+    render(<AgentPanel projectId="p1" onOpenBlueprint={() => undefined} />);
+    expect(screen.getByRole("button", { name: "批准这份蓝图，继续" })).toBeTruthy();
+    expect(screen.getByText("一起确认写作蓝图")).toBeTruthy();
+  });
+
+  it("澄清检查点把问题做成可读问答卡", () => {
+    mockAgent = makeAgent({
+      isRunning: false,
+      status: "awaiting_checkpoint",
+      pendingCheckpoint: {
+        id: "cp3",
+        kind: "clarify",
+        title: "需要你补充一点信息",
+        message: "先写引言还是先检索？",
+      },
+      messages: [{ kind: "user", text: "开始吧" }],
+    });
+    render(<AgentPanel projectId="p1" />);
+    expect(screen.getByText("先写引言还是先检索？")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "回答后继续" })).toBeTruthy();
   });
 });

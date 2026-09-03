@@ -24,7 +24,7 @@ function fileCacheKey(filePath: string, mode: string): string {
 }
 
 /**
- * 计算并缓存一张图的视觉描述：命中缓存直接返回；未命中则调 describeImage（GLM-4V）并写缓存。
+ * 计算并缓存一张图的视觉描述：命中缓存直接返回；未命中则调 describeImage 并写缓存。
  * 缓存 key 含 mtime + size + mode，图重新生成（新文件）时自动失效。
  * describeImage 失败（非 ready）时抛错，由调用方转为可读错误。
  */

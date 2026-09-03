@@ -43,6 +43,8 @@ import {
   shouldPauseForConfigConfirm,
   shouldPauseForOutlineApprove,
 } from "@/lib/agent/core/checkpoints";
+import { blueprintPreviewFromToolData } from "@/lib/agent/blueprint-review";
+import { outlineTextFromToolData } from "@/lib/agent/outline-review";
 import {
   buildPartialWriteRefineCall,
   isPartialWriteResume,
@@ -466,7 +468,7 @@ export async function agentNode(
 
 /**
  * 自动补齐的前置 step 是否命中批准检查点（ap-full 目标 + outline/blueprint 未批准）。
- * 返回检查点请求；未命中返回 null。preview 从 step.result.data.preview 或 summary 构建。
+ * 返回检查点请求；未命中返回 null。大纲全文优先 data.outline。
  */
 export function buildPrereqCheckpoint(
   state: AgentGraphStateType,
@@ -474,11 +476,10 @@ export function buildPrereqCheckpoint(
 ): AgentCheckpointRequest | null {
   if (!step.result.success) return null;
   const approvedKinds = state.approvedCheckpointKinds ?? [];
-  const data = step.result.data as { preview?: unknown } | null | undefined;
   const preview =
-    typeof data?.preview === "string" && data.preview
-      ? data.preview
-      : step.result.summary ?? "";
+    step.tool === "generate_writing_blueprint"
+      ? blueprintPreviewFromToolData(step.result.data, step.result.summary ?? "")
+      : outlineTextFromToolData(step.result.data, step.result.summary ?? "");
   if (
     step.tool === "generate_outline"
     && shouldPauseForOutlineApprove({

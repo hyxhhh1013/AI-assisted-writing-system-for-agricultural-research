@@ -49,7 +49,7 @@ export async function createAttachmentFromFile(
 
   let row;
   try {
-    // 先落库为 extracting，立即返回——提取（含 PDF 页面 GLM-4V）放后台完成，
+    // 先落库为 extracting，立即返回——提取（含 PDF 页面视觉理解）放后台完成，
     // 上传响应不再阻塞等待，用户可继续操作。
     row = await prisma.agentAttachment.create({
       data: {
@@ -89,7 +89,7 @@ export async function createAttachmentFromFile(
   };
 }
 
-/** 后台提取附件文本（图片走 GLM-4V；PDF 渲染前 N 页视觉理解），完成后更新记录 */
+/** 后台提取附件文本（图片走视觉模型；PDF 渲染前 N 页视觉理解），完成后更新记录 */
 async function extractAttachmentInBackground(
   attachmentId: string,
   userId: string,

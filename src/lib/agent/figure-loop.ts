@@ -13,7 +13,7 @@ export const FIGURE_GENERATE_TOOLS = new Set([
   "generate_chart",
 ]);
 
-/** 仅这些出图工具自动排队 GLM-4V 识图 QA（FIG-QA-008） */
+/** 仅这些出图工具自动排队视觉识图 QA（FIG-QA-008） */
 export const FIGURE_VISION_QA_TOOLS = new Set(["draft_mechanism_figure"]);
 
 const SCHEMATIC_FIGURE_IDS = new Set([

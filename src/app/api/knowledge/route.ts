@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import prisma from "@/lib/prisma";
+import { requireAdmin } from "@/lib/admin-auth";
 import { resolveProjectRuntimePath } from "@/lib/runtime-paths";
 import type { KnowledgeFileRecord } from "@/contracts/knowledge";
 import {
@@ -321,6 +322,9 @@ export async function PATCH(req: NextRequest) {
 // ====== DELETE ======
 
 export async function DELETE(req: NextRequest) {
+  const { error } = await requireAdmin(req);
+  if (error) return error;
+
   try {
     const { searchParams } = new URL(req.url);
     const name = searchParams.get("name");

@@ -1,11 +1,11 @@
-import { resolveKnowledgePdfOnDisk } from "@/lib/knowledge-metadata";
+import { parseBibField, resolveKnowledgePdfOnDisk } from "@/lib/knowledge-metadata";
 import { NextRequest } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { success } from "@/lib/admin-response";
 import { getAllKeys, resolveProviderModel } from "@/lib/ai";
 import { MODEL_PROVIDERS, type ModelProviderKey } from "@/lib/models";
-import { parseMetricsJson } from "@/lib/journal-metrics";
+import { bibHasIssnOrJournal, parseMetricsJson } from "@/lib/journal-metrics";
 import { getSetting } from "@/lib/settings";
 import type { AdminJournalMetricsLastImport } from "@/contracts/admin";
 import fs from "fs";
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
     chunkCount,
     uncategorizedCount,
     sampleFiles,
-    metricsRows,
+    bibMetricRows,
     agentTotal,
     agentError,
     agentError24h,
@@ -70,8 +70,7 @@ export async function GET(req: NextRequest) {
       orderBy: { name: "asc" },
     }),
     prisma.knowledgeFile.findMany({
-      where: { metrics: { not: null } },
-      select: { metrics: true },
+      select: { bib: true, metrics: true },
     }),
     prisma.agentSession.count(),
     prisma.agentSession.count({ where: { status: "error" } }),
@@ -98,13 +97,19 @@ export async function GET(req: NextRequest) {
   }
 
   let withImpactFactor = 0;
-  for (const row of metricsRows) {
+  let withIssnOrJournal = 0;
+  let withAnyMetrics = 0;
+  for (const row of bibMetricRows) {
+    if (bibHasIssnOrJournal(parseBibField(row.bib))) {
+      withIssnOrJournal += 1;
+    }
     const m = parseMetricsJson(row.metrics);
-    if (m && typeof m.impactFactor === "number" && Number.isFinite(m.impactFactor)) {
+    if (!m) continue;
+    withAnyMetrics += 1;
+    if (typeof m.impactFactor === "number" && Number.isFinite(m.impactFactor)) {
       withImpactFactor += 1;
     }
   }
-  const withAnyMetrics = metricsRows.length;
   const coveragePct =
     fileCount > 0 ? Math.round((withImpactFactor / fileCount) * 100) : 0;
 
@@ -122,7 +127,7 @@ export async function GET(req: NextRequest) {
     }),
   );
   const missingKeyProviders = aiProviders
-    .filter((p) => p.keyCount === 0)
+    .filter((p) => p.keyCount === 0 && p.provider !== "vision")
     .map((p) => p.name);
 
   const dataDir = path.join(process.cwd(), "data");
@@ -180,6 +185,7 @@ export async function GET(req: NextRequest) {
       withAnyMetrics,
       withImpactFactor,
       coveragePct,
+      withIssnOrJournal,
       lastImport: parseLastImport(lastImportRaw),
     },
   });

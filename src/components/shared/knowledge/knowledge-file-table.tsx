@@ -49,7 +49,8 @@ interface KnowledgeFileTableProps {
     | "currentPage"
     | "setCurrentPage"
     | "totalPages"
-  >;
+    | "totalFiles"
+  > & { canDeleteKnowledge?: boolean };
 }
 
 function MetricsCell({ file }: { file: KnowledgeFile }) {
@@ -166,6 +167,7 @@ function FileRowCard({
           <KnowledgeFileRowActions
             file={file}
             isIndexing={kb.isIndexing}
+            canDelete={kb.canDeleteKnowledge}
             onReindex={onReindex}
             onEditMetadata={kb.openMetadataEditor}
             onEditCategory={kb.openEditCategory}
@@ -257,6 +259,7 @@ function FileTableDesktop({
         <KnowledgeFileRowActions
           file={file}
           isIndexing={kb.isIndexing}
+          canDelete={kb.canDeleteKnowledge}
           onReindex={onReindex}
           onEditMetadata={kb.openMetadataEditor}
           onEditCategory={kb.openEditCategory}

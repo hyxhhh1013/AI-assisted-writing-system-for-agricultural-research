@@ -139,6 +139,8 @@ export interface AdminHealthData {
     withAnyMetrics: number;
     withImpactFactor: number;
     coveragePct: number;
+    /** 书目含 ISSN 或刊名、理论上可被 IF 表命中的篇数 */
+    withIssnOrJournal: number;
     lastImport: AdminJournalMetricsLastImport | null;
   };
 }
@@ -311,10 +313,11 @@ export interface AdminSettingRecord {
 }
 
 export type AiProviderKey = "deepseek" | "zhipu";
+export type AiStatusProviderKey = AiProviderKey | "vision";
 
 /** GET /api/admin/ai-status 返回的单个 provider 状态 */
 export interface AdminAiStatusProvider {
-  provider: AiProviderKey;
+  provider: AiStatusProviderKey;
   name: string;
   enabled: boolean;
   model: string;

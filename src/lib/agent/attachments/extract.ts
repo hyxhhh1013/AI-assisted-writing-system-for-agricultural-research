@@ -102,7 +102,7 @@ export async function extractAttachmentText(
       } catch {
         /* 文字层失败继续走视觉理解 */
       }
-      // 图表理解：渲染前 N 页用 GLM-4V 逐页理解（扫描件/图表多的 PDF 也能拿到内容）
+      // 图表理解：渲染前 N 页用视觉模型逐页理解（扫描件/图表多的 PDF 也能拿到内容）
       const vision = await describePdfPages(filePath);
       const blocks = [
         text ? `【正文文字】\n${text}` : "",

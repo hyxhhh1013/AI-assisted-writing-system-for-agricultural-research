@@ -1095,6 +1095,7 @@ function WorkbenchContent() {
                     onProjectMutated={(info) => void handleAgentProjectMutated(info)}
                     onCollapse={() => setIsSidebarOpen(false)}
                     onOpenBlueprint={() => void handleOpenBlueprintDialog()}
+                    onOpenOutline={() => setActiveTab("outline")}
                     onJumpToSection={(sectionKey) => {
                       setActiveSection(sectionKey);
                       toast.message(
