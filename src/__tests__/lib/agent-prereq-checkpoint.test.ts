@@ -58,7 +58,7 @@ describe("buildPrereqCheckpoint（自动补齐批准检查点）", () => {
     expect(cp!.kind).toBe("blueprint_approve");
   });
 
-  it("普通目标（非 ap-full）自动补齐不触发检查点", () => {
+  it("普通目标自动补齐大纲也触发检查点", () => {
     const cp = buildPrereqCheckpoint(
       baseState({ goal: "写引言", approvedCheckpointKinds: [] }),
       {
@@ -70,10 +70,11 @@ describe("buildPrereqCheckpoint（自动补齐批准检查点）", () => {
         },
       },
     );
-    expect(cp).toBeNull();
+    expect(cp).not.toBeNull();
+    expect(cp!.kind).toBe("outline_approve");
   });
 
-  it("已批准过 outline 后不再重复触发", () => {
+  it("新写回大纲即使曾批准过也再触发确认", () => {
     const cp = buildPrereqCheckpoint(
       baseState({ goal: "帮我写整篇论文", approvedCheckpointKinds: ["outline_approve"] }),
       {
@@ -85,7 +86,8 @@ describe("buildPrereqCheckpoint（自动补齐批准检查点）", () => {
         },
       },
     );
-    expect(cp).toBeNull();
+    expect(cp).not.toBeNull();
+    expect(cp!.kind).toBe("outline_approve");
   });
 
   it("step 失败时不触发检查点", () => {

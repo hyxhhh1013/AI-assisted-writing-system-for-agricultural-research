@@ -101,6 +101,8 @@ export interface LLMMessage {
   content: string;
   tool_call_id?: string;
   name?: string;
+  /** DeepSeek thinking 回传字段；合成历史通常没有，见 `buildChatCompletionsBody` */
+  reasoning_content?: string;
 }
 
 export interface ParsedToolCall {

@@ -11,6 +11,7 @@ export const AGENT_RULE_IDS = [
   "draft-missing-refs",
   "citation-refine-writeback",
   "results-data-foundation",
+  "outline-human-confirm",
 ] as const;
 
 export type AgentRuleId = (typeof AGENT_RULE_IDS)[number];
@@ -58,6 +59,14 @@ export const AGENT_RULES: readonly AgentRule[] = [
     text:
       "研究型写 results 必须先有数据根基：对话框上传 CSV/Excel（或仪器数据）后 ingest_project_data；无根基时 write_section 会被拒绝，不要编造实验数值，也不要先写空结果再补数据。",
     appliesTo: ["draft", "ap_full"],
+    severity: "nudge",
+  },
+  {
+    id: "outline-human-confirm",
+    text:
+      "generate_outline 写回后必须停等用户批准，禁止接着 generate_writing_blueprint。"
+      + "本会话若有大纲/框架附件，工具会按附件一级标题锁骨架；不要跳过附件另起炉灶。",
+    appliesTo: ["draft", "ap_full", "review_write"],
     severity: "nudge",
   },
 ];

@@ -26,7 +26,7 @@ import { createLogger } from "@/lib/logger";
 const log = createLogger("agent-intent");
 
 const FOLLOW_UP_RE =
-  /^(好|好的|可以|行|开始|执行|确认|同意|继续|按方案|就这样|嗯|哦|是的|对|A|a|ok|OK|yes)[。!！?？\s]*$/;
+  /^(好|好的|可以|行|开始吧?|开始写|动手|写吧|执行|确认|同意|继续|按方案|就这样|嗯|哦|是的|对|A|a|ok|OK|yes)[。!！?？\s]*$/;
 
 export type IntentClassificationSource = "inherit" | "regex";
 

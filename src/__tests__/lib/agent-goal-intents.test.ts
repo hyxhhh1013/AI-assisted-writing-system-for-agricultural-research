@@ -397,6 +397,9 @@ describe("intent continuation pickers", () => {
     expect(
       pickIntentNudge(ctx({ goal: "A", intentKind: "draft", refTotal: 5 })),
     ).toContain("write_section");
+    expect(
+      pickIntentNudge(ctx({ goal: "开始吧", intentKind: "ap_full", refTotal: 5 })),
+    ).toContain("write_section");
   });
 
   it("prioritizes review_write over nothing when refs enough but body missing", () => {

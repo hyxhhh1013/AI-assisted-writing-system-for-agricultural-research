@@ -1,13 +1,16 @@
 import { buildDomainExpertise } from "./domain";
 import type { ProjectWritingMode } from "@/contracts/writing-mode";
 
-function buildSkeletonConstraint(userSkeleton: string[]): string {
+function buildSkeletonConstraint(userSkeleton: string[], fromAttachment: boolean): string {
   const lines = userSkeleton.map((heading, index) => `${index + 1}. ${heading}`).join("\n");
+  const origin = fromAttachment
+    ? "【用户附件锁定的一级章节骨架】—— 必须严格遵守（硬约束）："
+    : "【用户给定的一级章节骨架】—— 必须严格遵守（硬约束）：";
   return `
-【用户给定的一级章节骨架】—— 必须严格遵守（硬约束）：
+${origin}
 - 一级章节 ## 标题必须**逐字**使用下列名称，不得改写、翻译或替换为同义章节名
 - 禁止新增或删除一级章节；顺序必须与下列一致
-- 禁止把任一一级标题改成「材料与方法」「结果与分析」「Results」「Methods」等未列出的名称
+- 禁止把任一一级标题改成未列出的名称（含默认综述/IMRaD 章节名）
 - 仅可在每个一级章节下补充 ### 子节与 1–3 句要点说明
 
 ${lines}
@@ -20,18 +23,23 @@ function buildResearchOutlinePrompt(params: {
   language: string;
   contextText: string;
   userSkeleton?: string[];
+  skeletonFromAttachment?: boolean;
+  frameworkBlock?: string;
 }): string {
   const { title, researchDirection, language, contextText, userSkeleton } = params;
   const domainExpertise = buildDomainExpertise(researchDirection);
   const skeletonBlock = userSkeleton?.length
-    ? buildSkeletonConstraint(userSkeleton)
+    ? buildSkeletonConstraint(userSkeleton, Boolean(params.skeletonFromAttachment))
+    : "";
+  const frameworkBlock = params.frameworkBlock?.trim()
+    ? `\n${params.frameworkBlock.trim()}\n`
     : "";
 
   return `${domainExpertise}
 请根据论文题目和研究方向，结合提供的参考资料，生成一份专业且详细的**原创研究论文**大纲。
 
 【论文类型】原创试验/机理/方法研究（IMRaD 结构）
-${skeletonBlock || `
+${frameworkBlock}${skeletonBlock || `
 【大纲结构要求】—— 必须包含以下全部章节：
 ## 摘要 — 1-2句该章节的核心方向
 ## 引言
@@ -78,11 +86,16 @@ function buildReviewOutlinePrompt(params: {
   language: string;
   contextText: string;
   userSkeleton?: string[];
+  skeletonFromAttachment?: boolean;
+  frameworkBlock?: string;
 }): string {
   const { title, researchDirection, language, contextText, userSkeleton } = params;
   const domainExpertise = buildDomainExpertise(researchDirection);
   const skeletonBlock = userSkeleton?.length
-    ? buildSkeletonConstraint(userSkeleton)
+    ? buildSkeletonConstraint(userSkeleton, Boolean(params.skeletonFromAttachment))
+    : "";
+  const frameworkBlock = params.frameworkBlock?.trim()
+    ? `\n${params.frameworkBlock.trim()}\n`
     : "";
 
   return `${domainExpertise}
@@ -91,7 +104,7 @@ function buildReviewOutlinePrompt(params: {
 【论文类型】文献综述 — 按主题/机制/应用维度综合已有研究，禁止安排「材料与方法」「试验设计」「本研究数据」等原创实验章节。
 
 【叙事逻辑】为何此时重要 → 概念与问题框架 → 主题1 → 主题2 → … → 争议与空白 → 综合判断 → 展望
-${skeletonBlock || `
+${frameworkBlock}${skeletonBlock || `
 【大纲结构要求】—— 必须包含：
 ## 摘要 — 综述范围、主要共识、空白与展望方向
 ## 引言
@@ -117,7 +130,9 @@ ${skeletonBlock || `
 
 【写作要求】：
 1. 「研究进展综述」或用户骨架中的主体章下至少 3 个主题子节，子节名应体现分类逻辑而非试验步骤
-2. **硬性禁止**一级或二级标题出现：「材料与方法」「结果与分析」「结果与讨论」「试验设计」「样本量」「Materials and Methods」——即使用户未写进骨架也禁止
+2. ${params.skeletonFromAttachment
+    ? "一级标题已由用户附件锁定，服从附件，不要改回默认综述骨架"
+    : "**硬性禁止**一级或二级标题出现：「材料与方法」「结果与分析」「结果与讨论」「试验设计」「样本量」「Materials and Methods」——即使用户未写进骨架也禁止"}
 3. 每个子标题后 1-3 句要点，说明该节要综合哪些类型的文献
 4. 仅输出大纲本身
 5. 严禁 *** 或 --- 装饰线
@@ -139,6 +154,8 @@ export function buildOutlinePrompt(params: {
   contextText: string;
   projectMode?: ProjectWritingMode;
   userSkeleton?: string[];
+  skeletonFromAttachment?: boolean;
+  frameworkBlock?: string;
 }): string {
   if (params.projectMode === "research") {
     return buildResearchOutlinePrompt(params);

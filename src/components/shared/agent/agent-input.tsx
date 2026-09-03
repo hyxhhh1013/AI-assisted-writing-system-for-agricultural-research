@@ -18,6 +18,8 @@ import {
   postAgentAttachment,
   postPinAttachment,
 } from "@/services/agent";
+import { AgentContinueBar } from "@/components/shared/agent/agent-continue-bar";
+import type { AgentContinueHint } from "@/lib/agent/continue-hint";
 
 /** 同时保留的最大附件数（与服务端 agentSchema.attachmentIds.max(20) 对齐） */
 const MAX_ATTACHMENT_CHIPS = 20;
@@ -44,6 +46,8 @@ interface AgentInputBarProps {
   prompts?: string[];
   sessionId?: string;
   projectId?: string;
+  /** 空闲且有对话时：输入框上方的续跑条 */
+  continueHint?: AgentContinueHint | null;
   onSend: (goal: string, opts?: { attachmentIds?: string[] }) => void;
   onCancel: () => void;
 }
@@ -66,18 +70,20 @@ export function AgentInputBar({
   prompts,
   sessionId,
   projectId,
+  continueHint,
   onSend,
   onCancel,
 }: AgentInputBarProps) {
   const [value, setValue] = useState("");
   const [chips, setChips] = useState<Chip[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
-  const chipsFallback =
+  const chipsFallback = (
     prompts && prompts.length > 0
       ? prompts
       : writeEnabled
         ? [...FALLBACK_WRITE]
-        : [...FALLBACK_READ];
+        : [...FALLBACK_READ]
+  ).filter((prompt) => !continueHint || prompt !== continueHint.goal);
 
   const readyChips = chips.filter((c) => c.status === "ready" && c.attachmentId);
 
@@ -255,6 +261,16 @@ export function AgentInputBar({
 
   return (
     <div className="shrink-0 border-t border-border/50 bg-white/95 px-4 pb-3.5 pt-2.5">
+      {continueHint && !isRunning ? (
+        <AgentContinueBar
+          hint={continueHint}
+          disabled={disabled}
+          onContinue={(goal) => {
+            sendWithAttachments(goal);
+            setValue("");
+          }}
+        />
+      ) : null}
       <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {chipsFallback.map((prompt) => (
           <Button

@@ -195,7 +195,9 @@ export const AgentActionCard = memo(function AgentActionCard({
   const soft = isSoftToolNotice(error);
   const isFigureCard =
     Boolean(imageUrl)
-    && (tool === "draft_mechanism_figure" || tool === "generate_chart");
+    && (tool === "draft_mechanism_figure"
+      || tool === "generate_chart"
+      || tool === "generate_xrd_analysis");
   const [open, setOpen] = useState(
     (Boolean(imageUrl) || isFigureCard) && !error && !soft,
   );
@@ -244,7 +246,9 @@ export const AgentActionCard = memo(function AgentActionCard({
         {hint ? (
           <>
             <span className="shrink-0 text-border">·</span>
-            <span className="shrink-0 text-muted-foreground">{hint}</span>
+            <span className="min-w-0 max-w-[40%] truncate text-muted-foreground" title={hint}>
+              {hint}
+            </span>
           </>
         ) : null}
         {displayDetail ? (

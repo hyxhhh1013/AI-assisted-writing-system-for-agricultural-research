@@ -51,4 +51,11 @@ describe("AGENT_RULES SSOT", () => {
     expect(buildAgentSystemPrompt([], "review_write")).toContain(text);
     expect(draftGoalNudge("写一篇生物炭综述", "review_write")).toContain(text);
   });
+
+  it("draft / ap_full prompt includes outline-human-confirm", () => {
+    const text = ruleText("outline-human-confirm");
+    expect(buildAgentSystemPrompt([], "draft")).toContain(text);
+    expect(buildAgentSystemPrompt([], "ap_full")).toContain(text);
+    expect(buildAgentSystemPrompt([], "literature")).not.toContain(text);
+  });
 });

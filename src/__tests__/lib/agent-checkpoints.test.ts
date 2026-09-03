@@ -5,6 +5,7 @@ import {
   shouldPauseForOutlineApprove,
   shouldPauseForBlueprintApprove,
   decisionMessage,
+  revokeApprovedKind,
 } from "@/lib/agent/core/checkpoints";
 import { applyEntryModeToGoal } from "@/lib/agent/entry-mode";
 
@@ -26,7 +27,19 @@ describe("agent checkpoints", () => {
     ).toBe(true);
   });
 
-  it("skips outline pause when already approved", () => {
+  it("pauses after persisted generate_outline even for ordinary goals", () => {
+    expect(
+      shouldPauseForOutlineApprove({
+        goal: "生成大纲",
+        toolName: "generate_outline",
+        toolSuccess: true,
+        persisted: true,
+        approvedKinds: [],
+      }),
+    ).toBe(true);
+  });
+
+  it("pauses again when a new outline is persisted after prior approval", () => {
     expect(
       shouldPauseForOutlineApprove({
         goal: "按 academic-paper 写完整篇",
@@ -34,6 +47,18 @@ describe("agent checkpoints", () => {
         toolSuccess: true,
         persisted: true,
         approvedKinds: ["outline_approve"],
+      }),
+    ).toBe(true);
+  });
+
+  it("does not pause when outline was only previewed", () => {
+    expect(
+      shouldPauseForOutlineApprove({
+        goal: "生成大纲",
+        toolName: "generate_outline",
+        toolSuccess: true,
+        persisted: false,
+        approvedKinds: [],
       }),
     ).toBe(false);
   });
@@ -91,6 +116,12 @@ describe("agent checkpoints", () => {
         approvedKinds: ["config_confirm"],
       }),
     ).toBe(false);
+  });
+
+  it("revokes outline approval after a new persist", () => {
+    expect(
+      revokeApprovedKind(["outline_approve", "blueprint_approve"], "outline_approve"),
+    ).toEqual(["blueprint_approve"]);
   });
 
   it("builds decision messages", () => {

@@ -25,16 +25,20 @@ import {
 } from "@/lib/agent/core/tool-registry";
 import {
   advancePlanAfterTool,
+  thoughtAnnouncesUnfinishedTool,
+  buildAnnounceToolNudge,
   buildContinueNudge,
   getFocusSubtask,
   markFocusRunning,
   planHasPendingWork,
+  shouldResetPlanContinueCount,
 } from "@/lib/agent/core/plan-progress";
 import {
   buildBlueprintCheckpoint,
   buildClarifyCheckpoint,
   buildConfigCheckpoint,
   buildOutlineCheckpoint,
+  revokeApprovedKind,
   shouldPauseForBlueprintApprove,
   shouldPauseForConfigConfirm,
   shouldPauseForOutlineApprove,
@@ -46,6 +50,7 @@ import {
 import { buildFigureQaPolishNudge } from "@/lib/agent/figure-qa";
 import {
   buildChartQaBlockNudge,
+  buildMechanismQaBlockNudge,
   buildFigureQaContinueNudge,
   buildReadFigureQaCall,
   extractChartQaFindingCodes,
@@ -76,7 +81,7 @@ import {
 import { buildImportReferenceConfirmParams } from "@/lib/agent/import-confirm";
 import { analyzeReflection, MAX_REFLECT_ROUNDS } from "@/lib/agent/core/reflect";
 import { compactAgentMessages } from "@/lib/agent/core/context-compact";
-import { MAX_INTENT_CONTINUES } from "@/lib/agent/langgraph/state";
+import { MAX_INTENT_CONTINUES, MAX_PLAN_CONTINUES } from "@/lib/agent/langgraph/state";
 import { formatToolObservationForLlm } from "@/lib/agent/observation-memory";
 import {
   markAgentProjectDirty,
@@ -214,6 +219,8 @@ export async function agentNode(
   }
 
   events.push({ type: "agent/status", status: "thinking" });
+  // 节点返回前 events 不会进 SSE；LLM 可能空转数十秒且无 thought_delta，必须立刻推状态
+  runtime.emitLiveEvent?.({ type: "agent/status", status: "thinking" });
 
   const plan = state.plan ? markFocusRunning(state.plan) : null;
   // 不每轮注入【计划焦点】假 user；改为提前结束时用 buildContinueNudge 轻推（见下方 canContinue）
@@ -297,7 +304,9 @@ export async function agentNode(
     events.push({ type: "agent/thought", content: response.content });
   }
 
-  if (response.finishReason === "stop" || response.toolCalls.length === 0) {
+  // 只看有没有解析到工具。部分模型带 tool_calls 仍回 finish_reason=stop，
+  // 旧条件会清掉 pendingToolCalls 并提前收尾，界面只剩半截「撰写引言…」。
+  if (response.toolCalls.length === 0) {
     // 与 routeAfterAgent 共用同一续跑判断（参数传「更新后」的值，见 shouldContinuePlanWork 文档）
     const canContinue = shouldContinuePlanWork({
       plan,
@@ -373,6 +382,15 @@ export async function agentNode(
         { role: "user", content: intentNudge },
       ];
     } else {
+      const announced = thoughtAnnouncesUnfinishedTool(response.content, observations);
+      if (announced && state.planContinueCount < MAX_PLAN_CONTINUES) {
+        updates.finished = false;
+        updates.planContinueCount = state.planContinueCount + 1;
+        updates.messages = [
+          ...(updates.messages ?? extraMessages),
+          { role: "user", content: buildAnnounceToolNudge(announced) },
+        ];
+      } else {
       updates.finished = true;
       // 对话式收尾：意图未完成 → 问用户；有未完成计划 → 提醒可继续（引用修正跟聊不提示旧 plan）
       let hint = pickIntentStopAsk(intentCtx);
@@ -385,12 +403,12 @@ export async function agentNode(
           .filter((s) => s.status === "pending" || s.status === "running")
           .map((s) => s.title);
         hint =
-          `\n\n——\n还有未完成步骤：${left.join("；")}。你可以直接说「继续」或指定下一步（例如「先写引言」）。`;
+          `\n\n——\n还有未完成步骤：${left.join("；")}。可以说「继续」接着做「${left[0]}」，或指定下一步。`;
       }
       // 收尾兜底：执行型指令（用户要实际改动）但整轮无落地写操作 → 引导 Agent 用 ask_user 确认，
       // 避免「分析完就当完成」——这是 ask_user 澄清链路的关键触发点
       const execWords =
-        /(改|修|调整|优化|更新|修正|refine|执行|按方案|补|删|插入|替换|生成|重写|重画|润色|扩展|处理|弄|配图)/i;
+        /(改|修|调整|优化|更新|修正|refine|执行|按方案|开始|动手|补|删|插入|替换|生成|重写|重画|润色|扩展|处理|弄|配图)/i;
       const landedWrite = observations.some(
         (o) => o.success
           && (o.tool === "write_section" || o.tool === "refine_content"
@@ -398,7 +416,8 @@ export async function agentNode(
             || o.tool === "write_bilingual_abstract" || o.tool === "import_reference"
             || o.tool === "generate_chart" || o.tool === "draft_mechanism_figure"
             || o.tool === "apply_revision_item"
-            || o.tool === "generate_writing_blueprint"),
+            || o.tool === "generate_writing_blueprint")
+          && !isChartQaBlocked(o.data),
       );
       if (
         !hint
@@ -429,12 +448,15 @@ export async function agentNode(
           events.push({ type: "agent/thought", content: updates.finalThought });
         }
       }
+      }
     }
     return updates;
   }
 
   updates.pendingToolCalls = response.toolCalls;
-  updates.planContinueCount = 0; // 有工具进展则重置续跑计数
+  if (shouldResetPlanContinueCount(response.toolCalls.map((c) => c.name))) {
+    updates.planContinueCount = 0;
+  }
   // reflectCount 不在此重置：仅在 write_section 成功时于 toolsNode 重置，避免「验证→修正→再验证」无限循环
   if (updates.plan) {
     events.push({ type: "agent/plan", plan: updates.plan });
@@ -726,6 +748,14 @@ export async function toolsNode(
               toolTrace: newTrace,
               awaitingCheckpoint: cp,
               finished: true,
+              ...(cp.kind === "outline_approve"
+                ? {
+                    approvedCheckpointKinds: revokeApprovedKind(
+                      state.approvedCheckpointKinds ?? [],
+                      "outline_approve",
+                    ),
+                  }
+                : {}),
             };
           }
         }
@@ -899,8 +929,12 @@ export async function toolsNode(
         }
       }
 
-      // 机理图：出图后硬注入 read_figure(qa)。数据图看 qaReport，不跑 GLM-4V。
-      if (result.success && shouldInjectVisionFigureQa(tool.name)) {
+      // 机理图：出图后硬注入 read_figure(qa)。block 未出图则不跑识图。数据图看 qaReport。
+      if (
+        result.success
+        && shouldInjectVisionFigureQa(tool.name)
+        && !isChartQaBlocked(result.data)
+      ) {
         const imageUrl = extractFigureImageUrl(result);
         if (imageUrl) {
           const qaCall = buildReadFigureQaCall(imageUrl);
@@ -932,6 +966,16 @@ export async function toolsNode(
           content: buildChartQaBlockNudge(imageUrl, extractChartQaFindingCodes(result.data)),
         });
         newSummaries.push("[figure-loop] 数据图 qaReport=block：按 findings 改 Spec 重出");
+      } else if (
+        result.success
+        && tool.name === "draft_mechanism_figure"
+        && isChartQaBlocked(result.data)
+      ) {
+        newMessages.push({
+          role: "user",
+          content: buildMechanismQaBlockNudge(extractChartQaFindingCodes(result.data)),
+        });
+        newSummaries.push("[figure-loop] 机理图 qaReport=block：按 findings 改 Spec 重出");
       }
 
       // P0：QA 判定需重生成 → 硬 nudge，禁止无 replace 再出图
@@ -1020,6 +1064,14 @@ export async function toolsNode(
           ...(reflectReset ? { reflectCount: 0 } : {}),
           awaitingCheckpoint: checkpoint,
           finished: true,
+          ...(checkpoint.kind === "outline_approve"
+            ? {
+                approvedCheckpointKinds: revokeApprovedKind(
+                  state.approvedCheckpointKinds ?? [],
+                  "outline_approve",
+                ),
+              }
+            : {}),
         };
       }
     } catch (err) {
@@ -1118,10 +1170,17 @@ export async function finalizeNode(
     };
   }
 
+  const announced = thoughtAnnouncesUnfinishedTool(
+    state.finalThought,
+    state.observations,
+  );
   const parts = [
     state.finalThought?.trim(),
     state.toolSummaries.length > 0
       ? `执行摘要:\n${state.toolSummaries.join("\n")}`
+      : null,
+    announced
+      ? `——\n刚才只是口头说了要「${announced.label}」，还没有真正执行。请直接说「继续」或点下方快捷按钮。`
       : null,
   ].filter(Boolean);
 

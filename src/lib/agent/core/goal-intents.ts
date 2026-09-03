@@ -1141,7 +1141,7 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
     isIncomplete: (ctx) =>
       matchesIntent(
         ctx.intentKind,
-        ["draft"],
+        ["draft", "ap_full"],
         () => isSectionDraftGoal(ctx.goal) && !isReviewWritingGoal(ctx.goal),
       ) && !ctx.wroteOk,
     nudge: () =>

@@ -39,6 +39,22 @@ describe("outline userSkeleton (ENG-PR-083)", () => {
     expect(prompt).not.toMatch(/【大纲结构要求】—— 必须包含/);
   });
 
+  it("marks attachment-locked skeleton and injects framework block", () => {
+    const prompt = buildOutlinePrompt({
+      title: "茶园土壤改良综述",
+      researchDirection: "土壤改良剂",
+      language: "zh",
+      contextText: "ref",
+      projectMode: "review",
+      userSkeleton: ["摘要", "机理进展", "展望"],
+      skeletonFromAttachment: true,
+      frameworkBlock: "【用户上传的大纲/框架附件：部分大纲.md】",
+    });
+    expect(prompt).toMatch(/用户附件锁定的一级章节骨架/);
+    expect(prompt).toMatch(/部分大纲\.md/);
+    expect(prompt).toMatch(/服从附件/);
+  });
+
   it("provides mode-specific default skeletons", () => {
     expect(getDefaultUserSkeleton("review")).toContain("研究进展综述");
     expect(getDefaultUserSkeleton("research")).toContain("材料与方法");

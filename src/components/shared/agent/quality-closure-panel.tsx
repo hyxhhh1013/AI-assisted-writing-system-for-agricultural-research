@@ -81,11 +81,11 @@ export function QualityClosurePanel({
 
   return (
     <div className="rounded-xl border border-border/60 bg-white px-3 py-2">
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] font-medium text-[#122820]">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="shrink-0 text-[11px] font-medium text-[#122820]">
           质量收口
         </span>
-        <div className="flex flex-1 flex-wrap items-center gap-1.5">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {result.signals.map((s) => {
             const style = STATUS_STYLE[s.status];
             return (
@@ -93,7 +93,7 @@ export function QualityClosurePanel({
                 key={s.key}
                 title={s.detail}
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]",
+                  "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px]",
                   style.chip,
                 )}
               >
@@ -106,9 +106,10 @@ export function QualityClosurePanel({
         </div>
         <span
           className={cn(
-            "shrink-0 text-[11px]",
+            "max-w-[38%] shrink-0 truncate text-[11px]",
             result.readyToClose ? "text-[#1a8a5a]" : "text-[#9aa8a0]",
           )}
+          title={result.summary}
         >
           {result.summary}
         </span>

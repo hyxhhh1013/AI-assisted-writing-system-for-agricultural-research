@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { WriteStatus } from "@/lib/agent/write-status";
 
 /** 受控 mock：AgentPanel 通过 useAgent() 拿到这个对象，测试逐例改写 */
@@ -11,7 +11,7 @@ vi.mock("@/hooks/use-agent", () => ({
 }));
 
 vi.mock("@/services/project", () => ({
-  getProject: vi.fn(),
+  getProject: vi.fn().mockResolvedValue(null),
   patchPaperPassportConfig: vi.fn(),
 }));
 
@@ -48,6 +48,8 @@ function makeAgent(over: Record<string, unknown> = {}): Record<string, unknown> 
     lastProjectMutation: null,
     sessionId: null,
     interruptedSessions: [],
+    orphanedRunning: null,
+    abandonOrphanedSession: vi.fn(),
     historyLoaded: false,
     isRunning: true,
     sendGoal: vi.fn(),
@@ -82,5 +84,141 @@ describe("AgentPanel × WritingStatusCard：写进度职责移交", () => {
     render(<AgentPanel />);
     expect(screen.getByText(/正在撰写「引言」…/)).toBeTruthy();
     expect(screen.queryByText(/正在生成正文/)).toBeNull();
+  });
+
+  it("写节已完成后仍显示思考指示器", () => {
+    mockAgent = makeAgent({
+      isRunning: true,
+      status: "thinking",
+      writeStatus: {
+        ...writeStatus,
+        stage: "completed",
+        done: { chars: 1200, issueCount: 0, passed: true },
+      },
+      messages: [
+        { kind: "user", text: "写引言" },
+        { kind: "action", tool: "write_section", params: { section: "引言" } },
+        { kind: "observation", tool: "write_section", summary: "已写回" },
+      ],
+    });
+    render(<AgentPanel />);
+    expect(screen.getByText("思考中")).toBeTruthy();
+    expect(screen.getByText("正在思考下一步…")).toBeTruthy();
+  });
+});
+
+describe("AgentPanel × 导入确认卡", () => {
+  beforeEach(() => {
+    mockAgent = makeAgent();
+  });
+
+  it("点开候选项后显示摘要，勾选不受展开影响", () => {
+    mockAgent = makeAgent({
+      isRunning: false,
+      status: "completed",
+      messages: [],
+      pendingConfirm: {
+        tool: "import_reference",
+        message: "确认批量导入 1 篇文献到项目参考文献？",
+        params: {
+          importItems: [
+            {
+              id: "doi:10.1/x",
+              title: "Catalytic pyrolysis review",
+              authors: ["Zhang"],
+              year: 2024,
+              journal: "JAAP",
+              doi: "10.1/x",
+              abstract: "This paper reviews biomass catalytic pyrolysis.",
+              source: "openalex",
+              isOpenAccess: true,
+              openAccessUrl: "https://oa.example/paper.pdf",
+            },
+          ],
+        },
+      },
+    });
+    render(<AgentPanel />);
+    expect(screen.getByText("Catalytic pyrolysis review")).toBeTruthy();
+    expect(screen.queryByText(/This paper reviews/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Catalytic pyrolysis review/ }));
+    expect(screen.getByText(/This paper reviews biomass catalytic pyrolysis/)).toBeTruthy();
+    expect(screen.getByText("打开 OA 全文")).toBeTruthy();
+  });
+});
+
+describe("AgentPanel × 继续推进条", () => {
+  it("空闲且有对话时显示下一步，而不是发送旁的灰色按钮", () => {
+    mockAgent = makeAgent({
+      isRunning: false,
+      status: "completed",
+      messages: [
+        { kind: "user", text: "开始吧" },
+        { kind: "thought", text: "撰写引言章节，对齐蓝图要点：" },
+        {
+          kind: "summary",
+          summary: {
+            text: "刚才只是口头说了要「撰写章节」，还没有真正执行。",
+            toolCallCount: 0,
+            keyFindings: [],
+          },
+        },
+      ],
+    });
+    render(<AgentPanel projectId="p1" />);
+    expect(screen.getByText(/上一轮只宣布了，还没执行/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /继续推进/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^继续$/ })).toBeNull();
+  });
+
+  it("点继续推进会发送跟聊目标", () => {
+    const sendGoal = vi.fn();
+    mockAgent = makeAgent({
+      isRunning: false,
+      status: "completed",
+      sendGoal,
+      messages: [
+        { kind: "user", text: "开始吧" },
+        { kind: "thought", text: "撰写引言章节，对齐蓝图要点：" },
+      ],
+    });
+    render(<AgentPanel projectId="p1" />);
+    fireEvent.click(screen.getByRole("button", { name: /继续推进/ }));
+    expect(sendGoal).toHaveBeenCalledWith("继续", { attachmentIds: [] });
+  });
+
+  it("检查点期间不显示续跑条", () => {
+    mockAgent = makeAgent({
+      isRunning: false,
+      status: "awaiting_checkpoint",
+      pendingCheckpoint: {
+        id: "cp1",
+        kind: "outline_approve",
+        title: "确认大纲",
+        message: "请确认大纲后再写",
+      },
+      messages: [{ kind: "user", text: "写大纲" }],
+    });
+    render(<AgentPanel projectId="p1" />);
+    expect(screen.queryByRole("button", { name: /继续推进/ })).toBeNull();
+  });
+
+  it("检查点期间不把孤儿会话条叠在确认卡上", () => {
+    mockAgent = makeAgent({
+      isRunning: false,
+      status: "awaiting_checkpoint",
+      pendingCheckpoint: {
+        id: "cp1",
+        kind: "outline_approve",
+        title: "确认大纲",
+        message: "请确认大纲后再写",
+      },
+      orphanedRunning: { id: "s1", status: "running" },
+      messages: [{ kind: "user", text: "写大纲" }],
+    });
+    render(<AgentPanel projectId="p1" />);
+    expect(screen.getByText("确认大纲")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /强制结束/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /接上进度/ })).toBeNull();
   });
 });

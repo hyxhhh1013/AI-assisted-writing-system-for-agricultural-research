@@ -20,6 +20,7 @@ import { buildFollowUpInitialState } from "@/lib/agent/session-continue";
 import {
   createAgentSession,
   getAgentSessionForUser,
+  interruptRunningSession,
   reclaimStaleRunningSessions,
   snapshotToInitialState,
   tryAcquireAgentSession,
@@ -113,8 +114,11 @@ export async function POST(req: NextRequest) {
           headers: { "Content-Type": "application/json" },
         });
       }
-      // 原子抢占执行权（interrupted/error → running）；running 说明并发请求或僵尸未回收 → 409，
-      // 防止两个请求并发跑同一 agent 图、快照互相覆盖
+      // 前端能点「接上」时本端 SSE 已断；running 先回收再抢占，避免空白 409
+      if (existing.status === "running") {
+        await interruptRunningSession(existing.id, userId);
+      }
+      // 原子抢占执行权（interrupted/error → running）；仍 running 才是真并发
       const claim = await tryAcquireAgentSession(data.sessionId, userId);
       if (claim === "conflict") {
         return new Response(
@@ -134,12 +138,8 @@ export async function POST(req: NextRequest) {
         });
       }
       if (existing.status === "running") {
-        // 跟聊撞上僵尸 running：短阈值回收后再读一次
-        await reclaimStaleRunningSessions({
-          userId,
-          sessionId: existing.id,
-          maxAgeMs: 45_000,
-        });
+        // 跟聊能发出 = 本端 SSE 已断。45s 阈值会让长写节把用户卡在空白 409
+        await interruptRunningSession(existing.id, userId);
         const refreshed = await getAgentSessionForUser(data.sessionId, userId);
         if (refreshed?.status === "running") {
           return new Response(

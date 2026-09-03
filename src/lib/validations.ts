@@ -1068,3 +1068,9 @@ export const agentSchema = z
     }
   });
 export type AgentInput = z.infer<typeof agentSchema>;
+
+export const agentSessionActionSchema = z.object({
+  sessionId: z.string().min(1),
+  action: z.enum(["interrupt"]),
+});
+export type AgentSessionActionInput = z.infer<typeof agentSessionActionSchema>;

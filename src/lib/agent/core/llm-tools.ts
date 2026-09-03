@@ -122,12 +122,8 @@ export async function callAIStreamingWithTools(
         choices?: Array<{ delta?: Record<string, unknown> }>;
       };
       const delta = (data.choices?.[0]?.delta ?? {}) as Record<string, unknown>;
-      const content =
-        typeof delta.content === "string"
-          ? delta.content
-          : typeof delta.reasoning_content === "string"
-            ? delta.reasoning_content
-            : "";
+      // 只拼 delta.content：reasoning_content 是思维链，不能进可见草稿 / 下一轮正文。
+      const content = typeof delta.content === "string" ? delta.content : "";
       if (content) {
         fullContent += content;
         onDelta?.(content);

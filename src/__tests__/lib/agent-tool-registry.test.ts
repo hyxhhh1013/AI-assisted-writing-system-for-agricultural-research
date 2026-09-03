@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createAgentTools, createReadOnlyTools } from "@/lib/agent/core/agent-loop";
+import { toolDisplayName } from "@/lib/agent/ui-progress";
 import {
   READ_TOOLS,
   UNREGISTERED_TOOL_FILES,
@@ -49,6 +50,13 @@ describe("agent tool registry (W3-AP-ARCH-01)", () => {
 
     expect(missing).toEqual([]);
     expect(unexpectedUnregistered).toEqual([]);
+  });
+
+  it("每个已挂载工具都有中文 UI 名（不能把 snake_case 甩给用户）", () => {
+    const unlabeled = [...READ_TOOLS, ...WRITE_TOOLS]
+      .map((t) => t.name)
+      .filter((name) => toolDisplayName(name) === name);
+    expect(unlabeled).toEqual([]);
   });
 
   it("弃用蓝图工具不进模型清单", () => {

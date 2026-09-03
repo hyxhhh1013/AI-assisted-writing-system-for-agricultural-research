@@ -4,7 +4,6 @@ import { Bot, CheckCircle2, ChevronDown, ChevronLeft, Circle, FileText, Loader2,
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { useAgent } from "@/hooks/use-agent";
 import type { AgentChartPersistedInfo } from "@/lib/agent/chart-persisted";
@@ -26,10 +25,16 @@ import {
   AgentWorkingIndicator,
 } from "@/components/shared/agent/agent-thought";
 import { AgentInputBar } from "@/components/shared/agent/agent-input";
+import {
+  collectTurnContinueSignals,
+  resolveAgentContinueHint,
+  sectionKeyFromWriteTip,
+} from "@/lib/agent/continue-hint";
 import { AgentConfigQa } from "@/components/shared/agent/agent-config-qa";
 import { AgentCitationReportCard } from "@/components/shared/agent/agent-citation-report";
 import { AgentPlanCard } from "@/components/shared/agent/agent-plan";
 import { WritingStatusCard } from "@/components/shared/agent/writing-status-card";
+import { isWriteStatusLive } from "@/lib/agent/write-status";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getProject, patchPaperPassportConfig } from "@/services/project";
 import type { ProjectData } from "@/contracts/project";
@@ -54,6 +59,8 @@ import type { FigureReviseFormValue, FigureReviseTarget } from "@/contracts/figu
 import { parseProjectCharts } from "@/contracts/figure";
 import { getProjectWritingMode, getSectionLabelForMode } from "@/lib/section-registry";
 import { AgentFigureDock } from "@/components/shared/agent/agent-figure-dock";
+import { ImportConfirmList } from "@/components/shared/agent/import-confirm-list";
+import { parseImportConfirmItems } from "@/lib/agent/import-confirm-view";
 
 const easeOut = [0.22, 1, 0.36, 1] as const;
 
@@ -106,14 +113,6 @@ const STATUS_LABEL: Record<string, string> = {
   completed: "已完成",
   error: "出错",
   cancelled: "已取消",
-};
-
-/** 外部文献来源徽标 */
-const IMPORT_SOURCE_LABELS: Record<string, string> = {
-  openalex: "OpenAlex",
-  "semantic-scholar": "S2",
-  crossref: "CrossRef",
-  pubmed: "PubMed",
 };
 
 const WRITE_PUBLIC = isAgentWritePublicEnabled();
@@ -259,6 +258,51 @@ export function AgentPanel({
     }
     return phaseGoal;
   }, [agent.messages, phaseGoal]);
+
+  const continueHint = useMemo(() => {
+    if (
+      !projectId
+      || agent.isRunning
+      || agent.messages.length === 0
+      || agent.pendingCheckpoint
+      || agent.pendingConfirm
+      || agent.orphanedRunning
+    ) {
+      return null;
+    }
+    const turn = collectTurnContinueSignals(agent.messages);
+    const skip = [
+      ...turn.writtenSectionKeys,
+      agent.lastPersisted?.sectionKey,
+    ].filter((k): k is string => Boolean(k));
+    return resolveAgentContinueHint({
+      lastAssistantText: turn.lastAssistantText,
+      lastSummaryText: turn.lastSummaryText,
+      observations: turn.observations,
+      planSubtasks: agent.plan?.subtasks,
+      suggestedActions: quickPrompts,
+      skipSectionKeys: skip,
+    });
+  }, [
+    projectId,
+    agent.isRunning,
+    agent.messages,
+    agent.pendingCheckpoint,
+    agent.pendingConfirm,
+    agent.orphanedRunning,
+    agent.plan?.subtasks,
+    agent.lastPersisted,
+    quickPrompts,
+  ]);
+
+  const inputPrompts = useMemo(() => {
+    const skip = new Set(collectTurnContinueSignals(agent.messages).writtenSectionKeys);
+    if (agent.lastPersisted?.sectionKey) skip.add(agent.lastPersisted.sectionKey);
+    return quickPrompts.filter((p) => {
+      const key = sectionKeyFromWriteTip(p);
+      return !key || !skip.has(key);
+    });
+  }, [quickPrompts, agent.messages, agent.lastPersisted]);
 
   const lastFailure = resolveAgentLastFailure({
     status: agent.status,
@@ -413,9 +457,9 @@ export function AgentPanel({
       }),
     [agent.status, agent.isRunning, agent.messages],
   );
-  /** 写状态卡激活时用常驻卡，否则回退通用工作指示器（写进度职责已移交） */
+  /** 写节进行中用常驻卡；完成后不再挡住思考/导入指示器 */
   const displayProgress = useMemo(() => {
-    if (agent.writeStatus) return null;
+    if (isWriteStatusLive(agent.writeStatus)) return null;
     if (!liveProgress) return null;
     // 思考/规划期间没有流式内容时，附上 plan 的下一步子任务，让「正在做什么」具体可读
     if (
@@ -457,18 +501,7 @@ export function AgentPanel({
 
   /** import_reference 确认卡批量选择 */
   const confirmImportItems = useMemo(
-    () =>
-      Array.isArray(agent.pendingConfirm?.params?.importItems)
-        ? (agent.pendingConfirm.params.importItems as Array<{
-            title?: string;
-            year?: number;
-            journal?: string;
-            doi?: string;
-            citedByCount?: number;
-            source?: string;
-            isOpenAccess?: boolean;
-          }>)
-        : [],
+    () => parseImportConfirmItems(agent.pendingConfirm?.params?.importItems),
     [agent.pendingConfirm],
   );
   const isImportBatchConfirm =
@@ -546,7 +579,7 @@ export function AgentPanel({
   }, [agent.messages, project, projectId]);
 
   return (
-    <div className={cn("flex h-full min-h-0 flex-col bg-[#fafaf8]", className)}>
+    <div className={cn("flex h-full min-h-0 flex-col overflow-hidden bg-[#fafaf8]", className)}>
       {/* 顶栏：标题 + 状态 + 操作 */}
       <header className="shrink-0 border-b border-border/50 bg-white/90 px-4 py-2.5">
         <div className="flex items-center gap-2">
@@ -586,6 +619,18 @@ export function AgentPanel({
               >
                 <MapIcon className="mr-1 h-3.5 w-3.5" />
                 蓝图
+              </Button>
+            ) : null}
+            {agent.orphanedRunning && !agent.isRunning && !agent.pendingConfirm && !agent.pendingCheckpoint ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => void agent.resumeSession(agent.orphanedRunning!.id)}
+              >
+                <RotateCcw className="mr-1 h-3 w-3" />
+                接上进度
               </Button>
             ) : null}
             {interrupted && !agent.isRunning ? (
@@ -729,7 +774,7 @@ export function AgentPanel({
               transition={{ duration: 0.36, ease: easeOut }}
               className="overflow-hidden"
             >
-              <div className="mt-2 max-h-[min(52vh,28rem)] overflow-y-auto">
+              <div className="mt-2 max-h-[min(36vh,16rem)] overflow-y-auto">
                 <AgentConfigQa
                   projectTitle={projectTitle ?? undefined}
                   existing={paperConfig}
@@ -746,7 +791,7 @@ export function AgentPanel({
         </AnimatePresence>
 
         {agent.plan && agent.plan.subtasks.length > 0 ? (
-          <AgentPlanCard plan={agent.plan} />
+          <AgentPlanCard plan={agent.plan} compact />
         ) : null}
       </header>
 
@@ -824,9 +869,9 @@ export function AgentPanel({
               const observation =
                 candidate?.kind === "observation" ? candidate : undefined;
               const pending =
-                agent.isRunning
-                && !observation
-                && msgFlags.latestActionIdx === i;
+                !observation
+                && msgFlags.latestActionIdx === i
+                && (agent.isRunning || msg.tool === "write_section");
               if (
                 msg.tool === "validate_citations"
                 && observation?.summary
@@ -1026,7 +1071,8 @@ export function AgentPanel({
                 }
               />
             </MessageEnter>
-          ) : displayProgress ? (
+          ) : null}
+          {displayProgress && !isWriteStatusLive(agent.writeStatus) ? (
             <MessageEnter animate>
               <AgentWorkingIndicator label={displayProgress} />
             </MessageEnter>
@@ -1051,7 +1097,7 @@ export function AgentPanel({
       {/* 人在环：贴在输入上方，滑入而非硬切 */}
       <AnimatePresence initial={false}>
         {/* 批量导入进度（确认后不再干等，实时动画反馈） */}
-        {agent.importProgress && !agent.writeStatus ? (
+        {agent.importProgress && !isWriteStatusLive(agent.writeStatus) ? (
           <motion.div
             key="import-progress"
             initial={{ opacity: 0, y: 16 }}
@@ -1140,7 +1186,7 @@ export function AgentPanel({
             <p className="text-xs font-medium text-[#122820]">{agent.pendingCheckpoint.title}</p>
             <p className="mt-0.5 text-[11px] text-[#3d4f46]/90">{agent.pendingCheckpoint.message}</p>
             {isConfigCheckpoint ? (
-              <div className="mt-2 max-h-[min(52vh,28rem)] overflow-y-auto">
+              <div className="mt-2 max-h-[min(40vh,18rem)] overflow-y-auto">
                 <AgentConfigQa
                   projectTitle={projectTitle ?? undefined}
                   existing={paperConfig}
@@ -1275,79 +1321,18 @@ export function AgentPanel({
               {agent.pendingConfirm.tool === "import_reference" ? "确认导入文献" : "需要你确认"}
             </p>
             <p className="mt-0.5 text-[11px] text-[#3d4f46]/90">{agent.pendingConfirm.message}</p>
-            {agent.pendingConfirm.preview ? (
+            {!isImportBatchConfirm && agent.pendingConfirm.preview ? (
               <pre className="mt-2 max-h-20 overflow-y-auto whitespace-pre-wrap rounded-md border border-border/50 bg-white/90 p-2 text-[10px] leading-relaxed text-[#3d4f46]">
                 {agent.pendingConfirm.preview}
               </pre>
             ) : null}
             {isImportBatchConfirm ? (
-              <div className="mt-2">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] text-[#3d4f46]/80">
-                    已收集 {confirmImportItems.length} 篇，已选 {importSelectedCount} 篇
-                  </span>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      className="text-[10px] text-[#1a5632] hover:underline"
-                      onClick={() => setAllImport(true)}
-                    >
-                      全选
-                    </button>
-                    <button
-                      type="button"
-                      className="text-[10px] text-[#3d4f46]/70 hover:underline"
-                      onClick={() => setAllImport(false)}
-                    >
-                      全不选
-                    </button>
-                  </div>
-                </div>
-                <div className="max-h-40 overflow-y-auto rounded-md border border-border/50 bg-white/90">
-                  {confirmImportItems.map((item, i) => {
-                    const checked = importSelection?.has(i) ?? false;
-                    return (
-                      <label
-                        key={i}
-                        className="flex items-start gap-2 border-b border-border/40 px-2 py-1.5 last:border-0 cursor-pointer hover:bg-muted/40"
-                      >
-                        <Checkbox
-                          checked={checked}
-                          onCheckedChange={(v) => toggleImportItem(i, v === true)}
-                          className="mt-0.5"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[11px] leading-snug break-words text-[#122820]">
-                            {item.title || "(无标题)"}
-                          </p>
-                          <p className="text-[9px] text-[#6b7c72] truncate">
-                            {[item.year, item.journal, item.doi].filter(Boolean).join(" · ")}
-                          </p>
-                          {(item.citedByCount != null || item.source || item.isOpenAccess) && (
-                            <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                              {item.citedByCount != null && (
-                                <span className="rounded bg-muted px-1 py-px text-[8px] leading-none text-muted-foreground">
-                                  被引 {item.citedByCount}
-                                </span>
-                              )}
-                              {item.source && IMPORT_SOURCE_LABELS[item.source] && (
-                                <span className="rounded bg-[#6366f1]/10 px-1 py-px text-[8px] leading-none text-[#6366f1]">
-                                  {IMPORT_SOURCE_LABELS[item.source]}
-                                </span>
-                              )}
-                              {item.isOpenAccess && (
-                                <span className="rounded bg-emerald-600/10 px-1 py-px text-[8px] leading-none text-emerald-700">
-                                  OA
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
+              <ImportConfirmList
+                items={confirmImportItems}
+                selected={importSelection}
+                onToggle={toggleImportItem}
+                onSetAll={setAllImport}
+              />
             ) : null}
             <div className="mt-2 flex gap-2">
               <Button
@@ -1377,6 +1362,34 @@ export function AgentPanel({
         ) : null}
       </AnimatePresence>
 
+      {agent.orphanedRunning && !agent.isRunning && !agent.pendingConfirm && !agent.pendingCheckpoint ? (
+        <div className="shrink-0 border-t border-[#1a5632]/12 bg-[#f6f8f6] px-3 py-2.5">
+          <p className="text-xs font-medium text-[#122820]">上一轮还在服务器上跑</p>
+          <p className="mt-0.5 text-[11px] text-[#5a7a68]">
+            这边已经断开，所以看不到思考和进度。可以接上，或强制结束后再发。
+          </p>
+          <div className="mt-2 flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              className="h-8 flex-1 text-xs"
+              onClick={() => void agent.resumeSession(agent.orphanedRunning!.id)}
+            >
+              接上进度
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs"
+              onClick={() => void agent.abandonOrphanedSession()}
+            >
+              强制结束
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {/* 配图坞：贴输入框上方，免翻聊天找「按意见改」 */}
       <AgentFigureDock
         items={figureDockItems}
@@ -1392,9 +1405,10 @@ export function AgentPanel({
         disabled={!projectId}
         isRunning={agent.isRunning}
         writeEnabled={WRITE_PUBLIC}
-        prompts={quickPrompts}
+        prompts={inputPrompts}
         sessionId={agent.sessionId ?? undefined}
         projectId={projectId}
+        continueHint={continueHint}
         onSend={(goal, opts) => {
           const firstUser = !agent.messages.some((m) => m.kind === "user");
           const payload = firstUser

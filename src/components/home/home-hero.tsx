@@ -61,9 +61,14 @@ export function HomeHero({ projects }: HomeHeroProps) {
   const [createOpen, setCreateOpen] = useState(false);
 
   const recentProject = projects[0] ?? null;
+  const [relativeReady, setRelativeReady] = useState(false);
+  useEffect(() => {
+    setRelativeReady(true);
+  }, []);
   const otherProjects = projects.slice(1, 5);
   const projectCount = projects.length;
-  const lastActivity = recentProject ? formatRelativeTime(recentProject.lastUpdated) : null;
+  const lastActivity =
+    recentProject && relativeReady ? formatRelativeTime(recentProject.lastUpdated) : null;
 
   useEffect(() => {
     let cancelled = false;

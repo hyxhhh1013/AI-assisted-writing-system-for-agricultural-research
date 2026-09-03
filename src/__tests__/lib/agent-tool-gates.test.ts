@@ -214,7 +214,7 @@ describe("evaluatePostGates", () => {
     }
   });
 
-  it("已批准过 outline → 放行", () => {
+  it("新写回大纲即使曾批准过 → 再弹 outline checkpoint", () => {
     const v = evaluatePostGates(
       makePostInput({
         tool: makeTool("generate_outline"),
@@ -222,7 +222,24 @@ describe("evaluatePostGates", () => {
         result: { success: true, data: { persisted: true } },
       }),
     );
-    expect(v).toEqual({ ok: true });
+    expect(v).toMatchObject({ ok: false, kind: "checkpoint" });
+    if (!v.ok && v.kind === "checkpoint") {
+      expect(v.checkpoint.kind).toBe("outline_approve");
+    }
+  });
+
+  it("普通目标写回大纲 → outline checkpoint", () => {
+    const v = evaluatePostGates(
+      makePostInput({
+        tool: makeTool("generate_outline"),
+        state: makeState({ goal: "生成大纲" }),
+        result: { success: true, data: { persisted: true, preview: "## 引言" } },
+      }),
+    );
+    expect(v).toMatchObject({ ok: false, kind: "checkpoint" });
+    if (!v.ok && v.kind === "checkpoint") {
+      expect(v.checkpoint.kind).toBe("outline_approve");
+    }
   });
 
   it("antispam 停滞熔断触发时累计 breakCount（供二次熔断硬停机）", () => {

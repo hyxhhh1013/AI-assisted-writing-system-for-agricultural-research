@@ -164,8 +164,10 @@ export function routeAfterAgent(
     return "finalize";
   }
   if (state.pendingToolCalls.length > 0) return "tools";
+  // finished 后禁止再因续跑计数打回 agent，否则 planContinueCount 停在 1..MAX 会 agent→agent 直到 512
   if (
-    shouldContinuePlanWork({
+    !state.finished
+    && shouldContinuePlanWork({
       plan: state.plan,
       iteration: state.iteration,
       planContinueCount: state.planContinueCount,
@@ -182,9 +184,10 @@ export function routeAfterAgent(
   ) {
     return "agent";
   }
-  // 意图续跑：agentNode 已注入 nudge 且 finished=false
+  // 意图续跑：仅当 agentNode 已注入 nudge 且尚未收尾
   if (
-    state.planContinueCount > 0
+    !state.finished
+    && state.planContinueCount > 0
     && state.planContinueCount <= MAX_INTENT_CONTINUES
     && state.iteration < maxIterations
   ) {

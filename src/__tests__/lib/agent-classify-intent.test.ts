@@ -14,13 +14,17 @@ describe("classifyIntent", () => {
     expect(result).toEqual({ kind: "draft", source: "inherit" });
   });
 
-  it("inherits on 继续 / 好", () => {
+  it("inherits on 继续 / 好 / 开始吧", () => {
     expect(classifyIntent({ goal: "继续", previousKind: "citation" }).source).toBe(
       "inherit",
     );
     expect(classifyIntent({ goal: "好", previousKind: "literature" }).kind).toBe(
       "literature",
     );
+    expect(classifyIntent({ goal: "开始吧", previousKind: "ap_full" })).toEqual({
+      kind: "ap_full",
+      source: "inherit",
+    });
   });
 
   it("follow-ups stay inherit so a regex-only LLM shadow would never see them", () => {
@@ -48,6 +52,7 @@ describe("looksLikeFollowUpUtterance", () => {
   it("treats short confirmations as follow-ups", () => {
     expect(looksLikeFollowUpUtterance("A")).toBe(true);
     expect(looksLikeFollowUpUtterance("ok")).toBe(true);
+    expect(looksLikeFollowUpUtterance("开始吧")).toBe(true);
     expect(looksLikeFollowUpUtterance("写引言")).toBe(false);
   });
 });

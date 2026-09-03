@@ -23,10 +23,20 @@ export function shouldPauseForOutlineApprove(input: {
   persisted?: boolean;
   approvedKinds: readonly AgentCheckpointKind[];
 }): boolean {
+  void input.goal;
+  void input.approvedKinds;
   if (!input.toolSuccess || input.toolName !== "generate_outline") return false;
   if (input.persisted === false) return false;
-  if (input.approvedKinds.includes("outline_approve")) return false;
-  return isApFullStyleGoal(input.goal);
+  // 大纲一旦写回项目就必须人确认；不看「整篇/从零」话术，也不因本轮曾批准过而放行（新大纲作废旧批准）。
+  return true;
+}
+
+/** 新写回的大纲/蓝图作废对应批准，避免会话仍带着旧 kind 往下走。 */
+export function revokeApprovedKind(
+  approved: readonly AgentCheckpointKind[],
+  kind: AgentCheckpointKind,
+): AgentCheckpointKind[] {
+  return approved.filter((k) => k !== kind);
 }
 
 export function shouldPauseForConfigConfirm(input: {

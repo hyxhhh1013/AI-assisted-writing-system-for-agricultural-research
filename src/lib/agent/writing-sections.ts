@@ -16,7 +16,17 @@ export function isAgentWritingSectionKey(value: string): value is AgentWritingSe
   return (AGENT_WRITING_SECTIONS as readonly string[]).includes(value);
 }
 
+/**
+ * 解析工具布尔入参。LLM 可能给 boolean / "true" / "false" / 0 / "0"。
+ * 缺省（undefined/null/""）用 defaultValue。
+ */
+export function parseBoolParam(raw: unknown, defaultValue: boolean): boolean {
+  if (raw === undefined || raw === null || raw === "") return defaultValue;
+  if (raw === false || raw === "false" || raw === 0 || raw === "0") return false;
+  if (raw === true || raw === "true" || raw === 1 || raw === "1") return true;
+  return defaultValue;
+}
+
 export function parsePersistToProject(raw: unknown): boolean {
-  if (raw === false || raw === "false" || raw === 0) return false;
-  return true;
+  return parseBoolParam(raw, true);
 }

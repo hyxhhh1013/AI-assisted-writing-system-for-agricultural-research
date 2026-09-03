@@ -8,7 +8,7 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-08-23（W3-AP-OUTLINE-HUMAN：大纲写回一律确认 + 框架附件锁骨架）  
+> **最后更新**：2026-09-03（Agent 侧栏高度断点：收口条与面板叠高裁输入框）  
 > **实时 status 只看 §1 Phase 13 / Phase 14 与 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
@@ -1186,6 +1186,13 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-08-23 | FIG-MECH-QA-002 | AI | /plot 流程与多面板出图前 refinePlot*：边上条件、英文占位修补后回写画布；API 回传 qaReport。不挡出图。 |
 | 2026-08-23 | W3-AP-OUTLINE-HUMAN | AI | 大纲 persist 一律暂停确认（含自动补齐、普通 goal、曾批准后再生成）。`generate_outline` 服务端读大纲/框架附件锁一级标题，长论文不当骨架。 |
 | 2026-08-23 | 写引言口头收口 | AI | 「开始吧」未当跟聊 → intent=null、plan=null；口头「撰写引言…」不在宣布表。补：跟聊词、write_section 宣布续跑、ap_full 未写回当 draft 未完成、SSE 中断不伪装完成。 |
+| 2026-08-23 | 图递归 512 | AI | `routeAfterAgent` 在 finished 后仍因 planContinueCount∈[1,2] 打回 agent，自环到 recursionLimit。改为 finished 必收尾；读/检索不清零续跑计数。 |
+| 2026-08-23 | 继续按钮 | AI | Agent 输入区在已有对话且空闲时显示「继续」，发送跟聊词「继续」；检查点/确认卡期间不显示。 |
+| 2026-08-23 | 继续推进条 | AI | 去掉发送旁灰色「继续」。输入框上方续跑条写清下一步（口头未执行 / 计划未完 / 建议写节），主按钮发具体 goal。 |
+| 2026-08-23 | 引言写回被空稿覆盖 | AI | 默认当前节是引言时，Agent persist 后 `useEditorSync` 500ms 用空编辑器盖掉新正文，autosave 还会写回库。改为 epoch 作废过期同步，并按节刷新编辑器。续跑条改成检查点同款。 |
+| 2026-08-23 | 会话 running 界面空白 | AI | SSE 已断、DB 仍 running → 跟聊 409，界面无进度且叠「写研究现状」气泡。跟聊/续跑先回收 running；409 回滚用户气泡；出示接上/强制结束。续跑条只认本轮 write 观察。 |
+| 2026-08-23 | 收尾示例串味 | AI | 计划在出图，收尾却写「例如先写引言」→ 续跑条当成口头未写节。去掉该示例；宣布检测忽略收尾套话；有未完成计划时「继续推进」只发「继续」。 |
+| 2026-09-03 | Agent 侧栏高度断点 | AI | 质量收口条与 `AgentPanel` 兄弟叠 `h-full` 裁掉输入框；写节完成卡误挡思考指示器。改为 `flex-1 min-h-0` 包面板、`isWriteStatusLive` 才抑制指示器、Plan/配置问答/收口芯片限高。 |
 
 ---
 

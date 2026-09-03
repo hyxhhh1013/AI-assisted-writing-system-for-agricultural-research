@@ -4,6 +4,7 @@ import { appendAgentSectionMarkdown } from "@/lib/agent/project-persist";
 import {
   AGENT_WRITING_SECTIONS,
   isAgentWritingSectionKey,
+  parseBoolParam,
   parsePersistToProject,
 } from "@/lib/agent/writing-sections";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
@@ -285,7 +286,7 @@ export const generateXrdAnalysisTool: ToolDefinition = {
 
     const caption = String(params.caption ?? "").trim() || title;
     const persistToProject = parsePersistToProject(params.persistToProject);
-    const insertTable = params.insertTable !== "false" && params.insertTable !== "0";
+    const insertTable = parseBoolParam(params.insertTable, true);
 
     try {
       const generated = await runScherrerGeneration(validated.data);
@@ -349,6 +350,7 @@ export const generateXrdAnalysisTool: ToolDefinition = {
           peakCount: generated.data?.n_peaks ?? scherrerPeaks.length,
           persisted,
           insertedSection,
+          figureSpecEnc: replay.figureSpecEnc,
           hasReplay: Boolean(replay.figureSpecEnc),
           workflowHref: buildWorkflowHref(ctx.projectId),
         },

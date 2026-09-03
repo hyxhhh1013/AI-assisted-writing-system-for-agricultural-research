@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createLogger } from "@/lib/logger";
 import { getErrorMessage } from "@/lib/error-utils";
+import { validateBody } from "@/lib/api-validate";
+import { agentSessionActionSchema } from "@/lib/validations";
 import { isAgentEnabled } from "@/lib/agent";
 import {
+  interruptRunningSession,
   listAgentSessions,
   listProjectAgentHistory,
 } from "@/lib/agent/session-store";
@@ -72,6 +75,33 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ sessions });
   } catch (error: unknown) {
     log.fail("list sessions failed", error);
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
+  }
+}
+
+/** POST /api/agent/sessions — 强制结束仍标 running、但前端已断开的会话 */
+export async function POST(req: NextRequest) {
+  if (!isAgentEnabled()) {
+    return NextResponse.json(
+      { error: "Agent 功能未启用，请设置 AGENT_ENABLED=1" },
+      { status: 503 },
+    );
+  }
+
+  try {
+    const userId = req.headers.get("x-user-id");
+    if (!userId) {
+      return NextResponse.json({ error: "未授权" }, { status: 401 });
+    }
+
+    const raw: unknown = await req.json();
+    const { data, errorResponse } = await validateBody(agentSessionActionSchema, raw);
+    if (errorResponse) return errorResponse;
+
+    const interrupted = await interruptRunningSession(data.sessionId, userId);
+    return NextResponse.json({ ok: true, interrupted });
+  } catch (error: unknown) {
+    log.fail("session action failed", error);
     return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }

@@ -46,6 +46,19 @@ export async function reclaimStaleRunningSessions(params: {
   return result.count;
 }
 
+/** 前端 SSE 已断但仍卡在 running：立即标 interrupted，允许跟聊/续跑 */
+export async function interruptRunningSession(
+  sessionId: string,
+  userId: string,
+): Promise<boolean> {
+  const n = await reclaimStaleRunningSessions({
+    userId,
+    sessionId,
+    maxAgeMs: 0,
+  });
+  return n > 0;
+}
+
 export async function createAgentSession(params: {
   userId: string;
   goal: string;
@@ -189,6 +202,8 @@ export async function listAgentSessions(params: {
       item.uiTranscript = snap?.uiTranscript
         ? normalizeUiTranscript(snap.uiTranscript)
         : undefined;
+      item.awaitingCheckpoint = snap?.awaitingCheckpoint ?? null;
+      item.awaitingConfirm = snap?.awaitingConfirm ?? null;
     }
     return item;
   });

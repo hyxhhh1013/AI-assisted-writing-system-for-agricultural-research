@@ -14,7 +14,11 @@ import { useDocxExport } from "@/hooks/use-docx-export";
 import { useReferenceReorder } from "@/hooks/use-reference-reorder";
 import { pruneUncitedReferences, collectAllCitedIndices, stripOutOfRangeCitations, stripEmbeddedBibliography, remapPrunedCitations, buildPreviewReferencesFromContent } from "@/lib/reference-reorder";
 import { normalizeAllCitationFormats } from "@/lib/citation";
-import { useEditorSync } from "@/hooks/use-editor-sync";
+import {
+  bumpEditorSyncEpoch,
+  editorTextForSection,
+  useEditorSync,
+} from "@/hooks/use-editor-sync";
 import { useAutoSave } from "@/hooks/use-auto-save";
 import { useMarkdownExport } from "@/hooks/use-markdown-export";
 import { usePdfExport } from "@/hooks/use-pdf-export";
@@ -53,7 +57,7 @@ import { parsePaperPassport } from "@/contracts/paper-passport";
 import { getModeAccent, getStructurePanelTitle, getStructurePanelHint } from "@/lib/mode-theme";
 import { siteTheme } from "@/lib/site-theme";
 import { cn } from "@/lib/utils";
-import { getProjectWritingMode } from "@/lib/section-registry";
+import { getProjectWritingMode, getSectionLabelForMode } from "@/lib/section-registry";
 
 // === Lazy-loaded panels: 首屏不加载，仅在对应 tab 激活时按需加载 ===
 
@@ -117,7 +121,12 @@ const QualityClosurePanel = dynamic(
     import("@/components/shared/agent/quality-closure-panel").then(
       (m) => m.QualityClosurePanel,
     ),
-  { ssr: false, loading: () => <TabPanelLoading /> }
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-9 rounded-xl border border-border/40 bg-white/70" aria-hidden />
+    ),
+  },
 );
 
 const LazyReaderPanel = dynamic(
@@ -228,6 +237,15 @@ function WorkbenchContent() {
   editingContentRef.current = editingContent;
   const activeSectionRef = useRef(activeSection);
   activeSectionRef.current = activeSection;
+  const editorSyncEpochRef = useRef(0);
+
+  const applyRemoteProject = useCallback((data: ProjectData, syncSectionKey?: string) => {
+    bumpEditorSyncEpoch(editorSyncEpochRef);
+    setProject(data);
+    if (syncSectionKey && syncSectionKey === activeSectionRef.current) {
+      setEditingContent(editorTextForSection(data, syncSectionKey));
+    }
+  }, []);
 
   // 窄屏（手机/平板竖屏，< lg 1024px）：自动收起侧栏与图标栏、关闭预览，只留编辑器。
   // 用 matchMedia 监听，宽屏恢复时展开；避免移动端三栏横排把编辑器挤没。
@@ -410,7 +428,7 @@ function WorkbenchContent() {
   }, [activeSection, project.id, project.abstract, project.sections]);
 
   // 核心优化：实时将编辑内容同步到 project 状态（提取至 useEditorSync）
-  useEditorSync(editingContent, activeSection, setProject, projectRef);
+  useEditorSync(editingContent, activeSection, setProject, projectRef, editorSyncEpochRef);
 
   const handleSave = useCallback(async () => {
     const updatedProject = mergeEditorIntoProject(projectRef.current, activeSectionRef.current, editingContentRef.current);
@@ -441,8 +459,8 @@ function WorkbenchContent() {
   const handleReferencesImported = useCallback(async () => {
     if (!projectId) return;
     const data = await projectStore.get(projectId);
-    if (data) setProject(data);
-  }, [projectId]);
+    if (data) applyRemoteProject(data);
+  }, [projectId, applyRemoteProject]);
 
   const handleAgentSectionPersisted = useCallback(
     async (info: { sectionKey: string }) => {
@@ -450,16 +468,20 @@ function WorkbenchContent() {
       try {
         const data = await projectStore.get(projectId);
         if (data) {
-          setProject(data);
+          applyRemoteProject(data, info.sectionKey);
           // 不强制跳转编辑器：保留用户当前视图（Agent 面板/读者页），仅提示已写回，
           // 避免每次写作都把用户从完成反馈里拽到综述章节页
-          toast.success(`Agent 已写回「${info.sectionKey}」`);
+          const label = getSectionLabelForMode(
+            info.sectionKey,
+            data.mode ?? projectRef.current.mode,
+          );
+          toast.success(`Agent 已写回「${label}」`);
         }
       } catch {
         toast.error("章节已写回，但刷新项目失败，请手动刷新页面");
       }
     },
-    [projectId],
+    [projectId, applyRemoteProject],
   );
 
   const handleAgentChartPersisted = useCallback(
@@ -468,7 +490,7 @@ function WorkbenchContent() {
       try {
         const data = await projectStore.get(projectId);
         if (data) {
-          setProject(data);
+          applyRemoteProject(data, info.sectionKey);
           // 与章节写回一致：只 toast + 刷新，绝不 focusEditorAfterDraft / 切 Tab，
           // 避免生成图后把用户从 Agent 面板拽到大纲/结构页
           if (info.sectionKey) {
@@ -489,7 +511,7 @@ function WorkbenchContent() {
         toast.error("图表已生成，但刷新项目失败，请手动刷新页面");
       }
     },
-    [projectId],
+    [projectId, applyRemoteProject],
   );
 
   /** Agent 任意写回（配置/大纲/蓝图/文献等）后刷新工作台项目 */
@@ -509,20 +531,20 @@ function WorkbenchContent() {
         || info.tool === "generate_table"
       ) {
         const data = await projectStore.get(projectId);
-        if (data) setProject(data);
+        if (data) applyRemoteProject(data);
         return;
       }
       try {
         const data = await projectStore.get(projectId);
         if (data) {
-          setProject(data);
+          applyRemoteProject(data);
           toast.success(`Agent 已更新「${info.label}」`);
         }
       } catch {
         toast.error("项目已更新，但刷新失败，请手动刷新页面");
       }
     },
-    [projectId],
+    [projectId, applyRemoteProject],
   );
 
   const handleApplyAiContent = (content: string, sectionId: string, subsectionTitle?: string) => {
@@ -1063,22 +1085,25 @@ function WorkbenchContent() {
                   language={project.language}
                 />
               </div>
-              <ErrorBoundary>
-                <LazyAgentPanel
-                  projectId={projectId ?? undefined}
-                  onSectionPersisted={(info) => void handleAgentSectionPersisted(info)}
-                  onChartPersisted={(info) => void handleAgentChartPersisted(info)}
-                  onProjectMutated={(info) => void handleAgentProjectMutated(info)}
-                  onCollapse={() => setIsSidebarOpen(false)}
-                  onOpenBlueprint={() => void handleOpenBlueprintDialog()}
-                  onJumpToSection={(sectionKey) => {
-                    setActiveSection(sectionKey);
-                    toast.message(
-                      "已切换到对应章节；插图当前在节末，可在底部「本节插图」条挪位置",
-                    );
-                  }}
-                />
-              </ErrorBoundary>
+              {/* flex-1 吃剩余高度：AgentPanel 自身是 h-full，不能和收口条做兄弟再各占 100% */}
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <ErrorBoundary>
+                  <LazyAgentPanel
+                    projectId={projectId ?? undefined}
+                    onSectionPersisted={(info) => void handleAgentSectionPersisted(info)}
+                    onChartPersisted={(info) => void handleAgentChartPersisted(info)}
+                    onProjectMutated={(info) => void handleAgentProjectMutated(info)}
+                    onCollapse={() => setIsSidebarOpen(false)}
+                    onOpenBlueprint={() => void handleOpenBlueprintDialog()}
+                    onJumpToSection={(sectionKey) => {
+                      setActiveSection(sectionKey);
+                      toast.message(
+                        "已切换到对应章节；插图当前在节末，可在底部「本节插图」条挪位置",
+                      );
+                    }}
+                  />
+                </ErrorBoundary>
+              </div>
             </div>
             {activeTab === "reader" && (
               <div className="h-full min-h-0 flex flex-col overflow-hidden">

@@ -47,9 +47,12 @@ const SUB_STATUS: Record<AgentSubTask["status"], StatusMeta> = {
 export const AgentPlanCard = memo(function AgentPlanCard({
   plan,
   defaultOpen = true,
+  /** 顶栏内：限制列表高度，避免把对话区和输入框挤没 */
+  compact = false,
 }: {
   plan: AgentPlan;
   defaultOpen?: boolean;
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const total = plan.subtasks.length;
@@ -82,7 +85,12 @@ export const AgentPlanCard = memo(function AgentPlanCard({
         </span>
       </button>
       {open ? (
-        <ol className="mt-2 space-y-1">
+        <ol
+          className={cn(
+            "mt-2 space-y-1",
+            compact && "max-h-28 overflow-y-auto overscroll-contain pr-0.5",
+          )}
+        >
           {plan.subtasks.map((s) => {
             const meta = SUB_STATUS[s.status] ?? SUB_STATUS.pending;
             return (

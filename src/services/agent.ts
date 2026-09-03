@@ -80,6 +80,19 @@ export async function listAgentSessions(params: {
   return data.sessions ?? [];
 }
 
+/** 强制把仍标 running 的会话标成 interrupted（前端 SSE 已断时） */
+export async function postInterruptAgentSession(sessionId: string): Promise<void> {
+  const res = await fetch("/api/agent/sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId, action: "interrupt" }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error || "无法结束会话");
+  }
+}
+
 /** 同项目聊天历史（时间正序，含 uiTranscript） */
 export async function loadAgentChatHistory(
   projectId: string,

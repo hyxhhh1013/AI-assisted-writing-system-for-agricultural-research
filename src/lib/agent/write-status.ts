@@ -73,3 +73,9 @@ export function finalizeWriteStatus(
     },
   };
 }
+
+/** 写节仍在进行（含刚发出、尚未收到 stage）。已完成/失败不应再挡住思考/导入进度。 */
+export function isWriteStatusLive(status: WriteStatus | null | undefined): boolean {
+  if (!status) return false;
+  return status.stage !== "completed" && status.stage !== "error";
+}

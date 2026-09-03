@@ -22,8 +22,9 @@
 
 ## AI 调用
 
-- 入口：`src/lib/ai.ts` 的 `callAI` / `callAINonStreaming` / `streamAIResponse`。
+- 入口：`src/lib/ai.ts` 的 `callAI` / `callAINonStreaming` / `streamAIResponse`；请求体由 `buildChatCompletionsBody` 组装。
 - Provider 配置：`src/lib/models.ts`（DeepSeek 主写、Zhipu 审查）。
+- **DeepSeek V4 thinking**：默认开启。请求一旦带 `tools`，上游要求历史 assistant 原样回传 `reasoning_content`，否则 400。Agent 历史是合成的（Plan / compact / 工具结果当 user），无法回传，故 **DeepSeek + tools 显式 `thinking: { type: "disabled" }`**。无 tools 的 Writer/审查单轮仍走默认 thinking。流式只取 `delta.content`，不把思维链拼进正文。
 - Prompt 出口：`src/lib/prompts.ts` 及 `src/lib/prompts/*.ts`。
 - Admin Key：`SystemSetting` AES 存储，`getApiKeyFromSettings()` 30s TTL。
 - 流式接口：`Content-Type: text/event-stream`，事件形状见 `src/contracts/sse.ts`。

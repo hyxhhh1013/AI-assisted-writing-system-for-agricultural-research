@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   runAgentLoop: vi.fn(),
   getAgentSessionForUser: vi.fn(),
   reclaimStaleRunningSessions: vi.fn(),
+  interruptRunningSession: vi.fn(),
   snapshotToInitialState: vi.fn(),
   tryAcquireAgentSession: vi.fn(),
   createAgentSession: vi.fn(),
@@ -24,6 +25,7 @@ vi.mock("@/lib/agent/session-store", () => ({
   createAgentSession: mocks.createAgentSession,
   getAgentSessionForUser: mocks.getAgentSessionForUser,
   reclaimStaleRunningSessions: mocks.reclaimStaleRunningSessions,
+  interruptRunningSession: mocks.interruptRunningSession,
   snapshotToInitialState: mocks.snapshotToInitialState,
   tryAcquireAgentSession: mocks.tryAcquireAgentSession,
 }));
@@ -77,6 +79,7 @@ describe("POST /api/agent 会话级并发互斥", () => {
     mocks.createAgentTools.mockReturnValue([]);
     mocks.runAgentLoop.mockImplementation(async function* () {});
     mocks.reclaimStaleRunningSessions.mockResolvedValue(0);
+    mocks.interruptRunningSession.mockResolvedValue(true);
     mocks.snapshotToInitialState.mockReturnValue({});
   });
 
@@ -129,5 +132,21 @@ describe("POST /api/agent 会话级并发互斥", () => {
       fromStatuses: ["completed", "interrupted", "error"],
     });
     expect(mocks.runAgentLoop).not.toHaveBeenCalled();
+  });
+
+  it("跟聊：running 且本端已断时先回收再抢占", async () => {
+    mocks.getAgentSessionForUser
+      .mockResolvedValueOnce(snapSession("running"))
+      .mockResolvedValueOnce(snapSession("interrupted"));
+    mocks.tryAcquireAgentSession.mockResolvedValue("acquired");
+
+    const res = await POST(makeReq("u1", { goal: "写综述正文", sessionId: "s1" }));
+
+    expect(res.status).toBe(200);
+    expect(mocks.interruptRunningSession).toHaveBeenCalledWith("s1", "u1");
+    const reader = res.body!.getReader();
+    await reader.read();
+    await reader.cancel();
+    expect(mocks.runAgentLoop).toHaveBeenCalled();
   });
 });

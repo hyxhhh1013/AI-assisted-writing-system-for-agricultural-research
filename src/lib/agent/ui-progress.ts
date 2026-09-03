@@ -39,6 +39,14 @@ const TOOL_LABELS: Record<string, string> = {
   analyze_direction: "分析方向",
   review_content: "内容审查",
   verify_content: "核查内容",
+  ask_user: "向你确认",
+  read_attachment: "读取附件",
+  list_attachments: "列出附件",
+  read_reference: "阅读文献",
+  read_figure: "回看图表",
+  rewrite_plagiarism: "降重改写",
+  check_consistency: "一致性检查",
+  generate_table: "生成三线表",
 };
 
 export function toolDisplayName(tool: string): string {
@@ -155,6 +163,16 @@ export function formatToolWorkingLine(
       return "正在写双语摘要…";
     case "generate_chart":
       return "正在生成图表…";
+    case "generate_xrd_analysis":
+      return "正在做 XRD 分析…";
+    case "generate_table":
+      return "正在生成三线表…";
+    case "ask_user":
+      return "需要你确认一下…";
+    case "read_attachment":
+      return "正在读取附件…";
+    case "list_attachments":
+      return "正在列出附件…";
     case "ingest_project_data":
       return "正在把表格写入项目数据…";
     case "run_review_rounds":
@@ -248,7 +266,42 @@ export function resolveLiveProgress(input: {
     case "finalizing":
       return "正在整理回复…";
     case "thinking":
-    default:
       return "正在思考下一步…";
+    default:
+      return "助手正在工作…";
   }
+}
+
+export function isAgentSessionBusyError(message: string | undefined | null): boolean {
+  return /会话仍在执行中/.test(message ?? "");
+}
+
+/** SSE 仍在飞且不是等人确认 → 顶栏/工作指示器应显示「进行中」 */
+export function resolveAgentIsRunning(input: {
+  inFlight: boolean;
+  status: string;
+  hasPendingConfirm?: boolean;
+  hasPendingCheckpoint?: boolean;
+}): boolean {
+  if (!input.inFlight) return false;
+  const paused =
+    input.status === "awaiting_checkpoint"
+    && Boolean(input.hasPendingConfirm || input.hasPendingCheckpoint);
+  return !paused;
+}
+
+/**
+ * 是否把「服务端仍 running、本端 SSE 已断」展示成孤儿会话条。
+ * 等人确认导入/检查点时 DB 仍是 running，但本端已有确认 UI，不能当成断开。
+ */
+export function shouldShowOrphanedSession(input: {
+  inFlight: boolean;
+  status: string;
+  hasPendingConfirm?: boolean;
+  hasPendingCheckpoint?: boolean;
+}): boolean {
+  if (input.inFlight) return false;
+  if (input.hasPendingConfirm || input.hasPendingCheckpoint) return false;
+  if (input.status === "awaiting_checkpoint") return false;
+  return true;
 }

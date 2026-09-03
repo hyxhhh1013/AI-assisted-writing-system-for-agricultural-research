@@ -3,6 +3,7 @@ import {
   initWriteStatus,
   mergeProgressIntoWriteStatus,
   finalizeWriteStatus,
+  isWriteStatusLive,
 } from "@/lib/agent/write-status";
 
 describe("write-status 纯逻辑", () => {
@@ -68,5 +69,12 @@ describe("write-status 纯逻辑", () => {
     const s = finalizeWriteStatus(initWriteStatus("引言"), { success: true, charCount: 100, issueCount: 0, pipelineMode: "full" });
     const r = mergeProgressIntoWriteStatus(s, { label: "x", stage: "writing", detail: "生成初稿…" });
     expect(r.stage).toBe("completed");
+  });
+
+  it("isWriteStatusLive：进行中为真，完成/失败为假", () => {
+    expect(isWriteStatusLive(initWriteStatus("引言"))).toBe(true);
+    expect(isWriteStatusLive(finalizeWriteStatus(initWriteStatus("引言"), { success: true }))).toBe(false);
+    expect(isWriteStatusLive(finalizeWriteStatus(initWriteStatus("引言"), { success: false }))).toBe(false);
+    expect(isWriteStatusLive(null)).toBe(false);
   });
 });

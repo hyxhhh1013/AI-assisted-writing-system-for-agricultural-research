@@ -1,6 +1,6 @@
 # Agent 编排（写作助手）
 
-> L3 域文档 · 更新：2026-08-23（大纲写回一律人确认；框架附件锁一级标题）  
+> L3 域文档 · 更新：2026-09-03（侧栏高度断点：收口条不得裁掉输入框）  
 > 契约唯一权威源：`src/contracts/agent.ts`（SSE 事件）、`src/contracts/agent-session.ts`（会话消息）、`src/contracts/agent-intent.ts`（`IntentKind`）。
 
 ## 概览
@@ -52,11 +52,13 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 | `src/lib/quality-eval/write-qa-fixtures.ts` | WRITE-QA-008：分节 golden；`eval:quality` 规则尺 |
 | `src/lib/agent/core/agent-rules.ts` | `AGENT_RULES` 单一事实源；prompt/nudge/硬拦文案读同一 `text` |
 | `src/lib/agent/core/classify-intent.ts` | 每轮 `classifyIntent`：跟聊继承或正则；不上 LLM |
+| `src/lib/agent/continue-hint.ts` | 输入区「继续推进」条：口头未执行 / 计划未完 / 建议写节 / 泛化跟聊 |
 | `src/lib/agent/ui-failure.ts` | 红框 `lastFailure`：检索无命中是软结果，不弹「再试一次」 |
 | `components/shared/agent/quality-closure-panel.tsx` | 质量收口看板 UI（工作台 agent Tab 顶部） |
 | `src/lib/agent/writing-runner.ts` | 复用写作管道；`onWritingEvent` 转发进度 |
 | `src/lib/agent/session-store.ts` | 会话持久化 + `tryAcquireAgentSession` 并发互斥 |
-| `src/hooks/use-agent.ts` / `components/shared/agent/agent-panel.tsx` | 前端状态机与面板 |
+| `src/hooks/use-agent.ts` / `components/shared/agent/agent-panel.tsx` | 前端状态机与面板；空闲时输入框上方「继续推进」条（检查点同款克制条，非发送旁按钮）。工作台 Agent Tab 里质量收口条与面板是上下兄弟：面板外包 `flex-1 min-h-0`，禁止再让 `h-full` 与收口条叠满父级把输入框裁掉 |
+| `src/hooks/use-editor-sync.ts` | 编辑器→project 防抖同步。Agent 写回时 `bumpEditorSyncEpoch`，禁止空的当前节（默认引言）把刚 persist 的正文盖掉 |
 | `src/app/api/agent/route.ts` | SSE 路由（认证、会话抢占、流式输出）；客户端断开后 `enqueue`/`close` 软失败，不记 `agent stream error` |
 
 ## SSE 事件表（`contracts/agent.ts`）
@@ -66,7 +68,11 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 | `agent/status` | 状态机：planning/thinking/executing/finalizing/awaiting_checkpoint/completed/error/cancelled | 快照；**thinking 在 LLM 开始时额外 live 推一次**，避免空转数十秒无气泡 |
 | `agent/plan` | Plan 子任务列表 + 焦点 | 快照 |
 
-**计划推进（2026-08-23）**：`advancePlanAfterTool` 有 `toolHints` 时只认 hints，不再用标题里的「大纲/文献」串味。`list_references` / `generate_outline` 不得把「依据大纲生成写作蓝图」标完成。口头宣布要生成蓝图但未调用工具时注入续跑，禁止空 `agent/complete`。
+**计划推进（2026-08-23）**：`advancePlanAfterTool` 有 `toolHints` 时只认 hints，不再用标题里的「大纲/文献」串味。`list_references` / `generate_outline` 不得把「依据大纲生成写作蓝图」标完成。口头宣布要生成蓝图/`write_section` 但未调用工具时注入续跑，禁止空 `agent/complete`。`开始吧` 视为跟聊继承意图；SSE 中途断开不再伪装成「已完成」。`finished=true` 时不得因续跑计数再打回 `agent`（否则 `planContinueCount` 停在 1–2 会自环到 LangGraph 512）。读/检索不清零续跑计数。
+
+**任务结束 vs 续跑条（2026-08-23）**：图循环 `finished=true` → `finalize` → `agent/complete` 才是一轮结束。续跑条只看**本轮**（上一句用户之后）的 thought / observation，禁止拿上一轮「口头未执行」摘要继续推荐同一节。本轮 `write_section` 成功后改为「已写回」并指向下一空节。前端 SSE 已断但 DB 仍 `running` 时，跟聊/续跑先 `interruptRunningSession`（不再等 45s），界面出示「接上进度 / 强制结束」，409 不再叠用户气泡、不当红框失败。收尾「还有未完成步骤」不再举例「先写引言」（会误触发 write_section 宣布）；续跑条有未完成计划时只发「继续」，不改推写另一节。
+
+**确认/检查点不是孤儿会话（2026-08-23）**：`import_reference` 等人勾选、以及 `outline_approve` 等检查点期间，SSE 会按终态结束（`inFlight=false`）但 DB session 仍 `running`。不得把「接上进度 / 强制结束」叠在确认卡上。`shouldShowOrphanedSession`：有 `pendingConfirm` / `pendingCheckpoint` 或 `status=awaiting_checkpoint` 时隐藏孤儿条。项目打开时若最近会话仍 `running` 且快照带 `awaitingCheckpoint` / `awaitingConfirm`，历史接口随 transcript 一并返回，前端直接恢复确认卡，不必先点「接上进度」。
 
 **大纲人控（2026-08-23）**：`generate_outline` 一旦 `persistToProject` 写回，**一律**弹 `outline_approve`（不再要求 goal 像「整篇/从零」；新大纲作废本轮旧批准）。`generate_outline` 服务端读取本会话文档附件：文件名含大纲/提纲/框架等，或短文档能抽出 ≥3 个一级标题，则锁为 `userSkeleton` 并注入附件摘录，禁止默认综述/IMRaD 另起炉灶。指定 `attachmentId` 未就绪则报错，不静默回落。长论文 PDF 不自动当框架。表格仍走 `ingest_project_data`，不进大纲骨架。实现：`lib/agent/outline-from-attachment.ts` + `core/checkpoints.ts`。
 | `agent/thought` | 完整思考（终） | 快照 |
@@ -101,7 +107,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 
 - **agent/progress 结构化字段（2026-08-07）**：负载在 `label` 基础上新增全可选结构化字段：`stage`（`WritingStage`：retrieving/writing/verifying/refining/completed/error）、`detail`（当前阶段细节文案）、`chars`（已生成字数）、`elapsedMs`（本次写节耗时）、`info`（提示行，写入 `WriteStatus.info`）、`warnings`（警告行，写入 `WriteStatus.warnings`）。`label` 保留兼容：旧服务器只发 label、或旧前端只读 label 均可用，服务端仍拼好含章节名（`正在撰写「引言」· 生成初稿… 已 860 字`）。
 - **verification_progress 事件（2026-08-07）**：`{ type: "verification_progress"; checked: number; total: number }`，来自 Verifier 逐条引用核查进度。模型流式输出 `〔进度 n/N〕` 标记，verifier 用 `findVerificationProgressMarkers` 解析、`stripProgressMarkers` 剥离后发射（`src/app/api/writing/pipeline/verifier.ts`）；writing-progress 翻译为 `已核查 n/N 条引用`（stage=verifying）。模型未吐标记时，前端回退到 `verification` 事件按字符数兜底（`已输出 N 字`）；主信号（verification_progress）出现后，字符兜底不再发射，避免覆盖主信号（`seenMarkerProgress`）。
-- **WritingStatusCard 生命周期（2026-08-07；2026-08-08 移到底部）**：`agent/action`（tool=write_section）→ `initWriteStatus(section)` 初始化；`agent/progress` → `mergeProgressIntoWriteStatus` 合并（info/warnings 去重、elapsedMs 覆盖、终态保护：completed/error 后不再改 stage）；`agent/observation`（write_section）→ `finalizeWriteStatus` 定稿（成功 → completed + done 摘要，失败 → error + error 文案）；`agent/complete` / `agent/error` / `cancel` / `reset` / `startNewChat` / 切换项目（useEffect projectId 变化）→ 清空 `writeStatus`。**卡片渲染在 agent-panel 消息流底部**（与 `AgentWorkingIndicator` 同位置：writeStatus 激活时显示 `WritingStatusCard`，否则显示通用工作指示器），不再悬浮顶部，避免与底部状态显示割裂；`writeStatus` 加入自动滚底依赖，写作进度更新时若用户在底部自动滚动到写作卡。
+- **WritingStatusCard 生命周期（2026-08-07；2026-08-08 移到底部）**：`agent/action`（tool=write_section）→ `initWriteStatus(section)` 初始化；`agent/progress` → `mergeProgressIntoWriteStatus` 合并（info/warnings 去重、elapsedMs 覆盖、终态保护：completed/error 后不再改 stage）；`agent/observation`（write_section）→ `finalizeWriteStatus` 定稿（成功 → completed + done 摘要，失败 → error + error 文案）；`agent/complete` / `agent/error` / `cancel` / `reset` / `startNewChat` / 切换项目（useEffect projectId 变化）→ 清空 `writeStatus`。**卡片渲染在 agent-panel 消息流底部**（与 `AgentWorkingIndicator` 同位置：仅 `isWriteStatusLive` 时用写状态卡挡住通用指示器，完成后仍显示「正在思考/导入」），不再悬浮顶部；`writeStatus` 加入自动滚底依赖。
 - **写作进度可见性（2026-08-08）**：生成初稿且 `chars=0` 时，卡片显示「等待 AI 输出首段（通常数秒）」+ spinner，替代误导性的「已 0 字」（用户误以为卡住）；非 writing 阶段 0 字不显示字数。让用户明白后端在等待 AI 首次输出而非异常。
 - **附件提取失败自动重试（2026-08-08）**：上传 xlsx 等附件后提取失败（extract_failed）时，`read_attachment` 会自动重试一次提取（`retryAttachmentExtraction`：文件仍在则重新解析），成功后返回内容；仍失败返回友好提示「可重新上传或稍后再读」。修复「上传 xlsx 显示未能解析且无法恢复」。
 - **xlsx 提取 Turbopack 兼容（2026-08-08）**：根因——SheetJS `XLSX.readFile(path)` 依赖库内部 `_fs`（模块加载时 `require('fs')` 捕获），Next.js Turbopack 下 `_fs` 为 undefined，导致即使文件存在也报「Cannot access file」。修复：`extractAttachmentText` 改用 `fs.readFileSync(path)` 读 buffer → `XLSX.read(buf)`，绕开 SheetJS 内部 `_fs`。诊断日志 `[attachment] extract not ready` 记录失败原因。
@@ -120,7 +126,8 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - 确认生成（`nodes.ts` → `lib/agent/import-confirm.ts`）：`buildImportReferenceConfirmParams` 在 `enrichImportReferenceParams` 之上注入 `params.importItems` = 候选文献数组（`resolveImportReferenceCandidates` = 模型请求的 hits（`hitIndices`→last-search / `hitsJson` / `hitJson` / `doi`）∪ 最近一次检索全部命中，按 id/doi 去重，≤25）。
 - `agent/confirm` 事件携带含 `importItems` 的 params，随快照持久化进 DB `awaitingConfirm`。
 - 前端确认卡（`import-confirm-list.tsx`，由 `agent-panel` 挂载）：`importItems` 存在时渲染 checkbox 列表（默认全选）+ 全选/全不选 + 「确认导入 N 篇」。点标题可展开作者、摘要（检索未带摘要则提示打开原文）和 DOI/OA 链接；不再用截断标题 preview 顶替正文。
-- **进行中 UI（2026-08-23）**：`use-agent` 的 `isRunning` 看 SSE 是否还在飞（`inFlight`），不再只看最后一条 `agent/status`。V4 关 thinking 后 LLM 可能长时间无 `thought_delta`，节点开始时 live 推 `thinking`；写节完成卡不再挡住底部「正在思考/导入」指示器。
+- **进行中 UI（2026-08-23）**：`use-agent` 的 `isRunning` 看 SSE 是否还在飞（`inFlight`），不再只看最后一条 `agent/status`。V4 关 thinking 后 LLM 可能长时间无 `thought_delta`，节点开始时 live 推 `thinking`；写节完成卡不再挡住底部「正在思考/导入」指示器（`displayProgress` 只在 `isWriteStatusLive` 时抑制）。
+- **侧栏高度断点（2026-09-03）**：质量收口看板在 Agent Tab 顶部、与 `AgentPanel` 兄弟排布。面板必须包在 `flex-1 min-h-0 overflow-hidden` 里，否则 `h-full` + 收口条会超出父级、`overflow-hidden` 裁掉输入框。收口芯片改为单行横滑；顶栏 Plan 用 `compact` 限高；配置问答 max-height 从 52vh 收到约 16–18rem，避免把对话区挤没。
 - 用户批准：`use-agent.ts resolveConfirm(true, selectedIndices)` 回传 `confirmDecision.selectedIndices`（0 起索引数组）；`run-graph.ts` 把 `selectedIndices` 并入 `trustedParams` 重放。
 - 工具执行（`tools/import-reference.ts`）：有 `selectedIndices` + `importItems` 时按勾选调 `importExternalReferencesToProject` 批量落库（自带 DOI/题录去重 + 批量入知识库），**跳过相关度门禁**（用户已亲眼确认）；未勾选任何 → 报「未勾选任何文献」。
 - **批量导入进度（2026-08-07）**：`importExternalReferencesToProject` / `ingestExternalHitsToKnowledge` 支持 `onProgress(done,total,title)`，工具经 `ctx.emitLiveEvent` 发 `agent/progress`（`stage="importing"`，新增 `done`/`total` 字段，`label`="正在导入文献 i/N"，`detail`=标题）。前端 `use-agent` 渲染动画进度卡（进度条 + 百分比 + **逐篇状态列表**：✓已导入 / 当前处理中动画 / ○待处理），observation/complete/error 后清空——解决批量导入 OA 下载期间 UI「干等/卡住」。
@@ -140,6 +147,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **论证并入写作蓝图（2026-08-09，方案 A）**：产品主路径改为 `配置 → 大纲 → 写作蓝图 → 分节写`。`SectionGuide` 增加 `claim` / `evidenceHint` / `warrant` / `rebuttal`；全文级 `researchQuestion` / `argumentGaps`。`ensure-write-prereqs` / phase-gate 不再要求 `build_argument_blueprint`；检查点只对 `generate_writing_blueprint` 暂停。Passport Phase 3 有写作蓝图即 done。旧 `argumentBlueprint` 列保留只读兼容。
 - **卸掉弃用工具注册（2026-08-11）**：`createAgentTools` 不再注册 `build_argument_blueprint`（源文件保留作说明，`UNREGISTERED_TOOL_FILES`）；planner / Phase 3 hint 文案改为「确认写作蓝图主张」，不再引导生成独立论证蓝图。
 - **工具挂载表（2026-08-16，W3-AP-ARCH-01）**：`tools/registry.ts` 为唯一挂载点。加工具：新建 `tools/<name>.ts` + 推进 `READ_TOOLS` 或 `WRITE_TOOLS`。禁止运行时扫磁盘。忘了挂表则 `agent-tool-registry.test.ts` 红。
+- **工具 UI 对齐体检（2026-08-23）**：每个已挂载工具必须在 `ui-progress.ts` 的 `TOOL_LABELS` 有中文名（`agent-tool-registry.test.ts` 断言 `toolDisplayName(name) !== name`）。XRD 出图走与 `generate_chart` 相同的图卡（`keepData` + `isFigureCard` + 回放 `figureSpecEnc`）。`generate_table` 纳入计划关键词。`parseBoolParam` 把 LLM 的 boolean `false` 与 `"false"`/`"0"` 一并视为否（XRD `insertTable` 等）。附件：上传后台提取（xlsx 走 buffer、失败可重试），`generate_outline` 会读框架附件锁一级标题。
 - **大纲阈值统一（2026-08-11）**：`MIN_OUTLINE_CHARS = 20`（`lib/outline-threshold.ts`）供写门禁与 Passport Phase 2 共用，消除 20 vs 80 漂移。
 - **破坏性删除需确认（2026-08-11）**：`remove_figure` / `remove_references` 标 `requiresConfirmation` + `safety: "destructive"`，确认卡文案见 `confirm-message.ts`。
 - **写作蓝图「结构无效」修复（2026-08-09）**：首因是 prompt 示例 `language: Chinese/English`（schema 仅 `zh|en`）。复查后发现仍会因 `dataSource`/`projectMode` 非法枚举、`keyPoints` 写成字符串、`estimatedWordCount` 写成 `"6000-12000"`、缺 `version`/空 items 等失败。现：① prompt 按 review/research 分示例并写明枚举约束；② `blueprint-coerce.ts` 纠偏上述偏差并在必要时合成最小合法 figure/guides；③ 错误文案带字段路径。API 与 `generate_writing_blueprint` 共用。

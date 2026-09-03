@@ -25,8 +25,18 @@ import {
   finalizeWriteStatus,
   type WriteStatus,
 } from "@/lib/agent/write-status";
-import { listAgentSessions, loadAgentChatHistory, postAgentStream } from "@/services/agent";
+import {
+  listAgentSessions,
+  loadAgentChatHistory,
+  postAgentStream,
+  postInterruptAgentSession,
+} from "@/services/agent";
 import { getErrorMessage } from "@/lib/error-utils";
+import {
+  isAgentSessionBusyError,
+  resolveAgentIsRunning,
+  shouldShowOrphanedSession,
+} from "@/lib/agent/ui-progress";
 
 export type AgentMessage = AgentUiMessage;
 
@@ -50,6 +60,8 @@ export function useAgent(options: UseAgentOptions = {}) {
   const [lastProjectMutation, setLastProjectMutation] = useState<AgentProjectMutatedInfo | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [interruptedSessions, setInterruptedSessions] = useState<AgentSessionListItem[]>([]);
+  /** 服务器仍 running、本端 SSE 已断：界面空白时用来接上/强制结束 */
+  const [orphanedRunning, setOrphanedRunning] = useState<AgentSessionListItem | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   /** 真流式：agent 回复正在逐 token 到达的增量文本 */
   const [streamingText, setStreamingText] = useState("");
@@ -64,6 +76,8 @@ export function useAgent(options: UseAgentOptions = {}) {
   } | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
+  /** SSE 请求仍在飞：不能只靠 status，思考/导入可能几十秒没有新事件 */
+  const [inFlight, setInFlight] = useState(false);
   const onPersistedRef = useRef(options.onSectionPersisted);
   const onChartPersistedRef = useRef(options.onChartPersisted);
   const onProjectMutatedRef = useRef(options.onProjectMutated);
@@ -84,16 +98,25 @@ export function useAgent(options: UseAgentOptions = {}) {
   const refreshInterrupted = useCallback(async () => {
     if (!options.projectId) {
       setInterruptedSessions([]);
+      setOrphanedRunning(null);
       return;
     }
     try {
-      const list = await listAgentSessions({
-        projectId: options.projectId,
-        status: "interrupted",
-      });
-      setInterruptedSessions(list);
+      const [interrupted, running] = await Promise.all([
+        listAgentSessions({
+          projectId: options.projectId,
+          status: "interrupted",
+        }),
+        listAgentSessions({
+          projectId: options.projectId,
+          status: "running",
+        }),
+      ]);
+      setInterruptedSessions(interrupted);
+      setOrphanedRunning(running[0] ?? null);
     } catch {
       setInterruptedSessions([]);
+      setOrphanedRunning(null);
     }
   }, [options.projectId]);
 
@@ -113,6 +136,14 @@ export function useAgent(options: UseAgentOptions = {}) {
       // 续聊挂到最近一条会话（含 completed），实现真多轮
       if (last) {
         setSessionId(last.id);
+        if (last.awaitingCheckpoint) {
+          setPendingCheckpoint(last.awaitingCheckpoint);
+          setStatus("awaiting_checkpoint");
+        }
+        if (last.awaitingConfirm) {
+          setPendingConfirm(last.awaitingConfirm);
+          setStatus("awaiting_checkpoint");
+        }
       }
       setHistoryLoaded(true);
     } catch {
@@ -131,6 +162,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     abortRef.current?.abort();
     abortRef.current = null;
     setStatus("idle");
+    setInFlight(false);
     setWriteStatus(null);
     setImportProgress(null);
     setPlan(null);
@@ -152,6 +184,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     abortRef.current?.abort();
     abortRef.current = null;
     setStatus("idle");
+    setInFlight(false);
     setMessages([]);
     setStreamingText("");
     setWriteStatus(null);
@@ -169,6 +202,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     abortRef.current?.abort();
     abortRef.current = null;
     setStatus("idle");
+    setInFlight(false);
     setPlan(null);
     setSummary(null);
     setPendingConfirm(null);
@@ -193,9 +227,22 @@ export function useAgent(options: UseAgentOptions = {}) {
     setStreamingText("");
     setWriteStatus(null);
     setImportProgress(null);
+    setInFlight(false);
     setStatus("cancelled");
     void refreshInterrupted();
   }, [refreshInterrupted]);
+
+  const abandonOrphanedSession = useCallback(async () => {
+    const id = orphanedRunning?.id ?? sessionId;
+    if (!id) return;
+    try {
+      await postInterruptAgentSession(id);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+    setOrphanedRunning(null);
+    void refreshInterrupted();
+  }, [orphanedRunning?.id, sessionId, refreshInterrupted]);
 
   const handleEvent = useCallback((event: AgentSSEEvent) => {
     switch (event.type) {
@@ -288,7 +335,8 @@ export function useAgent(options: UseAgentOptions = {}) {
           data != null
           && (event.tool === "validate_citations"
             || event.tool === "draft_mechanism_figure"
-            || event.tool === "generate_chart");
+            || event.tool === "generate_chart"
+            || event.tool === "generate_xrd_analysis");
         setMessages((prev) => [
           ...prev,
           {
@@ -357,19 +405,20 @@ export function useAgent(options: UseAgentOptions = {}) {
       case "agent/complete":
         setStreamingText("");
         setWriteStatus(null);
-    setImportProgress(null);
         setImportProgress(null);
         setSummary(event.summary);
         setMessages((prev) => [...prev, { kind: "summary", summary: event.summary }]);
         setPendingCheckpoint(null);
+        setPendingConfirm(null);
         setStatus("completed");
         void refreshInterrupted();
         break;
       case "agent/error":
         setStreamingText("");
         setWriteStatus(null);
-    setImportProgress(null);
         setImportProgress(null);
+        setPendingCheckpoint(null);
+        setPendingConfirm(null);
         toast.error(event.error);
         setStatus("error");
         void refreshInterrupted();
@@ -387,6 +436,7 @@ export function useAgent(options: UseAgentOptions = {}) {
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
+      setInFlight(true);
 
       if (userLine) {
         setMessages((prev) => [...prev, { kind: "user", text: userLine }]);
@@ -401,18 +451,36 @@ export function useAgent(options: UseAgentOptions = {}) {
       setStatus("planning");
 
       try {
+        let sawTerminal = false;
         await postAgentStream(request, {
           signal: controller.signal,
-          onEvent: handleEvent,
+          onEvent: (event) => {
+            if (
+              event.type === "agent/complete"
+              || event.type === "agent/error"
+              || (event.type === "agent/status"
+                && (event.status === "awaiting_checkpoint"
+                  || event.status === "completed"
+                  || event.status === "error"
+                  || event.status === "cancelled"))
+            ) {
+              sawTerminal = true;
+            }
+            handleEvent(event);
+          },
         });
-        setStatus((prev) =>
-          prev === "planning"
-          || prev === "thinking"
-          || prev === "executing"
-          || prev === "finalizing"
-            ? "completed"
-            : prev,
-        );
+        setStatus((prev) => {
+          const mid =
+            prev === "planning"
+            || prev === "thinking"
+            || prev === "executing"
+            || prev === "finalizing";
+          if (!sawTerminal && mid) {
+            toast.message("连接中断，写节可能还没落地。直接说「继续」接着写。");
+            return "cancelled";
+          }
+          return mid ? "completed" : prev;
+        });
       } catch (error: unknown) {
         if (controller.signal.aborted) {
           setStatus((prev) =>
@@ -421,7 +489,23 @@ export function useAgent(options: UseAgentOptions = {}) {
           void refreshInterrupted();
           return;
         }
-        toast.error(getErrorMessage(error));
+        const message = getErrorMessage(error);
+        if (isAgentSessionBusyError(message)) {
+          if (userLine) {
+            setMessages((prev) => {
+              const last = prev[prev.length - 1];
+              if (last?.kind === "user" && last.text === userLine) {
+                return prev.slice(0, -1);
+              }
+              return prev;
+            });
+          }
+          setStatus((prev) => (prev === "planning" ? "completed" : prev));
+          toast.error("上一轮还在服务器上跑，这边已经断开，看不到进度。请接上或强制结束。");
+          void refreshInterrupted();
+          return;
+        }
+        toast.error(message);
         setWriteStatus(null);
         setImportProgress(null);
         setStatus("error");
@@ -429,6 +513,7 @@ export function useAgent(options: UseAgentOptions = {}) {
         if (abortRef.current === controller) {
           abortRef.current = null;
         }
+        setInFlight(false);
         void refreshInterrupted();
       }
     },
@@ -529,12 +614,12 @@ export function useAgent(options: UseAgentOptions = {}) {
     [runStream, sessionId, pendingConfirm, options.projectId],
   );
 
-  const idleLike =
-    status === "idle"
-    || status === "completed"
-    || status === "error"
-    || status === "cancelled"
-    || status === "awaiting_checkpoint";
+  const isRunning = resolveAgentIsRunning({
+    inFlight,
+    status,
+    hasPendingConfirm: Boolean(pendingConfirm),
+    hasPendingCheckpoint: Boolean(pendingCheckpoint),
+  });
 
   return {
     status,
@@ -550,6 +635,15 @@ export function useAgent(options: UseAgentOptions = {}) {
     lastProjectMutation,
     sessionId,
     interruptedSessions,
+    orphanedRunning: shouldShowOrphanedSession({
+      inFlight,
+      status,
+      hasPendingConfirm: Boolean(pendingConfirm),
+      hasPendingCheckpoint: Boolean(pendingCheckpoint),
+    })
+      ? orphanedRunning
+      : null,
+    abandonOrphanedSession,
     historyLoaded,
     sendGoal,
     resumeSession,
@@ -559,6 +653,6 @@ export function useAgent(options: UseAgentOptions = {}) {
     cancel,
     reset,
     startNewChat,
-    isRunning: !idleLike,
+    isRunning,
   };
 }

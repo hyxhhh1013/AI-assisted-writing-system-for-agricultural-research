@@ -335,6 +335,7 @@ export async function* runAgentGraphLoop(
     const displayParams: Record<string, unknown> = Object.fromEntries(
       Object.entries(trustedParams).filter(([k]) => k !== "importItems"),
     );
+    yield { type: "agent/status", status: "executing" };
     const actionEvent: AgentSSEEvent = {
       type: "agent/action",
       tool: tool.name,

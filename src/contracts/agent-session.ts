@@ -3,7 +3,7 @@
  * + 可选 uiTranscript 供前端历史回放
  */
 
-import type { AgentPlan, AgentSummary } from "@/contracts/agent";
+import type { AgentCheckpointRequest, AgentConfirmRequest, AgentPlan, AgentSummary } from "@/contracts/agent";
 import type { IntentKind } from "@/contracts/agent-intent";
 import type { LLMMessage, ParsedToolCall } from "@/lib/agent/types";
 
@@ -120,6 +120,9 @@ export interface AgentSessionListItem {
   createdAt: string;
   /** 请求 includeTranscript=1 时返回 */
   uiTranscript?: AgentUiMessage[];
+  /** 历史恢复：服务端仍在等人确认时带回，避免刷新后只剩孤儿条 */
+  awaitingCheckpoint?: AgentCheckpointRequest | null;
+  awaitingConfirm?: AgentConfirmRequest | null;
 }
 
 export function isAgentSessionSnapshot(value: unknown): value is AgentSessionSnapshot {

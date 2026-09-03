@@ -13,7 +13,7 @@
 <!-- API_INDEX:AUTO:START -->
 ## 路由表（自动生成）
 
-> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-08-23 02:18:35**（共 **109** 个 route 文件，validateBody **50**，SSE **11**，requireAdmin **24**）。
+> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-08-23 02:55:49**（共 **109** 个 route 文件，validateBody **51**，SSE **11**，requireAdmin **24**）。
 
 图例：zod = 使用 validateBody；SSE = 含 text/event-stream / ReadableStream；admin = 含 requireAdmin。
 
@@ -229,7 +229,7 @@
 | POST | `/api/agent/attachments` | — | — | — |
 | GET, DELETE | `/api/agent/attachments/[id]` | — | — | — |
 | POST | `/api/agent/attachments/[id]/pin` | — | — | — |
-| GET | `/api/agent/sessions` | — | — | — |
+| GET, POST | `/api/agent/sessions` | ✓ | — | — |
 | GET, POST | `/api/citations/gate` | ✓ | — | — |
 | POST | `/api/dft/vasp` | — | — | — |
 | GET, POST | `/api/directions` | ✓ | — | — |

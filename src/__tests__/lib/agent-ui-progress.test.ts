@@ -4,7 +4,10 @@ import {
   formatToolWorkingLine,
   humanizeToolNotice,
   isSoftToolNotice,
+  isAgentSessionBusyError,
+  resolveAgentIsRunning,
   resolveLiveProgress,
+  shouldShowOrphanedSession,
 } from "@/lib/agent/ui-progress";
 
 describe("agent ui-progress", () => {
@@ -13,6 +16,9 @@ describe("agent ui-progress", () => {
     expect(formatToolWorkingLine("write_section", { section: "introduction" })).toContain("引言");
     expect(formatToolWorkingLine("ingest_project_data", { fileName: "yield.csv" })).toMatch(/表格|数据/);
     expect(formatToolParamHint("ingest_project_data", { fileName: "yield.csv" })).toBe("yield.csv");
+    expect(formatToolWorkingLine("generate_table")).toMatch(/三线表/);
+    expect(formatToolWorkingLine("generate_xrd_analysis")).toMatch(/XRD/);
+    expect(formatToolWorkingLine("read_attachment")).toMatch(/附件/);
   });
 
   it("softens stagnant notices for users", () => {
@@ -34,6 +40,72 @@ describe("agent ui-progress", () => {
         ],
       }),
     ).toContain("文献 [1]");
+  });
+
+  it("after an observation uses status, not a fake executing line", () => {
+    expect(
+      resolveLiveProgress({
+        status: "thinking",
+        isRunning: true,
+        messages: [
+          { kind: "action", tool: "import_reference" },
+          { kind: "observation", tool: "import_reference" },
+        ],
+      }),
+    ).toMatch(/思考/);
+  });
+
+  it("resolveAgentIsRunning stays true while SSE is in flight", () => {
+    expect(
+      resolveAgentIsRunning({ inFlight: true, status: "thinking" }),
+    ).toBe(true);
+    expect(
+      resolveAgentIsRunning({
+        inFlight: true,
+        status: "awaiting_checkpoint",
+        hasPendingConfirm: true,
+      }),
+    ).toBe(false);
+    expect(
+      resolveAgentIsRunning({ inFlight: false, status: "thinking" }),
+    ).toBe(false);
+    expect(
+      resolveAgentIsRunning({
+        inFlight: true,
+        status: "awaiting_checkpoint",
+      }),
+    ).toBe(true);
+  });
+
+  it("hides orphaned-session banner while waiting for confirm or checkpoint", () => {
+    expect(
+      shouldShowOrphanedSession({
+        inFlight: false,
+        status: "awaiting_checkpoint",
+        hasPendingConfirm: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowOrphanedSession({
+        inFlight: false,
+        status: "awaiting_checkpoint",
+        hasPendingCheckpoint: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowOrphanedSession({ inFlight: false, status: "awaiting_checkpoint" }),
+    ).toBe(false);
+    expect(
+      shouldShowOrphanedSession({ inFlight: true, status: "executing" }),
+    ).toBe(false);
+    expect(
+      shouldShowOrphanedSession({ inFlight: false, status: "idle" }),
+    ).toBe(true);
+  });
+
+  it("detects session-busy 409 copy", () => {
+    expect(isAgentSessionBusyError("会话仍在执行中，请稍候或先停止")).toBe(true);
+    expect(isAgentSessionBusyError("执行失败")).toBe(false);
   });
 
   it("falls back to thinking copy", () => {

@@ -23,6 +23,13 @@ export type AIChatMessage = {
   content: string | AIChatContentPart[];
   tool_call_id?: string;
   name?: string;
+  /**
+   * DeepSeek V4 thinking 模式的思维链。带 `tools` 的后续请求必须原样回传，
+   * 否则上游 400：`reasoning_content in the thinking mode must be passed back`。
+   * 本仓库 Agent 历史是合成的（Plan / compact / tool-as-user），无法可靠回传，
+   * 因此带 tools 的 DeepSeek 请求会关闭 thinking；此字段仅在确有原文时透传。
+   */
+  reasoning_content?: string;
 };
 
 export interface AICallOptions {
@@ -163,6 +170,44 @@ async function pickApiKey(provider: ModelProviderKey): Promise<string | undefine
   return keys[_keyRoundRobin % keys.length];
 }
 
+function serializeAIChatMessage(message: AIChatMessage): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    role: message.role,
+    content: message.content,
+  };
+  if (message.tool_call_id) out.tool_call_id = message.tool_call_id;
+  if (message.name) out.name = message.name;
+  if (message.reasoning_content) out.reasoning_content = message.reasoning_content;
+  return out;
+}
+
+/**
+ * 组装 OpenAI 兼容 chat/completions 请求体。
+ * DeepSeek V4 默认 thinking=on；一旦请求带 tools，上游要求历史里每条 assistant
+ * 都带回当时的 reasoning_content。Agent 会话会插入 Plan/检查点、压缩旧思考、
+ * 把工具结果写成 user 消息，无法满足该契约，故对 DeepSeek+tools 显式关闭 thinking。
+ */
+export function buildChatCompletionsBody(
+  options: AICallOptions & { model: string },
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: options.model,
+    messages: options.messages.map(serializeAIChatMessage),
+    stream: options.stream ?? true,
+  };
+  if (options.temperature !== undefined) {
+    body.temperature = options.temperature;
+  }
+  if (options.tools?.length) {
+    body.tools = options.tools;
+    body.tool_choice = options.tool_choice ?? "auto";
+    if (options.provider === "deepseek") {
+      body.thinking = { type: "disabled" };
+    }
+  }
+  return body;
+}
+
 export async function callAI(options: AICallOptions): Promise<Response> {
   const config = getModelConfig(options.provider);
   const apiKey = await pickApiKey(options.provider);
@@ -190,15 +235,7 @@ export async function callAI(options: AICallOptions): Promise<Response> {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({
-          model,
-          messages: options.messages,
-          stream: options.stream ?? true,
-          ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
-          ...(options.tools?.length
-            ? { tools: options.tools, tool_choice: options.tool_choice ?? "auto" }
-            : {}),
-        }),
+        body: JSON.stringify(buildChatCompletionsBody({ ...options, model })),
         signal: options.signal,
       },
       1,             // retries: 只重试 1 次（避免叠加等待过长）

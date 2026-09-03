@@ -9,8 +9,11 @@ const MECHANISM_FIGURE_RULE = [
   "- **机理图/流程图**：draft_mechanism_figure 必须传中文结构——",
   "flow 用 flowSteps 或 nodesJson+edgesJson；",
   "多面板用 panelsJson（每项含 title 与 steps 数组，每栏至少 2 个中文 steps）。",
+  "主张写 claim/caption，温度/催化剂等条件写在边标签或步骤括号里（会提升到边上）。",
   "禁止依赖默认英文占位（Pathway/Product/Feedstock）或「Upload figure asset」。",
-  "生成成功后立刻 read_figure（传 imageUrl，mode=qa）回看；",
+  "先看 observation.qaReport：block 按 findings 改 Spec 再出，不要整图重掷，不要改文生图。",
+  "未指定 layout 时可能带 chain/fork 两套候选，只入库推荐稿；用户选另一套就带 layout= 替换。",
+  "过线后系统会 read_figure(mode=qa) 扫残余观感；",
   "数据图 generate_chart 只看 qaReport，不要对柱状/折线/热力跑 read_figure(qa)。",
   "若需重画：必须带 replaceImageUrl 指向旧图 URL 就地替换，禁止再追加一张叠在下面；",
   "也可先 remove_figure 删旧图再生成。清多余重复图用 remove_figure。",
@@ -27,7 +30,7 @@ export function buildAgentSystemPrompt(
 ): string {
   const writeEnabled = tools.some((t) => t.safety === "write");
   const writeNote = writeEnabled
-    ? `【写回】可用 generate_* / write_section / refine / import_reference / ingest_project_data / 图表与修订工具；section 用英文 key（introduction、methods、results、discussion、conclusion、literature_body、abstract 等）。**主路径**：大纲 → 写作蓝图（含各节 claim/evidenceHint）→ 分节写。**已有写作蓝图时**：按 writingOrder 推进；context/bullets 对齐该节 purpose/keyPoints/主张（系统会注入【写作蓝图（本节）】）。缺大纲/蓝图时可直接 write_section（系统自动补齐并走批准检查点）。写后可用 validate_citations；交付可用 export_manuscript_markdown。`
+    ? `【写回】可用 generate_* / write_section / refine / import_reference / ingest_project_data / 图表与修订工具；section 用英文 key（introduction、methods、results、discussion、conclusion、literature_body、abstract 等）。**主路径**：大纲 → 用户确认大纲 → 写作蓝图（含各节 claim/evidenceHint）→ 分节写。**已有写作蓝图时**：按 writingOrder 推进；context/bullets 对齐该节 purpose/keyPoints/主张（系统会注入【写作蓝图（本节）】）。缺大纲/蓝图时可直接 write_section（系统自动补齐；大纲写回后一律暂停等人确认）。有大纲/框架附件时 generate_outline 会按附件一级标题锁骨架。写后可用 validate_citations；交付可用 export_manuscript_markdown。`
     : "【限制】当前只能使用只读工具，不能撰写或修改论文。";
 
   return `你是禾书耕文（GrainScript）的科研写作智能体——像 Cursor 里的通用 Agent：思考 → 自己取上下文 → 调工具 → 用中文说明 → 问下一步。

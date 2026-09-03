@@ -1,5 +1,12 @@
 import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
+import {
+  buildFrameworkPromptBlock,
+  parseUserSkeletonLines,
+  pickOutlineSkeleton,
+  resolveOutlineFramework,
+  type OutlineAttachmentCandidate,
+} from "@/lib/agent/outline-from-attachment";
 import { callAI, getAgentModelConfig } from "@/lib/ai";
 import { matchCategoryFromDirection } from "@/lib/knowledge-metadata";
 import {
@@ -12,21 +19,54 @@ import prisma from "@/lib/prisma";
 import { syncProjectPaperPassport } from "@/lib/project-paper-passport-sync";
 import { formatRagCitation, localRAG } from "@/lib/rag";
 
+async function loadOutlineAttachmentCandidates(
+  ctx: AgentContext,
+): Promise<OutlineAttachmentCandidate[]> {
+  const scopes = [
+    ...(ctx.sessionId ? [{ sessionId: ctx.sessionId }] : []),
+    ...(ctx.projectId ? [{ pinned: true, projectId: ctx.projectId }] : []),
+  ];
+  if (scopes.length === 0) return [];
+  const rows = await prisma.agentAttachment.findMany({
+    select: {
+      id: true,
+      originalName: true,
+      status: true,
+      extractedText: true,
+    },
+    where: { userId: ctx.userId, OR: scopes },
+    orderBy: { createdAt: "desc" },
+    take: 30,
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    originalName: r.originalName,
+    status: r.status,
+    extractedText: r.extractedText ?? "",
+  }));
+}
+
 /**
  * Phase 2 / academic-paper structure_architect：生成大纲并写回项目。
- * 让 Agent 自主补齐架构，而不是把用户踢回提纲 Tab。
+ * 有大纲/框架附件时服务端先读附件锁一级标题，不依赖模型自觉。
  */
 export const generateOutlineTool: ToolDefinition = {
   name: "generate_outline",
   description:
-    "基于题目与研究方向生成论文大纲（Markdown），默认写回项目；对应 academic-paper Phase 2 架构",
+    "基于题目与研究方向生成论文大纲（Markdown），默认写回项目。"
+    + "若本会话有大纲/框架类附件（或传入 attachmentId），会先读附件并按其一级标题写回，禁止另起炉灶。"
+    + "写回后必须等用户批准检查点，不要接着生成蓝图。",
   parameters: {
     type: "object",
     properties: {
       userSkeleton: {
         type: "string",
         description:
-          "可选：一级标题骨架，每行一条；缺省按综述/研究模式使用默认骨架",
+          "可选：一级标题骨架，每行一条；有框架附件时以附件标题为准",
+      },
+      attachmentId: {
+        type: "string",
+        description: "可选：指定本会话大纲/框架附件 id；不传则自动挑选像大纲的文档",
       },
       persistToProject: {
         type: "string",
@@ -52,14 +92,25 @@ export const generateOutlineTool: ToolDefinition = {
       || params.persistToProject === "true"
       || params.persistToProject === "1";
 
-    let skeleton = getDefaultUserSkeleton(project.mode);
-    if (typeof params.userSkeleton === "string" && params.userSkeleton.trim()) {
-      const lines = params.userSkeleton
-        .split("\n")
-        .map((l) => l.trim())
-        .filter(Boolean);
-      if (lines.length >= 3) skeleton = lines;
+    const attachmentId =
+      typeof params.attachmentId === "string" ? params.attachmentId.trim() : "";
+    const resolved = resolveOutlineFramework({
+      attachmentId: attachmentId || undefined,
+      attachments: await loadOutlineAttachmentCandidates(ctx),
+    });
+    if (resolved.status === "error") {
+      return { success: false, error: resolved.error };
     }
+    const framework = resolved.status === "used" ? resolved.framework : null;
+    const picked = pickOutlineSkeleton({
+      framework,
+      paramSkeleton: parseUserSkeletonLines(
+        typeof params.userSkeleton === "string" ? params.userSkeleton : undefined,
+      ),
+      defaultSkeleton: getDefaultUserSkeleton(project.mode),
+    });
+    const skeleton = picked.skeleton;
+    const lockedByAttachment = picked.lockedByAttachment;
 
     const { provider, keyError } = getAgentModelConfig("writer");
     if (keyError) return { success: false, error: keyError };
@@ -86,16 +137,25 @@ export const generateOutlineTool: ToolDefinition = {
       contextText,
       projectMode: project.mode,
       userSkeleton: skeleton,
+      skeletonFromAttachment: lockedByAttachment,
+      frameworkBlock: framework ? buildFrameworkPromptBlock(framework) : undefined,
     });
+
+    const userPayload = [
+      `论文题目：${title}`,
+      `研究方向：${researchDirection}`,
+      framework
+        ? `已读取附件「${framework.fileName}」作为框架底稿；一级标题不得改写。`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     const response = await callAI({
       provider,
       messages: [
         { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: `论文题目：${title}\n研究方向：${researchDirection}`,
-        },
+        { role: "user", content: userPayload },
       ],
       stream: false,
       timeoutMs: 120_000,
@@ -111,7 +171,7 @@ export const generateOutlineTool: ToolDefinition = {
     }
 
     outline = enforceOutlineAgainstSkeleton(outline, skeleton);
-    if (project.mode === "review") {
+    if (project.mode === "review" && !lockedByAttachment) {
       outline = scrubForbiddenReviewHeadings(outline, skeleton);
     }
 
@@ -127,16 +187,30 @@ export const generateOutlineTool: ToolDefinition = {
       }
     }
 
+    const chars = outline.replace(/\s+/g, "").length;
+    const frameworkHint = framework
+      ? `已按附件「${framework.fileName}」${lockedByAttachment ? "锁定一级标题" : "作为底稿"}，`
+      : "";
     return {
       success: true,
       data: {
-        chars: outline.replace(/\s+/g, "").length,
+        chars,
         preview: outline.slice(0, 1200),
         persisted: persist,
+        ...(framework
+          ? {
+              frameworkAttachment: {
+                id: framework.attachmentId,
+                fileName: framework.fileName,
+                headings: framework.headings,
+                locked: lockedByAttachment,
+              },
+            }
+          : {}),
       },
       summary: persist
-        ? `已生成并写回大纲（约 ${outline.replace(/\s+/g, "").length} 字）`
-        : `已生成大纲预览（约 ${outline.replace(/\s+/g, "").length} 字，未写回）`,
+        ? `${frameworkHint}已生成并写回大纲（约 ${chars} 字）。请等用户确认后再进入蓝图。`
+        : `${frameworkHint}已生成大纲预览（约 ${chars} 字，未写回）`,
     };
   },
 };
