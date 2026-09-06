@@ -8,7 +8,7 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-09-03（人控过目页：蓝图/澄清/导入/删除与大纲同一套交互）  
+> **最后更新**：2026-09-06（UI-PR-036 索引构建进度连续显示）  
 > **实时 status 只看 §1 Phase 13 / Phase 14 与 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
@@ -121,6 +121,9 @@
 | RAG-PR-011 | 扩写范围检索（按已选文献分类 scope） | RAG-PR-010 | 0.5d | done | 2026-06-13；`search({categories})` + `deriveScopeCategories`；无引用回退全库 |
 | RAG-PR-012 | 召回提升：同义词扩展 + 多 query RRF + 弱 BM25 全池向量 | RAG-PR-011 | 0.5d | done | 2026-07-27；`rag-query-expand.ts` |
 | RAG-PR-013 | 索引 n-gram 对齐 + 题名加权 + 条件 multi-query | RAG-PR-012 | 0.5d | done | 2026-07-27；倒排 bigram + metadata boost |
+| RAG-PR-014 | 增量索引：新文献只写变更分类、保留 `.emb` | RAG-PR-010 | 0.5d | done | 2026-09-06；`--files` 不再误删缓存/向量；上传后自动单篇索引 |
+| RAG-PR-015 | 检索提质减负：停用词/参考文献/加权 BM25 | RAG-PR-013 | 0.5d | done | 2026-09-06；CJK 停用单字、参考文献页过滤、同义词降权、弱召回向量扫描封顶 |
+| RAG-PR-016 | IMRaD 切块 + 写作按节取证 | RAG-PR-015 | 0.5d | done | 2026-09-06；`metadata.section`；旧库双读，`--rechunk` 可选迁移，默认不重解析全库 |
 | **Phase 9 — 研究方向战略规划（ENG-PR-100 系列）** |
 | ENG-PR-100 | 方向基础模块：Direction 表 + CRUD + 页面框架（33 files） | — | 3d | done | 2026-07-04；`d18a7e3` |
 | ENG-PR-110 | Socratic Mentor 预承诺（P0） | 100 | 2d | done | 2026-07-04；`314dd02` / `509a9a3` / `52823df` |
@@ -1195,7 +1198,11 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-09-03 | Agent 侧栏高度断点 | AI | 质量收口条与 `AgentPanel` 兄弟叠 `h-full` 裁掉输入框；写节完成卡误挡思考指示器。改为 `flex-1 min-h-0` 包面板、`isWriteStatusLive` 才抑制指示器、Plan/配置问答/收口芯片限高。 |
 | 2026-09-03 | 视觉/IF/删库 | AI | 识图改 `deepseek-v4-flash-vision-exp`（复用 DeepSeek Key）；健康页区分「未导入 IF 表」与低覆盖，并统计有刊名/ISSN 篇数；`DELETE /api/knowledge` 仅管理员，前台删除按钮对普通用户隐藏。 |
 | 2026-09-03 | 大纲过目页 | AI | `outline_approve` 不再塞 96px 预览。侧栏人控卡 + Dialog 通读全文/标题跳转/改结构芯片；检查点带 `data.outline` 全文。 |
-| 2026-09-03 | 人控过目页家族 | AI | 蓝图/澄清/配置/导入/删图删文献不再用小预览+批准。共用 HITL 眉题；蓝图与确认自动打开 Dialog 通读；蓝图检查点带 `formatBlueprintPreview` 全文。 |
+| 2026-09-06 | RAG-PR-014 | AI | 增量索引修复：`--files` 不再清全库 Stage1 缓存；skip-stage3 不再删分类 `.emb`；只写变更分类+按 id pread 复制向量；上传后自动单篇索引。 |
+| 2026-09-06 | RAG-PR-015 | AI | 检索提质减负：CJK 功能字不再入倒排；参考文献页索引跳过+检索降权；同义词 BM25 降权；弱 BM25 不再全池扫向量（分层抽样 ≤800）；题名/文件名 3× 写入倒排。 |
+| 2026-09-06 | RAG-PR-016 | AI | IMRaD 切块：Stage 1 按短行标题分段后再 1000 字切；写作检索 prefer `metadata.section`。旧索引双读不必全库重建；`--rechunk`/`RAG_RECHUNK=1` 才把旧 schema 当 miss。 |
+| 2026-09-06 | UI-PR-035 | AI | 知识库索引 UI：页头「更新索引」+ 下拉拆增量/按章节重切/强制重解析/仅重算向量；已选「索引所选」；`rechunk` 进 reindex 契约与 API。 |
+| 2026-09-06 | UI-PR-036 | AI | 索引进度补断点：三阶段步进；Stage2 开始/Prisma 同步/向量化预告有 SSE；百分比只增不减；完成后保留面板。 |
 
 ---
 

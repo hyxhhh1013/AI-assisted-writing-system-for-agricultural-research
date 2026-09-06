@@ -19,6 +19,7 @@ import { createLogger } from "@/lib/logger";
 const log = createLogger("knowledge-list");
 import {
   applyReindexEvent,
+  applyReindexDisconnect,
   INITIAL_REINDEX_PROGRESS,
   type ReindexProgressState,
   type ReindexRequest,
@@ -40,6 +41,7 @@ export function useKnowledgeList() {
   const [categories, setCategories] = useState<string[]>(["全部"]);
   const [isLoading, setIsLoading] = useState(true);
   const [isIndexing, setIsIndexing] = useState(false);
+  const [indexPanelOpen, setIndexPanelOpen] = useState(false);
   const [indexProgress, setIndexProgress] = useState<ReindexProgressState>(INITIAL_REINDEX_PROGRESS);
   const reindexAbortRef = useRef<AbortController | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -167,6 +169,7 @@ export function useKnowledgeList() {
       reindexAbortRef.current = controller;
 
       setIsIndexing(true);
+      setIndexPanelOpen(true);
       setIndexProgress(INITIAL_REINDEX_PROGRESS);
       toast.info(startMessage || "正在重新扫描并索引文献…");
 
@@ -182,14 +185,17 @@ export function useKnowledgeList() {
         void fetchFiles();
       } catch (error: unknown) {
         if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) {
-          // 用户手动取消，不显示错误
+          setIndexPanelOpen(false);
         } else {
           const msg = error instanceof Error ? getErrorMessage(error) : "操作失败";
-          // 网络错误通常已经重试过了，这里显示最终失败信息
           if (msg.includes("索引流意外结束") || msg.includes("重试")) {
-            toast.warning("索引连接中断，但后台仍继续处理中。刷新页面可查看最新进度。");
+            toast.warning("索引连接中断，但后台仍继续处理中。可保持本面板或刷新后重连。");
+            setIndexProgress((prev) =>
+              applyReindexDisconnect(prev, "进度连接中断，后台任务可能仍在运行"),
+            );
           } else {
             toast.error(msg);
+            setIndexProgress((prev) => applyReindexDisconnect(prev, msg));
           }
         }
       } finally {
@@ -201,8 +207,15 @@ export function useKnowledgeList() {
   );
 
   const handleReindex = useCallback(() => {
-    void runReindex();
+    void runReindex({}, "正在增量更新索引（跳过未改动的文献）…");
   }, [runReindex]);
+
+  const handleIndexJob = useCallback(
+    (options: ReindexRequest, startMessage?: string) => {
+      void runReindex(options, startMessage);
+    },
+    [runReindex],
+  );
 
   const handleSingleReindex = useCallback(
     (fileName: string, options: ReindexRequest) => {
@@ -210,7 +223,9 @@ export function useKnowledgeList() {
         ? "强制重解析"
         : options.forceStage3
           ? "强制重嵌向量"
-          : "重新索引";
+          : options.rechunk
+            ? "按章节重切块"
+            : "重新索引";
       void runReindex({ ...options, files: [fileName] }, `正在${label}：${fileName}`);
     },
     [runReindex],
@@ -218,6 +233,11 @@ export function useKnowledgeList() {
 
   const handleCancelReindex = useCallback(() => {
     reindexAbortRef.current?.abort();
+  }, []);
+
+  const dismissIndexProgress = useCallback(() => {
+    reindexAbortRef.current?.abort();
+    setIndexPanelOpen(false);
   }, []);
 
   const toggleSelectAll = useCallback(() => {
@@ -324,10 +344,12 @@ export function useKnowledgeList() {
     }
     setIsUploading(true);
     let successCount = 0;
+    const uploadedNames: string[] = [];
     for (const file of uploadFiles) {
       try {
         await uploadKnowledgeFile(file, catName, uploadDocumentType);
         successCount++;
+        uploadedNames.push(file.name);
       } catch (e) {
         log.fail("knowledge upload failed", e, { fileName: file.name });
       }
@@ -337,7 +359,10 @@ export function useKnowledgeList() {
     setUploadFiles([]);
     void fetchFiles();
     setIsUploading(false);
-  }, [uploadFiles, uploadCategory, uploadNewInput, uploadDocumentType, fetchFiles]);
+    if (uploadedNames.length > 0) {
+      void runReindex({ files: uploadedNames }, `正在为新上传的 ${uploadedNames.length} 篇文献构建索引…`);
+    }
+  }, [uploadFiles, uploadCategory, uploadNewInput, uploadDocumentType, fetchFiles, runReindex]);
 
   const handleUpdateCategory = useCallback(async () => {
     const catName = newCategoryName === "new_cat" ? newCategoryInput : newCategoryName;
@@ -383,6 +408,7 @@ export function useKnowledgeList() {
     categoryOptions,
     isLoading,
     isIndexing,
+    indexPanelOpen,
     indexProgress,
     searchQuery,
     setSearchQuery,
@@ -446,8 +472,10 @@ export function useKnowledgeList() {
     openMetadataEditor,
     fetchFiles,
     handleReindex,
+    handleIndexJob,
     handleSingleReindex,
     handleCancelReindex,
+    dismissIndexProgress,
     handleDeleteFile,
     formatSize,
     journalFilter,

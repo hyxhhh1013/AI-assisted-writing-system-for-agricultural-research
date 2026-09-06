@@ -24,6 +24,7 @@ function buildScriptArgs(options: ReindexRequestInput): string[] {
   const args = ["--progress"];
   if (options.forceStage1) args.push("--force-stage1");
   if (options.forceStage3) args.push("--force-stage3");
+  if (options.rechunk) args.push("--rechunk");
   if (options.files && options.files.length > 0) {
     args.push(`--files=${options.files.map((name) => encodeURIComponent(name)).join(",")}`);
   }

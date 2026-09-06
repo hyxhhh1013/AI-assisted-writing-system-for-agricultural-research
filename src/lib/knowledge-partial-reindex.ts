@@ -40,6 +40,7 @@ export function runPartialPdfIndex(
     });
 
     let stderr = "";
+    let stdout = "";
     let settled = false;
     const timer = setTimeout(() => {
       if (settled) return;
@@ -50,9 +51,13 @@ export function runPartialPdfIndex(
         /* ignore */
       }
       log.warn("partial reindex timeout", { files: names.length });
-      resolve({ ok: false, code: null, stderr: stderr.slice(-2000) || "timeout" });
+      resolve({ ok: false, code: null, stderr: (stderr || stdout).slice(-2000) || "timeout" });
     }, timeoutMs);
 
+    child.stdout?.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+      if (stdout.length > 8000) stdout = stdout.slice(-4000);
+    });
     child.stderr?.on("data", (chunk: Buffer) => {
       stderr += chunk.toString();
       if (stderr.length > 8000) stderr = stderr.slice(-4000);
@@ -73,7 +78,7 @@ export function runPartialPdfIndex(
       resolve({
         ok: code === 0,
         code,
-        stderr: stderr.slice(-2000),
+        stderr: (stderr || stdout).slice(-2000),
       });
     });
   });

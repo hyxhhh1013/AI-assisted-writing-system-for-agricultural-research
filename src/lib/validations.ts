@@ -515,6 +515,7 @@ export const reindexRequestSchema = z.object({
   files: z.array(z.string().min(1)).optional(),
   forceStage1: z.boolean().optional(),
   forceStage3: z.boolean().optional(),
+  rechunk: z.boolean().optional(),
 });
 export type ReindexRequestInput = z.infer<typeof reindexRequestSchema>;
 

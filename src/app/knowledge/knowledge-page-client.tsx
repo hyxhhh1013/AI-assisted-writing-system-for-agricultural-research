@@ -4,12 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, RefreshCw, Database, Upload, Globe, BookOpen } from "lucide-react";
+import { Database, Upload, Globe, BookOpen } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
-import { siteTheme } from "@/lib/site-theme";
 import { useAuth } from "@/lib/auth-context";
 import { useKnowledgeList } from "@/hooks/use-knowledge-list";
 import { KnowledgeReindexProgress } from "@/components/shared/knowledge/knowledge-reindex-progress";
+import { KnowledgeReindexMenu } from "@/components/shared/knowledge/knowledge-reindex-menu";
 import { KnowledgeBatchToolbar } from "@/components/shared/knowledge/knowledge-batch-toolbar";
 import { KnowledgeSearchFilters } from "@/components/shared/knowledge/knowledge-search-filters";
 import { KnowledgeBibFilters } from "@/components/shared/knowledge/knowledge-bib-filters";
@@ -41,14 +41,10 @@ export default function KnowledgePageClient() {
               <Button variant="outline" className="border-[#1a5632]/20" onClick={() => kb.setIsUploadOpen(true)}>
                 <Upload className="mr-2 h-4 w-4" /> 上传文献
               </Button>
-              <Button onClick={kb.handleReindex} disabled={kb.isIndexing} className={`shrink-0 ${siteTheme.btnPrimary}`}>
-                {kb.isIndexing ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                )}
-                重新构建索引
-              </Button>
+              <KnowledgeReindexMenu
+                isIndexing={kb.isIndexing}
+                onRun={kb.handleIndexJob}
+              />
             </div>
           ) : null
         }
@@ -69,8 +65,10 @@ export default function KnowledgePageClient() {
         <TabsContent value="local" className="space-y-6 mt-0">
           <KnowledgeReindexProgress
             isIndexing={kb.isIndexing}
+            panelOpen={kb.indexPanelOpen}
             indexProgress={kb.indexProgress}
             onCancel={kb.handleCancelReindex}
+            onDismiss={kb.dismissIndexProgress}
           />
           <KnowledgeBatchToolbar {...kb} canDeleteKnowledge={canDeleteKnowledge} />
           <KnowledgeSearchFilters kb={kb} />

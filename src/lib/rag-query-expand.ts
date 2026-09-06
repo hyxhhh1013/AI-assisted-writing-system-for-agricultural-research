@@ -42,6 +42,32 @@ const SYNONYM_GROUPS: string[][] = [
 
 const SYNONYM_INDEX = buildSynonymIndex(SYNONYM_GROUPS);
 
+/** 不作为 CJK 单字入倒排/查询，避免「的/了/是」撑爆 posting、稀释 BM25 */
+const CJK_STOP_UNIGRAMS = new Set(
+  "的了在是和与或对及等为中其就都而也把被从到这那有不无于以之乎者亦还很更最但因所以如果可以什么".split(""),
+);
+
+const EN_STOPWORDS = new Set([
+  "the", "and", "for", "with", "from", "that", "this", "are", "was", "were",
+  "been", "have", "has", "had", "not", "but", "its", "into", "onto", "over",
+  "than", "then", "also", "such", "using", "used", "based", "study", "paper",
+  "these", "those", "which", "their", "them", "there", "here", "only", "more",
+  "other", "between", "after", "before", "about", "under", "above",
+  "of", "in", "on", "an", "or", "by", "as", "at", "to",
+]);
+
+const NOISY_SYNONYMS = new Set([
+  "char", "black", "fast", "slow", "wood",
+]);
+
+export function isCjkStopUnigram(ch: string): boolean {
+  return ch.length === 1 && CJK_STOP_UNIGRAMS.has(ch);
+}
+
+export function isEnglishStopword(term: string): boolean {
+  return EN_STOPWORDS.has(term.toLowerCase());
+}
+
 function buildSynonymIndex(groups: string[][]): Map<string, Set<string>> {
   const index = new Map<string, Set<string>>();
   for (const group of groups) {
@@ -59,7 +85,10 @@ function buildSynonymIndex(groups: string[][]): Map<string, Set<string>> {
 /** 中文段写入 char + bigram +（短段）trigram；索引与查询共用 */
 export function addCjkNgrams(seg: string, sink: (term: string) => void): void {
   if (!seg) return;
-  for (let i = 0; i < seg.length; i++) sink(seg[i]);
+  for (let i = 0; i < seg.length; i++) {
+    const ch = seg[i];
+    if (!isCjkStopUnigram(ch)) sink(ch);
+  }
   if (seg.length >= 2) {
     for (let i = 0; i < seg.length - 1; i++) sink(seg.substring(i, i + 2));
   }
@@ -84,7 +113,7 @@ export function collectIndexTermTf(content: string): Map<string, number> {
   for (const t of tokens) {
     if (/[一-鿿]/.test(t)) {
       addCjkNgrams(t, (term) => add(term));
-    } else if (t.length > 1) {
+    } else if (t.length > 1 && !isEnglishStopword(t)) {
       add(t);
     }
   }
@@ -104,13 +133,13 @@ export function extractQueryTerms(query: string): string[] {
     for (const seg of segments) {
       if (/[一-龥]/.test(seg)) {
         addCjkNgrams(seg, push);
-      } else if (seg.length > 1) {
+      } else if (seg.length > 1 && !isEnglishStopword(seg)) {
         push(seg);
       }
     }
   } else {
     for (const k of q.toLowerCase().split(/\s+/)) {
-      if (k.length > 1) push(k);
+      if (k.length > 1 && !isEnglishStopword(k)) push(k);
     }
   }
   return Array.from(new Set(keywords)).filter((t) => t.length > 0);
@@ -144,8 +173,11 @@ function collectSynonymsForTerm(term: string): string[] {
 }
 
 function isNoisySynonym(term: string): boolean {
+  const key = term.trim().toLowerCase();
+  if (NOISY_SYNONYMS.has(key)) return true;
   // 过短英文易误伤（char/cd/pp/pe）
   if (/^[a-z0-9]+$/i.test(term) && term.length < 3) return true;
+  if (isEnglishStopword(key)) return true;
   return false;
 }
 
@@ -171,6 +203,26 @@ export function buildRagSearchTerms(query: string): string[] {
     }
   }
   return Array.from(expanded).slice(0, 48);
+}
+
+/**
+ * BM25 词项权重：原查询词=1；跨语种翻译≈0.9；同语种近义扩展=0.4。
+ * 避免 synonym bag 把「char / study」抬到和用户原词一样高。
+ */
+export function buildRagSearchTermWeights(query: string): Map<string, number> {
+  const original = new Set(extractQueryTerms(query));
+  const all = buildRagSearchTerms(query);
+  const qHasCjk = /[一-龥]/.test(query);
+  const weights = new Map<string, number>();
+  for (const term of all) {
+    if (original.has(term)) {
+      weights.set(term, 1);
+      continue;
+    }
+    const tHasCjk = /[一-龥]/.test(term);
+    weights.set(term, qHasCjk !== tHasCjk ? 0.9 : 0.4);
+  }
+  return weights;
 }
 
 /** 多 query 变体（RRF 融合）；去重且保留原 query 优先 */

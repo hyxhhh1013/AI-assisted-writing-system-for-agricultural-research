@@ -75,7 +75,8 @@ export async function reindexKnowledgeStream(
     options &&
     ((options.files && options.files.length > 0) ||
       options.forceStage1 === true ||
-      options.forceStage3 === true);
+      options.forceStage3 === true ||
+      options.rechunk === true);
 
   const MAX_RETRIES = 15;
   let eventCount = 0;

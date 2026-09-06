@@ -1,7 +1,7 @@
 "use client";
 
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import { AlertTriangle, FileSearch, RefreshCw } from "lucide-react";
+import { AlertTriangle, FileSearch, RefreshCw, Scissors } from "lucide-react";
 import type { KnowledgeFileRecord } from "@/contracts/knowledge";
 import type { ReindexRequest } from "@/contracts/reindex";
 
@@ -28,6 +28,13 @@ export function KnowledgeIndexActions({
       >
         <FileSearch className="mr-2 h-4 w-4" />
         强制重解析
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        disabled={disabled}
+        onClick={() => onReindex(file.name, { files: [file.name], rechunk: true })}
+      >
+        <Scissors className="mr-2 h-4 w-4" />
+        按章节重切块
       </DropdownMenuItem>
       <DropdownMenuItem
         disabled={disabled}

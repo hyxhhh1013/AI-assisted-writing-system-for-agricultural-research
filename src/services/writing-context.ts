@@ -12,6 +12,7 @@ import type {
 import type { SoftReferenceEvidence } from "@/contracts/project";
 import { formatSoftEvidenceBlock, isSoftGroundable } from "@/lib/reference-evidence";
 import { inferCategoriesFromTitle } from "@/lib/knowledge-category-hints";
+import { preferChunksByPaperSection } from "@/lib/paper-section";
 
 export { inferCategoriesFromTitle } from "@/lib/knowledge-category-hints";
 
@@ -335,8 +336,10 @@ export async function searchWritingRagChunks(
     projectMode,
   });
 
+  const searchLimit = Math.max(ragLimit * 2, ragLimit);
+
   let chunks = await localRAG.search(enhancedQuery, {
-    limit: ragLimit,
+    limit: searchLimit,
     maxPerSource: ragMaxPerSource,
     ...searchScope,
   });
@@ -352,7 +355,7 @@ export async function searchWritingRagChunks(
       .join(" ")
       .slice(0, 800);
     chunks = await localRAG.search(fallbackQuery || enhancedQuery, {
-      limit: ragLimit,
+      limit: searchLimit,
       maxPerSource: Math.max(1, Math.floor(ragMaxPerSource / 2)),
       ...searchScope,
     });
@@ -361,7 +364,7 @@ export async function searchWritingRagChunks(
   // scope fallback：分类收窄导致 0 命中 → 扩到全库（同一 query）
   if (chunks.length === 0 && scoped) {
     chunks = await localRAG.search(enhancedQuery, {
-      limit: ragLimit,
+      limit: searchLimit,
       maxPerSource: ragMaxPerSource,
     });
     expandedToFullLibrary = chunks.length > 0;
@@ -375,7 +378,7 @@ export async function searchWritingRagChunks(
   });
 
   return {
-    chunks: filtered.chunks,
+    chunks: preferChunksByPaperSection(filtered.chunks, section).slice(0, ragLimit),
     query: enhancedQuery,
     ragLimit,
     ragMaxPerSource,

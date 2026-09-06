@@ -29,10 +29,35 @@ node scripts/index-pdfs.mjs --force-stage1   # 强制重解析 PDF（刷新书�
 node scripts/index-pdfs.mjs --force-stage3   # 强制重算向量
 node scripts/index-pdfs.mjs --skip-stage3    # 仅 BM25（无 embedding）
 node scripts/index-pdfs.mjs --files=a.pdf    # 单篇（可配合 force-stage1/3）
+node scripts/index-pdfs.mjs --rechunk        # 仅把旧切块 schema 当 miss（按 IMRaD 重切）
 node scripts/index-pdfs.mjs --progress       # 输出 SSE 进度行（API reindex 使用）
 ```
 
+`RAG_RECHUNK=1` 与 `--rechunk` 等价。默认增量仍只看 PDF mtime，**不会**因为切块规则升级而重解析全库。
+
+### IMRaD 切块与按节取证（RAG-PR-016）
+
+Stage 1 先按 Introduction / Methods / Results 等短行标题分段，再在段内做 1000/200 字切块；`metadata.section` 写入 chunk。写作检索（`searchWritingRagChunks`）会把对应文献章节提前。
+
+**不必全库推倒重来：**
+
+- 旧索引没有 `section` 仍可检索；未标注块与带标签块双读，写作侧只在「足够多带标签命中」时才重排。
+- 新上传 / `--force-stage1` / `--rechunk` 的文献才会换 chunk id 并需要 Stage 3 重算向量（旧向量无法按新切分复用）。
+- 想给存量文献打上章节标签：知识库勾选若干篇 → 工具栏「索引所选 → 按章节重切块」，或页头下拉全库任务。CLI 等价：`node scripts/index-pdfs.mjs --rechunk --files=a.pdf,b.pdf`（不要默认对整棵 `papers/` 开 `--force-stage1`）。
+
 Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且未 emit `complete`，前端会报 **「索引流意外结束」**，Prisma `chunkCount` 可能仍为 0。
+
+### 增量写出（RAG-PR-014）
+
+新增 / 单篇 `--files` / 知识库上传后的自动索引，只处理**变更文献所在分类**：
+
+- Stage 1 增量不得清理其它文献的 `chunks_raw` 缓存（以前 `--files=新.pdf` 会把全库 Stage1 状态当成孤儿删掉）。
+- Stage 2 **不再**把全库 `.emb` 读进 JS 堆；纯追加时保留原 `.emb`（新 chunk 先走 BM25，Stage 3 再 append 向量）。
+- `--skip-stage3`（OA 入库默认）**禁止**因新 chunk 没有向量而删除该分类 `.emb`。
+- Prisma 元数据只 upsert 变更文件，不再为单篇导入全表重写。
+- 知识库页上传成功后会自动对这批文件跑增量索引（不必再点「更新索引」）。
+
+`complete.totalChunks` 在增量模式下表示**本次写入的 chunk 数**（不是全库总量）。
 
 ## 书目元数据（ENG-PR-027/028 后）
 
@@ -80,12 +105,19 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 - **多 query RRF**：`expandRagQueries` 自动生成 2～4 个变体（如 `biochar` ↔ `生物炭`），分路检索再 RRF 合并（默认开启，`multiQuery: false` 可关）。
 - **查询分类提示**：`inferCategoriesFromQuery` 从 query 推断分类（茶/热解/biochar 等）；全库检索时**优先在相关分类子集检索**，避免大块分类（如控释肥类）压制 Top1；命中不足再与全库 RRF 合并。
 - **索引 n-gram 对齐（RAG-PR-013）**：倒排写入 CJK char + bigram（短段补 trigram），与 query 分词一致；否则「热解」「生物炭」等词在 BM25 侧几乎失联。
+- **提质减负（RAG-PR-015）**：
+  - CJK 功能单字（的/了/是…）与英文停用词不入倒排/查询，缩小 posting、减少假命中。
+  - 同义词扩展：原查询词权重 1，跨语种翻译 0.9，同语种近义 0.4；过滤 `char` 等过宽词。
+  - 倒排加载时把题名/文件名以 3× TF 写入（**无需重建 PDF**），提高题名命中。
+  - 索引跳过参考文献/致谢页（第 3 页起）；检索时对参考文献块降权（已有索引立刻生效）。
+  - BM25 弱命中时向量扫描最多 800 条（无词面命中则分层抽样），避免整类上万 chunk 全扫。
 - **题名/文件名加权 + 轻量重排**：`applyMetadataBoost` / `lexicalRerank` 用 bib.title 与 source 抬高相关 chunk。
 - **条件化 multi-query**：默认 `auto`——弱召回、纯英文、或 Top 分类偏离提示时才展开变体；避免每请求 4 路全扫。
 - **`.emb` 按需 pread**：`EmbeddingStore` 不再把整个 `.emb` 读进内存，只保留文件句柄 + 维度；`get()` 用 `fs.readSync` 按偏移读单条向量（配合两阶段，每次仅读候选那几千条）。内存不再随库大小线性膨胀。
 - **倒排索引协作式构建**：`buildInvertedIndexAsync` 分批 `setImmediate` 让出事件循环，避免大库构建时冻结整个服务；全库索引由各分类索引按 offset **合并**得到（`mergeInvertedIndexInto`），不重复分词。
 - **范围检索**：`search({ categories })` 只加载相关分类（子集缓存 `subsetCache`）。扩写经 `writing-context.ts` 用**已有参考文献 ∪ 用户勾选**反推分类；若仍为空则按题名/方向关键词提示分类（如「绿茶香气」→ 茶学）；范围内 0 命中则自动扩到全库。
 - **主题过滤**：检索后按题名/方向主题词过滤跑题片段（`filterChunksByTopicRelevance`）；已有参考文献 pin 保留；过严时 soft top-K 兜底。
+- **按节取证（RAG-PR-016）**：扩写检索多取一倍命中，再按 `metadata.section` 把 Introduction/Methods/Results 等提前；旧索引无该字段时保持原排序。
 - **并发去重**：`categoryLoadInFlight` / `allLoadInFlight` 避免 warmup 与检索并发触发重复构建。
 - **Query Embedding LRU**：`getEmbedding` 缓存 `(model,query)→向量`（上限 256），省重复 query 的网络往返。
 - **启动预热**：`instrumentation.ts` 后台调 `localRAG.warmup()`。默认 **light**（只加载书目元数据 + 分类列表）；`full` 才预加载全库。
@@ -105,8 +137,11 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 
 | 操作 | 入口 |
 |------|------|
-| 全量重建 | 知识库 UI「重新构建索引」→ `POST /api/knowledge/reindex` SSE |
-| 单篇 force | 文献行菜单 → `files` + `forceStage1` / `forceStage3` |
+| 增量更新 | 知识库页头 **更新索引** → `POST /api/knowledge/reindex`（无 force 标志） |
+| 按章节重切 | 页头下拉 / 行菜单 / 已选「索引所选」→ `rechunk: true`（`--rechunk`） |
+| 强制重解析 | 同上 → `forceStage1`；全库会二次确认 |
+| 仅重算向量 | 同上 → `forceStage3` |
+| 单篇 force | 文献行菜单 → `files` + `forceStage1` / `rechunk` / `forceStage3` |
 | 二进制迁移 | `npm run rag:convert`（见 [`../DEPLOY.md`](../DEPLOY.md)） |
 | Admin 单篇 | `POST /api/admin/knowledge` 后台重索引 |
 
@@ -119,9 +154,9 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 | `started` | 任务开始 |
 | `scan` | 扫描总数 / 增量跳过数 |
 | `file` | 单篇 processing / unchanged / done / error |
-| `phase` | pdf_done / writing / embed_skip |
+| `phase` | parse / pdf_done / writing / sync / embed_skip |
 | `save` | 写入某分类 index |
-| `embed` | Stage 3 批次进度 |
+| `embed` | Stage 3 批次进度（含 `current: 0` 预告总批次数） |
 | `complete` | 成功结束（**必须有**，否则 UI 报「索引流意外结束」） |
 | `error` | 失败原因 |
 
@@ -132,7 +167,8 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 | 现象 | 常见原因 | 处理 |
 |------|----------|------|
 | 「索引流意外结束」 | Stage 2/3 脚本崩溃，未 emit `complete` | 终端跑 `node scripts/index-pdfs.mjs --progress` 看 stderr；修复后重跑 |
-| 全部「未索引 / 0 块」 | 上次索引中断，Prisma 未同步 | 全量「重新构建索引」至 `complete` |
+| 新上传文献一直「未索引 / 0 块」 | 旧版增量会超时读全库向量，或 `--files` 找不到 PDF | 确认 `papers/<分类>/` 下文件名与列表一致；重新上传（会自动增量索引）或行菜单「强制重解析」 |
+| 全部「未索引 / 0 块」 | 上次索引中断，Prisma 未同步 | 页头「更新索引」跑到 `complete`；仍异常再用「强制重解析 PDF」 |
 | 单篇 0 块 + parseWarning | 扫描版 PDF，无文本层 | 换 OCR 版或手动填书目 |
 | 书目缺字段 | 首页版式特殊 / 无 DOI | `--force-stage1`；有 DOI 时确认未设 `DISABLE_CROSSREF_ENRICH` |
 | 仅 BM25 无向量 | 未配置 Embedding Key 或 `--skip-stage3` | 配置 `RAG_EMBEDDING_*` 后全量重建 |
@@ -168,8 +204,8 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 ## UI
 
 - `src/app/knowledge/page.tsx` — 搜索、分类 Tab、语义/文件名模式
-- `knowledge-reindex-progress.tsx` — SSE 进度
-- 页头「共 N 篇」与重建索引；勿恢复中间重复状态条（已精简）
+- `knowledge-reindex-progress.tsx` — SSE 进度：三阶段步进（解析 / 写入 / 向量化），百分比只增不减；完成后面板保留到「关闭」
+- `knowledge-reindex-menu.tsx` — 页头「更新索引」+ 下拉（按章节重切 / 强制重解析 / 仅重算向量）；已选文献工具栏「索引所选」
 
 ## 路线图（Phase 7）
 

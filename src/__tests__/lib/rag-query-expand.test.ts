@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildRagSearchTerms,
+  buildRagSearchTermWeights,
   collectIndexTermTf,
   expandRagQueries,
   extractQueryTerms,
@@ -70,5 +71,27 @@ describe("rag-query-expand", () => {
     const terms = buildRagSearchTerms("生物炭");
     expect(terms).not.toContain("cd");
     expect(terms).not.toContain("pp");
+    expect(terms).not.toContain("char");
+  });
+
+  it("skips CJK function unigrams but keeps domain bigrams", () => {
+    const tf = collectIndexTermTf("这是一种有效的土壤改良方法。");
+    expect(tf.has("的")).toBe(false);
+    expect(tf.has("是")).toBe(false);
+    expect(tf.has("土壤") || tf.has("改良")).toBe(true);
+  });
+
+  it("skips English stopwords in query terms", () => {
+    const terms = extractQueryTerms("the study of biochar in soil");
+    expect(terms).not.toContain("the");
+    expect(terms).not.toContain("study");
+    expect(terms).toContain("biochar");
+  });
+
+  it("weights original query terms higher than same-script synonyms", () => {
+    const w = buildRagSearchTermWeights("biochar pyrolysis");
+    expect(w.get("biochar")).toBe(1);
+    const zh = [...w.entries()].find(([t]) => /[一-龥]/.test(t));
+    if (zh) expect(zh[1]).toBeGreaterThanOrEqual(0.9);
   });
 });

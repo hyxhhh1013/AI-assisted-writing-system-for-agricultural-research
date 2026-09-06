@@ -252,6 +252,10 @@ flowchart TD
   → 生成 index_*.json + index_*.emb，体积 = 旧版 28%
 ```
 
+> **RAG-PR-014（2026-09-06）**：增量 `--files` / `--skip-stage3` 已改为「只写变更分类 + 按 id 复制/追加 `.emb`」，禁止因新 chunk 无向量而删除整类 `.emb`。细节见 [`domain/rag-and-knowledge.md`](./domain/rag-and-knowledge.md)「增量写出」。
+>
+> **RAG-PR-016（2026-09-06）**：Stage 1 按 IMRaD 短行标题分段后再 1000 字切；`metadata.section` 供写作按节取证。默认增量不重解析全库；`--rechunk` 才把 `schemaVersion !== 2` 当 cache miss。旧 chunk 无 section 时双读。
+
 ---
 
 ### RAG-PR-005 — 部署 + 端到端验证

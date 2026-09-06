@@ -18,7 +18,7 @@ function buildIngestMessage(r: {
   const verb = r.created ? "已入库" : r.updated ? "已更新" : "已处理";
   if (r.mode === "pdf") {
     if (r.reason === "oa_pdf_index_failed") {
-      return `${verb} OA PDF，但增量索引失败（chunk=${r.chunkCount}）。请到本地库点「重新构建索引」。`;
+      return `${verb} OA PDF，但增量索引失败（chunk=${r.chunkCount}）。请到本地库点「更新索引」。`;
     }
     if (r.reason === "doi_duplicate_pdf_exists") {
       return `知识库已有该 PDF（${r.chunkCount} 块），已合并书目。`;

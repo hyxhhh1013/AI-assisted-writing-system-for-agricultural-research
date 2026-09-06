@@ -37,6 +37,12 @@ mkdir -p deploy-pkg/scripts
 cp -a scripts/deploy deploy-pkg/scripts/
 # 生产可直接 node 跑的摘要补建脚本（CommonJS，不依赖 tsx）
 cp scripts/rebuild-external-abstracts.cjs deploy-pkg/scripts/ 2>/dev/null || true
+# 知识库索引：API spawn `node scripts/index-pdfs.mjs`，不会进 standalone file trace
+cp scripts/index-pdfs.mjs deploy-pkg/scripts/
+cp scripts/doc-type-registry.mjs deploy-pkg/scripts/
+cp scripts/sync-knowledge-metadata-to-prisma.mjs deploy-pkg/scripts/
+cp -a scripts/lib deploy-pkg/scripts/
+cp -a scripts/extractors deploy-pkg/scripts/
 
 echo "=== 3/3 压缩 ==="
 tar -czf deploy.tar.gz -C deploy-pkg .

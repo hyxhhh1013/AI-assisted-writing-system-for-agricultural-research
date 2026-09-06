@@ -59,7 +59,7 @@
 | 外部文献检索 | 知识库页「外部检索」Tab | `POST /api/literature/search` | `lib/literature-search.ts`, `services/external-literature.ts` |
 | 外部文献→知识库 | 知识库页「加入知识库」 | `POST /api/knowledge/ingest-external` | `lib/external-knowledge-ingest.ts`（OA PDF / 摘要 / 书目） |
 | 外部文献→参考文献 | 知识库页 | `POST /api/projects/:id/references/import-external` | `lib/ref-format.ts`、`lib/external-literature-format.ts`（GB/T 7714：≤3 作者全列，>3 前 3 + 等） |
-| 重建索引 | 知识库页 | `POST /api/knowledge/reindex` | `scripts/index-pdfs.mjs` |
+| 重建索引 | 知识库页「更新索引」/ 下拉任务 | `POST /api/knowledge/reindex` | `scripts/index-pdfs.mjs` |
 | 删除文献 | 知识库页（仅管理员可见） | `DELETE /api/knowledge`（`requireAdmin`） | `app/api/knowledge/route.ts` |
 | 书目自动解析 | （索引 Stage 1） | — | `scripts/doc-type-registry.mjs`, `scripts/extractors/*` |
 | 引用括号归一化 | 扩写/预览/应用章节 | — | `src/lib/citation-bounds.ts`, `src/lib/citation.ts` |

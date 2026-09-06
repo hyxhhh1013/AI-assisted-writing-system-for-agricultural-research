@@ -177,6 +177,15 @@ describe("reindexRequestSchema", () => {
   it("accepts empty body defaults", () => {
     expect(reindexRequestSchema.safeParse({}).success).toBe(true);
   });
+
+  it("accepts rechunk flag", () => {
+    const parsed = reindexRequestSchema.safeParse({ rechunk: true, files: ["a.pdf"] });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.rechunk).toBe(true);
+      expect(parsed.data.files).toEqual(["a.pdf"]);
+    }
+  });
 });
 
 describe("projectReferencesPatchSchema", () => {

@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Loader2, Tag, Trash2 } from "lucide-react";
 import type { UseKnowledgeListReturn } from "@/hooks/use-knowledge-list";
+import { KnowledgeReindexMenu } from "@/components/shared/knowledge/knowledge-reindex-menu";
 
 type PickKb = Pick<
   UseKnowledgeListReturn,
@@ -11,6 +12,8 @@ type PickKb = Pick<
   | "setIsBatchMoveOpen"
   | "handleBatchDelete"
   | "isBatchProcessing"
+  | "isIndexing"
+  | "handleIndexJob"
 > & { canDeleteKnowledge?: boolean };
 
 export function KnowledgeBatchToolbar(kb: PickKb) {
@@ -24,6 +27,12 @@ export function KnowledgeBatchToolbar(kb: PickKb) {
         <Button variant="ghost" size="sm" className="text-xs h-8" onClick={() => kb.setIsBatchMoveOpen(true)}>
           <Tag className="mr-2 h-3.5 w-3.5" /> 批量分类
         </Button>
+        <KnowledgeReindexMenu
+          variant="batch"
+          isIndexing={kb.isIndexing}
+          files={kb.selectedFiles.map((f) => f.name)}
+          onRun={kb.handleIndexJob}
+        />
         {kb.canDeleteKnowledge && (
           <Button
             variant="ghost"

@@ -11,7 +11,8 @@ import {
 } from "@/lib/knowledge-metadata";
 import { EXTERNAL_ABSTRACT_CATEGORY } from "@/lib/knowledge-category-hints";
 import { cosineSimilarity } from "./similarity";
-import { buildRagSearchTerms, expandRagQueries, inferCategoriesFromQuery, collectIndexTermTf, shouldUseMultiQuery } from "@/lib/rag-query-expand";
+import { buildRagSearchTerms, buildRagSearchTermWeights, expandRagQueries, inferCategoriesFromQuery, collectIndexTermTf, shouldUseMultiQuery } from "@/lib/rag-query-expand";
+import { referencesScoreMultiplier } from "@/lib/rag-chunk-quality";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("rag");
@@ -33,6 +34,11 @@ export interface RagChunk {
      * 有此字段时，按 preferredCategory 参与烟草/茶学等 scoped 检索。
      */
     preferredCategory?: string;
+    /**
+     * 文献 PDF 的 IMRaD 章节（introduction/methods/results…）。
+     * 旧索引可能没有此字段；写作检索按节取证时未标注块仍可用。
+     */
+    section?: string;
   };
 }
 
@@ -302,10 +308,23 @@ function pickVectorScanTargets(
     candidates.length === 0
     || maxBm25 < 2.5
     || candidates.length < Math.min(80, limit * 8);
-  if (weakLexical) {
-    return Array.from({ length: poolSize }, (_, i) => i);
+  if (!weakLexical) return candidates;
+
+  const MAX_WEAK_SCAN = 800;
+  if (candidates.length === 0) {
+    if (poolSize <= MAX_WEAK_SCAN) {
+      return Array.from({ length: poolSize }, (_, i) => i);
+    }
+    // 无词面命中：分层抽样覆盖全篇，避免只扫分类文件开头
+    const step = poolSize / MAX_WEAK_SCAN;
+    const sampled: number[] = [];
+    for (let i = 0; i < MAX_WEAK_SCAN; i++) {
+      sampled.push(Math.min(poolSize - 1, Math.floor(i * step)));
+    }
+    return [...new Set(sampled)];
   }
-  return candidates;
+  const ranked = argsortDescending(bm25);
+  return ranked.slice(0, Math.min(poolSize, Math.max(candidates.length, MAX_WEAK_SCAN)));
 }
 
 // ── 倒排索引 ──────────────────────────────────────────────────────────────
@@ -321,8 +340,20 @@ function yieldToEventLoop(): Promise<void> {
 }
 
 /** 把单个 chunk 的词项写入倒排索引（globalIndex = 该 chunk 在 pool 中的下标） */
-function indexChunkInto(idx: InvertedIndex, content: string, globalIndex: number): void {
-  const tfMap = collectIndexTermTf(content);
+function indexChunkInto(idx: InvertedIndex, chunk: RagChunk, globalIndex: number): void {
+  const tfMap = collectIndexTermTf(chunk.content);
+  const raw = chunk.metadata.source || "";
+  const src = path.basename(raw.replace(/\\/g, "/"));
+  const bib = resolveBibEntry(raw);
+  const title = bib?.bib?.title || "";
+  if (title || src) {
+    const extraBits = [`${title} ${src.replace(/\.pdf$/i, "")}`];
+    if (chunk.metadata.section) extraBits.push(chunk.metadata.section);
+    const extra = collectIndexTermTf(extraBits.join(" "));
+    for (const [term, tf] of extra) {
+      tfMap.set(term, (tfMap.get(term) || 0) + tf * 3);
+    }
+  }
   for (const [term, tf] of tfMap) {
     let posting = idx.get(term);
     if (!posting) {
@@ -400,7 +431,7 @@ function lexicalRerank(chunks: RagChunk[], query: string, terms: string[]): RagC
 async function buildInvertedIndexAsync(chunks: RagChunk[]): Promise<InvertedIndex> {
   const idx: InvertedIndex = new Map();
   for (let i = 0; i < chunks.length; i++) {
-    indexChunkInto(idx, chunks[i].content, i);
+    indexChunkInto(idx, chunks[i], i);
     if (i > 0 && i % INDEX_BUILD_BATCH === 0) await yieldToEventLoop();
   }
   return idx;
@@ -427,7 +458,12 @@ async function mergeInvertedIndexInto(
   }
 }
 
-function bm25FromIndex(idx: InvertedIndex, chunks: RagChunk[], terms: string[]): number[] {
+function bm25FromIndex(
+  idx: InvertedIndex,
+  chunks: RagChunk[],
+  terms: string[],
+  weights?: Map<string, number>,
+): number[] {
   const N = chunks.length;
   const scores = new Float32Array(N);
   if (N === 0 || terms.length === 0) return Array.from(scores);
@@ -439,12 +475,21 @@ function bm25FromIndex(idx: InvertedIndex, chunks: RagChunk[], terms: string[]):
     const df = posting.size;
     const idf = Math.log((N - df + 0.5) / (df + 0.5) + 1);
     if (idf <= 0) continue;
+    const w = weights?.get(t) ?? 1;
     for (const [chunkIdx, tf] of posting) {
       const dl = docLens[chunkIdx];
-      scores[chunkIdx] += idf * ((tf * (BM25_K1 + 1)) / (tf + BM25_K1 * (1 - BM25_B + BM25_B * (dl / avgdl))));
+      scores[chunkIdx] += w * idf * ((tf * (BM25_K1 + 1)) / (tf + BM25_K1 * (1 - BM25_B + BM25_B * (dl / avgdl))));
     }
   }
   return Array.from(scores);
+}
+
+function applyReferencesPenalty(fused: number[], chunks: RagChunk[]): void {
+  for (let i = 0; i < chunks.length; i++) {
+    if (fused[i] <= 0) continue;
+    const m = referencesScoreMultiplier(chunks[i].content, chunks[i].metadata.pageStart);
+    if (m < 1) fused[i] *= m;
+  }
 }
 
 // ── RRF / 去重 ────────────────────────────────────────────────────────────
@@ -1115,7 +1160,8 @@ export class LocalRAG {
     if (pool.length === 0) return [];
 
     const terms = buildRagSearchTerms(q);
-    const bm25 = idx ? bm25FromIndex(idx, pool, terms) : new Array(pool.length).fill(0);
+    const termWeights = buildRagSearchTermWeights(q);
+    const bm25 = idx ? bm25FromIndex(idx, pool, terms, termWeights) : new Array(pool.length).fill(0);
     applyMetadataBoost(bm25, pool, q, terms);
     if (perf) tAfterBm25 = Date.now();
 
@@ -1152,6 +1198,7 @@ export class LocalRAG {
     } else {
       fused = bm25.map((s) => s);
     }
+    applyReferencesPenalty(fused, pool);
 
     const order = argsortDescending(fused);
 
@@ -1208,6 +1255,7 @@ export class LocalRAG {
     }
 
     const terms = buildRagSearchTerms(q);
+    const termWeights = buildRagSearchTermWeights(q);
     const queryVector = await this.getEmbedding(q);
     const hasVec = queryVector.length > 0;
     const perCatTop: RagChunk[][] = [];
@@ -1225,7 +1273,7 @@ export class LocalRAG {
         totalPool += pool.length;
         await this.ensureEmbeddingsLoaded(cat);
 
-        const bm25 = idx ? bm25FromIndex(idx, pool, terms) : new Array(pool.length).fill(0);
+        const bm25 = idx ? bm25FromIndex(idx, pool, terms, termWeights) : new Array(pool.length).fill(0);
         applyMetadataBoost(bm25, pool, q, terms);
         const vecScores = new Array(pool.length).fill(0);
         let hasUsefulVec = false;
@@ -1250,6 +1298,7 @@ export class LocalRAG {
         } else {
           fused = bm25.map((s) => s);
         }
+        applyReferencesPenalty(fused, pool);
         const order = argsortDescending(fused).filter((i) => fused[i] > 0);
         if (order.length === 0) continue;
         const topN = Math.max(limit * 3, 30);

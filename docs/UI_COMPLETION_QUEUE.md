@@ -63,6 +63,8 @@
 | UI-PR-032 | `analyzeKnowledgeStream` service + hook | — | 3h | done | 2026-05-31 |
 | UI-PR-033 | 阅读器「分析」Tab | UI-PR-032 | 4h | done | 2026-05-31 |
 | UI-PR-034 | 知识库菜单「AI 精读」入口 | UI-PR-033 | 1h | done | 2026-05-31 |
+| UI-PR-035 | 知识库索引任务菜单（增量/重切/重解析/向量） | UI-PR-031 | 0.5d | done | 2026-09-06；页头「更新索引」+ 下拉；已选「索引所选」 |
+| UI-PR-036 | 索引构建进度：三阶段连续显示、百分比不回跳 | UI-PR-035 | 0.5d | done | 2026-09-06；parse/write/embed 步进；完成后保留面板 |
 | **Phase 2 — 审查（与 quality-module-plan Phase 3 对齐）** |
 | UI-PR-040 | Review 历史 service + 列表组件 | UI-PR-005 | 3h | done | 2026-05-31 |
 | UI-PR-041 | 审查页/Tab：真实 IMRAD sections 输入 | UI-PR-040 | 4h | done | 2026-05-31 |
@@ -751,6 +753,8 @@ flowchart TD
 | 2026-05-31 | UI-PR-041 | AI | /review 页 + review-workspace（真项目 IMRAD sections + 审查历史 Tab） |
 | 2026-05-31 | UI-PR-040 | AI | review-history-list 组件（历史列表+详情展开+按维度分组）+ 修复 outline/writing/data-panel 语法错误 |
 | 2026-05-31 | UI-PR-034 | AI | 知识库菜单「AI 精读」→ reader?tab=analyze |
+| 2026-09-06 | UI-PR-035 | AI | 知识库页头拆成「更新索引」+ 下拉（按章节重切/强制重解析/仅重算向量）；已选「索引所选」；`rechunk` 透传到 index-pdfs |
+| 2026-09-06 | UI-PR-036 | AI | 索引进度三阶段步进；写入/同步/向量化补事件；百分比单调；完成后不立刻拆掉面板 |
 | 2026-05-31 | UI-PR-033 | AI | reader 分析 Tab + knowledge-analyze-panel；no_text 引导 |
 | 2026-05-31 | UI-PR-032 | AI | knowledge-analyze 契约 + analyzeKnowledgeStream + use-knowledge-analyze |
 | 2026-05-31 | UI-PR-031 | AI | 文献菜单：强制重解析/重嵌向量 + parseWarning 说明弹窗 |

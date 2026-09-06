@@ -75,7 +75,7 @@ bash scripts/deploy/package.sh
 tar -tzf deploy.tar.gz | grep -c "\.next/BUILD_ID"   # 必须非 0
 ```
 
-部署包内容：`.next/standalone/.*`（含隐藏 `.next`）+ `.next/static` + `ecosystem.config.cjs` + `package.json` + `prisma/` + `scripts/deploy/`。**排除**：`node_modules/`、`papers/`、`data/`、`.env`、`package-lock.json`。
+部署包内容：`.next/standalone/.*`（含隐藏 `.next`）+ `.next/static` + `ecosystem.config.cjs` + `package.json` + `prisma/` + `scripts/deploy/` + `scripts/index-pdfs.mjs` 及 `scripts/lib`、`scripts/extractors`（知识库索引 spawn，不进 standalone trace）。**排除**：`node_modules/`、`papers/`、`data/`、`.env`、`package-lock.json`。
 
 ### 3. 上传（scp，单次连接）
 
