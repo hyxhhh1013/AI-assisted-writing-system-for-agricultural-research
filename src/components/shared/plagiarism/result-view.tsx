@@ -30,15 +30,16 @@ const FILTERS: Array<{ id: "all" | PlagiarismMatchType; label: string }> = [
 
 export function PlagiarismResultView({ result, compact = false, sourceContent, onRewrite, onReCheck }: PlagiarismResultViewProps) {
   const [typeFilter, setTypeFilter] = useState<"all" | PlagiarismMatchType>("all");
+  const matches = result.matches ?? [];
 
-  const typeStats = result.matches.reduce<Record<string, number>>((acc, m) => {
+  const typeStats = matches.reduce<Record<string, number>>((acc, m) => {
     acc[m.matchType] = (acc[m.matchType] || 0) + 1;
     return acc;
   }, {});
 
   const filtered = useMemo(
-    () => typeFilter === "all" ? result.matches : result.matches.filter((m) => m.matchType === typeFilter),
-    [result.matches, typeFilter],
+    () => typeFilter === "all" ? matches : matches.filter((m) => m.matchType === typeFilter),
+    [matches, typeFilter],
   );
 
   const riskCls = riskBadgeClass(result.overallRisk);
@@ -71,7 +72,7 @@ export function PlagiarismResultView({ result, compact = false, sourceContent, o
                 <RefreshCw className="mr-1 h-3.5 w-3.5" />
                 重新检测
               </Button>
-              {result.matches.length > 0 && (
+              {matches.length > 0 && (
                 <Button size="sm" className="bg-[#1a5632] hover:bg-[#144a2a]" onClick={onRewrite}>
                   <Sparkles className="mr-1 h-3.5 w-3.5" />
                   AI 降重
@@ -118,11 +119,11 @@ export function PlagiarismResultView({ result, compact = false, sourceContent, o
         </div>
       )}
 
-      {!compact && sourceContent && result.matches.length > 0 && (
-        <MatchContentPreview content={sourceContent} matches={result.matches} />
+      {!compact && sourceContent && matches.length > 0 && (
+        <MatchContentPreview content={sourceContent} matches={matches} />
       )}
 
-      {!compact && result.matches.length > 0 && (
+      {!compact && matches.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {FILTERS.map((f) => (
             <button
@@ -152,7 +153,7 @@ export function PlagiarismResultView({ result, compact = false, sourceContent, o
           <div className={cn("flex flex-col items-center justify-center text-muted-foreground", compact ? "h-full" : "py-16")}>
             <CheckCircle2 className={cn("mb-1 text-green-500", compact ? "h-6 w-6" : "h-8 w-8 mb-2")} />
             <p className={compact ? "text-xs" : "text-sm"}>
-              {result.matches.length === 0 ? "未发现相似内容" : "当前筛选下没有匹配"}
+              {matches.length === 0 ? "未发现相似内容" : "当前筛选下没有匹配"}
             </p>
           </div>
         )}
@@ -164,7 +165,7 @@ export function PlagiarismResultView({ result, compact = false, sourceContent, o
             <RefreshCw className="mr-1 h-3 w-3" />
             重新检测
           </Button>
-          {result.matches.length > 0 && (
+          {matches.length > 0 && (
             <Button size="sm" className="h-7 flex-1 text-xs bg-[#1a5632] hover:bg-[#144a2a]" onClick={onRewrite}>
               <Sparkles className="mr-1 h-3 w-3" />
               AI 降重

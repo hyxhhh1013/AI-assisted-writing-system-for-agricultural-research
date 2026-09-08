@@ -68,7 +68,7 @@ export function buildFixableReportFromDetail(detail: ReviewDetailResponse): Fixa
     integrity: [],
   };
 
-  for (const row of detail.issues) {
+  for (const row of detail.issues ?? []) {
     const dim = row.dimension as ReviewDimension;
     if (grouped[dim]) grouped[dim].push(toReviewIssue(row));
   }

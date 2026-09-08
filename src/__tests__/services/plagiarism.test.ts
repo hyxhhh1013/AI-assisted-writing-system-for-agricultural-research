@@ -88,6 +88,21 @@ describe("plagiarism service", () => {
     expect(result.matches[0]?.matchType).toBe("self");
   });
 
+  it("toCheckResult defaults matches to empty array when detail omits them", () => {
+    const result = toCheckResult({
+      id: "chk-empty",
+      title: "无匹配记录",
+      status: "completed",
+      maxSimilarity: 0.2,
+      overallRisk: "low",
+      createdAt: "2026-01-01",
+      _count: { matches: 3 },
+    });
+    expect(result.matches).toEqual([]);
+    expect(result.totalMatches).toBe(3);
+    expect(result.checkId).toBe("chk-empty");
+  });
+
   it("rewriteMatch returns suggestions", async () => {
     vi.mocked(fetch).mockResolvedValue({
       ok: true,

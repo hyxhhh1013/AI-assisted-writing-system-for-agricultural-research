@@ -490,7 +490,7 @@ export function QualityWorkspace() {
               {tab === "rewrite" && result && (
                 <PlagiarismRewriteView
                   checkId={result.checkId}
-                  matches={result.matches}
+                  matches={result.matches ?? []}
                   fullContent={content}
                   scope={scope}
                   qualitySections={sections.length > 0 ? sections : undefined}

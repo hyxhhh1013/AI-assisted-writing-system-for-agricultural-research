@@ -36,7 +36,7 @@ export function ReviewIssueCard({
   onDismiss,
   onApply,
 }: ReviewIssueCardProps) {
-  const severityConfig = SEVERITY_CONFIG[issue.severity];
+  const severityConfig = SEVERITY_CONFIG[issue.severity] ?? SEVERITY_CONFIG.medium;
   const SeverityIcon = severityConfig.icon;
   const issueStatus = (issue as FixableReviewIssue).status || "open";
   const fixedContent = (issue as FixableReviewIssue).fixedContent;

@@ -132,7 +132,7 @@ export function PlagiarismPanel({
   return (
     <PlagiarismRewriteView
       checkId={result.checkId}
-      matches={result.matches}
+      matches={result.matches ?? []}
       fullContent={checkContent}
       compact
       onBack={() => setView("result")}

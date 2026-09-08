@@ -26,7 +26,7 @@ interface QualityOverviewProps {
   lastReview: ReviewHistoryItem | null;
   webSearch: boolean;
   setWebSearch: (v: boolean) => void;
-  plist: ProjectOption[];
+  plist?: ProjectOption[];
   selPid: string;
   loadingP: boolean;
   onLoadProject: (id: string) => void;
@@ -47,7 +47,8 @@ export function QualityOverview({
   onOpenStation,
 }: QualityOverviewProps) {
   const words = totalWordCount(sections);
-  const pendingRewrite = result?.matches.filter((m) => m.riskLevel !== "low").length ?? 0;
+  const pendingRewrite = result?.matches?.filter((m) => m.riskLevel !== "low").length ?? 0;
+  const projectOptions = plist ?? [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -60,7 +61,7 @@ export function QualityOverview({
           disabled={loadingP}
         >
           <option value="">选择要检测的项目…</option>
-          {plist.map((p) => (
+          {projectOptions.map((p) => (
             <option key={p.id} value={p.id}>{p.title}</option>
           ))}
         </select>

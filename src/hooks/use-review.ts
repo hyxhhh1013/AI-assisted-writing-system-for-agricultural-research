@@ -61,7 +61,7 @@ function toFixable(report: ReviewReport): FixableReviewReport {
     const dimension = dim as ReviewDimension;
     dimensions[dimension] = {
       ...result,
-      issues: result.issues.map((issue) => ({
+      issues: (result.issues ?? []).map((issue) => ({
         ...issue,
         status: "open" as IssueStatus,
       })) as FixableReviewIssue[],

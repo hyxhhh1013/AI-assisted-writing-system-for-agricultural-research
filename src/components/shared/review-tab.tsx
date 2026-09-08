@@ -123,7 +123,7 @@ export function ReviewTab({
       restoreReport(initialReport);
       const dimsToExpand = new Set<ReviewDimension>();
       for (const dim of ["academic", "argument", "structure", "integrity"] as ReviewDimension[]) {
-        if (initialReport.dimensions[dim].issueCount > 0) dimsToExpand.add(dim);
+        if (initialReport.dimensions[dim]?.issueCount > 0) dimsToExpand.add(dim);
       }
       setExpandedDimensions(dimsToExpand);
     }
@@ -174,7 +174,7 @@ export function ReviewTab({
       const dimension = dim as ReviewDimension;
       dimensions[dimension] = {
         ...result,
-        issues: result.issues.map((issue) => ({
+        issues: (result.issues ?? []).map((issue) => ({
           ...issue,
           status: "open" as IssueStatus,
         })) as FixableReviewIssue[],
@@ -264,7 +264,7 @@ export function ReviewTab({
 
   // 渲染评分环
   const renderScoreRing = (score: number, grade: "A" | "B" | "C" | "D") => {
-    const config = GRADE_CONFIG[grade];
+    const config = GRADE_CONFIG[grade] ?? GRADE_CONFIG.C;
     return (
       <div className="flex items-center gap-3">
         <div className="relative w-20 h-20">
@@ -426,7 +426,7 @@ export function ReviewTab({
                 <span className="mt-2 text-sm font-semibold text-[#122820]">{dim.name}</span>
                 <span className="mt-1 text-[11px] leading-relaxed text-[#6b7c72]">{dim.description}</span>
                 {dimResult && (
-                  <span className={cn("mt-2 text-xs font-medium", GRADE_CONFIG[dimResult.grade].color)}>
+                  <span className={cn("mt-2 text-xs font-medium", (GRADE_CONFIG[dimResult.grade] ?? GRADE_CONFIG.C).color)}>
                     {dimResult.score} 分 · {dimResult.issueCount} 项
                   </span>
                 )}
@@ -518,7 +518,10 @@ export function ReviewTab({
     .map((dim) => {
       if (!report) return null;
       const result = report.dimensions[dim.id];
+      if (!result) return null;
       const isExpanded = expandedDimensions.has(dim.id);
+      const gradeCls = GRADE_CONFIG[result.grade] ?? GRADE_CONFIG.C;
+      const dimIssues = result.issues ?? [];
 
       return (
         <Card key={dim.id} className={isWorkspace ? "border-[#1a5632]/10 shadow-sm" : undefined}>
@@ -529,7 +532,7 @@ export function ReviewTab({
                 <Badge variant="secondary">{result.issueCount} 个问题</Badge>
               </CardTitle>
               <div className="flex items-center gap-4">
-                <span className={cn("text-lg font-bold", GRADE_CONFIG[result.grade].color)}>
+                <span className={cn("text-lg font-bold", gradeCls.color)}>
                   {result.score} 分
                 </span>
                 {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
@@ -539,15 +542,15 @@ export function ReviewTab({
           </CardHeader>
           {isExpanded && (
             <CardContent>
-              {result.basis.length > 0 && (
+              {result.basis?.length > 0 && (
                 <div className="mb-4 text-sm">
                   <span className="font-medium">打分依据：</span>
                   {result.basis.join("；")}
                 </div>
               )}
-              {result.issues.length > 0 ? (
+              {dimIssues.length > 0 ? (
                 <div className="space-y-3">
-                  {result.issues
+                  {dimIssues
                     .map((issue, index) => ({ issue, index }))
                     .filter(({ issue }) => severityFilter === "all" || issue.severity === severityFilter)
                     .map(({ issue, index }) => renderIssue(issue, dim.id, index))}
@@ -590,10 +593,12 @@ export function ReviewTab({
             <ul className="mt-2 space-y-1.5">
               {dimensions.filter((d) => selectedDimensions.includes(d.id)).map((dim) => {
                 const r = report.dimensions[dim.id];
+                if (!r) return null;
+                const gradeCls = GRADE_CONFIG[r.grade] ?? GRADE_CONFIG.C;
                 return (
                   <li key={dim.id} className="flex items-center justify-between text-[11px]">
                     <span className="text-[#3d4f46]">{dim.name}</span>
-                    <span className={cn("font-semibold tabular-nums", GRADE_CONFIG[r.grade].color)}>
+                    <span className={cn("font-semibold tabular-nums", gradeCls.color)}>
                       {r.score}
                     </span>
                   </li>

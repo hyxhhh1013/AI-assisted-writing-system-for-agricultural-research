@@ -65,7 +65,7 @@ export interface PlagiarismCheckDetailRecord {
   maxSimilarity: number;
   overallRisk: string;
   createdAt: string;
-  matches: PlagiarismMatchResult[];
+  matches?: PlagiarismMatchResult[];
   _count?: { matches: number };
 }
 

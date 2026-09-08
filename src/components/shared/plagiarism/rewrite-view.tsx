@@ -45,7 +45,7 @@ export function PlagiarismRewriteView({
   const [accepted, setAccepted] = useState<Record<string, boolean | undefined>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const highRisk = matches.filter((m) => m.riskLevel !== "low");
+  const highRisk = (matches ?? []).filter((m) => m.riskLevel !== "low");
   const hasAccepted = Object.values(accepted).some((v) => v === true);
 
   const doRewrite = async (m: PlagiarismMatchResult) => {

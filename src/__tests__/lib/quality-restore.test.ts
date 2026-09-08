@@ -58,4 +58,19 @@ describe("quality-restore", () => {
     expect(session.content).toBe("正文内容");
     expect(session.title).toBe("章节查重");
   });
+
+  it("buildRestoredPlagiarismSession tolerates missing matches", () => {
+    const session = buildRestoredPlagiarismSession({
+      id: "chk-2",
+      title: "无匹配",
+      content: "正文",
+      status: "completed",
+      maxSimilarity: 0.1,
+      overallRisk: "low",
+      createdAt: "2026-06-01T00:00:00.000Z",
+      _count: { matches: 0 },
+    });
+    expect(session.result.matches).toEqual([]);
+    expect(session.result.totalMatches).toBe(0);
+  });
 });

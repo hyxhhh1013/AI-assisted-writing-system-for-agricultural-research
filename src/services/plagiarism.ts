@@ -126,12 +126,13 @@ export async function getCheckDetail(checkId: string): Promise<PlagiarismCheckDe
 
 /** 将详情记录转为 UI 用的 CheckResult */
 export function toCheckResult(detail: PlagiarismCheckDetailRecord): PlagiarismCheckResult {
+  const matches = detail.matches ?? [];
   return {
     checkId: detail.id,
-    totalMatches: detail._count?.matches ?? detail.matches.length,
+    totalMatches: detail._count?.matches ?? matches.length,
     maxSimilarity: detail.maxSimilarity ?? 0,
     overallRisk: (detail.overallRisk || "low") as PlagiarismCheckResult["overallRisk"],
-    matches: detail.matches,
+    matches,
   };
 }
 
