@@ -29,7 +29,7 @@ const LABEL_TO_SECTION: Record<string, string> = {
   结论: "conclusion",
 };
 
-const INSPECT_GOAL = "看看项目卡在哪，建议下一步";
+export const INSPECT_GOAL = "看看项目卡在哪，建议下一步";
 
 function lastNonEmpty(...parts: Array<string | null | undefined>): string {
   return parts.map((p) => p?.trim() ?? "").filter(Boolean).join("\n");

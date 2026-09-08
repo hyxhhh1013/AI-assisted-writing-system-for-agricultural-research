@@ -129,10 +129,12 @@ describe("checkAgentToolPhaseGate", () => {
 });
 
 describe("resolvePhaseTaskPack", () => {
-  it("returns drafting goal with empty section", () => {
+  it("returns drafting goal with empty section when outline and blueprint exist", () => {
     const r = resolvePhaseTaskPack(
       snap({
         currentPhase: 4,
+        outline: "A".repeat(50),
+        hasWritingBlueprint: true,
         sectionFills: [
           { key: "introduction", chars: 0 },
           { key: "literature_body", chars: 0 },
@@ -141,6 +143,19 @@ describe("resolvePhaseTaskPack", () => {
     );
     expect(r.pack.phase).toBe(4);
     expect(r.goal).toMatch(/introduction|引言/);
+  });
+
+  it("does not tell phase-4 to write when outline is missing", () => {
+    const r = resolvePhaseTaskPack(
+      snap({
+        currentPhase: 4,
+        outline: "",
+        hasWritingBlueprint: false,
+        sectionFills: [{ key: "introduction", chars: 0 }],
+      }),
+    );
+    expect(r.goal).toMatch(/大纲/);
+    expect(r.goal).not.toMatch(/写引言/);
   });
 
   it("phase 2 prefers generate_outline tools", () => {

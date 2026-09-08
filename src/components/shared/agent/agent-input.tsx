@@ -85,6 +85,9 @@ export function AgentInputBar({
         : [...FALLBACK_READ]
   ).filter((prompt) => !continueHint || prompt !== continueHint.goal);
 
+  /** 续跑条已经是当前下一步；再铺芯片会和阶段建议打架 */
+  const showChips = !continueHint && !isRunning;
+
   const readyChips = chips.filter((c) => c.status === "ready" && c.attachmentId);
 
   const uploadFile = async (file: File) => {
@@ -271,6 +274,7 @@ export function AgentInputBar({
           }}
         />
       ) : null}
+      {showChips ? (
       <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {chipsFallback.map((prompt) => (
           <Button
@@ -289,6 +293,7 @@ export function AgentInputBar({
           </Button>
         ))}
       </div>
+      ) : null}
       {chips.length > 0 ? (
         <div className="mb-2 flex flex-wrap gap-1.5">
           {chips.map((chip) => {

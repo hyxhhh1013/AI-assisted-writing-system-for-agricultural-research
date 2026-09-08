@@ -26,6 +26,7 @@ import {
 import { AgentInputBar } from "@/components/shared/agent/agent-input";
 import {
   collectTurnContinueSignals,
+  INSPECT_GOAL,
   resolveAgentContinueHint,
   sectionKeyFromWriteTip,
 } from "@/lib/agent/continue-hint";
@@ -238,11 +239,11 @@ export function AgentPanel({
     });
     setQuickPrompts(
       [
-        "看看项目卡在哪，建议下一步",
+        INSPECT_GOAL,
         ...suggestNextAgentActions({
           currentPhase: passport?.currentPhase ?? null,
           writeEnabled: WRITE_PUBLIC,
-          hasOutline: Boolean(p.outline?.trim()),
+          hasOutline: (p.outline?.trim().length ?? 0) >= 20,
           hasWritingBlueprint: Boolean(p.writingBlueprint?.trim()),
           emptySections,
           nextSectionKey: coverage.nextSectionKey,
@@ -264,6 +265,11 @@ export function AgentPanel({
     }
     return phaseGoal;
   }, [agent.messages, phaseGoal]);
+
+  const primaryWorkPrompt = useMemo(
+    () => quickPrompts.find((p) => p !== INSPECT_GOAL) ?? quickPrompts[0] ?? null,
+    [quickPrompts],
+  );
 
   const continueHint = useMemo(() => {
     if (
@@ -834,16 +840,16 @@ export function AgentPanel({
                     <li>帮我写引言</li>
                     <li>先生成大纲，我确认后再写</li>
                   </ul>
-                  {phaseGoal ? (
+                  {primaryWorkPrompt ? (
                     <Button
                       type="button"
                       variant="secondary"
                       size="sm"
                       className="mt-5 h-8 text-xs"
                       disabled={agent.isRunning}
-                      onClick={() => void agent.sendGoal(phaseGoal)}
+                      onClick={() => void agent.sendGoal(primaryWorkPrompt)}
                     >
-                      建议：{phasePack?.title}
+                      建议：{primaryWorkPrompt.length > 22 ? `${primaryWorkPrompt.slice(0, 22)}…` : primaryWorkPrompt}
                     </Button>
                   ) : null}
                 </>

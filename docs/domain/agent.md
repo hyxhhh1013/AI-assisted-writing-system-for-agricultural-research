@@ -52,7 +52,7 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 | `src/lib/quality-eval/write-qa-fixtures.ts` | WRITE-QA-008：分节 golden；`eval:quality` 规则尺 |
 | `src/lib/agent/core/agent-rules.ts` | `AGENT_RULES` 单一事实源；prompt/nudge/硬拦文案读同一 `text` |
 | `src/lib/agent/core/classify-intent.ts` | 每轮 `classifyIntent`：跟聊继承或正则；不上 LLM |
-| `src/lib/agent/continue-hint.ts` | 输入区「继续推进」条：口头未执行 / 计划未完 / 建议写节 / 泛化跟聊 |
+| `src/lib/agent/continue-hint.ts` | 输入区「继续推进」条：口头未执行 / 计划未完 / 建议写节 / 泛化跟聊。有续跑条时不再铺阶段芯片。 |
 | `src/lib/agent/ui-failure.ts` | 红框 `lastFailure`：检索无命中是软结果，不弹「再试一次」 |
 | `components/shared/agent/quality-closure-panel.tsx` | 质量收口看板 UI（工作台 agent Tab 顶部） |
 | `src/lib/agent/writing-runner.ts` | 复用写作管道；`onWritingEvent` 转发进度 |
@@ -71,6 +71,8 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 **计划推进（2026-08-23）**：`advancePlanAfterTool` 有 `toolHints` 时只认 hints，不再用标题里的「大纲/文献」串味。`list_references` / `generate_outline` 不得把「依据大纲生成写作蓝图」标完成。口头宣布要生成蓝图/`write_section` 但未调用工具时注入续跑，禁止空 `agent/complete`。`开始吧` 视为跟聊继承意图；SSE 中途断开不再伪装成「已完成」。`finished=true` 时不得因续跑计数再打回 `agent`（否则 `planContinueCount` 停在 1–2 会自环到 LangGraph 512）。读/检索不清零续跑计数。
 
 **任务结束 vs 续跑条（2026-08-23）**：图循环 `finished=true` → `finalize` → `agent/complete` 才是一轮结束。续跑条只看**本轮**（上一句用户之后）的 thought / observation，禁止拿上一轮「口头未执行」摘要继续推荐同一节。本轮 `write_section` 成功后改为「已写回」并指向下一空节。前端 SSE 已断但 DB 仍 `running` 时，跟聊/续跑先 `interruptRunningSession`（不再等 45s），界面出示「接上进度 / 强制结束」，409 不再叠用户气泡、不当红框失败。收尾「还有未完成步骤」不再举例「先写引言」（会误触发 write_section 宣布）；续跑条有未完成计划时只发「继续」，不改推写另一节。
+
+**下一步唯一叙事（2026-09-08）**：`suggestNextAgentActions` 按阶段互斥（文献 / 大纲 / 蓝图 / 写节），禁止同时抛「检索文献」和「写引言」。`resolvePhaseTaskPack.goal` 与 `inspect_project.suggestedGoal` 共用该函数。有续跑条时输入区不再铺阶段芯片；空闲空对话的「建议」按钮走同一条主建议。
 
 **确认/检查点不是孤儿会话（2026-08-23）**：`import_reference` 等人勾选、以及 `outline_approve` 等检查点期间，SSE 会按终态结束（`inFlight=false`）但 DB session 仍 `running`。不得把「接上进度 / 强制结束」叠在确认卡上。`shouldShowOrphanedSession`：有 `pendingConfirm` / `pendingCheckpoint` 或 `status=awaiting_checkpoint` 时隐藏孤儿条。项目打开时若最近会话仍 `running` 且快照带 `awaitingCheckpoint` / `awaitingConfirm`，历史接口随 transcript 一并返回，前端直接恢复确认卡，不必先点「接上进度」。
 

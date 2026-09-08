@@ -159,8 +159,7 @@ export function formatAgentProjectBriefing(
   return `${scopeBlock}\n\n${lines.join("\n")}`;
 }
 
-/** 根据 Passport 阶段给出下一步建议（前端快捷语 / 规划器共用） */
-export function suggestNextAgentActions(input: {
+export interface SuggestNextAgentActionsInput {
   currentPhase?: number | null;
   writeEnabled: boolean;
   hasOutline: boolean;
@@ -171,49 +170,62 @@ export function suggestNextAgentActions(input: {
   /** 优先于 emptySections 的薄节/缺口 */
   nextSectionKey?: string | null;
   thinOrGapSections?: string[];
-}): string[] {
-  const {
-    currentPhase,
-    writeEnabled,
-    hasOutline,
-    hasWritingBlueprint,
-    emptySections,
-    nextSectionKey,
-    thinOrGapSections,
-  } = input;
-  const tips: string[] = [];
+}
 
-  if ((currentPhase ?? 1) <= 1) {
-    tips.push("检索相关文献并总结研究缺口");
-  }
-  if (!hasOutline && (currentPhase ?? 2) <= 2) {
-    tips.push("生成大纲与写作蓝图并写回项目");
-  }
-  if (hasOutline && writeEnabled && !hasWritingBlueprint) {
-    tips.push("基于大纲生成写作蓝图（含各节主张/证据）并写回项目");
-  }
-
-  const writeTarget =
-    nextSectionKey
-    || thinOrGapSections?.[0]
-    || (emptySections.includes("introduction")
+function writeTargetOf(input: SuggestNextAgentActionsInput): string | null {
+  return (
+    input.nextSectionKey
+    || input.thinOrGapSections?.[0]
+    || (input.emptySections.includes("introduction")
       ? "introduction"
-      : emptySections.find((k) => k !== "abstract"));
+      : input.emptySections.find((k) => k !== "abstract"))
+    || null
+  );
+}
 
-  if (writeEnabled && writeTarget) {
-    const thinHint =
-      thinOrGapSections?.includes(writeTarget)
-      && !emptySections.includes(writeTarget)
-        ? "（当前偏薄，建议扩写/补强）"
-        : "";
-    tips.push(`写${sectionLabel(writeTarget)}并保存到当前项目${thinHint}`);
+function writeSectionTip(input: SuggestNextAgentActionsInput, target: string): string {
+  const thinHint =
+    input.thinOrGapSections?.includes(target)
+    && !input.emptySections.includes(target)
+      ? "（当前偏薄，建议扩写/补强）"
+      : "";
+  return `写${sectionLabel(target)}并保存到当前项目${thinHint}`;
+}
+
+/**
+ * 当前唯一的「下一步」主建议（前端芯片 / 续跑条 / 阶段包 goal / inspect 共用）。
+ * 按阶段互斥，禁止同时抛「检索文献」和「写引言」。
+ */
+export function suggestNextAgentActions(input: SuggestNextAgentActionsInput): string[] {
+  const phase = input.currentPhase;
+  const hasOutline = input.hasOutline;
+  const writeEnabled = input.writeEnabled;
+  const writeTarget = writeTargetOf(input);
+
+  if ((phase ?? 0) >= 7) {
+    return ["运行下一轮论文审查"];
   }
-  if (writeEnabled && (currentPhase ?? 0) >= 4) {
-    tips.push("按 academic-paper 流程继续：起草→引用检查→双语摘要→审查");
+  if ((phase ?? 0) >= 6) {
+    return ["基于已写正文生成中英双语摘要并写回项目"];
+  }
+  if ((phase ?? 0) >= 5) {
+    return ["检查当前引用"];
+  }
+
+  if ((phase ?? 1) <= 1 && !hasOutline) {
+    return ["检索相关文献并总结研究缺口"];
+  }
+  if (!hasOutline) {
+    return ["生成大纲与写作蓝图并写回项目"];
+  }
+  if (!input.hasWritingBlueprint) {
+    return ["基于大纲生成写作蓝图（含各节主张/证据）并写回项目"];
+  }
+  if (writeEnabled && writeTarget) {
+    return [writeSectionTip(input, writeTarget)];
   }
   if (writeEnabled) {
-    tips.push("查看可配图数据并生成图表");
+    return ["查看可配图数据并生成图表"];
   }
-
-  return tips.slice(0, 4);
+  return [];
 }

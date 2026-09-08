@@ -85,7 +85,35 @@ describe("agent project briefing", () => {
       nextSectionKey: "literature_body",
       thinOrGapSections: ["literature_body"],
     });
-    expect(tips.some((t) => t.includes("综述正文"))).toBe(true);
+    expect(tips).toHaveLength(1);
+    expect(tips[0]).toContain("综述正文");
+  });
+
+  it("does not stack literature search with write-section at phase 1", () => {
+    const tips = suggestNextAgentActions({
+      currentPhase: 1,
+      writeEnabled: true,
+      hasOutline: false,
+      hasWritingBlueprint: false,
+      emptySections: ["introduction", "literature_body"],
+      nextSectionKey: "introduction",
+    });
+    expect(tips).toEqual(["检索相关文献并总结研究缺口"]);
+    expect(tips.some((t) => t.startsWith("写"))).toBe(false);
+  });
+
+  it("skips stale phase-1 literature tip once an outline exists", () => {
+    const tips = suggestNextAgentActions({
+      currentPhase: 1,
+      writeEnabled: true,
+      hasOutline: true,
+      hasWritingBlueprint: false,
+      emptySections: ["introduction"],
+    });
+    expect(tips).toHaveLength(1);
+    expect(tips[0]).toContain("写作蓝图");
+    expect(tips.some((t) => t.includes("检索"))).toBe(false);
+    expect(tips.some((t) => t.startsWith("写"))).toBe(false);
   });
 
   it("suggests thickening a thin section", () => {

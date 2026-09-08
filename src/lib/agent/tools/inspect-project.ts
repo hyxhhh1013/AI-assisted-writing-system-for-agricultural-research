@@ -1,4 +1,4 @@
-import { formatAgentProjectBriefing } from "@/lib/agent/project-briefing";
+import { formatAgentProjectBriefing, suggestNextAgentActions } from "@/lib/agent/project-briefing";
 import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
 import { resolvePhaseTaskPack } from "@/lib/agent/phase-task-pack";
 import { assessDataFoundation } from "@/lib/agent/data-foundation";
@@ -118,9 +118,17 @@ export const inspectProjectTool: ToolDefinition = {
       draftCoverage.requiredGaps.length > 0 || draftCoverage.thinKeys.length > 0
         ? `；薄节/缺口 ${[...new Set([...draftCoverage.requiredGaps, ...draftCoverage.thinKeys])].slice(0, 4).join(",")}`
         : "";
-    const nextNote = draftCoverage.nextSectionKey
-      ? `建议写 ${draftCoverage.nextSectionKey}`
-      : pack.goal;
+    const nextTips = suggestNextAgentActions({
+      currentPhase: project.currentPhase,
+      writeEnabled: true,
+      hasOutline: project.outline.trim().length >= 20,
+      hasWritingBlueprint: project.hasWritingBlueprint,
+      emptySections: empty.filter((k) => k !== "abstract"),
+      nextSectionKey: draftCoverage.nextSectionKey,
+      thinOrGapSections: [...draftCoverage.requiredGaps, ...draftCoverage.thinKeys],
+    });
+    const suggestedGoal = nextTips[0] ?? pack.goal;
+    const nextNote = suggestedGoal;
 
     return {
       success: true,
@@ -129,7 +137,7 @@ export const inspectProjectTool: ToolDefinition = {
         mode: project.mode,
         phase: project.currentPhase,
         phaseTitle: pack.pack.title,
-        suggestedGoal: pack.goal,
+        suggestedGoal,
         hasPaperConfig: project.hasPaperConfig,
         hasOutline: project.outline.trim().length >= 20,
         hasWritingBlueprint: project.hasWritingBlueprint,

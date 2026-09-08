@@ -3,7 +3,14 @@ import {
   type PhaseTaskPack,
 } from "@/contracts/phase-task-pack";
 import type { AgentProjectSnapshot } from "@/lib/agent/project-loader";
-import { formatAgentProjectBriefing } from "@/lib/agent/project-briefing";
+import {
+  formatAgentProjectBriefing,
+  suggestNextAgentActions,
+} from "@/lib/agent/project-briefing";
+import {
+  evaluateDraftCoverage,
+  sectionCharsFromFills,
+} from "@/lib/draft-coverage";
 
 export interface ResolvedPhaseTaskPack {
   pack: PhaseTaskPack;
@@ -25,28 +32,30 @@ export function resolvePhaseTaskPack(
         : 1;
   const pack = getPhaseTaskPack(phase);
 
-  let goal = pack.goal;
-  if (pack.phase === 4 && snapshot) {
-    const empty = snapshot.sectionFills
+  const empty = snapshot
+    ? snapshot.sectionFills
       .filter((s) => s.chars === 0 && s.key !== "abstract")
-      .map((s) => s.key);
-    const first = empty[0] ?? "introduction";
-    const label =
-      first === "introduction"
-        ? "引言"
-        : first === "methods"
-          ? "方法"
-          : first === "results"
-            ? "结果"
-            : first === "discussion"
-              ? "讨论"
-              : first === "conclusion"
-                ? "结论"
-                : first === "literature_body"
-                  ? "综述正文"
-                  : first;
-    goal = `写${label}（section=${first}）并保存到当前项目`;
-  }
+      .map((s) => s.key)
+    : [];
+  const coverage = snapshot
+    ? evaluateDraftCoverage({
+      mode: snapshot.mode,
+      language: snapshot.language,
+      sectionChars: sectionCharsFromFills(snapshot.sectionFills),
+    })
+    : null;
+  const nextTips = suggestNextAgentActions({
+    currentPhase: pack.phase,
+    writeEnabled: true,
+    hasOutline: Boolean(snapshot?.outline?.trim() && snapshot.outline.trim().length >= 20),
+    hasWritingBlueprint: Boolean(snapshot?.hasWritingBlueprint),
+    emptySections: empty,
+    nextSectionKey: coverage?.nextSectionKey,
+    thinOrGapSections: coverage
+      ? [...coverage.requiredGaps, ...coverage.thinKeys]
+      : undefined,
+  });
+  const goal = nextTips[0] ?? pack.goal;
 
   const briefingExtra = [
     `【阶段任务包】Phase ${pack.phase} ${pack.title}`,

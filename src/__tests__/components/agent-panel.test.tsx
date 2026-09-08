@@ -170,6 +170,8 @@ describe("AgentPanel × 继续推进条", () => {
     expect(screen.getByText(/上一轮只宣布了，还没执行/)).toBeTruthy();
     expect(screen.getByRole("button", { name: /继续推进/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^继续$/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /检索相关文献/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /看看项目卡在哪/ })).toBeNull();
   });
 
   it("点继续推进会发送跟聊目标", () => {
