@@ -11,13 +11,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
 import {
   Loader2,
-  CheckCircle2,
-  AlertTriangle,
-  XCircle,
   ChevronDown,
   ChevronUp,
   FileText,
@@ -25,8 +20,9 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { useReview } from "@/hooks/use-review";
-import { getReviewRoundStatusClient, patchSection, runReviewRound } from "@/services/review";
+import { getReviewRoundStatusClient, runReviewRound } from "@/services/review";
 import type { ReviewRoundStatus } from "@/contracts/review-rounds";
 import type {
   ReviewReport,
@@ -36,34 +32,28 @@ import type {
   ReviewIssue,
   IssueStatus,
 } from "@/contracts/review";
-
 import type { ProjectWritingMode } from "@/contracts/writing-mode";
+import { ReviewIssueCard } from "@/components/shared/review/review-issue-card";
 
 // ==================== 常量 ====================
 
-const RESEARCH_DIMENSIONS: Array<{ id: ReviewDimension; name: string; icon: string; description: string }> = [
-  { id: "academic", name: "学术规范", icon: "📝", description: "口语化、术语一致性、句式规范" },
-  { id: "argument", name: "论证质量", icon: "💡", description: "论点论据、推理链、因果关系" },
-  { id: "structure", name: "结构规范", icon: "🏗️", description: "章节完整性、图表引用、摘要" },
-  { id: "integrity", name: "学术诚信", icon: "🔒", description: "引用真实性、数据一致性、统计方法" },
+const RESEARCH_DIMENSIONS: Array<{ id: ReviewDimension; name: string; description: string }> = [
+  { id: "academic", name: "学术规范", description: "口语化、术语一致性、句式规范" },
+  { id: "argument", name: "论证质量", description: "论点论据、推理链、因果关系" },
+  { id: "structure", name: "结构规范", description: "章节完整性、图表引用、摘要" },
+  { id: "integrity", name: "学术诚信", description: "引用真实性、数据一致性、统计方法" },
 ];
 
-const REVIEW_DIMENSIONS: Array<{ id: ReviewDimension; name: string; icon: string; description: string }> = [
-  { id: "academic", name: "学术规范", icon: "📝", description: "口语化、术语一致性、综述体例" },
-  { id: "argument", name: "论证质量", icon: "💡", description: "综合对比、批判性、数据归因" },
-  { id: "structure", name: "结构规范", icon: "🏗️", description: "综述章节完整性、摘要与展望" },
-  { id: "integrity", name: "学术诚信", icon: "🔒", description: "照搬原文、数据归属、未标注来源" },
+const REVIEW_DIMENSIONS: Array<{ id: ReviewDimension; name: string; description: string }> = [
+  { id: "academic", name: "学术规范", description: "口语化、术语一致性、综述体例" },
+  { id: "argument", name: "论证质量", description: "综合对比、批判性、数据归因" },
+  { id: "structure", name: "结构规范", description: "综述章节完整性、摘要与展望" },
+  { id: "integrity", name: "学术诚信", description: "照搬原文、数据归属、未标注来源" },
 ];
 
 function getDimensionsForMode(mode?: ProjectWritingMode) {
   return mode === "research" ? RESEARCH_DIMENSIONS : REVIEW_DIMENSIONS;
 }
-
-const SEVERITY_CONFIG = {
-  high: { color: "bg-red-100 text-red-800", icon: XCircle, label: "高" },
-  medium: { color: "bg-yellow-100 text-yellow-800", icon: AlertTriangle, label: "中" },
-  low: { color: "bg-green-100 text-green-800", icon: CheckCircle2, label: "低" },
-};
 
 const GRADE_CONFIG = {
   A: { color: "text-green-600", label: "优秀" },
@@ -98,7 +88,6 @@ export function ReviewTab({
   references,
   projectId,
   projectMode,
-  onJumpToSection,
   variant = "default",
   initialReport,
   onReportSaved,
@@ -127,6 +116,7 @@ export function ReviewTab({
   );
   const [roundStatus, setRoundStatus] = useState<ReviewRoundStatus | null>(null);
   const [isRoundRunning, setIsRoundRunning] = useState(false);
+  const [severityFilter, setSeverityFilter] = useState<"all" | "high" | "medium" | "low">("all");
 
   useEffect(() => {
     if (initialReport) {
@@ -311,119 +301,23 @@ export function ReviewTab({
     );
   };
 
-  // 渲染问题项
   const renderIssue = (
     issue: FixableReviewIssue | (ReviewIssue & { status?: IssueStatus }),
     dimension: ReviewDimension,
-    index: number
-  ) => {
-    const severityConfig = SEVERITY_CONFIG[issue.severity];
-    const SeverityIcon = severityConfig.icon;
-    const issueStatus = (issue as FixableReviewIssue).status || "open";
-    const fixedContent = (issue as FixableReviewIssue).fixedContent;
-
-    return (
-      <div
-        key={issue.id}
-        className={`p-3 rounded-lg border ${
-          issueStatus === "fixed"
-            ? "bg-green-50 border-green-200"
-            : issueStatus === "dismissed"
-            ? "bg-muted/50 border-muted"
-            : "bg-background border-border"
-        }`}
-      >
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <Badge variant="outline" className={severityConfig.color}>
-                <SeverityIcon className="w-3 h-3 mr-1" />
-                {severityConfig.label}
-              </Badge>
-              <Badge variant="secondary">{issue.type}</Badge>
-              {issueStatus === "fixed" && (
-                <Badge variant="outline" className="bg-green-100 text-green-800">
-                  已修复
-                </Badge>
-              )}
-              {issueStatus === "dismissed" && (
-                <Badge variant="outline">已忽略</Badge>
-              )}
-            </div>
-            <p className="text-sm mb-1">{issue.description}</p>
-            <p className="text-xs text-muted-foreground mb-2">
-              📍 {issue.location}
-            </p>
-            {issue.originalText && (
-              <div className="text-xs bg-muted p-2 rounded mb-2">
-                <span className="font-medium">原文：</span>
-                {issue.originalText}
-              </div>
-            )}
-            {issue.suggestion && (
-              <div className="text-xs bg-blue-50 p-2 rounded">
-                <span className="font-medium">建议：</span>
-                {issue.suggestion}
-              </div>
-            )}
-            {fixedContent && (
-              <div className="text-xs bg-green-50 p-2 rounded mt-2">
-                <span className="font-medium">修复内容：</span>
-                {fixedContent}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 操作按钮 */}
-        {issueStatus === "open" && (
-          <div className="flex gap-2 mt-3">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => fixIssue(dimension, index, sectionContents, title)}
-            >
-              修复
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => dismissIssue(dimension, index)}
-            >
-              忽略
-            </Button>
-          </div>
-        )}
-        {issueStatus === "open" && fixedContent && (
-          <div className="flex gap-2 mt-2">
-            <Button
-              size="sm"
-              variant="default"
-              onClick={() => {
-                applyFix(dimension, index);
-                // 写回：尝试匹配 issue.location 到 section key
-                if (projectId) {
-                  const locSection = sections.find(s =>
-                    issue.location?.includes(s.key) || issue.location?.includes(s.title)
-                  );
-                  const targetKey = locSection?.key || sections[0]?.key;
-                  if (targetKey) {
-                    patchSection(projectId, targetKey, fixedContent).then(() => {
-                      toast.success(`已写入 ${targetKey} 章节`);
-                    }).catch((e: unknown) => {
-                      toast.error(e instanceof Error ? e.message : "保存失败");
-                    });
-                  }
-                }
-              }}
-            >
-              接受修复
-            </Button>
-          </div>
-        )}
-      </div>
-    );
-  };
+    index: number,
+  ) => (
+    <ReviewIssueCard
+      key={issue.id}
+      issue={issue}
+      dimension={dimension}
+      index={index}
+      sections={sections}
+      projectId={projectId}
+      onFix={() => { void fixIssue(dimension, index, sectionContents, title); }}
+      onDismiss={() => dismissIssue(dimension, index)}
+      onApply={() => applyFix(dimension, index)}
+    />
+  );
 
   const modeDescription =
     projectMode === "research"
@@ -471,41 +365,26 @@ export function ReviewTab({
               size="lg"
               className="bg-[#1a5632] hover:bg-[#144a2a]"
               onClick={handleReview}
-              disabled={isReviewing || isRoundRunning || selectedDimensions.length === 0}
+              disabled={
+                isReviewing ||
+                isRoundRunning ||
+                selectedDimensions.length === 0 ||
+                Boolean(projectId && roundStatus?.complete)
+              }
             >
               {isReviewing || isRoundRunning ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   审查中…
                 </>
+              ) : roundStatus?.complete ? (
+                "已完成 2/2 轮"
+              ) : projectId ? (
+                `开始审查 ${(roundStatus?.doneCount ?? 0) + 1}/2`
               ) : (
                 "开始审查"
               )}
             </Button>
-            {projectId && (
-              <Button
-                size="lg"
-                variant="secondary"
-                onClick={() => void handleNextRound()}
-                disabled={
-                  isReviewing ||
-                  isRoundRunning ||
-                  selectedDimensions.length === 0 ||
-                  Boolean(roundStatus?.complete)
-                }
-              >
-                {isRoundRunning ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    编排中…
-                  </>
-                ) : roundStatus?.complete ? (
-                  "已完成 2/2 轮"
-                ) : (
-                  `下一轮审查 ${(roundStatus?.doneCount ?? 0) + 1}/2`
-                )}
-              </Button>
-            )}
             {report && (
               <Button size="lg" variant="outline" onClick={reset} disabled={isRoundRunning}>
                 <RotateCcw className="mr-2 h-4 w-4" />
@@ -544,7 +423,6 @@ export function ReviewTab({
                     : "border-[#1a5632]/10 bg-white hover:border-[#1a5632]/25",
                 )}
               >
-                <span className="text-xl">{dim.icon}</span>
                 <span className="mt-2 text-sm font-semibold text-[#122820]">{dim.name}</span>
                 <span className="mt-1 text-[11px] leading-relaxed text-[#6b7c72]">{dim.description}</span>
                 {dimResult && (
@@ -586,7 +464,7 @@ export function ReviewTab({
                     );
                   }}
                 />
-                <span>{dim.icon} {dim.name}</span>
+                <span>{dim.name}</span>
               </label>
             ))}
           </div>
@@ -598,35 +476,26 @@ export function ReviewTab({
         <div className="flex flex-wrap gap-2">
           <Button
             onClick={handleReview}
-            disabled={isReviewing || isRoundRunning || selectedDimensions.length === 0}
+            disabled={
+              isReviewing ||
+              isRoundRunning ||
+              selectedDimensions.length === 0 ||
+              Boolean(projectId && roundStatus?.complete)
+            }
           >
             {isReviewing || isRoundRunning ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 审查中...
               </>
+            ) : roundStatus?.complete ? (
+              "已完成 2/2 轮"
+            ) : projectId ? (
+              `开始审查 ${(roundStatus?.doneCount ?? 0) + 1}/2`
             ) : (
               "开始审查"
             )}
           </Button>
-          {projectId && (
-            <Button
-              variant="secondary"
-              onClick={() => void handleNextRound()}
-              disabled={
-                isReviewing ||
-                isRoundRunning ||
-                selectedDimensions.length === 0 ||
-                Boolean(roundStatus?.complete)
-              }
-            >
-              {isRoundRunning
-                ? "编排中..."
-                : roundStatus?.complete
-                  ? "已完成 2/2 轮"
-                  : `下一轮审查 ${(roundStatus?.doneCount ?? 0) + 1}/2`}
-            </Button>
-          )}
           {report && (
             <Button variant="outline" onClick={reset} disabled={isRoundRunning}>
               重新审查
@@ -656,7 +525,7 @@ export function ReviewTab({
           <CardHeader className="cursor-pointer" onClick={() => toggleDimension(dim.id)}>
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-base">
-                {dim.icon} {dim.name}
+                {dim.name}
                 <Badge variant="secondary">{result.issueCount} 个问题</Badge>
               </CardTitle>
               <div className="flex items-center gap-4">
@@ -678,7 +547,10 @@ export function ReviewTab({
               )}
               {result.issues.length > 0 ? (
                 <div className="space-y-3">
-                  {result.issues.map((issue, index) => renderIssue(issue, dim.id, index))}
+                  {result.issues
+                    .map((issue, index) => ({ issue, index }))
+                    .filter(({ issue }) => severityFilter === "all" || issue.severity === severityFilter)
+                    .map(({ issue, index }) => renderIssue(issue, dim.id, index))}
                 </div>
               ) : (
                 <p className="py-4 text-center text-sm text-muted-foreground">✅ 未发现问题</p>
@@ -720,7 +592,7 @@ export function ReviewTab({
                 const r = report.dimensions[dim.id];
                 return (
                   <li key={dim.id} className="flex items-center justify-between text-[11px]">
-                    <span className="text-[#3d4f46]">{dim.icon} {dim.name}</span>
+                    <span className="text-[#3d4f46]">{dim.name}</span>
                     <span className={cn("font-semibold tabular-nums", GRADE_CONFIG[r.grade].color)}>
                       {r.score}
                     </span>
@@ -730,7 +602,24 @@ export function ReviewTab({
             </ul>
           </div>
         </div>
-        <div className="min-w-0 space-y-4">{dimensionCards}</div>
+        <div className="min-w-0 space-y-4">
+          <div className="flex flex-wrap gap-1">
+            {(["all", "high", "medium", "low"] as const).map((level) => (
+              <button
+                key={level}
+                type="button"
+                className={cn(
+                  "rounded-full px-2.5 py-1 text-[11px] transition-colors",
+                  severityFilter === level ? "bg-[#1a5632] text-white" : "bg-[#faf9f6] text-[#6b7c72] hover:bg-[#1a5632]/8",
+                )}
+                onClick={() => setSeverityFilter(level)}
+              >
+                {level === "all" ? "全部严重度" : level === "high" ? "高" : level === "medium" ? "中" : "低"}
+              </button>
+            ))}
+          </div>
+          {dimensionCards}
+        </div>
       </div>
     ) : (
       <>

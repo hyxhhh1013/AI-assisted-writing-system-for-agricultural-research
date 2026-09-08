@@ -5,6 +5,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { FolderOpen, Globe, Loader2, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PlagiarismStage } from "@/hooks/use-plagiarism-check";
+import { DetectionScopePanel } from "@/components/shared/quality/detection-scope";
+import { QualityCheckProgress } from "@/components/shared/quality/quality-progress";
 
 interface ProjectOption {
   id: string;
@@ -87,11 +89,11 @@ export function PlagiarismCheckForm({
         onChange={(e) => setTitle(e.target.value)}
       />
 
-      <div className={cn("relative flex min-h-0 flex-1 flex-col", compact ? "" : "")}>
+      <div className="relative flex min-h-0 flex-1 flex-col">
         <Textarea
           className={cn(
             "flex-1 resize-none leading-relaxed",
-            compact ? "h-full font-mono text-xs" : "min-h-[280px] pr-16 text-sm",
+            compact ? "h-full font-mono text-xs" : "min-h-[200px] pr-16 text-sm",
           )}
           placeholder="在此粘贴论文内容，或从上方选择项目导入..."
           value={content}
@@ -104,9 +106,15 @@ export function PlagiarismCheckForm({
         )}
       </div>
 
+      {!compact && (
+        <DetectionScopePanel webSearch={webSearch} onToggleWeb={setWebSearch} />
+      )}
+
       {error && (
         <p className="text-xs text-red-600">{error}</p>
       )}
+
+      <QualityCheckProgress checking={checking} stage={stage} />
 
       <div className={cn("flex shrink-0 items-center justify-between", compact ? "" : "border-t pt-3")}>
         <label className={cn("flex cursor-pointer items-center text-muted-foreground", compact ? "gap-1.5 text-xs" : "gap-2 text-sm")}>
@@ -130,7 +138,7 @@ export function PlagiarismCheckForm({
           )}
           <Button
             size="sm"
-            className={compact ? "h-7 text-xs" : ""}
+            className={cn(compact ? "h-7 text-xs" : "", "bg-[#1a5632] hover:bg-[#144a2a]")}
             onClick={onCheck}
             disabled={checking || !content.trim() || overLimit}
           >
@@ -148,18 +156,6 @@ export function PlagiarismCheckForm({
           </Button>
         </div>
       </div>
-
-      {checking && stage && (
-        <div className={cn("rounded-lg border border-[#1a5632]/15 bg-[#1a5632]/5", compact ? "px-2 py-2" : "px-3 py-2.5")}>
-          <div className="mb-1.5 flex items-center justify-between gap-2">
-            <span className={cn("text-[#1a5632]", compact ? "text-[10px]" : "text-xs")}>{stage.label}</span>
-            <Loader2 className={cn("animate-spin text-[#1a5632]", compact ? "h-3 w-3" : "h-3.5 w-3.5")} />
-          </div>
-          <div className="h-1 overflow-hidden rounded-full bg-[#1a5632]/10">
-            <div className="h-full w-2/3 animate-pulse rounded-full bg-[#1a5632]/50" />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

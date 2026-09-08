@@ -63,12 +63,16 @@ export function PlagiarismRewriteView({
 
   const accept = (mid: string, s: RewriteSuggestion) => {
     if (s.id) updateRewriteSuggestion({ suggestionId: s.id, status: "accepted" }).catch(() => {});
+    setAccepted((p) => ({ ...p, [`${mid}-${s.strategy}`]: true }));
+    toast.success("已采纳，可写回项目或应用到正文");
+  };
+
+  const copySuggestion = (mid: string, s: RewriteSuggestion) => {
     navigator.clipboard.writeText(s.suggestedText).then(() => {
       setCopiedId(`${mid}-${s.strategy}`);
       setTimeout(() => setCopiedId(null), 1500);
-    }).catch(() => {});
-    setAccepted((p) => ({ ...p, [`${mid}-${s.strategy}`]: true }));
-    toast.success("已采纳");
+      toast.success("已复制");
+    }).catch(() => toast.error("复制失败"));
   };
 
   const reject = (mid: string, s: RewriteSuggestion) => {
@@ -222,6 +226,14 @@ export function PlagiarismRewriteView({
                               variant="ghost"
                               size="sm"
                               className={cn("text-muted-foreground", compact ? "h-5 px-1.5 text-[9px]" : "h-6 px-2 text-[10px]")}
+                              onClick={() => copySuggestion(m.id, s)}
+                            >
+                              {isC ? "已复制" : "复制"}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className={cn("text-muted-foreground", compact ? "h-5 px-1.5 text-[9px]" : "h-6 px-2 text-[10px]")}
                               onClick={() => reject(m.id, s)}
                             >
                               <X className={compact ? "mr-0.5 h-2.5 w-2.5" : "mr-0.5 h-3 w-3"} />
@@ -229,11 +241,24 @@ export function PlagiarismRewriteView({
                             </Button>
                           </>
                         )}
-                        {isA && <span className={cn("text-green-600", compact ? "text-[9px]" : "text-[10px]")}>{isC ? "已复制 ✓" : "已采纳"}</span>}
+                        {isA && <span className={cn("text-green-600", compact ? "text-[9px]" : "text-[10px]")}>已采纳</span>}
                         {isR && <span className={cn("text-muted-foreground", compact ? "text-[9px]" : "text-[10px]")}>已忽略</span>}
                       </div>
                     </div>
-                    <p className={isR ? "text-muted-foreground line-through" : ""}>{s.suggestedText}</p>
+                    {!compact ? (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <div className="rounded border border-red-100 bg-red-50/80 p-2">
+                          <span className="mb-0.5 block text-[10px] text-red-400">原文</span>
+                          <p className="text-[#3d4f46]">{m.sourceText}</p>
+                        </div>
+                        <div className={cn("rounded border p-2", isA ? "border-green-200 bg-green-50" : "border-amber-100 bg-amber-50/80")}>
+                          <span className="mb-0.5 block text-[10px] text-amber-500">改写建议</span>
+                          <p className={isR ? "text-muted-foreground line-through" : "text-[#122820]"}>{s.suggestedText}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className={isR ? "text-muted-foreground line-through" : ""}>{s.suggestedText}</p>
+                    )}
                   </div>
                 );
               })}

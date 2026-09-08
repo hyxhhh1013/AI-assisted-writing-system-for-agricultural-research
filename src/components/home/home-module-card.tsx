@@ -7,7 +7,7 @@ const SHORT_TITLES: Partial<Record<string, string>> = {
   workbench: "科研工作台",
   projects: "项目管理",
   knowledge: "文献库",
-  plagiarism: "查重降重",
+  plagiarism: "质量中心",
   plot: "数据绘图",
   "xrd-lab": "光谱分析",
 };

@@ -8,7 +8,7 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-09-06（UI-PR-036 索引构建进度连续显示）  
+> **最后更新**：2026-09-08（QUALITY-UX 质量中心总览工位）  
 > **实时 status 只看 §1 Phase 13 / Phase 14 与 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
@@ -232,6 +232,14 @@
 | WRITE-QA-009 | `write_section` 主路径改吃 Spec；context 只作适配 | 002, 006 | 1d | **done** | 2026-08-22；`spec-write-context.ts`；可传 `sectionSpec`；Writer 看【本节主张】 |
 | WRITE-QA-010 | 剖面收口：results + literature_body 子节 + introduction | 008, 009 | 1.5d | **done** | 2026-08-22；`writing-profiles.ts`：缺口句 / 无数量 / 综述写成试验 |
 | — | 任务单细节 | — | — | — | [`plans/WRITE-QA-quality-system.md`](./plans/WRITE-QA-quality-system.md) |
+| **Phase 15 — 提交前质量中心 UX（QUALITY-UX）** |
+| **QUALITY-UX-000** | **规划：入口合一 + 总览仪表 + 工位** | — | 0.5d | **done** | 2026-09-08；[`plans/QUALITY-UX-workspace.md`](./plans/QUALITY-UX-workspace.md) |
+| QUALITY-UX-001 | 总览默认 + 工位导航；历史进头栏 Dialog | 000 | 0.5d | **done** | 2026-09-08 |
+| QUALITY-UX-002 | 检测层接入、阶段进度、查重报告仪表 | 001 | 0.5d | **done** | 2026-09-08 |
+| QUALITY-UX-003 | 降重并排预览；采纳即标记 | 002 | 0.5d | **done** | 2026-09-08 |
+| QUALITY-UX-004 | 审查单 CTA + 问题筛选 + 章节写回 | 001 | 0.5d | **done** | 2026-09-08 |
+| QUALITY-UX-005 | 工作台入口卡；不再挂载 compact 查重 | 001 | 0.5d | **done** | 2026-09-08 |
+| — | 任务单细节 | — | — | — | [`plans/QUALITY-UX-workspace.md`](./plans/QUALITY-UX-workspace.md) |
 | **Phase 11b — Wave 3.7 Agent 写作质量（对齐 academic-paper Phase 4→7）** |
 | **W3-AP-QUALITY** | **质量主轴：引用接地→分节完整→文风质检→摘要/审查收口** | W3-AP-BEHAVIOR | 3～5w | **done** | 2026-08-06；子项全 done；详规 [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md) |
 | W3-AP-ENTRY-WIZARD | 新建向导：入口三档 full/outline_ready/data_ready + 配置迁入 | W3-AP-CONFIG-QA | 0.5d | **done** | 2026-08-06；`entry-mode.ts` + `create-project-wizard.tsx`（`create-project-dialog` 挂载）+ `agent-panel` 前缀注入 + `update_paper_config` 可调；补 `agent-entry-mode.test.ts` 独立覆盖 |
@@ -1203,6 +1211,7 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-09-06 | RAG-PR-016 | AI | IMRaD 切块：Stage 1 按短行标题分段后再 1000 字切；写作检索 prefer `metadata.section`。旧索引双读不必全库重建；`--rechunk`/`RAG_RECHUNK=1` 才把旧 schema 当 miss。 |
 | 2026-09-06 | UI-PR-035 | AI | 知识库索引 UI：页头「更新索引」+ 下拉拆增量/按章节重切/强制重解析/仅重算向量；已选「索引所选」；`rechunk` 进 reindex 契约与 API。 |
 | 2026-09-06 | UI-PR-036 | AI | 索引进度补断点：三阶段步进；Stage2 开始/Prisma 同步/向量化预告有 SSE；百分比只增不减；完成后保留面板。 |
+| 2026-09-08 | QUALITY-UX | AI | 质量中心改为总览默认 + 查重/降重/审查工位；检测层与阶段进度；降重并排采纳；审查单 CTA + 章节写回；工作台改入口卡。 |
 
 ---
 

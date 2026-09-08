@@ -11,7 +11,7 @@
 | 降重 service | ✅ 已实现 | `src/services/rewrite-service.ts` + `api/plagiarism/rewrite`；支持采纳写回原文 |
 | 审查四维度 | ✅ 已实现 | `src/services/review-service.ts`、`/review` → 质量中心审查 Tab |
 | 查重 SSE 进度 | ✅ 已实现 | v2/check 路由 `Accept: text/event-stream` |
-| 统一质量中心 | ✅ 已实现 | `QualityWorkspace` 组件（查重/降重/审查三 Tab），共享于 `/plagiarism` + 工作台 panel |
+| 统一质量中心 | ✅ 已实现 | `QualityWorkspace`：总览默认 + 查重/降重/审查工位；历史进头栏 Dialog（QUALITY-UX） |
 | 匹配内容预览 | ✅ 已实现 | `quality/match-content-preview.tsx`：原文 vs 匹配源高亮对照 |
 | 审查侧栏筛选 | ✅ 已实现 | `quality/section-sidebar.tsx`：按维度/严重度过滤 |
 | 会话持久化 | ✅ 已实现 | `quality-persist.ts` + `quality-restore.ts`：刷新/切项目恢复状态 |

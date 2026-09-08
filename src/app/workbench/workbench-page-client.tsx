@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cleanDraftArtifacts, deduplicateParagraphs, cleanMarkdownArtifacts } from "@/lib/utils";
-import { mergeEditorIntoProject, buildPlagiarismContentFromProject } from "@/lib/export-content";
+import { mergeEditorIntoProject } from "@/lib/export-content";
 import { ensureSubsectionNumbering, majorNumberFromSectionId, maxSecondLevelInText } from "@/lib/academic-numbering";
 import { useDocxExport } from "@/hooks/use-docx-export";
 import { useReferenceReorder } from "@/hooks/use-reference-reorder";
@@ -134,8 +134,8 @@ const LazyReaderPanel = dynamic(
   { ssr: false, loading: () => <TabPanelLoading /> }
 );
 
-const LazyPlagiarismPanel = dynamic(
-  () => import("@/components/shared/plagiarism-panel").then(m => m.PlagiarismPanel),
+const LazyQualityHubCard = dynamic(
+  () => import("@/components/shared/quality/quality-hub-card").then(m => m.QualityHubCard),
   { ssr: false, loading: () => <TabPanelLoading /> }
 );
 
@@ -907,12 +907,9 @@ function WorkbenchContent() {
             {activeTab === "plagiarism" && (
               <div className="h-full min-h-0 flex flex-col overflow-hidden">
                 <ErrorBoundary>
-                  <LazyPlagiarismPanel
+                  <LazyQualityHubCard
                     projectId={projectId ?? undefined}
                     projectTitle={project.title}
-                    initialContent={buildPlagiarismContentFromProject(
-                      mergeEditorIntoProject(project, activeSection, editingContent),
-                    )}
                   />
                 </ErrorBoundary>
               </div>

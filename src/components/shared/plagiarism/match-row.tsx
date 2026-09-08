@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PlagiarismMatchResult } from "@/contracts/plagiarism";
-import { MATCH_ICONS, MATCH_TYPE_LABELS, riskDotClass } from "./constants";
+import { MATCH_TYPE_LABELS, riskDotClass } from "./constants";
 
 interface PlagiarismMatchRowProps {
   match: PlagiarismMatchResult;
@@ -39,13 +39,8 @@ export function PlagiarismMatchRow({ match, index, compact = false }: Plagiarism
         >
           {(match.similarity * 100).toFixed(0)}%
         </Badge>
-        <span className={cn("shrink-0", compact ? "text-[10px]" : "text-xs")}>
-          {MATCH_ICONS[match.matchType]}
-          {!compact && (
-            <span className="ml-0.5 text-[10px] text-muted-foreground">
-              {MATCH_TYPE_LABELS[match.matchType]}
-            </span>
-          )}
+        <span className={cn("shrink-0 text-[#6b7c72]", compact ? "text-[10px]" : "text-xs")}>
+          {MATCH_TYPE_LABELS[match.matchType]}
         </span>
         {open ? (
           <ChevronUp className={cn("shrink-0 text-muted-foreground/50", compact ? "h-3 w-3" : "h-4 w-4")} />

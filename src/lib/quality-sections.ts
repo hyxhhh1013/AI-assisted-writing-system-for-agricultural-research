@@ -62,3 +62,41 @@ export function buildCheckContentFromSections(
 export function totalWordCount(sections: QualitySection[]): number {
   return sections.reduce((n, s) => n + s.wordCount, 0);
 }
+
+export interface IssueSectionHint {
+  location: string;
+  originalText?: string;
+}
+
+/**
+ * 把审查问题定位到章节：标题/key → 「第 N 节」序号 → 原文片段。
+ * 匹配不到时返回 null（调用方再决定是否回退到第一章）。
+ */
+export function resolveIssueSectionKey(
+  issue: IssueSectionHint,
+  sections: Array<{ key: string; title: string; content: string }>,
+): string | null {
+  if (sections.length === 0) return null;
+
+  const loc = issue.location.trim().toLowerCase();
+  for (const s of sections) {
+    if (loc.includes(s.key.toLowerCase()) || loc.includes(s.title.toLowerCase())) {
+      return s.key;
+    }
+  }
+
+  const ordinal = loc.match(/第\s*(\d+)\s*节/);
+  if (ordinal) {
+    const idx = Number(ordinal[1]) - 1;
+    if (idx >= 0 && idx < sections.length) return sections[idx].key;
+  }
+
+  const needle = issue.originalText?.trim();
+  if (needle && needle.length >= 6) {
+    const snippet = needle.slice(0, 80);
+    const hit = sections.find((s) => s.content.includes(snippet));
+    if (hit) return hit.key;
+  }
+
+  return null;
+}

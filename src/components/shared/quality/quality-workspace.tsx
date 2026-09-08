@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
-  ArrowLeft, Search, Shuffle, ClipboardCheck, Clock, Loader2,
+  ArrowLeft, Clock, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { projectStore } from "@/lib/store";
@@ -35,14 +35,20 @@ import { ReviewTab } from "@/components/shared/review-tab";
 import { SectionSidebar } from "@/components/shared/quality/section-sidebar";
 import { UnifiedHistoryPanel } from "@/components/shared/quality/unified-history-panel";
 import { persistQualitySections } from "@/lib/quality-state";
-import { parseQualityTab, shouldOpenCheckResult, type QualityTab } from "@/components/shared/quality/types";
-
-const TAB_DEFS: { id: QualityTab; label: string; icon: typeof Search; requiresResult?: boolean }[] = [
-  { id: "check", label: "查重", icon: Search },
-  { id: "rewrite", label: "降重", icon: Shuffle, requiresResult: true },
-  { id: "review", label: "审查", icon: ClipboardCheck },
-  { id: "history", label: "历史", icon: Clock },
-];
+import {
+  isHistoryTab,
+  parseQualityTab,
+  shouldOpenCheckResult,
+  type QualityStation,
+} from "@/components/shared/quality/types";
+import { QualityStationNav } from "@/components/shared/quality/quality-station-nav";
+import { QualityOverview } from "@/components/shared/quality/quality-overview";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type CheckView = "form" | "result";
 
@@ -53,7 +59,8 @@ export function QualityWorkspace() {
   const goBack = useGoBack();
 
   const initialTab = parseQualityTab(searchParams.get("tab"));
-  const [tab, setTabState] = useState<QualityTab>(initialTab);
+  const [tab, setTabState] = useState<QualityStation>(initialTab);
+  const [historyOpen, setHistoryOpen] = useState(() => isHistoryTab(searchParams.get("tab")));
   const [checkView, setCheckView] = useState<CheckView>(() =>
     shouldOpenCheckResult(searchParams.get("tab")) ? "result" : "form",
   );
@@ -92,7 +99,7 @@ export function QualityWorkspace() {
   const lastToastCheckIdRef = useRef<string | null>(null);
   const sessionRestoredForRef = useRef<string | null>(null);
 
-  const syncSessionParams = useCallback((patch: { tab?: QualityTab; checkId?: string; reviewId?: string }) => {
+  const syncSessionParams = useCallback((patch: { tab?: QualityStation; checkId?: string; reviewId?: string }) => {
     const params = new URLSearchParams(searchParams.toString());
     if (activeProjectId) params.set("id", activeProjectId);
     if (patch.tab) params.set("tab", patch.tab);
@@ -101,7 +108,7 @@ export function QualityWorkspace() {
     router.replace(`/plagiarism?${params.toString()}`, { scroll: false });
   }, [activeProjectId, router, searchParams]);
 
-  const setTab = useCallback((next: QualityTab) => {
+  const setTab = useCallback((next: QualityStation) => {
     setTabState(next);
     const params = new URLSearchParams(searchParams.toString());
     if (activeProjectId) params.set("id", activeProjectId);
@@ -112,6 +119,7 @@ export function QualityWorkspace() {
   useEffect(() => {
     const nextTab = parseQualityTab(searchParams.get("tab"));
     setTabState(nextTab);
+    if (isHistoryTab(searchParams.get("tab"))) setHistoryOpen(true);
     if (shouldOpenCheckResult(searchParams.get("tab")) && result) {
       setCheckView("result");
     }
@@ -184,7 +192,9 @@ export function QualityWorkspace() {
             setContent(session.content);
             setTitle(session.title);
           }
-          setCheckView("result");
+          if (shouldOpenCheckResult(searchParams.get("tab"))) {
+            setCheckView("result");
+          }
           syncSessionParams({ checkId });
         }
 
@@ -220,7 +230,6 @@ export function QualityWorkspace() {
 
     lastToastCheckIdRef.current = checkResult.checkId;
     setHistoryResult(null);
-    setSavedReviewReport(null);
     setTabState("check");
     setCheckView("result");
     syncSessionParams({ tab: "check", checkId: checkResult.checkId });
@@ -244,7 +253,7 @@ export function QualityWorkspace() {
       resetCheckSession();
       setHistoryResult(null);
       setCheckView("form");
-      setTab("check");
+      setTab("overview");
       toast.success(`已加载「${d.title}」`);
     } catch {
       toast.error("加载失败");
@@ -320,7 +329,7 @@ export function QualityWorkspace() {
     [sections],
   );
 
-  const showSectionSidebar = sections.length > 0 && (tab === "check" || tab === "rewrite");
+  const showSectionSidebar = sections.length > 0 && tab !== "overview";
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#f6f5f1]">
@@ -365,6 +374,15 @@ export function QualityWorkspace() {
                 审查 {lastReview.overallScore ?? "—"} 分
               </button>
             )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs text-[#3d4f46]"
+              onClick={() => setHistoryOpen(true)}
+            >
+              <Clock className="mr-1 h-3.5 w-3.5" />
+              历史
+            </Button>
           </div>
           {(loadingP || restoringSession) && <Loader2 className="h-4 w-4 animate-spin text-[#1a5632]" />}
         </div>
@@ -372,26 +390,12 @@ export function QualityWorkspace() {
 
       <div className="flex min-h-0 w-full flex-1 px-3 py-3 sm:px-4 lg:px-6 xl:px-8">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="mb-3 flex shrink-0 gap-1 overflow-x-auto rounded-xl bg-white/80 p-1 shadow-sm ring-1 ring-[#1a5632]/8">
-            {TAB_DEFS.map((t) => {
-              const disabled = t.requiresResult && !result;
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  disabled={disabled}
-                  className={cn(
-                    "flex min-w-fit flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2.5 text-xs font-medium transition-all",
-                    tab === t.id ? "bg-[#1a5632] text-white shadow-sm" : disabled ? "cursor-not-allowed text-muted-foreground/40" : "text-[#3d4f46] hover:bg-[#1a5632]/8",
-                  )}
-                  onClick={() => !disabled && setTab(t.id)}
-                >
-                  <t.icon className="h-3.5 w-3.5 shrink-0" />
-                  {t.label}
-                </button>
-              );
-            })}
-          </div>
+          <QualityStationNav
+            station={tab}
+            hasResult={Boolean(result)}
+            hasProject={reviewSections.length > 0}
+            onSelect={setTab}
+          />
 
           <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-[#1a5632]/10 bg-white shadow-sm">
             {showSectionSidebar && (
@@ -399,6 +403,25 @@ export function QualityWorkspace() {
             )}
 
             <main className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
+              {tab === "overview" && (
+                <QualityOverview
+                  projectTitle={project?.title ?? ""}
+                  sections={sections}
+                  result={result}
+                  lastReview={lastReview}
+                  webSearch={web}
+                  setWebSearch={setWeb}
+                  plist={plist}
+                  selPid={selPid}
+                  loadingP={loadingP}
+                  onLoadProject={loadP}
+                  onOpenStation={(id) => {
+                    if (id === "check" && result) setCheckView("result");
+                    setTab(id);
+                  }}
+                />
+              )}
+
               {tab === "check" && (
                 <div className="flex h-full min-h-0 flex-col gap-3">
                   {result && (
@@ -492,28 +515,35 @@ export function QualityWorkspace() {
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <ClipboardCheck className="mb-4 h-12 w-12 text-[#1a5632]/25" />
                     <p className="text-sm font-medium text-[#122820]">审查需要绑定项目章节</p>
                     <p className="mt-1 max-w-sm text-xs text-[#6b7c72]">
-                      请在查重页选择项目，系统会按 IMRAD / 综述结构加载各章正文。
+                      请在总览选择项目，系统会按 IMRAD / 综述结构加载各章正文。
                     </p>
-                    <Button className="mt-4 bg-[#1a5632] hover:bg-[#144a2a]" onClick={() => setTab("check")}>
-                      去选择项目
+                    <Button className="mt-4 bg-[#1a5632] hover:bg-[#144a2a]" onClick={() => setTab("overview")}>
+                      回总览选项目
                     </Button>
                   </div>
                 )
-              )}
-
-              {tab === "history" && (
-                <UnifiedHistoryPanel
-                  projectId={activeProjectId}
-                  onViewPlagiarism={handleViewPlagiarismHistory}
-                />
               )}
             </main>
           </div>
         </div>
       </div>
+
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>检测历史</DialogTitle>
+          </DialogHeader>
+          <UnifiedHistoryPanel
+            projectId={activeProjectId}
+            onViewPlagiarism={(r) => {
+              setHistoryOpen(false);
+              void handleViewPlagiarismHistory(r);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

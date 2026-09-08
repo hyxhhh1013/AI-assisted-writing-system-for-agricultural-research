@@ -8,8 +8,8 @@
 
 | 层 | 路径 |
 |----|------|
-| 页面 | `src/app/review/page.tsx`（重定向至质量中心审查 Tab） |
-| 组件 | `src/components/shared/review/`（`review-workspace`、`review-history-list`） |
+| 页面 | `src/app/plagiarism/page.tsx`（默认总览；`?tab=review` 审查工位） |
+| 组件 | `quality-workspace`、`review-tab`、`review-issue-card`、`review-history-list` |
 | API | `POST /api/review` |
 | 多轮编排 | `POST|GET /api/review/rounds`（max 2；`lib/review-rounds.ts`；Agent `run_review_rounds`） |
 | 历史 | `GET /api/review/history`、`GET /api/review/[id]` |
@@ -60,6 +60,7 @@
 | 历史 | `GET /api/plagiarism/history` |
 | Service | `plagiarism-service.ts`（**唯一业务实现**） |
 | 前端 hook | `use-plagiarism-check` → `services/plagiarism.ts`（SSE 调 **v2**） |
+| 工作台入口 | `quality-hub-card.tsx` 跳转 `/plagiarism?id=`，不再内嵌 compact 查重 |
 | Admin | `GET /api/admin/plagiarism`、`GET /api/admin/plagiarism/[id]` |
 
 ### 检测层（`PlagiarismConfig`）

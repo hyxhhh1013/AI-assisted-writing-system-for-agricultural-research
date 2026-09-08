@@ -1,7 +1,8 @@
 "use client";
 
 import type { PlagiarismCheckStats, PlagiarismMatchType } from "@/contracts/plagiarism";
-import { MATCH_ICONS } from "@/components/shared/plagiarism/constants";
+import { MATCH_TYPE_ICONS } from "@/components/shared/plagiarism/constants";
+import { cn } from "@/lib/utils";
 
 const STAT_KEYS: { key: keyof PlagiarismCheckStats; matchType: PlagiarismMatchType; label: string }[] = [
   { key: "selfMatches", matchType: "self", label: "自引重复" },
@@ -29,12 +30,13 @@ export function PlagiarismStatsReport({ stats, compact = false }: PlagiarismStat
         {STAT_KEYS.map(({ key, matchType, label }) => {
           const count = stats[key] as number;
           if (key === "totalParagraphs" || key === "sampledParagraphs" || key === "processingTime") return null;
+          const Icon = MATCH_TYPE_ICONS[matchType];
           return (
             <div
               key={key}
               className={compact ? "rounded-md border bg-muted/20 px-2 py-1.5 text-center" : "rounded-lg border bg-muted/20 px-3 py-2 text-center"}
             >
-              <span className="text-sm">{MATCH_ICONS[matchType]}</span>
+              {Icon && <Icon className={cn("mx-auto text-[#1a5632]", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />}
               <p className={compact ? "mt-0.5 text-sm font-bold tabular-nums text-[#122820]" : "mt-1 text-lg font-bold tabular-nums text-[#122820]"}>
                 {count}
               </p>

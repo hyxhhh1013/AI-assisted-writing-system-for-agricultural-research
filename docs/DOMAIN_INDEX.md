@@ -27,7 +27,7 @@
 | `writing` | 协作扩写流水线（旧 `/writing` 重定向至此） |
 | `agent` | **产品主入口**（需 `NEXT_PUBLIC_AGENT_ENABLED=1`；写工具需 `AGENT_WRITE_ENABLED=1`）。数据/出图/写结果主路径都在此 |
 | `reader` | 补录参考文献 |
-| `plagiarism` | 查重侧栏（精简）；完整质量中心见 `/plagiarism` |
+| `plagiarism` | 质量中心入口卡；完整工作台见 `/plagiarism` |
 
 > **移动端响应式（2026-08-08）**：窄屏（< 1024px，手机/平板竖屏）下自动隐藏左侧图标栏（`WorkbenchTabSwitcher`）与动态侧栏、关闭预览，只留编辑器全宽（`workbench-page-client.tsx` 的 `isMobileLayout` + `matchMedia`）。宽屏恢复三栏。侧栏收起的展开浮钮窄屏贴左边缘（`left-0`），宽屏贴图标栏（`left-14`）。
 
@@ -92,8 +92,8 @@
 
 | 功能 | 页面 | API | 核心代码 |
 |------|------|-----|----------|
-| 统一质量中心 | `src/app/plagiarism/page.tsx` | `/api/plagiarism/v2` SSE | `QualityWorkspace`、`quality-persist.ts`、`quality-restore.ts` |
-| 审查 Tab | `/plagiarism?tab=review` | `POST /api/review`；`POST /api/review/rounds` | `review-tab.tsx`、`review-service.ts`、`lib/review-rounds.ts` |
+| 统一质量中心 | `src/app/plagiarism/page.tsx` | `/api/plagiarism/v2` SSE | `QualityWorkspace`（总览默认）、`quality-state.ts` |
+| 审查工位 | `/plagiarism?tab=review` | `POST /api/review`；`POST /api/review/rounds` | `review-tab.tsx`、`review-issue-card.tsx`、`review-service.ts` |
 | 引用硬检 | Passport Phase 5 / PDF 导出 | `GET|POST /api/citations/gate` | `lib/citation-gate.ts`、`services/citations.ts` |
 | 引用语义接地 | Agent `validate_citations` / inspect |（工具内） | `lib/citation-grounding.ts`、`contracts/citation-grounding.ts`（W3-AP-CITE-GROUND） |
 | 分节完整度 | Agent inspect / 简报 |（工具内） | `lib/draft-coverage.ts`、`contracts/draft-coverage.ts`（W3-AP-DRAFT-COVER） |
