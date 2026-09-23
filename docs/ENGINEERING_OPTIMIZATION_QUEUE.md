@@ -8,8 +8,8 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-09-08（QUALITY-UX 质量中心总览工位）  
-> **实时 status 只看 §1 Phase 13 / Phase 14 与 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
+> **最后更新**：2026-09-23（Phase 17 Agent 每步等人）  
+> **实时 status 只看 §1 Phase 13 / Phase 14 / Phase 16 / Phase 17 与 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
 
@@ -293,6 +293,23 @@
 | W3-AP-ARCH-03 | 冻结 `POST /api/writing`：新写作规则只改 Agent | — | 0.5d | **done** | 2026-08-16；`route.ts`/`run-pipeline.ts` 文件头冻结声明 + `DOMAIN_INDEX`/`writing-pipeline.md` 主从标注；不删专家工具 7 步管 |
 | W3-AP-WRITE-NO-RAG | 有项目文献摘要时跳过知识库 RAG | — | 0.5d | **done** | 2026-08-17；`shouldSkipKnowledgeRag` + `retrieveWritingContext`；勾选来源 / `WRITING_FORCE_KNOWLEDGE_RAG=1` 不跳；预览仍走 RAG |
 | — | 任务单细节 | — | — | — | [`plans/W3-AP-RUNTIME.md`](./plans/W3-AP-RUNTIME.md) |
+| **Phase 16 — Wave 4 抛光与安全加固（SEC-04～08 + 工程债）** |
+| W4-SEC-04 | SSE 透传 abort + lastRefMapping 合并 | — | 1～2h | todo | 2026-09-20 复核：`lib/ai.ts` 已支持 `signal`，只剩调用点；详规 [`SECURITY_FIX_PLAN_2026-07-05.md`](./SECURITY_FIX_PLAN_2026-07-05.md) §PR-SEC-04 |
+| W4-SEC-05 | 上传校验 + Python 子进程超时/清理 | — | 5～7h | todo | **范围大幅扩大**：spawn 点 4→**19**（`src/app/api/` 13 + `src/lib/` 6）；原估 1～2h 上调；可降级拆 a/b |
+| W4-SEC-06 | XSS：两处 `dangerouslySetInnerHTML` 消毒 | — | 1～1.5h | todo | 位置已漂移：`plot-insert-dialog.tsx:281`、`table-panel.tsx:249` |
+| W4-SEC-07 | `createProjectFromRoadmap` 事务化 + auto-save 增量 + 创建幂等 | — | 2～3h | todo | 三项均未做；`use-auto-save.ts` 仍全量 `projectStore.save` |
+| W4-SEC-08 | reindex 原子化 + cookie `Secure` | — | 2～3h | todo | cookie 半做（`getSecureFlag()` 已抽出但硬编码 `''`）；reindex 需按 RAG-PR-014/016 后现状重写任务单 |
+| W4-WB-SLIM-A | workbench 编排下沉 hooks（`workbench-page-client` 1275 行 → ≤600） | — | 1d | todo | 先例 ENG-PR-031/032；抽 `use-workbench-project` / `-layout` / `-agent-bridge` |
+| W4-WB-SLIM-B | workbench 子组件抽取（侧栏 / 对话框 / 预览区） | WB-SLIM-A | 1d | todo | 目标 page ≤250 行；**不动 `workbench/page.tsx` 挂载行**（§0.3） |
+| ~~W4-LATEX~~ | ~~LaTeX / Pandoc 导出~~ | — | — | **blocked** | 无交付定义（仅 Wave 3.7 一句「归 Wave 4」）；需产品决策后再拆单，见 §3.1 末尾 5 问 |
+| — | 任务单细节 | — | — | — | 本文 §3 末尾「Phase 16 任务单」；SEC 详规见 [`SECURITY_FIX_PLAN_2026-07-05.md`](./SECURITY_FIX_PLAN_2026-07-05.md) |
+| **Phase 17 — Agent 每步等人（HITL steer）** |
+| **W3-AP-HITL-STEER** | **主轴：可见结果写回后停；蓝图一律等人；缺大纲先问** | W3-AP-OUTLINE-HUMAN | 1d | **done** | 2026-09-23；不重开 LLM 意图分类；详规 [`plans/W3-AP-HITL-STEER.md`](./plans/W3-AP-HITL-STEER.md) |
+| W3-AP-HITL-01 | 写作蓝图写回一律 `blueprint_approve` | OUTLINE-HUMAN | 0.5d | **done** | 2026-09-23；新蓝图作废旧批准 |
+| W3-AP-HITL-02 | 可见结果后停止计划续跑 | HITL-01 | 0.5d | **done** | 2026-09-23；写后自查仍保留 |
+| W3-AP-HITL-03 | 缺大纲先 clarify，再生成 | HITL-01 | 0.5d | **done** | 2026-09-23；出一版 / 贴骨架 / 先别生成 |
+| W3-AP-HITL-04 | 导入一批后不再灌到目标篇数 | HITL-02 | 0.5d | **done** | 2026-09-23；`importCount > 0` 停止文献续跑 |
+| W3-AP-HITL-05 | 缺文献停下来问，不静默泛写 | RULES-01 | 0.5d | **done** | 2026-09-23；`draft-missing-refs` |
 
 
 | 来源 | 本队列处理方式 |
@@ -306,6 +323,7 @@
 | `docs/plans/W3-AP-AGENT-HUB.md` | Wave 3.8 Agent 单面 + 数据闭环；合并时同步 §1 Phase 11c |
 | `docs/plans/W3-AP-INTENT-QUALITY.md` | Wave 3.9 意图状态化 + 规则 SSOT + 质量尺；合并时同步 §1 Phase 11d |
 | `docs/plans/W3-AP-RUNTIME.md` | Wave 3.10 车间图纸；合并时同步 §1 Phase 11e |
+| `docs/plans/W3-AP-HITL-STEER.md` | Wave 3.14 Agent 每步等人；合并时同步 §1 Phase 17 |
 | `docs/plans/FIG-QA-quality-system.md` | Wave 3.11 图表质量系统；合并时同步 §1 Phase 13 |
 | `docs/plans/WRITE-QA-quality-system.md` | Wave 3.12 写作质量系统；合并时同步 §1 Phase 14 |
 
@@ -1017,6 +1035,173 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 
 ---
 
+### 3.1 Phase 16 任务单（Wave 4 拆单，2026-09-20）
+
+> **共同约定**：SEC-04～08 的完整问题描述、修复方案、验收命令、回滚方式见
+> [`SECURITY_FIX_PLAN_2026-07-05.md`](./SECURITY_FIX_PLAN_2026-07-05.md) §PR-SEC-0x（**权威详规，勿在本文件复制**）。
+> 本节只记 **2026-09-20 复核后的增量事实**（行号漂移 / 范围变化 / 已完成部分），执行前以本节的现状描述为准。
+> commit 形如 `fix(sec): xxx (W4-SEC-0x)`；分支 `eng/w4-sec-0x-短名`。
+
+---
+
+#### W4-SEC-04 — SSE 透传 abort + lastRefMapping 合并（1～2h）
+
+**2026-09-20 现状复核**：
+
+| 原任务单假设 | 现状 |
+|--------------|------|
+| 需扩展 `callAI` 签名支持 signal | ❌ 已过时 —— `src/lib/ai.ts` **已支持** `signal`（`AiCallOptions.signal:40`、透传到 fetch `:243/:248`、`streamAIResponse` 外部 abort 监听 `:285-353`） |
+| 需参照 `/api/writing/route.ts` | ✅ 仍有效（`writing/route.ts:95` 有 `req.signal.addEventListener("abort", ...)`） |
+| 4 个路由无 signal | ✅ 仍成立：`chat` / `translate` / `plagiarism/v2` / `directions/[slug]/analyze` grep `signal` **零命中** |
+| `use-writing-panel-generate.ts:95,354-363` 整体替换 | ✅ 仍成立，行号漂移为 **`:395` / `:510`** |
+
+**因此本 PR 只剩「调用点传参」**，无 lib 层改造：
+
+1. 4 个路由的 AI 调用补 `signal: req.signal`（`callAI` / `streamAIResponse` / `callAINonStreaming` / `runPlagiarismCheck`）。
+2. `directions/[slug]/analyze` 批处理循环每批前 `if (req.signal.aborted) return`。
+3. `setLastRefMapping(prev => ({ ...(prev ?? {}), ...streamResult.refMapping }))` —— **两处**（`:395`、`:510`）。
+4. `batchUpsertReferences` 累积全部 mapping 后一次性提交。
+
+**注意**：`use-writing-panel-generate.ts` 属旧扩写管（W3-AP-ARCH-03 已冻结）。冻结含义是「不加新功能」，本项是**丢引用的 bug 修复**，允许改；但不要顺手重构该文件。
+
+**验收**：curl 触发 `/api/chat` 后立即断开 → 服务端日志确认 AI 调用被 abort；多 bullet 扩写后 `batchUpsertReferences` 持久化数量 = 各 bullet 之和；`npx tsc --noEmit` 通过。
+
+---
+
+#### W4-SEC-05 — 上传校验 + Python 子进程超时/清理（3～4h，**已上调**）
+
+**2026-09-20 现状复核**：
+
+| 项 | 现状 |
+|----|------|
+| `knowledge/route.ts` 无类型/大小校验 | ✅ 仍成立（`:195` `Buffer.from(await file.arrayBuffer())` 全量入内存） |
+| `src/lib/python-runner.ts` | ❌ **不存在**，待新建 |
+| 原任务单「4 处 Python spawn」 | ❌ **严重过时 → 实为 19 处**，且 `chart/route.ts` 里那处已随 FIG-QA 重构迁走 |
+
+**当前 spawn 点全量**（`rg -l "spawn\(" src/`，19 个文件）：
+
+```
+src/app/api/（13）                       src/lib/（6）
+  dft/vasp/route.ts                        chart-runner.ts:202   ← 原 chart/route.ts 的 spawn，FIG-QA 重构后迁到这
+  flow-diagram/route.ts                    agent/mechanism-runner.ts
+  knowledge/reindex/route.ts               agent/panel-runner.ts
+  mechanism-panel/route.ts                 agent/tools/generate-table.ts
+  mol-diagram/route.ts                     knowledge-partial-reindex.ts
+  table/route.ts                           xrd-scherrer-runner.ts
+  xrd/{amorphous,bragg,peakfit,simulate,
+       stack,unitcell,xps}/route.ts
+```
+
+**拆分建议**（原估 1～2h 远不够，建议两段同 PR 提交）：
+
+1. **Step 1 上传校验**（1h，独立可合）：文件名白名单（仅 `.pdf`）+ `file.size > MAX_UPLOAD_BYTES` → 413 + MIME 辅助校验；超大文件改 `file.stream()` pipe 落盘。
+2. **Step 2 `python-runner.ts`**（估 **4～6h**，19 处收敛）：`runPython(script, args, { timeoutMs })` → `proc.setTimeout(timeoutMs, () => proc.kill('SIGKILL'))`；`close`/`error` 都走 `finally` 清理 tmp；超时返 504。**19 处全部改用它**，删各自重复 spawn 样板。
+   - 建议分 3 个 commit 落地：`api/` 路由批 → `lib/xrd-*` + `chart-runner` 批 → `agent/` 批，每批跑一次测试。
+   - 若 19 处一次收口风险过大，**可降级为「先建 runner + 收口 `src/app/api/` 13 处」**，`src/lib/` 6 处留 W4-SEC-05b 跟进。
+
+**风险提示**：Step 2 触及 FIG-QA / FIG-MECH 新加的全部图表链路（`chart-runner.ts`、`mechanism-runner.ts`、`panel-runner.ts`、xrd×7、dft/vasp）。这些刚过质量闭环，改 runner 后**必须重跑 `npm run test:figures`**，并手测 `/plot` 出图与 Agent 生图各一条。
+
+**验收**：上传 `.exe` → 400、200MB → 413；Python 挂起（`time.sleep`）→ timeoutMs 后 504 + 子进程已 kill + tmp 已清；`npm run test:figures` 绿；`npx tsc --noEmit` 通过。
+
+---
+
+#### W4-SEC-06 — XSS：两处 `dangerouslySetInnerHTML` 消毒（1～1.5h）
+
+**2026-09-20 现状复核**：
+
+| 项 | 现状 |
+|----|------|
+| 两处 `dangerouslySetInnerHTML` | ✅ 仍成立，位置漂移：`plot-insert-dialog.tsx:281`（原 211）、`table-panel.tsx:249`（未变） |
+| `src/lib/sanitize-html.ts` | ❌ 不存在，待新建 |
+| Python 侧 `html.escape()` | ❌ **已核：`scripts/charts/` 全目录零命中** —— 根因修复完全未做 |
+
+**对应 Python 脚本**（实际文件名与原文不同）：`flow_diagram.py` / `flow_diagram_v2.py`、`mol_diagram.py`、`make_table.py`、`mechanism_panel.py`（多栏合成，同样拼 SVG）。
+
+**做法**：服务端 Python 先 `html.escape()` 所有用户可控串（**根因修复**），客户端再上 DOMPurify 兜底（`USE_PROFILES: { svg: true, html: true }` + `FORBID_TAGS: ['script']` + `FORBID_ATTR: ['onload','onerror','onclick',...]`）。
+
+**验收**：节点标签/单元格注入 `<img src=x onerror=alert(1)>` 后 DOM 中无 `onerror`；正常 SVG/表格渲染视觉无回归。
+
+---
+
+#### W4-SEC-07 — 事务化 + auto-save 增量 + 创建幂等（2～3h）
+
+**2026-09-20 现状复核**：三项**全部未做**。
+
+| 项 | 现状 |
+|----|------|
+| `createProjectFromRoadmap` 无事务 | ✅ 成立（`services/direction.ts:499` 起，仍无 `$transaction`，`try/catch` 静默吞错） |
+| auto-save 全量 POST | ✅ 成立（`src/hooks/use-auto-save.ts` 仅 25 行，`:17` 仍 `await projectStore.save(project)`） |
+| 无创建幂等键 | ✅ 成立（`rg clientRequestId src/ prisma/` 零命中） |
+
+**做法**：① 新增 `POST /api/directions/[slug]/roadmap/create-project` 聚合端点 + `$transaction`（推荐「先建项目，blueprint 失败标 `blueprintStatus: pending`」，避免长事务持 AI 调用）；② `use-auto-save` 改对脏 section 逐个 `PATCH /api/projects/[id]/sections/[key]`；③ `clientRequestId` + `@@unique([userId, clientRequestId])`，命中 P2002 返回原项目。
+
+**验收**：blueprint 步骤失败后无孤儿项目；双击创建只产生一个项目；多 tab 编辑不互相覆盖。
+
+---
+
+#### W4-SEC-08 — reindex 原子化 + cookie `Secure`（2～3h）
+
+**2026-09-20 现状复核**：
+
+| 项 | 现状 |
+|----|------|
+| cookie 不设 `Secure` | 🟡 **半做** —— `src/lib/auth.ts:63` 已抽出 `getSecureFlag()`，但函数体硬编码 `return ''`（注释说明 Nginx 终止 SSL）。改成读 `process.env.COOKIE_SECURE === "true"` 即可，**约 5 分钟** |
+| reindex 无原子切换 | ✅ 仍成立（`rg "staging\|index-manifest"` 在 reindex 路由与 `index-pdfs.mjs` 均零命中） |
+
+**⚠️ reindex 任务单必须重写**：原任务单写于 7/5，此后 **RAG-PR-014（增量索引）/ RAG-PR-016（IMRaD 切块）/ UI-PR-035/036（索引 UI + 三阶段 SSE 进度）** 已大幅改造 reindex 链路（`--files` 增量、`--rechunk`、按分类 `.emb` 保留、Stage1 缓存）。原方案的「临时目录 + 原子 rename」与现在的**增量写**语义冲突 —— 增量模式只写变更分类，全量 staging 会退化成全库重建。
+
+**执行前必须先决策**：
+- 全量 reindex → 走 staging + 原子 rename；
+- 增量 reindex → 改为「单分类内 staging + 原子替换 + manifest 记录已完成分类」，失败只回滚该分类。
+
+**验收**：模拟中途 kill 子进程，正式索引目录未损坏（旧索引仍可读）、staging 被清理；生产 cookie 带 `Secure`。
+
+---
+
+#### W4-WB-SLIM-A / B — workbench 瘦身（各 1d）
+
+**2026-09-20 现状复核**：`src/app/workbench/workbench-page-client.tsx` **1275 行**，未做。
+
+**当前结构**（`WorkbenchContent` 单组件承载）：
+
+- **约 20 个 `useState`**：project / activeSection / editingContent / isMobileLayout / isSidebarOpen / activeTab / isPreviewOpen / rightPanelMode / editorMode / currentPdf / isWritingGenerating / aiPreview / 三个 dialog 开关 / expandedOutlineSections / pendingExpandTask / blueprintDialogOpen
+- **约 10 个 `useEffect`**：`matchMedia` 移动端断点、编辑器同步、项目刷新、快捷键、autosave 接线等
+- **handler 族**：`applyRemoteProject` / `handleSave` / `focusEditorAfterDraft` / `handleReferencesImported` / `handleAgentSectionPersisted` / `handleAgentChartPersisted` / `handleOpenBlueprintDialog` / `handleSaveWritingBlueprint`
+- **13 个 `dynamic()` 懒加载面板** + `TabPanelLoading` / `PreviewLoading` 两个占位组件
+
+**A（hooks 下沉，目标 page ≤600 行）**：
+
+| 新 hook | 收编内容 |
+|---------|----------|
+| `use-workbench-project.ts` | project 状态、`applyRemoteProject`、加载/刷新、`handleSave` |
+| `use-workbench-layout.ts` | `isMobileLayout`（matchMedia）、`isSidebarOpen`、`activeTab`、`isPreviewOpen`、`rightPanelMode`、`editorMode`（含 localStorage `grainscript_editor_mode_v2`） |
+| `use-workbench-agent-bridge.ts` | `handleAgentSectionPersisted`、`handleAgentChartPersisted`、`focusEditorAfterDraft`、`isWritingGenerating`、`aiPreview` |
+
+**B（子组件抽取，目标 page ≤250 行）**：侧栏（Tab 列表 + 大纲树）、`WorkbenchMetaDialog` / `WorkbenchConsistencyDialog` / `BlueprintWorkspaceDialog` 挂载区、预览区（`SCIPreview` / `PDFViewer` 切换）。
+
+**约束**：
+- §0.3 禁止改 `workbench/page.tsx` 大段逻辑 —— 本 PR 只动 `workbench-page-client.tsx`，`page.tsx` 保持 import + 一行挂载。
+- **纯重构，不改行为**：不新增功能、不改 Agent/写作链路、不动 `NEXT_PUBLIC_WORKBENCH_EXPERT_TABS` 语义。
+- 每步跑 `npx tsc --noEmit` + `npm run test`；A、B 分两次提交，便于回滚。
+
+**验收**：`wc -l src/app/workbench/workbench-page-client.tsx` ≤250（B 完成后）；移动端断点、Tab 切换、autosave、Agent 写回刷新、出图刷新五条手测路径与重构前一致。
+
+---
+
+#### W4-LATEX — ⛔ blocked，需产品决策
+
+**现状**：全库唯一出处是 `docs/plans/W3-AP-QUALITY.md:42`「LaTeX / Pandoc / disclosure → 归 Wave 4 / 后续；本波只保证 MD 导出可用」，以及 `MASTER_PLAN.md:25` 一句「LaTeX/disclosure 等让路」。**没有交付定义、没有验收标准、没有任务单。**
+
+**在以下问题回答前不拆单**（避免造出无人验收的 PR）：
+
+1. **目标**：是「导出 `.tex` 源文件」还是「LaTeX → PDF 编译产物」？后者要装 TeX 发行版（服务器 4 核 7.5GB，需评估）。
+2. **走 Pandoc 还是自研映射**？Pandoc 要加二进制依赖，与现有 `python-runner` 体系不同源。
+3. **公式来源**：正文里的公式目前是纯文本 / MD，是否需要先有公式编辑器？
+4. **与 W4-EXPORT 的关系**：DOCX/PDF 已 done（`assessExportReadiness`），LaTeX 是新增第三种格式还是替换 PDF 路径？
+5. **优先级**：相对 SEC-04～08 与 workbench 瘦身，是否本季度要做？
+
+---
+
 ## 4. 会话日志
 
 | 日期 | PR | 执行者 | 备注 |
@@ -1212,18 +1397,26 @@ Session 3（数据）：ENG-PR-025 → ENG-PR-026 → ENG-PR-025b → ENG-PR-027
 | 2026-09-06 | UI-PR-035 | AI | 知识库索引 UI：页头「更新索引」+ 下拉拆增量/按章节重切/强制重解析/仅重算向量；已选「索引所选」；`rechunk` 进 reindex 契约与 API。 |
 | 2026-09-06 | UI-PR-036 | AI | 索引进度补断点：三阶段步进；Stage2 开始/Prisma 同步/向量化预告有 SSE；百分比只增不减；完成后保留面板。 |
 | 2026-09-08 | QUALITY-UX | AI | 质量中心改为总览默认 + 查重/降重/审查工位；检测层与阶段进度；降重并排采纳；审查单 CTA + 章节写回；工作台改入口卡。 |
+| 2026-09-20 | Wave 4 拆单 | AI | 新增 Phase 16。SEC-04～08 逐项复核当前代码：SEC-04 仅剩调用点传参（`lib/ai.ts` 已支持 signal）、SEC-05 spawn 4→19 处估时大幅上调、SEC-06 行号漂移、SEC-07 三项全未做、SEC-08 cookie 半做 + reindex 任务单需按 RAG-PR-014/016 后现状重写；workbench 瘦身拆 A/B（`workbench-page-client.tsx` 1275 行）；LaTeX 标 blocked（无交付定义，列 5 个待决策问题）。§3.1 任务单 + §5 执行顺序同步。 |
+| 2026-09-23 | W3-AP-HITL-STEER | AI | Phase 17：蓝图写回一律等人；缺大纲先问出一版或贴骨架；可见结果后停止计划续跑；导入一批后不再灌篇数；缺文献改为问用户。写后自查保留。不重开 LLM 意图分类。 |
 
 ---
 
 ## 5. 推荐执行顺序（给「下一次 AI」）
 
-**当前主轴（2026-08-23）**：Phase 13 **FIG-QA 001–010 已收口**；**FIG-MECH-QA-001 已收口**；Phase 14 **WRITE-QA 001–010 已收口**；**W3-AP-OUTLINE-HUMAN 已收口**。Wave 3.10 已收口。  
+**当前主轴（2026-09-23）**：Phase 17（Agent 每步等人）已落地。Phase 13 / 14 / 15 / 11e 已收口。**下一个可开工波次 = Phase 16（Wave 4 抛光与安全加固）**。  
 **即刻冻结**：不准再往 `goal-intents.ts` 加口语 `isXxxGoal` / `checkXxxGate`（领域不变量与事故型安全门除外）；不重开 SHADOW；不重写 LangGraph；不给 `POST /api/writing` 旧扩写管加功能；**禁止新增图表类型**（其余 8 类未做质量剖面）；禁止再开「某 chart_types 提质」散 PR；**禁止再往 `writing.ts` 堆「禁止」**（新规则进 WRITE-QA code 表）。
 
 | 优先级 | ID | 说明 |
 |--------|-----|------|
-| **now** | Wave 4 / 观测 | WRITE-QA、FIG-QA、FIG-MECH-QA 主轴已收口。详规见 [`MASTER_PLAN.md`](./MASTER_PLAN.md) |
-| backlog | Wave 4 | ENG-PR-094 已 done；LaTeX / SEC-04～08 见 [`MASTER_PLAN.md`](./MASTER_PLAN.md) |
+| **now** | W3-AP-HITL-STEER | ✅ 2026-09-23 已落地。Agent 每轮一个可见结果。详规 `plans/W3-AP-HITL-STEER.md` |
+| **now** | W4-SEC-06 → W4-SEC-04 | 两个最小的先做：SEC-06 只改 2 处渲染 + `scripts/charts/` 4～5 个拼 SVG 的 Python 脚本（1～1.5h）；SEC-04 已无 lib 层改造，只补调用点传参（1～2h）。见 §3.1 |
+| **now** | W4-SEC-05 | 唯一有回归风险的一项（触及 FIG-QA/FIG-MECH 新路由），做完必须跑 `npm run test:figures`。建议在 SEC-04/06 之后单独开 |
+| next | W4-SEC-07 → W4-SEC-08 | 数据完整性。**SEC-08 开工前先决策全量 vs 增量 reindex 的原子化语义**（§3.1） |
+| next | W4-WB-SLIM-A → B | 纯重构，无行为变化，可随时插入；A 完成即可合，B 独立跟 |
+| **blocked** | W4-LATEX | 无交付定义。**先答 §3.1 末尾 5 个问题**，否则不开 PR |
+
+**Wave 4 之外**：`MASTER_PLAN.md` §0 曾列「从 Demo→完整产品」见 [`PRODUCT_COMPLETION_PLAN.md`](./PRODUCT_COMPLETION_PLAN.md)（其 Wave P4 的 ENG-PR-094 已 done、workbench 瘦身即本 Phase 16 的 W4-WB-SLIM）。
 
 **明确不做**：重开 INTENT-SHADOW、LangGraph 重写 / 多 agent / DeepSeek Harness、热路径 LLM-judge、再堆口语门禁、运行时扫 `tools/` 磁盘、用 VLM 当数据图主质检、R 后端、解冻旧扩写管道、复刻十二代理 Conductor。
 

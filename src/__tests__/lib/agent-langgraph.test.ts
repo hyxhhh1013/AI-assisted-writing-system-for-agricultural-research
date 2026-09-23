@@ -133,4 +133,20 @@ describe("shouldContinuePlanWork", () => {
   it("does not continue when plan has no pending work", () => {
     expect(check(planState({ plan: null }))).toBe(false);
   });
+
+  it("stops after a visible deliverable even if the plan is still open", () => {
+    expect(
+      shouldContinuePlanWork({
+        plan: planState().plan,
+        iteration: 1,
+        planContinueCount: 0,
+        toolSummaries: ["[write_section] 已写回"],
+        maxIterations: 32,
+        observations: [
+          { tool: "write_section", success: true },
+          { tool: "validate_citations", success: true },
+        ],
+      }),
+    ).toBe(false);
+  });
 });

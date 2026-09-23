@@ -1,6 +1,6 @@
 # Agent 编排（写作助手）
 
-> L3 域文档 · 更新：2026-09-03（侧栏高度断点：收口条不得裁掉输入框）  
+> L3 域文档 · 更新：2026-09-23（HITL：蓝图一律等人；缺大纲先问；每轮一个可见结果）  
 > 契约唯一权威源：`src/contracts/agent.ts`（SSE 事件）、`src/contracts/agent-session.ts`（会话消息）、`src/contracts/agent-intent.ts`（`IntentKind`）。
 
 ## 概览
@@ -151,7 +151,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 
 ## 蓝图批准检查点 blueprint_approve（2026-08-07）
 
-`generate_writing_blueprint` 持久化后，若为 academic-paper 全流程目标（`isApFullStyleGoal`，entryMode=full 前缀含 `academic-paper` 即命中）且本轮未批准过 → 后置门禁 `blueprintApproveGate` 暂停。`buildBlueprintCheckpoint` 带 `formatBlueprintPreview` 全文（上限 24k）。前端不再复用「96px 预览 + 批准/需修改」：侧栏人控卡 + Dialog 结构化展示主张/各节要点/配图计划（优先 `project.writingBlueprint`），批准或留下改蓝图意见；仍可「在蓝图工作台打开」。批准后 `decisionMessage("blueprint_approve","approve")` 指示模型严格按蓝图推进。`run-graph.ts` 恢复时按 checkpointId 含 `blueprint` 映射 `blueprint_approve`。
+`generate_writing_blueprint` 持久化后一律暂停 `blueprint_approve`（不看「整篇/从零」话术；新蓝图作废旧批准）→ 后置门禁 `blueprintApproveGate`。`buildBlueprintCheckpoint` 带 `formatBlueprintPreview` 全文（上限 24k）。前端不再复用「96px 预览 + 批准/需修改」：侧栏人控卡 + Dialog 结构化展示主张/各节要点/配图计划（优先 `project.writingBlueprint`），批准或留下改蓝图意见；仍可「在蓝图工作台打开」。批准后 `decisionMessage("blueprint_approve","approve")` 指示模型严格按蓝图推进。`run-graph.ts` 恢复时按 checkpointId 含 `blueprint` 映射 `blueprint_approve`。
 - **查看/编辑完整蓝图（2026-08-07；过目页 2026-09-03）**：`blueprint_approve` 过目页内「在蓝图工作台打开」（`agent-panel` 的 `onOpenBlueprint`，由 workbench 接 `handleOpenBlueprintDialog`）。`generate_writing_blueprint` 属 `PROJECT_MUTATING_TOOLS`，生成后工作台自动刷新 `writingBlueprint`，确保打开的是最新蓝图。
 - **对话里「看看蓝图」调出工作台（2026-08-07）**：只读工具 `open_blueprint_workspace`。仅当用户明确要求打开/编辑时调用；**禁止**在 `generate_writing_blueprint` 后自动调用。前端仅对本轮**新追加**的成功 observation 自动打开（`blueprint-open-guard`）；会话恢复/面板重挂载不因历史记录误弹。observation 卡另有「打开蓝图工作台」按钮可手点。
 - **工作台随内容自适应（2026-08-07）**：蓝图 schema 新增可选 `projectMode`/`language`（生成时用项目兜底填充）；工作台按顶层章节把 `sectionGuides` 树形分组（`" > "` 层级，顶层可折叠）、按论文类型显示徽标与配图提示（综述→概念图/对比表，研究→方法流程图/结果数据图）、空区块（前置条件/配图/章节导览/写作顺序）自动隐藏。分组纯函数 `groupSectionGuides` 在 `lib/blueprint-utils.ts`。
@@ -166,7 +166,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **破坏性删除需确认（2026-08-11）**：`remove_figure` / `remove_references` 标 `requiresConfirmation` + `safety: "destructive"`，确认卡文案见 `confirm-message.ts`。
 - **写作蓝图「结构无效」修复（2026-08-09）**：首因是 prompt 示例 `language: Chinese/English`（schema 仅 `zh|en`）。复查后发现仍会因 `dataSource`/`projectMode` 非法枚举、`keyPoints` 写成字符串、`estimatedWordCount` 写成 `"6000-12000"`、缺 `version`/空 items 等失败。现：① prompt 按 review/research 分示例并写明枚举约束；② `blueprint-coerce.ts` 纠偏上述偏差并在必要时合成最小合法 figure/guides；③ 错误文案带字段路径。API 与 `generate_writing_blueprint` 共用。
 - **蓝图文献源 + 分析笔记进 Writer（2026-08-09）**：`sectionGuides.assignedSources`（文件名或 `[n]`）经 `blueprint-write-context` 解析为 `selectedSourceIds`，Agent `write_section` 限 RAG 范围（解析为空则不限，避免误清空）。`loadAgentProject` 加载 `analysisResults` 进 `globalContext.analysisResults`，与工作台扩写一致。
-- **自动补齐插入批准检查点（2026-08-08；2026-08-23 大纲一律确认）**：`ensureNextWritePrerequisite` 一次只补一个缺失前置；`buildPrereqCheckpoint` 在大纲写回后**无论 goal 是否 ap-full**都暂停 `outline_approve`。蓝图检查点仍仅 ap-full。resume 后继续补下一个 / 执行写工具。
+- **自动补齐插入批准检查点（2026-08-08；2026-08-23 大纲一律确认；2026-09-23 蓝图一律确认）**：`ensureNextWritePrerequisite` 一次只补一个缺失前置；`buildPrereqCheckpoint` 在大纲或写作蓝图写回后都暂停。缺大纲时先 `clarify`（出一版 / 贴骨架 / 先别生成），用户同意后才 `generate_outline`。最近一次实质动作已是可见结果（一节、一批文献、一张图等）时不再注入计划续跑。本轮已导入过文献则不再轻推灌到目标篇数。详规 [`plans/W3-AP-HITL-STEER.md`](../plans/W3-AP-HITL-STEER.md)。resume 后继续补下一个 / 执行写工具。
 - **蓝图常驻入口（2026-08-07）**：工作台侧栏头（非 Agent Tab）与 Agent 面板头均新增「蓝图」按钮（Map 图标），随时可打开蓝图工作台；无蓝图时点击自动切到「章节结构」侧栏引导生成。
 - **文献分类编码持久化（2026-08-07）**：新增写工具 `save_reference_classification`（`tools/save-reference-classification.ts`），把「文献分类编码」结果批量 upsert 到 `ReferenceSource`（refIndex 1 基 → sourceName/category/citation），与前端「引用-文献映射」同一张表。`list_references` 输出附带 `category`/`sourceName`，写作时 Agent 能看到分类。属 `PROJECT_MUTATING_TOOLS`，保存后工作台刷新。之前 Agent 只能靠多次关键词检索在对话里"分类"、结果不落库，现已闭环。
 - **删除不相关文献（2026-08-07）**：新增写工具 `remove_references`（`tools/remove-references.ts`），按引用编号（1 基 [n]）删除不相关/误导入文献，自动重排后续编号，并同步清理/重排 `ReferenceSource` 分类映射。若正文已引用被删编号，工具说明要求随后 `validate_citations` 检查越界引用。

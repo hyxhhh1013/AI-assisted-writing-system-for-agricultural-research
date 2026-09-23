@@ -166,7 +166,7 @@ describe("agent checkpoints", () => {
     ).toBe(false);
   });
 
-  it("skips blueprint pause for non-full goals / non-blueprint tools / already approved", () => {
+  it("pauses after persisted blueprint even for ordinary goals and after prior approval", () => {
     expect(
       shouldPauseForBlueprintApprove({
         goal: "写引言并保存",
@@ -175,7 +175,16 @@ describe("agent checkpoints", () => {
         persisted: true,
         approvedKinds: [],
       }),
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      shouldPauseForBlueprintApprove({
+        goal: "写引言并保存",
+        toolName: "generate_writing_blueprint",
+        toolSuccess: true,
+        persisted: true,
+        approvedKinds: ["blueprint_approve"],
+      }),
+    ).toBe(true);
     expect(
       shouldPauseForBlueprintApprove({
         goal: "按 academic-paper 写完整篇",
@@ -193,7 +202,7 @@ describe("agent checkpoints", () => {
         persisted: true,
         approvedKinds: ["blueprint_approve"],
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("builds blueprint decision messages", () => {

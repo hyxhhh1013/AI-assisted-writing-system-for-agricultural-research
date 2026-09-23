@@ -225,7 +225,7 @@ export const outlineApproveGate: PostToolGate = ({ tool, result, state }) => {
   return { ok: false, kind: "checkpoint", checkpoint: buildOutlineCheckpoint(preview), updateFocus: true };
 };
 
-/** 蓝图批准检查点：生成写作/论证蓝图且未批准过 → 暂停等用户 */
+/** 蓝图批准检查点：写作蓝图写回后一律暂停等用户 */
 export const blueprintApproveGate: PostToolGate = ({ tool, result, state }) => {
   if (
     !shouldPauseForBlueprintApprove({

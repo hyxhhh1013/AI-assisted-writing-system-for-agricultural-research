@@ -58,6 +58,7 @@ export async function ensureNextWritePrerequisite(
   ctx: AgentContext,
   tools: ToolDefinition[],
   refresh: () => Promise<void>,
+  extraParams?: Record<string, unknown>,
 ): Promise<EnsureWritePrereqsResult> {
   const ran: WritePrereqStep[] = [];
   const steps: EnsureWritePrereqsResult["steps"] = [];
@@ -88,10 +89,11 @@ export async function ensureNextWritePrerequisite(
   }
 
   ctx.budget.toolCallCount += 1;
-  const result = await tool.execute(
-    { persistToProject: true },
-    ctx,
-  );
+  const params =
+    next === "generate_outline" && extraParams
+      ? { persistToProject: true, ...extraParams }
+      : { persistToProject: true };
+  const result = await tool.execute(params, ctx);
   ran.push(next);
   steps.push({ tool: next, result });
 

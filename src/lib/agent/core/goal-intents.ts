@@ -406,7 +406,7 @@ export function checkDraftSearchGate(
     ok: false,
     error:
       "当前目标是写章节，不是检索。请先 inspect / read_project_asset(outline) / list_references，"
-      + "再 write_section（缺蓝图时系统会自动补齐）；若确需新文献，请用户明确说「检索」或「找文献」。",
+      + "再 write_section（缺大纲时先问用户；蓝图写回后必须等人批准）。若确需新文献，请用户明确说「检索」或「找文献」。",
   };
 }
 
@@ -468,9 +468,9 @@ export function draftGoalNudge(goal = "", intentKind?: IntentKind | null): strin
   }
   return withRule(
     withRule(
-      "【系统】本轮目标是写章节：先 inspect 或 read_project_asset(outline)/list_references，"
-        + "然后直接 write_section（缺大纲/蓝图时系统会自动补齐）。"
-        + "不要停下来只问「要不要写」；除非用户明确要求检索，否则不要先 search_external。",
+      "【系统】本轮目标是写章节：先 inspect 或 read_project_asset(outline)/list_references。"
+        + "缺大纲时系统会先问用户出一版或贴骨架，不要跳过这一问。"
+        + "然后 write_section 只写用户指定的一节，写回后停下来汇报。除非用户明确要求检索，否则不要先 search_external。",
       "draft-missing-refs",
     ),
     "no-argument-blueprint",
@@ -483,8 +483,8 @@ export function literatureHuntNudge(goal = ""): string {
   return (
     "【系统】本轮是检索并导入：优先 search_knowledge；外部用 search_external（中文自动转英文）。"
     + `默认目标约 ${n} 篇。效率优先：单次 limit=20～25，用 1～2 个宽泛英文 query 即可，不要碎成很多次小搜；`
-    + "立刻 import_reference(hitIndices=data.suggestedHitIndices, query, why≥8字) 分批导入（单次最多约 15 篇，hitIndices 最省 token 不截断；也可 hitsJson），不够再换一个同义 query 补一轮。"
-    + "禁止只导几篇就停。命中离题则说明；禁止改题；禁止编造 hitJson。"
+    + "立刻 import_reference(hitIndices=data.suggestedHitIndices, query, why≥8字) 交给用户勾选（单次最多约 15 篇，hitIndices 最省 token 不截断；也可 hitsJson）。"
+    + "用户确认入库后停下来汇报篇数，问要不要再补一轮。命中离题则说明；禁止改题；禁止编造 hitJson。"
   );
 }
 
@@ -1120,7 +1120,7 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
         ctx.intentKind,
         ["literature", "review_write"],
         () => isLiteratureHuntGoal(ctx.goal) || Boolean(reviewShort(ctx)),
-      ) && !importedOk(ctx),
+      ) && !importedOk(ctx) && ctx.importCount === 0,
     nudge: (ctx) => {
       if (ctx.importCount === 0 && ctx.refTotal < ctx.importTarget && ctx.searchedOk) {
         return `【系统】已检索但项目文献仍不足（现有 ${ctx.refTotal} 篇，目标约 ${ctx.importTarget} 篇）。`
@@ -1147,7 +1147,7 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
     nudge: () =>
       withRule(
         "【系统】用户要写章节，但尚未成功 write_section 写回。"
-          + "请先读大纲/文献（或 inspect），再直接 write_section（蓝图可自动补）；不要只提问。",
+          + "请先读大纲/文献（或 inspect）。缺大纲时等用户同意再生成。然后 write_section 只写这一节。",
         "draft-missing-refs",
       ),
     stopAsk: (ctx) =>

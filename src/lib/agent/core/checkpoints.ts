@@ -83,11 +83,13 @@ export function shouldPauseForBlueprintApprove(input: {
   persisted?: boolean;
   approvedKinds: readonly AgentCheckpointKind[];
 }): boolean {
+  void input.goal;
+  void input.approvedKinds;
   if (!input.toolSuccess) return false;
   if (input.toolName !== "generate_writing_blueprint") return false;
   if (input.persisted === false) return false;
-  if (input.approvedKinds.includes("blueprint_approve")) return false;
-  return isApFullStyleGoal(input.goal);
+  // 蓝图一旦写回就必须人确认；不看「整篇/从零」话术，新蓝图作废旧批准。
+  return true;
 }
 
 export function buildBlueprintCheckpoint(preview: string): AgentCheckpointRequest {
@@ -133,13 +135,13 @@ export function decisionMessage(
   }
   if (kind === "outline_approve") {
     if (decision === "approve") {
-      return "【检查点】用户已批准大纲。请用中文简短确认，并询问下一步：生成写作蓝图 / 写某一节？不要擅自写完整篇。";
+      return "【检查点】用户已批准大纲。若还没有写作蓝图，先 generate_writing_blueprint，写回后必须停等用户批准，不要接着写正文。已有蓝图则用中文询问下一步写哪一节。不要擅自写完整篇。";
     }
     return `【检查点】用户要求修改大纲。${note?.trim() ? `意见：${note.trim()}。` : ""}请先沟通或重新 generate_outline，改完后再请用户确认。`;
   }
   if (kind === "blueprint_approve") {
     if (decision === "approve") {
-      return "【检查点】用户已批准写作蓝图。请严格按蓝图各节要点与主张/证据推进写作，不要擅自偏离蓝图结构。";
+      return "【检查点】用户已批准写作蓝图。请只写用户点名的那一节；没点名就按蓝图写作顺序写第一节。写回后停下来汇报，并询问要不要写下一节。不要在同一轮连续写多节，也不要偏离蓝图结构。";
     }
     return `【检查点】用户要求修改写作蓝图。${note?.trim() ? `意见：${note.trim()}。` : ""}请先沟通或重新 generate_writing_blueprint，改完再请用户确认。`;
   }

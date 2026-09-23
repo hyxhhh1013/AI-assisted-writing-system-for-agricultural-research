@@ -8,6 +8,7 @@ import type {
 } from "@/contracts/agent";
 import { COST_LIMITS } from "@/lib/agent/core/safety";
 import { planHasPendingWork } from "@/lib/agent/core/plan-progress";
+import { latestActionIsVisibleDeliverable } from "@/lib/agent/core/visible-deliverable";
 import { analyzeReflection, MAX_REFLECT_ROUNDS } from "@/lib/agent/core/reflect";
 import { lastFigureQaNeedsReplace } from "@/lib/agent/figure-loop";
 import { getAgentGraphRuntime } from "@/lib/agent/langgraph/runtime";
@@ -139,7 +140,10 @@ export function shouldContinuePlanWork(state: {
   /** 已有工具进展（避免开局提问被强制续跑，绑架对话） */
   toolSummaries: string[];
   maxIterations: number;
+  /** 最近一次实质动作已是可见交付时，停下来问用户，不再注入计划续跑 */
+  observations?: ReadonlyArray<{ tool: string; success: boolean }>;
 }): boolean {
+  if (latestActionIsVisibleDeliverable(state.observations ?? [])) return false;
   return (
     planHasPendingWork(state.plan)
     && state.iteration < state.maxIterations
@@ -173,6 +177,7 @@ export function routeAfterAgent(
       planContinueCount: state.planContinueCount,
       toolSummaries: state.toolSummaries,
       maxIterations,
+      observations: state.observations,
     })
   ) {
     return "agent";

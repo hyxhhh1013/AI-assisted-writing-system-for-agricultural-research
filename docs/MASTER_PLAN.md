@@ -1,12 +1,12 @@
 # 禾书耕文（GrainScript）整体规划 v2
 
-> **状态**：生效中（2026-08-22：Phase 13 FIG-QA 001–010 收口；Phase 14 WRITE-QA 001–010 收口；Wave 3.10 已收口）  
-> **取代**：分散的「部分规划」作为唯一战略主轴；任务状态以 `ENGINEERING_OPTIMIZATION_QUEUE.md` **§1 Phase 13 / Phase 14 与 Phase 11 各波次** 为准  
+> **状态**：生效中（2026-09-23：Phase 17 Agent 每步等人已落地；Wave 4 Phase 16 仍为安全/瘦身下一波）  
+> **取代**：分散的「部分规划」作为唯一战略主轴；任务状态以 `ENGINEERING_OPTIMIZATION_QUEUE.md` **§1 Phase 13 / Phase 14 / Phase 16 / Phase 17 与 Phase 11 各波次** 为准  
 > **北极星**：从「功能齐全的 AI 写作工具箱」→「可走完一篇论文全生命周期的科研写作系统」
 
 ---
 
-## 0. 当前真相（2026-07-24）
+## 0. 当前真相（2026-09-20）
 
 | 项 | 状态 | 说明 |
 |----|------|------|
@@ -22,7 +22,10 @@
 | Wave 3.10 车间图纸 | ✅ 已收口 | [`plans/W3-AP-RUNTIME.md`](./plans/W3-AP-RUNTIME.md)：工具表 SSOT + 会话轨迹 + 冻结旧扩写。不换循环。队列 Phase 11e |
 | Wave 3.11 图表质量系统 | ✅ 001–010 收口 | [`plans/FIG-QA-quality-system.md`](./plans/FIG-QA-quality-system.md)：ChartSpec → Layout Solver → 确定性质检 → spec 补丁。三件套 bar/line/heatmap 已过剖面。不挡 Wave 4 导出 |
 | Wave 3.12 写作质量系统 | ✅ 收口 | [`plans/WRITE-QA-quality-system.md`](./plans/WRITE-QA-quality-system.md)：SectionSpec → Evidence Binder → 确定性质检 → writing patch。队列 Phase 14 WRITE-QA-001～010 done。不解冻旧扩写。 |
-| Wave 4 导出抛光 | ⚠️ backlog | **W4-EXPORT** / ENG-PR-094 done；LaTeX/disclosure 等让路 |
+| Wave 3.13 质量中心 UX | ✅ 收口 | 队列 Phase 15 QUALITY-UX-001～005 done（2026-09-08）：总览工位 + 查重/降重/审查三工位 + 工作台入口卡 |
+| RAG 增量索引 | ✅ 收口 | RAG-PR-014～016 + UI-PR-035/036 done（2026-09-06）：IMRaD 切块、增量索引、索引任务 UI |
+| Wave 3.14 Agent 每步等人 | ✅ 已落地 | [`plans/W3-AP-HITL-STEER.md`](./plans/W3-AP-HITL-STEER.md)：蓝图一律批准；缺大纲先问；每轮一个可见结果。队列 Phase 17。不重开 LLM 意图分类 |
+| **Wave 4 导出抛光 + 安全加固** | ⚠️ **下一波（Phase 16）** | W4-EXPORT ✅、ENG-PR-094 ✅；**W4-SEC-04～08 + W4-WB-SLIM 已拆单**（队列 §3.1）；**W4-LATEX ⛔ blocked**（无交付定义） |
 | 从 Demo→完整产品 | 📋 规划生效 | 见 [`PRODUCT_COMPLETION_PLAN.md`](./PRODUCT_COMPLETION_PLAN.md) |
 | `/academic-paper` | ➡️ 引导页 | **不是**第二套流水线；只引导进工作台 **Agent Tab** |
 | 产品主入口 | 工作台 **Agent Tab** | 人控 Tab 降为专家抽屉（Wave 3.8）；质量中心 / 知识库 / `/plot` 为深链 |
@@ -235,14 +238,24 @@ Wave 2 产品化三项已完成。
 
 原则：不解冻 `POST /api/writing`；不复刻十二代理；不往 `writing.ts` 再堆「禁止」；热路径只用确定性 QA。与 FIG-QA 文件面不重叠，可并行。
 
-### Wave 4 — 导出与抛光（backlog）
+### Wave 4 — 导出与抛光 + 安全加固（**下一波，Phase 16**）
+
+队列 §1 Phase 16 / §3.1 任务单为执行依据。2026-09-20 逐项复核当前代码后拆单：
 
 | 项 | 状态 | 说明 |
 |----|------|------|
 | **W4-EXPORT** | ✅ done | DOCX/PDF 共用 `assessExportReadiness`；DOCX 对照摘要 + 图表题注清单 |
-| ENG-PR-094 OA | todo | 全文入库 |
-| workbench 瘦身 | todo | — |
-| SEC-04～08 | todo | — |
+| ENG-PR-094 OA | ✅ done | 全文入库（导入链路已接 OA 下载 + 增量索引） |
+| W4-SEC-06 | todo | XSS：`plot-insert-dialog.tsx:281` + `table-panel.tsx:249` 消毒（1～1.5h，最小） |
+| W4-SEC-04 | todo | SSE 透传 abort + lastRefMapping 合并（1～2h；`lib/ai.ts` 已支持 signal，只剩调用点） |
+| W4-SEC-05 | todo | 上传校验 + Python 子进程超时/清理（5～7h；**spawn 点 4→19**，做完必跑 `test:figures`） |
+| W4-SEC-07 | todo | `createProjectFromRoadmap` 事务化 + auto-save 增量 + 创建幂等（2～3h） |
+| W4-SEC-08 | todo | reindex 原子化 + cookie `Secure`（2～3h；**开工前决策全量 vs 增量原子化语义**） |
+| W4-WB-SLIM-A / B | todo | workbench 瘦身：`workbench-page-client.tsx` 1275 → ≤600 → ≤250 行（各 1d，纯重构） |
+| W4-LATEX | ⛔ blocked | LaTeX / Pandoc 导出 —— **无交付定义**，需先答队列 §3.1 的 5 个问题 |
+| disclosure | 待评估 | Wave 3.7 一并让路的项，同样无定义 |
+
+原则：SEC-06/04 先做（小且无回归面）；SEC-05 单独开（触及图表新路由）；SEC-08 先决策再动手；WB-SLIM 是纯重构可随时插入；LaTeX 不开 PR。
 
 - `academic-paper-studio/flow` 旧向导代码：仅作策略参考，不再扩展 UI  
 

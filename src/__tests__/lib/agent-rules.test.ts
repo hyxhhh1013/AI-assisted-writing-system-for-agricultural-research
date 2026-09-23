@@ -36,6 +36,7 @@ describe("AGENT_RULES SSOT", () => {
     expect(prompt).not.toContain(ruleText("draft-missing-refs"));
     expect(rulesForKind("literature").map((r) => r.id)).toEqual([
       "no-argument-blueprint",
+      "one-deliverable-turn",
     ]);
   });
 

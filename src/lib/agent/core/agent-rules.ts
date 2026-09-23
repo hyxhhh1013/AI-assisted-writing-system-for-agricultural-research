@@ -12,6 +12,7 @@ export const AGENT_RULE_IDS = [
   "citation-refine-writeback",
   "results-data-foundation",
   "outline-human-confirm",
+  "one-deliverable-turn",
 ] as const;
 
 export type AgentRuleId = (typeof AGENT_RULE_IDS)[number];
@@ -43,7 +44,7 @@ export const AGENT_RULES: readonly AgentRule[] = [
   {
     id: "draft-missing-refs",
     text:
-      "写章节缺文献时照常写：检索 1 次确认没有后，用现有文献替代或泛化表述开写；不要为凑齐引用反复 search。",
+      "写章节时若检索确认没有可用文献，停下来用 ask_user 说明缺口，请用户补文献或明确允许泛化表述；不要为凑引用反复 search，也不要静默写成空泛正文。",
     appliesTo: ["draft", "ap_full"],
     severity: "nudge",
   },
@@ -67,6 +68,13 @@ export const AGENT_RULES: readonly AgentRule[] = [
       "generate_outline 写回后必须停等用户批准，禁止接着 generate_writing_blueprint。"
       + "本会话若有大纲/框架附件，工具会按附件一级标题锁骨架；不要跳过附件另起炉灶。",
     appliesTo: ["draft", "ap_full", "review_write"],
+    severity: "nudge",
+  },
+  {
+    id: "one-deliverable-turn",
+    text:
+      "同一轮只交付一个可见结果（一批文献、一份大纲、一份蓝图、一节正文或一张图）。写回后用中文汇报并询问下一步，不要连续写下一节，也不要把文献在同一轮灌到目标篇数。",
+    appliesTo: "*",
     severity: "nudge",
   },
 ];

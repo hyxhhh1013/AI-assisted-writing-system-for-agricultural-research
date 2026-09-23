@@ -95,6 +95,21 @@ describe("buildPrereqCheckpoint（自动补齐批准检查点）", () => {
     expect(cp!.kind).toBe("outline_approve");
   });
 
+  it("普通目标生成 writing_blueprint 也触发检查点", () => {
+    const cp = buildPrereqCheckpoint(
+      baseState({ goal: "写引言", approvedCheckpointKinds: [] }),
+      {
+        tool: "generate_writing_blueprint",
+        result: {
+          success: true,
+          data: { persisted: true, preview: "# 主张\n## 引言" },
+          summary: "已写回写作蓝图",
+        },
+      },
+    );
+    expect(cp?.kind).toBe("blueprint_approve");
+  });
+
   it("step 失败时不触发检查点", () => {
     const cp = buildPrereqCheckpoint(
       baseState({ goal: "帮我写整篇论文", approvedCheckpointKinds: [] }),

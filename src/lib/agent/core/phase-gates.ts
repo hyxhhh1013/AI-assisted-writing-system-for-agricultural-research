@@ -18,8 +18,8 @@ function hasBodyDraft(project: AgentProjectSnapshot): boolean {
 }
 
 /**
- * 前置条件门禁（对齐 academic-paper）：缺什么就让 Agent 自己补，不要踢回人控 Tab。
- * 失败作为 observation 返回，让 Agent 改道调用 generate_* / build_*。
+ * 前置条件门禁（对齐 academic-paper）：缺大纲时先问用户，缺蓝图写回后必须等人批准。
+ * 失败作为 observation 返回，让 Agent 改道调用 generate_*。
  */
 export function checkAgentToolPhaseGate(
   toolName: string,
@@ -109,10 +109,10 @@ export function checkAgentToolPhaseGate(
 
 /** 写入系统提示的门禁摘要 */
 export function phaseGatePromptRules(): string {
-  return `阶段策略（缺前置用工具自补，缺信息就问用户）：
+  return `阶段策略（缺信息就问用户；每轮只交付一个可见结果）：
 - 用 inspect_project 了解当前阶段与空白章节，再决定工具
-- 主路径：配置 → 大纲 → 写作蓝图（含各节主张/证据）→ 分节写 → 摘要/核查
-- 写章节若缺大纲/写作蓝图：可直接 write_section，系统会自动补齐
+- 主路径：配置 → 大纲（写回后等人批准）→ 写作蓝图（写回后等人批准）→ 一次写一节 → 摘要/核查
+- 写章节若缺大纲：先问用户「出一版」还是贴骨架，不要静默生成
 - 无正文时不要写摘要 / write_bilingual_abstract
 - 引用以 validate_citations 为准；不编造文献
 - 审查最多 2 轮；满轮后总结问题并征求用户是否继续改`;

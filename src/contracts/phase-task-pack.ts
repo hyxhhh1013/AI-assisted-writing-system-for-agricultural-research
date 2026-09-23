@@ -72,7 +72,7 @@ export const PHASE_TASK_PACKS: Record<number, PhaseTaskPack> = {
   2: {
     phase: 2,
     title: "架构",
-    goal: "自主生成大纲与写作蓝图并写回项目（无需用户去提纲 Tab）",
+    goal: "生成大纲与写作蓝图并写回；两份都要等用户批准后再写正文",
     preferredTools: [
       "read_project_asset",
       "generate_outline",
@@ -80,11 +80,11 @@ export const PHASE_TASK_PACKS: Record<number, PhaseTaskPack> = {
       "search_knowledge",
     ],
     constraints: [
-      "优先 generate_outline，再 generate_writing_blueprint",
+      "先问用户出大纲还是贴骨架，再 generate_outline，批准后再 generate_writing_blueprint",
       "禁止在无大纲时 write_section",
-      "生成后用中文说明结构与预计词数",
+      "大纲和蓝图写回后都停下来等人批准",
     ],
-    humanFallback: "提纲 Tab（仅当 Agent 工具失败时）",
+    humanFallback: "大纲/蓝图过目页",
   },
   3: {
     phase: 3,
@@ -115,7 +115,7 @@ export const PHASE_TASK_PACKS: Record<number, PhaseTaskPack> = {
     ],
     constraints: [
       "必须已有大纲 + 写作蓝图（含各节论证要点）",
-      "优先空白章节；一次任务可连续写多个小节（如引言+背景），但单次 write_section 只写一节/一子节",
+      "一次只写用户指定的一节或一个子节，写回后停下来问下一节",
       "综述 literature_body：蓝图有多子节时必须带 subsectionTitle 逐节写，禁止一次写完整章万字",
       "写完说明章节 key 与字数；有数据时可配图",
     ],

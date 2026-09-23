@@ -70,8 +70,14 @@ import { isConfirmGranted } from "@/lib/agent/core/confirm-grant";
 import {
   ensureNextWritePrerequisite,
   isWriteToolNeedingPrereqs,
+  listMissingWritePrereqs,
   type WritePrereqStep,
 } from "@/lib/agent/core/ensure-write-prereqs";
+import {
+  OUTLINE_PREREQ_HOLD_MESSAGE,
+  OUTLINE_PREREQ_QUESTION,
+  readOutlinePrereqConsent,
+} from "@/lib/agent/core/outline-prereq-consent";
 import {
   parseLiteratureImportTarget,
   pickIntentNudge,
@@ -316,6 +322,7 @@ export async function agentNode(
       planContinueCount: state.planContinueCount + 1,
       toolSummaries: state.toolSummaries,
       maxIterations: agentContext.budget.maxIterations,
+      observations: state.observations,
     });
 
     updates.pendingToolCalls = [];
@@ -467,7 +474,7 @@ export async function agentNode(
 }
 
 /**
- * 自动补齐的前置 step 是否命中批准检查点（ap-full 目标 + outline/blueprint 未批准）。
+ * 自动补齐的前置 step 是否命中批准检查点（大纲/蓝图写回后一律暂停）。
  * 返回检查点请求；未命中返回 null。大纲全文优先 data.outline。
  */
 export function buildPrereqCheckpoint(
@@ -675,16 +682,64 @@ export async function toolsNode(
       continue;
     }
 
-    // 写节前自动补大纲/蓝图，避免 LLM 多轮「被拒 → 再调 generate_*」。
-    // ap-full 目标（写整篇）逐步补齐 + 逐步批准：每补一个 outline/blueprint 暂停让用户确认；
-    // 普通目标一次补完（ensureNextWritePrerequisite 循环直至前置齐）。
+    // 写节前补大纲/蓝图。缺大纲先问用户；生成后大纲和蓝图都暂停等人批准。
     if (isWriteToolNeedingPrereqs(tool.name)) {
-      // 逐步补齐；每步生成后若命中批准检查点则暂停，resume 后继续补下一个 / 执行写工具
       const prereqRan: string[] = [];
       let prereqErr: string | null = null;
       let prereqPaused = false;
 
       while (!prereqPaused) {
+        const missing = listMissingWritePrereqs(agentContext.projectSnapshot);
+        let outlineExtra: Record<string, unknown> | undefined;
+        if (missing[0] === "generate_outline") {
+          const consent = readOutlinePrereqConsent(state.messages);
+          if (consent.kind === "unset") {
+            const checkpoint = buildClarifyCheckpoint(OUTLINE_PREREQ_QUESTION);
+            events.push({ type: "agent/checkpoint", checkpoint });
+            events.push({ type: "agent/status", status: "awaiting_checkpoint" });
+            return {
+              pendingToolCalls: toolQueue.slice(tcIdx),
+              toolCallCount,
+              toolSummaries: newSummaries,
+              observations: newObservations,
+              messages: newMessages,
+              events,
+              plan,
+              toolTrace: newTrace,
+              awaitingCheckpoint: checkpoint,
+              finished: true,
+            };
+          }
+          if (consent.kind === "hold") {
+            newSummaries.push(`[${tool.name}] ${OUTLINE_PREREQ_HOLD_MESSAGE}`);
+            newMessages.push({
+              role: "user",
+              content: OUTLINE_PREREQ_HOLD_MESSAGE,
+            });
+            events.push({
+              type: "agent/observation",
+              tool: tool.name,
+              result: { success: false, error: OUTLINE_PREREQ_HOLD_MESSAGE },
+              error: OUTLINE_PREREQ_HOLD_MESSAGE,
+            });
+            return {
+              pendingToolCalls: [],
+              toolCallCount,
+              toolSummaries: newSummaries,
+              observations: newObservations,
+              messages: newMessages,
+              events,
+              plan,
+              toolTrace: newTrace,
+              finalThought: OUTLINE_PREREQ_HOLD_MESSAGE,
+              finished: true,
+            };
+          }
+          if (consent.kind === "skeleton") {
+            outlineExtra = { userSkeleton: consent.skeleton };
+          }
+        }
+
         const ensured = await ensureNextWritePrerequisite(
           agentContext,
           tools,
@@ -692,6 +747,7 @@ export async function toolsNode(
             markAgentProjectDirty(agentContext);
             return refreshAgentProjectContext(agentContext);
           },
+          outlineExtra,
         );
         toolCallCount = agentContext.budget.toolCallCount;
 
@@ -749,14 +805,14 @@ export async function toolsNode(
               toolTrace: newTrace,
               awaitingCheckpoint: cp,
               finished: true,
-              ...(cp.kind === "outline_approve"
-                ? {
-                    approvedCheckpointKinds: revokeApprovedKind(
-                      state.approvedCheckpointKinds ?? [],
-                      "outline_approve",
-                    ),
-                  }
-                : {}),
+            ...((cp.kind === "outline_approve" || cp.kind === "blueprint_approve")
+              ? {
+                  approvedCheckpointKinds: revokeApprovedKind(
+                    state.approvedCheckpointKinds ?? [],
+                    cp.kind,
+                  ),
+                }
+              : {}),
             };
           }
         }
@@ -1065,11 +1121,11 @@ export async function toolsNode(
           ...(reflectReset ? { reflectCount: 0 } : {}),
           awaitingCheckpoint: checkpoint,
           finished: true,
-          ...(checkpoint.kind === "outline_approve"
+          ...((checkpoint.kind === "outline_approve" || checkpoint.kind === "blueprint_approve")
             ? {
                 approvedCheckpointKinds: revokeApprovedKind(
                   state.approvedCheckpointKinds ?? [],
-                  "outline_approve",
+                  checkpoint.kind,
                 ),
               }
             : {}),

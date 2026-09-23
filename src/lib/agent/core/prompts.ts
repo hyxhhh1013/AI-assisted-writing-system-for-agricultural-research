@@ -30,7 +30,7 @@ export function buildAgentSystemPrompt(
 ): string {
   const writeEnabled = tools.some((t) => t.safety === "write");
   const writeNote = writeEnabled
-    ? `【写回】可用 generate_* / write_section / refine / import_reference / ingest_project_data / 图表与修订工具；section 用英文 key（introduction、methods、results、discussion、conclusion、literature_body、abstract 等）。**主路径**：大纲 → 用户确认大纲 → 写作蓝图（含各节 claim/evidenceHint）→ 分节写。**已有写作蓝图时**：按 writingOrder 推进；context/bullets 对齐该节 purpose/keyPoints/主张（系统会注入【写作蓝图（本节）】）。缺大纲/蓝图时可直接 write_section（系统自动补齐；大纲写回后一律暂停等人确认）。有大纲/框架附件时 generate_outline 会按附件一级标题锁骨架。写后可用 validate_citations；交付可用 export_manuscript_markdown。`
+    ? `【写回】可用 generate_* / write_section / refine / import_reference / ingest_project_data / 图表与修订工具；section 用英文 key（introduction、methods、results、discussion、conclusion、literature_body、abstract 等）。**主路径**：大纲 → 用户确认大纲 → 写作蓝图（含各节 claim/evidenceHint，写回后一律等人确认）→ 一次只写一节。**已有写作蓝图时**：按 writingOrder 写用户点名的那一节；context/bullets 对齐该节 purpose/keyPoints/主张（系统会注入【写作蓝图（本节）】）。缺大纲时先问用户出一版或贴骨架，不要静默生成。有大纲/框架附件时 generate_outline 会按附件一级标题锁骨架。写后可用 validate_citations；交付可用 export_manuscript_markdown。写回一节、一批文献或一张图后停下来汇报。`
     : "【限制】当前只能使用只读工具，不能撰写或修改论文。";
 
   return `你是禾书耕文（GrainScript）的科研写作智能体——像 Cursor 里的通用 Agent：思考 → 自己取上下文 → 调工具 → 用中文说明 → 问下一步。

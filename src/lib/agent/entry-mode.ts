@@ -24,7 +24,7 @@ export const AGENT_ENTRY_MODES: AgentEntryModeOption[] = [
     label: "从零推进",
     hint: "配置 → 文献 → 大纲 → 分节写",
     goalPrefix:
-      "【写作入口=full｜对齐 academic-paper full】按需补配置/文献/大纲后再写；缺什么先用工具补，不要空转催用户去别的 Tab。",
+      "【写作入口=full｜对齐 academic-paper full】按需补配置/文献/大纲后再写。缺大纲先问用户出一版或贴骨架；大纲和写作蓝图写回后都要等用户批准。每轮只写一节或导入一批，然后停下来问下一步。",
   },
   {
     id: "outline_ready",
