@@ -25,7 +25,7 @@
 | Wave 3.13 质量中心 UX | ✅ 收口 | 队列 Phase 15 QUALITY-UX-001～005 done（2026-09-08）：总览工位 + 查重/降重/审查三工位 + 工作台入口卡 |
 | RAG 增量索引 | ✅ 收口 | RAG-PR-014～016 + UI-PR-035/036 done（2026-09-06）：IMRaD 切块、增量索引、索引任务 UI |
 | Wave 3.14 Agent 每步等人 | ✅ 已落地 | [`plans/W3-AP-HITL-STEER.md`](./plans/W3-AP-HITL-STEER.md)：蓝图一律批准；缺大纲先问；每轮一个可见结果。队列 Phase 17。不重开 LLM 意图分类 |
-| Wave 3.15 写节质量缺口 | ⚠️ 01–04 已落地 | [`plans/W3-AP-QUALITY-NEXT.md`](./plans/W3-AP-QUALITY-NEXT.md)：续跑条质检、主张覆盖、soft 精确数字、ingest 可见。队列 Phase 18。门禁审计与技能包、内环三跳仍 blocked |
+| Wave 3.16 文献过目 | 📋 挂单 | [`plans/W3-AP-HITL-LIT.md`](./plans/W3-AP-HITL-LIT.md)：确认卡能判断去留；大纲对照 [n]。队列 Phase 19。检索分波进度已先做 |
 | **Wave 4 导出抛光 + 安全加固** | ⚠️ **并行轨（Phase 16）** | W4-EXPORT ✅、ENG-PR-094 ✅；**W4-SEC-04～08 + W4-WB-SLIM 已拆单**（队列 §3.1）；**W4-LATEX ⛔ blocked**（无交付定义）。与 Phase 18 互不挡 |
 | 从 Demo→完整产品 | 📋 规划生效 | 见 [`PRODUCT_COMPLETION_PLAN.md`](./PRODUCT_COMPLETION_PLAN.md) |
 | `/academic-paper` | ➡️ 引导页 | **不是**第二套流水线；只引导进工作台 **Agent Tab** |

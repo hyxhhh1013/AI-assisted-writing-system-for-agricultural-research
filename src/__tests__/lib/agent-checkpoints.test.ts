@@ -124,7 +124,7 @@ describe("agent checkpoints", () => {
     const body = "## 引言\n".repeat(400);
     const cp = buildOutlineCheckpoint(body);
     expect(cp.preview?.length ?? 0).toBeGreaterThan(2000);
-    expect(cp.message).toContain("写作停在你这里");
+    expect(cp.message).toContain("不再单独确认");
   });
 
   it("keeps a readable blueprint preview instead of clipping at 2000", () => {
@@ -145,37 +145,16 @@ describe("agent checkpoints", () => {
     expect(decisionMessage("outline_approve", "revise", "加方法节")).toContain("加方法节");
   });
 
-  it("pauses after blueprint generation for full goals", () => {
+  it("does not pause after blueprint generation; outline is the only structure gate", () => {
     expect(
       shouldPauseForBlueprintApprove({
         goal: "按 academic-paper 写完整篇",
         toolName: "generate_writing_blueprint",
-        toolSuccess: true,
-        persisted: true,
-        approvedKinds: [],
-      }),
-    ).toBe(true);
-    expect(
-      shouldPauseForBlueprintApprove({
-        goal: "按 academic-paper 写完整篇",
-        toolName: "build_argument_blueprint",
         toolSuccess: true,
         persisted: true,
         approvedKinds: [],
       }),
     ).toBe(false);
-  });
-
-  it("pauses after persisted blueprint even for ordinary goals and after prior approval", () => {
-    expect(
-      shouldPauseForBlueprintApprove({
-        goal: "写引言并保存",
-        toolName: "generate_writing_blueprint",
-        toolSuccess: true,
-        persisted: true,
-        approvedKinds: [],
-      }),
-    ).toBe(true);
     expect(
       shouldPauseForBlueprintApprove({
         goal: "写引言并保存",
@@ -184,25 +163,7 @@ describe("agent checkpoints", () => {
         persisted: true,
         approvedKinds: ["blueprint_approve"],
       }),
-    ).toBe(true);
-    expect(
-      shouldPauseForBlueprintApprove({
-        goal: "按 academic-paper 写完整篇",
-        toolName: "generate_outline",
-        toolSuccess: true,
-        persisted: true,
-        approvedKinds: [],
-      }),
     ).toBe(false);
-    expect(
-      shouldPauseForBlueprintApprove({
-        goal: "按 academic-paper 写完整篇",
-        toolName: "generate_writing_blueprint",
-        toolSuccess: true,
-        persisted: true,
-        approvedKinds: ["blueprint_approve"],
-      }),
-    ).toBe(true);
   });
 
   it("builds blueprint decision messages", () => {
@@ -210,7 +171,7 @@ describe("agent checkpoints", () => {
     expect(decisionMessage("blueprint_approve", "revise", "加图表")).toContain("加图表");
   });
 
-  it("entryMode=full 前缀 goal 触发蓝图确认", () => {
+  it("entryMode=full 前缀 goal 也不再弹蓝图确认", () => {
     const goal = applyEntryModeToGoal("看看蓝图", "full");
     expect(isApFullStyleGoal(goal)).toBe(true);
     expect(
@@ -221,6 +182,6 @@ describe("agent checkpoints", () => {
         persisted: true,
         approvedKinds: [],
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 });

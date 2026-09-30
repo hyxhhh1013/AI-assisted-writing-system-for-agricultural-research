@@ -94,10 +94,16 @@ export function splitOutlineBlocks(markdown: string): OutlineReviewBlock[] {
   return blocks;
 }
 
+export function outlineLevelLabel(level: number): string {
+  if (level <= 1) return "一级";
+  if (level === 2) return "二级";
+  return "三级";
+}
+
 export function outlineHeadingChips(
   blocks: readonly OutlineReviewBlock[],
 ): Array<{ id: string; title: string; level: number }> {
   return blocks
     .filter((b): b is Extract<OutlineReviewBlock, { type: "heading" }> => b.type === "heading")
-    .filter((b) => b.level <= 2);
+    .filter((b) => b.level <= 3);
 }

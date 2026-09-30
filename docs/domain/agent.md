@@ -77,14 +77,14 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 
 **确认/检查点不是孤儿会话（2026-08-23）**：`import_reference` 等人勾选、以及 `outline_approve` 等检查点期间，SSE 会按终态结束（`inFlight=false`）但 DB session 仍 `running`。不得把「接上进度 / 强制结束」叠在确认卡上。`shouldShowOrphanedSession`：有 `pendingConfirm` / `pendingCheckpoint` 或 `status=awaiting_checkpoint` 时隐藏孤儿条。项目打开时若最近会话仍 `running` 且快照带 `awaitingCheckpoint` / `awaitingConfirm`，历史接口随 transcript 一并返回，前端直接恢复确认卡，不必先点「接上进度」。
 
-**大纲人控（2026-08-23；过目页 2026-09-03）**：`generate_outline` 一旦 `persistToProject` 写回，**一律**弹 `outline_approve`（不再要求 goal 像「整篇/从零」；新大纲作废本轮旧批准）。检查点带全文（优先 `data.outline`，上限 24k），侧栏是「需要你拍板」收口卡，过目页用 Dialog 通读标题芯片 + 正文，批准或留下改结构意见。`generate_outline` 服务端读取本会话文档附件：文件名含大纲/提纲/框架等，或短文档能抽出 ≥3 个一级标题，则锁为 `userSkeleton` 并注入附件摘录，禁止默认综述/IMRaD 另起炉灶。指定 `attachmentId` 未就绪则报错，不静默回落。长论文 PDF 不自动当框架。表格仍走 `ingest_project_data`，不进大纲骨架。实现：`lib/agent/outline-from-attachment.ts` + `core/checkpoints.ts` + `components/shared/agent/agent-outline-review.tsx`。
+**大纲人控（2026-08-23；过目页 2026-09-03；手改 + 一二级 2026-09-30）**：`generate_outline` 一旦 `persistToProject` 写回，**一律**弹 `outline_approve`。过目页区分一级 / 二级 / 三级标题，可直接改 Markdown 写回项目，或让 Agent 按意见重排。**结构只确认这一次**：写作蓝图仍会生成（各节主张/配图计划），但不再弹 `blueprint_approve`。实现：`lib/agent/outline-review.ts` + `core/checkpoints.ts` + `components/shared/agent/agent-outline-review.tsx`。
 
 **人控过目页家族（2026-09-03）**：所有「等人拍板」不再用 96px `<pre>` + 批准/需修改。共用 `AgentHitlBanner`（需要你拍板 · 已暂停），自动打开 Dialog 通读后再点 CTA：
 
 | 节点 | 组件 | 用户看到什么 |
 |------|------|----------------|
-| `outline_approve` | `agent-outline-review.tsx` | 大纲全文 + 标题芯片 + 改结构 |
-| `blueprint_approve` | `agent-blueprint-review.tsx` | 主张 / 各节要点 / 配图计划 + 改蓝图 |
+| `outline_approve` | `agent-outline-review.tsx` | 一/二级标题层级 + 可手改 Markdown + 可选让 Agent 改 |
+| `blueprint_approve` | `agent-blueprint-review.tsx` | **旧会话残留**；新生成蓝图不再弹窗 |
 | `clarify`（`ask_user`） | `agent-clarify-card.tsx` | 问题引用块 + 大回答框（侧栏即可，不弹层） |
 | `config_confirm` | `agent-config-qa.tsx` + HITL 眉题 | 一问一答表单，检查点时加高 |
 | `import_reference` / `remove_figure` / `remove_references` | `agent-tool-confirm.tsx` | 导入勾选列表或删除对象全文；破坏性操作用红色眉题 |
@@ -94,7 +94,7 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 | `agent/thought_delta` | LLM 回复逐 token 增量 | **实时**（不持久化） |
 | `agent/action` | 工具被调用（params）。不需确认的工具经 `emitLiveEvent` **实时**推送（长工具如 `write_section` 执行期间前端即时显示工具卡）；需确认工具仍走快照（确认路径直接 yield） | 实时（不需确认）/ 快照（需确认） |
 | `agent/observation` | 工具结果（result/error） | 快照 |
-| `agent/progress` | **长工具执行期实时进度**（`label` 兼容 + 结构化 `stage`/`detail`/`chars`/`elapsedMs`/`info`/`warnings`） | **实时**（不持久化） |
+| `agent/progress` | **长工具执行期实时进度**（`label` + `stage`：写节 / `importing` / `searching`） | **实时**（不持久化） |
 | `agent/confirm` | 写操作需用户确认（import_reference 等） | 快照 |
 | `agent/checkpoint` | S2 检查点（config_confirm / outline_approve / blueprint_approve / clarify） | 快照 |
 | `agent/complete` | 完成摘要 `AgentSummary` | 快照 |
@@ -150,10 +150,11 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 
 **契约**：`AgentRequest.confirmDecision.selectedIndices?: number[]`（`contracts/agent.ts` + `validations.ts`，`z.array(z.number().int().min(0)).max(50).optional()`）；`lib/agent/types.ts` 同源。旧客户端/旧快照无 `importItems` 时行为不变（仍走原单篇/批量确认）。
 
-## 蓝图批准检查点 blueprint_approve（2026-08-07）
+## 蓝图不再单独确认（2026-09-30）
 
-`generate_writing_blueprint` 持久化后一律暂停 `blueprint_approve`（不看「整篇/从零」话术；新蓝图作废旧批准）→ 后置门禁 `blueprintApproveGate`。`buildBlueprintCheckpoint` 带 `formatBlueprintPreview` 全文（上限 24k）。前端不再复用「96px 预览 + 批准/需修改」：侧栏人控卡 + Dialog 结构化展示主张/各节要点/配图计划（优先 `project.writingBlueprint`），批准或留下改蓝图意见；仍可「在蓝图工作台打开」。批准后 `decisionMessage("blueprint_approve","approve")` 指示模型严格按蓝图推进。`run-graph.ts` 恢复时按 checkpointId 含 `blueprint` 映射 `blueprint_approve`。
-- **查看/编辑完整蓝图（2026-08-07；过目页 2026-09-03）**：`blueprint_approve` 过目页内「在蓝图工作台打开」（`agent-panel` 的 `onOpenBlueprint`，由 workbench 接 `handleOpenBlueprintDialog`）。`generate_writing_blueprint` 属 `PROJECT_MUTATING_TOOLS`，生成后工作台自动刷新 `writingBlueprint`，确保打开的是最新蓝图。
+`shouldPauseForBlueprintApprove` 恒为 false：大纲过目是唯一结构人控。`generate_writing_blueprint` 仍写回项目并算可见结果（一轮停一次），但 **不再** 弹 `blueprint_approve`。旧会话若仍卡在该检查点，过目页可用。细改各节主张仍可打开蓝图工作台。
+
+- **查看/编辑完整蓝图**：`agent-panel` 的 `onOpenBlueprint`，由 workbench 接 `handleOpenBlueprintDialog`。
 - **对话里「看看蓝图」调出工作台（2026-08-07）**：只读工具 `open_blueprint_workspace`。仅当用户明确要求打开/编辑时调用；**禁止**在 `generate_writing_blueprint` 后自动调用。前端仅对本轮**新追加**的成功 observation 自动打开（`blueprint-open-guard`）；会话恢复/面板重挂载不因历史记录误弹。observation 卡另有「打开蓝图工作台」按钮可手点。
 - **工作台随内容自适应（2026-08-07）**：蓝图 schema 新增可选 `projectMode`/`language`（生成时用项目兜底填充）；工作台按顶层章节把 `sectionGuides` 树形分组（`" > "` 层级，顶层可折叠）、按论文类型显示徽标与配图提示（综述→概念图/对比表，研究→方法流程图/结果数据图）、空区块（前置条件/配图/章节导览/写作顺序）自动隐藏。分组纯函数 `groupSectionGuides` 在 `lib/blueprint-utils.ts`。
 - **蓝图顺序注入 Agent 简报（2026-08-08）**：修复「蓝图建议写作顺序与实际写作顺序不一致」——此前 `project-briefing` 只给 LLM「写作蓝图：有 + thesis 摘要」，`writingOrder` 与 `sectionGuides` 未进 Agent 决策输入，Agent 靠直觉/大纲顺序写。现在 `loadAgentProject` 额外提取 `blueprintWritingOrder`/`blueprintSectionGuides`（`project-loader.ts`），简报注入「建议写作顺序（蓝图）：1. x → 2. y → …」+「各节写作要点（蓝图）」区块（`project-briefing.ts`）。Agent 写作前即可见蓝图建议顺序并按序推进。
@@ -167,7 +168,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **破坏性删除需确认（2026-08-11）**：`remove_figure` / `remove_references` 标 `requiresConfirmation` + `safety: "destructive"`，确认卡文案见 `confirm-message.ts`。
 - **写作蓝图「结构无效」修复（2026-08-09）**：首因是 prompt 示例 `language: Chinese/English`（schema 仅 `zh|en`）。复查后发现仍会因 `dataSource`/`projectMode` 非法枚举、`keyPoints` 写成字符串、`estimatedWordCount` 写成 `"6000-12000"`、缺 `version`/空 items 等失败。现：① prompt 按 review/research 分示例并写明枚举约束；② `blueprint-coerce.ts` 纠偏上述偏差并在必要时合成最小合法 figure/guides；③ 错误文案带字段路径。API 与 `generate_writing_blueprint` 共用。
 - **蓝图文献源 + 分析笔记进 Writer（2026-08-09）**：`sectionGuides.assignedSources`（文件名或 `[n]`）经 `blueprint-write-context` 解析为 `selectedSourceIds`，Agent `write_section` 限 RAG 范围（解析为空则不限，避免误清空）。`loadAgentProject` 加载 `analysisResults` 进 `globalContext.analysisResults`，与工作台扩写一致。
-- **自动补齐插入批准检查点（2026-08-08；2026-08-23 大纲一律确认；2026-09-23 蓝图一律确认）**：`ensureNextWritePrerequisite` 一次只补一个缺失前置；`buildPrereqCheckpoint` 在大纲或写作蓝图写回后都暂停。缺大纲时先 `clarify`（出一版 / 贴骨架 / 先别生成），用户同意后才 `generate_outline`。最近一次实质动作已是可见结果（一节、一批文献、一张图等）时不再注入计划续跑。本轮已导入过文献则不再轻推灌到目标篇数。详规 [`plans/W3-AP-HITL-STEER.md`](../plans/W3-AP-HITL-STEER.md)。resume 后继续补下一个 / 执行写工具。
+- **自动补齐插入批准检查点（2026-08-08；2026-08-23 大纲一律确认；2026-09-30 蓝图不再单独确认）**：`ensureNextWritePrerequisite` 一次只补一个缺失前置；`buildPrereqCheckpoint` 在大纲写回后暂停，蓝图写回不再弹窗。缺大纲时先 `clarify`。最近一次实质动作已是可见结果时不再注入计划续跑。详规 [`plans/W3-AP-HITL-STEER.md`](../plans/W3-AP-HITL-STEER.md)。
 - **蓝图常驻入口（2026-08-07）**：工作台侧栏头（非 Agent Tab）与 Agent 面板头均新增「蓝图」按钮（Map 图标），随时可打开蓝图工作台；无蓝图时点击自动切到「章节结构」侧栏引导生成。
 - **文献分类编码持久化（2026-08-07）**：新增写工具 `save_reference_classification`（`tools/save-reference-classification.ts`），把「文献分类编码」结果批量 upsert 到 `ReferenceSource`（refIndex 1 基 → sourceName/category/citation），与前端「引用-文献映射」同一张表。`list_references` 输出附带 `category`/`sourceName`，写作时 Agent 能看到分类。属 `PROJECT_MUTATING_TOOLS`，保存后工作台刷新。之前 Agent 只能靠多次关键词检索在对话里"分类"、结果不落库，现已闭环。
 - **删除不相关文献（2026-08-07）**：新增写工具 `remove_references`（`tools/remove-references.ts`），按引用编号（1 基 [n]）删除不相关/误导入文献，自动重排后续编号，并同步清理/重排 `ReferenceSource` 分类映射。若正文已引用被删编号，工具说明要求随后 `validate_citations` 检查越界引用。

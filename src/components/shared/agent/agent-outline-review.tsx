@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -16,6 +16,7 @@ import {
   OUTLINE_REVISE_CHIPS,
   countOutlineChars,
   outlineHeadingChips,
+  outlineLevelLabel,
   pickOutlineBody,
   splitOutlineBlocks,
 } from "@/lib/agent/outline-review";
@@ -28,6 +29,7 @@ interface AgentOutlineReviewProps {
   onApprove: () => void;
   onRevise: (note?: string) => void;
   onOpenOutlineTab?: () => void;
+  onSaveOutline?: (markdown: string) => Promise<void>;
 }
 
 export function AgentOutlineReview({
@@ -38,19 +40,54 @@ export function AgentOutlineReview({
   onApprove,
   onRevise,
   onOpenOutlineTab,
+  onSaveOutline,
 }: AgentOutlineReviewProps) {
   const markdown = pickOutlineBody(preview, projectOutline);
-  const blocks = useMemo(() => splitOutlineBlocks(markdown), [markdown]);
-  const chips = useMemo(() => outlineHeadingChips(blocks), [blocks]);
-  const chars = countOutlineChars(markdown);
-  const headingCount = chips.length;
-  const [revising, setRevising] = useState(false);
+  const [draft, setDraft] = useState(markdown);
+  const [mode, setMode] = useState<"view" | "edit" | "agent">("view");
   const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (mode === "view") setDraft(markdown);
+  }, [markdown, mode]);
+
+  const liveMarkdown = mode === "edit" ? draft : markdown;
+  const blocks = useMemo(() => splitOutlineBlocks(liveMarkdown), [liveMarkdown]);
+  const chips = useMemo(() => outlineHeadingChips(blocks), [blocks]);
+  const chars = countOutlineChars(liveMarkdown);
+  const headingCount = chips.length;
+  const dirty = draft.trim() !== markdown.trim();
 
   const submitRevise = () => {
     onRevise(note.trim() || undefined);
-    setRevising(false);
+    setMode("view");
     setNote("");
+  };
+
+  const persistDraft = async (): Promise<boolean> => {
+    if (!onSaveOutline) return true;
+    if (!dirty) return true;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await onSaveOutline(draft);
+      return true;
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "保存失败");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const approve = async () => {
+    if (mode === "edit" && dirty) {
+      const ok = await persistDraft();
+      if (!ok) return;
+    }
+    onApprove();
   };
 
   return (
@@ -59,7 +96,7 @@ export function AgentOutlineReview({
         <AgentHitlBanner
           eyebrow="需要你拍板 · 写作已暂停"
           title="一起过目这份大纲"
-          detail={`${headingCount > 0 ? `${headingCount} 个章节` : "全文"}${chars > 0 ? ` · 约 ${chars} 字` : ""}。不批准我不会生成蓝图或写正文。`}
+          detail={`${headingCount > 0 ? `${headingCount} 个标题` : "全文"}${chars > 0 ? ` · 约 ${chars} 字` : ""}。这是唯一的结构确认，可直接改标题。`}
         />
         <div className="mt-2 flex gap-2">
           <Button
@@ -76,11 +113,12 @@ export function AgentOutlineReview({
             variant="outline"
             className="h-8 text-xs"
             onClick={() => {
-              setRevising(true);
+              setMode("edit");
+              setDraft(markdown);
               onOpenChange(true);
             }}
           >
-            要改结构
+            直接编辑
           </Button>
         </div>
       </div>
@@ -98,7 +136,8 @@ export function AgentOutlineReview({
               一起确认大纲
             </DialogTitle>
             <DialogDescription className="text-[12px] leading-relaxed text-[#5a7a68]">
-              大纲已写入项目。请通读结构：批准后我会问下一步（蓝图或写某一节）；要改请留下意见，我会按你的意思重排。
+              这里确认的是章节目录（一级 / 二级标题）。各节主张会按这份结构自动生成，不再单独弹「蓝图」。
+              可直接改 Markdown；也可以让我按意见重排。
             </DialogDescription>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[#5a7a68]">
               <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-[#1a5632]/12">
@@ -124,7 +163,7 @@ export function AgentOutlineReview({
             </div>
           </DialogHeader>
 
-          {chips.length > 0 ? (
+          {mode !== "edit" && chips.length > 0 ? (
             <div className="flex shrink-0 gap-1.5 overflow-x-auto border-b border-[#1a5632]/8 bg-white px-4 py-2">
               {chips.map((chip) => (
                 <button
@@ -134,7 +173,9 @@ export function AgentOutlineReview({
                     "shrink-0 rounded-full px-2.5 py-1 text-[11px] ring-1 ring-[#1a5632]/12",
                     chip.level === 1
                       ? "bg-[#1a5632] text-white ring-[#1a5632]"
-                      : "bg-[#f6f8f6] text-[#122820]",
+                      : chip.level === 2
+                        ? "bg-[#f6f8f6] text-[#122820]"
+                        : "bg-white text-[#5a7a68]",
                   )}
                   onClick={() => {
                     document.getElementById(chip.id)?.scrollIntoView?.({
@@ -143,6 +184,7 @@ export function AgentOutlineReview({
                     });
                   }}
                 >
+                  <span className="mr-1 opacity-70">{outlineLevelLabel(chip.level)}</span>
                   {chip.title}
                 </button>
               ))}
@@ -150,26 +192,54 @@ export function AgentOutlineReview({
           ) : null}
 
           <div className="min-h-0 flex-1 overflow-y-auto bg-white px-5 py-4">
-            {markdown ? (
+            {mode === "edit" ? (
+              <Textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                aria-label="大纲 Markdown"
+                className="min-h-[22rem] resize-y bg-white font-mono text-[12.5px] leading-6"
+              />
+            ) : liveMarkdown ? (
               <article className="space-y-3">
                 {blocks.map((block, i) =>
                   block.type === "heading" ? (
-                    <h3
+                    <div
                       key={block.id}
                       id={block.id}
-                      className={cn(
-                        "scroll-mt-2 font-semibold text-[#122820]",
-                        block.level === 1 ? "text-[15px]" : "text-[13.5px]",
-                        block.level >= 3 && "text-[13px] text-[#3d4f46]",
-                      )}
-                      style={{ paddingLeft: Math.max(0, block.level - 1) * 10 }}
+                      className="scroll-mt-2"
+                      style={{ paddingLeft: Math.max(0, block.level - 1) * 14 }}
                     >
-                      {block.title}
-                    </h3>
+                      <span
+                        className={cn(
+                          "mb-0.5 inline-block rounded px-1.5 py-px text-[10px] font-medium tracking-wide",
+                          block.level === 1
+                            ? "bg-[#1a5632] text-white"
+                            : block.level === 2
+                              ? "bg-[#1a5632]/12 text-[#1a5632]"
+                              : "bg-[#eef2ef] text-[#5a7a68]",
+                        )}
+                      >
+                        {outlineLevelLabel(block.level)}
+                      </span>
+                      {block.level <= 1 ? (
+                        <h2 className="mt-1 text-[16px] font-semibold leading-snug text-[#122820]">
+                          {block.title}
+                        </h2>
+                      ) : block.level === 2 ? (
+                        <h3 className="mt-1 text-[14.5px] font-semibold leading-snug text-[#122820]">
+                          {block.title}
+                        </h3>
+                      ) : (
+                        <h4 className="mt-1 text-[13px] font-medium leading-snug text-[#3d4f46]">
+                          {block.title}
+                        </h4>
+                      )}
+                    </div>
                   ) : (
                     <p
                       key={`b-${i}`}
                       className="whitespace-pre-wrap text-[13px] leading-7 text-[#3d4f46]"
+                      style={{ paddingLeft: 14 }}
                     >
                       {block.text}
                     </p>
@@ -182,7 +252,7 @@ export function AgentOutlineReview({
           </div>
 
           <div className="shrink-0 border-t border-[#1a5632]/12 bg-[#f6f8f6] px-4 py-3">
-            {revising ? (
+            {mode === "agent" ? (
               <div className="space-y-2">
                 <div className="flex flex-wrap gap-1.5">
                   {OUTLINE_REVISE_CHIPS.map((chip) => (
@@ -212,7 +282,7 @@ export function AgentOutlineReview({
                     variant="ghost"
                     className="h-8 text-xs"
                     onClick={() => {
-                      setRevising(false);
+                      setMode("view");
                       setNote("");
                     }}
                   >
@@ -220,19 +290,75 @@ export function AgentOutlineReview({
                   </Button>
                 </div>
               </div>
+            ) : mode === "edit" ? (
+              <div className="space-y-2">
+                {saveError ? <p className="text-[11px] text-red-700">{saveError}</p> : null}
+                <p className="text-[11px] text-[#5a7a68]">
+                  用 # / ## / ### 区分一、二、三级标题。保存后会写回项目，再点批准即可。
+                </p>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-9 flex-1 text-xs"
+                    disabled={saving || !draft.trim()}
+                    onClick={() => void approve()}
+                  >
+                    {saving ? "保存中…" : dirty ? "保存并批准" : "批准这份大纲，继续"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-9 text-xs"
+                    disabled={saving || !dirty}
+                    onClick={() => void persistDraft()}
+                  >
+                    仅保存
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-9 text-xs"
+                    disabled={saving}
+                    onClick={() => {
+                      setDraft(markdown);
+                      setMode("view");
+                      setSaveError(null);
+                    }}
+                  >
+                    取消编辑
+                  </Button>
+                </div>
+              </div>
             ) : (
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Button type="button" size="sm" className="h-9 flex-1 text-xs" onClick={onApprove}>
+                <Button type="button" size="sm" className="h-9 flex-1 text-xs" onClick={() => void approve()}>
                   批准这份大纲，继续
                 </Button>
+                {onSaveOutline ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-9 flex-1 text-xs"
+                    onClick={() => {
+                      setDraft(markdown);
+                      setMode("edit");
+                    }}
+                  >
+                    直接编辑
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   size="sm"
-                  variant="outline"
-                  className="h-9 flex-1 text-xs"
-                  onClick={() => setRevising(true)}
+                  variant="ghost"
+                  className="h-9 text-xs"
+                  onClick={() => setMode("agent")}
                 >
-                  我来改结构
+                  让 Agent 改
                 </Button>
               </div>
             )}

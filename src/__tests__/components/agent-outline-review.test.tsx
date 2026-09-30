@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentOutlineReview } from "@/components/shared/agent/agent-outline-review";
 
@@ -53,9 +53,32 @@ describe("AgentOutlineReview", () => {
         onRevise={onRevise}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "我来改结构" }));
+    fireEvent.click(screen.getByRole("button", { name: "让 Agent 改" }));
     fireEvent.click(screen.getByRole("button", { name: "补方法/数据节" }));
     fireEvent.click(screen.getByRole("button", { name: "提交修改意见" }));
     expect(onRevise).toHaveBeenCalledWith(expect.stringContaining("方法"));
+  });
+
+  it("saves markdown edits without going through Agent chat", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const onApprove = vi.fn();
+    render(
+      <AgentOutlineReview
+        preview={SAMPLE}
+        open
+        onOpenChange={vi.fn()}
+        onApprove={onApprove}
+        onRevise={vi.fn()}
+        onSaveOutline={onSave}
+      />,
+    );
+    fireEvent.click(screen.getAllByRole("button", { name: "直接编辑" })[0]);
+    const editor = screen.getByLabelText("大纲 Markdown");
+    fireEvent.change(editor, { target: { value: "## 摘要\n缩短。\n## 引言\n重写背景。" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存并批准" }));
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith("## 摘要\n缩短。\n## 引言\n重写背景。");
+      expect(onApprove).toHaveBeenCalled();
+    });
   });
 });

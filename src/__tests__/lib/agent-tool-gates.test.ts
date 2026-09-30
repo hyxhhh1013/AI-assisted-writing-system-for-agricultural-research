@@ -259,7 +259,7 @@ describe("evaluatePostGates", () => {
     }
   });
 
-  it("全文目标下写作蓝图用 data.preview 而不是一句 summary", () => {
+  it("写作蓝图写回不再弹检查点", () => {
     const v = evaluatePostGates(
       makePostInput({
         tool: makeTool("generate_writing_blueprint"),
@@ -271,11 +271,7 @@ describe("evaluatePostGates", () => {
         },
       }),
     );
-    expect(v).toMatchObject({ ok: false, kind: "checkpoint" });
-    if (!v.ok && v.kind === "checkpoint") {
-      expect(v.checkpoint.kind).toBe("blueprint_approve");
-      expect(v.checkpoint.preview).toContain("各节要点");
-    }
+    expect(v).toMatchObject({ ok: true });
   });
 
   it("antispam 停滞熔断触发时累计 breakCount（供二次熔断硬停机）", () => {

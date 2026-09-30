@@ -70,26 +70,20 @@ export function buildOutlineCheckpoint(preview: string): AgentCheckpointRequest 
     kind: "outline_approve",
     title: "一起确认大纲",
     message:
-      "大纲已写回项目。写作停在你这里：过目结构后点批准，我才会生成蓝图或写正文；要改结构请留下意见。",
+      "大纲已写回项目。请过目一、二级标题：可直接改 Markdown，或让我按意见重排。批准后我会按这份结构生成各节写作计划并问写哪一节，不再单独确认「蓝图」。",
     preview: capOutlinePreview(preview),
   };
 }
 
-/** 生成写作蓝图后 → 用户确认（论证已并入写作蓝图，不再对 build_argument_blueprint 暂停） */
-export function shouldPauseForBlueprintApprove(input: {
+/** 蓝图是内部写作计划，不再单独弹窗。签名保留以免门禁/测试调用方改口。 */
+export function shouldPauseForBlueprintApprove(_input: {
   goal: string;
   toolName: string;
   toolSuccess: boolean;
   persisted?: boolean;
   approvedKinds: readonly AgentCheckpointKind[];
 }): boolean {
-  void input.goal;
-  void input.approvedKinds;
-  if (!input.toolSuccess) return false;
-  if (input.toolName !== "generate_writing_blueprint") return false;
-  if (input.persisted === false) return false;
-  // 蓝图一旦写回就必须人确认；不看「整篇/从零」话术，新蓝图作废旧批准。
-  return true;
+  return false;
 }
 
 export function buildBlueprintCheckpoint(preview: string): AgentCheckpointRequest {
@@ -135,7 +129,7 @@ export function decisionMessage(
   }
   if (kind === "outline_approve") {
     if (decision === "approve") {
-      return "【检查点】用户已批准大纲。若还没有写作蓝图，先 generate_writing_blueprint，写回后必须停等用户批准，不要接着写正文。已有蓝图则用中文询问下一步写哪一节。不要擅自写完整篇。";
+      return "【检查点】用户已批准大纲。若还没有写作蓝图，先 generate_writing_blueprint（写回后不要再等人批准蓝图），然后用中文询问下一步写哪一节。已有蓝图则直接问写哪一节。不要擅自写完整篇。";
     }
     return `【检查点】用户要求修改大纲。${note?.trim() ? `意见：${note.trim()}。` : ""}请先沟通或重新 generate_outline，改完后再请用户确认。`;
   }

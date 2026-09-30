@@ -65,7 +65,8 @@ export const AGENT_RULES: readonly AgentRule[] = [
   {
     id: "outline-human-confirm",
     text:
-      "generate_outline 写回后必须停等用户批准，禁止接着 generate_writing_blueprint。"
+      "generate_outline 写回后必须停等用户批准大纲（这是唯一的结构确认）。"
+      + "用户批准后才可 generate_writing_blueprint；蓝图写回后不要再等人确认蓝图，用中文问写哪一节。"
       + "本会话若有大纲/框架附件，工具会按附件一级标题锁骨架；不要跳过附件另起炉灶。",
     appliesTo: ["draft", "ap_full", "review_write"],
     severity: "nudge",

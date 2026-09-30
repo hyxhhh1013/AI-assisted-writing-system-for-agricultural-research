@@ -24,10 +24,11 @@ describe("outline review helpers", () => {
 
   it("splits markdown headings for jump chips", () => {
     const blocks = splitOutlineBlocks(
-      "# 总题\n导语\n## 摘要\n要点\n## 引言\n背景",
+      "# 总题\n导语\n## 摘要\n要点\n## 引言\n背景\n### 背景小节\n",
     );
     const chips = outlineHeadingChips(blocks);
-    expect(chips.map((c) => c.title)).toEqual(["总题", "摘要", "引言"]);
+    expect(chips.map((c) => c.title)).toEqual(["总题", "摘要", "引言", "背景小节"]);
+    expect(chips.map((c) => c.level)).toEqual([1, 2, 2, 3]);
     expect(countOutlineChars("# 总题\n导语")).toBeGreaterThan(0);
   });
 

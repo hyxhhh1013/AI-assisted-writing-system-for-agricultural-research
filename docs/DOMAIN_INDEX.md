@@ -44,7 +44,7 @@
 | **写作质量系统（WRITE-QA）** | 工作台 `agent` Tab | Spec 主路径 + slim Writer + `qaReport`；`block` 不写回；`eval:quality` 分节 golden | `writer-prompt.ts` + `writing-qa-run.ts` + `writing-profiles.ts` + `quality-eval/write-qa-fixtures.ts`；详规 [`plans/WRITE-QA-quality-system.md`](./plans/WRITE-QA-quality-system.md) |
 | 证据中心 | 工作台 `data` | — | `evidence-hub-sections.tsx`、`data-panel.tsx` |
 | 配图编辑 | 写作面板内联 | — | `writing-figure-edit-links.tsx` |
-| 大纲生成 | 工作台 `outline` Tab / Agent | `POST /api/outline` SSE；Agent `generate_outline` | `outline-panel.tsx`、`lib/prompts/outline.ts`；Agent 人控过目：`outline_approve` / `blueprint_approve` / `clarify` / 导入删除确认共用 Dialog 家族（`agent-outline-review.tsx`、`agent-blueprint-review.tsx`、`agent-clarify-card.tsx`、`agent-tool-confirm.tsx`）；框架附件锁骨架 `lib/agent/outline-from-attachment.ts` |
+| 大纲生成 | 工作台 `outline` Tab / Agent | `POST /api/outline` SSE；Agent `generate_outline` | `outline-panel.tsx`、`lib/prompts/outline.ts`；Agent 人控过目：`outline_approve`（可手改 Markdown；蓝图不再单独确认）/ `clarify` / 导入删除确认共用 Dialog 家族；框架附件锁骨架 `lib/agent/outline-from-attachment.ts` |
 | 一致性检查 | 工作台 | `POST /api/consistency` | `consistency/fix` |
 | 翻译 | — | `POST /api/translate` | — |
 
