@@ -54,6 +54,7 @@ import {
 } from "@/lib/agent/ui-transcript";
 import type { AgentLoopOptions } from "@/lib/agent/types";
 import { ensurePendingWriteFromActive } from "@/lib/agent/write-resume";
+import { normalizeReadingPack } from "@/lib/agent/reading-pack";
 
 export async function* runAgentGraphLoop(
   options: AgentLoopOptions,
@@ -200,6 +201,7 @@ export async function* runAgentGraphLoop(
       goal,
       initialState.observations ?? [],
       classified.kind,
+      context.projectSnapshot?.nextWriteHint,
     );
     if (nudge) {
       initialState = {
@@ -221,6 +223,9 @@ export async function* runAgentGraphLoop(
         uiTranscript = seedUiTranscript(goal);
       }
       const mem = normalizeWorkMemory(existing?.snapshot?.workMemory);
+      if (existing?.snapshot?.readingPack?.length) {
+        context.readingPack = normalizeReadingPack(existing.snapshot.readingPack);
+      }
       if (mem) {
         context.workMemory = mem;
         const block = formatWorkMemoryBlock(mem);
@@ -462,6 +467,7 @@ export async function* runAgentGraphLoop(
             context.workMemory,
             options.attachmentIds,
             context.activeWrite ?? null,
+            context.readingPack,
           ),
           status,
           errorMessage,

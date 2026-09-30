@@ -10,7 +10,9 @@ import {
   checkReviewRequestGate,
   isExistingRefsOnlyGoal,
   isOutlineRevisionGoal,
+  mergeFollowUpGoalHint,
   mergeGoalWithIntentHint,
+  checkContinueWriteSpinGate,
   checkClassificationRetrieveGate,
   citationCheckReportReady,
   hasCitationRefineSuccess,
@@ -324,6 +326,11 @@ describe("goal-intents", () => {
       ok("inspect_project"),
     ], "draft");
     expect(afterInspect.ok).toBe(false);
+    expect(
+      checkDraftSearchGate("写引言", "search_knowledge", [], "draft", {
+        sourceKey: "biochar.pdf",
+      }).ok,
+    ).toBe(true);
   });
 
   it("review writing allows search to gather refs", () => {
@@ -418,6 +425,27 @@ describe("intent continuation pickers", () => {
     expect(pickIntentNudge(c)).toContain("subsectionTitle");
     expect(pickIntentNudge(c)).toContain("literature_body");
     expect(pickIntentStopAsk(c)).toContain("综述正文尚未写回");
+  });
+
+  it("continue follow-up hint writes next subsection instead of re-reading", () => {
+    const hint = mergeFollowUpGoalHint("继续", [], "draft", {
+      sectionKey: "background",
+      subsectionPath: "研究现状 > 共性局限",
+    });
+    expect(hint).toContain("write_section(section=background");
+    expect(hint).toContain("共性局限");
+    expect(hint).toMatch(/禁止.*list_references/);
+  });
+
+  it("blocks list_references on continue+draft before this-run write", () => {
+    const blocked = checkContinueWriteSpinGate("继续", "list_references", [], "draft");
+    expect(blocked.ok).toBe(false);
+    expect(
+      checkContinueWriteSpinGate("继续", "write_section", [], "draft").ok,
+    ).toBe(true);
+    expect(
+      checkContinueWriteSpinGate("写引言", "list_references", [], "draft").ok,
+    ).toBe(true);
   });
 
   it("nudge order and stop-ask order diverge for AP pipeline + literature", () => {

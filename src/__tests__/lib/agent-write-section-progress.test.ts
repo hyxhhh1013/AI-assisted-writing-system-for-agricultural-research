@@ -207,7 +207,7 @@ describe("writeSectionTool 进度透传", () => {
     };
     expect(input.data.bullets).toBeUndefined();
     expect(input.data.writerProfile).toBe("slim");
-    expect(input.data.selectedSourceIds).toEqual(["biochar.pdf"]);
+    expect(input.data.selectedSourceIds).toBeUndefined();
     expect(input.data.referenceEvidence?.map((e) => e.index)).toEqual([1]);
     expect(input.data.context).toContain("【本节主张】");
     expect(input.data.context).toContain("【证据绑定】");
@@ -312,5 +312,33 @@ describe("writeSectionTool 进度透传", () => {
     expect(input.data.context).toContain("营养元素保留率仍不清楚");
     expect(input.data.context).toContain("【补充说明】这句话只是补充");
     expect(input.data.bullets).toBeUndefined();
+  });
+
+  it("文献多时未精读则拒绝 write_section", async () => {
+    const abs =
+      "田间试验表明生物炭施用后土壤有机碳含量显著上升，团聚体稳定性同步改善，对旱地培肥有参考价值。";
+    mockedSnapshot.mockResolvedValue({
+      ...snapshot,
+      referenceEvidence: Array.from({ length: 12 }, (_, i) => ({
+        index: i + 1,
+        title: `T${i + 1}`,
+        abstract: abs,
+      })),
+    } as unknown as AgentProjectSnapshot);
+
+    const result = await writeSectionTool.execute(
+      { section: "introduction", context: "扩写", pipelineMode: "fast" },
+      makeCtx(),
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("read_reference");
+
+    const ctx = makeCtx();
+    ctx.readingPack = [1, 2, 3, 4].map((n) => ({ n, depth: "abstract" as const }));
+    const ok = await writeSectionTool.execute(
+      { section: "introduction", context: "扩写", pipelineMode: "fast" },
+      ctx,
+    );
+    expect(ok.success).toBe(true);
   });
 });

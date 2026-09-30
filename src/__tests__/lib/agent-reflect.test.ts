@@ -154,6 +154,7 @@ describe("reflection routing", () => {
       awaitingConfirm: null,
       grantedConfirm: null,
       intentKind: null,
+      intentObsOffset: 0,
       approvedCheckpointKinds: [],
       toolTrace: [],
       ...overrides,

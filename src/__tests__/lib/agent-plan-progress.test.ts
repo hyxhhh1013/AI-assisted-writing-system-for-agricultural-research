@@ -184,6 +184,7 @@ describe("routeAfterAgent plan continue", () => {
       awaitingConfirm: null,
       grantedConfirm: null,
       intentKind: null,
+      intentObsOffset: 0,
       approvedCheckpointKinds: [],
       toolTrace: [],
       ...overrides,

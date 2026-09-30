@@ -5,7 +5,10 @@ import {
   buildAgentWritingGlobalContext,
   collectBlueprintAssignedSourceTokens,
   formatBlueprintSectionHintForKey,
+  firstMissingBlueprintSubsection,
   listBlueprintSubsectionPathsForKey,
+  multiSubsectionWriteError,
+  pickNextWriteTarget,
   prepareAgentWriteBlueprintContext,
   resolveAssignedSourcesToSelectedIds,
   resolveBlueprintSectionPathForKey,
@@ -123,6 +126,72 @@ describe("listBlueprintSubsectionPathsForKey", () => {
     expect(listBlueprintSubsectionPathsForKey(null, "literature_body", "review")).toEqual(
       [],
     );
+  });
+});
+
+describe("firstMissingBlueprintSubsection", () => {
+  it("skips written leaves and returns the next path", () => {
+    const body = "2.1 改性策略\n已有一段。\n";
+    expect(
+      firstMissingBlueprintSubsection(sampleBlueprint, "literature_body", "review", body),
+    ).toBe("研究进展综述 > 应用效果");
+  });
+});
+
+describe("pickNextWriteTarget", () => {
+  it("prefers background over literature_body", () => {
+    const bp: WritingBlueprint = {
+      ...sampleBlueprint,
+      sectionGuides: [
+        {
+          sectionPath: "研究现状 > 过程特征",
+          purpose: "a",
+          keyPoints: ["x"],
+        },
+        {
+          sectionPath: "研究现状 > 共性局限",
+          purpose: "b",
+          keyPoints: ["y"],
+        },
+        ...sampleBlueprint.sectionGuides,
+      ],
+    };
+    const next = pickNextWriteTarget({
+      mode: "review",
+      blueprint: bp,
+      sectionBodies: {
+        background: "2.1 过程特征\n已写。\n",
+        literature_body: "",
+      },
+    });
+    expect(next).toEqual({
+      sectionKey: "background",
+      subsectionPath: "研究现状 > 共性局限",
+    });
+  });
+});
+
+describe("multiSubsectionWriteError", () => {
+  it("requires subsectionTitle for background when ≥2 nested guides", () => {
+    const bp: WritingBlueprint = {
+      ...sampleBlueprint,
+      sectionGuides: [
+        {
+          sectionPath: "研究现状 > 过程特征",
+          purpose: "a",
+          keyPoints: ["x"],
+        },
+        {
+          sectionPath: "研究现状 > 共性局限",
+          purpose: "b",
+          keyPoints: ["y"],
+        },
+      ],
+    };
+    expect(multiSubsectionWriteError("background", "", bp, "review")).toMatch(
+      /subsectionTitle/,
+    );
+    expect(multiSubsectionWriteError("background", "共性局限", bp, "review")).toBeNull();
   });
 });
 

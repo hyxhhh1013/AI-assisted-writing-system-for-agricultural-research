@@ -89,7 +89,13 @@ import {
 import { buildImportReferenceConfirmParams } from "@/lib/agent/import-confirm";
 import { analyzeReflection, MAX_REFLECT_ROUNDS } from "@/lib/agent/core/reflect";
 import { compactAgentMessages } from "@/lib/agent/core/context-compact";
-import { MAX_INTENT_CONTINUES, MAX_PLAN_CONTINUES } from "@/lib/agent/langgraph/state";
+import {
+  MAX_INTENT_CONTINUES,
+  MAX_PLAN_CONTINUES,
+  observationsThisRun,
+  shouldContinuePlanWork,
+  type AgentGraphStateType,
+} from "@/lib/agent/langgraph/state";
 import { formatToolObservationForLlm } from "@/lib/agent/observation-memory";
 import {
   markAgentProjectDirty,
@@ -99,10 +105,6 @@ import { isProjectMutatingTool } from "@/lib/agent/project-mutated";
 import type { ParsedToolCall, ToolObservation } from "@/lib/agent/types";
 import type { AgentToolTrace } from "@/contracts/agent-session";
 import { getAgentGraphRuntime } from "@/lib/agent/langgraph/runtime";
-import {
-  shouldContinuePlanWork,
-  type AgentGraphStateType,
-} from "@/lib/agent/langgraph/state";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 import {
   allParallelSafe,
@@ -328,15 +330,16 @@ export async function agentNode(
     updates.pendingToolCalls = [];
 
     const observations = state.observations;
-    const searchedOk = observations.some(
+    const thisRun = observationsThisRun(observations, state.intentObsOffset);
+    const searchedOk = thisRun.some(
       (o) =>
         (o.tool === "search_external" || o.tool === "search_knowledge")
         && o.success,
     );
-    const importCount = sumImportedCount(observations);
+    const importCount = sumImportedCount(thisRun);
     const importTarget = parseLiteratureImportTarget(state.goal);
     const refTotal = agentContext.projectSnapshot?.references?.length ?? 0;
-    const wroteOk = observations.some(
+    const wroteOk = thisRun.some(
       (o) =>
         o.tool === "write_section"
         && o.success
@@ -406,7 +409,9 @@ export async function agentNode(
       const suppressPlanHint =
         state.intentKind === "ap_full"
         || state.intentKind === "citation_apply"
-        || state.intentKind === "citation";
+        || state.intentKind === "citation"
+        || state.intentKind === "draft"
+        || state.intentKind === "review_write";
       if (!hint && !suppressPlanHint && planHasPendingWork(plan) && plan) {
         const left = plan.subtasks
           .filter((s) => s.status === "pending" || s.status === "running")
@@ -418,7 +423,11 @@ export async function agentNode(
       // 避免「分析完就当完成」——这是 ask_user 澄清链路的关键触发点
       const execWords =
         /(改|修|调整|优化|更新|修正|refine|执行|按方案|开始|动手|补|删|插入|替换|生成|重写|重画|润色|扩展|处理|弄|配图)/i;
-      const landedWrite = observations.some(
+      const writeObs =
+        state.intentKind === "draft" || state.intentKind === "review_write"
+          ? thisRun
+          : observations;
+      const landedWrite = writeObs.some(
         (o) => o.success
           && (o.tool === "write_section" || o.tool === "refine_content"
             || o.tool === "update_paper_config" || o.tool === "generate_outline"
@@ -433,7 +442,7 @@ export async function agentNode(
         && (execWords.test(state.goal)
           || state.intentKind === "draft"
           || state.intentKind === "review_write")
-        && observations.length > 0
+        && writeObs.length > 0
         && !landedWrite
       ) {
         hint =

@@ -77,6 +77,11 @@ export const AgentGraphState = Annotation.Root({
     reducer: (_, next) => next,
     default: () => null,
   }),
+  /** 跟聊开始时 observations.length；意图完成度只看本轮新增工具 */
+  intentObsOffset: Annotation<number>({
+    reducer: (_, next) => next,
+    default: () => 0,
+  }),
   /** 工具轨迹（W3-AP-ARCH-02）：append + 截断，供快照排障 */
   toolTrace: Annotation<import("@/contracts/agent-session").AgentToolTrace[]>({
     reducer: (left, right) => left.concat(right).slice(-MAX_TOOL_TRACE),
@@ -115,6 +120,15 @@ export type AgentGraphRoute = "tools" | "finalize" | "agent" | "reflect";
  * 真正跑完仍有 maxIterations / maxToolCalls 兜底。
  */
 export const MAX_PLAN_CONTINUES = 3;
+
+/** 跟聊本轮新增的工具观察（offset 之前为历史） */
+export function observationsThisRun<T>(
+  observations: readonly T[],
+  offset: number | null | undefined,
+): T[] {
+  const n = Math.max(0, Math.min(offset ?? 0, observations.length));
+  return observations.slice(n) as T[];
+}
 
 /**
  * 意图未完成时的弱续跑（检索未导入 / 写节未写回）。

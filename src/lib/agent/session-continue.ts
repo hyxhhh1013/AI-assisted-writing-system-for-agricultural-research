@@ -44,6 +44,7 @@ export function buildFollowUpInitialState(
     approvedCheckpointKinds: base.approvedCheckpointKinds ?? [],
     toolSummaries: (base.toolSummaries ?? []).slice(-20),
     observations: (base.observations ?? []).slice(-20),
+    intentObsOffset: (base.observations ?? []).slice(-20).length,
   };
 }
 

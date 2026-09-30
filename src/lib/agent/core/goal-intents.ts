@@ -400,6 +400,7 @@ export function checkDraftSearchGate(
   toolName: string,
   observations: readonly ToolObservation[],
   intentKind?: IntentKind | null,
+  params?: Record<string, unknown>,
 ): GoalIntentGateResult {
   const unbound = isEvidenceUnboundRepairGoal(goal);
   const isDraft = unbound || matchesIntent(
@@ -422,6 +423,12 @@ export function checkDraftSearchGate(
     };
   }
   if (toolName !== "search_external" && toolName !== "search_knowledge") {
+    return { ok: true };
+  }
+  if (
+    toolName === "search_knowledge"
+    && String(params?.sourceKey ?? "").trim()
+  ) {
     return { ok: true };
   }
   return {
@@ -477,25 +484,94 @@ export function diagnoseGoalNudge(): string {
   );
 }
 
+/** 跟聊短确认（继续/好/A），对齐 classify-intent FOLLOW_UP_RE */
+export function isShortContinueGoal(goal: string): boolean {
+  return /^(好|好的|可以|行|开始吧?|开始写|动手|写吧|执行|确认|同意|继续|按方案|就这样|嗯|哦|是的|对|A|a|ok|OK|yes)[。!！?？\s]*$/.test(
+    goal.trim(),
+  );
+}
+
+export function continueDraftWriteNudge(
+  next?: { sectionKey: string; subsectionPath: string } | null,
+): string {
+  const spec = next
+    ? `立刻调用 write_section(section=${next.sectionKey}, subsectionTitle="${next.subsectionPath}") 写回该子节。`
+    : "立刻调用 write_section，带 subsectionTitle 写蓝图中下一未写子节（background 或 literature_body）。";
+  return (
+    "【系统】用户说「继续」是接着写，不是再摸底。"
+    + "禁止 inspect_project / read_section / list_references / search_* / read_reference。"
+    + spec
+    + "写完用中文汇报本节 key、字数、下一未写子节。禁止复述上轮「还有未完成步骤」里的检索任务。"
+  );
+}
+
+const CONTINUE_WRITE_SPIN_TOOLS = new Set([
+  "inspect_project",
+  "read_section",
+  "list_references",
+  "read_project_asset",
+  "search_knowledge",
+  "search_external",
+  "read_reference",
+  "read_full_text",
+]);
+
+/**
+ * 跟聊「继续」写章节：禁止再摸底/检索。上轮已读过上下文。
+ */
+export function checkContinueWriteSpinGate(
+  goal: string,
+  toolName: string,
+  thisRunObservations: readonly ToolObservation[],
+  intentKind?: IntentKind | null,
+): GoalIntentGateResult {
+  if (!isShortContinueGoal(goal)) return { ok: true };
+  if (
+    !matchesIntent(
+      intentKind,
+      ["draft", "review_write"],
+      () => isSectionDraftGoal(goal) || isReviewWritingGoal(goal),
+    )
+  ) {
+    return { ok: true };
+  }
+  if (!CONTINUE_WRITE_SPIN_TOOLS.has(toolName)) return { ok: true };
+  const wrote = thisRunObservations.some((o) => o.tool === "write_section" && o.success);
+  if (wrote) return { ok: true };
+  return {
+    ok: false,
+    error:
+      "用户已说继续写。请立刻 write_section(..., subsectionTitle=下一未写子节)，"
+      + "禁止再 list_references / read_section / inspect / 检索。",
+  };
+}
+
 /** 写节任务开场提示 */
 export function draftGoalNudge(goal = "", intentKind?: IntentKind | null): string {
   if (matchesIntent(intentKind, ["review_write"], () => isReviewWritingGoal(goal))) {
     const n = parseLiteratureImportTarget(goal);
     return withRule(
-      `【系统】写综述：先 inspect / list_references。参考文献通常至少约 ${n} 篇；`
-        + "不足则多轮 search_knowledge / search_external + import_reference(hitsJson=...) 分批导入，"
-        + "达标后再按蓝图子节 write_section(literature_body, subsectionTitle=…)。禁止只用两三篇硬写综述。",
-      "review-subsection",
+      withRule(
+        `【系统】写综述：先 inspect / list_references 拿到目录卡。本会话精读约 4 篇摘要即可（全文最多 4 篇），`
+          + "后续子节复用阅读包，不要每个小点重读。"
+          + `参考文献通常至少约 ${n} 篇；不足则检索导入。达标后 write_section(literature_body, subsectionTitle=…)。`,
+        "review-subsection",
+      ),
+      "catalog-then-read",
     );
   }
   return withRule(
     withRule(
-      "【系统】本轮目标是写章节：先 inspect 或 read_project_asset(outline)/list_references。"
+      withRule(
+        "【系统】本轮目标是写章节：先 inspect 或 read_project_asset(outline)/list_references。"
         + "缺大纲时系统会先问用户出一版或贴骨架，不要跳过这一问。"
-        + "然后 write_section 只写用户指定的一节，写回后停下来汇报。除非用户明确要求检索，否则不要先 search_external。",
-      "draft-missing-refs",
+        + "文献多时按目录选题 read_reference 再 write_section，只写用户指定的一节，写回后停下来汇报。"
+        + "除非用户明确要求检索，否则不要先 search_external。",
+        "draft-missing-refs",
+      ),
+      "no-argument-blueprint",
     ),
-    "no-argument-blueprint",
+    "catalog-then-read",
   );
 }
 
@@ -926,7 +1002,14 @@ export function mergeFollowUpGoalHint(
   goal: string,
   observations: readonly ToolObservation[],
   intentKind?: IntentKind | null,
+  nextWrite?: { sectionKey: string; subsectionPath: string } | null,
 ): string | null {
+  if (
+    isShortContinueGoal(goal)
+    && (intentKind === "draft" || intentKind === "review_write")
+  ) {
+    return continueDraftWriteNudge(nextWrite);
+  }
   if (intentKind !== undefined) {
     return (
       nudgeForKind(intentKind, goal, observations)
@@ -1168,8 +1251,8 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
       ) && !ctx.wroteOk,
     nudge: () =>
       withRule(
-        "【系统】用户要写章节，但尚未成功 write_section 写回。"
-          + "请先读大纲/文献（或 inspect）。缺大纲时等用户同意再生成。然后 write_section 只写这一节。",
+        "【系统】用户要写章节，但本轮尚未成功 write_section 写回。"
+          + "请立刻 write_section 只写下一未写子节（多子节必须带 subsectionTitle）。禁止再 list_references / 检索。",
         "draft-missing-refs",
       ),
     stopAsk: (ctx) =>
@@ -1183,10 +1266,13 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
       && !ctx.wroteOk,
     nudge: () =>
       withRule(
-        "【系统】文献体量已够，请 list_references 核对后，按蓝图子节逐次 "
-          + "write_section(literature_body, subsectionTitle=子节标题) 写回正文；"
-          + "禁止一次 write_section(literature_body) 写完整章万字。",
-        "review-subsection",
+        withRule(
+          "【系统】本轮尚未 write_section 写回。立刻 "
+            + "write_section(background 或 literature_body, subsectionTitle=蓝图下一未写子节)；"
+            + "禁止再 list_references / search / 把整库摘要塞进写作。",
+          "review-subsection",
+        ),
+        "catalog-then-read",
       ),
     stopAsk: (ctx) =>
       buildIntentStopAskUser({ kind: "review_write", ...stopAskOpts(ctx) }),

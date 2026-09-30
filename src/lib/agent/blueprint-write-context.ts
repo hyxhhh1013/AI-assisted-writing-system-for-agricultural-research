@@ -14,6 +14,7 @@ import {
 import { getSectionLabelForMode } from "@/lib/section-registry";
 import { buildOutlineTasks, mapToSectionForMode } from "@/lib/utils";
 import type { AgentProjectSnapshot } from "@/lib/agent/project-loader";
+import { subsectionHeadingPattern } from "@/lib/writing-merge";
 
 const BLUEPRINT_SECTION_HINT_HEAD = "【写作蓝图（本节）】";
 
@@ -144,6 +145,72 @@ export function listBlueprintSubsectionPathsForKey(
   const unique = [...new Set(paths)];
   const nested = unique.filter((p) => p.includes(">"));
   return nested.length >= 2 ? nested : unique;
+}
+
+export function subsectionPathLeaf(path: string): string {
+  const parts = path.split(">").map((s) => s.trim()).filter(Boolean);
+  return parts[parts.length - 1] ?? path.trim();
+}
+
+export function bodyCoversSubsectionTitle(body: string, title: string): boolean {
+  const t = title.trim();
+  if (!t) return true;
+  const padded = `\n${body.replace(/\r\n/g, "\n")}\n`;
+  return subsectionHeadingPattern(t).test(padded);
+}
+
+export function firstMissingBlueprintSubsection(
+  blueprint: WritingBlueprint | null | undefined,
+  sectionKey: string,
+  mode: ProjectWritingMode | undefined,
+  body: string,
+): string | null {
+  const paths = listBlueprintSubsectionPathsForKey(blueprint, sectionKey, mode);
+  if (paths.length < 2) return null;
+  for (const p of paths) {
+    const leaf = subsectionPathLeaf(p);
+    if (!bodyCoversSubsectionTitle(body, leaf)) return p;
+  }
+  return null;
+}
+
+const NEXT_WRITE_SECTION_ORDER = ["background", "literature_body"] as const;
+
+export function pickNextWriteTarget(opts: {
+  mode: ProjectWritingMode | undefined;
+  blueprint: WritingBlueprint | null | undefined;
+  sectionBodies: Record<string, string>;
+}): { sectionKey: string; subsectionPath: string } | null {
+  for (const key of NEXT_WRITE_SECTION_ORDER) {
+    const missing = firstMissingBlueprintSubsection(
+      opts.blueprint,
+      key,
+      opts.mode,
+      opts.sectionBodies[key] ?? "",
+    );
+    if (missing) return { sectionKey: key, subsectionPath: missing };
+  }
+  return null;
+}
+
+export function multiSubsectionWriteError(
+  sectionKey: string,
+  subsectionTitle: string,
+  blueprint: WritingBlueprint | null | undefined,
+  mode: ProjectWritingMode | undefined,
+): string | null {
+  if (subsectionTitle.trim()) return null;
+  if (sectionKey !== "literature_body" && sectionKey !== "background") return null;
+  const subs = listBlueprintSubsectionPathsForKey(blueprint, sectionKey, mode);
+  if (subs.length < 2) return null;
+  const label = sectionKey === "background" ? "研究现状" : "综述正文";
+  const preview = subs.slice(0, 6).map((p, i) => `${i + 1}. ${p}`).join("；");
+  return (
+    `${label}请按蓝图子节分批写，不要一次 write_section(${sectionKey}) 写完整章。`
+    + `请带 subsectionTitle，例如：${preview}`
+    + (subs.length > 6 ? "…" : "")
+    + "。每调用一次只写一个子节。"
+  );
 }
 
 /** 收集本节蓝图 assignedSources（含子路径 guides） */

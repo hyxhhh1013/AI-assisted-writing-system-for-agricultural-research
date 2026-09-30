@@ -8,6 +8,7 @@ import type { IntentKind } from "@/contracts/agent-intent";
 export const AGENT_RULE_IDS = [
   "no-argument-blueprint",
   "review-subsection",
+  "catalog-then-read",
   "draft-missing-refs",
   "citation-refine-writeback",
   "results-data-foundation",
@@ -37,7 +38,17 @@ export const AGENT_RULES: readonly AgentRule[] = [
   {
     id: "review-subsection",
     text:
-      "综述 literature_body：蓝图有多子节时必须带 subsectionTitle 逐节写，禁止一次写完整章。",
+      "研究现状 background、综述 literature_body：蓝图有多子节时必须带 subsectionTitle 逐节写，禁止一次写完整章。"
+      + "用户说「继续」时立刻写下一未写子节，禁止再 list_references / read_section / 检索。",
+    appliesTo: ["review_write", "draft", "ap_full"],
+    severity: "nudge",
+  },
+  {
+    id: "catalog-then-read",
+    text:
+      "文献写作：开写前 list_references 一次即可；本会话精读约 4 篇摘要（全文最多 4 篇），后续子节复用阅读包。"
+      + "write_section 每节只带少量摘要。禁止每个小点重读，禁止把整库摘要塞进写作。"
+      + "跟聊「继续」禁止再摸底检索。",
     appliesTo: ["review_write", "draft", "ap_full"],
     severity: "nudge",
   },

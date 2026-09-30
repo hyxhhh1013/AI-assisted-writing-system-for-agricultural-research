@@ -23,6 +23,7 @@ describe("session-continue", () => {
     expect(next.iteration).toBe(0);
     expect(next.toolCallCount).toBe(0);
     expect(next.plan).toBeNull();
+    expect(next.intentObsOffset).toBe(0);
     expect(next.messages?.at(-1)).toEqual({
       role: "user",
       content: "改成写方法",
@@ -45,5 +46,17 @@ describe("session-continue", () => {
     snap.intentKind = "draft";
     const next = buildFollowUpInitialState("A", snap);
     expect(next.intentKind).toBe("draft");
+  });
+
+  it("sets intentObsOffset to historical observation length", () => {
+    const snap = emptyAgentSessionSnapshot("写研究现状");
+    snap.intentKind = "draft";
+    snap.observations = [
+      { tool: "write_section", success: true },
+      { tool: "list_references", success: true },
+    ];
+    const next = buildFollowUpInitialState("继续", snap);
+    expect(next.intentObsOffset).toBe(2);
+    expect(next.observations).toHaveLength(2);
   });
 });

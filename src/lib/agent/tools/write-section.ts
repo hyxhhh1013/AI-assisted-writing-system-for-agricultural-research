@@ -22,7 +22,7 @@ import {
   evaluateWriteResume,
 } from "@/lib/agent/write-resume";
 import {
-  listBlueprintSubsectionPathsForKey,
+  multiSubsectionWriteError,
   prepareAgentWriteBlueprintContext,
 } from "@/lib/agent/blueprint-write-context";
 import {
@@ -32,7 +32,6 @@ import {
 import {
   bindSectionEvidence,
   evidenceUnboundFinding,
-  slimReferenceEvidenceForSpec,
   type BindSectionEvidenceResult,
 } from "@/lib/agent/evidence-binder";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
@@ -61,6 +60,13 @@ import { getAgentModelConfig } from "@/lib/ai";
 import { isSoftGroundable } from "@/lib/reference-evidence";
 import { isSectionValidForMode } from "@/lib/section-registry";
 import type { WritingInput } from "@/lib/validations";
+import {
+  mergePackWithSlimEvidence,
+  mergeRagSourceIds,
+  readingPackGateError,
+  readingPackIndices,
+  readingPackSourceKeys,
+} from "@/lib/agent/reading-pack";
 
 function bindCompiledSpec(
   compiled: CompileSectionSpecResult | null,
@@ -155,7 +161,8 @@ export const writeSectionTool: ToolDefinition = {
   name: "write_section",
   description:
     "调用 Writer 扩写管道为指定章节生成正文（含 RAG；默认写后自动核查修正一轮，可关）。主路径是 SectionSpec（可传 sectionSpec，或由蓝图/context 编译）。"
-    + "context/bullets 只作适配，勿另起炉灶。综述 literature_body：蓝图有多个子节时必须带 subsectionTitle 逐节写。",
+    + "context/bullets 只作适配，勿另起炉灶。background / literature_body：蓝图有多个子节时必须带 subsectionTitle 逐节写。"
+    + "文献多时请先 list_references 再 read_reference 精读若干篇，再调用本工具。",
   parameters: {
     type: "object",
     properties: {
@@ -239,24 +246,23 @@ export const writeSectionTool: ToolDefinition = {
     const subsectionTitleEarly = params.subsectionTitle
       ? String(params.subsectionTitle).trim()
       : "";
-    // 综述正文：蓝图多子节时禁止一次 write 整章（否则易产出万字、超时/质量塌陷）
-    if (sectionRaw === "literature_body" && !subsectionTitleEarly) {
-      const subs = listBlueprintSubsectionPathsForKey(
-        project.globalContext?.blueprint ?? null,
-        "literature_body",
-        project.mode,
-      );
-      if (subs.length >= 2) {
-        const preview = subs.slice(0, 6).map((p, i) => `${i + 1}. ${p}`).join("；");
-        return {
-          success: false,
-          error:
-            `综述正文请按蓝图子节分批写，不要一次 write_section(literature_body) 写完整章。`
-            + `请带 subsectionTitle，例如：${preview}`
-            + (subs.length > 6 ? "…" : "")
-            + "。每调用一次只写一个子节。",
-        };
-      }
+    const multiSubErr = multiSubsectionWriteError(
+      sectionRaw,
+      subsectionTitleEarly,
+      project.globalContext?.blueprint ?? null,
+      project.mode,
+    );
+    if (multiSubErr) {
+      return { success: false, error: multiSubErr };
+    }
+
+    const packGate = readingPackGateError({
+      section: sectionRaw,
+      withAbstract: (project.referenceEvidence ?? []).length,
+      packCount: readingPackIndices(ctx).size,
+    });
+    if (packGate) {
+      return { success: false, error: packGate };
     }
 
     let bullets: string[] | undefined;
@@ -444,12 +450,14 @@ export const writeSectionTool: ToolDefinition = {
           source: specSource === "provided" ? "provided" : compileSource,
         })
       : context || draftContext;
-    const ragIds = bind?.selectedSourceIds?.length
-      ? bind.selectedSourceIds
-      : selectedSourceIds;
-    const writerEvidence = boundSpec
-      ? slimReferenceEvidenceForSpec(project.referenceEvidence, boundSpec)
-      : (project.referenceEvidence ?? []);
+    // 蓝图勾选可收窄检索；不要用证据卡绑中的 2～3 个 PDF 锁死 RAG，否则 50 篇综述只会引用前几号
+    const ragIds = mergeRagSourceIds(selectedSourceIds, readingPackSourceKeys(ctx));
+    const writerEvidence = mergePackWithSlimEvidence(
+      project.referenceEvidence,
+      boundSpec,
+      readingPackIndices(ctx),
+      { slice: Boolean(subsectionTitle) },
+    );
 
     const data: WritingInput = {
       title: project.title,

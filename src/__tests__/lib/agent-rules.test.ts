@@ -47,10 +47,13 @@ describe("AGENT_RULES SSOT", () => {
     );
   });
 
-  it("review_write prompt includes subsection rule", () => {
-    const text = ruleText("review-subsection");
-    expect(buildAgentSystemPrompt([], "review_write")).toContain(text);
-    expect(draftGoalNudge("写一篇生物炭综述", "review_write")).toContain(text);
+  it("review_write prompt includes subsection and catalog-then-read rules", () => {
+    const sub = ruleText("review-subsection");
+    const catalog = ruleText("catalog-then-read");
+    expect(buildAgentSystemPrompt([], "review_write")).toContain(sub);
+    expect(buildAgentSystemPrompt([], "review_write")).toContain(catalog);
+    expect(draftGoalNudge("写一篇生物炭综述", "review_write")).toContain(sub);
+    expect(draftGoalNudge("写一篇生物炭综述", "review_write")).toContain(catalog);
   });
 
   it("draft / ap_full prompt includes outline-human-confirm", () => {

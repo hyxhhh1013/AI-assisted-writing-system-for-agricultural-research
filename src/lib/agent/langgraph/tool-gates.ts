@@ -20,6 +20,7 @@ import {
   checkCitationSpinGate,
   checkCitationSideTripGate,
   checkClassificationRetrieveGate,
+  checkContinueWriteSpinGate,
   checkDiagnoseInspectGate,
   checkDraftSearchGate,
   checkOutlineSearchGate,
@@ -35,7 +36,7 @@ import {
 import { blueprintPreviewFromToolData } from "@/lib/agent/blueprint-review";
 import { outlineTextFromToolData } from "@/lib/agent/outline-review";
 import { checkFigureReplaceRequired } from "@/lib/agent/figure-loop";
-import type { AgentGraphStateType } from "./state";
+import { observationsThisRun, type AgentGraphStateType } from "./state";
 import type { AntispamTracker } from "@/lib/agent/core/antispam";
 import type { RepeatTracker } from "@/lib/agent/core/safety";
 
@@ -100,9 +101,11 @@ export const figureReplaceGate: PreToolGate = ({ tool, params, recentObservation
 
 /** 意图门禁组：诊断 inspect / 草稿检索 / 引用核查 / 引用绕行 / 收口摘要 / 审查审稿 / 先读后写 */
 export const intentGate: PreToolGate = ({ state, tool, params, recentObservations }) => {
+  const thisRun = observationsThisRun(recentObservations, state.intentObsOffset);
   const gates: Array<() => { ok: boolean; error?: string }> = [
+    () => checkContinueWriteSpinGate(state.goal, tool.name, thisRun, state.intentKind),
     () => checkDiagnoseInspectGate(state.goal, tool.name, recentObservations, state.intentKind),
-    () => checkDraftSearchGate(state.goal, tool.name, recentObservations, state.intentKind),
+    () => checkDraftSearchGate(state.goal, tool.name, recentObservations, state.intentKind, params),
     () => checkOutlineSearchGate(state.goal, tool.name),
     () => checkCitationCheckGate(state.goal, tool.name, recentObservations, state.intentKind),
     () => checkCitationSpinGate(state.goal, tool.name, recentObservations, state.intentKind),
