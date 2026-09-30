@@ -101,6 +101,7 @@ describe("bindSectionEvidence", () => {
       hadBindablePool: result.hadBindablePool,
     });
     expect(finding?.code).toBe("evidence_unbound");
+    expect(finding?.action).toBe("warn");
     expect(evidenceUnboundFinding(["C1"], { hadBindablePool: false })).toBeNull();
   });
 

@@ -129,4 +129,18 @@ describe("agent project briefing", () => {
     });
     expect(tips.some((t) => t.includes("引言") && t.includes("偏薄"))).toBe(true);
   });
+
+  it("prefers thickening a thin section over passport citation phase", () => {
+    const tips = suggestNextAgentActions({
+      currentPhase: 5,
+      writeEnabled: true,
+      hasOutline: true,
+      hasWritingBlueprint: true,
+      emptySections: [],
+      nextSectionKey: "literature_body",
+      thinOrGapSections: ["literature_body"],
+    });
+    expect(tips[0]).toContain("综述正文");
+    expect(tips.some((t) => t.includes("引用"))).toBe(false);
+  });
 });

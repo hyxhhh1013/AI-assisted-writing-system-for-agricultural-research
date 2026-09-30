@@ -61,4 +61,12 @@ describe("classifyIntentFromRegex", () => {
   it("maps 写引言 to draft", () => {
     expect(classifyIntentFromRegex("写引言")).toBe("draft");
   });
+
+  it("maps evidence_unbound 修补 to draft not literature/review_write", () => {
+    expect(
+      classifyIntentFromRegex(
+        "修补已写的综述正文（evidence_unbound）：6 张主张未绑到文献，勿硬挂 [n]",
+      ),
+    ).toBe("draft");
+  });
 });

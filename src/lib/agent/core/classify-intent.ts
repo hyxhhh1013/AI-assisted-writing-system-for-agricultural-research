@@ -14,6 +14,7 @@ import {
   isCitationApplyGoal,
   isCitationCheckGoal,
   isDiagnoseStyleGoal,
+  isEvidenceUnboundRepairGoal,
   isLiteratureHuntGoal,
   isReferenceClassificationGoal,
   isReviewRequestGoal,
@@ -63,6 +64,7 @@ export function classifyIntentFromRegex(
   if (isReferenceClassificationGoal(goal)) return "classify";
   if (isAbstractFinishGoal(goal)) return "abstract_finish";
   if (isReviewRequestGoal(goal)) return "review_request";
+  if (isEvidenceUnboundRepairGoal(goal)) return "draft";
   if (isLiteratureHuntGoal(goal)) return "literature";
   if (isReviewWritingGoal(goal)) return "review_write";
   if (isSectionDraftGoal(goal)) return "draft";

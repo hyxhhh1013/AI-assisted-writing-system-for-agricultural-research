@@ -208,13 +208,6 @@ export function suggestNextAgentActions(input: SuggestNextAgentActionsInput): st
   if ((phase ?? 0) >= 7) {
     return ["运行下一轮论文审查"];
   }
-  if ((phase ?? 0) >= 6) {
-    return ["基于已写正文生成中英双语摘要并写回项目"];
-  }
-  if ((phase ?? 0) >= 5) {
-    return ["检查当前引用"];
-  }
-
   if ((phase ?? 1) <= 1 && !hasOutline) {
     return ["检索相关文献并总结研究缺口"];
   }
@@ -226,6 +219,12 @@ export function suggestNextAgentActions(input: SuggestNextAgentActionsInput): st
   }
   if (writeEnabled && writeTarget) {
     return [writeSectionTip(input, writeTarget)];
+  }
+  if ((phase ?? 0) >= 6) {
+    return ["基于已写正文生成中英双语摘要并写回项目"];
+  }
+  if ((phase ?? 0) >= 5) {
+    return ["检查当前引用"];
   }
   if (writeEnabled) {
     return ["查看可配图数据并生成图表"];

@@ -124,6 +124,20 @@ export function writingQaActionableFindings(
   return report.findings.filter((f) => f.action === "block" || f.action === "repair");
 }
 
+/** 续跑条不认：主张未绑文献不是「去导入」 */
+const CONTINUE_HINT_SKIP_QA_CODES = new Set([
+  "evidence_unbound",
+  "blueprint_claim_uncovered",
+]);
+
+export function writingQaContinueFindings(
+  report: WritingQaReport | null | undefined,
+): WritingQaFinding[] {
+  return writingQaActionableFindings(report).filter(
+    (f) => !CONTINUE_HINT_SKIP_QA_CODES.has(f.code),
+  );
+}
+
 const SECTION_KEY_IN_MESSAGE = /^\[([a-z][a-z0-9_]*)\]\s/;
 
 /** 收口文风灯跳转：finding 前缀或 report.sectionKey */

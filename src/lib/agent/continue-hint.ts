@@ -2,7 +2,7 @@ import type { AgentUiMessage } from "@/contracts/agent-session";
 import type { WritingQaReport } from "@/contracts/writing-qa";
 import {
   parseWritingQaReport,
-  writingQaActionableFindings,
+  writingQaContinueFindings,
 } from "@/contracts/writing-qa";
 import {
   isPlanLeftoverSpeech,
@@ -81,12 +81,20 @@ function firstWriteTip(
   );
 }
 
+export function skipSectionKeysAfterWrite(
+  written: readonly string[],
+  thinOrGap?: readonly string[],
+): string[] {
+  const thin = new Set(thinOrGap ?? []);
+  return written.filter((k) => Boolean(k) && !thin.has(k));
+}
+
 export function peekSectionKeyFromContinueHint(hint: AgentContinueHint): string | null {
   return sectionKeyFromWriteTip(hint.goal) ?? sectionKeyFromPlanTitle(hint.title);
 }
 
 export function formatWriteQaContinueHint(report: WritingQaReport, sectionKey?: string): AgentContinueHint {
-  const items = writingQaActionableFindings(report);
+  const items = writingQaContinueFindings(report);
   const first = items[0] ?? report.findings[0];
   const label = (sectionKey && SECTION_LABEL[sectionKey]) || "本节";
   const blocked = report.verdict === "block";
@@ -193,10 +201,14 @@ export function resolveAgentContinueHint(input: {
   suggestedActions?: readonly string[];
   observations?: readonly ContinueHintObservation[];
   skipSectionKeys?: readonly string[];
+  thinOrGapSections?: readonly string[];
 }): AgentContinueHint {
   const skipKeys = new Set(input.skipSectionKeys ?? []);
+  const thin = new Set(input.thinOrGapSections ?? []);
   for (const o of input.observations ?? []) {
-    if (o.success && o.sectionKey) skipKeys.add(o.sectionKey);
+    if (o.success && o.sectionKey && !thin.has(o.sectionKey)) {
+      skipKeys.add(o.sectionKey);
+    }
   }
   const wroteThisTurn = (input.observations ?? []).some(
     (o) => o.tool === "write_section" && o.success,
@@ -211,7 +223,7 @@ export function resolveAgentContinueHint(input: {
   const planTitle = firstOpenPlanTitle(input.planSubtasks, skipKeys);
   const writeQa = lastWriteQaObservation(input.observations);
   const qaActionable = writeQa?.qaReport
-    ? writingQaActionableFindings(writeQa.qaReport).length > 0
+    ? writingQaContinueFindings(writeQa.qaReport).length > 0
       || writeQa.qaReport.verdict === "block"
     : false;
 

@@ -145,7 +145,14 @@ export function checkClassificationRetrieveGate(
 }
 
 /** 综述 / literature review（文献体量要求更高） */
+/** 综述 / literature review（文献体量要求更高） */
+export function isEvidenceUnboundRepairGoal(goal: string): boolean {
+  return /evidence_unbound/.test(goal)
+    || (/修补已写/.test(goal) && /未绑到文献/.test(goal));
+}
+
 export function isReviewWritingGoal(goal: string): boolean {
+  if (isEvidenceUnboundRepairGoal(goal)) return false;
   return /综述|literature\s*review|literature_body|系统综述|文献综述/i.test(goal);
 }
 
@@ -345,6 +352,7 @@ export function parseLiteratureImportTarget(goal: string): number {
 
 /** 起草某一节（引言/讨论/综述等），非检索任务。仅供 classifyIntent 使用。 */
 export function isSectionDraftGoal(goal: string): boolean {
+  if (isEvidenceUnboundRepairGoal(goal) || /修补已写/.test(goal)) return true;
   if (isLiteratureHuntGoal(goal)) return false;
   if (isAcademicPaperPipelineGoal(goal)) return false;
   return (
@@ -393,12 +401,26 @@ export function checkDraftSearchGate(
   observations: readonly ToolObservation[],
   intentKind?: IntentKind | null,
 ): GoalIntentGateResult {
-  const isDraft = matchesIntent(
+  const unbound = isEvidenceUnboundRepairGoal(goal);
+  const isDraft = unbound || matchesIntent(
     intentKind,
     ["draft"],
     () => isSectionDraftGoal(goal) && !isReviewWritingGoal(goal),
   );
   if (!isDraft) return { ok: true };
+  if (
+    unbound
+    && (toolName === "search_external"
+      || toolName === "search_knowledge"
+      || toolName === "import_reference")
+  ) {
+    return {
+      ok: false,
+      error:
+        "evidence_unbound 表示主张卡没对上已有题录，禁止为此去检索/导入。"
+        + "请继续 write_section 扩写该节，或改主张措辞；勿硬挂 [n]。",
+    };
+  }
   if (toolName !== "search_external" && toolName !== "search_knowledge") {
     return { ok: true };
   }

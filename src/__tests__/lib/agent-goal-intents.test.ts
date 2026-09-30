@@ -46,6 +46,8 @@ describe("goal-intents", () => {
     expect(isSectionDraftGoal("写引言")).toBe(true);
     expect(isSectionDraftGoal("检索并导入 1 篇文献")).toBe(false);
     expect(isReviewWritingGoal("写一篇生物炭综述")).toBe(true);
+    expect(isReviewWritingGoal("修补已写的综述正文（evidence_unbound）：勿硬挂")).toBe(false);
+    expect(isSectionDraftGoal("修补已写的综述正文（evidence_unbound）：未绑到文献")).toBe(true);
   });
 
   it("isSectionDraftGoal is regex-only; follow-up inherit lives in classifyIntent", () => {
@@ -327,6 +329,15 @@ describe("goal-intents", () => {
   it("review writing allows search to gather refs", () => {
     expect(checkDraftSearchGate("写一篇生物炭综述", "search_external", []).ok).toBe(
       true,
+    );
+  });
+
+  it("evidence_unbound 修补 blocks search and import even if 综述 is in the goal", () => {
+    const goal =
+      "修补已写的综述正文（evidence_unbound）：6 张主张未绑到文献（C1），勿硬挂 [n]";
+    expect(checkDraftSearchGate(goal, "search_external", []).ok).toBe(false);
+    expect(checkDraftSearchGate(goal, "import_reference", [], "review_write").ok).toBe(
+      false,
     );
   });
 

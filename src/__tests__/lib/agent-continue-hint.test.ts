@@ -189,4 +189,32 @@ describe("resolveAgentContinueHint", () => {
     expect(hint.detail).toContain("throat_clear");
     expect(hint.goal).toContain("修补已写的引言");
   });
+
+  it("does not send evidence_unbound to the continue bar as 修补/导入", () => {
+    const hint = resolveAgentContinueHint({
+      suggestedActions: ["写综述正文并保存到当前项目（当前偏薄，建议扩写/补强）"],
+      thinOrGapSections: ["literature_body"],
+      observations: [
+        {
+          tool: "write_section",
+          success: true,
+          sectionKey: "literature_body",
+          qaReport: {
+            verdict: "pass",
+            sectionKey: "literature_body",
+            findings: [
+              {
+                code: "evidence_unbound",
+                layer: "L0",
+                action: "warn",
+                message: "6 张主张未绑到文献（C1），勿硬挂 [n]",
+              },
+            ],
+          },
+        },
+      ],
+    });
+    expect(hint.goal).not.toContain("修补");
+    expect(hint.goal).toContain("综述正文");
+  });
 });
