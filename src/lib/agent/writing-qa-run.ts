@@ -20,6 +20,7 @@ import { checkWritingQuality } from "@/lib/agent/writing-quality";
 import { collectWritingProfileFindings } from "@/lib/agent/writing-profiles";
 import { reconcileResultsNumbers } from "@/lib/agent/results-number-reconcile";
 import { collectInvalidCitationNumbers } from "@/lib/reference-reorder";
+import { evaluateSoftPreciseNotInAbstract } from "@/lib/agent/precise-data-grounding";
 
 const HOLLOW_PHRASES = [
   "具有重要的意义",
@@ -69,6 +70,8 @@ export interface EvaluateSectionWritingQaInput {
   /** 010 剖面 / 主张覆盖 */
   spec?: SectionSpecV1 | null;
   subsectionTitle?: string;
+  /** 有摘要的 soft 文献，句内精确数据须能在摘要里对上 */
+  softRefs?: ReadonlyArray<{ n: number; abstract: string }>;
 }
 
 function countPhrases(text: string, phrases: string[]): { count: number; examples: string[] } {
@@ -217,6 +220,28 @@ function collectNumberClaimFindings(
   ];
 }
 
+function collectSoftPreciseFindings(
+  text: string,
+  softRefs?: ReadonlyArray<{ n: number; abstract: string }>,
+): WritingQaFinding[] {
+  if (!softRefs?.length) return [];
+  const hits = evaluateSoftPreciseNotInAbstract({ draftText: text, softRefs });
+  if (hits.length === 0) return [];
+  return [
+    {
+      code: "cite_semantic_mismatch",
+      layer: "L3",
+      action: "repair",
+      message: `soft 文献句内精确数据未出现在摘要（${hits
+        .slice(0, 3)
+        .map((h) => `[${h.number}] ${h.data.join("、")}`)
+        .join("；")}）`,
+      count: hits.length,
+      examples: hits.slice(0, 3).map((h) => `[${h.number}] ${h.data[0] ?? ""}`),
+    },
+  ];
+}
+
 function collectCiteOobFindings(text: string, maxRefIndex?: number): WritingQaFinding[] {
   if (!maxRefIndex || maxRefIndex < 1) return [];
   const oob = collectInvalidCitationNumbers(text, maxRefIndex);
@@ -251,6 +276,7 @@ export function evaluateSectionWritingQa(
     ...collectSectionFindings(text, register),
     ...collectCiteOobFindings(text, input.maxRefIndex),
     ...collectNumberClaimFindings(text, register, input.dataClaims),
+    ...collectSoftPreciseFindings(text, input.softRefs),
     ...collectWritingProfileFindings({
       text,
       sectionKey: input.sectionKey,

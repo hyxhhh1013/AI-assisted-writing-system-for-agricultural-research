@@ -21,6 +21,7 @@ describe("buildAttachmentManifest", () => {
       size: 500, status: "extract_failed", pinned: false, createdAt: "2026-08-02T00:00:00Z",
     }];
     expect(buildAttachmentManifest(info)).toContain("未提取成功");
+    expect(buildAttachmentManifest(info)).toContain("重新上传");
   });
 
   it("marks truncated ready attachments", () => {

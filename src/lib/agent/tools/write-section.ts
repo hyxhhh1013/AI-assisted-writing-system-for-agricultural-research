@@ -58,6 +58,7 @@ import {
   type WriteSpecSource,
 } from "@/lib/agent/spec-write-context";
 import { getAgentModelConfig } from "@/lib/ai";
+import { isSoftGroundable } from "@/lib/reference-evidence";
 import { isSectionValidForMode } from "@/lib/section-registry";
 import type { WritingInput } from "@/lib/validations";
 
@@ -116,6 +117,15 @@ function extraFromBind(bind: BindSectionEvidenceResult | null) {
   return extra ? [extra] : undefined;
 }
 
+function softRefsOf(project: AgentProjectSnapshot): { n: number; abstract: string }[] {
+  const out: { n: number; abstract: string }[] = [];
+  for (const ev of project.referenceEvidence ?? []) {
+    if (!isSoftGroundable(ev.abstract) || !ev.abstract) continue;
+    out.push({ n: ev.index, abstract: ev.abstract });
+  }
+  return out;
+}
+
 function qaWithBind(
   text: string,
   sectionKey: string,
@@ -123,6 +133,7 @@ function qaWithBind(
   maxRefIndex?: number,
   dataClaims?: EvidenceClaim[],
   subsectionTitle?: string,
+  softRefs?: ReadonlyArray<{ n: number; abstract: string }>,
 ) {
   return evaluateSectionWritingQa({
     text,
@@ -132,6 +143,7 @@ function qaWithBind(
     dataClaims,
     spec: bind?.spec ?? null,
     subsectionTitle,
+    softRefs,
   });
 }
 
@@ -321,6 +333,7 @@ export const writeSectionTool: ToolDefinition = {
         maxRefIndex,
         project.dataClaims,
         params.subsectionTitle ? String(params.subsectionTitle) : undefined,
+        softRefsOf(project),
       );
       const patched = applyWritingPatches(resume.draft, qa0.findings, {
         maxRefIndex,
@@ -336,6 +349,7 @@ export const writeSectionTool: ToolDefinition = {
             maxRefIndex,
             project.dataClaims,
             params.subsectionTitle ? String(params.subsectionTitle) : undefined,
+            softRefsOf(project),
           );
       const blocked = !shouldPersistWritingDraft(qaReport);
       let persisted: { sectionKey: string; referencesAdded: number } | null = null;
@@ -546,6 +560,7 @@ export const writeSectionTool: ToolDefinition = {
         dataClaims: project.dataClaims,
         spec: boundSpec,
         subsectionTitle,
+        softRefs: softRefsOf(project),
       });
 
       draftAcc.draft = repaired.draft;

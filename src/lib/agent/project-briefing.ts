@@ -106,7 +106,10 @@ export function formatAgentProjectBriefing(
       sourceCount: 0,
       candidateCount: 0,
     }).brief,
-    `证据声明：${project.dataClaims.length} 条`,
+    `证据声明：${project.dataClaims.length} 条`
+    + (project.dataClaims.length === 0
+      ? "。写 results 前须 ingest 表格：对话框上传 CSV/Excel，或粘贴 csvData。无声明则研究型结果章会被拒绝。"
+      : ""),
     `写作蓝图：${project.hasWritingBlueprint ? "有" : "无"}${
       project.writingBlueprintSummary ? ` — ${project.writingBlueprintSummary}` : ""
     }`,

@@ -203,7 +203,7 @@ export function evidenceUnboundFinding(
   return {
     code: "evidence_unbound",
     layer: "L0",
-    action: "warn",
+    action: "repair",
     message: `${unboundCardIds.length} 张主张未绑到文献（${unboundCardIds.join("、")}），勿硬挂 [n]`,
     count: unboundCardIds.length,
     examples: unboundCardIds.slice(0, 3),

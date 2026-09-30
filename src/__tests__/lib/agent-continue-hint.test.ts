@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AgentUiMessage } from "@/contracts/agent-session";
 import {
   collectTurnContinueSignals,
+  peekSectionKeyFromContinueHint,
   resolveAgentContinueHint,
   sectionKeyFromWriteTip,
 } from "@/lib/agent/continue-hint";
@@ -9,6 +10,20 @@ import {
 describe("sectionKeyFromWriteTip", () => {
   it("maps 研究现状 to background", () => {
     expect(sectionKeyFromWriteTip("写研究现状并保存到当前项目")).toBe("background");
+  });
+});
+
+describe("peekSectionKeyFromContinueHint", () => {
+  it("reads 摘要 from next-write title", () => {
+    expect(
+      peekSectionKeyFromContinueHint({
+        eyebrow: "这一轮已写回",
+        title: "撰写摘要",
+        detail: "",
+        goal: "写摘要并保存到当前项目",
+        cta: "继续推进",
+      }),
+    ).toBe("abstract");
   });
 });
 
@@ -144,5 +159,34 @@ describe("resolveAgentContinueHint", () => {
     const hint = resolveAgentContinueHint({});
     expect(hint.goal).toBe("继续");
     expect(hint.title).toBe("继续推进");
+  });
+
+  it("surfaces write_section qaReport instead of next-section tip", () => {
+    const hint = resolveAgentContinueHint({
+      suggestedActions: ["写综述正文并保存到当前项目"],
+      planSubtasks: [{ title: "写综述正文", status: "pending" }],
+      observations: [
+        {
+          tool: "write_section",
+          success: true,
+          sectionKey: "introduction",
+          qaReport: {
+            verdict: "repair",
+            sectionKey: "introduction",
+            findings: [
+              {
+                code: "throat_clear",
+                layer: "L2",
+                action: "repair",
+                message: "喉清开场",
+              },
+            ],
+          },
+        },
+      ],
+    });
+    expect(hint.eyebrow).toBe("写节质检");
+    expect(hint.detail).toContain("throat_clear");
+    expect(hint.goal).toContain("修补已写的引言");
   });
 });

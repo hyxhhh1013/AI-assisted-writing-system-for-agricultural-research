@@ -38,6 +38,41 @@ describe("ui-transcript", () => {
     ]);
   });
 
+  it("keeps slim write_section qaReport and section key", () => {
+    const t = appendUiFromAgentEvent([], {
+      type: "agent/observation",
+      tool: "write_section",
+      result: {
+        success: true,
+        summary: "已写回",
+        data: {
+          section: "introduction",
+          draft: "x".repeat(200),
+          qaReport: {
+            verdict: "repair",
+            sectionKey: "introduction",
+            findings: [
+              {
+                code: "throat_clear",
+                layer: "L2",
+                action: "repair",
+                message: "喉清开场",
+              },
+            ],
+          },
+        },
+      },
+    });
+    const obs = t[0];
+    expect(obs?.kind).toBe("observation");
+    if (obs?.kind !== "observation") return;
+    expect(obs.sectionKey).toBe("introduction");
+    expect((obs.data as { qaReport?: { findings?: { code: string }[] } })?.qaReport?.findings?.[0]?.code).toBe(
+      "throat_clear",
+    );
+    expect(JSON.stringify(obs.data)).not.toContain("xxxx");
+  });
+
   it("merges multi-session transcripts in order with dividers", () => {
     const merged = mergeSessionTranscripts([
       {

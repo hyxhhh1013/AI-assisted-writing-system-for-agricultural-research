@@ -103,6 +103,55 @@ export function evaluateBibOnlyPreciseData(params: {
   return [...byNumber.values()].sort((a, b) => a.number - b.number);
 }
 
+export interface SoftPreciseMismatch {
+  number: number;
+  data: string[];
+  sentence: string;
+}
+
+function digitKey(sample: string): string {
+  const m = sample.match(/\d+(?:\.\d+)?/);
+  return m ? m[0] : sample.toLowerCase();
+}
+
+/**
+ * soft 文献（有摘要）被引用且句内精确数据未出现在摘要里 → 张冠李戴风险。
+ * 确定性规则；不阻断 persist。
+ */
+export function evaluateSoftPreciseNotInAbstract(params: {
+  draftText: string;
+  softRefs: ReadonlyArray<{ n: number; abstract: string }>;
+}): SoftPreciseMismatch[] {
+  const byN = new Map(params.softRefs.map((r) => [r.n, r.abstract]));
+  if (byN.size === 0) return [];
+  const normalized = normalizeAllCitationFormats(params.draftText);
+  const found = new Map<number, SoftPreciseMismatch>();
+  const re = new RegExp(CITATION_GROUP_RE.source, CITATION_GROUP_RE.flags);
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(normalized)) !== null) {
+    const sentence = extractCitationContext(normalized, m.index);
+    const nums = expandCitationGroup(m[1]);
+    const data = extractPreciseData(sentence);
+    if (data.length === 0) continue;
+    for (const num of nums) {
+      const abstract = byN.get(num);
+      if (!abstract || found.has(num)) continue;
+      const absNorm = abstract.replace(/\s+/g, "");
+      const missing = data.filter((sample) => {
+        const key = digitKey(sample);
+        return key.length > 0 && !absNorm.includes(key);
+      });
+      if (missing.length === 0) continue;
+      found.set(num, {
+        number: num,
+        data: missing.slice(0, 4),
+        sentence: sentence.slice(0, 160),
+      });
+    }
+  }
+  return [...found.values()].sort((a, b) => a.number - b.number);
+}
+
 /** 导出 / validate_citations 共用的软告警文案（不阻断 exportReady） */
 export function formatBibOnlyPreciseWarning(
   findings: readonly BibOnlyPreciseDataFinding[],

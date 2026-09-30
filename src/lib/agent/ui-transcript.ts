@@ -1,5 +1,23 @@
 import type { AgentSSEEvent, AgentSummary } from "@/contracts/agent";
 import type { AgentUiMessage } from "@/contracts/agent-session";
+import { slimWritingQaForUi } from "@/contracts/writing-qa";
+
+export function sectionKeyFromToolData(data: unknown): string | undefined {
+  if (!data || typeof data !== "object") return undefined;
+  const dataObj = data as Record<string, unknown>;
+  if (typeof dataObj.section === "string" && dataObj.section.trim()) {
+    return dataObj.section;
+  }
+  if (typeof dataObj.insertedSection === "string") return dataObj.insertedSection;
+  if (
+    dataObj.persisted
+    && typeof dataObj.persisted === "object"
+    && typeof (dataObj.persisted as { sectionKey?: unknown }).sectionKey === "string"
+  ) {
+    return String((dataObj.persisted as { sectionKey: string }).sectionKey);
+  }
+  return undefined;
+}
 
 /** 从 SSE 事件增量拼 UI 对话气泡 */
 export function appendUiFromAgentEvent(
@@ -34,14 +52,7 @@ export function appendUiFromAgentEvent(
         const sep = rawHref.includes("?") ? "&" : "?";
         plotHref = `${rawHref}${sep}replaceImageUrl=${encodeURIComponent(imageUrl)}`;
       }
-      const sectionKey =
-        dataObj && typeof dataObj.insertedSection === "string"
-          ? dataObj.insertedSection
-          : dataObj?.persisted
-            && typeof dataObj.persisted === "object"
-            && typeof (dataObj.persisted as { sectionKey?: unknown }).sectionKey === "string"
-            ? String((dataObj.persisted as { sectionKey: string }).sectionKey)
-            : undefined;
+      const sectionKey = sectionKeyFromToolData(data);
       const insertMode =
         dataObj && typeof dataObj.insertMode === "string"
           ? dataObj.insertMode
@@ -57,6 +68,14 @@ export function appendUiFromAgentEvent(
         && typeof (dataObj.persisted as { id?: unknown }).id === "string"
           ? String((dataObj.persisted as { id: string }).id)
           : undefined;
+      const qaReport = event.tool === "write_section"
+        ? slimWritingQaForUi(dataObj?.qaReport)
+        : null;
+      const extraData: Record<string, unknown> = {
+        ...(figureSpecEnc ? { figureSpecEnc } : {}),
+        ...(chartAssetId ? { persisted: { id: chartAssetId } } : {}),
+        ...(qaReport ? { qaReport } : {}),
+      };
       return [
         ...transcript,
         {
@@ -69,14 +88,7 @@ export function appendUiFromAgentEvent(
           ...(imageUrl ? { replaceImageUrl: imageUrl } : {}),
           ...(sectionKey ? { sectionKey } : {}),
           ...(insertMode ? { insertMode } : {}),
-          ...((figureSpecEnc || chartAssetId)
-            ? {
-                data: {
-                  ...(figureSpecEnc ? { figureSpecEnc } : {}),
-                  ...(chartAssetId ? { persisted: { id: chartAssetId } } : {}),
-                },
-              }
-            : {}),
+          ...(Object.keys(extraData).length > 0 ? { data: extraData } : {}),
         },
       ];
     }

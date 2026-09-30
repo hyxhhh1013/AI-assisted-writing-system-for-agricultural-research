@@ -18,7 +18,8 @@ import {
   type AgentProjectMutatedInfo,
 } from "@/lib/agent/project-mutated";
 import { extractSectionPersisted, type AgentSectionPersistedInfo } from "@/lib/agent/section-persisted";
-import { mergeSessionTranscripts } from "@/lib/agent/ui-transcript";
+import { mergeSessionTranscripts, sectionKeyFromToolData } from "@/lib/agent/ui-transcript";
+import { slimWritingQaForUi } from "@/contracts/writing-qa";
 import {
   initWriteStatus,
   mergeProgressIntoWriteStatus,
@@ -319,24 +320,25 @@ export function useAgent(options: UseAgentOptions = {}) {
           const sep = rawPlotHref.includes("?") ? "&" : "?";
           plotHref = `${rawPlotHref}${sep}replaceImageUrl=${encodeURIComponent(imageUrl)}`;
         }
-        const sectionKey =
-          dataObj && typeof dataObj.insertedSection === "string"
-            ? dataObj.insertedSection
-            : dataObj?.persisted
-              && typeof dataObj.persisted === "object"
-              && typeof (dataObj.persisted as { sectionKey?: unknown }).sectionKey === "string"
-              ? String((dataObj.persisted as { sectionKey: string }).sectionKey)
-              : undefined;
+        const sectionKey = sectionKeyFromToolData(data);
         const insertMode =
           dataObj && typeof dataObj.insertMode === "string"
             ? dataObj.insertMode
             : undefined;
-        const keepData =
+        const keepChartData =
           data != null
           && (event.tool === "validate_citations"
             || event.tool === "draft_mechanism_figure"
             || event.tool === "generate_chart"
             || event.tool === "generate_xrd_analysis");
+        const qaSlim = event.tool === "write_section"
+          ? slimWritingQaForUi(dataObj?.qaReport)
+          : null;
+        const storedData = qaSlim
+          ? { qaReport: qaSlim }
+          : keepChartData
+            ? data
+            : undefined;
         setMessages((prev) => [
           ...prev,
           {
@@ -349,7 +351,7 @@ export function useAgent(options: UseAgentOptions = {}) {
             ...(replaceImageUrl ? { replaceImageUrl } : {}),
             ...(sectionKey ? { sectionKey } : {}),
             ...(insertMode ? { insertMode } : {}),
-            ...(keepData ? { data } : {}),
+            ...(storedData != null ? { data: storedData } : {}),
           },
         ]);
         if (event.tool === "import_reference") setImportProgress(null);

@@ -31,6 +31,7 @@ export interface RepairSectionDraftInput {
   dataClaims?: EvidenceClaim[];
   spec?: SectionSpecV1 | null;
   subsectionTitle?: string;
+  softRefs?: ReadonlyArray<{ n: number; abstract: string }>;
 }
 
 export interface RepairSectionDraftResult {
@@ -48,6 +49,7 @@ function runQa(
   dataClaims?: EvidenceClaim[],
   spec?: SectionSpecV1 | null,
   subsectionTitle?: string,
+  softRefs?: ReadonlyArray<{ n: number; abstract: string }>,
 ): WritingQaReport {
   return evaluateSectionWritingQa({
     text,
@@ -57,6 +59,7 @@ function runQa(
     dataClaims,
     spec,
     subsectionTitle,
+    softRefs,
   });
 }
 
@@ -68,7 +71,8 @@ export async function repairSectionDraft(
   const claims = input.dataClaims;
   const spec = input.spec;
   const sub = input.subsectionTitle;
-  const first = runQa(input.draft, input.sectionKey, extra, maxRefIndex, claims, spec, sub);
+  const softRefs = input.softRefs;
+  const first = runQa(input.draft, input.sectionKey, extra, maxRefIndex, claims, spec, sub, softRefs);
   const applied = applyWritingPatches(input.draft, first.findings, {
     maxRefIndex,
     sectionKey: input.sectionKey,
@@ -76,7 +80,7 @@ export async function repairSectionDraft(
   let draft = applied.draft;
   let qaReport = draft === input.draft
     ? first
-    : runQa(draft, input.sectionKey, extra, maxRefIndex, claims, spec, sub);
+    : runQa(draft, input.sectionKey, extra, maxRefIndex, claims, spec, sub, softRefs);
 
   let refined = false;
   if (input.allowRefine !== false && hasWritingRefineCandidate(qaReport.findings)) {
@@ -92,7 +96,7 @@ export async function repairSectionDraft(
       });
       if (out.draft.trim().length >= 10) {
         draft = out.draft;
-        qaReport = runQa(draft, input.sectionKey, extra, maxRefIndex, claims, spec, sub);
+        qaReport = runQa(draft, input.sectionKey, extra, maxRefIndex, claims, spec, sub, softRefs);
         refined = true;
       }
     } catch {

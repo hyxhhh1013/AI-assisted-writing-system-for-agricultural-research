@@ -116,6 +116,30 @@ export function summarizeWritingQa(report: WritingQaReport): {
   };
 }
 
+/** 续跑条 / 收口看板只认会改稿的 findings（block + repair） */
+export function writingQaActionableFindings(
+  report: WritingQaReport | null | undefined,
+): WritingQaFinding[] {
+  if (!report) return [];
+  return report.findings.filter((f) => f.action === "block" || f.action === "repair");
+}
+
+const SECTION_KEY_IN_MESSAGE = /^\[([a-z][a-z0-9_]*)\]\s/;
+
+/** 收口文风灯跳转：finding 前缀或 report.sectionKey */
+export function proseFocusSectionKey(report: WritingQaReport | null | undefined): string | undefined {
+  if (!report) return undefined;
+  const ordered = [
+    ...writingQaActionableFindings(report),
+    ...report.findings,
+  ];
+  for (const f of ordered) {
+    const m = SECTION_KEY_IN_MESSAGE.exec(f.message);
+    if (m) return m[1];
+  }
+  return report.sectionKey;
+}
+
 /** 对用户展示的中文标签（不参与门禁） */
 export function writingQaVerdictLabel(verdict: WritingQaVerdict): string {
   if (verdict === "block") return "不可写回";
@@ -197,5 +221,26 @@ export function parseWritingQaReport(raw: unknown): WritingQaReport | null {
     findings,
     sectionKey: typeof raw.sectionKey === "string" ? raw.sectionKey : undefined,
     charCount: typeof raw.charCount === "number" ? raw.charCount : undefined,
+  };
+}
+
+/** 写节 observation 落盘：只留人能看的质检，避免塞进整节 draft */
+export function slimWritingQaForUi(raw: unknown): WritingQaReport | null {
+  const parsed = parseWritingQaReport(raw);
+  if (!parsed) return null;
+  const actionable = writingQaActionableFindings(parsed);
+  const source = actionable.length > 0 ? actionable : parsed.findings;
+  return {
+    verdict: parsed.verdict,
+    sectionKey: parsed.sectionKey,
+    charCount: parsed.charCount,
+    findings: source.slice(0, 4).map((f) => ({
+      code: f.code,
+      layer: f.layer,
+      action: f.action,
+      message: f.message.slice(0, 160),
+      ...(f.count != null ? { count: f.count } : {}),
+      ...(f.examples?.length ? { examples: f.examples.slice(0, 2) } : {}),
+    })),
   };
 }

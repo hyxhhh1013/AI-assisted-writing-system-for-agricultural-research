@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   evaluateBibOnlyPreciseData,
+  evaluateSoftPreciseNotInAbstract,
   extractPreciseData,
   formatBibOnlyPreciseWarning,
 } from "@/lib/agent/precise-data-grounding";
@@ -75,5 +76,26 @@ describe("formatBibOnlyPreciseWarning", () => {
     expect(text).toMatch(/\[3\]/);
     expect(text).toMatch(/40%/);
     expect(text).toMatch(/不阻断导出/);
+  });
+});
+
+describe("evaluateSoftPreciseNotInAbstract", () => {
+  it("flags precise data missing from the soft abstract", () => {
+    const hits = evaluateSoftPreciseNotInAbstract({
+      draftText: "炭化温度升高使产率降至 42.5%[1]。",
+      softRefs: [
+        { n: 1, abstract: "Biochar generally improves soil aggregation under field conditions." },
+      ],
+    });
+    expect(hits).toHaveLength(1);
+    expect(hits[0]?.data.join(" ")).toContain("42.5");
+  });
+
+  it("skips when the abstract already contains the number", () => {
+    const hits = evaluateSoftPreciseNotInAbstract({
+      draftText: "炭化温度升高使产率降至 42.5%[1]。",
+      softRefs: [{ n: 1, abstract: "Yield decreased to 42.5% at higher pyrolysis temperature." }],
+    });
+    expect(hits).toEqual([]);
   });
 });

@@ -201,8 +201,13 @@ export function formatWritingRefineFeedback(findings: readonly WritingQaFinding[
   ].join("\n");
 }
 
+const SKIP_REFINE_CODES = new Set([
+  "blueprint_claim_uncovered",
+  "evidence_unbound",
+]);
+
 export function hasWritingRefineCandidate(findings: readonly WritingQaFinding[]): boolean {
-  return findings.some((f) => f.action === "repair");
+  return findings.some((f) => f.action === "repair" && !SKIP_REFINE_CODES.has(f.code));
 }
 
 export function excerptFinding(text: string, finding: WritingQaFinding): string {

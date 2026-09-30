@@ -92,5 +92,11 @@ describe("formatWritingRefineFeedback", () => {
       action: "repair",
       message: "x",
     }])).toBe(true);
+    expect(hasWritingRefineCandidate([{
+      code: "blueprint_claim_uncovered",
+      layer: "L4",
+      action: "repair",
+      message: "x",
+    }])).toBe(false);
   });
 });

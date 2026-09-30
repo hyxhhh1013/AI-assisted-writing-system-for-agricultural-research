@@ -83,10 +83,10 @@ export function collectWritingProfileFindings(
       findings.push({
         code: "blueprint_claim_uncovered",
         layer: "L4",
-        action: "warn",
+        action: "repair",
         message: `${missed.length} 张主张在正文中对齐偏弱（${missed.map((c) => c.id).join("、")}）`,
         count: missed.length,
-        examples: missed.slice(0, 3).map((c) => c.id),
+        examples: missed.slice(0, 3).map((c) => `${c.id} ${c.claim.slice(0, 48)}`),
       });
     }
   }

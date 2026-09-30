@@ -1,4 +1,9 @@
 import type { AgentUiMessage } from "@/contracts/agent-session";
+import type { WritingQaReport } from "@/contracts/writing-qa";
+import {
+  parseWritingQaReport,
+  writingQaActionableFindings,
+} from "@/contracts/writing-qa";
 import {
   isPlanLeftoverSpeech,
   thoughtAnnouncesUnfinishedTool,
@@ -16,7 +21,19 @@ export interface ContinueHintObservation {
   tool: string;
   success: boolean;
   sectionKey?: string;
+  qaReport?: WritingQaReport;
 }
+
+const SECTION_LABEL: Record<string, string> = {
+  abstract: "摘要",
+  introduction: "引言",
+  background: "研究现状",
+  literature_body: "综述正文",
+  methods: "方法",
+  results: "结果",
+  discussion: "讨论",
+  conclusion: "结论",
+};
 
 const LABEL_TO_SECTION: Record<string, string> = {
   摘要: "abstract",
@@ -64,6 +81,42 @@ function firstWriteTip(
   );
 }
 
+export function peekSectionKeyFromContinueHint(hint: AgentContinueHint): string | null {
+  return sectionKeyFromWriteTip(hint.goal) ?? sectionKeyFromPlanTitle(hint.title);
+}
+
+export function formatWriteQaContinueHint(report: WritingQaReport, sectionKey?: string): AgentContinueHint {
+  const items = writingQaActionableFindings(report);
+  const first = items[0] ?? report.findings[0];
+  const label = (sectionKey && SECTION_LABEL[sectionKey]) || "本节";
+  const blocked = report.verdict === "block";
+  const codes = items.slice(0, 3).map((f) => f.code).join("、");
+  const title = first?.message?.replace(/^\[[a-z][a-z0-9_]*\]\s/, "") || "写节质检待处理";
+  const detail = codes
+    ? `${blocked ? "未写入章节" : "已写回，先看质检"}：${codes}`
+    : blocked
+      ? "质检未过线，正文未写入章节"
+      : "已写回，可按质检改一刀";
+  return {
+    eyebrow: blocked ? "这一轮未写回" : "写节质检",
+    title: title.slice(0, 48),
+    detail,
+    goal: `修补已写的${label}（${first?.code ?? "质检"}）：${title.slice(0, 80)}`,
+    cta: "继续推进",
+  };
+}
+
+function lastWriteQaObservation(
+  observations: readonly ContinueHintObservation[] | undefined,
+): ContinueHintObservation | null {
+  const list = observations ?? [];
+  for (let i = list.length - 1; i >= 0; i--) {
+    const o = list[i];
+    if (o.tool === "write_section" && o.qaReport) return o;
+  }
+  return null;
+}
+
 function shortWriteTitle(action: string): string {
   const m = action.trim().match(/^写([^并（(]+)/);
   return m ? `撰写${m[1].trim()}` : action.trim().slice(0, 20);
@@ -109,10 +162,18 @@ export function collectTurnContinueSignals(messages: readonly AgentUiMessage[]):
     if (m.kind === "summary") lastSummaryText = m.summary.text;
     if (m.kind !== "observation") continue;
     const success = !m.error;
+    const qaReport = m.tool === "write_section"
+      ? parseWritingQaReport(
+          m.data && typeof m.data === "object"
+            ? (m.data as { qaReport?: unknown }).qaReport
+            : undefined,
+        ) ?? undefined
+      : undefined;
     observations.push({
       tool: m.tool,
       success,
       ...(m.sectionKey ? { sectionKey: m.sectionKey } : {}),
+      ...(qaReport ? { qaReport } : {}),
     });
     if (success && m.tool === "write_section" && m.sectionKey) {
       writtenSectionKeys.push(m.sectionKey);
@@ -148,6 +209,15 @@ export function resolveAgentContinueHint(input: {
     : thoughtAnnouncesUnfinishedTool(blob, input.observations ?? []);
   const writeTip = firstWriteTip(input.suggestedActions, skipKeys);
   const planTitle = firstOpenPlanTitle(input.planSubtasks, skipKeys);
+  const writeQa = lastWriteQaObservation(input.observations);
+  const qaActionable = writeQa?.qaReport
+    ? writingQaActionableFindings(writeQa.qaReport).length > 0
+      || writeQa.qaReport.verdict === "block"
+    : false;
+
+  if (qaActionable && writeQa?.qaReport) {
+    return formatWriteQaContinueHint(writeQa.qaReport, writeQa.sectionKey);
+  }
 
   if (planTitle) {
     return {

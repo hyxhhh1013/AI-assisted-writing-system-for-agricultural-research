@@ -18,6 +18,7 @@ export interface WriteQaGolden {
   dataClaims?: EvidenceClaim[];
   spec?: SectionSpecV1;
   maxRefIndex?: number;
+  softRefs?: ReadonlyArray<{ n: number; abstract: string }>;
 }
 
 const SOC_CLAIM: EvidenceClaim = {
@@ -51,6 +52,33 @@ const DISCUSSION_PASS =
 const REVIEW_PASS =
   "已有田间试验表明生物炭可提高土壤有机碳并改善团聚体[1]。不同热解温度下产率与孔隙差异明显[2]。"
   + "各研究在原料与保温时间上并不一致，转述时需对照试验条件。";
+
+const REVIEW_SPEC: SectionSpecV1 = {
+  version: 1,
+  sectionKey: "literature_body",
+  subsectionTitle: "生物炭与有机碳",
+  register: "review_body",
+  claimCards: [
+    {
+      id: "C1",
+      claim: "生物炭可提高土壤有机碳并改善团聚体",
+      evidence: [{ kind: "ref", n: 1, grounded: "soft" }],
+    },
+    {
+      id: "C2",
+      claim: "不同热解温度下产率与孔隙差异明显",
+      evidence: [{ kind: "ref", n: 2, grounded: "soft" }],
+    },
+    {
+      id: "C3",
+      claim: "原料与保温时间在各研究间并不一致",
+      evidence: [{ kind: "ref", n: 2, grounded: "soft" }],
+    },
+  ],
+  constraints: { minChars: 80, maxChars: 4000 },
+  assignedSourceIds: [],
+  figureSlots: [],
+};
 
 export const WRITE_QA_GOLDENS: WriteQaGolden[] = [
   {
@@ -117,8 +145,9 @@ export const WRITE_QA_GOLDENS: WriteQaGolden[] = [
     sectionKey: "literature_body",
     subsectionTitle: "生物炭与有机碳",
     expect: "pass",
-    forbidCodes: ["review_as_experiment"],
+    forbidCodes: ["review_as_experiment", "blueprint_claim_uncovered"],
     text: REVIEW_PASS,
+    spec: REVIEW_SPEC,
   },
   {
     id: "literature_body/fail",
@@ -127,6 +156,31 @@ export const WRITE_QA_GOLDENS: WriteQaGolden[] = [
     expect: "repair",
     expectCodes: ["review_as_experiment"],
     text: "本研究田间试验表明处理组产量显著高于对照。小区设置三个重复，测定土壤有机碳。",
+  },
+  {
+    id: "literature_body/claim-miss",
+    sectionKey: "literature_body",
+    subsectionTitle: "生物炭与有机碳",
+    expect: "repair",
+    expectCodes: ["blueprint_claim_uncovered"],
+    spec: REVIEW_SPEC,
+    text:
+      "已有田间试验表明生物炭可提高土壤有机碳并改善团聚体[1]。转述时需对照试验条件。",
+  },
+  {
+    id: "literature_body/soft-precise",
+    sectionKey: "literature_body",
+    subsectionTitle: "生物炭与有机碳",
+    expect: "repair",
+    expectCodes: ["cite_semantic_mismatch"],
+    text: "炭化使产率降至 42.5%[1]。各研究在原料与保温时间上并不一致。",
+    softRefs: [
+      {
+        n: 1,
+        abstract:
+          "Biochar generally improves soil aggregation and organic carbon stocks under field conditions without reporting pyrolysis yield percentages.",
+      },
+    ],
   },
 ];
 
@@ -144,6 +198,7 @@ export function runWriteQaGolden(g: WriteQaGolden): WriteQaGoldenRun {
     dataClaims: g.dataClaims,
     spec: g.spec,
     maxRefIndex: g.maxRefIndex,
+    softRefs: g.softRefs,
   });
   const codes = report.findings.map((f) => f.code);
   const missing = (g.expectCodes ?? []).filter((c) => !codes.includes(c));

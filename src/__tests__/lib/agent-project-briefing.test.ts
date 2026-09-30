@@ -44,7 +44,8 @@ describe("agent project briefing", () => {
     expect(text).toContain("literature_body");
     expect(text).toContain("分节完整度");
     expect(text).toContain("大纲全文");
-    expect(text).toContain("数据根基");
+    expect(text).toContain("证据声明：0 条");
+    expect(text).toContain("ingest");
     expect(text).toContain("实验室范围");
     expect(text).toContain("热化学");
     expect(text).toContain("烟草");

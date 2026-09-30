@@ -129,6 +129,14 @@ export const inspectProjectTool: ToolDefinition = {
     });
     const suggestedGoal = nextTips[0] ?? pack.goal;
     const nextNote = suggestedGoal;
+    const claimSamples = project.dataClaims.slice(0, 3).map((c) => ({
+      id: c.id,
+      text: c.text.slice(0, 80),
+    }));
+    const foundationNote =
+      claimCount === 0
+        ? "结果章无 dataClaims。请上传/粘贴 CSV 或 Excel 后 ingest_project_data；研究型勿直接写 results。"
+        : `声明样例：${claimSamples.map((c) => `${c.id} ${c.text}`).join("；")}`;
 
     return {
       success: true,
@@ -144,6 +152,7 @@ export const inspectProjectTool: ToolDefinition = {
         hasArgumentBlueprint: project.hasArgumentBlueprint,
         referenceCount: project.references.length,
         claimCount,
+        claimSamples,
         plotCandidates,
         existingCharts,
         dataFoundation,
@@ -172,7 +181,7 @@ export const inspectProjectTool: ToolDefinition = {
         skillHint: `academic-paper Phase ${pack.pack.phase}（${pack.pack.title}）→ 推荐 ${pack.pack.preferredTools.join(" → ") || "对话确认配置"}`,
         ...(includeBriefing ? { briefing } : {}),
       },
-      summary: `项目「${project.title}」阶段 ${project.currentPhase ?? "?"}（${pack.pack.title}）；空白节 ${empty.length}；文献 ${project.references.length}；${dataFoundation.brief}；可配图 ${plotCandidates}${coverNote}${susNote}${softNote}。${nextNote}`,
+      summary: `项目「${project.title}」阶段 ${project.currentPhase ?? "?"}（${pack.pack.title}）；空白节 ${empty.length}；文献 ${project.references.length}；${dataFoundation.brief}；${foundationNote}；可配图 ${plotCandidates}${coverNote}${susNote}${softNote}。${nextNote}`,
     };
   },
 };

@@ -121,7 +121,20 @@ export const ingestProjectDataTool: ToolDefinition = {
       };
     }
 
-    const { analysis: rawAnalysis, claims } = await analyzeFile(input, fileName);
+    let rawAnalysis;
+    let claims;
+    try {
+      const parsed = await analyzeFile(input, fileName);
+      rawAnalysis = parsed.analysis;
+      claims = parsed.claims;
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "解析失败";
+      return {
+        success: false,
+        error:
+          `「${fileName}」未能解析（${detail}）。请检查表头与至少一行数据，重新上传，或粘贴 CSV 后再入库。`,
+      };
+    }
     const analysis = await enrichAnalysisWithPeakTable(rawAnalysis, input, fileName);
     if (analysis.rowCount <= 0) {
       return {
