@@ -17,7 +17,8 @@ export type WritingStage =
   | "refining"
   | "completed"
   | "error"
-  | "importing";
+  | "importing"
+  | "searching";
 
 export interface AgentSubTask {
   id: string;

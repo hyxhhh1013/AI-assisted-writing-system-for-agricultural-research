@@ -38,6 +38,12 @@ export const searchKnowledgeTool: ToolDefinition = {
 
     const limit = Math.min(Math.max(Number(params.limit) || 12, 1), 20);
     const category = params.category ? String(params.category).trim() : undefined;
+    _ctx.emitLiveEvent?.({
+      type: "agent/progress",
+      label: category ? `正在检索知识库「${category}」…` : "正在检索本地知识库…",
+      stage: "searching",
+      detail: query.slice(0, 80),
+    });
 
     let chunks = await localRAG.search(query, {
       limit,

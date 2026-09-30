@@ -341,6 +341,8 @@ export type ExternalSearchOptions = {
    * full：四源；fast：先 OpenAlex+S2，不够再补 CrossRef/PubMed（默认，Agent/UI 更快）
    */
   mode?: "fast" | "full";
+  /** 外部检索分波进度（Agent SSE / 工作台检索条） */
+  onProgress?: (label: string) => void;
 };
 
 const EMPTY_SOURCE_COUNTS: Record<string, number> = {
@@ -444,6 +446,7 @@ async function searchKeywordLiterature(
   query: string,
   limit: number,
   mode: "fast" | "full",
+  onProgress?: (label: string) => void,
 ): Promise<{
   hits: ExternalLiteratureHit[];
   variants: string[];
@@ -453,6 +456,7 @@ async function searchKeywordLiterature(
   const perSource = Math.max(5, Math.ceil(limit / Math.max(1, variants.length)));
 
   if (mode === "full") {
+    onProgress?.("正在并行检索 OpenAlex / Semantic Scholar / CrossRef / PubMed…");
     const wave = await searchVariantsOnSources(variants, perSource, [
       "openalex",
       "semantic-scholar",
@@ -467,6 +471,7 @@ async function searchKeywordLiterature(
   }
 
   // fast：先主源（变体全部并行），不够再补次源
+  onProgress?.("正在检索 OpenAlex 与 Semantic Scholar…");
   const primary = await searchVariantsOnSources(variants, perSource, [
     "openalex",
     "semantic-scholar",
@@ -475,6 +480,7 @@ async function searchKeywordLiterature(
   const sourceCounts = { ...primary.sourceCounts };
 
   if (merged.length < limit) {
+    onProgress?.(`已命中 ${merged.length} 篇，正在补 CrossRef / PubMed…`);
     const secondary = await searchVariantsOnSources(variants, perSource, [
       "crossref",
       "pubmed",
@@ -484,6 +490,7 @@ async function searchKeywordLiterature(
     merged = mergeHits([...primary.hits, ...secondary.hits]);
   }
 
+  onProgress?.(`检索完成，整理 ${Math.min(merged.length, limit)} 篇…`);
   return {
     hits: merged.slice(0, limit),
     variants,
@@ -545,6 +552,7 @@ export async function searchExternalLiteratureWithStats(
 
   const doi = parseDoiFromQuery(query);
   if (doi) {
+    options?.onProgress?.("正在按 DOI 解析文献…");
     const hits = await resolveDoiHits(doi, limit);
     return {
       hits,
@@ -557,7 +565,7 @@ export async function searchExternalLiteratureWithStats(
     };
   }
 
-  return searchKeywordLiterature(query, limit, mode);
+  return searchKeywordLiterature(query, limit, mode, options?.onProgress);
 }
 
 /**

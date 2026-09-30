@@ -75,6 +75,11 @@ export function useAgent(options: UseAgentOptions = {}) {
     title: string;
     label: string;
   } | null>(null);
+  /** search_external / search_knowledge 分波进度 */
+  const [searchProgress, setSearchProgress] = useState<{
+    label: string;
+    detail: string;
+  } | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   /** SSE 请求仍在飞：不能只靠 status，思考/导入可能几十秒没有新事件 */
@@ -166,6 +171,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     setInFlight(false);
     setWriteStatus(null);
     setImportProgress(null);
+    setSearchProgress(null);
     setPlan(null);
     setSummary(null);
     setPendingConfirm(null);
@@ -190,6 +196,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     setStreamingText("");
     setWriteStatus(null);
     setImportProgress(null);
+    setSearchProgress(null);
     setPlan(null);
     setSummary(null);
     setPendingConfirm(null);
@@ -211,6 +218,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     setLastPersisted(null);
     setWriteStatus(null);
     setImportProgress(null);
+    setSearchProgress(null);
     setSessionId(null);
     setHistoryLoaded(true);
     setMessages((prev) => {
@@ -228,6 +236,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     setStreamingText("");
     setWriteStatus(null);
     setImportProgress(null);
+    setSearchProgress(null);
     setInFlight(false);
     setStatus("cancelled");
     void refreshInterrupted();
@@ -299,6 +308,13 @@ export function useAgent(options: UseAgentOptions = {}) {
           });
           break;
         }
+        if (event.stage === "searching") {
+          setSearchProgress({
+            label: event.label,
+            detail: event.detail ?? "",
+          });
+          break;
+        }
         setWriteStatus((prev) => (prev ? mergeProgressIntoWriteStatus(prev, event) : prev));
         break;
       case "agent/observation": {
@@ -355,6 +371,9 @@ export function useAgent(options: UseAgentOptions = {}) {
           },
         ]);
         if (event.tool === "import_reference") setImportProgress(null);
+        if (event.tool === "search_external" || event.tool === "search_knowledge") {
+          setSearchProgress(null);
+        }
         if (event.tool === "write_section") {
           setWriteStatus((prev) => {
             if (!prev) return prev;
@@ -408,6 +427,7 @@ export function useAgent(options: UseAgentOptions = {}) {
         setStreamingText("");
         setWriteStatus(null);
         setImportProgress(null);
+        setSearchProgress(null);
         setSummary(event.summary);
         setMessages((prev) => [...prev, { kind: "summary", summary: event.summary }]);
         setPendingCheckpoint(null);
@@ -419,6 +439,7 @@ export function useAgent(options: UseAgentOptions = {}) {
         setStreamingText("");
         setWriteStatus(null);
         setImportProgress(null);
+        setSearchProgress(null);
         setPendingCheckpoint(null);
         setPendingConfirm(null);
         toast.error(event.error);
@@ -450,6 +471,7 @@ export function useAgent(options: UseAgentOptions = {}) {
       setPendingCheckpoint(null);
       setWriteStatus(null);
       setImportProgress(null);
+      setSearchProgress(null);
       setStatus("planning");
 
       try {
@@ -510,6 +532,7 @@ export function useAgent(options: UseAgentOptions = {}) {
         toast.error(message);
         setWriteStatus(null);
         setImportProgress(null);
+        setSearchProgress(null);
         setStatus("error");
       } finally {
         if (abortRef.current === controller) {
@@ -629,6 +652,7 @@ export function useAgent(options: UseAgentOptions = {}) {
     streamingText,
     writeStatus,
     importProgress,
+    searchProgress,
     plan,
     summary,
     pendingConfirm,

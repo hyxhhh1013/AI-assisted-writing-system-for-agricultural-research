@@ -41,6 +41,8 @@ function makeAgent(over: Record<string, unknown> = {}): Record<string, unknown> 
     messages: [pendingAction],
     streamingText: "",
     writeStatus: null,
+    importProgress: null,
+    searchProgress: null,
     plan: null,
     pendingCheckpoint: null,
     pendingConfirm: null,

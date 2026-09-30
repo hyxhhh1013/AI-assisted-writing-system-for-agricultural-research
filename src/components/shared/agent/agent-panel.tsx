@@ -29,6 +29,7 @@ import {
   INSPECT_GOAL,
   resolveAgentContinueHint,
   sectionKeyFromWriteTip,
+  skipSectionKeysAfterWrite,
 } from "@/lib/agent/continue-hint";
 import { AgentConfigQa } from "@/components/shared/agent/agent-config-qa";
 import { AgentOutlineReview } from "@/components/shared/agent/agent-outline-review";
@@ -42,6 +43,7 @@ import { WritingStatusCard } from "@/components/shared/agent/writing-status-card
 import { isWriteStatusLive } from "@/lib/agent/write-status";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getProject, patchPaperPassportConfig } from "@/services/project";
+import { projectStore } from "@/lib/store";
 import type { ProjectData } from "@/contracts/project";
 import { parsePaperPassport, type PaperConfigRecord } from "@/contracts/paper-passport";
 import { formatConfigQaSummary, hasCompletePaperConfig } from "@/lib/agent/config-qa";
@@ -151,6 +153,7 @@ export function AgentPanel({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [project, setProject] = useState<ProjectData | null>(null);
   const [quickPrompts, setQuickPrompts] = useState<string[]>([]);
+  const [thinOrGapSections, setThinOrGapSections] = useState<string[]>([]);
   const [phasePack, setPhasePack] = useState<PhaseTaskPack | null>(null);
   const [phaseGoal, setPhaseGoal] = useState<string | null>(null);
   const [hitlPageOpen, setHitlPageOpen] = useState(false);
@@ -237,6 +240,11 @@ export function AgentPanel({
       language: snapshot.language,
       sectionChars: sectionCharsFromFills(sectionFills),
     });
+    const thinOrGap = [
+      ...coverage.requiredGaps,
+      ...coverage.thinKeys,
+    ];
+    setThinOrGapSections(thinOrGap);
     setQuickPrompts(
       [
         INSPECT_GOAL,
@@ -247,10 +255,7 @@ export function AgentPanel({
           hasWritingBlueprint: Boolean(p.writingBlueprint?.trim()),
           emptySections,
           nextSectionKey: coverage.nextSectionKey,
-          thinOrGapSections: [
-            ...coverage.requiredGaps,
-            ...coverage.thinKeys,
-          ],
+          thinOrGapSections: thinOrGap,
         }),
       ]
         .filter((x, i, arr) => arr.indexOf(x) === i)
@@ -283,10 +288,13 @@ export function AgentPanel({
       return null;
     }
     const turn = collectTurnContinueSignals(agent.messages);
-    const skip = [
-      ...turn.writtenSectionKeys,
-      agent.lastPersisted?.sectionKey,
-    ].filter((k): k is string => Boolean(k));
+    const skip = skipSectionKeysAfterWrite(
+      [
+        ...turn.writtenSectionKeys,
+        agent.lastPersisted?.sectionKey,
+      ].filter((k): k is string => Boolean(k)),
+      thinOrGapSections,
+    );
     return resolveAgentContinueHint({
       lastAssistantText: turn.lastAssistantText,
       lastSummaryText: turn.lastSummaryText,
@@ -294,6 +302,7 @@ export function AgentPanel({
       planSubtasks: agent.plan?.subtasks,
       suggestedActions: quickPrompts,
       skipSectionKeys: skip,
+      thinOrGapSections,
     });
   }, [
     projectId,
@@ -305,16 +314,24 @@ export function AgentPanel({
     agent.plan?.subtasks,
     agent.lastPersisted,
     quickPrompts,
+    thinOrGapSections,
   ]);
 
   const inputPrompts = useMemo(() => {
-    const skip = new Set(collectTurnContinueSignals(agent.messages).writtenSectionKeys);
-    if (agent.lastPersisted?.sectionKey) skip.add(agent.lastPersisted.sectionKey);
+    const skip = new Set(
+      skipSectionKeysAfterWrite(
+        [
+          ...collectTurnContinueSignals(agent.messages).writtenSectionKeys,
+          agent.lastPersisted?.sectionKey,
+        ].filter((k): k is string => Boolean(k)),
+        thinOrGapSections,
+      ),
+    );
     return quickPrompts.filter((p) => {
       const key = sectionKeyFromWriteTip(p);
       return !key || !skip.has(key);
     });
-  }, [quickPrompts, agent.messages, agent.lastPersisted]);
+  }, [quickPrompts, agent.messages, agent.lastPersisted, thinOrGapSections]);
 
   const lastFailure = resolveAgentLastFailure({
     status: agent.status,
@@ -335,6 +352,7 @@ export function AgentPanel({
           emptySections: [],
         }),
       );
+      setThinOrGapSections([]);
       return;
     }
     // 运行中不反复拉项目，减少与 SSE 抢主线程/带宽
@@ -386,6 +404,25 @@ export function AgentPanel({
       applyProjectSnapshot,
       onProjectMutated,
     ],
+  );
+
+  const persistOutlineMarkdown = useCallback(
+    async (markdown: string) => {
+      if (!projectId) throw new Error("缺少项目");
+      const current = project ?? (await getProject(projectId));
+      if (!current) throw new Error("项目还没加载完，请稍后再保存");
+      const next = { ...current, outline: markdown };
+      const id = await projectStore.save(next);
+      if (!id) throw new Error("大纲保存失败");
+      applyProjectSnapshot(next);
+      onProjectMutated?.({
+        tool: "generate_outline",
+        label: "大纲",
+        at: Date.now(),
+      });
+      toast.success("大纲已保存");
+    },
+    [projectId, project, applyProjectSnapshot, onProjectMutated],
   );
 
   useEffect(() => {
@@ -486,6 +523,11 @@ export function AgentPanel({
   /** 写节进行中用常驻卡；完成后不再挡住思考/导入指示器 */
   const displayProgress = useMemo(() => {
     if (isWriteStatusLive(agent.writeStatus)) return null;
+    if (agent.searchProgress) {
+      return agent.searchProgress.detail
+        ? `${agent.searchProgress.label} · ${agent.searchProgress.detail}`
+        : agent.searchProgress.label;
+    }
     if (!liveProgress) return null;
     // 思考/规划期间没有流式内容时，附上 plan 的下一步子任务，让「正在做什么」具体可读
     if (
@@ -501,7 +543,7 @@ export function AgentPanel({
       if (focus?.title) return `${liveProgress} · ${focus.title}`;
     }
     return liveProgress;
-  }, [liveProgress, agent.writeStatus, agent.status, agent.plan]);
+  }, [liveProgress, agent.writeStatus, agent.searchProgress, agent.status, agent.plan]);
 
   /** 预计算每条消息的渲染标志，避免渲染循环内 O(n²) 扫描 */
   const msgFlags = useMemo(() => {
@@ -1133,6 +1175,35 @@ export function AgentPanel({
 
       {/* 人在环：贴在输入上方，滑入而非硬切 */}
       <AnimatePresence initial={false}>
+        {agent.searchProgress && !agent.importProgress && !isWriteStatusLive(agent.writeStatus) ? (
+          <motion.div
+            key="search-progress"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            transition={{ duration: 0.32, ease: easeOut }}
+            className="shrink-0 border-t border-[#1a5632]/15 bg-[#f0f4f1] px-3 py-2.5"
+          >
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[#1a5632]" />
+              <span className="min-w-0 truncate text-xs font-medium text-[#122820]">
+                {agent.searchProgress.label}
+              </span>
+            </div>
+            {agent.searchProgress.detail ? (
+              <p className="mt-1 truncate text-[10px] text-[#3d4f46]/70">
+                {agent.searchProgress.detail}
+              </p>
+            ) : null}
+            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[#1a5632]/10">
+              <motion.div
+                className="h-full w-1/3 rounded-full bg-gradient-to-r from-[#1a5632] to-[#3d9a5f]"
+                animate={{ x: ["-20%", "220%"] }}
+                transition={{ duration: 1.2, ease: "easeInOut", repeat: Infinity }}
+              />
+            </div>
+          </motion.div>
+        ) : null}
         {/* 批量导入进度（确认后不再干等，实时动画反馈） */}
         {agent.importProgress && !isWriteStatusLive(agent.writeStatus) ? (
           <motion.div
@@ -1264,6 +1335,7 @@ export function AgentPanel({
                   onApprove={() => void agent.resolveCheckpoint("approve")}
                   onRevise={(note) => void agent.resolveCheckpoint("revise", note)}
                   onOpenOutlineTab={onOpenOutline}
+                  onSaveOutline={projectId ? persistOutlineMarkdown : undefined}
                 />
               </div>
             ) : isBlueprintCheckpoint ? (

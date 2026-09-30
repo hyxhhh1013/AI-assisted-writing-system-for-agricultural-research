@@ -51,6 +51,14 @@ export const searchExternalTool: ToolDefinition = {
     const { hits, variants, sourceCounts } = await searchExternalLiteratureWithStats(query, {
       limit,
       mode: "fast",
+      onProgress: (label) => {
+        ctx.emitLiveEvent?.({
+          type: "agent/progress",
+          label,
+          stage: "searching",
+          detail: query.slice(0, 80),
+        });
+      },
     });
 
     if (hits.length === 0) {
