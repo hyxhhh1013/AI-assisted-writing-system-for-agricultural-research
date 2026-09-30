@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Loader2, Ban, Bot, AlertTriangle, Activity, Wrench } from "lucide-react";
+import { Loader2, Ban, Bot, AlertTriangle, Activity, Wrench, Copy } from "lucide-react";
 import {
   getAdminAgentSessionDetail,
   getAdminAgentSessionStats,
@@ -156,6 +156,31 @@ export default function AdminAgentSessionsPage() {
     }
   };
 
+  const copyDebugPack = async () => {
+    if (!detail) return;
+    const pack = {
+      sessionId: detail.id,
+      projectId: detail.projectId,
+      projectTitle: detail.projectTitle,
+      goal: detail.goal,
+      status: detail.status,
+      intentKind: detail.intentKind ?? null,
+      iteration: detail.iteration,
+      toolCallCount: detail.toolCallCount,
+      errorMessage: detail.errorMessage,
+      error: detail.error,
+      plan: detail.plan,
+      toolTrace: detail.toolTrace ?? [],
+      uiTranscript: detail.uiTranscript ?? [],
+    };
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(pack, null, 2));
+      toast.success("已复制排障包，可直接发给开发");
+    } catch {
+      toast.error("复制失败，请手动选中执行记录");
+    }
+  };
+
   const doInterrupt = async (id: string) => {
     setInterrupting(id);
     try {
@@ -263,7 +288,13 @@ export default function AdminAgentSessionsPage() {
                 <div className="rounded border border-[#1a5632]/10 bg-white p-2">用户 <b>{detail.userName ?? detail.userId.slice(0, 8)}</b></div>
               </div>
               <div>
-                <p className="text-[10px] font-semibold text-[#1a5632]/60">目标</p>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <p className="text-[10px] font-semibold text-[#1a5632]/60">目标</p>
+                  <Button size="sm" variant="outline" className="h-7 gap-1 text-[11px]" onClick={() => void copyDebugPack()}>
+                    <Copy className="h-3 w-3" />
+                    复制排障包
+                  </Button>
+                </div>
                 <p className="rounded border border-[#1a5632]/10 bg-white p-2 text-xs text-[#3d4f46]">{detail.goal}</p>
               </div>
 

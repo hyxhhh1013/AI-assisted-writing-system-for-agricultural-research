@@ -48,6 +48,8 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
     iteration: snap?.iteration ?? 0,
     toolCallCount: snap?.toolCallCount ?? 0,
     uiTranscript: transcript,
+    toolTrace: snap?.toolTrace ?? [],
+    intentKind: snap?.intentKind ?? null,
     plan: snap?.plan ?? null,
     error: snap?.error ?? null,
     summary: lastSummary?.kind === "summary" ? lastSummary.summary : null,

@@ -365,6 +365,9 @@ export interface AdminAgentSessionDetail extends AdminAgentSessionRecord {
   toolCallCount: number;
   /** 对话气泡时间线（思考/工具调用/观察/摘要） */
   uiTranscript?: AgentUiMessage[];
+  /** 最近工具名与成败（排障；不含完整参数） */
+  toolTrace?: import("@/contracts/agent-session").AgentToolTrace[];
+  intentKind?: import("@/contracts/agent-intent").IntentKind | null;
   plan?: AgentPlan | null;
   error?: string | null;
   summary?: AgentSummary | null;

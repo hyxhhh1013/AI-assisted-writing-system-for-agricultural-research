@@ -248,9 +248,14 @@ export const importReferenceTool: ToolDefinition = {
     // ── 确认卡勾选批量导入：用户已在确认卡勾选并批准 ──
     // selectedIndices + importItems 均由服务端注入（见 import-confirm.ts），
     // 用户亲眼确认过 → 跳过相关度门禁，直接按勾选批量落库。
-    const selectedIndices = parseSelectedIndices(params.selectedIndices);
+    // selectedIndices 省略（前端未回传）→ 默认全选 importItems；显式 [] 仍取消
     const importItems = Array.isArray(params.importItems) ? params.importItems : [];
     if (importItems.length > 0) {
+      const rawSel = params.selectedIndices;
+      const selectedIndices =
+        rawSel === undefined || rawSel === null
+          ? importItems.map((_, i) => i)
+          : parseSelectedIndices(rawSel);
       if (selectedIndices.length === 0) {
         return { success: false, error: "未勾选任何文献，已取消导入" };
       }
@@ -296,6 +301,7 @@ export const importReferenceTool: ToolDefinition = {
             batch: true,
             imported: result.imported,
             skippedDuplicate: result.skippedDuplicate,
+            skippedNonCitable: result.skippedNonCitable,
             referenceCount: result.referenceCount,
             withAbstract: result.withAbstract,
             knowledgeCreated: result.knowledgeCreated,
@@ -305,7 +311,11 @@ export const importReferenceTool: ToolDefinition = {
           },
           summary:
             `已按勾选导入 ${result.imported} 篇`
-            + (result.skippedDuplicate ? `（跳过重复 ${result.skippedDuplicate}）` : "")
+            + (result.skippedDuplicate ? `（跳过重复 ${result.skippedDuplicate}` : "")
+            + (result.skippedNonCitable
+              ? `${result.skippedDuplicate ? "；" : "（"}跳过审稿/非论文 ${result.skippedNonCitable}`
+              : "")
+            + (result.skippedDuplicate || result.skippedNonCitable ? "）" : "")
             + `；参考文献共 ${result.referenceCount} 条${kbHint}`,
         };
       } catch (error) {
@@ -548,6 +558,7 @@ export const importReferenceTool: ToolDefinition = {
           batch: true,
           imported: result.imported,
           skippedDuplicate: result.skippedDuplicate,
+          skippedNonCitable: result.skippedNonCitable,
           referenceCount: result.referenceCount,
           withAbstract: result.withAbstract,
           knowledgeCreated: result.knowledgeCreated,
@@ -557,7 +568,11 @@ export const importReferenceTool: ToolDefinition = {
         },
         summary:
           `已批量导入 ${result.imported} 篇`
-          + (result.skippedDuplicate ? `（跳过重复 ${result.skippedDuplicate}）` : "")
+            + (result.skippedDuplicate ? `（跳过重复 ${result.skippedDuplicate}` : "")
+            + (result.skippedNonCitable
+              ? `${result.skippedDuplicate ? "；" : "（"}跳过审稿/非论文 ${result.skippedNonCitable}`
+              : "")
+            + (result.skippedDuplicate || result.skippedNonCitable ? "）" : "")
           + `；参考文献共 ${result.referenceCount} 条${kbHint}`,
       };
     } catch (error) {

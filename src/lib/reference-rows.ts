@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { applyReferencePatchOps } from "@/lib/project-references";
 import type { ReferenceEvidenceMeta } from "@/contracts/project";
+import { canonicalizeLiteratureDoi } from "@/lib/literature-hit-quality";
 
 export type ReferenceRowLite = {
   order: number;
@@ -94,7 +95,7 @@ export async function loadReferenceDedupKeys(projectId: string): Promise<{
     contents: new Set(rows.map((r) => r.content.trim())),
     dois: new Set(
       rows
-        .map((r) => r.doi?.trim().toLowerCase())
+        .map((r) => canonicalizeLiteratureDoi(r.doi))
         .filter((d): d is string => Boolean(d)),
     ),
   };

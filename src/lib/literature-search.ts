@@ -1,5 +1,10 @@
 import type { ExternalLiteratureHit, LiteratureSource } from "@/contracts/literature";
 import { expandRagQueries } from "@/lib/rag-query-expand";
+import {
+  isNonCitableLiteratureHit,
+  literatureMergeKey,
+  literatureTitleKey,
+} from "@/lib/literature-hit-quality";
 
 const TIMEOUT_MS = 12_000;
 /** 单源软超时：慢源（如 S2 限流）不拖垮整轮；硬超时仍由 fetch AbortSignal 兜底 */
@@ -50,15 +55,12 @@ export function parseDoiFromQuery(raw: string): string | null {
   return bare ? bare[1].replace(/[.,;]+$/, "") : null;
 }
 
-function normalizeTitleKey(title: string): string {
-  return title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-}
-
 function mergeHits(hits: ExternalLiteratureHit[]): ExternalLiteratureHit[] {
   const byKey = new Map<string, ExternalLiteratureHit>();
 
   for (const hit of hits) {
-    const key = hit.doi?.toLowerCase() || normalizeTitleKey(hit.title);
+    if (isNonCitableLiteratureHit(hit)) continue;
+    const key = literatureMergeKey(hit);
     const existing = byKey.get(key);
     if (!existing) {
       byKey.set(key, { ...hit, sources: [hit.source] });
@@ -135,6 +137,7 @@ async function searchSemanticScholar(query: string, limit: number): Promise<Exte
 
 interface CrossRefItem {
   DOI?: string;
+  type?: string;
   title?: string[];
   author?: { given?: string; family?: string }[];
   published?: { "date-parts"?: number[][] };
@@ -153,11 +156,16 @@ async function searchCrossRef(query: string, limit: number): Promise<ExternalLit
   if (!res?.ok) return [];
 
   const data = (await res.json()) as { message?: { items?: CrossRefItem[] } };
-  return (data.message?.items ?? []).map((item) => {
+  return (data.message?.items ?? [])
+    .filter((item) => {
+      const t = (item.type ?? "").toLowerCase();
+      return t !== "peer-review" && t !== "peer_review";
+    })
+    .map((item) => {
     const doi = item.DOI;
     const title = item.title?.[0] ?? "Unknown";
     return {
-      id: doi ? `doi:${doi}` : `crossref:${normalizeTitleKey(title)}`,
+      id: doi ? `doi:${doi}` : `crossref:${literatureTitleKey(title)}`,
       title,
       authors: (item.author ?? []).map((a) => `${a.given ?? ""} ${a.family ?? ""}`.trim()).filter(Boolean),
       year: item.published?.["date-parts"]?.[0]?.[0],

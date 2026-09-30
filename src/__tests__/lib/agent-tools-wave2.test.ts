@@ -84,6 +84,7 @@ vi.mock("@/lib/agent/import-reference", () => ({
   importExternalReferencesToProject: vi.fn(async () => ({
     imported: 2,
     skippedDuplicate: 0,
+    skippedNonCitable: 0,
     citations: ["a", "b"],
     referenceCount: 5,
   })),

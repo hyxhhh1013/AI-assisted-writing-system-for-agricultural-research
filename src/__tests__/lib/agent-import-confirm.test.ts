@@ -23,6 +23,7 @@ vi.mock("@/lib/agent/import-reference", () => ({
   importExternalReferencesToProject: vi.fn(async () => ({
     imported: 2,
     skippedDuplicate: 0,
+    skippedNonCitable: 0,
     citations: ["a", "b"],
     referenceCount: 5,
     withAbstract: 1,
@@ -205,6 +206,26 @@ describe("importReferenceTool selectedIndices batch path", () => {
     expect(result.error).toMatch(/未勾选/);
   });
 
+  it("defaults to all importItems when selectedIndices omitted", async () => {
+    const { importExternalReferencesToProject } = await import("@/lib/agent/import-reference");
+    const items = [hit("doi:1", "A"), hit("doi:2", "B")];
+    const result = await importReferenceTool.execute(
+      {
+        importItems: items,
+        userConfirmed: true,
+      },
+      ctx,
+    );
+    expect(result.success).toBe(true);
+    expect(importExternalReferencesToProject).toHaveBeenCalledWith(
+      ctx.userId,
+      ctx.projectId,
+      items,
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
   it("ignores out-of-range indices and imports valid ones", async () => {
     const { importExternalReferencesToProject } = await import("@/lib/agent/import-reference");
     const result = await importReferenceTool.execute(
@@ -234,6 +255,7 @@ describe("importReferenceTool selectedIndices batch path", () => {
         return {
           imported: 2,
           skippedDuplicate: 0,
+          skippedNonCitable: 0,
           citations: ["a", "b"],
           referenceCount: 2,
           withAbstract: 0,

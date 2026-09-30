@@ -1,6 +1,10 @@
 import type { ExternalLiteratureHit } from "@/contracts/literature";
 import { formatExternalLiteratureHit } from "@/lib/external-literature-format";
 import {
+  canonicalizeLiteratureDoi,
+  isNonCitableLiteratureHit,
+} from "@/lib/literature-hit-quality";
+import {
   ingestExternalHitToKnowledge,
   ingestExternalHitsToKnowledge,
 } from "@/lib/external-knowledge-ingest";
@@ -36,6 +40,7 @@ export interface ImportAgentReferenceResult {
 export interface ImportAgentReferencesBatchResult {
   imported: number;
   skippedDuplicate: number;
+  skippedNonCitable: number;
   citations: string[];
   referenceCount: number;
   withAbstract: number;
@@ -51,11 +56,13 @@ function isDuplicateHit(
   existingDois: Set<string>,
 ): boolean {
   if (existingContents.has(citation.trim())) return true;
-  const doi = hit.doi?.trim().toLowerCase();
-  if (doi && existingDois.has(doi)) return true;
-  // 题录行里已含 DOI: xxx 时也去重
-  if (doi && [...existingContents].some((c) => c.toLowerCase().includes(doi))) {
-    return true;
+  const doi = canonicalizeLiteratureDoi(hit.doi);
+  if (!doi) return false;
+  if (existingDois.has(doi)) return true;
+  for (const c of existingContents) {
+    const fromLine = canonicalizeLiteratureDoi(c.match(/DOI:\s*(10\.\S+)/i)?.[1]);
+    if (fromLine && fromLine === doi) return true;
+    if (c.toLowerCase().includes(doi)) return true;
   }
   return false;
 }
@@ -90,6 +97,9 @@ export async function importExternalReferenceToProject(
   }
 
   const citation = formatExternalLiteratureHit(hit);
+  if (isNonCitableLiteratureHit(hit)) {
+    throw new Error("该条是审稿意见或非论文记录，已跳过");
+  }
   const meta = hitToReferenceMeta(hit);
   const { contents, dois } = await loadReferenceDedupKeys(projectId);
   if (isDuplicateHit(hit, citation, contents, dois)) {
@@ -163,16 +173,22 @@ export async function importExternalReferencesToProject(
   const acceptedHits: ExternalLiteratureHit[] = [];
   const citations: string[] = [];
   let skippedDuplicate = 0;
+  let skippedNonCitable = 0;
   let withAbstract = 0;
 
   for (const hit of hits) {
+    if (isNonCitableLiteratureHit(hit)) {
+      skippedNonCitable += 1;
+      continue;
+    }
     const citation = formatExternalLiteratureHit(hit);
     if (isDuplicateHit(hit, citation, existingContents, existingDois)) {
       skippedDuplicate += 1;
       continue;
     }
     existingContents.add(citation.trim());
-    if (hit.doi?.trim()) existingDois.add(hit.doi.trim().toLowerCase());
+    const canon = canonicalizeLiteratureDoi(hit.doi);
+    if (canon) existingDois.add(canon);
     const meta = hitToReferenceMeta(hit);
     if (meta.abstract) withAbstract += 1;
     citations.push(citation);
@@ -231,6 +247,7 @@ export async function importExternalReferencesToProject(
   return {
     imported: citations.length,
     skippedDuplicate,
+    skippedNonCitable,
     citations,
     referenceCount,
     withAbstract,

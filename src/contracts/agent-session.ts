@@ -105,8 +105,12 @@ export interface AgentSessionSnapshot {
   activeWrite?: AgentActiveWrite | null;
   /** 本轮意图（跟聊短回复继承；旧快照缺省则本轮重判） */
   intentKind?: IntentKind | null;
+  /** 跟聊时历史 observations 条数；意图完成度只看其后的工具 */
+  intentObsOffset?: number;
   /** 最近工具轨迹（排障用；旧快照缺字段当 []） */
   toolTrace?: AgentToolTrace[];
+  /** 本会话精读包（跟聊续写；旧快照可缺） */
+  readingPack?: import("@/lib/agent/reading-pack").ReadingPackEntry[];
 }
 
 export interface AgentSessionListItem {
