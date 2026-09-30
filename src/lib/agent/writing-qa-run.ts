@@ -171,7 +171,7 @@ function collectSectionFindings(
       code: "md_heading",
       layer: "L1",
       action: "repair",
-      message: "正文使用了 Markdown 标题（#），应改为纯文本编号小标题",
+      message: "正文使用了 Markdown 标题（#），应删掉标题标记；多数段落没有标题",
       count: 1,
     });
   }

@@ -56,6 +56,17 @@ describe("applyWritingPatches", () => {
     expect(patched.draft).not.toContain("毫无疑问");
   });
 
+  it("strips C1/C2 paragraph titles from review body", () => {
+    const text =
+      "C1 催化剂活性位与反应器热历史共同决定产物分配。纳入文献在这一方向上结论较一致。\n\nC2 原料协同可改变产物定向性。";
+    const qa = evaluateSectionWritingQa({ sectionKey: "literature_body", text });
+    expect(qa.findings.some((f) => f.code === "claim_id_heading")).toBe(true);
+    const patched = applyWritingPatches(text, qa.findings);
+    expect(patched.draft).not.toMatch(/^C1\s/m);
+    expect(patched.draft).not.toMatch(/^C2\s/m);
+    expect(patched.draft).toContain("催化剂活性位");
+  });
+
   it("does not treat warn findings as patches", () => {
     const sentences = [
       "田间观测显示处理组叶片更绿一些。",

@@ -30,6 +30,7 @@ const DETERMINISTIC_CODES = new Set([
   "md_heading",
   "overclaim",
   "review_as_experiment",
+  "claim_id_heading",
 ]);
 
 const BLEED_REPLACEMENTS: ReadonlyArray<readonly [string, string]> = [
@@ -122,6 +123,13 @@ function stripMdHeadings(text: string): string {
   return text.replace(/^#{1,6}\s+/gm, "");
 }
 
+/** 去掉段首/行首的主张卡编号，避免 C1/C2 被写成小标题。 */
+export function stripClaimIdHeadings(text: string): string {
+  return tidyPunctuation(
+    text.replace(/^(?:#{1,6}\s*)?(?:\*{0,2}C\d+\*{0,2})(?:\s*[:：.、-]?\s+|\s+)/gm, ""),
+  );
+}
+
 function recordPatch(
   patches: WritingPatch[],
   code: string,
@@ -142,9 +150,11 @@ export function applyWritingPatches(
   findings: readonly WritingQaFinding[],
   opts: ApplyWritingPatchesInput = {},
 ): ApplyWritingPatchesResult {
-  let next = draft;
+  let next = stripClaimIdHeadings(draft);
   const patches: WritingPatch[] = [];
   const seen = new Set<string>();
+  recordPatch(patches, "claim_id_heading", draft, next);
+  if (next !== draft) seen.add("claim_id_heading");
 
   for (const finding of findings) {
     if (finding.action !== "repair") continue;
@@ -174,6 +184,8 @@ export function applyWritingPatches(
       }
     } else if (finding.code === "review_as_experiment") {
       next = tidyPunctuation(next.split("本研究").join("已有研究"));
+    } else if (finding.code === "claim_id_heading") {
+      next = stripClaimIdHeadings(next);
     }
 
     recordPatch(patches, finding.code, before, next);

@@ -47,6 +47,15 @@ describe("WRITE-QA-010 profiles", () => {
     expect(hit?.count).toBeGreaterThanOrEqual(2);
   });
 
+  it("literature_body repairs claim-id paragraph titles", () => {
+    const text = "C1 生物炭可提高土壤有机碳并改善团聚体。已有田间试验对照了热解温度差异。";
+    const findings = collectWritingProfileFindings({
+      sectionKey: "literature_body",
+      text,
+    });
+    expect(findings.some((f) => f.code === "claim_id_heading")).toBe(true);
+  });
+
   it("results warns when there is no quantity", () => {
     const findings = collectWritingProfileFindings({
       sectionKey: "results",

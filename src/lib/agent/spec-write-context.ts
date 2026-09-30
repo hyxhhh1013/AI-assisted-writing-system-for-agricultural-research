@@ -38,7 +38,7 @@ export function formatWriterContextFromSpec(spec: SectionSpecV1): string {
     : "";
   const sub = spec.subsectionTitle ? `子节：${spec.subsectionTitle}` : "";
   return [
-    "【本节主张】按 C1/C2… 逐条覆盖，不要另起结构。",
+    "【本节主张】把下列判断写进连续论述。禁止把 C1/C2 或主张原文写成小标题、加粗行或段首标签。",
     sub,
     ...(cards.length > 0 ? cards : ["（尚无主张卡，按语域扩写，不要虚构 [n]）"]),
     `字数带 ${spec.constraints.minChars}–${spec.constraints.maxChars}`,

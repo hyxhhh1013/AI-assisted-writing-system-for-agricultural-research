@@ -18,6 +18,7 @@ export type WriteQaProfileId = (typeof WRITE_QA_PROFILE_IDS)[number];
 
 const INTRO_GAP_RE = /尚不清楚|证据不足|结果不一致|鲜有报道|仍不清楚|有待|尚缺|研究不足/;
 const REVIEW_TRIAL_RE = /本研究.{0,12}(田间|试验|处理组|对照|小区)|处理组.{0,8}(显著|产量)|本试验/;
+const CLAIM_ID_HEADING_RE = /^(?:#{1,6}\s*)?(?:\*{0,2}C\d+\*{0,2})(?:\s*[:：.、-]?\s+|\s+)/m;
 const HAS_DIGIT_RE = /\d/;
 const PROFILE_MIN_CHARS = 24;
 
@@ -70,6 +71,16 @@ export function collectWritingProfileFindings(
         message: "综述子节写成了「本研究」试验报告，应改为转述已有文献",
         count: 1,
         examples: ["本研究"],
+      });
+    }
+    if (CLAIM_ID_HEADING_RE.test(text)) {
+      findings.push({
+        code: "claim_id_heading",
+        layer: "L1",
+        action: "repair",
+        message: "正文把 C1/C2 写成了段首标题；主张应织进论述，多数段落没有标题",
+        count: 1,
+        examples: text.match(CLAIM_ID_HEADING_RE)?.slice(0, 2) ?? ["C1"],
       });
     }
   }
