@@ -30,6 +30,8 @@ import os
 import sys
 from typing import Any
 
+from _shared import escape_html
+
 
 def _safe_float(v: Any, default: float = 0.0) -> float:
     """数值容错：字符串/缺失转浮点失败时用默认值，避免 KeyError/ValueError 崩脚本。"""
@@ -262,12 +264,12 @@ def _build_html_table(
 
     rows = []
     rows.append(f'<table class="three-line-table">')
-    rows.append(f"  <caption>{title}</caption>")
+    rows.append(f"  <caption>{escape_html(title)}</caption>")
     rows.append("  <thead>")
     rows.append("    <tr>")
-    rows.append(f"      <th>{column_header}</th>")
+    rows.append(f"      <th>{escape_html(column_header)}</th>")
     for g in groups:
-        rows.append(f"      <th>{g['label']}</th>")
+        rows.append(f"      <th>{escape_html(g.get('label', ''))}</th>")
     rows.append("    </tr>")
     rows.append("  </thead>")
     rows.append("  <tbody>")
@@ -292,7 +294,7 @@ def _build_html_table(
     rows.append("</table>")
 
     if note:
-        rows.append(f'<p class="note">{note}</p>')
+        rows.append(f'<p class="note">{escape_html(note)}</p>')
 
     return css + "\n" + "\n".join(rows)
 

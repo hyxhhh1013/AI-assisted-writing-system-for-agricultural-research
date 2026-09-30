@@ -50,6 +50,8 @@
 - 新增图表：`chart_types/*.py` + registry 一条 → 前端 `/plot` 自动出现
 - API：`GET /api/figures/registry`
 
+**XSS（W4-SEC-06）**：`make_table.py` / `flow_diagram_v2.py` / `mechanism_panel.py` 对用户可控串 `html.escape`；`/plot` 预览 `src/lib/sanitize-html.ts`（DOMPurify，禁 script 与 on*）。
+
 ## 分类
 
 | 类 | 示例 | 靠拢 |

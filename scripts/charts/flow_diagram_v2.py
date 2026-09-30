@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import os
 import shutil
@@ -226,13 +227,7 @@ ROLE_TO_SHAPE = {
 
 
 def _escape_xml(text: str) -> str:
-    return (
-        str(text)
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-    )
+    return html.escape(str(text), quote=True)
 
 
 def _darken(hex_color: str, factor: float = 0.55) -> str:

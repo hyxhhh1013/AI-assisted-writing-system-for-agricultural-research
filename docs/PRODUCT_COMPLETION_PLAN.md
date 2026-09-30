@@ -59,11 +59,15 @@ L5 交稿面         DOCX/模板/双语进导出；数据免责；部署打磨
 
 ### Wave P4 — 交稿（原 Wave 4）
 
+> 2026-09-20 起本波由队列 **Phase 16** 承接（`ENGINEERING_OPTIMIZATION_QUEUE.md` §1 Phase 16 / §3.1 任务单为执行依据）。
+
 | ID | 交付 | 验收 |
 |----|------|------|
 | **W4-EXPORT** | DOCX/PDF 共用导出就绪硬检；DOCX 双语对照摘要 + 图表题注清单 | 越界引用无法导出；有 Passport 对照摘要则写入 Word | ✅ |
-| ENG-PR-094 | OA 全文入库 | backlog |
-| workbench 瘦身 | 编排下沉 hooks | backlog |
+| ENG-PR-094 | OA 全文入库 | ✅ done（导入链路接 OA 下载 + 增量索引） |
+| workbench 瘦身 | 编排下沉 hooks | → **W4-WB-SLIM-A / B**（`workbench-page-client.tsx` 1275 → ≤600 → ≤250 行） |
+| SEC-04～08 | 安全与数据完整性收尾 | → **W4-SEC-04～08**，详规 `SECURITY_FIX_PLAN_2026-07-05.md` |
+| LaTeX / Pandoc | — | ⛔ **blocked**：无交付定义，需先答队列 §3.1 的 5 个问题 |
 
 ---
 

@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Copy, Check, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { generateTable, type TableGenerateRequest } from "@/services/table";
+import { sanitizeHtml } from "@/lib/sanitize-html";
 import { getErrorMessage } from "@/lib/error-utils";
 import { PlotWorkspace } from "@/components/shared/plot/plot-workspace";
 import { PlotPreviewPane } from "@/components/shared/plot/plot-preview-pane";
@@ -246,7 +247,7 @@ export function TablePanel({ title: toolTitle, description, onInsertTable }: Plo
             previewMode === "html" ? (
               <div
                 className="rounded-lg border border-[#1a5632]/10 bg-white p-4"
-                dangerouslySetInnerHTML={{ __html: result.html }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(result.html) }}
               />
             ) : (
               <div className="rounded-lg bg-[#faf9f6] p-4 text-xs leading-relaxed whitespace-pre-wrap text-[#122820]">

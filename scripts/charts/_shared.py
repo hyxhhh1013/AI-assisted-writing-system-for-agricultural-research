@@ -1,4 +1,6 @@
 """图表脚本共享工具 — 中文字体 + Unicode 上下标归一化"""
+import html
+
 from font_setup import apply_cjk_font_rcparams
 
 apply_cjk_font_rcparams()
@@ -20,3 +22,8 @@ def normalize_label(text: str) -> str:
     out = text.translate(_SUP_MAP)
     out = out.translate(_SUB_MAP)
     return out
+
+
+def escape_html(text: object) -> str:
+    """用户可控串写入 HTML/SVG 前转义。"""
+    return html.escape("" if text is None else str(text), quote=True)

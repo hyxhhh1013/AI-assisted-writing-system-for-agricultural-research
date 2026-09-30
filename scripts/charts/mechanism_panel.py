@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from flow_diagram_v2 import draw_flow_chart  # noqa: E402
 from font_setup import apply_cjk_font_rcparams  # noqa: E402
+from _shared import escape_html  # noqa: E402
 
 PRESET_COLORS = {
     "nature": {
@@ -118,8 +119,8 @@ def _draw_panel(ax, panel: dict[str, Any], colors: dict[str, str], preset: str, 
         )
     )
 
-    label = str(panel.get("id") or panel.get("label") or "").strip()
-    title = str(panel.get("title") or "").strip()
+    label = escape_html(str(panel.get("id") or panel.get("label") or "").strip())
+    title = escape_html(str(panel.get("title") or "").strip())
     header = f"({label}) {title}".strip() if label else title
 
     # 顶栏：细底线代替色块条
@@ -259,8 +260,8 @@ def _draw_panel(ax, panel: dict[str, Any], colors: dict[str, str], preset: str, 
                 )
                 y -= h + 0.03
         elif btype == "molecule":
-            smiles = str(block.get("smiles") or "")
-            mlabel = str(block.get("label") or "molecule")
+            smiles = escape_html(str(block.get("smiles") or ""))
+            mlabel = escape_html(str(block.get("label") or "molecule"))
             ax.text(
                 0.06,
                 y,
@@ -337,7 +338,7 @@ def compose_mechanism_panel(config: dict[str, Any], output_path: str) -> dict[st
         for ax, panel in zip(axes, panels):
             _draw_panel(ax, panel, colors, preset, tmp_dir)
 
-        title = str(config.get("title") or "").strip()
+        title = escape_html(str(config.get("title") or "").strip())
         if title:
             fig.suptitle(
                 title,

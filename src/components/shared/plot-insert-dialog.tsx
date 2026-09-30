@@ -21,6 +21,7 @@ import {
 import { ArrowLeft, Copy, FileCheck, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { getErrorMessage } from "@/lib/error-utils";
+import { sanitizeHtml } from "@/lib/sanitize-html";
 import {
   appendChartAsset,
   appendProjectSectionMarkdown,
@@ -278,7 +279,7 @@ export function PlotInsertDialog({
               {contentHtml && !imageUrl ? (
                 <div
                   className="max-h-40 overflow-auto rounded bg-white p-2 text-xs"
-                  dangerouslySetInnerHTML={{ __html: contentHtml }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(contentHtml) }}
                 />
               ) : (
                 <img
