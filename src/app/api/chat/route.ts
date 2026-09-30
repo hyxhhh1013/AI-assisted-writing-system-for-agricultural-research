@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
     const response = await callAI({
       provider: "deepseek",
       messages: allMessages,
+      signal: req.signal,
     });
 
     if (!response.ok || !response.body) {
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          for await (const chunk of streamAIResponse(response)) {
+          for await (const chunk of streamAIResponse(response, req.signal)) {
             if (chunk.content) {
               controller.enqueue(
                 encoder.encode(

@@ -25,13 +25,14 @@ export async function POST(req: NextRequest) {
         { role: "system", content: TRANSLATE_SYSTEM_PROMPT },
         { role: "user", content: userPrompt },
       ],
+      signal: req.signal,
     });
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          for await (const chunk of streamAIResponse(response)) {
+          for await (const chunk of streamAIResponse(response, req.signal)) {
             if (chunk.content) {
               controller.enqueue(
                 encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: chunk.content } }] })}\n\n`)

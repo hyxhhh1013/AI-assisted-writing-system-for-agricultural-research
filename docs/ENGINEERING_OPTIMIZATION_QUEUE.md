@@ -8,8 +8,8 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-09-23（Phase 17 Agent 每步等人）  
-> **实时 status 只看 §1 Phase 13 / Phase 14 / Phase 16 / Phase 17 与 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
+> **最后更新**：2026-09-30（Phase 18 写节质量缺口挂单）  
+> **实时 status 只看 §1 Phase 13 / Phase 14 / Phase 16 / Phase 17 / Phase 18 与 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
 
@@ -294,9 +294,9 @@
 | W3-AP-WRITE-NO-RAG | 有项目文献摘要时跳过知识库 RAG | — | 0.5d | **done** | 2026-08-17；`shouldSkipKnowledgeRag` + `retrieveWritingContext`；勾选来源 / `WRITING_FORCE_KNOWLEDGE_RAG=1` 不跳；预览仍走 RAG |
 | — | 任务单细节 | — | — | — | [`plans/W3-AP-RUNTIME.md`](./plans/W3-AP-RUNTIME.md) |
 | **Phase 16 — Wave 4 抛光与安全加固（SEC-04～08 + 工程债）** |
-| W4-SEC-04 | SSE 透传 abort + lastRefMapping 合并 | — | 1～2h | todo | 2026-09-20 复核：`lib/ai.ts` 已支持 `signal`，只剩调用点；详规 [`SECURITY_FIX_PLAN_2026-07-05.md`](./SECURITY_FIX_PLAN_2026-07-05.md) §PR-SEC-04 |
+| W4-SEC-04 | SSE 透传 abort + lastRefMapping 合并 | — | 1～2h | **done** | 2026-09-30；`chat`/`translate`/`plagiarism`/`analyze` 传 `req.signal`；多 bullet 引用映射合并后一次 upsert |
 | W4-SEC-05 | 上传校验 + Python 子进程超时/清理 | — | 5～7h | todo | **范围大幅扩大**：spawn 点 4→**19**（`src/app/api/` 13 + `src/lib/` 6）；原估 1～2h 上调；可降级拆 a/b |
-| W4-SEC-06 | XSS：两处 `dangerouslySetInnerHTML` 消毒 | — | 1～1.5h | todo | 位置已漂移：`plot-insert-dialog.tsx:281`、`table-panel.tsx:249` |
+| W4-SEC-06 | XSS：两处 `dangerouslySetInnerHTML` 消毒 | — | 1～1.5h | **done** | 2026-09-30；`sanitizeHtml` + Python `html.escape`；`plot-insert-dialog` / `table-panel` |
 | W4-SEC-07 | `createProjectFromRoadmap` 事务化 + auto-save 增量 + 创建幂等 | — | 2～3h | todo | 三项均未做；`use-auto-save.ts` 仍全量 `projectStore.save` |
 | W4-SEC-08 | reindex 原子化 + cookie `Secure` | — | 2～3h | todo | cookie 半做（`getSecureFlag()` 已抽出但硬编码 `''`）；reindex 需按 RAG-PR-014/016 后现状重写任务单 |
 | W4-WB-SLIM-A | workbench 编排下沉 hooks（`workbench-page-client` 1275 行 → ≤600） | — | 1d | todo | 先例 ENG-PR-031/032；抽 `use-workbench-project` / `-layout` / `-agent-bridge` |
@@ -310,7 +310,17 @@
 | W3-AP-HITL-03 | 缺大纲先 clarify，再生成 | HITL-01 | 0.5d | **done** | 2026-09-23；出一版 / 贴骨架 / 先别生成 |
 | W3-AP-HITL-04 | 导入一批后不再灌到目标篇数 | HITL-02 | 0.5d | **done** | 2026-09-23；`importCount > 0` 停止文献续跑 |
 | W3-AP-HITL-05 | 缺文献停下来问，不静默泛写 | RULES-01 | 0.5d | **done** | 2026-09-23；`draft-missing-refs` |
-
+| **Phase 18 — 写节质量缺口（主张 / 证据 / 可见下一刀；控制面克制）** |
+| **W3-AP-QNEXT** | **主轴：L4 主张覆盖 + findings 给人看；不重构编排** | W3-AP-HITL-STEER | 1～2w | todo | 2026-09-30 挂单；**01–04 已落地**；05–07 仍 blocked。详规 [`plans/W3-AP-QUALITY-NEXT.md`](./plans/W3-AP-QUALITY-NEXT.md)。与 Phase 16 并行、互不挡 |
+| W3-AP-QNEXT-01 | 写节 `qaReport` repair/block 抬到续跑条与收口文风 | HITL-STEER | 0.5d | **done** | 2026-09-30；`continue-hint` + `ui-transcript` 落 slim qaReport；收口文风可跳节 |
+| W3-AP-QNEXT-02 | L4 `claim_uncovered`（默认不 block）+ golden | QNEXT-01 | 1d | **done** | 2026-09-30；`blueprint_claim_uncovered` 改 repair；不触发定向 refine；golden `literature_body/claim-miss` |
+| W3-AP-QNEXT-03 | soft 精确数字 + unbound 主张写进 observation | QNEXT-02 | 0.5d | **done** | 2026-09-30；`evaluateSoftPreciseNotInAbstract` → `cite_semantic_mismatch`；`evidence_unbound` 改 repair 进续跑条 |
+| W3-AP-QNEXT-04 | ingest 可恢复提示；inspect/简报列出 dataClaims | — | 0.5d | **done** | 2026-09-30；附件失败文案 + inspect `claimSamples` + 简报 0 条声明提示 |
+| W3-AP-QNEXT-UX | Agent 页内切节（不必去章节结构 Tab） | QNEXT-01 | 0.5d | **done** | 2026-09-30；编辑器标题下拉；写回跟节不切 Tab；续跑条/收口灯/已写回可 peek |
+| W3-AP-QNEXT-05 | 门禁审计：只删已有 eval/vitest 证明的误拦 | QNEXT-01 | 1d | **blocked** | 板块 5；无失败用例不开；禁止新 `isXxxGoal` |
+| W3-AP-QNEXT-06 | 按阶段露出工具技能包 | QNEXT-05 | 2d | **blocked** | 板块 6；须先有稳定「选错合法工具」评测 |
+| W3-AP-QNEXT-07 | 写节 Refiner/Verifier 可关策略 + golden A/B | QNEXT-02 | 1d | **blocked** | 板块 7；L0–L4 回退则不准合；不解冻旧扩写 |
+| — | 任务单细节 | — | — | — | [`plans/W3-AP-QUALITY-NEXT.md`](./plans/W3-AP-QUALITY-NEXT.md) |
 
 | 来源 | 本队列处理方式 |
 |------|----------------|
@@ -324,6 +334,7 @@
 | `docs/plans/W3-AP-INTENT-QUALITY.md` | Wave 3.9 意图状态化 + 规则 SSOT + 质量尺；合并时同步 §1 Phase 11d |
 | `docs/plans/W3-AP-RUNTIME.md` | Wave 3.10 车间图纸；合并时同步 §1 Phase 11e |
 | `docs/plans/W3-AP-HITL-STEER.md` | Wave 3.14 Agent 每步等人；合并时同步 §1 Phase 17 |
+| `docs/plans/W3-AP-QUALITY-NEXT.md` | Wave 3.15 写节质量缺口；合并时同步 §1 Phase 18 |
 | `docs/plans/FIG-QA-quality-system.md` | Wave 3.11 图表质量系统；合并时同步 §1 Phase 13 |
 | `docs/plans/WRITE-QA-quality-system.md` | Wave 3.12 写作质量系统；合并时同步 §1 Phase 14 |
 
@@ -1399,26 +1410,30 @@ src/app/api/（13）                       src/lib/（6）
 | 2026-09-08 | QUALITY-UX | AI | 质量中心改为总览默认 + 查重/降重/审查工位；检测层与阶段进度；降重并排采纳；审查单 CTA + 章节写回；工作台改入口卡。 |
 | 2026-09-20 | Wave 4 拆单 | AI | 新增 Phase 16。SEC-04～08 逐项复核当前代码：SEC-04 仅剩调用点传参（`lib/ai.ts` 已支持 signal）、SEC-05 spawn 4→19 处估时大幅上调、SEC-06 行号漂移、SEC-07 三项全未做、SEC-08 cookie 半做 + reindex 任务单需按 RAG-PR-014/016 后现状重写；workbench 瘦身拆 A/B（`workbench-page-client.tsx` 1275 行）；LaTeX 标 blocked（无交付定义，列 5 个待决策问题）。§3.1 任务单 + §5 执行顺序同步。 |
 | 2026-09-23 | W3-AP-HITL-STEER | AI | Phase 17：蓝图写回一律等人；缺大纲先问出一版或贴骨架；可见结果后停止计划续跑；导入一批后不再灌篇数；缺文献改为问用户。写后自查保留。不重开 LLM 意图分类。 |
+| 2026-09-30 | W3-AP-QNEXT | AI | Phase 18 01–04 落地：续跑条展示写节质检；文风灯跳节；主张未覆盖/soft 精确数字/unbound 进 qaReport；ingest/inspect 可见 dataClaims。05–07 仍 blocked。 |
+| 2026-09-30 | W3-AP-QNEXT-UX | AI | Agent 写作页可切段落：编辑器下拉 + 写回跟节不切 Tab；续跑条标题 / 收口灯 / 已写回可 peek 对应节。 |
+| 2026-09-30 | W4-SEC-06/04 | AI | XSS：`sanitizeHtml` + Python `html.escape`；chat/translate/查重/方向分析透传 abort；多 bullet 引用映射合并后一次 upsert。 |
 
 ---
 
 ## 5. 推荐执行顺序（给「下一次 AI」）
 
-**当前主轴（2026-09-23）**：Phase 17（Agent 每步等人）已落地。Phase 13 / 14 / 15 / 11e 已收口。**下一个可开工波次 = Phase 16（Wave 4 抛光与安全加固）**。  
-**即刻冻结**：不准再往 `goal-intents.ts` 加口语 `isXxxGoal` / `checkXxxGate`（领域不变量与事故型安全门除外）；不重开 SHADOW；不重写 LangGraph；不给 `POST /api/writing` 旧扩写管加功能；**禁止新增图表类型**（其余 8 类未做质量剖面）；禁止再开「某 chart_types 提质」散 PR；**禁止再往 `writing.ts` 堆「禁止」**（新规则进 WRITE-QA code 表）。
+**当前主轴（2026-09-30）**：Phase 17 已落地。Phase 18 **QNEXT-01～04 已落地**；05–07 仍 blocked。安全/瘦身仍走 **Phase 16**（与 18 并行、互不挡）。Phase 13 / 14 / 15 / 11e 已收口。  
+**即刻冻结**：不准再往 `goal-intents.ts` 加口语 `isXxxGoal` / `checkXxxGate`（领域不变量与事故型安全门除外）；不重开 SHADOW；不重写 LangGraph；不给 `POST /api/writing` 旧扩写管加功能；**禁止新增图表类型**（其余 8 类未做质量剖面）；禁止再开「某 chart_types 提质」散 PR；**禁止再往 `writing.ts` 堆「禁止」**（新规则进 WRITE-QA code 表）；QNEXT-05/06/07 未满足 blocked 条件不得改热路径。
 
 | 优先级 | ID | 说明 |
 |--------|-----|------|
 | **now** | W3-AP-HITL-STEER | ✅ 2026-09-23 已落地。Agent 每轮一个可见结果。详规 `plans/W3-AP-HITL-STEER.md` |
-| **now** | W4-SEC-06 → W4-SEC-04 | 两个最小的先做：SEC-06 只改 2 处渲染 + `scripts/charts/` 4～5 个拼 SVG 的 Python 脚本（1～1.5h）；SEC-04 已无 lib 层改造，只补调用点传参（1～2h）。见 §3.1 |
-| **now** | W4-SEC-05 | 唯一有回归风险的一项（触及 FIG-QA/FIG-MECH 新路由），做完必须跑 `npm run test:figures`。建议在 SEC-04/06 之后单独开 |
+| **now** | W3-AP-QNEXT-01～04 | ✅ 2026-09-30 已落地。05–07 仍 blocked。详规 `plans/W3-AP-QUALITY-NEXT.md` |
+| **now** | W4-SEC-06 → W4-SEC-04 | ✅ 2026-09-30 已落地。XSS 消毒 + SSE abort / 引用映射合并 |
+| **now** | W4-SEC-05 | 上传校验 + Python 子进程超时。触及 FIG-QA 图表链路，做完必须跑 `npm run test:figures`。可降级：先 runner + `src/app/api/` 13 处 |
 | next | W4-SEC-07 → W4-SEC-08 | 数据完整性。**SEC-08 开工前先决策全量 vs 增量 reindex 的原子化语义**（§3.1） |
 | next | W4-WB-SLIM-A → B | 纯重构，无行为变化，可随时插入；A 完成即可合，B 独立跟 |
 | **blocked** | W4-LATEX | 无交付定义。**先答 §3.1 末尾 5 个问题**，否则不开 PR |
 
 **Wave 4 之外**：`MASTER_PLAN.md` §0 曾列「从 Demo→完整产品」见 [`PRODUCT_COMPLETION_PLAN.md`](./PRODUCT_COMPLETION_PLAN.md)（其 Wave P4 的 ENG-PR-094 已 done、workbench 瘦身即本 Phase 16 的 W4-WB-SLIM）。
 
-**明确不做**：重开 INTENT-SHADOW、LangGraph 重写 / 多 agent / DeepSeek Harness、热路径 LLM-judge、再堆口语门禁、运行时扫 `tools/` 磁盘、用 VLM 当数据图主质检、R 后端、解冻旧扩写管道、复刻十二代理 Conductor。
+**明确不做**：重开 INTENT-SHADOW、LangGraph 重写 / 多 agent / DeepSeek Harness、热路径 LLM-judge、再堆口语门禁、运行时扫 `tools/` 磁盘、用 VLM 当数据图主质检、R 后端、解冻旧扩写管道、复刻十二代理 Conductor、per-card RAG、无评测就关 Verifier/Refiner。
 
 ---
 

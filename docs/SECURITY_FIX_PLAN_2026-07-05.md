@@ -3,7 +3,31 @@
 > 编写日期：2026-07-05
 > 依据：`AUDIT_REPORT_2026-07-05.md` + 并发维度深审 + 安全定向核查
 > 目标读者：执行 agent。每个 PR 独立可合并、可回滚。
-> 约定：所有改前 `rg` 引用，改后跑 `npx tsc --noEmit` + 相关 `npx vitest run`；commit 形如 `fix(sec): xxx (ENG-PR-SEC-xx)`。
+> 约定：所有改前 `rg` 引用，改后跑 `npx tsc --noEmit` + 相关 `npx vitest run`；commit 形如 `fix(sec): xxx (W4-SEC-0x)`。
+
+---
+
+> ## ⚠️ 时效声明（2026-09-20 复核）
+>
+> 本文件写于 2026-07-05，此后代码已过约 76 个 commit。**执行 SEC-04～08 前，先读
+> [`ENGINEERING_OPTIMIZATION_QUEUE.md`](./ENGINEERING_OPTIMIZATION_QUEUE.md) **§3.1 Phase 16 任务单** ——
+> 那里记的是 2026-09-20 复核后的当前事实（行号漂移、范围变化、已完成部分）。**
+>
+> 本文件仍是**问题描述与修复方案的权威详规**（为什么这么改、验收命令、回滚方式），
+> 但**文中的 file:line 引用一律可能过期**，动手前必须重新 `rg` 定位。
+>
+> 已复核出的主要偏差（详见队列 §3.1）：
+>
+> | PR | 本文件写的 | 2026-09-20 实际 |
+> |----|-----------|-----------------|
+> | SEC-04 | 需扩展 `callAI` 支持 signal | `src/lib/ai.ts` **已支持** signal；只剩 4 个调用点没传。`use-writing-panel-generate.ts` 行号 95/354-363 → **395/510** |
+> | SEC-05 | 「4 处 Python spawn」 | **19 处**（`src/app/api/` 13 + `src/lib/` 6；`chart/route.ts` 那处已随 FIG-QA 迁到 `lib/chart-runner.ts:202`）；`python-runner.ts` 仍不存在 |
+> | SEC-06 | `plot-insert-dialog.tsx:211` | 漂移到 **`:281`**；`table-panel.tsx:249` 未变 |
+> | SEC-07 | 三项 | **全部未做**，描述仍准确 |
+> | SEC-08 | cookie 不设 Secure | 🟡 **半做**：`auth.ts:63` 已抽出 `getSecureFlag()` 但硬编码 `return ''`，改读 env 即可 |
+> | SEC-08 | reindex 临时目录 + 原子 rename | ⚠️ **方案需重写**：RAG-PR-014/016 + UI-PR-035/036 已把 reindex 改成**增量写**（`--files`/`--rechunk`/按分类 `.emb`），全量 staging 会退化成全库重建。需先决策全量 vs 增量语义 |
+>
+> SEC-01 / SEC-02 / SEC-03 已于 2026-07 完成（队列 §1 的 `W0-SEC-01` / `W0-SEC-02` / `W0-SEC-03`，均 done）。
 
 ---
 
@@ -23,15 +47,15 @@
 ## 1. 问题总览与 PR 拆分
 
 | PR | 优先级 | 主题 | 严重度 | 预计 |
-|----|--------|------|--------|------|
-| SEC-01 | P0 | `/api/directions/*` 鉴权 + owner + AI 限流 | 🔴 致命 | 3-4h |
-| SEC-02 | P0 | 补齐未鉴权 AI 路由 + 限流覆盖 | 🔴 致命 | 1-2h |
-| SEC-03 | P0 | JSONB 增量 PATCH 竞态（3 处）+ Reference.order 唯一约束 | 🔴 高 | 3-4h |
-| SEC-04 | P1 | SSE 透传 abort + lastRefMapping 合并 | 🟡 中 | 1-2h |
-| SEC-05 | P1 | 上传校验 + Python 子进程超时/清理 | 🟡 中 | 1-2h |
-| SEC-06 | P1 | XSS：两处 dangerouslySetInnerHTML 消毒 | 🟡 中 | 1h |
-| SEC-07 | P2 | createProjectFromRoadmap 事务化 + auto-save 增量 + 创建幂等 | 🟡 中 | 2-3h |
-| SEC-08 | P2 | reindex 原子化 + cookie Secure | 🟢 低 | 1-2h |
+|----|--------|------|--------|------|------|
+| SEC-01 | P0 | `/api/directions/*` 鉴权 + owner + AI 限流 | 🔴 致命 | 3-4h | ✅ done（W0-SEC-01） |
+| SEC-02 | P0 | 补齐未鉴权 AI 路由 + 限流覆盖 | 🔴 致命 | 1-2h | ✅ done（W0-SEC-02） |
+| SEC-03 | P0 | JSONB 增量 PATCH 竞态（3 处）+ Reference.order 唯一约束 | 🔴 高 | 3-4h | ✅ done（W0-SEC-03） |
+| SEC-04 | P1 | SSE 透传 abort + lastRefMapping 合并 | 🟡 中 | 1-2h | ✅ done（W4-SEC-04） |
+| SEC-05 | P1 | 上传校验 + Python 子进程超时/清理 | 🟡 中 | **5-7h** | todo（W4-SEC-05；spawn 4→19 处，估时上调，可降级拆 a/b） |
+| SEC-06 | P1 | XSS：两处 dangerouslySetInnerHTML 消毒 | 🟡 中 | 1-1.5h | ✅ done（W4-SEC-06） |
+| SEC-07 | P2 | createProjectFromRoadmap 事务化 + auto-save 增量 + 创建幂等 | 🟡 中 | 2-3h | todo（W4-SEC-07；三项均未做） |
+| SEC-08 | P2 | reindex 原子化 + cookie Secure | 🟢 低 | 2-3h | todo（W4-SEC-08；cookie 半做，reindex 方案需重写） |
 
 ---
 

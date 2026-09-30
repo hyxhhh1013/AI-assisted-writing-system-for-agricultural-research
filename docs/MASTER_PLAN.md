@@ -1,7 +1,7 @@
 # 禾书耕文（GrainScript）整体规划 v2
 
-> **状态**：生效中（2026-09-23：Phase 17 Agent 每步等人已落地；Wave 4 Phase 16 仍为安全/瘦身下一波）  
-> **取代**：分散的「部分规划」作为唯一战略主轴；任务状态以 `ENGINEERING_OPTIMIZATION_QUEUE.md` **§1 Phase 13 / Phase 14 / Phase 16 / Phase 17 与 Phase 11 各波次** 为准  
+> **状态**：生效中（2026-09-30：Phase 18 QNEXT-01～04 已落地；Phase 16 SEC-06/04 已落地，SEC-05 仍 todo）  
+> **取代**：分散的「部分规划」作为唯一战略主轴；任务状态以 `ENGINEERING_OPTIMIZATION_QUEUE.md` **§1 Phase 13 / 14 / 16 / 17 / 18 与 Phase 11 各波次** 为准  
 > **北极星**：从「功能齐全的 AI 写作工具箱」→「可走完一篇论文全生命周期的科研写作系统」
 
 ---
@@ -25,7 +25,8 @@
 | Wave 3.13 质量中心 UX | ✅ 收口 | 队列 Phase 15 QUALITY-UX-001～005 done（2026-09-08）：总览工位 + 查重/降重/审查三工位 + 工作台入口卡 |
 | RAG 增量索引 | ✅ 收口 | RAG-PR-014～016 + UI-PR-035/036 done（2026-09-06）：IMRaD 切块、增量索引、索引任务 UI |
 | Wave 3.14 Agent 每步等人 | ✅ 已落地 | [`plans/W3-AP-HITL-STEER.md`](./plans/W3-AP-HITL-STEER.md)：蓝图一律批准；缺大纲先问；每轮一个可见结果。队列 Phase 17。不重开 LLM 意图分类 |
-| **Wave 4 导出抛光 + 安全加固** | ⚠️ **下一波（Phase 16）** | W4-EXPORT ✅、ENG-PR-094 ✅；**W4-SEC-04～08 + W4-WB-SLIM 已拆单**（队列 §3.1）；**W4-LATEX ⛔ blocked**（无交付定义） |
+| Wave 3.15 写节质量缺口 | ⚠️ 01–04 已落地 | [`plans/W3-AP-QUALITY-NEXT.md`](./plans/W3-AP-QUALITY-NEXT.md)：续跑条质检、主张覆盖、soft 精确数字、ingest 可见。队列 Phase 18。门禁审计与技能包、内环三跳仍 blocked |
+| **Wave 4 导出抛光 + 安全加固** | ⚠️ **并行轨（Phase 16）** | W4-EXPORT ✅、ENG-PR-094 ✅；**W4-SEC-04～08 + W4-WB-SLIM 已拆单**（队列 §3.1）；**W4-LATEX ⛔ blocked**（无交付定义）。与 Phase 18 互不挡 |
 | 从 Demo→完整产品 | 📋 规划生效 | 见 [`PRODUCT_COMPLETION_PLAN.md`](./PRODUCT_COMPLETION_PLAN.md) |
 | `/academic-paper` | ➡️ 引导页 | **不是**第二套流水线；只引导进工作台 **Agent Tab** |
 | 产品主入口 | 工作台 **Agent Tab** | 人控 Tab 降为专家抽屉（Wave 3.8）；质量中心 / 知识库 / `/plot` 为深链 |
@@ -246,8 +247,8 @@ Wave 2 产品化三项已完成。
 |----|------|------|
 | **W4-EXPORT** | ✅ done | DOCX/PDF 共用 `assessExportReadiness`；DOCX 对照摘要 + 图表题注清单 |
 | ENG-PR-094 OA | ✅ done | 全文入库（导入链路已接 OA 下载 + 增量索引） |
-| W4-SEC-06 | todo | XSS：`plot-insert-dialog.tsx:281` + `table-panel.tsx:249` 消毒（1～1.5h，最小） |
-| W4-SEC-04 | todo | SSE 透传 abort + lastRefMapping 合并（1～2h；`lib/ai.ts` 已支持 signal，只剩调用点） |
+| W4-SEC-06 | ✅ done | XSS：`sanitizeHtml` + Python `html.escape`（2026-09-30） |
+| W4-SEC-04 | ✅ done | SSE abort 透传 + lastRefMapping 合并（2026-09-30） |
 | W4-SEC-05 | todo | 上传校验 + Python 子进程超时/清理（5～7h；**spawn 点 4→19**，做完必跑 `test:figures`） |
 | W4-SEC-07 | todo | `createProjectFromRoadmap` 事务化 + auto-save 增量 + 创建幂等（2～3h） |
 | W4-SEC-08 | todo | reindex 原子化 + cookie `Secure`（2～3h；**开工前决策全量 vs 增量原子化语义**） |

@@ -507,7 +507,10 @@ function detectAcademicCliche(
 }
 
 /** 检测 7：AI 语义评估 */
-async function detectAiAssessment(content: string): Promise<{
+async function detectAiAssessment(
+  content: string,
+  signal?: AbortSignal,
+): Promise<{
   score: number;
   findings: { type: string; detail: string }[];
   matches: PlagiarismMatchResult[];
@@ -536,6 +539,7 @@ async function detectAiAssessment(content: string): Promise<{
         { role: "user", content: content.slice(0, 8000) },
       ],
       stream: false,
+      signal,
     });
 
     const raw = await aiRes.text();
@@ -584,7 +588,8 @@ async function detectAiAssessment(content: string): Promise<{
 
 export async function runPlagiarismCheck(
   input: CheckInput,
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
+  signal?: AbortSignal,
 ): Promise<CheckResult> {
   const startTime = Date.now();
   const config: PlagiarismConfig = { ...DEFAULT_CONFIG, ...input.config };
@@ -687,7 +692,7 @@ export async function runPlagiarismCheck(
     let aiResult = { score: 0, findings: [] as { type: string; detail: string }[], matches: [] as PlagiarismMatchResult[] };
     if (config.aiAssessment) {
       progress("ai_assessment", "正在 AI 语义评估...");
-      aiResult = await detectAiAssessment(input.content);
+      aiResult = await detectAiAssessment(input.content, signal);
     }
 
     // 9. 合并去重

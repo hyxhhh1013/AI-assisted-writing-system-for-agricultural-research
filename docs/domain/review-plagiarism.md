@@ -88,6 +88,7 @@
 ### 不变量
 
 - 新查重逻辑只改 **`plagiarism-service.ts`**，勿在 v1/v2 route 里复制业务。
+- `runPlagiarismCheck` 第三参 `signal` 透传到 AI 评估（W4-SEC-04）；路由传 `req.signal`。
 - 从历史恢复查重时 `toCheckResult` 必须把缺失的 `matches` 收成 `[]`，总览/报告/降重不得对 undefined 做 `.map` / `.filter`。
 - `webSearch=true` 时注意超时（`maxDuration = 180`）。
 - 改阈值或层 → `DEFAULT_CONFIG` + 本节 + [`API_INDEX.md`](../API_INDEX.md)。

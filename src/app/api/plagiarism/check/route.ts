@@ -50,7 +50,8 @@ export async function POST(req: NextRequest) {
               checkInput,
               (event) => {
                 send({ type: "progress", stage: event.stage, message: event.message });
-              }
+              },
+              req.signal,
             );
             send({ type: "done", data: result });
           } catch (err) {
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 普通模式：直接返回结果
-    const result = await runPlagiarismCheck(checkInput);
+    const result = await runPlagiarismCheck(checkInput, undefined, req.signal);
     return Response.json(result);
   } catch (error: unknown) {
     log.fail("plagiarism check failed", error);

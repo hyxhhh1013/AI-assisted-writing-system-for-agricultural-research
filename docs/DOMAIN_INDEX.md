@@ -37,7 +37,7 @@
 
 | 功能 | 页面 | API | 核心代码 |
 |------|------|-----|----------|
-| **AI Agent（主）** | 工作台 `agent` Tab | `POST /api/agent` SSE；`GET /api/agent/sessions`（`history=1`） | 工具挂载 `lib/agent/tools/registry.ts`；质量 [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md)；**Wave 3.9** [`W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md)；**Wave 3.10 车间图纸** [`W3-AP-RUNTIME.md`](./plans/W3-AP-RUNTIME.md)；**Wave 3.12 写作质量** [`WRITE-QA-quality-system.md`](./plans/WRITE-QA-quality-system.md) |
+| **AI Agent（主）** | 工作台 `agent` Tab | `POST /api/agent` SSE；`GET /api/agent/sessions`（`history=1`） | 工具挂载 `lib/agent/tools/registry.ts`；质量 [`plans/W3-AP-QUALITY.md`](./plans/W3-AP-QUALITY.md)；**Wave 3.9** [`W3-AP-INTENT-QUALITY.md`](./plans/W3-AP-INTENT-QUALITY.md)；**Wave 3.10 车间图纸** [`W3-AP-RUNTIME.md`](./plans/W3-AP-RUNTIME.md)；**Wave 3.12 写作质量** [`WRITE-QA-quality-system.md`](./plans/WRITE-QA-quality-system.md)；**Wave 3.15 缺口** [`W3-AP-QUALITY-NEXT.md`](./plans/W3-AP-QUALITY-NEXT.md)（队列 Phase 18） |
 | 扩写流水线（从·已冻结） | 工作台 `writing` Tab（专家工具） | `POST /api/writing` SSE；`POST /api/writing/retrieve-preview` | `api/writing/pipeline/*`, `services/writing-context.ts` |
 | 产品门禁评测 | 本地/CI | `npm run eval:gates`；可选 `npm run eval:pipeline` | `lib/eval/product-gates.ts`、`scripts/eval-pipeline-paper.ts` |
 | 论文质量评测 | 本地脚本 | `npm run eval:quality` | `lib/quality-eval/` 规则尺（CI 地板）+ `llm-judge.ts`（仅脚本，不进写节） |
@@ -86,7 +86,7 @@
 | **图表质量系统（001–010 收口）** | — | `POST /api/chart` 回传 `qaReport` + `exportManifest` | compiler + layout_solver；`npm run test:figures`；三件套 bar/line/heatmap；[`plans/FIG-QA-quality-system.md`](./plans/FIG-QA-quality-system.md) |
 | **机理图质量（FIG-MECH-QA）** | Agent `draft_mechanism_figure` · `/plot` 示意图 | `POST /api/flow-diagram` · `POST /api/mechanism-panel` | `MechanismSpecV1` → 边条件编译 → 确定性质检 → spec 补丁；/plot 同套 refine 并回写画布；**不**接文生图 |
 
-详见 [`domain/figures-and-python.md`](./domain/figures-and-python.md)。
+详见 [`domain/figures-and-python.md`](./domain/figures-and-python.md)（含 W4-SEC-06 预览消毒）。
 
 ## 审查与查重
 

@@ -65,7 +65,11 @@ function sseEvent(data: unknown): string { return `data: ${JSON.stringify(data)}
 
 // ==================== AI 调用（temperature=0） ====================
 
-async function callAIZero(messages: { role: string; content: string }[], timeoutMs = 60_000): Promise<string> {
+async function callAIZero(
+  messages: { role: string; content: string }[],
+  timeoutMs = 60_000,
+  signal?: AbortSignal,
+): Promise<string> {
   const { provider, keyError } = getAgentModelConfig("writer");
   if (keyError) {
     logger.warn("writer agent key unavailable, falling back to deepseek", { keyError });
@@ -74,6 +78,7 @@ async function callAIZero(messages: { role: string; content: string }[], timeout
     provider: keyError ? "deepseek" : provider,
     messages,
     timeoutMs,
+    signal,
   });
 }
 
@@ -84,6 +89,7 @@ async function analyzeDimension(
   assetSummary: string,
   rubricsText: string,
   literatureContext: string,
+  signal?: AbortSignal,
 ): Promise<AnalysisDimension> {
   const prompt = buildDimensionPromptV2(
     dimId,
@@ -97,7 +103,7 @@ async function analyzeDimension(
   const raw = await callAIZero([
     { role: "system", content: prompt.system },
     { role: "user", content: prompt.user },
-  ]);
+  ], 60_000, signal);
 
   const result = parseAIJson<{
     score: number;
@@ -132,6 +138,7 @@ async function runVerifier(
   writerSummary: string,
   assetSummary: string,
   rubricsText: string,
+  signal?: AbortSignal,
 ): Promise<{ critique: string; confidenceAdjustment: number; flagged: boolean } | null> {
   // 仅 D3/D5 启用 Verifier
   if (dimId !== "D3" && dimId !== "D5") return null;
@@ -177,6 +184,7 @@ ${assetSummary}
         { role: "user", content: verifierPrompt },
       ],
       timeoutMs: 30_000,
+      signal,
     });
 
     const result = parseAIJson<{
@@ -316,6 +324,9 @@ export async function POST(
 
   const { slug } = await params;
   let aborted = false;
+  req.signal.addEventListener("abort", () => {
+    aborted = true;
+  }, { once: true });
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -381,6 +392,8 @@ export async function POST(
         const categories = (direction.categories as string[]) || [];
         const literatureContext = await getLiteratureContext(assets, categories);
 
+        if (req.signal.aborted) { aborted = true; return; }
+
         // 5. 批次 1：并行 D1-D4（gap-only 仅重跑 D3）
         const batch1Dims = isGapOnly ? ["D3"] : BATCH_1;
         emit({ type: "batch_start", batch: 1, dimensions: batch1Dims });
@@ -396,11 +409,11 @@ export async function POST(
         const batch1Promises = batch1Dims.map(async (dimId) => {
           try {
             emit({ type: "dimension_start", dimensionId: dimId, provider: "deepseek" });
-            const dim = await analyzeDimension(dimId, assetSummary, getRubrics(dimId), literatureContext);
+            const dim = await analyzeDimension(dimId, assetSummary, getRubrics(dimId), literatureContext, req.signal);
 
             // D3 Verifier 跨模型验证
             if (dimId === "D3") {
-              const verifierResult = await runVerifier(dimId, dim.score, dim.summary, assetSummary, getRubrics(dimId));
+              const verifierResult = await runVerifier(dimId, dim.score, dim.summary, assetSummary, getRubrics(dimId), req.signal);
               if (verifierResult) {
                 emit({ type: "verifier_start", dimensionId: dimId, provider: "zhipu" });
                 if (verifierResult.flagged) {
@@ -422,7 +435,7 @@ export async function POST(
 
         await Promise.all(batch1Promises);
         emit({ type: "batch_done", batch: 1 });
-        if (aborted) return;
+        if (aborted || req.signal.aborted) { aborted = true; return; }
 
         // 6. 批次 2：D5-D7（gap-only 重跑 D5/D6，复用 D7）
         const batch2Run = isGapOnly ? ["D5", "D6"] : BATCH_2;
@@ -442,7 +455,7 @@ export async function POST(
           const d5Raw = await callAIZero([
             { role: "system", content: d5Prompt.system },
             { role: "user", content: d5Prompt.user },
-          ]);
+          ], 60_000, req.signal);
           const d5Result = parseAIJson<{
             candidates: Array<{
               id: string;
@@ -464,7 +477,7 @@ export async function POST(
           }));
 
           // D5 Verifier 跨模型验证
-          const d5VerifierResult = await runVerifier("D5", 7, `候选论文 ${capturedCandidates.length} 篇，ready ${capturedCandidates.filter((c) => c.tier === "ready").length} 篇`, assetSummary, getRubrics("D5"));
+          const d5VerifierResult = await runVerifier("D5", 7, `候选论文 ${capturedCandidates.length} 篇，ready ${capturedCandidates.filter((c) => c.tier === "ready").length} 篇`, assetSummary, getRubrics("D5"), req.signal);
           if (d5VerifierResult) {
             emit({ type: "verifier_start", dimensionId: "D5", provider: "zhipu" });
             emit({ type: "verifier_done", dimensionId: "D5", critique: d5VerifierResult.critique, confidenceAdjustment: d5VerifierResult.confidenceAdjustment });
@@ -499,7 +512,7 @@ export async function POST(
           dimD6DimD7Ids.map(async (dimId) => {
             try {
               emit({ type: "dimension_start", dimensionId: dimId, provider: "deepseek" });
-              const dim = await analyzeDimension(dimId, assetSummary, getRubrics(dimId), "");
+              const dim = await analyzeDimension(dimId, assetSummary, getRubrics(dimId), "", req.signal);
               return dim;
             } catch (err) {
               logger.error(`${dimId} failed:`, err);
@@ -517,7 +530,7 @@ export async function POST(
         emit({ type: "dimension_done", dimensionId: "D6", result: dimD6 });
         emit({ type: "dimension_done", dimensionId: "D7", result: dimD7 });
         emit({ type: "batch_done", batch: 2 });
-        if (aborted) return;
+        if (aborted || req.signal.aborted) { aborted = true; return; }
 
         // 7. D8（gap-only 复用）
         emit({ type: "batch_start", batch: 3, dimensions: ["D8"] });
@@ -531,7 +544,7 @@ export async function POST(
         } else {
           try {
             emit({ type: "dimension_start", dimensionId: "D8", provider: "deepseek" });
-            dimD8 = await analyzeDimension("D8", `${assetSummary}\n\n## 其他维度摘要\n\n${allSoFar}`, getRubrics("D8"), "");
+            dimD8 = await analyzeDimension("D8", `${assetSummary}\n\n## 其他维度摘要\n\n${allSoFar}`, getRubrics("D8"), "", req.signal);
           } catch (err) {
             logger.error("D8 failed:", err);
             emit({ type: "dimension_error", dimensionId: "D8", error: getErrorMessage(err) || "D8 分析失败" });
@@ -540,6 +553,7 @@ export async function POST(
           emit({ type: "dimension_done", dimensionId: "D8", result: dimD8 });
         }
         emit({ type: "batch_done", batch: 3 });
+        if (aborted || req.signal.aborted) { aborted = true; return; }
 
         // 8. 合成阶段
         emit({ type: "batch_start", batch: 4, dimensions: ["SYNTHESIS"] });
@@ -557,7 +571,7 @@ export async function POST(
           const synRaw = await callAIZero([
             { role: "system", content: synPrompt.system },
             { role: "user", content: synPrompt.user },
-          ]);
+          ], 60_000, req.signal);
           synthesis = parseAIJson<SynthesisResult>(synRaw);
           emit({ type: "synthesis", synthesis });
         } catch (err) {

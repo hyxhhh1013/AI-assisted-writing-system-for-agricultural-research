@@ -60,7 +60,7 @@ interface UseWritingPanelGenerateParams {
   setDetectedRefs: Dispatch<SetStateAction<string[]>>;
   setCitationWarnings: (v: WritingPreviewPayload["citationWarnings"]) => void;
   setDataClaimWarnings: (v: WritingPreviewPayload["dataClaimWarnings"]) => void;
-  setLastRefMapping: (v: Record<string, number> | null) => void;
+  setLastRefMapping: Dispatch<SetStateAction<Record<string, number> | null>>;
   setSubsectionTitle: (v: string | undefined) => void;
   setPendingFigures: Dispatch<
     SetStateAction<
@@ -78,6 +78,7 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
   const detectedFiguresRef = useRef<{ tool: string; config: string; caption: string }[]>([]);
   const figureAbortRef = useRef<AbortController | null>(null);
   const writingAbortRef = useRef<AbortController | null>(null);
+  const refMappingAccRef = useRef<Record<string, number>>({});
 
   const {
     projectId,
@@ -392,17 +393,11 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
       setCitationWarnings(streamResult.citationWarnings);
       setDataClaimWarnings(streamResult.dataClaimWarnings);
       if (streamResult.refMapping && Object.keys(streamResult.refMapping).length > 0) {
-        setLastRefMapping(streamResult.refMapping);
-        const mappings = Object.entries(streamResult.refMapping).map(([sourceName, refIndex]) => ({
-          refIndex,
-          sourceName,
-          category: "",
-          citation: "",
-        }));
-        batchUpsertReferences({ projectId, mappings }).catch(() => {});
+        refMappingAccRef.current = { ...refMappingAccRef.current, ...streamResult.refMapping };
+        setLastRefMapping((prev) => ({ ...(prev ?? {}), ...streamResult.refMapping }));
       }
     },
-    [projectId, setCitationWarnings, setDataClaimWarnings, setDetectedRefs, setLastRefMapping],
+    [setCitationWarnings, setDataClaimWarnings, setDetectedRefs, setLastRefMapping],
   );
 
   const buildExpandRequest = useCallback(
@@ -428,6 +423,16 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
     setGenerationStatus,
     onStreamResult: handleBulletStreamResult,
     onAllBulletsComplete: async (mergedDraft) => {
+      const mapping = refMappingAccRef.current;
+      if (Object.keys(mapping).length > 0) {
+        const mappings = Object.entries(mapping).map(([sourceName, refIndex]) => ({
+          refIndex,
+          sourceName,
+          category: "",
+          citation: "",
+        }));
+        batchUpsertReferences({ projectId, mappings }).catch(() => {});
+      }
       const selectedTask = outlineTasks.find((t) => t.id === selectedSectionId);
       const subTitle = selectedTask && selectedTask.level > 1 ? selectedTask.title : undefined;
       const isChapterScope = !selectedTask || selectedTask.level <= 1;
@@ -485,6 +490,7 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
 
     try {
       if (useCollaborative) {
+        refMappingAccRef.current = {};
         setGenerationStatus("writing");
         await bulletExpand.start();
         return;
@@ -507,8 +513,9 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
       // 参考文献合并放到 applyGenerationResult，避免用本节紧凑表覆盖全局表
 
       if (streamResult.refMapping && Object.keys(streamResult.refMapping).length > 0) {
-        setLastRefMapping(streamResult.refMapping);
-        const mappings = Object.entries(streamResult.refMapping).map(([sourceName, refIndex]) => ({
+        const merged = { ...(lastRefMapping ?? {}), ...streamResult.refMapping };
+        setLastRefMapping(merged);
+        const mappings = Object.entries(merged).map(([sourceName, refIndex]) => ({
           refIndex,
           sourceName,
           category: "",
@@ -551,6 +558,7 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
     setCitationWarnings,
     setDataClaimWarnings,
     setLastRefMapping,
+    lastRefMapping,
     setSubsectionTitle,
     setManualPhase,
   ]);
