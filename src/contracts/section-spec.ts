@@ -104,7 +104,11 @@ const DEFAULT_CONSTRAINTS: Record<SectionRegister, SectionSpecConstraints> = {
   review_body: { minChars: 800, maxChars: 4000 },
 };
 
-const SUBSECTION_MAX_CHARS = 2500;
+/** 按蓝图子节 / 要点条数均分整章字数带；下限保证能成段，上限禁止单点写满整章。 */
+export const PART_WRITE_MIN_FLOOR = 220;
+export const PART_WRITE_MIN_CEIL = 450;
+export const PART_WRITE_MAX_CAP = 560;
+export const PART_WRITE_DEFAULT_PARTS = 4;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -125,9 +129,50 @@ export function registerFromSectionKey(sectionKey: string): SectionRegister | nu
   return sectionKey;
 }
 
+export function splitConstraintsForPartWrites(
+  base: SectionSpecConstraints,
+  partCount: number,
+): SectionSpecConstraints {
+  const parts = Math.max(1, Math.floor(Number(partCount) || 1));
+  if (parts <= 1) {
+    return {
+      minChars: base.minChars,
+      maxChars: base.maxChars,
+      ...(base.forbidDiscussionInResults ? { forbidDiscussionInResults: true } : {}),
+      ...(base.forbidInlineCite ? { forbidInlineCite: true } : {}),
+    };
+  }
+  const minChars = Math.min(
+    PART_WRITE_MIN_CEIL,
+    Math.max(PART_WRITE_MIN_FLOOR, Math.round(base.minChars / parts)),
+  );
+  const maxChars = Math.min(
+    PART_WRITE_MAX_CAP,
+    Math.max(minChars + 80, Math.round(base.maxChars / parts)),
+  );
+  return { ...base, minChars, maxChars };
+}
+
+/** 有子节标题时按兄弟节/要点数拆配额；只有 1 块时按默认 4 份，避免仍走整章 min。 */
+export function resolveWritePartCount(opts: {
+  subsectionTitle?: string;
+  siblingCount?: number;
+  claimCount?: number;
+  bulletCount?: number;
+}): number {
+  if (!opts.subsectionTitle?.trim()) return 1;
+  const n = Math.max(
+    opts.siblingCount ?? 0,
+    opts.claimCount ?? 0,
+    opts.bulletCount ?? 0,
+    1,
+  );
+  return n < 2 ? PART_WRITE_DEFAULT_PARTS : n;
+}
+
 export function defaultConstraintsFor(
   register: SectionRegister,
-  options?: { subsectionTitle?: string },
+  options?: { subsectionTitle?: string; partCount?: number },
 ): SectionSpecConstraints {
   const base = DEFAULT_CONSTRAINTS[register];
   const constraints: SectionSpecConstraints = {
@@ -136,10 +181,15 @@ export function defaultConstraintsFor(
   };
   if (base.forbidDiscussionInResults) constraints.forbidDiscussionInResults = true;
   if (base.forbidInlineCite) constraints.forbidInlineCite = true;
-  if (options?.subsectionTitle?.trim()) {
-    constraints.maxChars = Math.min(constraints.maxChars, SUBSECTION_MAX_CHARS);
-  }
-  return constraints;
+  const wantsPart =
+    Boolean(options?.subsectionTitle?.trim()) ||
+    (typeof options?.partCount === "number" && options.partCount > 1);
+  if (!wantsPart) return constraints;
+  const parts =
+    typeof options?.partCount === "number" && options.partCount > 1
+      ? options.partCount
+      : PART_WRITE_DEFAULT_PARTS;
+  return splitConstraintsForPartWrites(constraints, parts);
 }
 
 function parseEvidence(raw: unknown): ClaimEvidence[] {

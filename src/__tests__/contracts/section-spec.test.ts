@@ -3,9 +3,11 @@ import {
   defaultConstraintsFor,
   liftWriteSectionInputToSpec,
   parseSectionSpec,
+  PART_WRITE_MAX_CAP,
   registerFromSectionKey,
   sectionGuideToClaimCards,
   sectionSpecToWriteDraft,
+  splitConstraintsForPartWrites,
   type SectionSpecV1,
 } from "@/contracts/section-spec";
 
@@ -52,11 +54,16 @@ describe("SectionSpecV1", () => {
     expect(registerFromSectionKey("unknown")).toBeNull();
   });
 
-  it("caps subsection max chars so综述子节不会按整章预算", () => {
+  it("splits subsection char budget instead of capping only the max", () => {
     const whole = defaultConstraintsFor("review_body");
     const sub = defaultConstraintsFor("review_body", { subsectionTitle: "2.1 孔隙结构" });
-    expect(sub.maxChars).toBeLessThanOrEqual(2500);
+    expect(sub.minChars).toBeLessThan(whole.minChars);
+    expect(sub.maxChars).toBeLessThanOrEqual(PART_WRITE_MAX_CAP);
     expect(sub.maxChars).toBeLessThan(whole.maxChars);
+
+    const six = splitConstraintsForPartWrites(whole, 6);
+    expect(six.minChars).toBeLessThan(whole.minChars / 2);
+    expect(six.maxChars).toBeLessThanOrEqual(PART_WRITE_MAX_CAP);
   });
 
   it("lifts bullets over context, and allows empty cards", () => {

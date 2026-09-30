@@ -72,7 +72,7 @@ describe("compileSectionSpec", () => {
     expect(bulletsFromCompiledSpec(compiled)).toEqual(["机制不清", "田间证据少"]);
   });
 
-  it("applies research coverage floor and subsection cap", () => {
+  it("applies research coverage floor and splits subsection budget", () => {
     const intro = compileSectionSpec({
       sectionKey: "introduction",
       mode: "research",
@@ -90,8 +90,55 @@ describe("compileSectionSpec", () => {
       context: "写子节",
     });
     expect(sub?.spec.register).toBe("review_body");
-    expect(sub?.spec.constraints.maxChars).toBeLessThanOrEqual(2500);
-    expect(sub?.spec.constraints.minChars).toBeLessThan(2000);
+    expect(sub?.spec.constraints.maxChars).toBeLessThanOrEqual(560);
+    expect(sub?.spec.constraints.minChars).toBeLessThan(500);
+  });
+
+  it("divides literature_body budget by sibling subsection count", () => {
+    const compiled = compileSectionSpec({
+      sectionKey: "literature_body",
+      mode: "review",
+      language: "zh",
+      subsectionTitle: "改性策略",
+      context: "写子节",
+      blueprint: sampleBlueprint({
+        sectionGuides: [
+          {
+            sectionPath: "研究进展综述 > 改性策略",
+            purpose: "a",
+            keyPoints: ["酸改性"],
+          },
+          {
+            sectionPath: "研究进展综述 > 应用效果",
+            purpose: "b",
+            keyPoints: ["产量"],
+          },
+          {
+            sectionPath: "研究进展综述 > 机制",
+            purpose: "c",
+            keyPoints: ["机理"],
+          },
+          {
+            sectionPath: "研究进展综述 > 局限",
+            purpose: "d",
+            keyPoints: ["不足"],
+          },
+          {
+            sectionPath: "研究进展综述 > 展望",
+            purpose: "e",
+            keyPoints: ["方向"],
+          },
+          {
+            sectionPath: "研究进展综述 > 对比",
+            purpose: "f",
+            keyPoints: ["对照"],
+          },
+        ],
+      }),
+    });
+    expect(compiled?.spec.constraints.minChars).toBeLessThanOrEqual(450);
+    expect(compiled?.spec.constraints.maxChars).toBeLessThanOrEqual(560);
+    expect(compiled?.spec.constraints.minChars).toBeGreaterThanOrEqual(220);
   });
 
   it("scales English budgets and keeps abstract cite ban", () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildWriterSystemPrompt } from "@/lib/prompts/writing";
 import {
   buildSlimWriterSystemPrompt,
+  resolvePartSlicePrompt,
   resolveSlimSectionPrompt,
 } from "@/lib/agent/writer-prompt";
 
@@ -49,5 +50,16 @@ describe("WRITE-QA-007 slim writer prompt", () => {
       isChinese: true,
     });
     expect(abs).toContain("不要 [n]");
+  });
+
+  it("uses a slice prompt that does not ask for a full-chapter outline", () => {
+    const slice = resolvePartSlicePrompt({
+      isChinese: true,
+      subsectionTitle: "2.1 孔隙结构",
+    });
+    expect(slice).toContain("只写「2.1 孔隙结构」");
+    expect(slice).toContain("1～2 段");
+    expect(slice).not.toContain("3.1");
+    expect(slice.length).toBeLessThan(280);
   });
 });

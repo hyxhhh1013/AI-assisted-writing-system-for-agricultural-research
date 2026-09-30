@@ -1,4 +1,8 @@
 import { callAI, getAgentModelConfig, streamAIResponse } from "@/lib/ai";
+import {
+  defaultConstraintsFor,
+  registerFromSectionKey,
+} from "@/contracts/section-spec";
 import type { WritingInput } from "@/lib/validations";
 import {
   formatWritingBulletsForPrompt,
@@ -36,13 +40,18 @@ export async function runExpandBulletPhase(
     .join("\n");
 
   const adopted = draftSoFar?.trim() || "（本节尚无已采纳内容）";
+  const register = registerFromSectionKey(section) ?? "review_body";
+  const bulletBudget = defaultConstraintsFor(register, {
+    subsectionTitle: subsectionTitle || "bullet",
+    partCount: Math.max(normalizedBullets.length, 2),
+  });
   const userContent = `论文题目：${title}
 当前写作章节：${section}${subsectionTitle ? `\n当前子节：${subsectionTitle}` : ""}
 
 【本节已写入内容（请自然衔接，勿重复）】
 ${adopted}
 
-【本条扩写要点（仅写这一条，1～3 个完整段落）】
+【本条扩写要点（仅写这一条，1～2 个完整段落，字数 ${bulletBudget.minChars}–${bulletBudget.maxChars}）】
 ${idx + 1}. ${normalizedBullets[idx]}
 
 【其他要点（本条勿展开）】

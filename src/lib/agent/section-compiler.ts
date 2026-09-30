@@ -11,6 +11,7 @@ import {
   isSectionSpecKey,
   liftWriteSectionInputToSpec,
   registerFromSectionKey,
+  resolveWritePartCount,
   sectionGuideToClaimCards,
   type SectionClaimCard,
   type SectionSpecConstraints,
@@ -19,13 +20,13 @@ import {
 import { getDraftSectionTargets } from "@/lib/draft-coverage";
 import {
   collectBlueprintAssignedSourceTokens,
+  listBlueprintSubsectionPathsForKey,
   resolveAssignedSourcesToSelectedIds,
 } from "@/lib/agent/blueprint-write-context";
 import { figureBelongsToSection } from "@/lib/blueprint-utils";
 import { mapToSectionForMode } from "@/lib/utils";
 
 const EN_CHAR_SCALE = 0.55;
-const EN_SUBSECTION_MAX = 1400;
 
 export type SectionSpecCardSource = "bullets" | "blueprint" | "context" | "empty";
 
@@ -72,19 +73,6 @@ function applyDraftCoverageFloor(
   return {
     ...constraints,
     minChars: Math.max(constraints.minChars, target.minChars),
-  };
-}
-
-function applySubsectionCap(
-  constraints: SectionSpecConstraints,
-  language: "zh" | "en",
-  subsectionTitle?: string,
-): SectionSpecConstraints {
-  if (!subsectionTitle?.trim()) return constraints;
-  const cap = language === "en" ? EN_SUBSECTION_MAX : 2500;
-  return {
-    ...constraints,
-    maxChars: Math.min(constraints.maxChars, cap),
   };
 }
 
@@ -196,7 +184,16 @@ export function compileSectionSpec(
     source = "context";
   }
 
-  let constraints = defaultConstraintsFor(register, { subsectionTitle });
+  const siblingCount = blueprint
+    ? listBlueprintSubsectionPathsForKey(blueprint, input.sectionKey, input.mode).length
+    : 0;
+  const partCount = resolveWritePartCount({
+    subsectionTitle,
+    siblingCount,
+    claimCount: claimCards.length,
+    bulletCount: userBullets.length,
+  });
+  let constraints = defaultConstraintsFor(register, { subsectionTitle, partCount });
   constraints = scaleConstraints(constraints, language);
   constraints = applyDraftCoverageFloor(
     constraints,
@@ -205,7 +202,6 @@ export function compileSectionSpec(
     language,
     subsectionTitle,
   );
-  constraints = applySubsectionCap(constraints, language, subsectionTitle);
 
   let assignedSourceIds = (input.selectedSourceIds ?? [])
     .map((s) => s.trim())

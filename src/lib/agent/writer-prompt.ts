@@ -14,7 +14,7 @@ const QA_CODES =
   + "abstract_has_cite / cite_oob / md_heading / embedded_bib / "
   + "hollow_phrase / throat_clear / results_discussion_bleed / "
   + "overclaim / number_not_in_claims / evidence_unbound / "
-  + "intro_gap_missing / review_as_experiment";
+  + "intro_gap_missing / review_as_experiment / claim_id_heading";
 
 const SLIM_SECTION_ZH: Record<string, string> = {
   abstract:
@@ -30,7 +30,7 @@ const SLIM_SECTION_ZH: Record<string, string> = {
   conclusion:
     "回到目标→3–5 条核心发现→贡献边界。不引入新数据。不要「首次/证明/填补空白」。",
   literature_body:
-    "按本子节主张综合文献：转述+ [n]，对比条件差异。不要写成「本研究」试验报告。",
+    "按本子节主张综合文献：转述+ [n]，对比条件差异。连续成段写。不要给每个自然段加标题，不要输出 C1/C2/2.1 段首标签。不要写成「本研究」试验报告。",
   background:
     "交代领域背景与关键概念，为后文综述铺垫。有出处的判断须带 [n]。",
 };
@@ -49,10 +49,34 @@ const SLIM_SECTION_EN: Record<string, string> = {
   conclusion:
     "Restate aim → 3–5 findings → boundary. No new data. No 'first/prove/fill the gap'.",
   literature_body:
-    "Synthesize sources for this subsection; paraphrase + [n]. Do not write as if this is your experiment.",
+    "Synthesize sources in continuous prose; paraphrase + [n]. Do not title each paragraph or print C1/C2 labels. Do not write as if this is your experiment.",
   background:
     "Set domain context. Cite [n] for borrowed claims.",
 };
+
+/** 子节 / 单条要点：短指令，不要拼整章「按 3.1/3.2 组织」的综述模板。 */
+export function resolvePartSlicePrompt(opts: {
+  isChinese: boolean;
+  subsectionTitle?: string;
+}): string {
+  const title = opts.subsectionTitle?.trim();
+  if (opts.isChinese) {
+    const who = title ? `只写「${title}」这一小点` : "只写当前这一条要点";
+    return (
+      `${who}：连续 1～2 段即可，综合相关文献并带 [n]。`
+      + "不要再按整章列子节树，不要写其他子节，不要按整章篇幅写。"
+      + "语域：转述文献；不要写成「本研究」试验报告。"
+    );
+  }
+  const who = title
+    ? `Write only the slice "${title}"`
+    : "Write only this bullet";
+  return (
+    `${who}: 1–2 continuous paragraphs with [n] where needed. `
+    + "Do not re-outline the whole chapter. Do not cover other subsections. "
+    + "Do not match full-section length. Paraphrase the literature; do not write as your own experiment."
+  );
+}
 
 export function resolveSlimSectionPrompt(
   section: string,
@@ -95,10 +119,10 @@ ${pool}${data}
 ${params.sectionInstruction}
 
 —— 证据卡 ——
-若上下文有【证据绑定】：按 C1/C2… 扩写；只引用表中 [n]；soft 只概括，禁止编造该文献精确数据；未绑定的主张不要硬挂 [n]。
+若上下文有【证据绑定】：覆盖 C1/C2 的判断，但正文里不要出现 C1/C2 字样；只引用表中 [n]；soft 只概括，禁止编造该文献精确数据；未绑定的主张不要硬挂 [n]。
 没有绑定表时：没有依据的观点直接陈述，不要虚构 [n]。
 文中引用只用半角 [n] / [n,m]。不要输出参考文献列表。
-不要使用 Markdown # 标题；子节用「2.1 …」纯文本。
+不要使用 Markdown # 标题。不要给每个自然段加小标题；多数段落就是论述，没有标题。
 不要插入【FIGURE】JSON 或插图占位（配图走 generate_chart）。
 不要写元文字、编辑批注、道歉。
 
@@ -113,8 +137,8 @@ ${pool}${data}
 ${params.sectionInstruction}
 
 —— Evidence cards ——
-If the context has an evidence-bind table: cover C1/C2…; cite only listed [n]; soft = paraphrase only.
-In-text cites: half-width [n] only. No bibliography. No Markdown # headings. No 【FIGURE】 JSON.
+If the context has an evidence-bind table: cover the claims, but do not print C1/C2 in the body; cite only listed [n]; soft = paraphrase only.
+In-text cites: half-width [n] only. No bibliography. No Markdown # headings. Do not title every paragraph. No 【FIGURE】 JSON.
 
 ${QA_CODES}
 `;

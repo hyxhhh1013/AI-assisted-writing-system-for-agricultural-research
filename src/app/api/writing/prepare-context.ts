@@ -2,6 +2,7 @@ import type { EvidenceClaim } from "@/contracts/data-source";
 import type { WritingInput } from "@/lib/validations";
 import {
   buildSlimWriterSystemPrompt,
+  resolvePartSlicePrompt,
   resolveSlimSectionPrompt,
 } from "@/lib/agent/writer-prompt";
 import {
@@ -40,6 +41,7 @@ export async function prepareWritingContext(
     projectMode,
     citationStyle,
     writerProfile,
+    mode: writingMode,
   } = data;
 
   const isAbstract = section === "abstract";
@@ -167,9 +169,9 @@ export async function prepareWritingContext(
     ? resolveSlimSectionPrompt(section, projectMode, { isGBT, isChinese })
     : resolveSectionPrompt(section, projectMode, { isGBT, isChinese });
 
-  const resolvedSectionPrompt = subsectionTitle
-    ? `请针对「${subsectionTitle}」这一子节进行扩写。只写这一小节的内容，不要扩写到该章节的其他子节。` +
-      basePrompt.replace(/请(撰写|描述|总结)/, "请针对该子节$1")
+  const isPartWrite = Boolean(subsectionTitle?.trim()) || writingMode === "expand_bullet";
+  const resolvedSectionPrompt = isPartWrite
+    ? resolvePartSlicePrompt({ isChinese, subsectionTitle })
     : basePrompt + (
         globalContext?.outline
           ? "\n⚠️ 本节必须完整覆盖【论文大纲】中属于本节的全部子节，不得遗漏（大纲列出的每个小节都要写到）；子节编号与大纲保持一致。若已写过部分子节，需补齐缺失小节而非整节重写。"
