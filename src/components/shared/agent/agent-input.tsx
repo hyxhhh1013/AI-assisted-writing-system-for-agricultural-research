@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { clientRejectReason } from "@/lib/agent/attachments/client-validate";
+import { ATTACHMENT_EXTRACT_RECOVERY } from "@/lib/agent/attachments/manifest";
 import {
   formatAttachmentChipBadge,
   inferAttachmentKind,
@@ -50,6 +51,7 @@ interface AgentInputBarProps {
   continueHint?: AgentContinueHint | null;
   onSend: (goal: string, opts?: { attachmentIds?: string[] }) => void;
   onCancel: () => void;
+  onJumpToSection?: (sectionKey: string) => void;
 }
 
 type Chip = {
@@ -73,6 +75,7 @@ export function AgentInputBar({
   continueHint,
   onSend,
   onCancel,
+  onJumpToSection,
 }: AgentInputBarProps) {
   const [value, setValue] = useState("");
   const [chips, setChips] = useState<Chip[]>([]);
@@ -119,9 +122,11 @@ export function AgentInputBar({
             ? "extracting"
             : "failed";
       const error =
-        attachment.status === "extract_failed" || attachment.status === "unsupported"
-          ? "未能解析"
-          : undefined;
+        attachment.status === "unsupported"
+          ? "不支持的类型"
+          : attachment.status === "extract_failed"
+            ? ATTACHMENT_EXTRACT_RECOVERY
+            : undefined;
       setChips((prev) =>
         prev.map((c) =>
           c.file === file
@@ -174,7 +179,7 @@ export function AgentInputBar({
             setChips((prev) =>
               prev.map((c) =>
                 c.file === chip.file
-                  ? { ...c, status: "failed", error: att.status === "unsupported" ? "不支持的类型" : "未能解析" }
+                  ? { ...c, status: "failed", error: att.status === "unsupported" ? "不支持的类型" : ATTACHMENT_EXTRACT_RECOVERY }
                   : c,
               ),
             );
@@ -272,6 +277,7 @@ export function AgentInputBar({
             sendWithAttachments(goal);
             setValue("");
           }}
+          onJumpToSection={onJumpToSection}
         />
       ) : null}
       {showChips ? (

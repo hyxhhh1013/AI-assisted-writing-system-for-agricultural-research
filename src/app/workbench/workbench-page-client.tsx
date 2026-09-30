@@ -242,9 +242,31 @@ function WorkbenchContent() {
   const applyRemoteProject = useCallback((data: ProjectData, syncSectionKey?: string) => {
     bumpEditorSyncEpoch(editorSyncEpochRef);
     setProject(data);
-    if (syncSectionKey && syncSectionKey === activeSectionRef.current) {
+    if (syncSectionKey) {
+      setActiveSection(syncSectionKey);
       setEditingContent(editorTextForSection(data, syncSectionKey));
     }
+  }, []);
+
+  /** 切节不离开当前侧栏 Tab。先把当前编辑区落到 project，再换正文，避免 500ms 同步写串节。 */
+  const showEditorSection = useCallback((sectionKey: string) => {
+    const current = activeSectionRef.current;
+    bumpEditorSyncEpoch(editorSyncEpochRef);
+    let snapshot = projectRef.current;
+    if (current !== sectionKey) {
+      const text = editingContentRef.current;
+      if (current === "abstract") {
+        if (snapshot.abstract !== text) snapshot = { ...snapshot, abstract: text };
+      } else if (snapshot.sections[current] !== text) {
+        snapshot = { ...snapshot, sections: { ...snapshot.sections, [current]: text } };
+      }
+      if (snapshot !== projectRef.current) {
+        projectRef.current = snapshot;
+        setProject(snapshot);
+      }
+    }
+    setActiveSection(sectionKey);
+    setEditingContent(editorTextForSection(snapshot, sectionKey));
   }, []);
 
   // 窄屏（手机/平板竖屏，< lg 1024px）：自动收起侧栏与图标栏、关闭预览，只留编辑器。
@@ -468,9 +490,18 @@ function WorkbenchContent() {
       try {
         const data = await projectStore.get(projectId);
         if (data) {
-          applyRemoteProject(data, info.sectionKey);
-          // 不强制跳转编辑器：保留用户当前视图（Agent 面板/读者页），仅提示已写回，
-          // 避免每次写作都把用户从完成反馈里拽到综述章节页
+          const current = activeSectionRef.current;
+          const text = editingContentRef.current;
+          let merged = data;
+          if (current !== info.sectionKey) {
+            if (current === "abstract") {
+              if (merged.abstract !== text) merged = { ...merged, abstract: text };
+            } else if (merged.sections[current] !== text) {
+              merged = { ...merged, sections: { ...merged.sections, [current]: text } };
+            }
+          }
+          applyRemoteProject(merged, info.sectionKey);
+          // 右侧编辑器跟到刚写回的节，但不切 Tab（留在 Agent），避免还要去「章节结构」点段落
           const label = getSectionLabelForMode(
             info.sectionKey,
             data.mode ?? projectRef.current.mode,
@@ -491,8 +522,7 @@ function WorkbenchContent() {
         const data = await projectStore.get(projectId);
         if (data) {
           applyRemoteProject(data, info.sectionKey);
-          // 与章节写回一致：只 toast + 刷新，绝不 focusEditorAfterDraft / 切 Tab，
-          // 避免生成图后把用户从 Agent 面板拽到大纲/结构页
+          // 跟章节写回一样：右侧跟到插入节，但不切 Tab
           if (info.sectionKey) {
             toast.success(
               info.caption
@@ -929,7 +959,7 @@ function WorkbenchContent() {
                   {structureSections.map((s) => (
                     <button
                       key={s.id}
-                      onClick={() => setActiveSection(s.id)}
+                      onClick={() => showEditorSection(s.id)}
                       className={cn(
                         "w-full text-left px-3 py-2.5 rounded-xl text-sm transition-all flex items-center justify-between group",
                         activeSection === s.id
@@ -1080,6 +1110,7 @@ function WorkbenchContent() {
                   sections={project.sections}
                   mode={project.mode}
                   language={project.language}
+                  onJumpToSection={showEditorSection}
                 />
               </div>
               {/* flex-1 吃剩余高度：AgentPanel 自身是 h-full，不能和收口条做兄弟再各占 100% */}
@@ -1093,12 +1124,7 @@ function WorkbenchContent() {
                     onCollapse={() => setIsSidebarOpen(false)}
                     onOpenBlueprint={() => void handleOpenBlueprintDialog()}
                     onOpenOutline={() => setActiveTab("outline")}
-                    onJumpToSection={(sectionKey) => {
-                      setActiveSection(sectionKey);
-                      toast.message(
-                        "已切换到对应章节；插图当前在节末，可在底部「本节插图」条挪位置",
-                      );
-                    }}
+                    onJumpToSection={showEditorSection}
                   />
                 </ErrorBoundary>
               </div>
@@ -1158,6 +1184,8 @@ function WorkbenchContent() {
             editorMode={editorMode}
             rightPanelMode={rightPanelMode}
             onContentChange={setEditingContent}
+            sectionOptions={structureSections}
+            onSectionChange={showEditorSection}
             onEditorModeChange={setEditorMode}
             onRightPanelModeChange={(mode) => { setRightPanelMode(mode); setIsPreviewOpen(true); }}
             onOpenMetaDialog={() => setIsMetaDialogOpen(true)}
@@ -1267,7 +1295,7 @@ function WorkbenchContent() {
         activeSection={activeSection}
         editingContent={editingContent}
         onApplyFix={(content, sectionKey) => handleApplyAiContent(content, sectionKey)}
-        onJumpToSection={(sectionKey) => setActiveSection(sectionKey)}
+        onJumpToSection={showEditorSection}
       />
     </div>
     </ErrorBoundary>

@@ -2,11 +2,13 @@
 
 import { Button } from "@/components/ui/button";
 import type { AgentContinueHint } from "@/lib/agent/continue-hint";
+import { peekSectionKeyFromContinueHint } from "@/lib/agent/continue-hint";
 
 interface AgentContinueBarProps {
   hint: AgentContinueHint;
   disabled?: boolean;
   onContinue: (goal: string) => void;
+  onJumpToSection?: (sectionKey: string) => void;
 }
 
 /** 输入区上方的续跑提示：和检查点条同一套克制样式，不另做营销按钮 */
@@ -14,14 +16,27 @@ export function AgentContinueBar({
   hint,
   disabled,
   onContinue,
+  onJumpToSection,
 }: AgentContinueBarProps) {
+  const peekKey = peekSectionKeyFromContinueHint(hint);
   return (
     <div className="mb-2 flex items-center gap-3 rounded-xl border border-[#1a5632]/12 bg-[#f6f8f6] px-3 py-2">
       <div className="min-w-0 flex-1">
         <p className="truncate text-[12px] leading-snug text-[#122820]">
           <span className="text-[#5a7a68]">{hint.eyebrow}</span>
           <span className="mx-1.5 text-[#1a5632]/25">·</span>
-          <span className="font-medium">{hint.title}</span>
+          {peekKey && onJumpToSection ? (
+            <button
+              type="button"
+              className="font-medium underline-offset-2 hover:underline"
+              title="打开右侧对应章节，不发送"
+              onClick={() => onJumpToSection(peekKey)}
+            >
+              {hint.title}
+            </button>
+          ) : (
+            <span className="font-medium">{hint.title}</span>
+          )}
         </p>
         <p className="truncate text-[11px] leading-snug text-[#5a7a68]" title={hint.detail}>
           {hint.detail}

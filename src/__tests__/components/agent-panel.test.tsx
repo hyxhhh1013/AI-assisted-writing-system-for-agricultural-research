@@ -278,3 +278,23 @@ describe("AgentPanel × 继续推进条", () => {
     expect(screen.getByRole("button", { name: "回答后继续" })).toBeTruthy();
   });
 });
+
+describe("AgentPanel × 已写回跳节", () => {
+  beforeEach(() => {
+    mockAgent = makeAgent();
+  });
+
+  it("点「已写回」调用 onJumpToSection 且不切侧栏", () => {
+    const onJump = vi.fn();
+    mockAgent = makeAgent({
+      isRunning: false,
+      status: "completed",
+      writeStatus: null,
+      lastPersisted: { sectionKey: "introduction" },
+      messages: [{ kind: "user", text: "写引言" }],
+    });
+    render(<AgentPanel onJumpToSection={onJump} />);
+    fireEvent.click(screen.getByRole("button", { name: /已写回/ }));
+    expect(onJump).toHaveBeenCalledWith("introduction");
+  });
+});

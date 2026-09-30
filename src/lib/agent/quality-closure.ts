@@ -4,6 +4,7 @@
  * WRITE-QA-006：第 5 信号避免「四灯全绿、正文仍空话」。
  */
 import type { WritingQaReport } from "@/contracts/writing-qa";
+import { proseFocusSectionKey } from "@/contracts/writing-qa";
 import { evaluateSectionWritingQa } from "@/lib/agent/writing-qa-run";
 import { evaluateDraftCoverage } from "@/lib/draft-coverage";
 
@@ -15,6 +16,8 @@ export interface QualitySignal {
   status: QualitySignalStatus;
   label: string;
   detail: string;
+  /** 点按跳到该节（文风 / 摘要 / 节完整度缺口） */
+  sectionKey?: string;
 }
 
 export interface QualityClosureInput {
@@ -83,6 +86,7 @@ export function evaluateProjectProseQa(
 function proseSignal(
   report: WritingQaReport | null,
 ): QualitySignal {
+  const sectionKey = proseFocusSectionKey(report);
   if (!report) {
     return {
       key: "prose",
@@ -98,6 +102,7 @@ function proseSignal(
       status: "warn",
       label: "文风质检",
       detail: `不可写回：${repair.map((f) => f.code).slice(0, 3).join("、") || "block"}`,
+      ...(sectionKey ? { sectionKey } : {}),
     };
   }
   if (report.verdict === "repair") {
@@ -106,6 +111,7 @@ function proseSignal(
       status: "warn",
       label: "文风质检",
       detail: `${repair.length} 条待修补（${repair.map((f) => f.code).slice(0, 3).join("、")}）`,
+      ...(sectionKey ? { sectionKey } : {}),
     };
   }
   const warns = report.findings.filter((f) => f.action === "warn");
@@ -114,6 +120,7 @@ function proseSignal(
     status: "ok",
     label: "文风质检",
     detail: warns.length > 0 ? `通过（${warns.length} 条提示）` : "通过",
+    ...(sectionKey ? { sectionKey } : {}),
   };
 }
 
@@ -133,6 +140,11 @@ export function buildQualityClosure(input: QualityClosureInput): QualityClosureR
 
   const coverageOk =
     coverage.requiredGaps.length === 0 && coverage.thinKeys.length === 0;
+  const coverageFocus =
+    coverage.nextSectionKey
+    ?? coverage.requiredGaps[0]
+    ?? coverage.thinKeys[0]
+    ?? undefined;
   signals.push({
     key: "coverage",
     status: coverageOk ? "ok" : "warn",
@@ -140,6 +152,7 @@ export function buildQualityClosure(input: QualityClosureInput): QualityClosureR
     detail: coverageOk
       ? `必写 ${coverage.okRequiredCount}/${coverage.requiredCount} 全达标`
       : `必写 ${coverage.okRequiredCount}/${coverage.requiredCount}${coverage.requiredGaps.length > 0 ? `，缺 ${coverage.requiredGaps.join("、")}` : ""}${coverage.thinKeys.length > 0 ? `，偏薄 ${coverage.thinKeys.join("、")}` : ""}`,
+    ...(!coverageOk && coverageFocus ? { sectionKey: coverageFocus } : {}),
   });
 
   const abs = coverage.sections.find((s) => s.key === "abstract");
@@ -154,6 +167,7 @@ export function buildQualityClosure(input: QualityClosureInput): QualityClosureR
         : absStatus === "thin"
           ? `${abs?.chars ?? 0} 字（偏薄）`
           : "未写",
+    sectionKey: "abstract",
   });
 
   signals.push({

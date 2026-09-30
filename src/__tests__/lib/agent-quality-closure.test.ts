@@ -38,6 +38,7 @@ describe("buildQualityClosure", () => {
     });
     const coverage = r.signals.find((s) => s.key === "coverage");
     expect(coverage?.status).toBe("warn");
+    expect(coverage?.sectionKey).toBeTruthy();
     expect(r.readyToClose).toBe(false);
   });
 
@@ -51,6 +52,7 @@ describe("buildQualityClosure", () => {
     });
     const abs = r.signals.find((s) => s.key === "abstract");
     expect(abs?.status).toBe("missing");
+    expect(abs?.sectionKey).toBe("abstract");
     expect(r.summary).toContain("摘要");
   });
 
@@ -99,6 +101,7 @@ describe("buildQualityClosure", () => {
       reviewDone: true,
     });
     expect(r.signals.find((s) => s.key === "prose")?.status).toBe("warn");
+    expect(r.signals.find((s) => s.key === "prose")?.sectionKey).toBe("introduction");
     expect(r.readyToClose).toBe(false);
     expect(r.summary).toContain("可优化");
   });

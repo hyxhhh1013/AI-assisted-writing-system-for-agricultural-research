@@ -82,6 +82,8 @@ interface WorkbenchEditorAreaProps {
   onCleanReferences?: () => void;
   aiPreview?: WritingPreviewData | null;
   projectId: string;
+  sectionOptions?: { id: string; label: string }[];
+  onSectionChange?: (sectionKey: string) => void;
 }
 
 function WorkbenchEditorToolbar({
@@ -205,7 +207,7 @@ export function WorkbenchEditorArea({
   onExportDoc, onExportMarkdown, onExportPDF,
   onExpandParagraph, onAuditParagraph, onFixParagraph, onSelectionAction,
   onApplyAiOutput, onCancelAiOutput, onCleanReferences, aiPreview,
-  projectId,
+  projectId, sectionOptions, onSectionChange,
 }: WorkbenchEditorAreaProps) {
   const [cursorOffset, setCursorOffset] = useState<number | null>(null);
   const captureCursor = useCallback(
@@ -341,7 +343,38 @@ export function WorkbenchEditorArea({
             <FileType className={cn("h-4 w-4", accent.iconText)} />
           </div>
           <div className="flex items-center gap-2 min-w-0">
-            <span className="font-semibold text-sm text-[#122820] truncate">{sectionLabel}</span>
+            {onSectionChange && sectionOptions && sectionOptions.length > 0 ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <button
+                      type="button"
+                      className="flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 text-left hover:bg-black/[0.04]"
+                      title="切换章节，无需离开当前侧栏"
+                    >
+                      <span className="truncate font-semibold text-sm text-[#122820]">{sectionLabel}</span>
+                      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#6b7c72]" />
+                    </button>
+                  }
+                />
+                <DropdownMenuContent align="start" className="max-h-80 w-56 overflow-y-auto">
+                  <DropdownMenuLabel className="text-[10px] font-normal text-[#6b7c72]">
+                    当前编辑章节
+                  </DropdownMenuLabel>
+                  {sectionOptions.map((s) => (
+                    <DropdownMenuItem
+                      key={s.id}
+                      onClick={() => onSectionChange(s.id)}
+                      className={s.id === activeSection ? "font-medium text-[#1a5632]" : ""}
+                    >
+                      {s.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <span className="truncate font-semibold text-sm text-[#122820]">{sectionLabel}</span>
+            )}
             <ProjectModeBadge mode={writingMode} />
           </div>
         </div>

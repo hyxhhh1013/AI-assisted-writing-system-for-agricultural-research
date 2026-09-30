@@ -14,6 +14,7 @@ interface QualityClosurePanelProps {
   sections?: Record<string, string>;
   mode?: "review" | "research";
   language?: "zh" | "en";
+  onJumpToSection?: (sectionKey: string) => void;
 }
 
 const STATUS_STYLE: Record<
@@ -34,6 +35,7 @@ export function QualityClosurePanel({
   sections,
   mode,
   language,
+  onJumpToSection,
 }: QualityClosurePanelProps) {
   const [citationPassed, setCitationPassed] = useState<boolean | null>(null);
   const [reviewDone, setReviewDone] = useState(false);
@@ -88,19 +90,33 @@ export function QualityClosurePanel({
         <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {result.signals.map((s) => {
             const style = STATUS_STYLE[s.status];
+            const jumpKey = s.sectionKey;
+            const clickable = Boolean(jumpKey && onJumpToSection);
+            const ChipTag = clickable ? "button" : "span";
             return (
-              <span
+              <ChipTag
                 key={s.key}
-                title={s.detail}
+                {...(clickable ? { type: "button" as const } : {})}
+                title={
+                  clickable
+                    ? `${s.detail} · 点击跳到该节`
+                    : s.detail
+                }
                 className={cn(
                   "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px]",
                   style.chip,
+                  clickable && "cursor-pointer hover:opacity-90",
                 )}
+                onClick={
+                  clickable
+                    ? () => onJumpToSection?.(jumpKey!)
+                    : undefined
+                }
               >
                 <span className={cn("h-1.5 w-1.5 rounded-full", style.dot)} />
                 {s.label}
                 {s.status !== "ok" && s.status !== "missing" ? " ⚠" : ""}
-              </span>
+              </ChipTag>
             );
           })}
         </div>

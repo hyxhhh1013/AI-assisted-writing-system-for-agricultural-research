@@ -724,9 +724,20 @@ export function AgentPanel({
           {agent.lastPersisted ? (
             <>
               <span className="text-border">·</span>
-              <span className="text-[#1a5632]">
-                已写回 {agent.lastPersisted.sectionKey}
-              </span>
+              {onJumpToSection ? (
+                <button
+                  type="button"
+                  className="text-[#1a5632] underline-offset-2 hover:underline"
+                  title="打开右侧对应章节"
+                  onClick={() => onJumpToSection(agent.lastPersisted!.sectionKey)}
+                >
+                  已写回 {figureSectionLabel(agent.lastPersisted.sectionKey) ?? agent.lastPersisted.sectionKey}
+                </button>
+              ) : (
+                <span className="text-[#1a5632]">
+                  已写回 {agent.lastPersisted.sectionKey}
+                </span>
+              )}
             </>
           ) : null}
           {projectId && !agent.isRunning ? (
@@ -1346,6 +1357,7 @@ export function AgentPanel({
         sessionId={agent.sessionId ?? undefined}
         projectId={projectId}
         continueHint={continueHint}
+        onJumpToSection={onJumpToSection}
         onSend={(goal, opts) => {
           const firstUser = !agent.messages.some((m) => m.kind === "user");
           const payload = firstUser

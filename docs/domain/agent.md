@@ -1,6 +1,6 @@
 # Agent 编排（写作助手）
 
-> L3 域文档 · 更新：2026-09-23（HITL：蓝图一律等人；缺大纲先问；每轮一个可见结果）  
+> L3 域文档 · 更新：2026-09-30（Phase 18：续跑条展示写节质检；主张/soft 数字/ingest 可见）  
 > 契约唯一权威源：`src/contracts/agent.ts`（SSE 事件）、`src/contracts/agent-session.ts`（会话消息）、`src/contracts/agent-intent.ts`（`IntentKind`）。
 
 ## 概览
@@ -59,6 +59,7 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 | `src/lib/agent/session-store.ts` | 会话持久化 + `tryAcquireAgentSession` 并发互斥 |
 | `src/hooks/use-agent.ts` / `components/shared/agent/agent-panel.tsx` | 前端状态机与面板；空闲时输入框上方「继续推进」条（检查点同款克制条，非发送旁按钮）。工作台 Agent Tab 里质量收口条与面板是上下兄弟：面板外包 `flex-1 min-h-0`，禁止再让 `h-full` 与收口条叠满父级把输入框裁掉 |
 | `src/hooks/use-editor-sync.ts` | 编辑器→project 防抖同步。Agent 写回时 `bumpEditorSyncEpoch`，禁止空的当前节（默认引言）把刚 persist 的正文盖掉 |
+| `workbench-page-client` `showEditorSection` | Agent 页切节：编辑器标题下拉 / 收口灯 / 续跑条标题 / 「已写回」。不切 Tab；先落盘当前编辑区再换节 |
 | `src/app/api/agent/route.ts` | SSE 路由（认证、会话抢占、流式输出）；客户端断开后 `enqueue`/`close` 软失败，不记 `agent stream error` |
 
 ## SSE 事件表（`contracts/agent.ts`）
@@ -357,6 +358,10 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 - 脚本：`npm run eval:quality`（`scripts/eval-quality.ts`，无参输出好/坏对比，可传 manifest.json）。
 
 **注意**：词重叠/数值回扣是「代理信号」，claim 级 truthfulness 以 claim 接地为准；规则分用于「判断方向」，不做硬门禁。LLM 分与规则分不可直接比绝对值（量纲不同），只看改完后两把尺是否同向。
+
+## Phase 18 质量缺口（01–04 已落地）
+
+WRITE-QA 与 HITL 收口之后，编排不再作为优化主轴。已落地：写节 `qaReport` 进续跑条与收口文风跳节；主张未覆盖 / soft 精确数字 / unbound 进质检；inspect/简报可见 dataClaims。任务在 [`plans/W3-AP-QUALITY-NEXT.md`](../plans/W3-AP-QUALITY-NEXT.md)。门禁审计 / 技能包 / 关 Refiner 仍 blocked。
 
 ## 常用命令
 
