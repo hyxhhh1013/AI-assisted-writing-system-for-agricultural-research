@@ -140,16 +140,49 @@ describe("stripDisallowedCitations / grounded allow-list", () => {
 });
 
 describe("shouldSkipKnowledgeRag (W3-AP-WRITE-NO-RAG)", () => {
-  const longAbs = "摘要".repeat(50); // >= 80 chars
+  const teaAbs =
+    "绿茶香气品质形成机制及关键挥发性成分研究进展，杀青与摊放工艺影响茶汤香气。".repeat(3);
+  const pyroAbs =
+    "生物质热解温度与催化剂对生物炭产率和比表面积的影响研究综述内容填充。".repeat(3);
+  const longAbs = "摘要".repeat(50);
 
-  it("skips when soft-groundable abstracts exist", () => {
+  it("does not skip with a single long abstract", () => {
     expect(
       shouldSkipKnowledgeRag({
-        referenceEvidence: [{ index: 1, abstract: longAbs }],
+        referenceEvidence: [{ index: 1, abstract: teaAbs }],
+        title: "绿茶香气品质形成机制",
+        forceKnowledgeRag: false,
+        skipKnowledgeRagDisabled: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("skips when two abstracts cover the writing topic", () => {
+    expect(
+      shouldSkipKnowledgeRag({
+        referenceEvidence: [
+          { index: 1, abstract: teaAbs },
+          { index: 2, abstract: teaAbs },
+        ],
+        title: "绿茶香气品质形成机制",
         forceKnowledgeRag: false,
         skipKnowledgeRagDisabled: false,
       }),
     ).toBe(true);
+  });
+
+  it("does not skip when abstracts are off-topic", () => {
+    expect(
+      shouldSkipKnowledgeRag({
+        referenceEvidence: [
+          { index: 1, abstract: pyroAbs },
+          { index: 2, abstract: pyroAbs },
+        ],
+        title: "绿茶香气品质形成机制",
+        forceKnowledgeRag: false,
+        skipKnowledgeRagDisabled: false,
+      }),
+    ).toBe(false);
   });
 
   it("does not skip when user selected knowledge sources", () => {

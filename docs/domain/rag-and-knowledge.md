@@ -97,7 +97,7 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 - `localRAG`：BM25 + 余弦相似度，RRF 融合；**查询同义词扩展 + 多 query RRF**（`lib/rag-query-expand.ts`）
 - `getBibMap` / `getCategories` / `search` 走 Prisma 缓存
 - 写作上下文：`services/writing-context.ts` 组装 `contextText` + `refMapping`
-- **WRITE-NO-RAG（2026-08-17）**：`retrieveWritingContext` 在项目已有 soft-groundable 摘要（默认 ≥1）且未勾选知识库来源时**跳过** `searchWritingRagChunks`，避免离题库内文献抢引用位；`retrieveWritingPreview` **始终**走 RAG。强制检索：`WRITING_FORCE_KNOWLEDGE_RAG=1` 或 `WRITING_SKIP_KNOWLEDGE_RAG=0`。
+- **WRITE-NO-RAG（2026-09-30）**：正式写节在 **≥2 条** soft-groundable 摘要 **且** 题名/方向主题词能对上摘要时才跳过知识库 RAG；单条摘要或跑题摘要仍检索。勾选知识库来源 / `WRITING_FORCE_KNOWLEDGE_RAG=1` / `WRITING_SKIP_KNOWLEDGE_RAG=0` 强制检索。预览始终走 RAG。
 
 ### 检索性能（库变大后）
 
@@ -111,7 +111,7 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
   - 倒排加载时把题名/文件名以 3× TF 写入（**无需重建 PDF**），提高题名命中。
   - 索引跳过参考文献/致谢页（第 3 页起）；检索时对参考文献块降权（已有索引立刻生效）。
   - BM25 弱命中时向量扫描最多 800 条（无词面命中则分层抽样），避免整类上万 chunk 全扫。
-- **题名/文件名加权 + 轻量重排**：`applyMetadataBoost` / `lexicalRerank` 用 bib.title 与 source 抬高相关 chunk。
+- **外部摘要降权（2026-09-30）**：物理分类「外部摘要」在融合分与全库 RRF 列表上低于实验室 PDF；query 已命中茶学/热化学等时压得更狠。泛英文（values/physical/treated 等）在有领域词时不进 query。OA PDF 增量索引默认跑 Stage 3。存量摘要向量：`node scripts/index-pdfs.mjs --embed-external-abstracts`（独立 `index_外部摘要.emb`）。
 - **条件化 multi-query**：默认 `auto`——弱召回、纯英文、或 Top 分类偏离提示时才展开变体；避免每请求 4 路全扫。
 - **`.emb` 按需 pread**：`EmbeddingStore` 不再把整个 `.emb` 读进内存，只保留文件句柄 + 维度；`get()` 用 `fs.readSync` 按偏移读单条向量（配合两阶段，每次仅读候选那几千条）。内存不再随库大小线性膨胀。
 - **倒排索引协作式构建**：`buildInvertedIndexAsync` 分批 `setImmediate` 让出事件循环，避免大库构建时冻结整个服务；全库索引由各分类索引按 offset **合并**得到（`mergeInvertedIndexInto`），不重复分词。
@@ -200,6 +200,21 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 - RAG `listKnowledgeCategories` 合并磁盘 `index_*.json`，避免 Prisma 未对齐时检索扫不到。全量重建保留摘要 chunk 时同步把物理分类写回「外部摘要」，并尽量保留 `preferredCategory`。
 - **全量重建保留纯摘要**：`index-pdfs.mjs` Stage 2 全量写盘时，会把旧 index 里「source 不在本次 PDF 扫描集合」的纯摘要 chunk 保留下来、统一软落到「外部摘要」分类（`scanFiles` 只扫 PDF，否则全量重建会丢这批外部导入的无 PDF 摘要）
 - 运行时 query 向量维度与 `.emb` 不一致（换 Embedding Model 未重建）会打一次性 `dim mismatch` 告警，随后向量检索退化为纯 BM25
+
+## Agent 写作：目录卡 → 精读 → 再写
+
+综述/引言不要把 50 篇摘要一次塞进 Writer，也不要每个子节重读。
+
+| 边界 | 值 |
+|------|-----|
+| 会话摘要精读 | 最多 12 篇，门槛约 4 篇即可开写 |
+| 会话全文 | 最多 4 篇 `read_full_text` / `search_knowledge(sourceKey)` |
+| 每节写入 Writer | 整节 ≤6 条摘要；子节/小点 ≤5 条、摘要截到约 420 字 |
+| RAG 文件 | 每次 write 最多 4 个 source |
+
+1. `list_references` 短目录卡（默认 120 / 上限 200）
+2. 本会话精读一次，后续子节复用 `readingPack`
+3. 小点扩写只写**一个**自然段（不要 1～2 段）
 
 ## UI
 

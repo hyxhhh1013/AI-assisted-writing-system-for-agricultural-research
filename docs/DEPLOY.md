@@ -124,6 +124,15 @@ pm2 reload grainscript
 
 或 Admin：`POST /api/admin/knowledge/rebuild-external-abstracts`，body `{ "all": true }`。
 
+摘要分类补向量（独立 `index_外部摘要.emb`，勿混进实验室 PDF 的 `.emb`）：
+
+```bash
+cd /home/ubuntu/grainscript
+set -a && . ./.env && set +a
+node scripts/index-pdfs.mjs --embed-external-abstracts
+pm2 reload grainscript
+```
+
 ---
 
 ## 四、踩坑清单（部署前必读）

@@ -18,6 +18,10 @@ import { termOverlapRatio } from "@/lib/citation-grounding";
 const MIN_BIND_SCORE = 0.14;
 const MAX_REFS_PER_CARD = 3;
 const MAX_DATA_PER_CARD = 2;
+/** 分接近时视为并列，优先尚未绑过的编号，避免 50 篇综述全挤在 [1][2][3] */
+const BIND_SCORE_TIE = 0.04;
+/** Writer 摘要池：绑中文献 + 主题相近补位上限 */
+const MAX_SLIM_EVIDENCE = 14;
 
 export interface BindableReference {
   n: number;
@@ -90,13 +94,40 @@ export function buildBindableReferencePool(input: {
   return [...byN.values()].sort((a, b) => a.n - b.n);
 }
 
-function bindRefsForClaim(claim: string, pool: BindableReference[]): ClaimEvidence[] {
+function bindRefsForClaim(
+  claim: string,
+  pool: BindableReference[],
+  usedNs: Set<number>,
+): ClaimEvidence[] {
   const scored = pool
     .map((ref) => ({ ref, score: termOverlapRatio(claim, corpusOf(ref)) }))
     .filter((row) => row.score >= MIN_BIND_SCORE)
-    .sort((a, b) => b.score - a.score || a.ref.n - b.ref.n)
-    .slice(0, MAX_REFS_PER_CARD);
-  return scored.map((row) => ({
+    .sort((a, b) => {
+      const d = b.score - a.score;
+      if (Math.abs(d) > BIND_SCORE_TIE) return d;
+      const usedA = usedNs.has(a.ref.n) ? 1 : 0;
+      const usedB = usedNs.has(b.ref.n) ? 1 : 0;
+      if (usedA !== usedB) return usedA - usedB;
+      return a.ref.n - b.ref.n;
+    });
+
+  const picked: typeof scored = [];
+  for (const row of scored) {
+    if (picked.length >= MAX_REFS_PER_CARD) break;
+    if (usedNs.has(row.ref.n)) {
+      const unused = scored.find(
+        (x) =>
+          !usedNs.has(x.ref.n)
+          && !picked.some((p) => p.ref.n === x.ref.n)
+          && x.score >= row.score - 0.08,
+      );
+      if (unused) continue;
+    }
+    picked.push(row);
+    usedNs.add(row.ref.n);
+  }
+
+  return picked.map((row) => ({
     kind: "ref" as const,
     n: row.ref.n,
     grounded: row.ref.grounded,
@@ -125,9 +156,10 @@ function bindDataForClaim(claim: string, dataClaims: EvidenceClaim[]): ClaimEvid
 export function bindSectionEvidence(input: BindSectionEvidenceInput): BindSectionEvidenceResult {
   const pool = buildBindableReferencePool(input);
   const dataClaims = input.dataClaims ?? [];
+  const usedNs = new Set<number>();
   const cards: SectionClaimCard[] = input.spec.claimCards.map((card) => {
     const evidence = [
-      ...bindRefsForClaim(card.claim, pool),
+      ...bindRefsForClaim(card.claim, pool, usedNs),
       ...(input.spec.register === "results" ? bindDataForClaim(card.claim, dataClaims) : []),
     ];
     return { ...card, evidence };
@@ -174,8 +206,25 @@ export function slimReferenceEvidenceForSpec(
     }
   }
   if (ns.size === 0) return list;
-  const slim = list.filter((ev) => ns.has(ev.index));
-  return slim.length > 0 ? slim : list;
+  const bound = list.filter((ev) => ns.has(ev.index));
+  if (bound.length === 0) return list;
+  if (bound.length >= MAX_SLIM_EVIDENCE) {
+    return bound.sort((a, b) => a.index - b.index).slice(0, MAX_SLIM_EVIDENCE);
+  }
+
+  const claimBlob = spec.claimCards.map((c) => c.claim).join("\n");
+  const extra = list
+    .filter((ev) => !ns.has(ev.index) && (ev.title || ev.abstract))
+    .map((ev) => ({
+      ev,
+      score: termOverlapRatio(claimBlob, `${ev.title ?? ""}\n${ev.abstract ?? ""}`),
+    }))
+    .filter((row) => row.score >= MIN_BIND_SCORE * 0.7)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_SLIM_EVIDENCE - bound.length)
+    .map((row) => row.ev);
+
+  return [...bound, ...extra].sort((a, b) => a.index - b.index);
 }
 
 /** 短表，禁止带摘要。给 Writer 看「只许用这些号」。 */
@@ -189,7 +238,7 @@ export function formatEvidenceBindHint(spec: SectionSpecV1): string {
     return `${card.id} ${card.claim.slice(0, 40)} → ${tail}`;
   });
   return [
-    "【证据绑定】主张只许引用下列编号；未列出的 [n] 不要用。soft=只可概括，禁止编造该文献精确数据。",
+    "【证据绑定】优先引用下列编号。综述还可概括引用项目参考文献里其它有摘要/全文的 [n]，勿编造精确数据。soft=只可概括。",
     ...lines,
   ].join("\n");
 }

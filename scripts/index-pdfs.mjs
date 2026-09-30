@@ -14,7 +14,7 @@
  *   node scripts/index-pdfs.mjs --files=a.pdf,b.pdf  仅处理指定文献（可配合 force-stage1/3）
  *   node scripts/index-pdfs.mjs --rechunk            把 schemaVersion<2 的缓存当 miss（按 IMRaD 重切，不默认全库重解析）
  *   RAG_RECHUNK=1                                    同上
- *   node scripts/index-pdfs.mjs --enrich-metrics     Stage 2 后对本次文献 OpenAlex 补被引/ISSN（限 20 篇）
+ *   node scripts/index-pdfs.mjs --embed-external-abstracts  仅为「外部摘要」分类补/增量向量（无 PDF）
  *   ENRICH_OPENALEX_AFTER_INDEX=true                   同上，环境变量开启
  */
 
@@ -65,6 +65,7 @@ const FLAGS = {
   rechunk: process.argv.includes("--rechunk") || process.env.RAG_RECHUNK === "1",
   /** 每个 batch 之间的延迟（毫秒），用于控制 API 调用频率 */
   embedDelay:  parseInt(process.argv.find(a => a.startsWith("--embed-delay="))?.split("=")[1] || "0", 10),
+  embedExternalAbstracts: process.argv.includes("--embed-external-abstracts"),
 };
 
 function isPartialReindex() {
@@ -730,6 +731,26 @@ async function stage3_embed(allChunks) {
   console.log("Indexes updated (JSON + .emb, incremental)");
 }
 
+async function embedExternalAbstractsOnly() {
+  const cat = "外部摘要";
+  const indexPath = path.join(DATA_DIR, `index_${cat}.json`);
+  const chunks = loadJSON(indexPath, []);
+  if (!Array.isArray(chunks) || chunks.length === 0) {
+    console.log("embed-external-abstracts: 无 index_外部摘要.json 或为空");
+    emitProgress({ type: "complete", totalChunks: 0, fileCount: 0, categoryCount: 0, duplicatesSkipped: 0 });
+    return;
+  }
+  console.log(`\n── Stage 3: 外部摘要 ${chunks.length} chunks ──`);
+  await stage3_embed(chunks);
+  emitProgress({
+    type: "complete",
+    totalChunks: chunks.length,
+    fileCount: 0,
+    categoryCount: 1,
+    duplicatesSkipped: 0,
+  });
+}
+
 // ─── File Scanning ────────────────────────────────────────────────────────────
 
 function scanFiles() {
@@ -784,6 +805,12 @@ async function main() {
 
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   if (!fs.existsSync(RAW_DIR)) fs.mkdirSync(RAW_DIR, { recursive: true });
+
+  if (FLAGS.embedExternalAbstracts) {
+    await embedExternalAbstractsOnly();
+    console.log("\n=== Done ===");
+    return;
+  }
 
   const { uniqueFiles, duplicatesSkipped, pathsFound } = scanFiles();
   let filesToProcess = uniqueFiles;

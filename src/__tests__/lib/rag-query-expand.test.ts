@@ -88,6 +88,19 @@ describe("rag-query-expand", () => {
     expect(terms).toContain("biochar");
   });
 
+  it("drops generic academic English when a domain term is present", () => {
+    const terms = extractQueryTerms("physical treated biochar pyrolysis");
+    expect(terms).toContain("biochar");
+    expect(terms).not.toContain("physical");
+    expect(terms).not.toContain("treated");
+  });
+
+  it("keeps generic English when the query has no domain term", () => {
+    const terms = extractQueryTerms("physical treated values");
+    expect(terms).toContain("physical");
+    expect(terms).toContain("values");
+  });
+
   it("weights original query terms higher than same-script synonyms", () => {
     const w = buildRagSearchTermWeights("biochar pyrolysis");
     expect(w.get("biochar")).toBe(1);

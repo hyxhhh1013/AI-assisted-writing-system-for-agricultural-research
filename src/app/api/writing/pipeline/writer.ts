@@ -51,7 +51,7 @@ export async function runExpandBulletPhase(
 【本节已写入内容（请自然衔接，勿重复）】
 ${adopted}
 
-【本条扩写要点（仅写这一条，1～2 个完整段落，字数 ${bulletBudget.minChars}–${bulletBudget.maxChars}）】
+【本条扩写要点（仅写这一条，一个完整段落，不要拆成两段，字数 ${bulletBudget.minChars}–${bulletBudget.maxChars}）】
 ${idx + 1}. ${normalizedBullets[idx]}
 
 【其他要点（本条勿展开）】

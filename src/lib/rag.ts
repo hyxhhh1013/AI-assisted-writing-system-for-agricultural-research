@@ -12,7 +12,11 @@ import {
 import { EXTERNAL_ABSTRACT_CATEGORY } from "@/lib/knowledge-category-hints";
 import { cosineSimilarity } from "./similarity";
 import { buildRagSearchTerms, buildRagSearchTermWeights, expandRagQueries, inferCategoriesFromQuery, collectIndexTermTf, shouldUseMultiQuery } from "@/lib/rag-query-expand";
-import { referencesScoreMultiplier } from "@/lib/rag-chunk-quality";
+import {
+  referencesScoreMultiplier,
+  externalAbstractScoreMultiplier,
+  ragListRrfWeight,
+} from "@/lib/rag-chunk-quality";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("rag");
@@ -250,15 +254,16 @@ function ragCategoryCacheMax(): number {
   return Math.floor(n);
 }
 
-/** 多路检索结果 RRF 融合（按 chunk id 去重） */
+/** 多路检索结果 RRF 融合（按 chunk id 去重；纯外部摘要列表降权） */
 function rrfMergeChunkLists(lists: RagChunk[][], k = 60): RagChunk[] {
   const scores = new Map<string, { chunk: RagChunk; score: number }>();
   for (const list of lists) {
+    const listW = ragListRrfWeight(list);
     list.forEach((chunk, rank) => {
       const id =
         chunk.metadata.id ||
         `${chunk.metadata.source}:${chunk.metadata.chunkIndex ?? 0}:${chunk.metadata.pageStart ?? 0}`;
-      const add = 1 / (k + rank + 1);
+      const add = listW / (k + rank + 1);
       const prev = scores.get(id);
       if (prev) prev.score += add;
       else scores.set(id, { chunk, score: add });
@@ -398,6 +403,29 @@ function applyMetadataBoost(
     }
     if (boost > 0) scores[i] += boost;
   }
+  applyPhraseBoost(scores, chunks, query);
+}
+
+/** 连续英文实词短语命中正文/题名（补单词语 BM25） */
+function applyPhraseBoost(scores: number[], chunks: RagChunk[], query: string): void {
+  const words = query.toLowerCase().match(/[a-z][a-z0-9\-]{3,}/g) || [];
+  if (words.length < 2) return;
+  const phrases: string[] = [];
+  for (let i = 0; i < words.length - 1; i++) {
+    phrases.push(`${words[i]} ${words[i + 1]}`);
+  }
+  for (let i = 0; i < chunks.length; i++) {
+    const src = path.basename((chunks[i].metadata.source || "").replace(/\\/g, "/")).toLowerCase();
+    const bib = resolveBibEntry(chunks[i].metadata.source);
+    const title = (bib?.bib?.title || "").toLowerCase();
+    const head = (chunks[i].content || "").toLowerCase().slice(0, 1600);
+    let extra = 0;
+    for (const p of phrases) {
+      if (title.includes(p)) extra += 3.5;
+      else if (head.includes(p) || src.includes(p.replace(/\s+/g, ""))) extra += 2;
+    }
+    if (extra > 0) scores[i] += extra;
+  }
 }
 
 /** Top 结果轻量词重叠重排（不调用 LLM） */
@@ -419,6 +447,7 @@ function lexicalRerank(chunks: RagChunk[], query: string, terms: string[]): RagC
       if (head.includes(t)) s += 1;
     }
     if (qLower.length >= 4 && title.includes(qLower.slice(0, 24))) s += 4;
+    if (c.metadata.category === EXTERNAL_ABSTRACT_CATEGORY) s *= 0.7;
     return { c, s, idx };
   });
   scored.sort((a, b) => b.s - a.s || a.idx - b.idx);
@@ -484,11 +513,12 @@ function bm25FromIndex(
   return Array.from(scores);
 }
 
-function applyReferencesPenalty(fused: number[], chunks: RagChunk[]): void {
+function applyCorpusPenalties(fused: number[], chunks: RagChunk[], queryHints: string[]): void {
   for (let i = 0; i < chunks.length; i++) {
     if (fused[i] <= 0) continue;
-    const m = referencesScoreMultiplier(chunks[i].content, chunks[i].metadata.pageStart);
-    if (m < 1) fused[i] *= m;
+    const refM = referencesScoreMultiplier(chunks[i].content, chunks[i].metadata.pageStart);
+    const absM = externalAbstractScoreMultiplier(chunks[i].metadata.category, queryHints);
+    fused[i] *= refM * absM;
   }
 }
 
@@ -1198,7 +1228,7 @@ export class LocalRAG {
     } else {
       fused = bm25.map((s) => s);
     }
-    applyReferencesPenalty(fused, pool);
+    applyCorpusPenalties(fused, pool, queryHints);
 
     const order = argsortDescending(fused);
 
@@ -1298,7 +1328,7 @@ export class LocalRAG {
         } else {
           fused = bm25.map((s) => s);
         }
-        applyReferencesPenalty(fused, pool);
+        applyCorpusPenalties(fused, pool, queryHints);
         const order = argsortDescending(fused).filter((i) => fused[i] > 0);
         if (order.length === 0) continue;
         const topN = Math.max(limit * 3, 30);

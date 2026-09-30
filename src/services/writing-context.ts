@@ -61,7 +61,7 @@ function sectionKeywordsForMode(section: string, mode?: "review" | "research"): 
 
 const retrievalConfigs: Record<string, { limit: number; maxPerSource: number }> = {
   precise: { limit: 10, maxPerSource: 2 },
-  balanced: { limit: 20, maxPerSource: 3 },
+  balanced: { limit: 20, maxPerSource: 4 },
   extensive: { limit: 60, maxPerSource: 6 },
 };
 
@@ -583,19 +583,39 @@ export async function retrieveWritingPreview(
 }
 
 /**
- * 有足够项目文献摘要时跳过知识库 RAG（W3-AP-WRITE-NO-RAG）。
+ * 有足够且与题名/方向对得上的项目摘要时跳过知识库 RAG（W3-AP-WRITE-NO-RAG）。
  *
  * - 用户勾选了知识库来源（`selectedSourceIds` 非空）→ 不跳过
  * - `WRITING_FORCE_KNOWLEDGE_RAG=1` 或 `WRITING_SKIP_KNOWLEDGE_RAG=0` → 不跳过
- * - soft-groundable 摘要数 ≥ 阈值 → 跳过（默认阈值 1）
+ * - soft-groundable 摘要数 ≥ 阈值（默认 2）且主题词能对上摘要 → 跳过
  *
  * 仅作用于 `retrieveWritingContext`（正式写节）；预览检索始终走 RAG。
  */
-export const MIN_SOFT_ABSTRACTS_TO_SKIP_KNOWLEDGE_RAG = 1;
+export const MIN_SOFT_ABSTRACTS_TO_SKIP_KNOWLEDGE_RAG = 2;
+
+/** 摘要是否覆盖写作主题（至少命中 min(2, 主题词数) 个 ≥3 字词） */
+export function writingTopicCoveredByAbstracts(
+  abstracts: string[],
+  topicTexts: Array<string | undefined>,
+): boolean {
+  const terms = extractTopicTerms(...topicTexts).filter((t) => t.length >= 3);
+  if (terms.length === 0) return true;
+  const blob = abstracts.join("\n").toLowerCase();
+  let hits = 0;
+  for (const t of terms) {
+    if (blob.includes(t.toLowerCase())) hits++;
+  }
+  return hits >= Math.min(2, terms.length);
+}
 
 export function shouldSkipKnowledgeRag(params: {
   referenceEvidence?: SoftReferenceEvidence[];
   selectedSourceIds?: string[];
+  title?: string;
+  researchDirection?: string;
+  section?: string;
+  context?: string;
+  bullets?: string[];
   /** 单测注入；缺省读环境变量 */
   forceKnowledgeRag?: boolean;
   skipKnowledgeRagDisabled?: boolean;
@@ -616,10 +636,15 @@ export function shouldSkipKnowledgeRag(params: {
 
   const min =
     params.minSoftAbstracts ?? MIN_SOFT_ABSTRACTS_TO_SKIP_KNOWLEDGE_RAG;
-  const softCount = (params.referenceEvidence ?? []).filter((e) =>
+  const soft = (params.referenceEvidence ?? []).filter((e) =>
     isSoftGroundable(e.abstract),
-  ).length;
-  return softCount >= min;
+  );
+  if (soft.length < min) return false;
+
+  return writingTopicCoveredByAbstracts(
+    soft.map((e) => e.abstract || ""),
+    [params.title, params.researchDirection, params.section, params.context, ...(params.bullets ?? [])],
+  );
 }
 
 export async function retrieveWritingContext(
@@ -632,6 +657,11 @@ export async function retrieveWritingContext(
   const skipRag = shouldSkipKnowledgeRag({
     referenceEvidence: params.referenceEvidence,
     selectedSourceIds,
+    title: params.title,
+    researchDirection: params.researchDirection,
+    section: params.section,
+    context: params.context,
+    bullets: params.bullets,
   });
 
   let rawChunks: RagChunk[] = [];

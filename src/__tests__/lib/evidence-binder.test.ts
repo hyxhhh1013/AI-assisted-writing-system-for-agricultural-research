@@ -88,6 +88,30 @@ describe("bindSectionEvidence", () => {
     expect(result.boundRefCount).toBe(1);
   });
 
+  it("spreads similar-scoring refs across cards instead of always [1][2][3]", () => {
+    const evidence = Array.from({ length: 8 }, (_, i) => ({
+      index: i + 1,
+      title: `生物炭与土壤有机碳研究 ${i + 1}`,
+      abstract: biocharAbs,
+    }));
+    const result = bindSectionEvidence({
+      spec: spec({
+        claimCards: [
+          { id: "C1", claim: "生物炭提高土壤有机碳并改善团聚体稳定性", evidence: [] },
+          { id: "C2", claim: "田间施用生物炭后团聚体稳定性提高", evidence: [] },
+        ],
+      }),
+      referenceEvidence: evidence,
+    });
+    const ns = new Set(
+      result.spec.claimCards.flatMap((c) =>
+        c.evidence.filter((e) => e.kind === "ref").map((e) => e.n),
+      ),
+    );
+    expect(ns.size).toBeGreaterThanOrEqual(4);
+    expect(Math.max(...ns)).toBeGreaterThan(3);
+  });
+
   it("leaves unmatched cards unbound and records evidence_unbound only when a pool exists", () => {
     const result = bindSectionEvidence({
       spec: spec({
@@ -131,7 +155,7 @@ describe("formatEvidenceBindHint / slimReferenceEvidenceForSpec", () => {
     expect(hint).toContain("【证据绑定】");
     expect(hint).toContain("[2]soft");
     expect(hint).not.toContain("旱地培肥");
-    expect(hint.length).toBeLessThan(400);
+    expect(hint.length).toBeLessThan(480);
   });
 
   it("keeps only bound abstracts for Writer", () => {

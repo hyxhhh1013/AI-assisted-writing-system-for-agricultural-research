@@ -56,6 +56,20 @@ const EN_STOPWORDS = new Set([
   "of", "in", "on", "an", "or", "by", "as", "at", "to",
 ]);
 
+/** 学术摘要高频泛词：有领域词时从 query 丢掉，避免外部摘要 BM25 抢榜 */
+const GENERIC_ACADEMIC_EN = new Set([
+  "values", "greater", "considering", "physical", "treated", "treatment",
+  "obtained", "respectively", "various", "including", "shown", "found",
+  "increased", "decreased", "compared", "different", "significant",
+  "effects", "effect", "results", "result", "role", "due", "well",
+  "among", "within", "however", "therefore", "thus", "while", "during",
+  "several", "many", "most", "both", "high", "low", "good",
+]);
+
+export function isGenericAcademicEnTerm(term: string): boolean {
+  return GENERIC_ACADEMIC_EN.has(term.toLowerCase());
+}
+
 const NOISY_SYNONYMS = new Set([
   "char", "black", "fast", "slow", "wood",
 ]);
@@ -142,7 +156,12 @@ export function extractQueryTerms(query: string): string[] {
       if (k.length > 1 && !isEnglishStopword(k)) push(k);
     }
   }
-  return Array.from(new Set(keywords)).filter((t) => t.length > 0);
+  const unique = Array.from(new Set(keywords)).filter((t) => t.length > 0);
+  const hasDomain = unique.some(
+    (t) => /[一-鿿]/.test(t) || (!isGenericAcademicEnTerm(t) && t.length >= 4),
+  );
+  if (!hasDomain) return unique;
+  return unique.filter((t) => /[一-鿿]/.test(t) || !isGenericAcademicEnTerm(t));
 }
 
 /** 是否值得开多 query（弱召回 / 纯英文 / Top 分类偏离提示） */
@@ -216,7 +235,7 @@ export function buildRagSearchTermWeights(query: string): Map<string, number> {
   const weights = new Map<string, number>();
   for (const term of all) {
     if (original.has(term)) {
-      weights.set(term, 1);
+      weights.set(term, isGenericAcademicEnTerm(term) ? 0.28 : 1);
       continue;
     }
     const tHasCjk = /[一-龥]/.test(term);

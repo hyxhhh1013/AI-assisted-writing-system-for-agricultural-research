@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isLikelyReferencesText } from "../../../scripts/lib/index-text-filters.mjs";
-import { isLikelyReferencesText as runtimeRefs, referencesScoreMultiplier } from "@/lib/rag-chunk-quality";
+import { isLikelyReferencesText as runtimeRefs, referencesScoreMultiplier, externalAbstractScoreMultiplier, ragListRrfWeight } from "@/lib/rag-chunk-quality";
 
 describe("references page filter", () => {
   it("detects a References page with numbered citations", () => {
@@ -32,5 +32,20 @@ describe("references page filter", () => {
 [1] A 2020 [2] B 2019 [3] C 2018 [4] D 2017 [5] E 2016
 [6] F 2015 [7] G 2014 [8] H 2013 [9] I 2012 [10] J 2011`;
     expect(isLikelyReferencesText(text, { page: 1, minPage: 3 })).toBe(false);
+  });
+});
+
+describe("external abstract ranking", () => {
+  it("downweights 外部摘要 more when query already hints a lab category", () => {
+    expect(externalAbstractScoreMultiplier("热化学", ["热化学"])).toBe(1);
+    expect(externalAbstractScoreMultiplier("外部摘要", [])).toBeLessThan(1);
+    expect(externalAbstractScoreMultiplier("外部摘要", ["茶学"])).toBeLessThan(
+      externalAbstractScoreMultiplier("外部摘要", []),
+    );
+  });
+
+  it("gives a lower RRF list weight to an all-abstract hit list", () => {
+    expect(ragListRrfWeight([{ metadata: { category: "热化学" } }])).toBe(1);
+    expect(ragListRrfWeight([{ metadata: { category: "外部摘要" } }])).toBeLessThan(1);
   });
 });

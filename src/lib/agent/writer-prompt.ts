@@ -63,7 +63,7 @@ export function resolvePartSlicePrompt(opts: {
   if (opts.isChinese) {
     const who = title ? `只写「${title}」这一小点` : "只写当前这一条要点";
     return (
-      `${who}：连续 1～2 段即可，综合相关文献并带 [n]。`
+      `${who}：写成一个自然段（不要拆成两段），综合相关文献并带 [n]。`
       + "不要再按整章列子节树，不要写其他子节，不要按整章篇幅写。"
       + "语域：转述文献；不要写成「本研究」试验报告。"
     );
@@ -72,7 +72,7 @@ export function resolvePartSlicePrompt(opts: {
     ? `Write only the slice "${title}"`
     : "Write only this bullet";
   return (
-    `${who}: 1–2 continuous paragraphs with [n] where needed. `
+    `${who}: one continuous paragraph with [n] where needed (do not split into two paragraphs). `
     + "Do not re-outline the whole chapter. Do not cover other subsections. "
     + "Do not match full-section length. Paraphrase the literature; do not write as your own experiment."
   );
@@ -119,7 +119,7 @@ ${pool}${data}
 ${params.sectionInstruction}
 
 —— 证据卡 ——
-若上下文有【证据绑定】：覆盖 C1/C2 的判断，但正文里不要出现 C1/C2 字样；只引用表中 [n]；soft 只概括，禁止编造该文献精确数据；未绑定的主张不要硬挂 [n]。
+若上下文有【证据绑定】：覆盖 C1/C2 的判断，但正文里不要出现 C1/C2 字样；优先引用表中 [n]，综述可穿插其它已入库有摘要/全文的编号；soft 只概括，禁止编造该文献精确数据；未绑定的主张不要硬挂 [n]。
 没有绑定表时：没有依据的观点直接陈述，不要虚构 [n]。
 文中引用只用半角 [n] / [n,m]。不要输出参考文献列表。
 不要使用 Markdown # 标题。不要给每个自然段加小标题；多数段落就是论述，没有标题。
@@ -137,7 +137,7 @@ ${pool}${data}
 ${params.sectionInstruction}
 
 —— Evidence cards ——
-If the context has an evidence-bind table: cover the claims, but do not print C1/C2 in the body; cite only listed [n]; soft = paraphrase only.
+If the context has an evidence-bind table: cover the claims, but do not print C1/C2 in the body; prefer listed [n]; a review may also paraphrase other in-project refs that have an abstract or full text.
 In-text cites: half-width [n] only. No bibliography. No Markdown # headings. Do not title every paragraph. No 【FIGURE】 JSON.
 
 ${QA_CODES}

@@ -548,7 +548,7 @@ async function ingestOne(
 async function reindexAndReload(files: string[]): Promise<boolean> {
   const unique = [...new Set(files.filter(Boolean))];
   if (unique.length === 0) return true;
-  const result = await runPartialPdfIndex(unique, { skipEmbed: true });
+  const result = await runPartialPdfIndex(unique, { skipEmbed: false, timeoutMs: 300_000 });
   if (!result.ok) {
     log.warn("oa pdf reindex failed", { files: unique, stderr: result.stderr.slice(0, 300) });
   }

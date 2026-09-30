@@ -1,5 +1,11 @@
 import { localRAG, formatRagCitation, type RagChunk } from "@/lib/rag";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
+import {
+  basenameKey,
+  fullReadBudgetError,
+  recordSourceKeyRead,
+  resolveRefIndexBySourceKey,
+} from "@/lib/agent/reading-pack";
 
 function mergeChunksById(primary: RagChunk[], extra: RagChunk[], cap: number): RagChunk[] {
   const seen = new Set<string>();
@@ -19,18 +25,20 @@ function mergeChunksById(primary: RagChunk[], extra: RagChunk[], cap: number): R
 export const searchKnowledgeTool: ToolDefinition = {
   name: "search_knowledge",
   description:
-    "在本地知识库检索文献片段（BM25+向量+同义词扩展+多 query RRF）。可选 category 收窄分类；命中少时会自动扩全库",
+    "在本地知识库检索文献片段（BM25+向量+同义词扩展+多 query RRF）。"
+    + "可选 category 收窄分类；可选 sourceKey 只看一篇（精读，不算全库检索）。命中少时会自动扩全库（有 sourceKey 时不扩）",
   parameters: {
     type: "object",
     properties: {
       query: { type: "string", description: "检索关键词或问句（中英文均可）" },
       limit: { type: "number", description: "返回条数，默认 12，最大 20" },
       category: { type: "string", description: "可选：限定文献分类（命中不足时自动扩全库）" },
+      sourceKey: { type: "string", description: "可选：只检索该知识库文件名（精读单篇）" },
     },
     required: ["query"],
   },
   safety: "read",
-  async execute(params, _ctx: AgentContext) {
+  async execute(params, ctx: AgentContext) {
     const query = String(params.query ?? "").trim();
     if (!query) {
       return { success: false, error: "query 不能为空" };
@@ -38,20 +46,38 @@ export const searchKnowledgeTool: ToolDefinition = {
 
     const limit = Math.min(Math.max(Number(params.limit) || 12, 1), 20);
     const category = params.category ? String(params.category).trim() : undefined;
-    _ctx.emitLiveEvent?.({
+    const sourceKey = params.sourceKey ? String(params.sourceKey).trim() : "";
+    if (sourceKey) {
+      const n = resolveRefIndexBySourceKey(
+        sourceKey,
+        ctx.projectSnapshot?.referenceSourceNames,
+      );
+      const budget = fullReadBudgetError(ctx, n);
+      if (budget) {
+        return { success: false, error: budget };
+      }
+    }
+    ctx.emitLiveEvent?.({
       type: "agent/progress",
-      label: category ? `正在检索知识库「${category}」…` : "正在检索本地知识库…",
+      label: sourceKey
+        ? `正在检索「${sourceKey}」…`
+        : category
+          ? `正在检索知识库「${category}」…`
+          : "正在检索本地知识库…",
       stage: "searching",
       detail: query.slice(0, 80),
     });
 
     let chunks = await localRAG.search(query, {
-      limit,
+      limit: sourceKey ? Math.max(limit, 20) : limit,
       ...(category ? { category } : {}),
     });
 
     let expandedScope = false;
-    if (category && chunks.length < Math.min(4, limit)) {
+    if (sourceKey) {
+      const key = basenameKey(sourceKey);
+      chunks = chunks.filter((c) => basenameKey(c.metadata.source) === key);
+    } else if (category && chunks.length < Math.min(4, limit)) {
       const full = await localRAG.search(query, { limit: limit * 2 });
       const merged = mergeChunksById(chunks, full, limit);
       if (merged.length > chunks.length) {
@@ -67,6 +93,10 @@ export const searchKnowledgeTool: ToolDefinition = {
       excerpt: c.content.slice(0, 400),
       citation: formatRagCitation(c),
     }));
+
+    if (sourceKey && hits.length > 0) {
+      recordSourceKeyRead(ctx, sourceKey, "full");
+    }
 
     const scopeNote = expandedScope ? "（分类命中不足，已扩全库）" : "";
     return {

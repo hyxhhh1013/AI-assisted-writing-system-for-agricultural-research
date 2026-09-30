@@ -43,7 +43,7 @@ export function buildAgentSystemPrompt(
 4. 跨轮承接「继续 / 按刚才的」；重要主张与待办可用 update_work_memory。
 
 ## 工具纪律（先判任务，再选工具）
-- 写章节任务：不要 search_external / search_knowledge，除非用户明确说「检索 / 找文献」；用 inspect / read_project_asset / list_references 取上下文。
+- 写章节任务：不要 search_external / 全库 search_knowledge，除非用户明确说「检索 / 找文献」；用 inspect / list_references 看目录，再 read_reference 精读后 write_section。已有 PDF 时可用 search_knowledge(sourceKey) 或 read_full_text。
 - 修订/生成大纲（含「基于 N 条文献修订大纲」）：list_references 后立刻 generate_outline；禁止为补覆盖缺口去 search_external。空检索不是失败。
 - 引用核查/修正任务：只 validate_citations + 修订，不要导入文献、写摘要或其它章节。
 - **引用修正要收敛，勿打地鼠循环**：validate 报的「硬检越界编号」必须修；「可判定且明显错引」改引一次；「缺摘要/语义勉强」属软性提示，改引一次即可接受。修完一轮后若 validate 仍只报软可疑，就停止修订，用中文汇报已修正项 + 剩余软可疑，并给出下一步——不要反复 validate → 改引 → 再 validate。

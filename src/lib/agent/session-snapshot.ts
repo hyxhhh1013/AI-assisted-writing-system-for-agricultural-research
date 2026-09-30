@@ -6,6 +6,7 @@ import {
 } from "@/contracts/agent-session";
 import type { AgentGraphStateType } from "@/lib/agent/langgraph/state";
 import { normalizeWorkMemory } from "@/lib/agent/work-memory";
+import { normalizeReadingPack } from "@/lib/agent/reading-pack";
 
 export { emptyAgentSessionSnapshot, isAgentSessionSnapshot };
 
@@ -15,8 +16,10 @@ export function graphStateToSnapshot(
   workMemory?: import("@/lib/agent/work-memory").AgentWorkMemory | null,
   attachmentIds?: string[],
   activeWrite?: import("@/contracts/agent-session").AgentActiveWrite | null,
+  readingPack?: import("@/lib/agent/reading-pack").ReadingPackEntry[],
 ): AgentSessionSnapshot {
   const mem = normalizeWorkMemory(workMemory ?? null);
+  const pack = normalizeReadingPack(readingPack);
   return {
     version: 1,
     messages: state.messages,
@@ -32,11 +35,13 @@ export function graphStateToSnapshot(
     awaitingConfirm: state.awaitingConfirm ?? null,
     approvedCheckpointKinds: state.approvedCheckpointKinds ?? [],
     intentKind: state.intentKind ?? null,
+    intentObsOffset: state.intentObsOffset ?? 0,
     toolTrace: state.toolTrace,
     activeWrite: activeWrite ?? null,
     ...(uiTranscript ? { uiTranscript } : {}),
     ...(mem ? { workMemory: mem } : {}),
     ...(attachmentIds && attachmentIds.length ? { attachmentIds } : {}),
+    ...(pack.length ? { readingPack: pack } : {}),
   };
 }
 
@@ -66,5 +71,6 @@ export function snapshotToInitialState(
     approvedCheckpointKinds: snapshot.approvedCheckpointKinds ?? [],
     intentKind: snapshot.intentKind ?? null,
     toolTrace: snapshot.toolTrace ?? [],
+    intentObsOffset: snapshot.intentObsOffset ?? 0,
   };
 }

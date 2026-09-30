@@ -1,5 +1,6 @@
 /**
- * 对指定知识库 PDF 跑增量 index-pdfs（默认跳过 embedding，缩短导入等待）
+ * 对指定知识库 PDF 跑增量 index-pdfs。
+ * 默认跳过 embedding（缩短等待）；OA 入库传 skipEmbed: false 以补向量。
  */
 
 import { spawn } from "child_process";

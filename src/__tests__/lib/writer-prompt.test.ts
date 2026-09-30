@@ -58,8 +58,10 @@ describe("WRITE-QA-007 slim writer prompt", () => {
       subsectionTitle: "2.1 孔隙结构",
     });
     expect(slice).toContain("只写「2.1 孔隙结构」");
-    expect(slice).toContain("1～2 段");
+    expect(slice).toContain("一个自然段");
+    expect(slice).toContain("不要拆成两段");
+    expect(slice).not.toContain("1～2 段");
     expect(slice).not.toContain("3.1");
-    expect(slice.length).toBeLessThan(280);
+    expect(slice.length).toBeLessThan(320);
   });
 });

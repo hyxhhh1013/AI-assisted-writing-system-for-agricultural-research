@@ -1,6 +1,7 @@
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import { isSoftGroundable } from "@/lib/reference-evidence";
 import { findReferenceRowsLite } from "@/lib/reference-rows";
+import { recordReferenceRead } from "@/lib/agent/reading-pack";
 
 const MAX_ABSTRACT_RETURN = 6000;
 
@@ -68,6 +69,9 @@ export const readReferenceTool: ToolDefinition = {
       : abstract;
 
     const softGroundable = isSoftGroundable(abstract);
+    if (softGroundable) {
+      recordReferenceRead(ctx, index, "abstract");
+    }
 
     return {
       success: true,

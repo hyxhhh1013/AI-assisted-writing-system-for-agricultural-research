@@ -9,8 +9,8 @@ import prisma from "@/lib/prisma";
 export const listReferencesTool: ToolDefinition = {
   name: "list_references",
   description:
-    "列出项目已收录的参考文献（编号、题录、是否有摘要）。写引用前先调用；"
-    + "有摘要的条目可用 read_reference 精读，再 write_section",
+    "列出项目已收录的参考文献目录卡（编号、短题录、是否有摘要/PDF）。写引用前先全量浏览再选题精读；"
+    + "有摘要用 read_reference，有 sourceName 可用 read_full_text / search_knowledge(sourceKey)",
   parameters: {
     type: "object",
     properties: {
@@ -20,7 +20,7 @@ export const listReferencesTool: ToolDefinition = {
       },
       limit: {
         type: "number",
-        description: "最多返回条数，默认 40，上限 80",
+        description: "最多返回条数，默认 120，上限 200",
       },
       onlyWithAbstract: {
         type: "boolean",
@@ -59,7 +59,7 @@ export const listReferencesTool: ToolDefinition = {
     }
 
     const query = String(params.query ?? "").trim().toLowerCase();
-    const limit = Math.min(Math.max(Number(params.limit) || 40, 1), 80);
+    const limit = Math.min(Math.max(Number(params.limit) || 120, 1), 200);
     const onlyWithAbstract =
       params.onlyWithAbstract === true
       || params.onlyWithAbstract === "true"
@@ -98,10 +98,13 @@ export const listReferencesTool: ToolDefinition = {
     const total = rows.length;
     const sliced = rows.slice(0, limit).map((r) => ({
       index: r.index,
-      text: r.text.length > 280 ? `${r.text.slice(0, 280)}…` : r.text,
-      title: r.title,
+      text: r.text.length > 140 ? `${r.text.slice(0, 140)}…` : r.text,
+      title: r.title
+        ? (r.title.length > 80 ? `${r.title.slice(0, 80)}…` : r.title)
+        : r.title,
       doi: r.doi,
       hasAbstract: r.hasAbstract,
+      hasPdf: Boolean(r.sourceName),
       category: r.category,
       sourceName: r.sourceName,
     }));
@@ -117,8 +120,8 @@ export const listReferencesTool: ToolDefinition = {
         references: sliced,
       },
       summary: query
-        ? `项目文献 ${refs.length} 条（有摘要 ${withAbstractCount}），匹配「${query}」${total} 条，返回 ${sliced.length} 条`
-        : `项目文献共 ${refs.length} 条（有摘要 ${withAbstractCount}），返回前 ${sliced.length} 条`,
+        ? `项目文献 ${refs.length} 条（有摘要 ${withAbstractCount}），匹配「${query}」${total} 条，返回 ${sliced.length} 条目录卡`
+        : `项目文献共 ${refs.length} 条（有摘要 ${withAbstractCount}），返回 ${sliced.length} 条目录卡；请选题后 read_reference，不要直接 write_section`,
     };
   },
 };

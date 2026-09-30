@@ -60,6 +60,8 @@ export interface AgentContext {
   goal?: string;
   /** 本轮已分类意图（跟聊继承后的 kind） */
   intentKind?: import("@/contracts/agent-intent").IntentKind | null;
+  /** 本会话已精读文献（目录选题后的 read_reference / 全文） */
+  readingPack?: import("@/lib/agent/reading-pack").ReadingPackEntry[];
   budget: {
     maxIterations: number;
     currentIteration: number;
