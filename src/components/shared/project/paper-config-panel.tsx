@@ -142,6 +142,11 @@ export function PaperConfigPanel({
             {WORD_COUNT_PRESETS.map((p) => (
               <SelectItem key={p.value} value={p.value} className="text-xs">{p.label}</SelectItem>
             ))}
+            {draft.wordCount && !WORD_COUNT_PRESETS.some((p) => p.value === draft.wordCount) ? (
+              <SelectItem value={draft.wordCount} className="text-xs">
+                {draft.wordCount} 字
+              </SelectItem>
+            ) : null}
           </SelectContent>
         </Select>
       </div>

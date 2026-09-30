@@ -13,10 +13,12 @@ export function buildBlueprintPrompt(params: {
   motivationFromGap?: string;
   /** 建议投稿的目标期刊 */
   targetJournal?: string;
+  /** 新建项目确认的目标字数（如 4000-6000），蓝图 estimatedWordCount 必须对齐 */
+  targetWordCount?: string;
   /** 写作时需标注"此处需补实验数据"的缺口 */
   pendingExperiments?: string[];
 }): string {
-  const { title, researchDirection, outline, language, projectMode, chartCatalog, motivationFromGap, targetJournal, pendingExperiments } = params;
+  const { title, researchDirection, outline, language, projectMode, chartCatalog, motivationFromGap, targetJournal, targetWordCount, pendingExperiments } = params;
   const domainExpertise = buildDomainExpertise(researchDirection);
   const isResearch = projectMode === "research";
   const langLabel = language === "en" ? "English" : "Chinese";
@@ -27,6 +29,9 @@ export function buildBlueprintPrompt(params: {
   const directionContext = [
     motivationFromGap ? `- 写作动机：${motivationFromGap}` : "",
     targetJournal ? `- 目标期刊：${targetJournal}（请据此调整蓝图的深度与配图标准）` : "",
+    targetWordCount
+      ? `- 用户确认的目标字数：${targetWordCount}（estimatedWordCount.min/max 必须落在此区间，禁止改用默认 6000–12000）`
+      : "",
     pendingExperiments && pendingExperiments.length > 0
       ? `- 待补实验：${pendingExperiments.join("、")}（在蓝图中标注这些缺口，提醒作者补充数据后再写对应章节）`
       : "",
@@ -45,7 +50,11 @@ export function buildBlueprintPrompt(params: {
 
 【任务】
 1. 用 2–3 句话概括全文叙事逻辑（narrativeSummary）和一句核心论点（thesis）；可选 researchQuestion。
-2. 估计全文字数区间（estimatedWordCount，中文论文通常 6000–12000）。
+2. 估计全文字数区间（estimatedWordCount）。${
+    targetWordCount
+      ? `必须使用用户确认的目标字数 ${targetWordCount}，不要自行改成 6000–12000。`
+      : "中文论文若用户未指定，通常 6000–12000。"
+  }
 3. 规划配图：先估总量（totalMin/totalMax），再分配到具体大纲节点（sectionPath 必须与大纲中的「完整路径」一致，用 " > " 连接层级，如 "结果与分析 > 产量变化"）。
 4. 为重要章节写 sectionGuides：purpose + keyPoints，并尽量填写论证字段 claim / evidenceHint / warrant（必要时 rebuttal）。
 5. 给出建议写作顺序 writingOrder（sectionPath 数组）。

@@ -161,6 +161,19 @@ describe("buildBlueprintPrompt — 不再诱导非法枚举", () => {
     expect(p).not.toMatch(/"dataSource": "experiment"/);
   });
 
+  it("injects user-confirmed target word count into estimatedWordCount instructions", () => {
+    const p = buildBlueprintPrompt({
+      title: "t",
+      researchDirection: "d",
+      outline: "## 引言\n要点",
+      language: "zh",
+      projectMode: "review",
+      targetWordCount: "4000-6000",
+    });
+    expect(p).toContain("用户确认的目标字数：4000-6000");
+    expect(p).toContain("必须使用用户确认的目标字数");
+  });
+
   it("research example keeps experiment + research mode", () => {
     const p = buildBlueprintPrompt({
       title: "t",

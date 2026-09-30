@@ -33,6 +33,14 @@ describe("paper-passport", () => {
     expect(parsed).toEqual(passport);
   });
 
+  it("parses already-decoded JSON objects (Prisma JSON 列)", () => {
+    const passport = createInitialPaperPassport({
+      ...sampleConfig,
+      wordCount: "4000-6000",
+    });
+    expect(parsePaperPassport(passport)?.config?.wordCount).toBe("4000-6000");
+  });
+
   it("returns null for invalid JSON", () => {
     expect(parsePaperPassport("{bad")).toBeNull();
     expect(parsePaperPassport('{"version":2}')).toBeNull();

@@ -256,14 +256,56 @@ export function createInitialPaperPassport(
   };
 }
 
-export function parsePaperPassport(raw: string | null | undefined): PaperPassport | null {
-  if (!raw?.trim()) return null;
+function parsePassportJson(raw: unknown): unknown | null {
+  if (raw == null) return null;
+  if (typeof raw === "object") return raw;
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
   try {
-    const parsed: unknown = JSON.parse(raw);
-    return isPaperPassport(parsed) ? parsed : null;
+    return JSON.parse(trimmed) as unknown;
   } catch {
     return null;
   }
+}
+
+/**
+ * Prisma `$queryRaw` / JSON 列偶发把 TEXT JSON 读成 object；
+ * 只接受 string 时 `.trim()` 失败 → parse 空 → 向导配置被 bootstrap 空字数盖掉。
+ */
+export function parsePaperPassport(raw: unknown): PaperPassport | null {
+  const parsed = parsePassportJson(raw);
+  return isPaperPassport(parsed) ? parsed : null;
+}
+
+/** 护照整体校验失败时，尽量保住向导写入的 config（尤其 wordCount） */
+export function extractPaperConfigFromUnknown(value: unknown): PaperConfigRecord | null {
+  const parsed = parsePassportJson(value);
+  if (!isRecord(parsed)) {
+    return isPaperConfigRecord(parsed) ? parsed : null;
+  }
+  if (isPaperConfigRecord(parsed.config)) return parsed.config;
+  return isPaperConfigRecord(parsed) ? parsed : null;
+}
+
+/** 向导词数 "4000-6000" / "8000" → 蓝图 estimatedWordCount */
+export function parsePaperConfigWordRange(
+  wordCount: string | null | undefined,
+): { min: number; max: number } | null {
+  const t = (wordCount ?? "").trim();
+  if (!t) return null;
+  const range = t.match(/(\d[\d,]*)\s*[-–—~至到]\s*(\d[\d,]*)/);
+  if (range) {
+    const min = Number.parseInt(range[1].replace(/,/g, ""), 10);
+    const max = Number.parseInt(range[2].replace(/,/g, ""), 10);
+    if (!Number.isFinite(min) || !Number.isFinite(max) || min <= 0 || max <= 0) {
+      return null;
+    }
+    return min <= max ? { min, max } : { min: max, max: min };
+  }
+  const n = Number.parseInt(t.replace(/,/g, "").replace(/[^\d]/g, ""), 10);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return { min: n, max: n };
 }
 
 export function serializePaperPassport(passport: PaperPassport): string {

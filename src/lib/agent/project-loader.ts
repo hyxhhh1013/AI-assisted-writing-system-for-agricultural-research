@@ -1,7 +1,13 @@
 import type { EvidenceClaim } from "@/contracts/data-source";
 import type { WritingGlobalContext } from "@/app/api/writing/types";
 import { parseWritingBlueprint } from "@/contracts/writing-blueprint";
+import {
+  extractPaperConfigFromUnknown,
+  parsePaperPassport,
+  type PaperConfigRecord,
+} from "@/contracts/paper-passport";
 import { hasCompletePaperConfig } from "@/lib/agent/config-qa";
+import { pickNextWriteTarget } from "@/lib/agent/blueprint-write-context";
 import { readWritingBlueprint } from "@/lib/project-writing-blueprint-db";
 import { rowsToSoftReferenceEvidence } from "@/lib/reference-evidence";
 import prisma from "@/lib/prisma";
@@ -45,10 +51,14 @@ export interface AgentProjectSnapshot {
   }[];
   /** 写作蓝图配图计划短摘要（注入简报） */
   blueprintFigurePlanSummary?: string | null;
+  /** 蓝图下一未写子节（跟聊「继续」直接 write） */
+  nextWriteHint?: { sectionKey: string; subsectionPath: string } | null;
   /** 论证蓝图短摘要 */
   argumentBlueprintSummary?: string | null;
   /** Passport 是否已有 config 记录 */
   hasPaperConfig: boolean;
+  /** 向导 / Passport 配置（字数、期刊等），供简报与蓝图对齐 */
+  paperConfig?: PaperConfigRecord | null;
   /** 写作入口（新建项目选定） */
   agentEntryMode?: import("@/contracts/paper-passport").AgentEntryModeId | null;
   /**
@@ -101,28 +111,20 @@ export async function loadAgentProject(
 
   let currentPhase: number | null = null;
   let hasPaperConfig = false;
+  let paperConfig: PaperConfigRecord | null = null;
   let agentEntryMode: import("@/contracts/paper-passport").AgentEntryModeId | null = null;
   if (project.paperPassport) {
-    try {
-      const parsed = JSON.parse(project.paperPassport) as {
-        currentPhase?: unknown;
-        config?: {
-          agentEntryMode?: unknown;
-        };
-      };
-      if (typeof parsed.currentPhase === "number") {
-        currentPhase = parsed.currentPhase;
-      }
-      // 须有题目等完整字段；空壳 config 仍要走问答
-      hasPaperConfig = hasCompletePaperConfig(parsed.config);
-      const em = parsed.config?.agentEntryMode;
-      if (em === "full" || em === "outline_ready" || em === "data_ready") {
-        agentEntryMode = em;
-      }
-    } catch {
-      currentPhase = null;
-      hasPaperConfig = false;
-      agentEntryMode = null;
+    const parsed = parsePaperPassport(project.paperPassport);
+    paperConfig =
+      parsed?.config
+      ?? extractPaperConfigFromUnknown(project.paperPassport);
+    if (typeof parsed?.currentPhase === "number") {
+      currentPhase = parsed.currentPhase;
+    }
+    hasPaperConfig = hasCompletePaperConfig(paperConfig);
+    const em = paperConfig?.agentEntryMode;
+    if (em === "full" || em === "outline_ready" || em === "data_ready") {
+      agentEntryMode = em;
     }
   }
 
@@ -232,6 +234,17 @@ export async function loadAgentProject(
     .filter((s) => !s.endsWith(":"))
     .join("|");
 
+  const sectionBodies: Record<string, string> = {};
+  for (const s of project.sections) {
+    sectionBodies[s.key] = s.content ?? "";
+  }
+  sectionBodies.abstract = abstractText;
+  const nextWriteHint = pickNextWriteTarget({
+    mode: project.mode === "research" ? "research" : "review",
+    blueprint,
+    sectionBodies,
+  });
+
   const referenceSourceNames = project.referenceSources
     .filter((s) => s.sourceName?.trim())
     .map((s) => ({
@@ -262,8 +275,10 @@ export async function loadAgentProject(
     blueprintWritingOrder,
     blueprintSectionGuides,
     blueprintFigurePlanSummary,
+    nextWriteHint,
     argumentBlueprintSummary,
     hasPaperConfig,
+    paperConfig,
     agentEntryMode,
     referenceClassificationSig: referenceClassificationSig || undefined,
     referenceSourceNames:

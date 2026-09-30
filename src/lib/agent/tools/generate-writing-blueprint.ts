@@ -1,4 +1,5 @@
 import type { WritingBlueprint } from "@/contracts/writing-blueprint";
+import { parsePaperConfigWordRange } from "@/contracts/paper-passport";
 import { formatBlueprintPreview } from "@/lib/agent/blueprint-review";
 import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
@@ -73,12 +74,17 @@ export const generateWritingBlueprintTool: ToolDefinition = {
     const { provider, keyError } = getAgentModelConfig("writer");
     if (keyError) return { success: false, error: keyError };
 
+    const targetWordCount = project.paperConfig?.wordCount?.trim() || "";
+    const targetRange = parsePaperConfigWordRange(targetWordCount);
+
     const systemPrompt = buildBlueprintPrompt({
       title: project.title,
       researchDirection: project.researchDirection || project.title,
       outline: project.outline,
       language: project.language,
       projectMode: project.mode,
+      targetJournal: project.paperConfig?.targetJournal?.trim() || undefined,
+      targetWordCount: targetWordCount || undefined,
     });
 
     const response = await callAI({
@@ -137,6 +143,7 @@ export const generateWritingBlueprintTool: ToolDefinition = {
       language: checked.data.language ?? project.language,
       outlineHash: computeOutlineHash(project.outline),
       generatedAt: Date.now(),
+      estimatedWordCount: targetRange ?? checked.data.estimatedWordCount,
       figurePlan: {
         totalMin,
         totalMax: Math.max(checked.data.figurePlan.totalMax, totalMin),

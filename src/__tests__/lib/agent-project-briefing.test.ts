@@ -26,7 +26,11 @@ const sample: AgentProjectSnapshot = {
     { path: "引言", purpose: "建立研究背景与核心命题" },
     { path: "研究现状与问题", purpose: "梳理基础共识与现存瓶颈" },
   ],
-  hasArgumentBlueprint: false,
+    nextWriteHint: {
+      sectionKey: "literature_body",
+      subsectionPath: "研究进展综述 > 改性策略",
+    },
+    hasArgumentBlueprint: false,
   sectionFills: [
     { key: "introduction", chars: 1200 },
     { key: "literature_body", chars: 0 },
@@ -39,7 +43,8 @@ describe("agent project briefing", () => {
   it("formats snapshot into prompt briefing", () => {
     const text = formatAgentProjectBriefing(sample);
     expect(text).toContain("生物炭综述");
-    expect(text).toContain("Passport 当前阶段：4");
+    expect(text).toContain("PaperConfig：已填写");
+    expect(text).toContain("目标字数：（未填）");
     expect(text).toContain("introduction:1200字");
     expect(text).toContain("literature_body");
     expect(text).toContain("分节完整度");
@@ -49,6 +54,8 @@ describe("agent project briefing", () => {
     expect(text).toContain("实验室范围");
     expect(text).toContain("热化学");
     expect(text).toContain("烟草");
+    expect(text).toContain("下一未写子节");
+    expect(text).toContain("write_section(section=literature_body");
   });
 
   it("injects blueprint writing order and section guides", () => {

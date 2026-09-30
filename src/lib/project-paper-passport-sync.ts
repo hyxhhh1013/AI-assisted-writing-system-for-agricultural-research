@@ -2,6 +2,7 @@ import prisma from "@/lib/prisma";
 import { parseExpandedOutlineSections } from "@/contracts/project";
 import {
   createInitialPaperPassport,
+  extractPaperConfigFromUnknown,
   parsePaperPassport,
   serializePaperPassport,
   type PaperConfigRecord,
@@ -108,11 +109,18 @@ function buildSignals(
   };
 }
 
+function normalizePassportColumn(raw: unknown): string | null {
+  if (raw == null) return null;
+  if (typeof raw === "string") return raw;
+  if (typeof raw === "object") return JSON.stringify(raw);
+  return String(raw);
+}
+
 async function readPaperPassportRaw(projectId: string): Promise<string | null> {
-  const rows = await prisma.$queryRaw<{ paperPassport: string | null }[]>`
+  const rows = await prisma.$queryRaw<{ paperPassport: unknown }[]>`
     SELECT "paperPassport" FROM "Project" WHERE id = ${projectId} LIMIT 1
   `;
-  return rows[0]?.paperPassport ?? null;
+  return normalizePassportColumn(rows[0]?.paperPassport ?? null);
 }
 
 async function writePaperPassportRaw(projectId: string, serialized: string): Promise<void> {
@@ -198,6 +206,18 @@ async function recomputeAndPersistPassport(
   return next;
 }
 
+function resolvePassportFromProject(project: ProjectPassportSnapshot): PaperPassport {
+  const parsed = parsePaperPassport(project.paperPassport);
+  if (parsed) return parsed;
+
+  const boot = bootstrapPassportFromProject(project);
+  const salvaged = extractPaperConfigFromUnknown(project.paperPassport);
+  if (salvaged && salvaged.wordCount.trim()) {
+    boot.config = salvaged;
+  }
+  return boot;
+}
+
 /** 确保项目有 passport（旧项目自动补建）并重算阶段进度 */
 export async function ensureProjectPaperPassport(
   projectId: string,
@@ -206,11 +226,7 @@ export async function ensureProjectPaperPassport(
     const project = await loadProjectPassportSnapshot(projectId);
     if (!project) return null;
 
-    let passport = parsePaperPassport(project.paperPassport);
-    if (!passport) {
-      passport = bootstrapPassportFromProject(project);
-    }
-
+    const passport = resolvePassportFromProject(project);
     return recomputeAndPersistPassport(projectId, project, passport);
   } catch (error) {
     // 不吞错：暴露真实原因，避免上层误报「项目无 PaperPassport」
@@ -228,10 +244,7 @@ export async function updateProjectPaperPassportConfig(
     const project = await loadProjectPassportSnapshot(projectId);
     if (!project) return null;
 
-    let passport = parsePaperPassport(project.paperPassport);
-    if (!passport) {
-      passport = bootstrapPassportFromProject(project);
-    }
+    let passport = resolvePassportFromProject(project);
 
     passport = {
       ...passport,

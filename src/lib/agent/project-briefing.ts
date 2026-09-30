@@ -91,6 +91,8 @@ export function formatAgentProjectBriefing(
     `研究方向：${project.researchDirection || "（未填）"}`,
     `Passport 当前阶段：${phase}（对齐 academic-paper Phase ${project.currentPhase ?? "?"}）`,
     `PaperConfig：${project.hasPaperConfig ? "已填写" : "未填写（可用 update_paper_config）"}`,
+    `目标字数：${project.paperConfig?.wordCount?.trim() || "（未填）"}`,
+    `目标期刊：${project.paperConfig?.targetJournal?.trim() || "（未定刊）"}`,
     `写作入口：${
       project.agentEntryMode === "outline_ready"
         ? "已有大纲（勿主动 generate_outline）"
@@ -142,6 +144,11 @@ export function formatAgentProjectBriefing(
         : ""
     }`,
     `已有正文：${filled || "无"}`,
+    ...(project.nextWriteHint
+      ? [
+          `下一未写子节：立刻 write_section(section=${project.nextWriteHint.sectionKey}, subsectionTitle="${project.nextWriteHint.subsectionPath}")；用户说「继续」时禁止再 list_references / read_section / 检索。`,
+        ]
+      : []),
     `空白章节：${empty || "无"}`,
     `分节完整度：必写 ${coverage.okRequiredCount}/${coverage.requiredCount}；${coverage.hint}`,
     `大纲全文：\n${outlinePreview}`,

@@ -217,6 +217,9 @@ export async function POST(req: NextRequest) {
                   }
                 : {}),
               lastUpdated: new Date(),
+              ...(paperPassportJson
+                ? { paperPassport: paperPassportJson }
+                : {}),
             } as Prisma.ProjectUpdateInput,
           })
         : await tx.project.create({
@@ -230,6 +233,9 @@ export async function POST(req: NextRequest) {
               expandedOutlineSections: serializeExpandedOutlineSections(
                 Array.isArray(expandedOutlineSections) ? expandedOutlineSections : [],
               ),
+              ...(paperPassportJson
+                ? { paperPassport: paperPassportJson }
+                : {}),
             } as Prisma.ProjectUncheckedCreateInput,
           });
 
