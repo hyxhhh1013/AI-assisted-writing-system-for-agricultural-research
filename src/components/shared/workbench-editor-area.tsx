@@ -358,18 +358,20 @@ export function WorkbenchEditorArea({
                   }
                 />
                 <DropdownMenuContent align="start" className="max-h-80 w-56 overflow-y-auto">
-                  <DropdownMenuLabel className="text-[10px] font-normal text-[#6b7c72]">
-                    当前编辑章节
-                  </DropdownMenuLabel>
-                  {sectionOptions.map((s) => (
-                    <DropdownMenuItem
-                      key={s.id}
-                      onClick={() => onSectionChange(s.id)}
-                      className={s.id === activeSection ? "font-medium text-[#1a5632]" : ""}
-                    >
-                      {s.label}
-                    </DropdownMenuItem>
-                  ))}
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel className="text-[10px] font-normal text-[#6b7c72]">
+                      当前编辑章节
+                    </DropdownMenuLabel>
+                    {sectionOptions.map((s) => (
+                      <DropdownMenuItem
+                        key={s.id}
+                        onClick={() => onSectionChange(s.id)}
+                        className={s.id === activeSection ? "font-medium text-[#1a5632]" : ""}
+                      >
+                        {s.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
