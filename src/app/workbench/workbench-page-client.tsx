@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cleanDraftArtifacts, deduplicateParagraphs, cleanMarkdownArtifacts } from "@/lib/utils";
 import { mergeEditorIntoProject } from "@/lib/export-content";
-import { ensureSubsectionNumbering, majorNumberFromSectionId, maxSecondLevelInText } from "@/lib/academic-numbering";
+import { ensureSubsectionNumbering } from "@/lib/academic-numbering";
+import { mergeSubsectionIntoSection } from "@/lib/writing-merge";
 import { useDocxExport } from "@/hooks/use-docx-export";
 import { useReferenceReorder } from "@/hooks/use-reference-reorder";
 import { pruneUncitedReferences, collectAllCitedIndices, stripOutOfRangeCitations, stripEmbeddedBibliography, remapPrunedCitations, buildPreviewReferencesFromContent } from "@/lib/reference-reorder";
@@ -590,71 +591,15 @@ function WorkbenchContent() {
       processedContent = ensureSubsectionNumbering(processedContent, sectionId, existingText);
     }
 
-    // 子任务扩写：合并到现有章节内容中，而非覆盖
+    // 子任务扩写：已有正文则追加，禁止整小节覆盖
     if (subsectionTitle) {
-      // 检测 AI 输出首行是否已经是匹配该子节的标题（如 "2.1 温度对发芽率的影响"）
-      // 若是则不再重复添加标题，避免 ### 和 2.1 双重标题
-      const firstLine = processedContent.trim().split("\n")[0]?.trim() || "";
-      const firstLineBody = firstLine.replace(/^\d+(?:\.\d+)*\s*/, "").trim();
-      const aiStartsWithMatchingHeading = firstLineBody === subsectionTitle.trim();
-
-      // 尝试在现有内容中定位该子节并替换；若找不到则追加
-      const escapedTitle = subsectionTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      // 匹配 ### Title / ## Title / X.Y Title 三种格式
-      const headingPattern = new RegExp(
-        `(?:^|\\n)(?:#{1,3}\\s*)?(?:\\d+\\.?\\d*(?:\\.?\\d+)?\\s*)?${escapedTitle}\\s*\\n`,
-        "i"
-      );
-      const match = existingText.match(headingPattern);
-
-      let merged: string;
-      if (match && match.index !== undefined) {
-        // 找到该子节 → 保留原标题行，替换标题后的内容到下一个标题前
-        const headingEnd = match.index! + match[0].length;
-        const afterMatch = existingText.slice(headingEnd);
-        const nextHeadingMatch = afterMatch.match(/\n(?:#{1,3} |\d+\.\d+(?:\.\d+)?\s)/);
-        const endIdx = nextHeadingMatch
-          ? headingEnd + nextHeadingMatch.index!
-          : existingText.length;
-        // AI 输出首行已是该标题 → 剥掉重复标题行，避免双重标题
-        let contentToInsert = processedContent;
-        if (aiStartsWithMatchingHeading) {
-          const firstNl = contentToInsert.indexOf("\n");
-          contentToInsert = firstNl !== -1 ? contentToInsert.slice(firstNl + 1).trimStart() : "";
-        }
-        merged = existingText.slice(0, headingEnd) + contentToInsert + "\n\n" + existingText.slice(endIdx);
-      } else {
-        // 未找到 → 追加到章节末尾，使用统一编号标题格式
-        const major = majorNumberFromSectionId(sectionId);
-        let heading: string;
-        if (major != null) {
-          const nextSub = maxSecondLevelInText(existingText, major) + 1;
-          heading = aiStartsWithMatchingHeading
-            ? ""  // AI 首行已经是编号标题，不重复加
-            : `${major}.${nextSub} ${subsectionTitle}`;
-        } else {
-          heading = aiStartsWithMatchingHeading ? "" : `### ${subsectionTitle}`;
-        }
-        // AI 输出首行已是该标题 → 剥掉重复标题行（与 "found" 分支保持一致）
-        let appendContent = processedContent;
-        if (aiStartsWithMatchingHeading) {
-          const firstNl = appendContent.indexOf("\n");
-          appendContent = firstNl !== -1 ? appendContent.slice(firstNl + 1).trimStart() : "";
-        }
-        const newBlock = heading ? `${heading}\n${appendContent}` : appendContent;
-        // 如果 existingText 末尾残留了相同小节的大纲占位标题（无正文），先剥掉再追加
-        // 这样可避免"末尾占位行 + AI 输出首行"形成双标题
-        const trailingStubRe = new RegExp(
-          `(?:\\n|^)(?:#{1,3}\\s*)?(?:\\d+\\.?\\d*(?:\\.\\d+)?\\s*)?${escapedTitle}\\s*$`,
-          "i"
-        );
-        const baseText = existingText.trim().replace(trailingStubRe, "").trim();
-        merged = baseText
-          ? `${baseText}\n\n${newBlock}`
-          : newBlock;
-      }
-
-      processedContent = merged;
+      processedContent = mergeSubsectionIntoSection({
+        existingText,
+        incoming: processedContent,
+        subsectionTitle,
+        sectionKey: sectionId,
+        appendIfPresent: true,
+      });
     } else {
       // 没有子节标题 → 合并到现有内容末尾
       if (existingText.trim()) {

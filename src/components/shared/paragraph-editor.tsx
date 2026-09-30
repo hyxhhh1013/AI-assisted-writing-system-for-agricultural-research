@@ -17,6 +17,7 @@ import {
   ParagraphSelectionToolbar,
   type ParagraphSelectionAction,
 } from "@/components/shared/writing/paragraph-selection-toolbar";
+import { composeExpandedParagraph } from "@/lib/writing-merge";
 
 interface ParagraphEditorProps {
   content: string;
@@ -121,7 +122,7 @@ export function ParagraphEditor({
       const expanded = await onExpand(text, index);
       if (expanded) {
         const newParagraphs = [...paragraphs];
-        newParagraphs[index] = expanded;
+        newParagraphs[index] = composeExpandedParagraph(text, expanded);
         updateTotalContent(newParagraphs);
         toast.success("段落扩写完成");
       }
@@ -216,7 +217,11 @@ export function ParagraphEditor({
         }
       } else if (result) {
         const newParagraphs = [...paragraphs];
-        newParagraphs[index] = para.slice(0, start) + result + para.slice(end);
+        const nextPiece =
+          action === "expand"
+            ? composeExpandedParagraph(selected, result)
+            : result;
+        newParagraphs[index] = para.slice(0, start) + nextPiece + para.slice(end);
         updateTotalContent(newParagraphs);
         toast.success(`选区${actionLabel}完成`);
       }

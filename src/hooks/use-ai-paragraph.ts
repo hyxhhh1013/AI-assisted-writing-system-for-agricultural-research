@@ -10,6 +10,8 @@ type AiMode = "expand" | "audit" | "fix" | "polish" | "shorten";
 export type AiParagraphAction = AiMode;
 
 const AI_TASK_PREFIX: Partial<Record<AiMode, string>> = {
+  expand:
+    "【任务】只输出接在原文之后的新增论述，不要重复原文，不要重写全段，不要另起一章：\n\n",
   polish: "【任务】在不改变学术事实与引用编号的前提下润色以下段落，使其更流畅、术语更规范：\n\n",
   shorten: "【任务】在保留核心论点与引用编号的前提下精简以下段落：\n\n",
 };

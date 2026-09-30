@@ -1,6 +1,11 @@
 import { applyReferencePatchOps } from "@/lib/project-references";
 import { syncProjectPaperPassport } from "@/lib/project-paper-passport-sync";
 import prisma from "@/lib/prisma";
+import { mergeSubsectionIntoSection } from "@/lib/writing-merge";
+
+export interface PersistAgentDraftOptions {
+  subsectionTitle?: string;
+}
 
 export interface PersistAgentDraftResult {
   sectionKey: string;
@@ -69,6 +74,7 @@ export async function persistAgentDraft(
   sectionKey: string,
   content: string,
   newReferences: string[] = [],
+  options?: PersistAgentDraftOptions,
 ): Promise<PersistAgentDraftResult> {
   const owned = await prisma.project.findFirst({
     where: { id: projectId, userId },
@@ -76,6 +82,22 @@ export async function persistAgentDraft(
   });
   if (!owned) {
     throw new Error("项目不存在或无权访问");
+  }
+
+  const subsectionTitle = options?.subsectionTitle?.trim();
+  let nextContent = content;
+  if (sectionKey !== "abstract" && subsectionTitle) {
+    const existing = await prisma.section.findUnique({
+      where: { projectId_key: { projectId, key: sectionKey } },
+      select: { content: true },
+    });
+    nextContent = mergeSubsectionIntoSection({
+      existingText: existing?.content ?? "",
+      incoming: content,
+      subsectionTitle,
+      sectionKey,
+      appendIfPresent: true,
+    });
   }
 
   if (sectionKey === "abstract") {
@@ -86,8 +108,8 @@ export async function persistAgentDraft(
   } else {
     await prisma.section.upsert({
       where: { projectId_key: { projectId, key: sectionKey } },
-      update: { content },
-      create: { projectId, key: sectionKey, content },
+      update: { content: nextContent },
+      create: { projectId, key: sectionKey, content: nextContent },
     });
 
     await prisma.project.update({

@@ -360,6 +360,9 @@ export const writeSectionTool: ToolDefinition = {
           sectionRaw,
           resumeDraft,
           resume.references,
+          params.subsectionTitle
+            ? { subsectionTitle: String(params.subsectionTitle) }
+            : undefined,
         );
       }
       ctx.activeWrite = null;
@@ -575,6 +578,7 @@ export const writeSectionTool: ToolDefinition = {
           sectionRaw,
           repaired.draft,
           result.references,
+          subsectionTitle ? { subsectionTitle } : undefined,
         );
       }
 
