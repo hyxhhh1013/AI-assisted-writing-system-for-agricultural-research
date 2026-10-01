@@ -68,6 +68,18 @@ describe("visible deliverable stop", () => {
       ]),
     ).toBe(false);
   });
+
+  it("stops after Seedream illustration candidates even without body insert", () => {
+    expect(
+      latestActionIsVisibleDeliverable([
+        {
+          tool: "illustrate_mechanism_figure",
+          success: true,
+          data: { action: "generate", persisted: false, imageUrl: "/api/charts/c.png" },
+        },
+      ]),
+    ).toBe(true);
+  });
 });
 
 describe("literature batch stop", () => {

@@ -13,6 +13,8 @@ export type FigureDockItem = FigureReviseTarget & {
   /** 精修回放快照（点击时写入 sessionStorage） */
   figureSpecEnc?: string;
   chartAssetId?: string;
+  kind?: "structure" | "illustration-candidate";
+  sourceImageUrl?: string;
 };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -100,6 +102,42 @@ export function collectSessionFigureDockItems(
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
     if (m?.kind !== "observation") continue;
+    if (m.tool === "illustrate_mechanism_figure") {
+      if (m.error) continue;
+      const data = isRecord(m.data) ? m.data : null;
+      const sourceImageUrl =
+        data && typeof data.sourceImageUrl === "string" && data.sourceImageUrl.startsWith("/api/charts/")
+          ? data.sourceImageUrl
+          : undefined;
+      const cands = data && Array.isArray(data.candidates) ? data.candidates : [];
+      const urls: string[] = [];
+      for (const c of cands) {
+        if (isRecord(c) && typeof c.imageUrl === "string" && c.imageUrl.startsWith("/api/charts/")) {
+          urls.push(c.imageUrl);
+        }
+      }
+      if (!urls.length && m.imageUrl?.startsWith("/api/charts/")) urls.push(m.imageUrl);
+      for (const url of urls) {
+        if (seen.has(url)) continue;
+        seen.add(url);
+        out.push({
+          id: `session:${url}`,
+          source: "session",
+          kind: "illustration-candidate",
+          imageUrl: url,
+          replaceImageUrl: sourceImageUrl ?? url,
+          sourceImageUrl,
+          title: "即梦示意候选",
+          sectionKey: m.sectionKey,
+          figureSpecEnc: data && typeof data.figureSpecEnc === "string"
+            ? data.figureSpecEnc
+            : undefined,
+        });
+        if (out.length >= limit) break;
+      }
+      if (out.length >= limit) break;
+      continue;
+    }
     if (m.tool !== "draft_mechanism_figure" && m.tool !== "generate_chart") continue;
     if (m.error || !m.imageUrl) continue;
     const title =

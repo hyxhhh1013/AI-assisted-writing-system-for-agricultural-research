@@ -295,7 +295,8 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 
 | 层 | 行为 |
 |----|------|
-| L1 草稿 | `draft_mechanism_figure` 先编译 `MechanismSpecV1`（主张进 caption，步骤括号条件上边）；多机理图任务前 **FigureBrief clarify**；可选 `templateId`。未锁 `layout` 且 ≥4 步会带 chain/fork 两套候选，只入库推荐稿。**不用文生图当主渲染器**（Flux/SD/DALL-E 出的图不可回放、箭头易胡编，不能进 `/plot` 改节点） |
+| L1 草稿 | `draft_mechanism_figure` 先编译 `MechanismSpecV1`（主张进 caption，步骤括号条件上边）；多机理图任务前 **FigureBrief clarify**；可选 `templateId`。未锁 `layout` 且 ≥4 步会带 chain/fork 两套候选，只入库推荐稿。**结构主渲染器仍是 Graphviz/多面板**（文生图不可回放改节点） |
+| L1.5 观感候选 | 结构过线后 `illustrate_mechanism_figure`：即梦 Seedream 图生图（结构 PNG→base64），智谱 CogView 备选。`generate` **禁止插入正文**；人选后 `adopt` 才落盘并回看。Admin：`VOLC_ARK_API_KEY` / `SEEDREAM_MODEL` / `ZHIPU_IMAGE_MODEL` |
 | L2 硬闭环 | **机理图**先看 `draft_mechanism_figure.qaReport`（`block` 不入库、按 findings 改 Spec）；过线后 toolsNode 才注入 `read_figure(mode=qa)` 扫残余观感。**数据图**看 `generate_chart.qaReport`（不跑视觉识图）。QA 未通过则禁止空口收尾 + 门禁 `replaceImageUrl`；同 caption/section 无 replace 时工具内自动就地替换（防叠图） |
 | L3 精修 | **配图坞**（输入框上方常驻最近出图，免翻聊天）+ 结果卡：落点说明（默认**节末落盘**）+「查看正文位置」+ 结构化「按意见改」（含分叉/三面板/脱氧等快捷）+ `/plot?chartAssetId=&replaceImageUrl=` 深链（优先资产快照回放，精修回写默认真地替换）；编辑器「本节插图」可挪位 |
 | 图质检两级（2026-08-09；008 收窄；MECH-QA 2026-08-23） | 机理图主尺是 `MechanismSpec` + `qaReport`（`contracts/mechanism-spec.ts` / `mechanism-qa.ts`）。识图 `figure-qa.ts` 只扫残余观感。数据图只看 ChartSpec `qaReport`。 |
@@ -304,6 +305,7 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 | 工具 | 作用 |
 |------|------|
 | `draft_mechanism_figure` / `generate_chart` | 出图并写入图表库；**默认插入已写章节**（省略 sectionKey 落入 results/methods）并回看正文是否含 URL。**改图传 `replaceImageUrl`/`replaceChartId` 就地替换**；同标题已有图自动 replace。机理图走 MechanismSpec。数据图走 ChartSpec。 |
+| `illustrate_mechanism_figure` | 即梦 Seedream 观感候选（智谱备选）。`generate` 不插正文；`adopt` 才插入并回看 |
 | `generate_table` | 三线表默认插入正文并回看表题；未 `insertedSection` 不算交付 |
 | `remove_figure` | 删图表资产 + 默认去掉正文对应 `![](url)`（清重复旧图）；**需用户确认** |
 | `read_figure` | `describe` 可识任意图；`mode=qa` **仅机理图**（占位/英文模板/空栏）。数据图跳过识图，看 `qaReport` |

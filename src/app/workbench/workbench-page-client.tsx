@@ -557,6 +557,7 @@ function WorkbenchContent() {
         || info.tool === "write_bilingual_abstract"
         || info.tool === "generate_chart"
         || info.tool === "draft_mechanism_figure"
+        || info.tool === "illustrate_mechanism_figure"
         || info.tool === "remove_figure"
         || info.tool === "generate_xrd_analysis"
         || info.tool === "generate_table"

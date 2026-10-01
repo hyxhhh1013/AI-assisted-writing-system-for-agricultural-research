@@ -198,6 +198,7 @@ export const AgentActionCard = memo(function AgentActionCard({
     Boolean(imageUrl)
     && (tool === "draft_mechanism_figure"
       || tool === "generate_chart"
+      || tool === "illustrate_mechanism_figure"
       || tool === "generate_xrd_analysis");
   const [open, setOpen] = useState(
     (Boolean(imageUrl) || isFigureCard) && !error && !soft,

@@ -324,7 +324,17 @@ export function useAgent(options: UseAgentOptions = {}) {
         const imageUrl =
           dataObj && typeof dataObj.imageUrl === "string"
             ? dataObj.imageUrl
-            : undefined;
+            : (() => {
+                const cands = dataObj && Array.isArray(dataObj.candidates)
+                  ? dataObj.candidates
+                  : [];
+                const first = cands[0];
+                if (first && typeof first === "object" && first !== null
+                  && typeof (first as { imageUrl?: unknown }).imageUrl === "string") {
+                  return (first as { imageUrl: string }).imageUrl;
+                }
+                return undefined;
+              })();
         const rawPlotHref =
           dataObj && typeof dataObj.href === "string" && dataObj.href.startsWith("/plot")
             ? dataObj.href
@@ -346,6 +356,7 @@ export function useAgent(options: UseAgentOptions = {}) {
           && (event.tool === "validate_citations"
             || event.tool === "draft_mechanism_figure"
             || event.tool === "generate_chart"
+            || event.tool === "illustrate_mechanism_figure"
             || event.tool === "generate_xrd_analysis");
         const qaSlim = event.tool === "write_section"
           ? slimWritingQaForUi(dataObj?.qaReport)

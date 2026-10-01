@@ -218,6 +218,7 @@
 | FIG-QA-010 | 类型质量剖面：bar_grouped / line / heatmap 先收口 | 006, 007 | 1.5d | **done** | 2026-08-22；热力不撑刊宽；三件套 profile 夹具；其余类型仍冻结扩新 |
 | **FIG-MECH-QA-001** | **机理图 MechanismSpec + 边条件 + 确定性质检 + 双布局候选** | FIG-QA-008 | 1.5d | **done** | 2026-08-23；`contracts/mechanism-spec.ts` + `mechanism-qa.ts`；compiler/patches；`draft_mechanism_figure` 热路径；不接文生图 |
 | **FIG-MECH-QA-002** | **/plot 流程图/多面板走同一套 Spec 修补并回放画布** | FIG-MECH-QA-001 | 0.5d | **done** | 2026-08-23；`mechanism-spec-run.ts`；flow-diagram / mechanism-panel 回传 qaReport；画布同步 |
+| **FIG-MECH-ILLUSTRATE** | **即梦 Seedream 观感层 + 智谱备选 + 人选后插入** | FIG-MECH-QA-001 | 1d | **done** | 2026-10-01；`illustrate_mechanism_figure`；`POST /api/illustrate-mechanism`；结构 Graphviz 仍为主渲染器 |
 | — | 任务单细节 | — | — | — | [`plans/FIG-QA-quality-system.md`](./plans/FIG-QA-quality-system.md) |
 | **Phase 14 — 写作质量系统（WRITE-QA：编译器 + 证据绑定 + 确定性质检）** |
 | **WRITE-QA-000** | **规划：诊断 + 质量合同 + SectionSpec 架构** | — | 0.5d | **done** | 2026-08-22；[`plans/WRITE-QA-quality-system.md`](./plans/WRITE-QA-quality-system.md) |
@@ -1428,6 +1429,7 @@ src/app/api/（13）                       src/lib/（6）
 | 2026-10-01 | W3-AP-HITL-LIT-02 | AI | 导入确认缺摘要时补 OpenAlex 或落地页首段（≤480 字）。超时或 PDF 链接软失败，不把全文写入确认参数。 |
 | 2026-10-01 | W3-AP-HITL-LIT-03 | AI | 大纲过目标题旁只显示题录对得上或蓝图已写明的 [n]。Phase 19 主轴收口。 |
 | 2026-10-01 | INSERT-VERIFY | AI | 三线表/图表默认插入已写章节并回看正文；未进正文不算交付，禁止 Agent 空口收尾。机理图仍不接文生图。 |
+| 2026-10-01 | FIG-MECH-ILLUSTRATE | AI | 即梦 Seedream 为机理观感主路径、智谱备选；结构 Graphviz 仍可编辑。候选不自动插入，配图坞 adopt 才进正文。 |
 | 2026-10-01 | W4-SEC-05a | AI | 知识库上传只收 PDF，超过 100MB 在读入前 413。`runCommand` 超时杀进程；图表渲染与三线表已接入。其余 spawn 仍待收口。 |
 | 2026-10-01 | AGENT-TRACE | AI | toolTrace 补 reason/via/ms；Admin 会话页展示失败轨迹；终态与 persist 失败打 agent-session JSON 到 PM2。 |
 | 2026-10-01 | ADMIN-047～049 | AI | 健康页 heap/RSS/Chromium/PM2；会话 intentKind+失败筛选；文献 indexStatus SQL 近似+重索引进度；Insights 时间窗与失败工具榜。 |

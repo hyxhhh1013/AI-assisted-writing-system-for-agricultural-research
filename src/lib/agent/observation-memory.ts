@@ -93,6 +93,7 @@ function formatEvidence(toolName: string, data: unknown): string {
     (toolName === "generate_table"
       || toolName === "generate_chart"
       || toolName === "draft_mechanism_figure"
+      || toolName === "illustrate_mechanism_figure"
       || toolName === "generate_xrd_analysis")
     && typeof data === "object"
     && data !== null

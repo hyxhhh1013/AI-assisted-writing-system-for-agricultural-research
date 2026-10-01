@@ -34,7 +34,7 @@ const protectedApis = [
   "/api/projects", "/api/writing", "/api/analysis", "/api/outline", "/api/export",
   "/api/plagiarism", "/api/chat", "/api/translate",
   "/api/consistency", "/api/chart", "/api/flow-diagram", "/api/mol-diagram", "/api/mechanism-panel",
-  "/api/save-chart", "/api/references", "/api/literature", "/api/xrd", "/api/admin",
+  "/api/save-chart", "/api/illustrate-mechanism", "/api/references", "/api/literature", "/api/xrd", "/api/admin",
   "/api/review", "/api/directions", "/api/data", "/api/figures", "/api/presentation",
   "/api/agent",
 ];

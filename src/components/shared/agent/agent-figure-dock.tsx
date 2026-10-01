@@ -17,6 +17,7 @@ interface AgentFigureDockProps {
   sectionLabelOf?: (sectionKey?: string) => string | undefined;
   disabled?: boolean;
   onRevise: (target: FigureReviseTarget, form: FigureReviseFormValue) => void;
+  onAdoptIllustration?: (item: FigureDockItem) => void;
   onJumpToSection?: (sectionKey: string) => void;
   projectId?: string;
 }
@@ -29,6 +30,7 @@ export function AgentFigureDock({
   sectionLabelOf,
   disabled,
   onRevise,
+  onAdoptIllustration,
   onJumpToSection,
   projectId,
 }: AgentFigureDockProps) {
@@ -134,6 +136,17 @@ export function AgentFigureDock({
                   <Pencil className="h-3 w-3" />
                   按意见改
                 </Button>
+                {active.kind === "illustration-candidate" && onAdoptIllustration ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-7 px-2 text-[11px]"
+                    disabled={disabled}
+                    onClick={() => onAdoptIllustration(active)}
+                  >
+                    采用此候选
+                  </Button>
+                ) : null}
                 {plotHref ? (
                   <Link
                     href={plotHref}

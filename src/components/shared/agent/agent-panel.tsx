@@ -58,7 +58,7 @@ import type { PhaseTaskPack } from "@/contracts/phase-task-pack";
 import { resolveLiveProgress } from "@/lib/agent/ui-progress";
 import { toast } from "sonner";
 import { findNewBlueprintOpenIndex } from "@/lib/agent/blueprint-open-guard";
-import { buildFigureReviseGoal } from "@/lib/agent/figure-revise";
+import { buildFigureReviseGoal, buildIllustrateAdoptGoal } from "@/lib/agent/figure-revise";
 import {
   collectSessionFigureDockItems,
   mergeProjectChartsIntoDock,
@@ -657,6 +657,21 @@ export function AgentPanel({
         return;
       }
       void agent.sendGoal(buildFigureReviseGoal(target, form));
+    },
+    [agent],
+  );
+
+  const handleAdoptIllustration = useCallback(
+    (item: { imageUrl: string; sourceImageUrl?: string; sectionKey?: string }) => {
+      if (agent.isRunning) {
+        toast.message("请等当前任务结束后再采用候选");
+        return;
+      }
+      void agent.sendGoal(buildIllustrateAdoptGoal({
+        candidateImageUrl: item.imageUrl,
+        sourceImageUrl: item.sourceImageUrl,
+        sectionKey: item.sectionKey,
+      }));
     },
     [agent],
   );
@@ -1453,6 +1468,7 @@ export function AgentPanel({
         sectionLabelOf={figureSectionLabel}
         disabled={agent.isRunning}
         onRevise={handleReviseFigure}
+        onAdoptIllustration={handleAdoptIllustration}
         onJumpToSection={onJumpToSection}
         projectId={projectId}
       />

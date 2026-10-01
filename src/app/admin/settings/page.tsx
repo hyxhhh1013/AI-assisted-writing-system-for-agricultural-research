@@ -401,6 +401,31 @@ export default function AdminSettingsPage() {
         })}
       </div>
 
+      <div className="rounded-xl border border-[#1a5632]/10 bg-white p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Cpu className="h-4 w-4 text-[#1a5632]" />
+          <h3 className="text-sm font-medium text-[#122820]">机理示意 · 即梦 Seedream</h3>
+        </div>
+        <p className="text-[10px] text-[#9aa8a0]">
+          结构图仍走 Graphviz。观感候选主路径为火山方舟 Seedream（图生图），智谱 CogView 仅备选。
+          密钥不占用 Writer/Verifier 角色。
+        </p>
+        {["VOLC_ARK_API_KEY", "SEEDREAM_MODEL", "ZHIPU_IMAGE_MODEL"].map((key) => {
+          const row = settings.find((x) => x.key === key);
+          return (
+            <div key={key} className="flex items-center justify-between gap-2 text-xs">
+              <code className="font-mono text-[#122820] truncate">{key}</code>
+              <span className="flex items-center gap-0.5 shrink-0">
+                <code className="font-mono text-[#9aa8a0]">{row?.maskedValue ?? "未配置"}</code>
+                <Button variant="ghost" size="icon" className="h-6 w-6" title="设置" onClick={() => openEditKey(key)}>
+                  <Key className="h-3 w-3" />
+                </Button>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
       {/* ==================== 运行时开关（ADMIN-040） ==================== */}
       <div className="rounded-xl border border-[#1a5632]/10 bg-white p-4">
         <div className="flex items-center gap-2">

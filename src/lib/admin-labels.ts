@@ -111,6 +111,7 @@ export const ADMIN_TOOL_LABEL: Record<string, string> = {
   generate_writing_blueprint: "生成写作蓝图",
   generate_chart: "生成图表",
   draft_mechanism_figure: "机理示意图",
+  illustrate_mechanism_figure: "即梦示意",
   generate_outline: "生成大纲",
   review_content: "审查正文",
 };

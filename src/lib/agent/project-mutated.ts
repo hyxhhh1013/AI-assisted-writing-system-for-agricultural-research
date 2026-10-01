@@ -17,6 +17,7 @@ export const PROJECT_MUTATING_TOOLS = [
   "generate_xrd_analysis",
   "generate_table",
   "draft_mechanism_figure",
+  "illustrate_mechanism_figure",
   "remove_figure",
   "save_reference_classification",
   "remove_references",
@@ -49,6 +50,7 @@ const TOOL_LABELS: Record<string, string> = {
   generate_xrd_analysis: "XRD 分析",
   generate_table: "三线表",
   draft_mechanism_figure: "机理图",
+  illustrate_mechanism_figure: "即梦示意",
   remove_figure: "删除图表",
   save_reference_classification: "文献分类",
   remove_references: "删除文献",
@@ -75,9 +77,12 @@ export function extractProjectMutated(
       return null;
     }
     if (
-      (tool === "draft_mechanism_figure" || tool === "generate_chart")
+      (tool === "draft_mechanism_figure" || tool === "generate_chart" || tool === "illustrate_mechanism_figure")
       && data.blocked === true
     ) {
+      return null;
+    }
+    if (tool === "illustrate_mechanism_figure" && data.action === "generate") {
       return null;
     }
     // import_reference 预览 / 待确认

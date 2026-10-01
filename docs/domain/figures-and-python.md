@@ -12,7 +12,8 @@
 > **超时（2026-10-01）**：`src/lib/python-runner.ts` 的 `runCommand` 到点 `kill`。图表渲染（120s）和 `POST /api/table`（55s，超时 504，临时目录仍删）已接入。其余 Python spawn 还在各路由里。  
 > **Agent 参数面（007 done）**：`generate_chart` 显著性走 `significanceJson`；`configJson` 仅白名单（`src/lib/chart-spec-extras.ts`）。刊宽 / DPI / `tight_layout` 丢弃并写入 observation。  
 > **QA 分流（008 done）**：数据图只看 `qaReport`（`block` 续跑改 Spec）；`read_figure(mode=qa)` 仅机理图/流程/分子扫残余观感。柱状/折线/热力会跳过视觉识图。  
-> **机理图质量（FIG-MECH-QA-001）**：`draft_mechanism_figure` 先编译 `MechanismSpecV1`（主张进 caption，括号条件上边），确定性质检 + ≤2 次 spec 补丁；`block` 不入库。未指定 layout 且 ≥4 步时额外渲一套 chain/fork 候选，只入库推荐稿。主渲染器仍是 Graphviz / `mechanism_panel`，**不**接文生图（结构必须可编辑回放）。  
+> **机理图质量（FIG-MECH-QA-001）**：`draft_mechanism_figure` 先编译 `MechanismSpecV1`（主张进 caption，括号条件上边），确定性质检 + ≤2 次 spec 补丁；`block` 不入库。未指定 layout 且 ≥4 步时额外渲一套 chain/fork 候选，只入库推荐稿。主渲染器仍是 Graphviz / `mechanism_panel`。  
+> **观感层（FIG-MECH-ILLUSTRATE）**：结构过线后可选 `illustrate_mechanism_figure`：即梦 Seedream 以结构 PNG 做图生图（`VOLC_ARK_API_KEY`），智谱 CogView 为备选。候选默认**不插入正文**，配图坞「采用此候选」才 `adopt`。数据柱状/折线仍走 matplotlib，禁止用文生图。  
 > **正文落点（2026-10-01）**：`generate_table` / `generate_chart` / `draft_mechanism_figure` 省略 `sectionKey` 时插入已写章节（优先 results），并回看正文含表题/图片 URL。仅进图表库不算交付，Agent 不得口头收尾。  
 > **/plot 回放（FIG-MECH-QA-002）**：`POST /api/flow-diagram` 与 `POST /api/mechanism-panel` 出图前走同一套 `refinePlotFlow` / `refinePlotPanelConfig`（保留用户拓扑，只上边条件、改英文占位）。回传 `qaReport` + 修补后的 nodes/panels；`/plot` 画布同步并显示质检条。不因 QA 拒绝出图。  
 > **刊规包 / 导出清单（009 done）**：`src/contracts/chart-export.ts`（栏宽 mm 与 Python 对齐）。出图后写 `{uuid}.csv` + `{uuid}.json`；`POST /api/chart` / `generate_chart` 回传 `exportManifest`。`GET /api/charts/:file` 可取 csv/json。  
@@ -94,8 +95,9 @@
 - Agent 三层定位：
   1. **草稿**：`draft_mechanism_figure` 编译 `MechanismSpec`（可 `templateId` 农科模板；`claim` / 边条件 / `preset`）→ Graphviz 或多面板 PNG 入库
   2. **硬闭环**：先看 `qaReport`（英文占位 / 空栏 / 节点过载 / 缺边条件）；`block` 不入库。过线后再自动 `read_figure(qa)` 扫残余观感；硬伤必须 `replaceImageUrl`；建议精修不强制重画、引导 `/plot`；同标题防叠图自动 replace；`remove_figure` 清旧图
-  3. **个性化（Agent 表单为主）**：输入框上方**配图坞**随时「按意见改」；表单快捷项（分叉/三面板/模板）→ `replaceImageUrl` 重画；复杂观感进 `/plot?replaceImageUrl=`，插入对话框默认**就地替换**正文旧图。**插图位置**：默认节末落盘，编辑器「本节插图」条可挪位（不做智能章节锚定）
-  4. **精修回放（2026-08-09；2026-08-10 加固）**：`/plot` 深链优先 `chartAssetId`；点击精修时用 **`localStorage`** 暂存 `figureSpecEnc`（`target=_blank` 新标签读不到 `sessionStorage`）；`GET /api/projects/:id/charts` 供绘图页按资产/图片 URL 回放；`uiTranscript` 持久化 `plotHref` + 轻量快照字段。配图坞无稳链时从资产重建，禁止落空 `/plot`
+  3. **观感候选（可选）**：`illustrate_mechanism_figure` 即梦 Seedream 图生图 + 智谱备选；配图坞采用后才进正文
+  4. **个性化（Agent 表单为主）**：输入框上方**配图坞**随时「按意见改」；表单快捷项（分叉/三面板/模板）→ `replaceImageUrl` 重画；复杂观感进 `/plot?replaceImageUrl=`，插入对话框默认**就地替换**正文旧图。**插图位置**：默认节末落盘，编辑器「本节插图」条可挪位（不做智能章节锚定）
+  5. **精修回放（2026-08-09；2026-08-10 加固）**：`/plot` 深链优先 `chartAssetId`；点击精修时用 **`localStorage`** 暂存 `figureSpecEnc`（`target=_blank` 新标签读不到 `sessionStorage`）；`GET /api/projects/:id/charts` 供绘图页按资产/图片 URL 回放；`uiTranscript` 持久化 `plotHref` + 轻量快照字段。配图坞无稳链时从资产重建，禁止落空 `/plot`
 
 ## 主要 API
 
@@ -106,6 +108,7 @@
 | `POST /api/xrd/*` | XRD 实验室（含 stack、scherrer） |
 | `POST /api/dft/vasp` | VASP DOSCAR / EIGENVAL / PROCAR → DOS/能带/投影能带 |
 | `POST /api/flow-diagram` | 流程示意 |
+| `POST /api/illustrate-mechanism` | 即梦 Seedream 机理示意候选（智谱备选，不插正文） |
 | `POST /api/mol-diagram` | 分子结构 |
 | `POST /api/save-chart` | 持久化输出 |
 

@@ -19,6 +19,7 @@ const TOOL_TITLE_HINTS: Record<string, string[]> = {
   generate_chart: ["图表", "chart", "配图", "画图", "做图"],
   generate_table: ["三线表", "表格", "table", "ANOVA", "统计表"],
   draft_mechanism_figure: ["机理", "示意图", "流程图", "mechanism", "framework"],
+  illustrate_mechanism_figure: ["即梦", "seedream", "示意", "观感", "文生图"],
   remove_figure: ["删图", "删除图", "去掉图", "remove figure"],
   read_figure: ["识图", "回看", "看图", "质检图"],
   generate_xrd_analysis: ["XRD", "xrd", "Scherrer", "晶粒", "衍射", "峰表"],

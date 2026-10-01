@@ -34,6 +34,7 @@ const VISIBLE_DELIVERABLE_TOOLS = new Set([
   "generate_writing_blueprint",
   "generate_chart",
   "draft_mechanism_figure",
+  "illustrate_mechanism_figure",
   "generate_xrd_analysis",
   "generate_table",
   "import_reference",

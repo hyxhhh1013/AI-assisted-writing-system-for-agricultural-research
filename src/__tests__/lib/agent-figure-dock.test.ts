@@ -109,4 +109,30 @@ describe("figure-dock", () => {
     const again = withReplaceImageUrlParam(href, "/api/charts/y.png");
     expect(again).toBe(href);
   });
+
+  it("collects Seedream illustration candidates without inserting as structure drafts", () => {
+    const messages: AgentUiMessage[] = [
+      {
+        kind: "observation",
+        tool: "illustrate_mechanism_figure",
+        imageUrl: "/api/charts/a.png",
+        data: {
+          action: "generate",
+          sourceImageUrl: "/api/charts/src.png",
+          candidates: [
+            { imageUrl: "/api/charts/a.png", provider: "seedream" },
+            { imageUrl: "/api/charts/b.png", provider: "seedream" },
+          ],
+        },
+      },
+    ];
+    const items = collectSessionFigureDockItems(messages, 6);
+    expect(items).toHaveLength(2);
+    expect(items[0]?.kind).toBe("illustration-candidate");
+    expect(items[0]?.sourceImageUrl).toBe("/api/charts/src.png");
+    expect(items.map((x) => x.imageUrl)).toEqual([
+      "/api/charts/a.png",
+      "/api/charts/b.png",
+    ]);
+  });
 });

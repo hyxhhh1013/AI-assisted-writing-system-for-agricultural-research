@@ -784,6 +784,20 @@ export const tableGenerateSchema = z.object({
 });
 export type TableGenerateInput = z.infer<typeof tableGenerateSchema>;
 
+/** POST /api/illustrate-mechanism — 即梦 Seedream 主路径，智谱备选 */
+export const illustrateMechanismSchema = z.object({
+  sourceImageUrl: z
+    .string()
+    .regex(/^\/api\/charts\/[A-Za-z0-9._-]+$/, "sourceImageUrl 必须是 /api/charts/ 下的结构图"),
+  caption: z.string().max(500).optional(),
+  claim: z.string().max(500).optional(),
+  promptOverride: z.string().max(4000).optional(),
+  mechanismSpec: jsonObjectSchema.optional(),
+  figureSpecEnc: z.string().max(200_000).optional(),
+  visibleText: z.array(z.string().max(120)).max(80).optional(),
+});
+export type IllustrateMechanismInput = z.infer<typeof illustrateMechanismSchema>;
+
 const braggHklSchema = z.tuple([z.number(), z.number(), z.number()]);
 
 export const xrdBraggSchema = z.object({

@@ -61,3 +61,22 @@ export function buildFigureReviseGoal(
   }
   return lines.join("\n");
 }
+
+export function buildIllustrateAdoptGoal(input: {
+  candidateImageUrl: string;
+  sourceImageUrl?: string;
+  sectionKey?: string;
+}): string {
+  const lines = [
+    "请采用配图坞中的即梦示意候选（不要再生成新候选）。",
+    `必须调用 illustrate_mechanism_figure，action=adopt，candidateImageUrl="${input.candidateImageUrl}"。`,
+  ];
+  if (input.sourceImageUrl) {
+    lines.push(`sourceImageUrl="${input.sourceImageUrl}"，replaceImageUrl="${input.sourceImageUrl}"。`);
+  }
+  if (input.sectionKey) {
+    lines.push(`sectionKey=${input.sectionKey}。`);
+  }
+  lines.push("采用后回看正文含新图 URL，禁止口头说已经插好。");
+  return lines.join("\n");
+}

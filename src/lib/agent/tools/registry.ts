@@ -25,6 +25,7 @@ import { getFullTextTool } from "@/lib/agent/tools/get-full-text";
 import { importReferenceTool } from "@/lib/agent/tools/import-reference";
 import { ingestProjectDataTool } from "@/lib/agent/tools/ingest-project-data";
 import { inspectProjectTool } from "@/lib/agent/tools/inspect-project";
+import { illustrateMechanismFigureTool } from "@/lib/agent/tools/illustrate-mechanism-figure";
 import { listAttachmentsTool } from "@/lib/agent/tools/list-attachments";
 import { listPlotSourcesTool } from "@/lib/agent/tools/list-plot-sources";
 import { listReferencesTool } from "@/lib/agent/tools/list-references";
@@ -96,6 +97,7 @@ export const WRITE_TOOLS: readonly ToolDefinition[] = [
   generateXrdAnalysisTool,
   generateTableTool,
   draftMechanismFigureTool,
+  illustrateMechanismFigureTool,
   removeFigureTool,
   writeBilingualAbstractTool,
   saveReferenceClassificationTool,

@@ -29,6 +29,7 @@ const TOOL_LABELS: Record<string, string> = {
   remove_figure: "删除图表",
   generate_chart: "生成图表",
   draft_mechanism_figure: "生成机理图",
+  illustrate_mechanism_figure: "即梦示意候选",
   generate_xrd_analysis: "XRD 分析",
   update_paper_config: "更新论文配置",
   parse_revision_comments: "解析审稿意见",

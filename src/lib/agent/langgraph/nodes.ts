@@ -445,6 +445,7 @@ export async function agentNode(
             || o.tool === "update_paper_config" || o.tool === "generate_outline"
             || o.tool === "write_bilingual_abstract" || o.tool === "import_reference"
             || o.tool === "generate_chart" || o.tool === "draft_mechanism_figure"
+            || o.tool === "illustrate_mechanism_figure"
             || o.tool === "apply_revision_item"
             || o.tool === "generate_writing_blueprint")
           && !isChartQaBlocked(o.data),
@@ -1143,7 +1144,9 @@ export async function toolsNode(
         && (tool.name === "generate_table"
           || tool.name === "generate_chart"
           || tool.name === "draft_mechanism_figure"
-          || tool.name === "generate_xrd_analysis")
+          || tool.name === "generate_xrd_analysis"
+          || (tool.name === "illustrate_mechanism_figure"
+            && (result.data as { action?: unknown })?.action === "adopt"))
         && !isChartQaBlocked(result.data)
         && !assetLandedInBody(result.data)
       ) {
@@ -1168,6 +1171,18 @@ export async function toolsNode(
             "System: 声称已插入但回看未在正文找到标记。请 read_section 核对该节末尾；未找到则带 replaceImageUrl/sectionKey 重插。不要开始下一节。",
         });
         newSummaries.push("[insert-verify] 回看失败，须 read_section");
+      } else if (
+        result.success
+        && tool.name === "illustrate_mechanism_figure"
+        && (result.data as { action?: unknown })?.action === "generate"
+      ) {
+        newMessages.push({
+          role: "user",
+          content:
+            "System: 即梦/智谱示意候选已出，禁止自动插入正文。"
+            + "向用户展示候选，等他们说采用哪张后再 illustrate_mechanism_figure action=adopt。",
+        });
+        newSummaries.push("[illustrate] 候选待人选，禁止自动插入");
       }
 
       // P0：QA 判定需重生成 → 硬 nudge，禁止无 replace 再出图

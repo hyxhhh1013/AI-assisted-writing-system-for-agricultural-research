@@ -51,6 +51,7 @@ export const PROGRESS_TOOLS = new Set([
   "generate_xrd_analysis",
   "generate_table",
   "draft_mechanism_figure",
+  "illustrate_mechanism_figure",
   "remove_figure",
   "save_reference_classification",
   "remove_references",
@@ -69,6 +70,7 @@ export const FINGERPRINT_BLIND_PROGRESS_TOOLS = new Set([
   "generate_xrd_analysis",
   "generate_table",
   "draft_mechanism_figure",
+  "illustrate_mechanism_figure",
   "remove_figure",
 ]);
 

@@ -13,7 +13,7 @@
 <!-- API_INDEX:AUTO:START -->
 ## 路由表（自动生成）
 
-> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-08-23 02:55:49**（共 **109** 个 route 文件，validateBody **51**，SSE **11**，requireAdmin **24**）。
+> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-10-01 14:02:24**（共 **110** 个 route 文件，validateBody **52**，SSE **11**，requireAdmin **25**）。
 
 图例：zod = 使用 validateBody；SSE = 含 text/event-stream / ReadableStream；admin = 含 requireAdmin。
 
@@ -66,8 +66,7 @@
 
 | 方法 | 路径 | zod | SSE | admin |
 |------|------|-----|-----|-------|
-| GET, POST, PATCH | `/api/knowledge` | ✓ | — | — |
-| DELETE | `/api/knowledge` | ✓ | — | ✓ |
+| GET, POST, PATCH, DELETE | `/api/knowledge` | ✓ | — | ✓ |
 | POST | `/api/knowledge/analyze` | — | — | — |
 | POST | `/api/knowledge/import-bibliography` | ✓ | — | — |
 | POST | `/api/knowledge/ingest-external` | ✓ | — | — |
@@ -248,6 +247,7 @@
 | PATCH, POST | `/api/directions/[slug]/roadmap` | ✓ | — | — |
 | GET | `/api/directions/[slug]/scan` | — | — | — |
 | GET | `/api/directions/summary` | — | — | — |
+| POST | `/api/illustrate-mechanism` | ✓ | — | — |
 | POST | `/api/literature/search` | ✓ | — | — |
 | POST | `/api/mechanism-panel` | — | — | — |
 | GET | `/api/presentation/stats` | — | — | — |
@@ -282,6 +282,10 @@
 ### POST /api/chart（FIG-QA）
 
 响应在 PNG/`imageUrl` 之外带 `qaReport`、`exportManifest`（刊规包 + png/svg/pdf/csv/清单 URL + qa 摘要）。同源文件：`GET /api/charts/{uuid}.{png|svg|pdf|csv|json}`。
+
+### POST /api/illustrate-mechanism（FIG-MECH-ILLUSTRATE）
+
+结构草稿 PNG（`/api/charts/…`）→ 即梦 Seedream 图生图（`VOLC_ARK_API_KEY`），失败则智谱 CogView。只返回候选，不写正文。Agent 工具 `illustrate_mechanism_figure` 的 `adopt` 才插入。
 
 ### 尚未接入 validateBody 的常见路由
 

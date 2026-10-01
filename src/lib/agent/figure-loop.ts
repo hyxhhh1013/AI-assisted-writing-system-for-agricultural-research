@@ -47,6 +47,7 @@ export const FIGURE_BRIEF_QUESTION =
   + "3) 是否需要分子式/化学结构标注（要/不要）\n"
   + "4) 是否已有素材图要嵌入（无 / 有，稍后上传）\n"
   + "5) 其他个性化要求（一句话）。\n"
+  + "6) 结构过线后是否用即梦 Seedream 出观感候选（要/不要；默认不插入正文，须人选后再采用）。\n"
   + "确认后我会按你的选择出「可编辑草稿」，复杂终稿可在绘图页精修。";
 
 /** 从出图工具结果提取 imageUrl */
@@ -57,6 +58,12 @@ export function extractFigureImageUrl(result: AgentToolResult): string | null {
   const data = result.data as Record<string, unknown>;
   if (typeof data.imageUrl === "string" && data.imageUrl.startsWith("/api/charts/")) {
     return data.imageUrl;
+  }
+  if (Array.isArray(data.candidates) && data.candidates[0] && typeof data.candidates[0] === "object") {
+    const first = data.candidates[0] as Record<string, unknown>;
+    if (typeof first.imageUrl === "string" && first.imageUrl.startsWith("/api/charts/")) {
+      return first.imageUrl;
+    }
   }
   // 批量：取第一张
   if (Array.isArray(data.charts) && data.charts[0] && typeof data.charts[0] === "object") {

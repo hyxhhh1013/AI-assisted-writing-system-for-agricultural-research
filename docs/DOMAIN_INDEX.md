@@ -84,7 +84,8 @@
 | 仪器 .xy/.ras | XRD 各工具上传 | 经 `load_dataframe` | `instrument_io.py`、`lib/xrd-file-ext.ts` |
 | 科研作图队列（类型能力，已收口） | — | — | [`plans/FIG-PR-scientific-plotting.md`](./plans/FIG-PR-scientific-plotting.md) |
 | **图表质量系统（001–010 收口）** | — | `POST /api/chart` 回传 `qaReport` + `exportManifest` | compiler + layout_solver；`npm run test:figures`；三件套 bar/line/heatmap；[`plans/FIG-QA-quality-system.md`](./plans/FIG-QA-quality-system.md) |
-| **机理图质量（FIG-MECH-QA）** | Agent `draft_mechanism_figure` · `/plot` 示意图 | `POST /api/flow-diagram` · `POST /api/mechanism-panel` | `MechanismSpecV1` → 边条件编译 → 确定性质检 → spec 补丁；/plot 同套 refine 并回写画布；**不**接文生图 |
+| **机理图质量（FIG-MECH-QA）** | Agent `draft_mechanism_figure` · `/plot` 示意图 | `POST /api/flow-diagram` · `POST /api/mechanism-panel` | `MechanismSpecV1` → 边条件编译 → 确定性质检 → spec 补丁；/plot 同套 refine 并回写画布 |
+| **机理示意（FIG-MECH-ILLUSTRATE）** | `illustrate_mechanism_figure` · 配图坞采用 | `POST /api/illustrate-mechanism` | Seedream 主路径（结构 PNG img2img）+ 智谱备选；人选后才插入 |
 
 详见 [`domain/figures-and-python.md`](./domain/figures-and-python.md)（含 W4-SEC-06 预览消毒）。
 
