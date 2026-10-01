@@ -20,6 +20,7 @@ function mockRuntime(tools: ToolDefinition[]) {
 }
 
 const baseState = {
+  goal: "确认把图注 CEC 的 [18] 改为 [21] 吗？",
   error: null,
   finished: false,
   pendingToolCalls: [

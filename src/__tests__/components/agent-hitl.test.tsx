@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AgentClarifyCard } from "@/components/shared/agent/agent-clarify-card";
+import { AgentClarifyCard, formatChoicePrompt } from "@/components/shared/agent/agent-clarify-card";
 import { AgentToolConfirm } from "@/components/shared/agent/agent-tool-confirm";
 
 afterEach(cleanup);
@@ -22,6 +22,38 @@ describe("AgentClarifyCard", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "回答后继续" }));
     expect(onSubmit).toHaveBeenCalledWith("先写引言");
+  });
+
+  it("renders numbered options as a list without raw markdown asterisks", () => {
+    render(
+      <AgentClarifyCard
+        question="**下一步请选**: 1. **继续写子节**； 2. **先写结论**。 回复 1/2/3 即可。"
+        onSubmit={vi.fn()}
+        onSkip={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText(/\*\*/)).toBeNull();
+    expect(screen.getByText("下一步请选:")).toBeTruthy();
+    expect(screen.getByText("继续写子节")).toBeTruthy();
+    expect(screen.getByText(/先写结论/)).toBeTruthy();
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "1" })).toBeTruthy();
+    expect(formatChoicePrompt("1. 甲； 2. 乙。 回复 1/2/3")).toContain("\n2. 乙");
+  });
+
+  it("keeps the answer box when the question includes a long 执行摘要 dump", () => {
+    const dump = " [write_section] 已写回 ".repeat(40);
+    render(
+      <AgentClarifyCard
+        question={`**下一步请选**： 1. **继续写子节**； 2.**先写结论**。 回复 1 / 2 即可。执行摘要:${dump}`}
+        onSubmit={vi.fn()}
+        onSkip={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText(/write_section/)).toBeNull();
+    expect(screen.getByPlaceholderText("直接写你的决定或补充…")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "回答后继续" })).toBeTruthy();
   });
 });
 

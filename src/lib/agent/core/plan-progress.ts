@@ -191,7 +191,9 @@ export function extractUserChoicePrompt(text: string | null | undefined): string
   const head = body.search(/下一步请选|请回复\s*[1１]|回复\s*[1１]\s*[\/、,，或]\s*2/);
   if (head < 0) return null;
   const lineStart = body.lastIndexOf("\n", head);
-  const fromMarker = body.slice(lineStart >= 0 ? lineStart + 1 : 0).trim();
+  let fromMarker = body.slice(lineStart >= 0 ? lineStart + 1 : 0).trim();
+  const execCut = fromMarker.search(/执行摘要[:：]|【执行摘要】|\[[a-z][\w_]*\]/);
+  if (execCut > 8) fromMarker = fromMarker.slice(0, execCut).trim();
   if (/^回复\s*[1１]/.test(fromMarker) && lineStart > 0) {
     const lines = body.split("\n");
     const hit = lines.findIndex((line) => /回复\s*[1１]/.test(line) || /下一步请选/.test(line));

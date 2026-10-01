@@ -11,7 +11,7 @@ import type { FigureReviseFormValue, FigureReviseTarget } from "@/contracts/figu
 import { withReplaceImageUrlParam } from "@/lib/agent/figure-dock";
 import { formatFigurePlacementHint } from "@/lib/agent/figure-revise";
 import { stashPlotPrefill } from "@/lib/plot-prefill-stash";
-import { splitExecSummary } from "@/lib/agent/split-exec-summary";
+import { compactSummaryBodyForDisplay, splitExecSummary } from "@/lib/agent/split-exec-summary";
 import {
   formatToolParamHint,
   humanizeToolNotice,
@@ -118,7 +118,8 @@ export const AgentSummaryContent = memo(function AgentSummaryContent({
   text?: string | null;
 }) {
   const { body, execSummary } = splitExecSummary(text);
-  if (!body && !execSummary) {
+  const displayBody = body ? compactSummaryBodyForDisplay(body) : "";
+  if (!displayBody && !execSummary) {
     return (
       <p className="text-[13.5px] leading-relaxed text-foreground/90">
         {typeof text === "string" && text.trim() ? text : "任务已完成。"}
@@ -127,11 +128,11 @@ export const AgentSummaryContent = memo(function AgentSummaryContent({
   }
   return (
     <div className="space-y-0">
-      {body ? <AgentMarkdown content={body} /> : null}
+      {displayBody ? <AgentMarkdown content={displayBody} /> : null}
       {execSummary ? (
         <div
           className={
-            body
+            displayBody
               ? "mt-3 rounded-md border-t border-border/35 bg-muted/25 px-2.5 pb-2 pt-2.5"
               : "rounded-md bg-muted/25 px-2.5 py-2"
           }
