@@ -10,15 +10,17 @@ import type {
 import { parseMechanismSpec } from "@/contracts/mechanism-spec";
 import { ensureChartsDir, resolveChartFile } from "@/lib/charts-dir";
 import { getErrorMessage } from "@/lib/error-utils";
-import { resolveIllustrationRuntime } from "@/lib/illustration-keys";
+import {
+  arkImagesUrl,
+  resolveIllustrationRuntime,
+  ZHIPU_IMAGES_URL,
+} from "@/lib/illustration-keys";
 import {
   compileIllustrationPrompt,
   compileIllustrationPromptFromFigureSpecEnc,
   compileIllustrationPromptFromParts,
 } from "@/lib/illustration-prompt";
 
-const ARK_IMAGES_URL = "https://ark.cn-beijing.volces.com/api/v3/images/generations";
-const ZHIPU_IMAGES_URL = "https://open.bigmodel.cn/api/paas/v4/images/generations";
 const MAX_CANDIDATES = 2;
 
 export interface RunIllustrationInput {
@@ -159,6 +161,7 @@ async function runSeedream(input: {
   png: Buffer;
   model: string;
   apiKey: string;
+  imagesUrl: string;
 }): Promise<IllustrationCandidate[]> {
   const image = toDataUriPng(input.png);
   const baseBody = {
@@ -176,13 +179,13 @@ async function runSeedream(input: {
   };
 
   let called = await callJsonApi({
-    url: ARK_IMAGES_URL,
+    url: input.imagesUrl,
     apiKey: input.apiKey,
     body: withSeq,
   });
   if (!called.ok) {
     called = await callJsonApi({
-      url: ARK_IMAGES_URL,
+      url: input.imagesUrl,
       apiKey: input.apiKey,
       body: baseBody,
     });
@@ -243,6 +246,7 @@ export async function runMechanismIllustration(
         png,
         model: runtime.seedreamModel,
         apiKey: runtime.arkKey,
+        imagesUrl: arkImagesUrl(runtime.arkBaseUrl),
       });
       return {
         prompt,

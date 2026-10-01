@@ -13,7 +13,7 @@
 <!-- API_INDEX:AUTO:START -->
 ## 路由表（自动生成）
 
-> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-10-01 14:02:24**（共 **110** 个 route 文件，validateBody **52**，SSE **11**，requireAdmin **25**）。
+> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-10-01 14:25:49**（共 **112** 个 route 文件，validateBody **53**，SSE **11**，requireAdmin **27**）。
 
 图例：zod = 使用 validateBody；SSE = 含 text/event-stream / ReadableStream；admin = 含 requireAdmin。
 
@@ -203,6 +203,8 @@
 | GET | `/api/admin/directions` | — | — | ✓ |
 | GET, PATCH | `/api/admin/directions/[id]` | — | — | ✓ |
 | GET | `/api/admin/health` | — | — | ✓ |
+| GET | `/api/admin/illustration-status` | — | — | ✓ |
+| POST | `/api/admin/illustration-test` | ✓ | — | ✓ |
 | GET | `/api/admin/insights` | — | — | ✓ |
 | GET, POST | `/api/admin/journal-metrics` | — | — | ✓ |
 | GET, DELETE, POST | `/api/admin/knowledge` | ✓ | — | ✓ |
@@ -285,7 +287,7 @@
 
 ### POST /api/illustrate-mechanism（FIG-MECH-ILLUSTRATE）
 
-结构草稿 PNG（`/api/charts/…`）→ 即梦 Seedream 图生图（`VOLC_ARK_API_KEY`），失败则智谱 CogView。只返回候选，不写正文。Agent 工具 `illustrate_mechanism_figure` 的 `adopt` 才插入。
+结构草稿 PNG（`/api/charts/…`）→ 即梦 Seedream 图生图（`VOLC_ARK_API_KEY`），失败则智谱 CogView。只返回候选，不写正文。Agent 工具 `illustrate_mechanism_figure` 的 `adopt` 才插入。Key / 模型在 Admin「系统设置 → 机理示意模型」管理：`GET /api/admin/illustration-status`、`POST /api/admin/illustration-test`（拉模型列表，不出图）。
 
 ### 尚未接入 validateBody 的常见路由
 

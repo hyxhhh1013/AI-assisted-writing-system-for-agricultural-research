@@ -747,6 +747,13 @@ export const adminAiTestSchema = z.object({
 });
 export type AdminAiTestInput = z.infer<typeof adminAiTestSchema>;
 
+export const adminIllustrationTestSchema = z.object({
+  provider: z.enum(["seedream", "zhipu"]),
+  model: z.string().trim().optional(),
+  apiKey: z.string().trim().optional(),
+});
+export type AdminIllustrationTestInput = z.infer<typeof adminIllustrationTestSchema>;
+
 // === Chart / Table / XRD ===
 export const chartModeSchema = z.enum(["generic", "crd"]).default("generic");
 

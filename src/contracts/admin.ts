@@ -361,6 +361,23 @@ export interface AdminAiStatusResponse {
   roles: AdminAiRoles;
 }
 
+export type AdminIllustrationTestProvider = "seedream" | "zhipu";
+
+export interface AdminIllustrationProviderStatus {
+  name: string;
+  ready: boolean;
+  model: string;
+  modelSource: "db" | "env" | "default";
+  keyCount: number;
+  keys: string[];
+  baseUrl?: string;
+}
+
+export interface AdminIllustrationStatus {
+  seedream: AdminIllustrationProviderStatus;
+  zhipuImage: AdminIllustrationProviderStatus;
+}
+
 // ==================== Agent 会话监控 ====================
 
 export type AdminAgentSessionStatus = "running" | "interrupted" | "completed" | "error";

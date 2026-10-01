@@ -183,7 +183,7 @@ PYTHON_CMD=python3
 | `RAG_ARTICLES_DIR` | PDF 根目录绝对路径 |
 | `WRITING_MAX_CONCURRENT` | 扩写并发（默认 2；生产 3）。**改后必须 `pm2 delete + start`** |
 
-`ecosystem.config.cjs` 会把 `.env` 的 `DEEPSEEK_API_KEY_*`、`ZHIPU_API_KEY_*` 注入 PM2 子进程。
+| `ecosystem.config.cjs` 会把 `.env` 的 `DEEPSEEK_API_KEY_*`、`ZHIPU_API_KEY_*`、`VOLC_ARK_API_KEY_*`、`ZHIPU_IMAGE_API_KEY_*` 注入 PM2 子进程。 |
 
 ---
 

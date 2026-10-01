@@ -10,19 +10,29 @@ import { toast } from "sonner";
 import {
   deleteAdminSetting,
   getAiStatus,
+  getIllustrationStatus,
   listAdminSettings,
   saveAdminSetting,
   testAiConnection,
+  testIllustrationConnection,
   type AdminAiRoles,
   type AdminAiStatusResponse,
+  type AdminIllustrationStatus,
   type AdminSettingRecord,
 } from "@/services/admin";
-import type { AiProviderKey } from "@/contracts/admin";
+import type { AiProviderKey, AdminIllustrationProviderStatus } from "@/contracts/admin";
 import {
   DEEPSEEK_MODEL_OPTIONS,
   DEEPSEEK_VISION_MODEL_OPTIONS,
   ZHIPU_MODEL_OPTIONS,
 } from "@/lib/models";
+import {
+  DEFAULT_ARK_BASE_URL,
+  DEFAULT_SEEDREAM_MODEL,
+  DEFAULT_ZHIPU_IMAGE_MODEL,
+  SEEDREAM_MODEL_OPTIONS,
+  ZHIPU_IMAGE_MODEL_OPTIONS,
+} from "@/contracts/illustration";
 
 type EditKind = "secret" | "model";
 
@@ -64,6 +74,7 @@ const SOURCE_LABEL: Record<string, string> = { db: "DB", env: "env", default: "�
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<AdminSettingRecord[]>([]);
   const [aiStatus, setAiStatus] = useState<AdminAiStatusResponse | null>(null);
+  const [illustrationStatus, setIllustrationStatus] = useState<AdminIllustrationStatus | null>(null);
   const [roles, setRoles] = useState<AdminAiRoles>({
     writer: "deepseek",
     verifier: "deepseek",
@@ -94,7 +105,11 @@ export default function AdminSettingsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [s, st] = await Promise.allSettled([listAdminSettings(), getAiStatus()]);
+    const [s, st, ill] = await Promise.allSettled([
+      listAdminSettings(),
+      getAiStatus(),
+      getIllustrationStatus(),
+    ]);
     if (s.status === "fulfilled") {
       setSettings(s.value);
       const map = new Map(s.value.map((x) => [x.key, x.maskedValue]));
@@ -116,6 +131,9 @@ export default function AdminSettingsPage() {
       setRoles(st.value.roles);
     } else {
       toast.error("加载 AI 状态失败");
+    }
+    if (ill.status === "fulfilled") {
+      setIllustrationStatus(ill.value);
     }
     setLoading(false);
   }, []);
@@ -166,8 +184,65 @@ export default function AdminSettingsPage() {
     setShowEdit(true);
   };
 
+  const openEditIllustrationModel = (which: "seedream" | "zhipu") => {
+    const modelKey = which === "seedream" ? "SEEDREAM_MODEL" : "ZHIPU_IMAGE_MODEL";
+    const options = which === "seedream" ? SEEDREAM_MODEL_OPTIONS : ZHIPU_IMAGE_MODEL_OPTIONS;
+    const fallback = which === "seedream" ? DEFAULT_SEEDREAM_MODEL : DEFAULT_ZHIPU_IMAGE_MODEL;
+    const existing = settings.find((x) => x.key === modelKey);
+    const live =
+      which === "seedream"
+        ? illustrationStatus?.seedream.model
+        : illustrationStatus?.zhipuImage.model;
+    const current = existing?.maskedValue || live || fallback;
+    setEditProvider(which === "zhipu" ? "zhipu" : "deepseek");
+    setEditKey(modelKey);
+    setEditValue(current);
+    setEditKind("model");
+    setEditOptions(options);
+    setCustomModel(current !== "" && !(options as readonly string[]).includes(current));
+    setShowEdit(true);
+  };
+
+  const openAddIllustrationKey = (prefix: "VOLC_ARK_API_KEY" | "ZHIPU_IMAGE_API_KEY") => {
+    const dbKeys = settings.filter((x) => x.key === prefix || x.key.startsWith(`${prefix}_`));
+    const nextName = dbKeys.length === 0 ? prefix : `${prefix}_${dbKeys.length + 1}`;
+    setEditProvider(prefix.startsWith("ZHIPU") ? "zhipu" : "deepseek");
+    setEditKey(nextName);
+    setEditValue("");
+    setEditKind("secret");
+    setEditOptions(null);
+    setCustomModel(false);
+    setShowEdit(true);
+  };
+
+  const openEditArkBase = () => {
+    const existing = settings.find((x) => x.key === "VOLC_ARK_BASE_URL");
+    const current = existing?.maskedValue
+      || illustrationStatus?.seedream.baseUrl
+      || DEFAULT_ARK_BASE_URL;
+    setEditProvider("deepseek");
+    setEditKey("VOLC_ARK_BASE_URL");
+    setEditValue(current);
+    setEditKind("model");
+    setEditOptions([DEFAULT_ARK_BASE_URL]);
+    setCustomModel(true);
+    setShowEdit(true);
+  };
+
   /** 编辑已有 DB Key（仅 Key 名 + 重填值） */
   const openEditKey = (key: string) => {
+    if (key === "SEEDREAM_MODEL") {
+      openEditIllustrationModel("seedream");
+      return;
+    }
+    if (key === "ZHIPU_IMAGE_MODEL") {
+      openEditIllustrationModel("zhipu");
+      return;
+    }
+    if (key === "VOLC_ARK_BASE_URL") {
+      openEditArkBase();
+      return;
+    }
     const provider = PROVIDERS.find(
       (p) => key === p.apiKeyPrefix || key.startsWith(`${p.apiKeyPrefix}_`),
     );
@@ -211,6 +286,29 @@ export default function AdminSettingsPage() {
     setTesting(true);
     try {
       const r = await testAiConnection({ provider, model, apiKey });
+      if (r.ok) toast.success(r.message || "连接正常");
+      else toast.error(r.error || "连接失败");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "测试失败");
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const handleTestIllustration = async (
+    provider: "seedream" | "zhipu",
+    opts?: { model?: string; apiKey?: string },
+  ) => {
+    setTesting(true);
+    try {
+      const r = await testIllustrationConnection({
+        provider,
+        model: opts?.model
+          || (provider === "seedream"
+            ? illustrationStatus?.seedream.model
+            : illustrationStatus?.zhipuImage.model),
+        apiKey: opts?.apiKey,
+      });
       if (r.ok) toast.success(r.message || "连接正常");
       else toast.error(r.error || "连接失败");
     } catch (e) {
@@ -401,29 +499,38 @@ export default function AdminSettingsPage() {
         })}
       </div>
 
-      <div className="rounded-xl border border-[#1a5632]/10 bg-white p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <Cpu className="h-4 w-4 text-[#1a5632]" />
-          <h3 className="text-sm font-medium text-[#122820]">机理示意 · 即梦 Seedream</h3>
-        </div>
-        <p className="text-[10px] text-[#9aa8a0]">
-          结构图仍走 Graphviz。观感候选主路径为火山方舟 Seedream（图生图），智谱 CogView 仅备选。
-          密钥不占用 Writer/Verifier 角色。
+      <div>
+        <h3 className="mb-2 text-sm font-medium text-[#122820]">机理示意模型</h3>
+        <p className="mb-3 text-[10px] text-[#9aa8a0]">
+          结构图仍走 Graphviz。观感候选：即梦 Seedream 主路径，智谱绘图备选。不占用 Writer/Verifier。保存后立即生效。
         </p>
-        {["VOLC_ARK_API_KEY", "SEEDREAM_MODEL", "ZHIPU_IMAGE_MODEL"].map((key) => {
-          const row = settings.find((x) => x.key === key);
-          return (
-            <div key={key} className="flex items-center justify-between gap-2 text-xs">
-              <code className="font-mono text-[#122820] truncate">{key}</code>
-              <span className="flex items-center gap-0.5 shrink-0">
-                <code className="font-mono text-[#9aa8a0]">{row?.maskedValue ?? "未配置"}</code>
-                <Button variant="ghost" size="icon" className="h-6 w-6" title="设置" onClick={() => openEditKey(key)}>
-                  <Key className="h-3 w-3" />
-                </Button>
-              </span>
-            </div>
-          );
-        })}
+        <div className="grid gap-4 md:grid-cols-2">
+          <IllustrationSeedreamCard
+            status={illustrationStatus?.seedream}
+            dbKeys={settings.filter(
+              (x) => x.key === "VOLC_ARK_API_KEY" || x.key.startsWith("VOLC_ARK_API_KEY_"),
+            )}
+            testing={testing}
+            onTest={() => void handleTestIllustration("seedream")}
+            onEditModel={() => openEditIllustrationModel("seedream")}
+            onEditBase={openEditArkBase}
+            onAddKey={() => openAddIllustrationKey("VOLC_ARK_API_KEY")}
+            onEditKey={openEditKey}
+            onDeleteKey={setDeleteTarget}
+          />
+          <IllustrationZhipuCard
+            status={illustrationStatus?.zhipuImage}
+            dbKeys={settings.filter(
+              (x) => x.key === "ZHIPU_IMAGE_API_KEY" || x.key.startsWith("ZHIPU_IMAGE_API_KEY_"),
+            )}
+            testing={testing}
+            onTest={() => void handleTestIllustration("zhipu")}
+            onEditModel={() => openEditIllustrationModel("zhipu")}
+            onAddKey={() => openAddIllustrationKey("ZHIPU_IMAGE_API_KEY")}
+            onEditKey={openEditKey}
+            onDeleteKey={setDeleteTarget}
+          />
+        </div>
       </div>
 
       {/* ==================== 运行时开关（ADMIN-040） ==================== */}
@@ -621,6 +728,19 @@ export default function AdminSettingsPage() {
           <DialogFooter className="gap-2">
             <Button variant="outline" size="sm" className="gap-1" disabled={testing}
               onClick={() => {
+                const illustrationProvider =
+                  editKey.startsWith("VOLC_ARK") || editKey === "SEEDREAM_MODEL"
+                    ? "seedream" as const
+                    : editKey.startsWith("ZHIPU_IMAGE")
+                      ? "zhipu" as const
+                      : null;
+                if (illustrationProvider) {
+                  void handleTestIllustration(illustrationProvider, {
+                    model: editKey.endsWith("_MODEL") ? editValue.trim() || undefined : undefined,
+                    apiKey: editKind === "secret" ? editValue.trim() || undefined : undefined,
+                  });
+                  return;
+                }
                 if (editKind === "model") {
                   void handleTest(editProvider, editValue.trim() || undefined);
                 } else if (editValue.trim()) {
@@ -654,6 +774,184 @@ export default function AdminSettingsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function IllustrationSeedreamCard(props: {
+  status: AdminIllustrationProviderStatus | undefined;
+  dbKeys: AdminSettingRecord[];
+  testing: boolean;
+  onTest: () => void;
+  onEditModel: () => void;
+  onEditBase: () => void;
+  onAddKey: () => void;
+  onEditKey: (key: string) => void;
+  onDeleteKey: (key: string) => void;
+}) {
+  const seed = props.status;
+  return (
+    <div className="rounded-xl border border-[#1a5632]/10 bg-white p-4 flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Cpu className="h-4 w-4 text-[#1a5632]" />
+          <span className="text-sm font-medium text-[#122820]">即梦 Seedream</span>
+          {seed?.ready
+            ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+            : <XCircle className="h-3.5 w-3.5 text-red-400" />}
+        </div>
+        <Button variant="outline" size="sm" className="gap-1" disabled={props.testing} onClick={props.onTest}>
+          {props.testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+          测试连接
+        </Button>
+      </div>
+      <div className="text-[10px] text-[#9aa8a0]">火山方舟图生图。Key 填控制台 API Key，模型填接入点 ID。</div>
+      <div className="rounded-lg bg-[#faf9f6] px-3 py-2 flex items-center justify-between gap-2">
+        <span className="text-xs text-[#6b7c72] shrink-0">当前模型</span>
+        <span className="flex items-center gap-2 min-w-0">
+          <code className="text-xs font-mono text-[#122820] truncate">{seed?.model ?? DEFAULT_SEEDREAM_MODEL}</code>
+          {seed && (
+            <span className={`text-[9px] px-1.5 py-0.5 rounded-full shrink-0 ${
+              seed.modelSource === "db"
+                ? "bg-[#1a5632]/10 text-[#1a5632]"
+                : seed.modelSource === "env"
+                  ? "bg-amber-100 text-amber-700"
+                  : "bg-[#e8e4dc] text-[#6b7c72]"
+            }`}>
+              {SOURCE_LABEL[seed.modelSource]}
+            </span>
+          )}
+        </span>
+      </div>
+      <div className="rounded-lg bg-[#faf9f6] px-3 py-2 flex items-center justify-between gap-2">
+        <span className="text-xs text-[#6b7c72] shrink-0">接口地址</span>
+        <code className="text-[10px] font-mono text-[#122820] truncate">{seed?.baseUrl ?? DEFAULT_ARK_BASE_URL}</code>
+      </div>
+      <div>
+        <div className="text-xs text-[#6b7c72] mb-1">可用 Key（{seed?.keyCount ?? 0}）</div>
+        <div className="flex flex-wrap gap-1.5">
+          {(seed?.keys ?? []).map((k, i) => (
+            <code key={i} className="text-[10px] font-mono px-2 py-1 rounded bg-[#f4f2ec] text-[#6b7c72]">{k}</code>
+          ))}
+          {(seed?.keys ?? []).length === 0 && <span className="text-xs text-[#9aa8a0]">未配置</span>}
+        </div>
+      </div>
+      <div className="border-t border-[#1a5632]/5 pt-2 space-y-1">
+        <div className="text-xs text-[#6b7c72]">DB 已存 Key</div>
+        {props.dbKeys.map((k) => (
+          <div key={k.key} className="flex items-center justify-between gap-2 text-xs">
+            <code className="font-mono text-[#122820] truncate">{k.key}</code>
+            <span className="flex items-center gap-0.5 shrink-0">
+              <code className="font-mono text-[#9aa8a0]">{k.maskedValue}</code>
+              <Button variant="ghost" size="icon" className="h-6 w-6" title="重新设置" onClick={() => props.onEditKey(k.key)}>
+                <Key className="h-3 w-3" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500" title="删除" onClick={() => props.onDeleteKey(k.key)}>
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </span>
+          </div>
+        ))}
+        {props.dbKeys.length === 0 && (
+          <div className="text-xs text-[#9aa8a0]">— 点「添加 Key」写入数据库</div>
+        )}
+      </div>
+      <div className="flex items-center gap-2 mt-auto flex-wrap">
+        <Button size="sm" variant="outline" className="gap-1 flex-1" onClick={props.onEditModel}>
+          <Settings2 className="h-3.5 w-3.5" />配置模型
+        </Button>
+        <Button size="sm" variant="outline" className="gap-1 flex-1" onClick={props.onEditBase}>
+          <Settings2 className="h-3.5 w-3.5" />接口地址
+        </Button>
+        <Button size="sm" className="gap-1 flex-1" onClick={props.onAddKey}>
+          <Plus className="h-3.5 w-3.5" />添加 Key
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function IllustrationZhipuCard(props: {
+  status: AdminIllustrationProviderStatus | undefined;
+  dbKeys: AdminSettingRecord[];
+  testing: boolean;
+  onTest: () => void;
+  onEditModel: () => void;
+  onAddKey: () => void;
+  onEditKey: (key: string) => void;
+  onDeleteKey: (key: string) => void;
+}) {
+  const zimg = props.status;
+  return (
+    <div className="rounded-xl border border-[#1a5632]/10 bg-white p-4 flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Cpu className="h-4 w-4 text-[#1a5632]" />
+          <span className="text-sm font-medium text-[#122820]">智谱绘图（备选）</span>
+          {zimg?.ready
+            ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+            : <XCircle className="h-3.5 w-3.5 text-red-400" />}
+        </div>
+        <Button variant="outline" size="sm" className="gap-1" disabled={props.testing} onClick={props.onTest}>
+          {props.testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+          测试连接
+        </Button>
+      </div>
+      <div className="text-[10px] text-[#9aa8a0]">可单独配绘图 Key；不配则回退智谱对话 Key。</div>
+      <div className="rounded-lg bg-[#faf9f6] px-3 py-2 flex items-center justify-between gap-2">
+        <span className="text-xs text-[#6b7c72] shrink-0">当前模型</span>
+        <span className="flex items-center gap-2 min-w-0">
+          <code className="text-xs font-mono text-[#122820] truncate">{zimg?.model ?? DEFAULT_ZHIPU_IMAGE_MODEL}</code>
+          {zimg && (
+            <span className={`text-[9px] px-1.5 py-0.5 rounded-full shrink-0 ${
+              zimg.modelSource === "db"
+                ? "bg-[#1a5632]/10 text-[#1a5632]"
+                : zimg.modelSource === "env"
+                  ? "bg-amber-100 text-amber-700"
+                  : "bg-[#e8e4dc] text-[#6b7c72]"
+            }`}>
+              {SOURCE_LABEL[zimg.modelSource]}
+            </span>
+          )}
+        </span>
+      </div>
+      <div>
+        <div className="text-xs text-[#6b7c72] mb-1">可用 Key（{zimg?.keyCount ?? 0}）</div>
+        <div className="flex flex-wrap gap-1.5">
+          {(zimg?.keys ?? []).map((k, i) => (
+            <code key={i} className="text-[10px] font-mono px-2 py-1 rounded bg-[#f4f2ec] text-[#6b7c72]">{k}</code>
+          ))}
+          {(zimg?.keys ?? []).length === 0 && <span className="text-xs text-[#9aa8a0]">未配置</span>}
+        </div>
+      </div>
+      <div className="border-t border-[#1a5632]/5 pt-2 space-y-1">
+        <div className="text-xs text-[#6b7c72]">DB 专用绘图 Key</div>
+        {props.dbKeys.map((k) => (
+          <div key={k.key} className="flex items-center justify-between gap-2 text-xs">
+            <code className="font-mono text-[#122820] truncate">{k.key}</code>
+            <span className="flex items-center gap-0.5 shrink-0">
+              <code className="font-mono text-[#9aa8a0]">{k.maskedValue}</code>
+              <Button variant="ghost" size="icon" className="h-6 w-6" title="重新设置" onClick={() => props.onEditKey(k.key)}>
+                <Key className="h-3 w-3" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500" title="删除" onClick={() => props.onDeleteKey(k.key)}>
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </span>
+          </div>
+        ))}
+        {props.dbKeys.length === 0 && (
+          <div className="text-xs text-[#9aa8a0]">— 不配则使用上方智谱对话 Key</div>
+        )}
+      </div>
+      <div className="flex items-center gap-2 mt-auto flex-wrap">
+        <Button size="sm" variant="outline" className="gap-1 flex-1" onClick={props.onEditModel}>
+          <Settings2 className="h-3.5 w-3.5" />配置模型
+        </Button>
+        <Button size="sm" className="gap-1 flex-1" onClick={props.onAddKey}>
+          <Plus className="h-3.5 w-3.5" />添加绘图 Key
+        </Button>
+      </div>
     </div>
   );
 }

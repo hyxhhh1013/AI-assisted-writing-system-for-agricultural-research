@@ -11,6 +11,7 @@ import type {
   AdminDirectionRecord,
   AdminHealthData,
   AdminInsights,
+  AdminIllustrationStatus,
   AdminJournalMetricsLastImport,
   AdminKnowledgeFile,
   AdminKnowledgeListResponse,
@@ -38,6 +39,7 @@ export type {
   AdminAiRoles,
   AdminAiStatusProvider,
   AdminAiStatusResponse,
+  AdminIllustrationStatus,
   AdminDirectionDetail,
   AdminDirectionRecord,
   AdminInsights,
@@ -354,6 +356,29 @@ export async function testAiConnection(input: {
     body: JSON.stringify(input),
   });
   const data = await parseJson<AdminSuccessResponse & { error?: string }>(res);
+  if (res.ok && data.success) return { ok: true, message: data.message };
+  return { ok: false, error: data.error || data.message || `${res.status} ${res.statusText}` };
+}
+
+/** GET /api/admin/illustration-status — 即梦 / 智谱绘图 Key 与模型 */
+export async function getIllustrationStatus(): Promise<AdminIllustrationStatus | null> {
+  const res = await fetch("/api/admin/illustration-status");
+  const data = await parseJson<AdminSuccessResponse<AdminIllustrationStatus>>(res);
+  return data.success ? (data.data ?? null) : null;
+}
+
+/** POST /api/admin/illustration-test — 拉模型列表验证 Key（不出图） */
+export async function testIllustrationConnection(input: {
+  provider: "seedream" | "zhipu";
+  model?: string;
+  apiKey?: string;
+}): Promise<{ ok: boolean; message?: string; error?: string }> {
+  const res = await fetch("/api/admin/illustration-test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const data = await parseJson<AdminSuccessResponse & { error?: string; message?: string }>(res);
   if (res.ok && data.success) return { ok: true, message: data.message };
   return { ok: false, error: data.error || data.message || `${res.status} ${res.statusText}` };
 }
