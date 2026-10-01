@@ -99,6 +99,7 @@ describe("assessExportReadiness", () => {
       baseProject({
         abstract: "产率升至 42.5%[1]。",
         sections: { introduction: "背景见文献[2]。" },
+        references: ["ref1", "ref2"],
       }),
       { bibOnlyIndexes: new Set([1]) },
     );
@@ -106,11 +107,22 @@ describe("assessExportReadiness", () => {
     expect(r.bibOnlyPrecise).toHaveLength(1);
     expect(r.bibOnlyPrecise[0].number).toBe(1);
     expect(r.warnings.length).toBeGreaterThan(0);
-    expect(r.warnings[0]).toMatch(/仅书目文献含精确数据/);
+    expect(r.warnings.join("\n")).toMatch(/仅书目文献含精确数据/);
   });
 
-  it("returns empty soft fields when bibOnlyIndexes omitted", () => {
+  it("warns unused bibliography without blocking export", () => {
     const r = assessExportReadiness(baseProject());
+    expect(r.ok).toBe(true);
+    expect(r.gate.unusedCount).toBe(1);
+    expect(r.warnings.join("\n")).toMatch(/未引用/);
+  });
+
+  it("returns empty unused warning when every listed ref is cited", () => {
+    const r = assessExportReadiness(
+      baseProject({
+        sections: { introduction: "背景见文献[1][2][3]。" },
+      }),
+    );
     expect(r.warnings).toEqual([]);
     expect(r.bibOnlyPrecise).toEqual([]);
   });

@@ -486,8 +486,10 @@ export function diagnoseGoalNudge(): string {
 
 /** 跟聊短确认（继续/好/A），对齐 classify-intent FOLLOW_UP_RE */
 export function isShortContinueGoal(goal: string): boolean {
+  const g = goal.trim();
+  if (/^[1-9]$/.test(g) || /^[１-９]$/.test(g)) return true;
   return /^(好|好的|可以|行|开始吧?|开始写|动手|写吧|执行|确认|同意|继续|按方案|就这样|嗯|哦|是的|对|A|a|ok|OK|yes)[。!！?？\s]*$/.test(
-    goal.trim(),
+    g,
   );
 }
 
@@ -501,7 +503,9 @@ export function continueDraftWriteNudge(
     "【系统】用户说「继续」是接着写，不是再摸底。"
     + "禁止 inspect_project / read_section / list_references / search_* / read_reference。"
     + spec
-    + "写完用中文汇报本节 key、字数、下一未写子节。禁止复述上轮「还有未完成步骤」里的检索任务。"
+    + "写完用中文汇报本节 key、字数、下一未写子节。"
+    + "不要把本轮收尾写成引用核查，不要再开一轮「是否改引」的 1/2/3。"
+    + "禁止复述上轮「还有未完成步骤」里的检索任务。"
   );
 }
 
@@ -601,8 +605,9 @@ export function referenceClassificationNudge(): string {
 export function citationCheckNudge(): string {
   return (
     "【系统】本轮是引用核查：可选 list_references 或 read_section 看正文，"
-    + "然后立刻 validate_citations（一次检查全文：越界硬检 + 语义可疑项）。"
-    + "用中文汇报报告中的 suspicious [n]；仅对个别可疑编号再 read_reference。"
+    + "然后立刻 validate_citations（一次检查全文：越界硬检 + 文献表与正文是否对齐 + 语义可疑项）。"
+    + "用中文汇报 unused 未引用编号与 suspicious [n]；文献表远多于正文引用时必须问用户补引或删除，不要说引用已符合要求。"
+    + "仅对个别可疑编号再 read_reference。"
     + "禁止无报告地连读多篇 read_reference；禁止 search_* / import_reference / write_bilingual_abstract。"
   );
 }
@@ -618,7 +623,7 @@ export function apPipelineNudge(
     case "citation_check":
       return (
         "【系统】academic-paper 流程·①引用检查：可选 read_section，然后立刻 validate_citations（一次全文）。"
-        + "用中文汇报 suspicious [n]；禁止 search/import/写摘要。"
+        + "用中文汇报 unused 与 suspicious [n]；表远多于正文引用时不要说已符合要求。禁止 search/import/写摘要。"
       );
     case "citation_fix":
       return withRule(

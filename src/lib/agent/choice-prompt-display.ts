@@ -1,4 +1,7 @@
 /** 模型常用全角/弯引号，会导致 ** 加粗解析失败 */
+import type { AgentUiMessage } from "@/contracts/agent-session";
+import { splitExecSummary } from "@/lib/agent/split-exec-summary";
+
 export function normalizeChoiceMarkdown(raw: string): string {
   return raw
     .replace(/\uFF0A/g, "*")
@@ -49,4 +52,47 @@ export function parseChoicePrompt(raw: string): ParsedChoicePrompt | null {
     .replace(/\*\*/g, "")
     .trim();
   return { lead, options, tail };
+}
+
+const FULLWIDTH_DIGIT: Record<string, string> = {
+  "１": "1",
+  "２": "2",
+  "３": "3",
+  "４": "4",
+  "５": "5",
+  "６": "6",
+  "７": "7",
+  "８": "8",
+  "９": "9",
+};
+
+/** 用户只回了「1」时，还原成上轮选项原文，避免 goal=1 丢意图 */
+export function parseChoiceDigit(goal: string): number | null {
+  const raw = goal.trim();
+  const mapped = FULLWIDTH_DIGIT[raw] ?? raw;
+  if (!/^[1-9]$/.test(mapped)) return null;
+  return Number(mapped);
+}
+
+function choiceSourceText(msg: AgentUiMessage): string {
+  if (msg.kind === "thought") return msg.text;
+  if (msg.kind === "summary") return msg.summary?.text ?? "";
+  return "";
+}
+
+export function expandChoiceDigitGoal(
+  goal: string,
+  uiTranscript: readonly AgentUiMessage[] | null | undefined,
+): string {
+  const digit = parseChoiceDigit(goal);
+  if (digit == null || !uiTranscript?.length) return goal;
+  for (let i = uiTranscript.length - 1; i >= 0; i--) {
+    const text = choiceSourceText(uiTranscript[i]);
+    if (!text.trim()) continue;
+    const { body } = splitExecSummary(text);
+    const parsed = parseChoicePrompt(body);
+    const option = parsed?.options[digit - 1]?.trim();
+    if (option) return option;
+  }
+  return goal;
 }

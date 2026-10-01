@@ -4,7 +4,14 @@ import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface CitationReportData {
-  gate?: { hint?: string; exportReady?: boolean; passed?: boolean };
+  gate?: {
+    hint?: string;
+    exportReady?: boolean;
+    passed?: boolean;
+    unusedCount?: number;
+    uniqueNumbers?: number[];
+    refCount?: number;
+  };
   exportReady?: boolean;
   phase5Passed?: boolean;
   grounding?: {
@@ -39,8 +46,11 @@ export function AgentCitationReportCard({
   const grounding = report?.grounding;
   const suspicious = grounding?.suspicious ?? [];
   const suspiciousCount = grounding?.suspiciousCount ?? suspicious.length;
+  const unusedCount = report?.gate?.unusedCount ?? 0;
+  const citedCount = report?.gate?.uniqueNumbers?.length;
+  const refCount = report?.gate?.refCount;
   const exportReady = report?.exportReady ?? report?.gate?.exportReady;
-  const ok = exportReady !== false && suspiciousCount === 0;
+  const ok = exportReady !== false && suspiciousCount === 0 && unusedCount === 0;
 
   return (
     <div
@@ -61,6 +71,13 @@ export function AgentCitationReportCard({
           <p className="font-medium text-[#122820]">
             {ok ? "引用核查通过" : "引用核查完成（需关注）"}
           </p>
+          {typeof refCount === "number" ? (
+            <p className="text-[11px] text-muted-foreground">
+              文献表 {refCount} 条
+              {typeof citedCount === "number" ? ` · 正文引用 ${citedCount} 条` : ""}
+              {unusedCount > 0 ? ` · 未引用 ${unusedCount} 条` : ""}
+            </p>
+          ) : null}
           {summary ? (
             <p className="text-[12px] leading-relaxed text-[#3d4f46]">{summary}</p>
           ) : null}

@@ -7,6 +7,7 @@ import {
   mergeSectionReferencesIntoProject,
   referencesFromRefMapping,
   remapBracketCitations,
+  toCitedOnlyManuscript,
 } from "@/lib/reference-reorder";
 
 describe("reference-reorder", () => {
@@ -77,5 +78,29 @@ describe("reference-reorder", () => {
     expect(merged.references).toEqual(["old.pdf", "new.pdf"]);
     // section [1]=new → project [2]; section [2]=old → project [1]
     expect(merged.text).toBe("据[2]与[1]报道。");
+  });
+
+  it("toCitedOnlyManuscript drops uncited refs and remaps body numbers", () => {
+    const out = toCitedOnlyManuscript({
+      abstract: "见[1]。",
+      sections: { introduction: "又见[3]。" },
+      references: ["a", "b", "c"],
+    });
+    expect(out.removed).toBe(1);
+    expect(out.project.references).toEqual(["a", "c"]);
+    expect(out.project.abstract).toContain("[1]");
+    expect(out.project.sections.introduction).toContain("[2]");
+    expect(out.project.sections.introduction).not.toContain("[3]");
+  });
+
+  it("toCitedOnlyManuscript keeps pool when body has no citations", () => {
+    const src = {
+      abstract: "尚无编号",
+      sections: { introduction: "草稿" },
+      references: ["a", "b"],
+    };
+    const out = toCitedOnlyManuscript(src);
+    expect(out.removed).toBe(0);
+    expect(out.project.references).toEqual(["a", "b"]);
   });
 });

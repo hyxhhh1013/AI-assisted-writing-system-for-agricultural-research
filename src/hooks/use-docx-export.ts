@@ -10,6 +10,7 @@ import { parseMarkdownBlocks, MarkdownBlock } from "@/lib/markdown-parser";
 import { formatFilenames } from "@/services/references";
 import { assessExportReadiness } from "@/lib/export-readiness";
 import { fetchExportReadiness } from "@/services/export-readiness";
+import { toCitedOnlyManuscript } from "@/lib/reference-reorder";
 
 /** 清理文件名用于兜底显示 */
 function cleanRefForDocx(raw: string): string {
@@ -42,10 +43,10 @@ export function useDocxExport({ project, activeSection, editingContent, saveProj
     if (!project) return;
 
     await saveProject();
-    const p = mergeEditorIntoProject(project, activeSection, editingContent);
+    const merged = mergeEditorIntoProject(project, activeSection, editingContent);
 
     // W4-EXPORT：与 PDF 共用引用硬检；越界不可「可过稿」导出
-    const readiness = assessExportReadiness(p);
+    const readiness = assessExportReadiness(merged);
     if (!readiness.ok) {
       toast.error(readiness.gate.hint || "引用编号未通过硬检，暂不可导出 Word");
       return;
@@ -53,12 +54,17 @@ export function useDocxExport({ project, activeSection, editingContent, saveProj
 
     // bib_only 精确数据软告警（不阻断）；失败降级为静默
     try {
-      const full = await fetchExportReadiness(p);
+      const full = await fetchExportReadiness(merged);
       if (full.warnings.length > 0) {
         toast.warning(full.warnings.join("\n"));
       }
     } catch {
       // soft-only；网络失败不挡导出
+    }
+
+    const { project: p, removed } = toCitedOnlyManuscript(merged);
+    if (removed > 0) {
+      toast.info(`Word 参考文献已对齐正文，去掉 ${removed} 条未引用（项目文献池未改）`);
     }
 
     const template = p.template || "sci";

@@ -63,6 +63,13 @@ export function assessExportReadiness(
   }
 
   const warnings: string[] = [];
+  if (gate.unusedCount > 0 && gate.uniqueNumbers.length > 0) {
+    warnings.push(
+      `导出手稿将只保留正文引用的 ${gate.uniqueNumbers.length} 条`
+      + `（文献表 ${gate.refCount} 条，未引用 ${gate.unusedCount} 条）。`
+      + `项目文献池不删；工作台「清理未引用文献」可永久删除。`,
+    );
+  }
   let bibOnlyPrecise: BibOnlyPreciseDataFinding[] = [];
   const bibOnlyIndexes = options?.bibOnlyIndexes;
   if (bibOnlyIndexes && bibOnlyIndexes.size > 0) {

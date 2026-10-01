@@ -39,10 +39,10 @@
 | 算法 | `lib/citation-gate.ts`（基于 `markOutOfBoundsCitations`） |
 | API | `GET|POST /api/citations/gate` |
 | 客户端 | `services/citations.ts` |
-| 导出 | `POST /api/export/pdf` 未过稿返回 422 `CITATION_GATE_BLOCKED`；`POST /api/export/readiness` 含 bib_only 软告警（不阻断） |
+| 导出 | `POST /api/export/pdf` 未过稿返回 422 `CITATION_GATE_BLOCKED`；`POST /api/export/readiness` 含未引用条数软告警与 bib_only（不阻断）；手稿 HTML/Word/Markdown **只列正文引用过的文献** |
 | Passport | Phase 5 `done` 仅当 `citationGatePassed`；快照 `paperPassport.citationGate` |
 
-验收：越界编号无法标「可过稿」/导出 PDF。
+验收：越界编号无法标「可过稿」/导出 PDF。文献表远多于正文引用时 gate.hint / validate 不得宣称引用已齐；导出剪枝不删项目池。
 
 ---
 

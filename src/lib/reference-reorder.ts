@@ -288,6 +288,38 @@ export function pruneUncitedReferences(project: {
 }
 
 /**
+ * 导出手稿用：只保留正文出现过的文献并重排 [n]。
+ * 正文尚无 [n] 时不剪枝（中间稿仍可带完整文献池）。
+ * 不写回项目；永久删除走工作台「清理未引用文献」。
+ */
+export function toCitedOnlyManuscript<T extends {
+  abstract?: string | null;
+  sections: Record<string, string | undefined>;
+  references: string[];
+}>(project: T): { project: T; removed: number } {
+  const cited = collectAllCitedIndices(project);
+  if (cited.size === 0) return { project, removed: 0 };
+  const { references, removed, indexMap } = pruneUncitedReferences(project);
+  if (removed === 0) return { project, removed: 0 };
+  const sections = { ...project.sections };
+  for (const key of Object.keys(sections)) {
+    const raw = sections[key];
+    if (typeof raw === "string") {
+      sections[key] = remapPrunedCitations(raw, indexMap);
+    }
+  }
+  return {
+    project: {
+      ...project,
+      abstract: remapPrunedCitations(project.abstract || "", indexMap),
+      sections,
+      references,
+    },
+    removed,
+  };
+}
+
+/**
  * 剪枝后重映射正文中的引用编号。
  * 根据 pruneUncitedReferences 返回的 indexMap：
  * - indexMap[old] = new → 替换为 [new]

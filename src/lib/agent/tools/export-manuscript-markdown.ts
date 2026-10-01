@@ -3,6 +3,7 @@ import { parsePaperPassport } from "@/contracts/paper-passport";
 import { parseProjectCharts } from "@/contracts/figure";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import prisma from "@/lib/prisma";
+import { toCitedOnlyManuscript } from "@/lib/reference-reorder";
 
 const SECTION_ORDER = [
   "abstract",
@@ -92,8 +93,25 @@ export const exportManuscriptMarkdownTool: ToolDefinition = {
       40_000,
     );
 
+    const texts = [
+      project.abstract ?? "",
+      ...project.sections.map((s) => s.content ?? ""),
+    ];
+    const gate = evaluateCitationGate({
+      texts,
+      refCount: project.references.length,
+    });
+    const sectionRecord: Record<string, string> = {};
+    for (const s of project.sections) {
+      sectionRecord[s.key] = s.content ?? "";
+    }
+    const { project: cited, removed } = toCitedOnlyManuscript({
+      abstract: project.abstract ?? "",
+      sections: sectionRecord,
+      references: project.references.map((r) => r.content ?? ""),
+    });
     const sectionMap = new Map(
-      project.sections.map((s) => [s.key, s.content ?? ""]),
+      Object.entries(cited.sections).map(([key, content]) => [key, content ?? ""]),
     );
     const parts: string[] = [
       `# ${project.title}`,
@@ -102,7 +120,7 @@ export const exportManuscriptMarkdownTool: ToolDefinition = {
       "",
     ];
 
-    const abstract = project.abstract?.trim() || sectionMap.get("abstract")?.trim() || "";
+    const abstract = cited.abstract?.trim() || sectionMap.get("abstract")?.trim() || "";
     if (abstract) {
       parts.push("## 摘要", "", clip(abstract, maxChars), "");
     }
@@ -114,23 +132,15 @@ export const exportManuscriptMarkdownTool: ToolDefinition = {
       parts.push(`## ${SECTION_TITLE[key] ?? key}`, "", clip(content, maxChars), "");
     }
 
-    if (includeRefs && project.references.length > 0) {
+    if (includeRefs && cited.references.length > 0) {
       parts.push("## 参考文献", "");
-      project.references.forEach((r, i) => {
-        parts.push(`[${i + 1}] ${(r.content ?? "").replace(/\s+/g, " ").trim()}`);
+      cited.references.forEach((content, i) => {
+        parts.push(`[${i + 1}] ${content.replace(/\s+/g, " ").trim()}`);
       });
       parts.push("");
     }
 
     const markdown = replaceFigurePlaceholders(parts.join("\n"));
-    const texts = [
-      project.abstract ?? "",
-      ...project.sections.map((s) => s.content ?? ""),
-    ];
-    const gate = evaluateCitationGate({
-      texts,
-      refCount: project.references.length,
-    });
     const passport = parsePaperPassport(project.paperPassport);
     const chartCount = parseProjectCharts(project.charts).length;
 
@@ -146,13 +156,19 @@ export const exportManuscriptMarkdownTool: ToolDefinition = {
           exportReady: gate.exportReady,
           outOfBounds: gate.outOfBounds,
           refCount: gate.refCount,
+          unusedCount: gate.unusedCount,
+          citedCount: gate.uniqueNumbers.length,
           hint: gate.hint,
         },
+        citedRefCount: cited.references.length,
+        uncitedDropped: removed,
         chartCount,
         phase: passport?.currentPhase ?? null,
       },
       summary: gate.exportReady
-        ? `已打包 Markdown 手稿（${markdown.length} 字符），引用检查通过`
+        ? removed > 0
+          ? `已打包 Markdown（${markdown.length} 字符）；手稿参考文献 ${cited.references.length} 条（去掉未引用 ${removed} 条，项目文献池未删）`
+          : `已打包 Markdown 手稿（${markdown.length} 字符），引用检查通过`
         : `已打包 Markdown（${markdown.length} 字符）；${gate.hint}`,
     };
   },

@@ -23,6 +23,9 @@ export interface CitationGateResult {
   citationCount: number;
   uniqueNumbers: number[];
   outOfBounds: number[];
+  /** 文献表有、正文从未出现的编号（1 基） */
+  unusedCount: number;
+  unusedIndexes: number[];
   hint: string;
 }
 
@@ -35,6 +38,14 @@ export function buildCitationGateHint(result: Omit<CitationGateResult, "hint">):
   }
   if (result.citationCount === 0) {
     return `无越界引用（参考文献 ${result.refCount} 条）；正文尚无 [n]，Phase 5 未完成，但可导出中间稿`;
+  }
+  if (result.unusedCount > 0) {
+    const sample = result.unusedIndexes.slice(0, 12).join(", ");
+    const more = result.unusedCount > 12 ? "…" : "";
+    return (
+      `编号无越界，但文献表 ${result.refCount} 条、正文只引用 ${result.uniqueNumbers.length} 条；`
+      + `未引用 [${sample}${more}]。交付前应删未引用或补引进正文，不要把未引文献留在表里`
+    );
   }
   return `引用编号合规（${result.citationCount} 处，最大编号 ≤ ${result.refCount}），可标「可过稿」`;
 }

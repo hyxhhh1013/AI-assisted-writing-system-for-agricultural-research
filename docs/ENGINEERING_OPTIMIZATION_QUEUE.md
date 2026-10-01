@@ -8,7 +8,7 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-10-01（Phase 19 LIT-01 导入确认默认露出理由与摘要）  
+> **最后更新**：2026-10-01（文献表 vs 正文引用对齐；导出剪未引用）  
 > **实时 status 只看 §1 Phase 13 / Phase 14 / Phase 16 / Phase 17 / Phase 18 与 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
@@ -1430,9 +1430,11 @@ src/app/api/（13）                       src/lib/（6）
 | 2026-10-01 | W3-AP-HITL-LIT-03 | AI | 大纲过目标题旁只显示题录对得上或蓝图已写明的 [n]。Phase 19 主轴收口。 |
 | 2026-10-01 | INSERT-VERIFY | AI | 三线表/图表默认插入已写章节并回看正文；未进正文不算交付，禁止 Agent 空口收尾。机理图仍不接文生图。 |
 | 2026-10-01 | FIG-MECH-ILLUSTRATE | AI | 即梦 Seedream 为机理观感主路径、智谱备选；结构 Graphviz 仍可编辑。候选不自动插入，配图坞 adopt 才进正文。 |
+| 2026-10-01 | FIG-MECH-ILLUSTRATE-ADMIN | AI | Admin 系统设置可管即梦/智谱绘图 Key、模型、方舟地址，并测连通；不占用 Agent 对话角色。 |
 | 2026-10-01 | W4-SEC-05a | AI | 知识库上传只收 PDF，超过 100MB 在读入前 413。`runCommand` 超时杀进程；图表渲染与三线表已接入。其余 spawn 仍待收口。 |
 | 2026-10-01 | AGENT-TRACE | AI | toolTrace 补 reason/via/ms；Admin 会话页展示失败轨迹；终态与 persist 失败打 agent-session JSON 到 PM2。 |
 | 2026-10-01 | ADMIN-047～049 | AI | 健康页 heap/RSS/Chromium/PM2；会话 intentKind+失败筛选；文献 indexStatus SQL 近似+重索引进度；Insights 时间窗与失败工具榜。 |
+| 2026-10-01 | AGENT-LOOP-1 | AI | 线上 cmuntp1ls：用户回 1 被当成空意图+写完强制 validate，执行摘要回放旧工具。数字选项还原、跟聊清空摘要、起草写完不再强制引用自查。 |
 | 2026-09-30 | RAG-CAT-ALIAS | AI | `search_knowledge(category=热解)` 0 命中：别名映射到 `热化学`；索引改走 `GRAINSCRIPT_DATA_ROOT`。 |
 
 ---

@@ -3,6 +3,7 @@ import { isIntentKind } from "@/contracts/agent-intent";
 import { classifyIntent } from "@/lib/agent/core/classify-intent";
 import { snapshotToInitialState } from "@/lib/agent/session-snapshot";
 import type { AgentGraphStateType } from "@/lib/agent/langgraph/state";
+import { expandChoiceDigitGoal } from "@/lib/agent/choice-prompt-display";
 import type { LLMMessage } from "@/lib/agent/types";
 
 const MAX_HISTORY_MESSAGES = 40;
@@ -14,7 +15,7 @@ export function buildFollowUpInitialState(
   newGoal: string,
   snapshot: AgentSessionSnapshot,
 ): Partial<AgentGraphStateType> {
-  const goal = newGoal.trim();
+  const goal = expandChoiceDigitGoal(newGoal.trim(), snapshot.uiTranscript);
   const base = snapshotToInitialState(goal, snapshot);
   const history = clipMessages(base.messages ?? [], MAX_HISTORY_MESSAGES);
   const previousKind = isIntentKind(snapshot.intentKind) ? snapshot.intentKind : null;
@@ -42,7 +43,7 @@ export function buildFollowUpInitialState(
     awaitingConfirm: null,
     grantedConfirm: null,
     approvedCheckpointKinds: base.approvedCheckpointKinds ?? [],
-    toolSummaries: (base.toolSummaries ?? []).slice(-20),
+    toolSummaries: [],
     observations: (base.observations ?? []).slice(-20),
     intentObsOffset: (base.observations ?? []).slice(-20).length,
   };

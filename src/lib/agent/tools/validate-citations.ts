@@ -23,7 +23,7 @@ import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 export const validateCitationsTool: ToolDefinition = {
   name: "validate_citations",
   description:
-    "一次检查全文引用（硬检越界 + 语义可疑项 + soft 池未引用）。优先于逐条 read_reference；"
+    "一次检查全文引用（硬检越界、文献表与正文引用是否对齐、语义可疑项）。优先于逐条 read_reference；"
     + "可省略 draftText 自动用项目全文。交付前必调；核查任务第一步应调用本工具",
   parameters: {
     type: "object",
@@ -156,14 +156,28 @@ export const validateCitationsTool: ToolDefinition = {
         + `判断：优先修正【可判定且明显错引】的编号（改引或删引）；`
         + `【缺摘要/语义勉强】属软性提示，可接受或改引一次，不要反复 validate 重验——`
         + `修完这轮即可向用户汇报并给出下一步`;
+    } else if (gate.unusedCount > 0) {
+      const sample = gate.unusedIndexes.slice(0, 12).join(", ");
+      const more = gate.unusedCount > 12 ? "…" : "";
+      summary =
+        `编号无越界，但文献表 ${gate.refCount} 条、正文只引用 ${gate.uniqueNumbers.length} 条；`
+        + `未引用 [${sample}${more}]。这不是「引用已符合要求」。`
+        + `请用中文问用户：补引进正文，或调用 remove_references / 工作台「清理未引用文献」删掉未引条目。`
+        + `不要把未引文献留在交付书目里${softHint}`;
     } else if (overlapIssues.length > 0) {
       summary = `硬检通过，语义接地未见明显错引；全池重叠低 ${overlapIssues.length} 处可人工核对${softHint}`;
     } else {
-      summary = `引用检查通过（硬检 OK，语义接地 OK，${checks.length || gate.citationCount} 处引用）${softHint}。引用已符合要求，无需再改，请向用户汇报并给出下一步`;
+      summary = `引用检查通过（硬检 OK，文献表与正文引用对齐，语义接地 OK，${checks.length || gate.citationCount} 处引用）${softHint}。引用已符合要求，无需再改，请向用户汇报并给出下一步`;
     }
 
     if (claimGrounding) {
       summary += `\n【claim 接地】${claimGrounding.hint}`;
+    }
+
+    if (gate.unusedCount > 0 && !summary.includes("未引用")) {
+      summary =
+        `【文献表未对齐】表 ${gate.refCount} 条、正文引用 ${gate.uniqueNumbers.length} 条。`
+        + summary;
     }
 
     if (bibOnlyPrecise.length > 0) {

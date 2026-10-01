@@ -52,6 +52,13 @@ export function evaluateCitationGate(input: CitationGateInput): CitationGateResu
 
   const exportReady = refCount > 0 && outOfBounds.length === 0;
   const passed = exportReady && citationCount > 0;
+  const unusedIndexes: number[] = [];
+  if (refCount > 0) {
+    const cited = new Set(uniqueNumbers);
+    for (let i = 1; i <= refCount; i++) {
+      if (!cited.has(i)) unusedIndexes.push(i);
+    }
+  }
   const base = {
     passed,
     exportReady,
@@ -59,6 +66,8 @@ export function evaluateCitationGate(input: CitationGateInput): CitationGateResu
     citationCount,
     uniqueNumbers,
     outOfBounds,
+    unusedCount: unusedIndexes.length,
+    unusedIndexes: unusedIndexes.slice(0, 40),
   };
 
   return {

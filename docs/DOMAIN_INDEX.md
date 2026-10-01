@@ -95,7 +95,7 @@
 |------|------|-----|----------|
 | 统一质量中心 | `src/app/plagiarism/page.tsx` | `/api/plagiarism/v2` SSE | `QualityWorkspace`（总览默认）、`quality-state.ts` |
 | 审查工位 | `/plagiarism?tab=review` | `POST /api/review`；`POST /api/review/rounds` | `review-tab.tsx`、`review-issue-card.tsx`、`review-service.ts` |
-| 引用硬检 | Passport Phase 5 / PDF 导出 | `GET|POST /api/citations/gate` | `lib/citation-gate.ts`、`services/citations.ts` |
+| 引用硬检 | Passport Phase 5 / PDF 导出 | `GET|POST /api/citations/gate` | `lib/citation-gate.ts`（含 unusedCount）；导出剪枝 `toCitedOnlyManuscript` |
 | 引用语义接地 | Agent `validate_citations` / inspect |（工具内） | `lib/citation-grounding.ts`、`contracts/citation-grounding.ts`（W3-AP-CITE-GROUND） |
 | 分节完整度 | Agent inspect / 简报 |（工具内） | `lib/draft-coverage.ts`、`contracts/draft-coverage.ts`（W3-AP-DRAFT-COVER） |
 | 查重 | 质量中心 | `POST /api/plagiarism/v2` | `plagiarism-service.ts`、`use-plagiarism-check` |
@@ -132,7 +132,7 @@
 | Agent 会话 | `admin/agent-sessions` | `/api/admin/agent-sessions` | 回放 / 中断 / 统计；intentKind、failTool/failVia（失败筛最多扫 400 条）、lastFail |
 | 使用洞察 | `admin/insights` | `GET /api/admin/insights?days=` | 窗口聚合意图词 / 工具榜 / 失败模式 / 失败工具；最多 2000 条 |
 | 系统健康 | `admin/health` | `GET /api/admin/health` | AI Key / Agent 错误 / heap·RSS·Chromium·PM2 / 期刊 IF / PDF 漂移（`admin-health-alerts`） |
-| 设置/Key+模型+开关 | `admin/settings` | `PUT /api/admin/settings` | `lib/settings.ts`；`AGENT_ROLE_*`；OA/写并发/auto-fix |
+| 设置/Key+模型+开关 | `admin/settings` | `PUT /api/admin/settings` · `GET /api/admin/illustration-status` · `POST /api/admin/illustration-test` | `lib/settings.ts`；`AGENT_ROLE_*`；OA/写并发/auto-fix；机理示意即梦/智谱绘图 |
 
 详见 [`ADMIN_ENHANCEMENT_PLAN.md`](./ADMIN_ENHANCEMENT_PLAN.md)（Phase 5：ADMIN-040～046）。
 
@@ -173,9 +173,9 @@
 |------|------|-----|----------|
 | 登录注册 | `login`, `register` | `/api/auth/*` | `proxy.ts` |
 | PDF 导出 | 工作台 | `/api/export/pdf`, `/api/pdf` | Playwright |
-| 导出就绪 | 工作台 hook | `POST /api/export/readiness` | `services/export-readiness.ts`；硬检 + bib_only 软告警 |
-| DOCX | 工作台 hook | 引用硬检 + 双语 + 题注 | `useDocxExport`、`lib/export-readiness.ts`（浏览器安全）；bib_only 软告警走 API |
-| PDF 导出 | 工作台 / API | `POST /api/export/pdf`（同硬检） | `services/pdf-export.ts`、`export-readiness-server` |
+| 导出就绪 | 工作台 hook | `POST /api/export/readiness` | 硬检 + 未引用软告警 + bib_only；导出手稿剪未引 |
+| DOCX | 工作台 hook | 引用硬检 + 双语 + 题注 | `useDocxExport`、`toCitedOnlyManuscript`；bib_only 软告警走 API |
+| PDF 导出 | 工作台 / API | `POST /api/export/pdf`（同硬检） | `renderProjectPdfHtml` 正文有引用时只列被引文献 |
 
 > **预览/导出章节渲染（2026-08-16；侧栏对齐 2026-08-17）**：期刊预览与 Word/PDF/Markdown 导出共用 `lib/template-sections.ts` 的 `getRenderableSections`（空节隐藏、1..N 重排）。研究模式正文为 **引言 / 方法 / 结果 / 讨论 / 结论** 五节（`discussion` 独立，不再并入 results）。工作台结构侧栏经 `buildStructureSectionsForWorkbench` 与模板同构，避免侧栏仍显示「结果与讨论」四节导致 discussion 写不进去、预览只剩四块。
 

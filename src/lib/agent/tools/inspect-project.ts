@@ -8,6 +8,7 @@ import {
   evaluateCitationGrounding,
   refsFromLiteRows,
 } from "@/lib/citation-grounding";
+import { evaluateCitationGate } from "@/lib/citation-gate";
 import {
   evaluateDraftCoverage,
   sectionCharsFromFills,
@@ -74,6 +75,11 @@ export const inspectProjectTool: ToolDefinition = {
       softUnusedRatio: number | null;
       hint: string;
     } | null = null;
+    let citationAlign: {
+      refCount: number;
+      citedCount: number;
+      unusedCount: number;
+    } | null = null;
 
     try {
       const rows = await findReferenceRowsLite(ctx.projectId, ctx.userId);
@@ -82,6 +88,15 @@ export const inspectProjectTool: ToolDefinition = {
         select: { content: true },
       });
       const draftText = sections.map((s) => s.content).join("\n\n");
+      const gate = evaluateCitationGate({
+        texts: [draftText],
+        refCount: rows.length,
+      });
+      citationAlign = {
+        refCount: gate.refCount,
+        citedCount: gate.uniqueNumbers.length,
+        unusedCount: gate.unusedCount,
+      };
       const report = evaluateCitationGrounding({
         draftText,
         references: refsFromLiteRows(rows),
@@ -109,6 +124,10 @@ export const inspectProjectTool: ToolDefinition = {
       && citationGrounding.softUnusedRatio != null
       && citationGrounding.softUnusedRatio >= 0.5
         ? `；soft 未引用 ${citationGrounding.softUnusedCount}/${citationGrounding.softGroundableCount}`
+        : "";
+    const unusedNote =
+      citationAlign && citationAlign.unusedCount > 0 && citationAlign.citedCount > 0
+        ? `；正文引用 ${citationAlign.citedCount}/${citationAlign.refCount}，未引用 ${citationAlign.unusedCount}`
         : "";
     const susNote =
       citationGrounding && citationGrounding.suspiciousCount > 0
@@ -151,6 +170,7 @@ export const inspectProjectTool: ToolDefinition = {
         hasWritingBlueprint: project.hasWritingBlueprint,
         hasArgumentBlueprint: project.hasArgumentBlueprint,
         referenceCount: project.references.length,
+        citationAlign,
         claimCount,
         claimSamples,
         plotCandidates,
@@ -181,7 +201,7 @@ export const inspectProjectTool: ToolDefinition = {
         skillHint: `academic-paper Phase ${pack.pack.phase}（${pack.pack.title}）→ 推荐 ${pack.pack.preferredTools.join(" → ") || "对话确认配置"}`,
         ...(includeBriefing ? { briefing } : {}),
       },
-      summary: `项目「${project.title}」阶段 ${project.currentPhase ?? "?"}（${pack.pack.title}）；空白节 ${empty.length}；文献 ${project.references.length}；${dataFoundation.brief}；${foundationNote}；可配图 ${plotCandidates}${coverNote}${susNote}${softNote}。${nextNote}`,
+      summary: `项目「${project.title}」阶段 ${project.currentPhase ?? "?"}（${pack.pack.title}）；空白节 ${empty.length}；文献 ${project.references.length}${unusedNote}；${dataFoundation.brief}；${foundationNote}；可配图 ${plotCandidates}${coverNote}${susNote}${softNote}。${nextNote}`,
     };
   },
 };

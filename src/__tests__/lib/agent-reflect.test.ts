@@ -205,4 +205,13 @@ describe("reflection routing", () => {
     expect(shouldReflect(base({ finished: true, observations: [WRITE] }))).toBe(true);
     expect(shouldReflect(base({ finished: true, observations: [] }))).toBe(false);
   });
+
+  it("skips write-verify reflect during draft so 写完不会变成引用核查循环", () => {
+    expect(
+      shouldReflect(base({ finished: true, observations: [WRITE], intentKind: "draft" })),
+    ).toBe(false);
+    expect(
+      routeAfterAgent(base({ finished: true, observations: [WRITE], intentKind: "draft" })),
+    ).toBe("finalize");
+  });
 });

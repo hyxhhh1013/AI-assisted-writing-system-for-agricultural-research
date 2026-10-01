@@ -1,6 +1,6 @@
 # Agent 编排（写作助手）
 
-> L3 域文档 · 更新：2026-09-30（Phase 18：续跑条展示写节质检；主张/soft 数字/ingest 可见）  
+> L3 域文档 · 更新：2026-10-01（文献表与正文引用条数必须对齐；导出剪未引用）  
 > 契约唯一权威源：`src/contracts/agent.ts`（SSE 事件）、`src/contracts/agent-session.ts`（会话消息）、`src/contracts/agent-intent.ts`（`IntentKind`）。
 
 ## 概览
@@ -198,7 +198,9 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - `reflect.ts` `validateIssueCount`：**「无文献且文内无引用」的硬检未过（`gate.refCount===0 && gate.citationCount===0`）不再算 citation issue**，只当「还没导入文献」而非「错引要修」；`gate` 缺失（旧快照/简化测试）保持原判定。
 
 - **引用修正收敛（2026-08-08）**：修复「Agent 陷入 validate→改引→再 validate 打地鼠循环，不收尾、没下一步」——`validate_citations` 的 summary 按硬错/软可疑分级引导（硬检越界必须修；可判定且明显错引改引一次；缺摘要/语义勉强属软性可接受，**不要反复重验**），并在通过时明确「引用已符合要求，请汇报并给下一步」；`buildAgentSystemPrompt` 增加「引用修正要收敛，勿打地鼠循环」规则。双保险让 Agent 在改引循环里能停下并给出下一步计划。
+- **文献表 ≫ 正文引用（2026-10-01）**：`evaluateCitationGate` 增加 `unusedCount` / `unusedIndexes`。编号无越界但表 25 / 正文 11 时 **不得** 说「引用已符合要求」。`validate_citations` / `inspect_project` 明示未引用编号，问用户补引或 `remove_references` / 工作台「清理未引用文献」。**导出手稿**（PDF/Word/Markdown/`export_manuscript_markdown`）走 `toCitedOnlyManuscript` 只保留正文出现过的条目并重排 [n]；**不自动删项目文献池**。未引用不阻断 `exportReady`（中间稿仍可导出）。`reflect.validateIssueCount` 仍不算 unused 为硬错，避免写节后卡在改书目。
 - **软可疑不再劫持「继续」（2026-10-01）**：生产会话 `cmuntp1ls000m126h08fhzsn6` 写完 3.4 后每次「继续」都去 refine 同一批缺摘要语义可疑项，写不出 3.5。`analyzeReflection` 只对硬检未过推 refine；跟聊「继续」且有 `nextWriteHint` 时即使快照 `intentKind` 为空也注入写下一子节。
+- **跟聊「1」又变成引用核查（2026-10-01）**：同一会话后期用户点 1/2/3 只把 goal 存成 `1`，快照 `intentKind` 空，写完子节仍被 reflect 强制 `validate_citations`，收尾标题变成核查报告，执行摘要还回放近 20 条旧工具。处理：数字回复还原成上轮选项；跟聊清空 `toolSummaries`；起草/`ap_full` 写完不再强制引用自查（越界仍由导出硬检拦）。
 - **写章节缺文献照常写（2026-08-08 / RULES-01 2026-08-15）**：条文现只写在 `AGENT_RULES` id=`draft-missing-refs`；`buildAgentSystemPrompt` 与 `draftGoalNudge` 同读 `ruleText`。跟聊 goal 失真（「A/继续」）的写章节纪律由 `snapshot.intentKind` 继承（INTENT-01/02）。`checkDraftSearchGate` / 收尾兜底只认 `intentKind === "draft"`。
 
 ## 断点续跑 / 门禁旁路修复（2026-08-09）
@@ -296,7 +298,7 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 | 层 | 行为 |
 |----|------|
 | L1 草稿 | `draft_mechanism_figure` 先编译 `MechanismSpecV1`（主张进 caption，步骤括号条件上边）；多机理图任务前 **FigureBrief clarify**；可选 `templateId`。未锁 `layout` 且 ≥4 步会带 chain/fork 两套候选，只入库推荐稿。**结构主渲染器仍是 Graphviz/多面板**（文生图不可回放改节点） |
-| L1.5 观感候选 | 结构过线后 `illustrate_mechanism_figure`：即梦 Seedream 图生图（结构 PNG→base64），智谱 CogView 备选。`generate` **禁止插入正文**；人选后 `adopt` 才落盘并回看。Admin：`VOLC_ARK_API_KEY` / `SEEDREAM_MODEL` / `ZHIPU_IMAGE_MODEL` |
+| L1.5 观感候选 | 结构过线后 `illustrate_mechanism_figure`：即梦 Seedream 图生图，智谱 CogView 备选。Admin「系统设置 → 机理示意模型」可配方舟 Key / 接入点 ID / 接口地址、智谱绘图模型与专用 Key，并可测连通。`generate` **禁止插入正文**；人选后 `adopt` 才落盘 |
 | L2 硬闭环 | **机理图**先看 `draft_mechanism_figure.qaReport`（`block` 不入库、按 findings 改 Spec）；过线后 toolsNode 才注入 `read_figure(mode=qa)` 扫残余观感。**数据图**看 `generate_chart.qaReport`（不跑视觉识图）。QA 未通过则禁止空口收尾 + 门禁 `replaceImageUrl`；同 caption/section 无 replace 时工具内自动就地替换（防叠图） |
 | L3 精修 | **配图坞**（输入框上方常驻最近出图，免翻聊天）+ 结果卡：落点说明（默认**节末落盘**）+「查看正文位置」+ 结构化「按意见改」（含分叉/三面板/脱氧等快捷）+ `/plot?chartAssetId=&replaceImageUrl=` 深链（优先资产快照回放，精修回写默认真地替换）；编辑器「本节插图」可挪位 |
 | 图质检两级（2026-08-09；008 收窄；MECH-QA 2026-08-23） | 机理图主尺是 `MechanismSpec` + `qaReport`（`contracts/mechanism-spec.ts` / `mechanism-qa.ts`）。识图 `figure-qa.ts` 只扫残余观感。数据图只看 ChartSpec `qaReport`。 |

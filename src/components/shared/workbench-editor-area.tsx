@@ -28,6 +28,8 @@ import { getTemplateSections } from "@/lib/template-sections";
 import { getModeAccent } from "@/lib/mode-theme";
 import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
 import { siteTheme } from "@/lib/site-theme";
+import { mergeEditorIntoProject } from "@/lib/export-content";
+import { evaluateCitationGate } from "@/lib/citation-gate";
 import { getProjectWritingMode } from "@/lib/section-registry";
 import { buildPreviewReferencesFromContent } from "@/lib/reference-reorder";
 import dynamic from "next/dynamic";
@@ -87,6 +89,9 @@ interface WorkbenchEditorAreaProps {
 }
 
 function WorkbenchEditorToolbar({
+  project,
+  activeSection,
+  editingContent,
   editorMode,
   rightPanelMode,
   onEditorModeChange,
@@ -99,6 +104,9 @@ function WorkbenchEditorToolbar({
   onExportPDF,
 }: Pick<
   WorkbenchEditorAreaProps,
+  | "project"
+  | "activeSection"
+  | "editingContent"
   | "editorMode"
   | "rightPanelMode"
   | "onEditorModeChange"
@@ -111,6 +119,13 @@ function WorkbenchEditorToolbar({
   | "onExportPDF"
 >) {
   const viewHint = `${editorMode === "classic" ? "经典" : "段落"} · ${rightPanelMode === "preview" ? "预览" : "文献"}`;
+  const live = mergeEditorIntoProject(project, activeSection, editingContent);
+  const citeGate = evaluateCitationGate({
+    texts: [live.abstract ?? "", ...Object.values(live.sections ?? {})],
+    refCount: live.references?.length ?? 0,
+  });
+  const unusedCount = citeGate.unusedCount;
+  const refTotal = citeGate.refCount;
 
   return (
     <div className="flex items-center gap-1.5 shrink-0">
@@ -158,6 +173,17 @@ function WorkbenchEditorToolbar({
             <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs px-2.5">
               <BookMarked className="h-3.5 w-3.5 shrink-0" />
               <span className="hidden sm:inline">文献</span>
+              {refTotal > 0 ? (
+                <span className={cn(
+                  "text-[10px] tabular-nums",
+                  unusedCount > 0 && citeGate.uniqueNumbers.length > 0
+                    ? "text-amber-700"
+                    : "text-[#6b7c72]",
+                )}>
+                  {citeGate.uniqueNumbers.length}/{refTotal}
+                  {unusedCount > 0 && citeGate.uniqueNumbers.length > 0 ? " 未引" : ""}
+                </span>
+              ) : null}
               <ChevronDown className="h-3 w-3 opacity-50" />
             </Button>
           }
@@ -174,6 +200,9 @@ function WorkbenchEditorToolbar({
           <DropdownMenuItem variant="destructive" onClick={onCleanReferences}>
             <Trash2 className="h-3.5 w-3.5" />
             清理未引用文献
+            {unusedCount > 0 && citeGate.uniqueNumbers.length > 0
+              ? `（${unusedCount}）`
+              : ""}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -382,6 +411,9 @@ export function WorkbenchEditorArea({
         </div>
 
         <WorkbenchEditorToolbar
+          project={project}
+          activeSection={activeSection}
+          editingContent={editingContent}
           editorMode={editorMode}
           rightPanelMode={rightPanelMode}
           onEditorModeChange={onEditorModeChange}

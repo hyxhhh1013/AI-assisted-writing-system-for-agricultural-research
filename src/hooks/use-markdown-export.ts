@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { mergeEditorIntoProject, getTemplateSectionContent } from "@/lib/export-content";
 import { getRenderableSections } from "@/lib/template-sections";
 import type { ProjectData } from "@/contracts/project";
+import { toCitedOnlyManuscript } from "@/lib/reference-reorder";
 
 /** Markdown 导出：合并编辑器当前内容后生成 .md 文件 */
 export function useMarkdownExport(
@@ -11,7 +12,11 @@ export function useMarkdownExport(
   editingContent: string,
 ) {
   return useCallback(() => {
-    const p = mergeEditorIntoProject(project, activeSection, editingContent);
+    const merged = mergeEditorIntoProject(project, activeSection, editingContent);
+    const { project: p, removed } = toCitedOnlyManuscript(merged);
+    if (removed > 0) {
+      toast.info(`手稿参考文献已对齐正文，去掉 ${removed} 条未引用（项目文献池未改）`);
+    }
     const referencesMd =
       p.references && p.references.length > 0
         ? p.references.map((ref, i) => `[${i + 1}] ${ref}`).join("\n\n")

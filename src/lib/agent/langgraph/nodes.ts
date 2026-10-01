@@ -1383,10 +1383,15 @@ export async function finalizeNode(
     state.finalThought,
     state.observations,
   );
+  const turnSummaryCount = Math.max(0, state.toolCallCount);
+  const turnSummaries =
+    turnSummaryCount > 0
+      ? state.toolSummaries.slice(-turnSummaryCount)
+      : [];
   const parts = [
     state.finalThought?.trim(),
-    state.toolSummaries.length > 0
-      ? `执行摘要:\n${state.toolSummaries.join("\n")}`
+    turnSummaries.length > 0
+      ? `执行摘要:\n${turnSummaries.join("\n")}`
       : null,
     announced
       ? `——\n刚才只是口头说了要「${announced.label}」，还没有真正执行。请直接说「继续」或点下方快捷按钮。`
@@ -1399,7 +1404,7 @@ export async function finalizeNode(
       type: "agent/complete",
       summary: {
         text: parts.join("\n\n") || "任务已完成。",
-        toolCallCount: state.toolSummaries.length,
+        toolCallCount: turnSummaries.length,
         keyFindings: [],
       },
     },

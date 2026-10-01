@@ -59,4 +59,28 @@ describe("session-continue", () => {
     expect(next.intentObsOffset).toBe(2);
     expect(next.observations).toHaveLength(2);
   });
+
+  it("clears prior toolSummaries so 执行摘要不会整段回放", () => {
+    const snap = emptyAgentSessionSnapshot("写引言");
+    snap.toolSummaries = ["[validate_citations] 硬检通过", "[write_section] 旧一轮"];
+    const next = buildFollowUpInitialState("继续", snap);
+    expect(next.toolSummaries).toEqual([]);
+  });
+
+  it("expands a numeric reply into the last 1/2/3 option", () => {
+    const snap = emptyAgentSessionSnapshot("写综述");
+    snap.intentKind = "draft";
+    snap.uiTranscript = [
+      { kind: "user", text: "继续" },
+      {
+        kind: "thought",
+        text:
+          "下一步请选：\n1. 继续写 literature_body 子节「生物油定向调控」\n2. 先写结论\n回复 1 / 2 即可。",
+      },
+    ];
+    const next = buildFollowUpInitialState("1", snap);
+    expect(next.goal).toContain("literature_body");
+    expect(next.goal).toContain("生物油");
+    expect(next.intentKind).toBe("review_write");
+  });
 });

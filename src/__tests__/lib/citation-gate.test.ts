@@ -24,6 +24,23 @@ describe("evaluateCitationGate", () => {
     expect(gate.passed).toBe(true);
     expect(gate.exportReady).toBe(true);
     expect(gate.outOfBounds).toEqual([]);
+    expect(gate.unusedCount).toBe(2);
+    expect(gate.unusedIndexes).toEqual([4, 5]);
+    expect(gate.hint).toContain("文献表");
+    expect(gate.hint).not.toContain("可标「可过稿」");
+  });
+
+  it("flags listed-vs-cited mismatch (pool 25, body 11 unique)", () => {
+    const cited = Array.from({ length: 11 }, (_, i) => `[${i + 1}]`).join("");
+    const gate = evaluateCitationGate({
+      texts: [`正文${cited}`],
+      refCount: 25,
+    });
+    expect(gate.exportReady).toBe(true);
+    expect(gate.passed).toBe(true);
+    expect(gate.uniqueNumbers).toHaveLength(11);
+    expect(gate.unusedCount).toBe(14);
+    expect(gate.hint).toContain("正文只引用 11");
   });
 
   it("allows export without inline citations but does not pass phase 5", () => {
@@ -56,6 +73,8 @@ describe("buildCitationGateHint", () => {
         citationCount: 0,
         uniqueNumbers: [],
         outOfBounds: [],
+        unusedCount: 0,
+        unusedIndexes: [],
       }),
     ).toContain("参考文献");
   });

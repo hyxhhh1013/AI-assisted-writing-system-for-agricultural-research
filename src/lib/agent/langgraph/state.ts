@@ -10,6 +10,7 @@ import { COST_LIMITS } from "@/lib/agent/core/safety";
 import { planHasPendingWork } from "@/lib/agent/core/plan-progress";
 import { latestActionIsVisibleDeliverable } from "@/lib/agent/core/visible-deliverable";
 import { analyzeReflection, MAX_REFLECT_ROUNDS } from "@/lib/agent/core/reflect";
+import type { IntentKind } from "@/contracts/agent-intent";
 import { lastFigureQaNeedsReplace } from "@/lib/agent/figure-loop";
 import { getAgentGraphRuntime } from "@/lib/agent/langgraph/runtime";
 import type { LLMMessage, ParsedToolCall, ToolObservation } from "@/lib/agent/types";
@@ -219,10 +220,25 @@ export function routeAfterAgent(
   return "finalize";
 }
 
+/** 起草跟聊：写节管道已做质检，再强制 validate 会把收尾变成引用核查循环 */
+const SKIP_WRITE_VERIFY_KINDS = new Set<IntentKind>([
+  "draft",
+  "review_write",
+  "ap_full",
+]);
+
 /** 是否需要对刚写入的内容做反思（写完自查、有问题再修） */
 export function shouldReflect(state: AgentGraphStateType): boolean {
   if (state.reflectCount >= MAX_REFLECT_ROUNDS) return false;
-  return analyzeReflection(state.observations).action !== null;
+  const analysis = analyzeReflection(state.observations);
+  if (
+    analysis.action === "verify"
+    && state.intentKind
+    && SKIP_WRITE_VERIFY_KINDS.has(state.intentKind)
+  ) {
+    return false;
+  }
+  return analysis.action !== null;
 }
 
 /** 反思节点后的路由：推了 nudge 就回 agent，否则收尾 */

@@ -9,7 +9,7 @@ import fs from "fs";
 import path from "path";
 
 import { BodySectionKey } from "@/lib/imrad";
-import { stripOutOfRangeCitations } from "@/lib/reference-reorder";
+import { stripOutOfRangeCitations, toCitedOnlyManuscript } from "@/lib/reference-reorder";
 import { markOutOfBoundsCitations } from "@/lib/citation";
 import { cleanMarkdownArtifacts } from "@/lib/utils";
 import { getRenderableSections, type TemplateSectionDef } from "@/lib/template-sections";
@@ -1013,27 +1013,28 @@ export function renderProjectPdfHtml(project: ProjectData): string {
   const template = normalizeTemplate(project.template);
   const isChinese = CHINESE_TEMPLATES.has(template);
 
-  // 导出保留全部引用（不剪枝），仅清理 Markdown 残余 + 越界引用
-  const refs = project.references || [];
+  // 正文有引用时只导出被引文献并重排 [n]；无引用的中间稿仍带完整文献池
+  const { project: citedProject } = toCitedOnlyManuscript(project);
+  const refs = citedProject.references || [];
   const refCount = refs.length;
 
   const cleanSections: Record<string, string> = {};
-  for (const [key, content] of Object.entries(project.sections)) {
+  for (const [key, content] of Object.entries(citedProject.sections)) {
     const { cleaned } = markOutOfBoundsCitations(content || "", refCount);
     cleanSections[key] = cleanMarkdownArtifacts(cleaned);
   }
 
-  const { cleaned: cleanAbstract } = markOutOfBoundsCitations(project.abstract || "", refCount);
+  const { cleaned: cleanAbstract } = markOutOfBoundsCitations(citedProject.abstract || "", refCount);
 
   // 清理作者和单位占位符
   const cleanPlaceholder = (s: string) =>
     s?.replace(/【请填写作者姓名】/g, "")?.replace(/【作者信息待填写】/g, "")?.trim() || "";
 
   const cleanProject: ProjectData = {
-    ...project,
-    title: cleanMarkdownArtifacts(project.title || ""),
-    authors: cleanPlaceholder(project.authors || ""),
-    affiliations: cleanPlaceholder(project.affiliations || ""),
+    ...citedProject,
+    title: cleanMarkdownArtifacts(citedProject.title || ""),
+    authors: cleanPlaceholder(citedProject.authors || ""),
+    affiliations: cleanPlaceholder(citedProject.affiliations || ""),
     abstract: cleanMarkdownArtifacts(cleanAbstract),
     sections: cleanSections as ProjectData["sections"],
     references: refs,
