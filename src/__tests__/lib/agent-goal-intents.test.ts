@@ -437,6 +437,28 @@ describe("intent continuation pickers", () => {
     expect(hint).toMatch(/禁止.*list_references/);
   });
 
+  it("continue with nextWrite still writes when snapshot kind is missing", () => {
+    const hint = mergeFollowUpGoalHint(
+      "继续",
+      [
+        {
+          tool: "validate_citations",
+          success: true,
+          data: {
+            exportReady: true,
+            phase5Passed: true,
+            grounding: { suspiciousCount: 3 },
+          },
+        },
+      ],
+      null,
+      { sectionKey: "literature_body", subsectionPath: "3.5 碳纳米材料" },
+    );
+    expect(hint).toContain("write_section(section=literature_body");
+    expect(hint).toContain("碳纳米材料");
+    expect(hint).not.toMatch(/refine_content/);
+  });
+
   it("blocks list_references on continue+draft before this-run write", () => {
     const blocked = checkContinueWriteSpinGate("继续", "list_references", [], "draft");
     expect(blocked.ok).toBe(false);

@@ -1006,7 +1006,12 @@ export function mergeFollowUpGoalHint(
 ): string | null {
   if (
     isShortContinueGoal(goal)
-    && (intentKind === "draft" || intentKind === "review_write")
+    && !isCitationApplyGoal(goal, observations)
+    && (
+      intentKind === "draft"
+      || intentKind === "review_write"
+      || (intentKind == null && Boolean(nextWrite))
+    )
   ) {
     return continueDraftWriteNudge(nextWrite);
   }

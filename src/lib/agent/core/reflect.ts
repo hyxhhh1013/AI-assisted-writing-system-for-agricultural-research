@@ -138,9 +138,14 @@ export function analyzeReflection(
     }
   }
 
-  // validate 覆盖了该写入：据此决定是否推 refine
+  // validate 覆盖了该写入：仅硬检未过才推 refine。
+  // 语义可疑/缺摘要是软提示（文献无摘要时会永远 >0），再推 refine 会让「继续」卡住改引、写不了下一子节。
   if (lastValidateIdx > lastWriteIdx) {
-    const issueCount = validateIssueCount(observations[lastValidateIdx]);
+    const lastValidate = observations[lastValidateIdx];
+    if (!validateHasHardIssues(lastValidate)) {
+      return { action: null, nudge: null };
+    }
+    const issueCount = validateIssueCount(lastValidate);
     if (issueCount === 0) return { action: null, nudge: null };
     for (let i = observations.length - 1; i > lastValidateIdx; i--) {
       if (isWrite(observations[i], REFINE_TOOLS)) {

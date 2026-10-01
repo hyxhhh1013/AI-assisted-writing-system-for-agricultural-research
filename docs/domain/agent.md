@@ -198,6 +198,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - `reflect.ts` `validateIssueCount`：**「无文献且文内无引用」的硬检未过（`gate.refCount===0 && gate.citationCount===0`）不再算 citation issue**，只当「还没导入文献」而非「错引要修」；`gate` 缺失（旧快照/简化测试）保持原判定。
 
 - **引用修正收敛（2026-08-08）**：修复「Agent 陷入 validate→改引→再 validate 打地鼠循环，不收尾、没下一步」——`validate_citations` 的 summary 按硬错/软可疑分级引导（硬检越界必须修；可判定且明显错引改引一次；缺摘要/语义勉强属软性可接受，**不要反复重验**），并在通过时明确「引用已符合要求，请汇报并给下一步」；`buildAgentSystemPrompt` 增加「引用修正要收敛，勿打地鼠循环」规则。双保险让 Agent 在改引循环里能停下并给出下一步计划。
+- **软可疑不再劫持「继续」（2026-10-01）**：生产会话 `cmuntp1ls000m126h08fhzsn6` 写完 3.4 后每次「继续」都去 refine 同一批缺摘要语义可疑项，写不出 3.5。`analyzeReflection` 只对硬检未过推 refine；跟聊「继续」且有 `nextWriteHint` 时即使快照 `intentKind` 为空也注入写下一子节。
 - **写章节缺文献照常写（2026-08-08 / RULES-01 2026-08-15）**：条文现只写在 `AGENT_RULES` id=`draft-missing-refs`；`buildAgentSystemPrompt` 与 `draftGoalNudge` 同读 `ruleText`。跟聊 goal 失真（「A/继续」）的写章节纪律由 `snapshot.intentKind` 继承（INTENT-01/02）。`checkDraftSearchGate` / 收尾兜底只认 `intentKind === "draft"`。
 
 ## 断点续跑 / 门禁旁路修复（2026-08-09）

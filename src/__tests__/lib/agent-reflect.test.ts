@@ -102,6 +102,18 @@ describe("analyzeReflection", () => {
     expect(r.nudge).toContain("refine_content");
   });
 
+  it("soft suspicious citations after write do not force refine", () => {
+    const r = analyzeReflection([
+      WRITE,
+      obs("validate_citations", {
+        exportReady: true,
+        phase5Passed: true,
+        grounding: { suspiciousCount: 3 },
+      }),
+    ]);
+    expect(r.action).toBeNull();
+  });
+
   it("validate issues then refine → done", () => {
     expect(analyzeReflection([WRITE, VALIDATE_ISSUES, REFINE]).action).toBeNull();
   });
