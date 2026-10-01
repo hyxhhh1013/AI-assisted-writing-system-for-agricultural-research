@@ -5,6 +5,7 @@ import type {
   AgentToolResult,
 } from "@/contracts/agent";
 import type { AgentUiMessage } from "@/contracts/agent-session";
+import { logAgentSessionOutcome } from "@/lib/agent/tool-trace";
 import { buildPriorConversationMessages } from "@/lib/agent/conversation-continuity";
 import {
   applyCheckpointDecisionPatch,
@@ -472,8 +473,25 @@ export async function* runAgentGraphLoop(
           status,
           errorMessage,
         );
-      } catch {
-        /* ignore */
+        if (status && status !== "running") {
+          logAgentSessionOutcome({
+            sessionId,
+            status,
+            intentKind: state.intentKind,
+            goal: state.goal,
+            errorMessage: errorMessage ?? state.error,
+            toolTrace: state.toolTrace,
+          });
+        }
+      } catch (err) {
+        console.error(
+          JSON.stringify({
+            tag: "agent-session",
+            sessionId,
+            status: "persist-failed",
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
       }
     };
     persistChain = persistChain.then(op, op);

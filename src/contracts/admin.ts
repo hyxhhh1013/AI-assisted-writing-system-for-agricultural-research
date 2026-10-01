@@ -27,6 +27,10 @@ export interface AdminListParams {
   indexStatus?: string;
   /** 通用状态筛选（agent-sessions / directions 等） */
   status?: string;
+  intentKind?: string;
+  failTool?: string;
+  failVia?: string;
+  days?: number;
 }
 
 // ==================== 鍒嗛〉鍝嶅簲 ====================
@@ -120,7 +124,23 @@ export interface AdminHealthData {
     categoryDriftInSample: number;
   };
   index: { indexFiles: string[]; totalSizeBytes: number };
-  server: { uptime: number; nodeVersion: string; platform: string; memoryMB: number };
+  server: {
+    uptime: number;
+    nodeVersion: string;
+    platform: string;
+    memoryMB: number;
+    heapUsedMB: number;
+    heapTotalMB: number;
+    heapPct: number;
+    chromiumAvailable: boolean;
+    chromiumPath: string | null;
+    pm2: {
+      name: string;
+      status: string;
+      restarts: number;
+      memoryMB: number;
+    } | null;
+  };
   /** AI Key / 模型可用性（ADMIN-042） */
   ai: {
     providers: AdminHealthAiProvider[];
@@ -355,6 +375,13 @@ export interface AdminAgentSessionRecord {
   goal: string;
   status: AdminAgentSessionStatus;
   errorMessage: string | null;
+  intentKind?: string | null;
+  lastFail?: {
+    tool: string;
+    via?: string;
+    reason?: string;
+    at?: number;
+  } | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -396,8 +423,11 @@ export interface AdminAgentSessionStats {
 export interface AdminInsights {
   totalSessions: number;
   errorSessionCount: number;
+  windowDays: number;
+  scanned: number;
   goalIntents: { intent: string; count: number }[];
   toolCalls: { tool: string; count: number }[];
+  failTools: { tool: string; count: number }[];
   errorPatterns: { pattern: string; count: number }[];
 }
 

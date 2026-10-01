@@ -77,5 +77,44 @@ export function buildAdminHealthAlerts(health: AdminHealthData): AdminHealthAler
     });
   }
 
+  const server = health.server;
+  if (typeof server.heapPct === "number" && server.heapPct >= 85) {
+    alerts.push({
+      message: `Node heap ${server.heapPct}%（${server.heapUsedMB}/${server.heapTotalMB} MB）`,
+      href: "/admin/health",
+      label: "看健康",
+    });
+  }
+  if (typeof server.memoryMB === "number" && server.memoryMB >= 1400) {
+    alerts.push({
+      message: `进程 RSS ${server.memoryMB} MB，接近常见 1.6GB 上限`,
+      href: "/admin/health",
+      label: "看健康",
+    });
+  }
+  if (server.chromiumAvailable === false) {
+    alerts.push({
+      message: "未检测到 Chromium，PDF 导出可能失败",
+      href: "/admin/health",
+      label: "看健康",
+    });
+  }
+  const pm2 = server.pm2;
+  if (pm2) {
+    if (pm2.status !== "online") {
+      alerts.push({
+        message: `PM2 ${pm2.name} 状态 ${pm2.status}`,
+        href: "/admin/health",
+        label: "看健康",
+      });
+    } else if (pm2.restarts >= 5) {
+      alerts.push({
+        message: `PM2 ${pm2.name} 已重启 ${pm2.restarts} 次`,
+        href: "/admin/health",
+        label: "看健康",
+      });
+    }
+  }
+
   return alerts;
 }

@@ -102,9 +102,19 @@ import {
   markAgentProjectDirty,
   refreshAgentProjectContext,
 } from "@/lib/agent/project-refresh";
+import { assetLandedInBody } from "@/lib/agent/insert-section";
 import { isProjectMutatingTool } from "@/lib/agent/project-mutated";
+import { loadAgentPlotSources } from "@/lib/agent/plot-sources";
+import { collectChartConfigsFromSources } from "@/contracts/figure";
+import {
+  buildGenerateChartCallsFromJobs,
+  collectBoundChartJobsForSection,
+  formatUnboundBlueprintChartsNudge,
+  jobAlreadyCoveredByText,
+} from "@/lib/blueprint-chart-jobs";
 import type { ParsedToolCall, ToolObservation } from "@/lib/agent/types";
 import type { AgentToolTrace } from "@/contracts/agent-session";
+import { makeToolTrace, type AgentToolTraceVia } from "@/lib/agent/tool-trace";
 import { getAgentGraphRuntime } from "@/lib/agent/langgraph/runtime";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 import {
@@ -545,13 +555,21 @@ export async function toolsNode(
   const newObservations: ToolObservation[] = [];
   /** 本轮工具轨迹（W3-AP-ARCH-02）：每次调用结局 append，节点结束随 state 截断 */
   const newTrace: AgentToolTrace[] = [];
-  const trace = (toolName: string, ok: boolean) => {
-    newTrace.push({
-      at: Date.now(),
-      tool: toolName,
-      ok,
-      intentKind: state.intentKind ?? null,
-    });
+  const trace = (
+    toolName: string,
+    ok: boolean,
+    extra?: { reason?: string | null; via?: AgentToolTraceVia; ms?: number },
+  ) => {
+    newTrace.push(
+      makeToolTrace({
+        tool: toolName,
+        ok,
+        intentKind: state.intentKind ?? null,
+        reason: extra?.reason,
+        via: extra?.via,
+        ms: extra?.ms,
+      }),
+    );
   };
   /** 本轮是否有 write_section 成功写回：新写入需重新给反思预算 */
   let reflectReset = false;
@@ -563,7 +581,7 @@ export async function toolsNode(
 
   /** 门禁失败统一记录：摘要 + LLM 消息 + SSE observation + 计划标记失败 */
   const rejectGate = (toolName: string, error: string) => {
-    trace(toolName, false);
+    trace(toolName, false, { reason: error, via: "pre-gate" });
     newSummaries.push(`[${toolName}] 失败: ${error}`);
     newMessages.push({
       role: "user",
@@ -586,6 +604,7 @@ export async function toolsNode(
     if (agentContext.budget.toolCallCount >= agentContext.budget.maxToolCalls) {
       error = `单次任务最多调用 ${agentContext.budget.maxToolCalls} 次工具`;
       events.push({ type: "agent/error", error });
+      trace(toolCall.name, false, { reason: error, via: "budget" });
       finished = true;
       break;
     }
@@ -593,7 +612,7 @@ export async function toolsNode(
     const tool = findTool(tools, toolCall.name);
     if (!tool) {
       const msg = `未知工具: ${toolCall.name}`;
-      trace(toolCall.name, false);
+      trace(toolCall.name, false, { reason: msg, via: "unknown" });
       newSummaries.push(`[${toolCall.name}] 失败: ${msg}`);
       newMessages.push({ role: "user", content: `Tool result (${toolCall.name}):\n${msg}` });
       events.push({
@@ -668,14 +687,14 @@ export async function toolsNode(
     const gateVerdict = evaluatePreGates(gateInput);
     if (!gateVerdict.ok) {
       if (gateVerdict.kind === "hard") {
-        trace(tool.name, false);
+        trace(tool.name, false, { reason: gateVerdict.error, via: "pre-gate" });
         error = gateVerdict.error;
         events.push({ type: "agent/error", error });
         finished = true;
         break;
       }
       if (gateVerdict.kind === "soft") {
-        trace(tool.name, false);
+        trace(tool.name, false, { reason: gateVerdict.error, via: "pre-gate" });
         newSummaries.push(`[${tool.name}] ${gateVerdict.error}`);
         newMessages.push({
           role: "user",
@@ -733,6 +752,7 @@ export async function toolsNode(
               result: { success: false, error: OUTLINE_PREREQ_HOLD_MESSAGE },
               error: OUTLINE_PREREQ_HOLD_MESSAGE,
             });
+            trace(tool.name, false, { reason: OUTLINE_PREREQ_HOLD_MESSAGE, via: "pre-gate" });
             return {
               pendingToolCalls: [],
               toolCallCount,
@@ -768,7 +788,10 @@ export async function toolsNode(
             tool: step.tool,
             params: { persistToProject: true, autoPrereq: true },
           });
-          trace(step.tool, step.result.success);
+          trace(step.tool, step.result.success, {
+            reason: step.result.success ? undefined : step.result.error,
+            via: step.result.success ? "ok" : "fail",
+          });
           const stepLine = step.result.success
             ? `[${step.tool}] ${step.result.summary ?? "自动补齐完成"}`
             : `[${step.tool}] 失败: ${step.result.error ?? "未知错误"}`;
@@ -932,8 +955,13 @@ export async function toolsNode(
     agentContext.goal = state.goal || agentContext.goal;
 
     try {
+      const startedAt = Date.now();
       const result = await tool.execute(params, agentContext);
-      trace(tool.name, result.success);
+      trace(tool.name, result.success, {
+        reason: result.success ? undefined : result.error,
+        via: result.success ? "ok" : "fail",
+        ms: Date.now() - startedAt,
+      });
       const line = result.success
         ? `[${tool.name}] ${result.summary ?? "完成"}`
         : `[${tool.name}] 失败: ${result.error ?? "未知错误"}`;
@@ -997,6 +1025,69 @@ export async function toolsNode(
         }
       }
 
+      // 写节落库后：蓝图已绑定试验数据的数据图自动排队 generate_chart（不靠 Writer 吐 FIGURE JSON）
+      if (
+        result.success
+        && tool.name === "write_section"
+        && !isPartialWriteResume(result.data)
+        && agentContext.projectId
+      ) {
+        const writeData = (result.data ?? {}) as {
+          blocked?: unknown;
+          persisted?: unknown;
+          section?: unknown;
+          draft?: unknown;
+        };
+        const section = String(
+          writeData.section ?? toolCall.args?.section ?? "",
+        ).trim();
+        const persisted = Boolean(writeData.persisted);
+        const blocked = writeData.blocked === true;
+        if (section && persisted && !blocked) {
+          const plot = await loadAgentPlotSources(
+            agentContext.userId,
+            agentContext.projectId,
+          );
+          const configs = plot
+            ? collectChartConfigsFromSources(plot.sources)
+            : [];
+          const subsectionTitle = String(
+            toolCall.args?.subsectionTitle ?? "",
+          ).trim() || undefined;
+          const draft = typeof writeData.draft === "string" ? writeData.draft : "";
+          const { jobs, unboundRequired } = collectBoundChartJobsForSection({
+            blueprint: agentContext.projectSnapshot?.globalContext?.blueprint ?? null,
+            sectionKey: section,
+            mode: agentContext.projectSnapshot?.mode,
+            subsectionTitle,
+            chartConfigs: configs,
+          });
+          const uncovered = jobs.filter((j) => !jobAlreadyCoveredByText(draft, j));
+          const chartCalls = buildGenerateChartCallsFromJobs(
+            uncovered,
+            section,
+            toolQueue.slice(tcIdx + 1),
+          );
+          if (chartCalls.length > 0) {
+            toolQueue.splice(tcIdx + 1, 0, ...chartCalls);
+            newSummaries.push(
+              `[blueprint-chart] 已自动排队 generate_chart × ${chartCalls.length} → ${section}`,
+            );
+            newMessages.push({
+              role: "user",
+              content:
+                `System: 本节写作蓝图已绑定试验数据，已自动排队 generate_chart 插入 ${section}。`
+                + "请等待出图完成；qaReport=block 时按 findings 改 Spec 重出，不要编造数值。",
+            });
+          }
+          const unboundNudge = formatUnboundBlueprintChartsNudge(unboundRequired);
+          if (unboundNudge) {
+            newMessages.push({ role: "user", content: unboundNudge });
+            newSummaries.push("[blueprint-chart] 蓝图必需图缺数据绑定，已提示上传");
+          }
+        }
+      }
+
       // 机理图：出图后硬注入 read_figure(qa)。block 未出图则不跑识图。数据图看 qaReport。
       if (
         result.success
@@ -1044,6 +1135,39 @@ export async function toolsNode(
           content: buildMechanismQaBlockNudge(extractChartQaFindingCodes(result.data)),
         });
         newSummaries.push("[figure-loop] 机理图 qaReport=block：按 findings 改 Spec 重出");
+      }
+
+      // P0：QA 判定需重生成 → 硬 nudge，禁止无 replace 再出图
+      if (
+        result.success
+        && (tool.name === "generate_table"
+          || tool.name === "generate_chart"
+          || tool.name === "draft_mechanism_figure"
+          || tool.name === "generate_xrd_analysis")
+        && !isChartQaBlocked(result.data)
+        && !assetLandedInBody(result.data)
+      ) {
+        newMessages.push({
+          role: "user",
+          content:
+            `System: ${tool.name} 已生成但正文里没有这张表/图。`
+            + "禁止向用户汇报「已经插好」。立刻用同一内容再调用并传 sectionKey（results 或 methods），然后 read_section 回看落点。",
+        });
+        newSummaries.push(`[insert-verify] ${tool.name} 未进正文，禁止收尾`);
+      } else if (
+        result.success
+        && (tool.name === "generate_table"
+          || tool.name === "generate_chart"
+          || tool.name === "draft_mechanism_figure")
+        && assetLandedInBody(result.data)
+        && (result.data as { verifiedInBody?: unknown }).verifiedInBody === false
+      ) {
+        newMessages.push({
+          role: "user",
+          content:
+            "System: 声称已插入但回看未在正文找到标记。请 read_section 核对该节末尾；未找到则带 replaceImageUrl/sectionKey 重插。不要开始下一节。",
+        });
+        newSummaries.push("[insert-verify] 回看失败，须 read_section");
       }
 
       // P0：QA 判定需重生成 → 硬 nudge，禁止无 replace 再出图
@@ -1098,6 +1222,7 @@ export async function toolsNode(
             result: { success: false, error: postVerdict.warning },
             error: postVerdict.warning,
           });
+          trace("antispam", false, { reason: postVerdict.warning, via: "post-gate" });
           // 停滞熔断多次仍无进展 → 硬停机，不再放行后续工具
           if (antispamTracker.breakCount >= MAX_BREAKS_BEFORE_HARD_STOP) {
             const hardMsg =
@@ -1105,6 +1230,7 @@ export async function toolsNode(
               + "请基于已有信息向用户总结当前进展并询问下一步，不要再调用工具。";
             error = hardMsg;
             events.push({ type: "agent/error", error: hardMsg });
+            trace("antispam", false, { reason: hardMsg, via: "post-gate" });
             finished = true;
             break;
           }
@@ -1144,7 +1270,7 @@ export async function toolsNode(
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      trace(tool.name, false);
+      trace(tool.name, false, { reason: errMsg, via: "throw" });
       newSummaries.push(`[${tool.name}] 失败: ${errMsg}`);
       newMessages.push({ role: "user", content: `Tool result (${tool.name}):\n${errMsg}` });
       events.push({ type: "agent/observation", tool: tool.name, error: errMsg });

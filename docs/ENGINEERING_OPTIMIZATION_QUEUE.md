@@ -1427,7 +1427,10 @@ src/app/api/（13）                       src/lib/（6）
 | 2026-10-01 | AGENT-CHOICE | AI | 正文已请用户回复 1/2/3 时，收起「继续推进」，输入框上方打开回答框；停住的子任务显示「等你决定」。 |
 | 2026-10-01 | W3-AP-HITL-LIT-02 | AI | 导入确认缺摘要时补 OpenAlex 或落地页首段（≤480 字）。超时或 PDF 链接软失败，不把全文写入确认参数。 |
 | 2026-10-01 | W3-AP-HITL-LIT-03 | AI | 大纲过目标题旁只显示题录对得上或蓝图已写明的 [n]。Phase 19 主轴收口。 |
+| 2026-10-01 | INSERT-VERIFY | AI | 三线表/图表默认插入已写章节并回看正文；未进正文不算交付，禁止 Agent 空口收尾。机理图仍不接文生图。 |
 | 2026-10-01 | W4-SEC-05a | AI | 知识库上传只收 PDF，超过 100MB 在读入前 413。`runCommand` 超时杀进程；图表渲染与三线表已接入。其余 spawn 仍待收口。 |
+| 2026-10-01 | AGENT-TRACE | AI | toolTrace 补 reason/via/ms；Admin 会话页展示失败轨迹；终态与 persist 失败打 agent-session JSON 到 PM2。 |
+| 2026-10-01 | ADMIN-047～049 | AI | 健康页 heap/RSS/Chromium/PM2；会话 intentKind+失败筛选；文献 indexStatus SQL 近似+重索引进度；Insights 时间窗与失败工具榜。 |
 | 2026-09-30 | RAG-CAT-ALIAS | AI | `search_knowledge(category=热解)` 0 命中：别名映射到 `热化学`；索引改走 `GRAINSCRIPT_DATA_ROOT`。 |
 
 ---

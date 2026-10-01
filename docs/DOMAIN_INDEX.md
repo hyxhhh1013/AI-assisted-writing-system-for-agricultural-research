@@ -124,13 +124,13 @@
 | 全局搜索 | `admin-global-search.tsx` | `GET /api/admin/search` | Ctrl+K（用户/项目/文献/方向/Agent 会话） |
 | 仪表盘 | `admin/page.tsx` | `GET /api/admin/stats` | 单行 KPI + 告警 + 活动/分类；用量标签人性化（`admin-labels`） |
 | 用户/项目 | `admin/users`, `projects` | `/api/admin/users`, `projects` | `admin-data-table.tsx`, `use-admin-list.ts` |
-| 文献运维 | `admin/knowledge` | `GET/POST/DELETE /api/admin/knowledge`；`POST .../rebuild-external-abstracts`；`POST .../journal-metrics` | 索引状态、外部摘要补建/自动归类、SSE 重索引、期刊 IF/分区导入 |
+| 文献运维 | `admin/knowledge` | `GET/POST/DELETE /api/admin/knowledge`；`POST .../rebuild-external-abstracts`；`POST .../journal-metrics` | `indexStatus` SQL 近似筛选；SSE 重索引进度条；期刊 IF/分区导入 |
 | 研究方向 | `admin/directions` | `/api/admin/directions` | 归档/详情（资产·文献·路线图） |
 | 审查/查重记录 | `admin/reviews`, `plagiarism` | `/api/admin/reviews`, `plagiarism` | `admin-record-project-links.tsx` |
 | 使用统计 | `admin/usage` | `GET /api/admin/usage`, `usage/trends` | `services/admin-usage.ts` |
-| Agent 会话 | `admin/agent-sessions` | `/api/admin/agent-sessions` | 回放 / 中断 / 统计 |
-| 使用洞察 | `admin/insights` | `GET /api/admin/insights` | 意图词 / 工具榜 / 失败模式 |
-| 系统健康 | `admin/health` | `GET /api/admin/health` | AI Key / Agent 错误 / 期刊 IF 覆盖 / PDF 漂移告警（`admin-health-alerts`） |
+| Agent 会话 | `admin/agent-sessions` | `/api/admin/agent-sessions` | 回放 / 中断 / 统计；intentKind、failTool/failVia（失败筛最多扫 400 条）、lastFail |
+| 使用洞察 | `admin/insights` | `GET /api/admin/insights?days=` | 窗口聚合意图词 / 工具榜 / 失败模式 / 失败工具；最多 2000 条 |
+| 系统健康 | `admin/health` | `GET /api/admin/health` | AI Key / Agent 错误 / heap·RSS·Chromium·PM2 / 期刊 IF / PDF 漂移（`admin-health-alerts`） |
 | 设置/Key+模型+开关 | `admin/settings` | `PUT /api/admin/settings` | `lib/settings.ts`；`AGENT_ROLE_*`；OA/写并发/auto-fix |
 
 详见 [`ADMIN_ENHANCEMENT_PLAN.md`](./ADMIN_ENHANCEMENT_PLAN.md)（Phase 5：ADMIN-040～046）。

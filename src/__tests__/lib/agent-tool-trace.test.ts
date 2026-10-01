@@ -96,6 +96,7 @@ describe("toolsNode toolTrace (W3-AP-ARCH-02)", () => {
       tool: "probe_ok",
       ok: true,
       intentKind: "draft",
+      via: "ok",
     });
     expect(typeof out.toolTrace?.[0]?.at).toBe("number");
   });
@@ -119,7 +120,7 @@ describe("toolsNode toolTrace (W3-AP-ARCH-02)", () => {
       config(runtime),
     );
     expect(out.toolTrace).toEqual([
-      expect.objectContaining({ tool: "probe_fail", ok: false }),
+      expect.objectContaining({ tool: "probe_fail", ok: false, via: "throw", reason: "boom" }),
     ]);
   });
 
@@ -133,7 +134,31 @@ describe("toolsNode toolTrace (W3-AP-ARCH-02)", () => {
       config(runtime),
     );
     expect(out.toolTrace).toEqual([
-      expect.objectContaining({ tool: "nope", ok: false }),
+      expect.objectContaining({ tool: "nope", ok: false, via: "unknown" }),
     ]);
+  });
+});
+
+describe("makeToolTrace / summarizeToolTraceFails", () => {
+  it("clips long fail reasons and summarizes last fails", async () => {
+    const { clipToolTraceReason, makeToolTrace, summarizeToolTraceFails } = await import(
+      "@/lib/agent/tool-trace"
+    );
+    expect(clipToolTraceReason(`x`.repeat(300))?.endsWith("…")).toBe(true);
+    const row = makeToolTrace({
+      tool: "write_section",
+      ok: false,
+      reason: "boom",
+      via: "throw",
+      intentKind: "draft",
+      ms: 12.8,
+    });
+    expect(row).toMatchObject({ tool: "write_section", via: "throw", reason: "boom", ms: 13 });
+    expect(
+      summarizeToolTraceFails([
+        makeToolTrace({ tool: "ok", ok: true }),
+        makeToolTrace({ tool: "write_section", ok: false, reason: "boom", via: "throw" }),
+      ]),
+    ).toBe("write_section(throw): boom");
   });
 });

@@ -18,9 +18,13 @@ import {
 import { runMechanismGeneration } from "@/lib/agent/mechanism-runner";
 import {
   AGENT_WRITING_SECTIONS,
-  isAgentWritingSectionKey,
   parsePersistToProject,
 } from "@/lib/agent/writing-sections";
+import {
+  formatInsertSummary,
+  resolveInsertSectionKey,
+  verifySectionContains,
+} from "@/lib/agent/insert-section";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import {
   buildAlternateLayoutSpec,
@@ -111,8 +115,8 @@ export const draftMechanismFigureTool: ToolDefinition = {
     + "农科常用模板可传 templateId："
     + listMechanismTemplateIds().join("/")
     + "。"
-    + "传 sectionKey 可插入或替换章节图片。"
-    + "期刊观感请在 /plot 精修。不使用文生图当主渲染器。",
+    + "传 sectionKey 可插入或替换章节图片；省略则自动插入已写的 results/methods。"
+    + "插入后会回看正文是否含图片 URL。期刊观感请在 /plot 精修。不使用文生图当主渲染器。",
   safety: "write",
   parameters: {
     type: "object",
@@ -233,26 +237,21 @@ export const draftMechanismFigureTool: ToolDefinition = {
     }
 
     const persistToProject = parsePersistToProject(params.persistToProject);
-    const sectionKeyRaw = params.sectionKey ? String(params.sectionKey).trim() : "";
-    const sectionKey =
-      sectionKeyRaw && isAgentWritingSectionKey(sectionKeyRaw)
-        ? sectionKeyRaw
-        : sectionKeyRaw
-          ? null
-          : undefined;
-    if (sectionKeyRaw && sectionKey === null) {
-      return {
-        success: false,
-        error: `无效 sectionKey: ${sectionKeyRaw}。可用：${AGENT_WRITING_SECTIONS.join(", ")}`,
-      };
+    const resolvedSection = resolveInsertSectionKey(
+      params.sectionKey,
+      ctx.projectSnapshot,
+    );
+    if ("error" in resolvedSection) {
+      return { success: false, error: resolvedSection.error };
     }
+    const sectionKey = resolvedSection.sectionKey;
 
     const existingCharts = await listAgentCharts(ctx.projectId);
     const anti = resolveReplaceForAntiStack({
       params: {
         ...params,
         title,
-        sectionKey: sectionKey ?? sectionKeyRaw,
+        sectionKey,
       },
       charts: existingCharts,
     });
@@ -372,6 +371,8 @@ export const draftMechanismFigureTool: ToolDefinition = {
 
       let insertMode: "replaced" | "appended" | undefined;
       let retiredId: string | undefined;
+      let verifiedInBody: boolean | undefined;
+      let bodyExcerpt: string | undefined;
       if (sectionKey) {
         const ins = await insertOrReplaceAgentSectionImage(
           ctx.userId,
@@ -386,6 +387,13 @@ export const draftMechanismFigureTool: ToolDefinition = {
         );
         insertMode = ins.mode;
         retiredId = ins.retiredId;
+        const seen = await verifySectionContains(
+          ctx.projectId,
+          sectionKey,
+          generated.imageUrl,
+        );
+        verifiedInBody = seen.verifiedInBody;
+        bodyExcerpt = seen.bodyExcerpt;
       } else if (replaceImageUrl || replaceChartId) {
         try {
           const r = await removeAgentChart(ctx.userId, ctx.projectId, {
@@ -436,7 +444,13 @@ export const draftMechanismFigureTool: ToolDefinition = {
       if (insertMode === "replaced" || autoReplaced) {
         bits.push(`已就地替换旧图（防叠图${autoReplaced ? "·自动" : ""}）`);
       } else if (insertMode === "appended") {
-        bits.push(`已插入章节 ${sectionKey}`);
+        bits.push(
+          formatInsertSummary({
+            inferred: resolvedSection.inferred,
+            insertedSection: sectionKey,
+            verifiedInBody,
+          }),
+        );
       }
       if (retiredId) bits.push("已删除旧图表资产");
       if (template) bits.push(`模板 ${String(params.templateId)}`);
@@ -456,6 +470,9 @@ export const draftMechanismFigureTool: ToolDefinition = {
           persisted,
           insertedSection: sectionKey,
           insertMode,
+          verifiedInBody,
+          bodyExcerpt,
+          inferredSection: resolvedSection.inferred,
           retiredId,
           href,
           figureSpecEnc,

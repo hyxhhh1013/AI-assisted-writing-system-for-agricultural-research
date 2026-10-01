@@ -383,8 +383,9 @@ export async function getAdminAgentSessionStats(): Promise<AdminAgentSessionStat
 }
 
 /** GET /api/admin/insights — 使用洞察（目标高频 / 工具榜 / 失败模式） */
-export async function getAdminInsights(): Promise<AdminInsights | null> {
-  const res = await fetch("/api/admin/insights");
+export async function getAdminInsights(days?: number): Promise<AdminInsights | null> {
+  const qs = days && days > 0 ? `?days=${days}` : "";
+  const res = await fetch(`/api/admin/insights${qs}`);
   const data = await parseJson<AdminSuccessResponse<AdminInsights>>(res);
   return data.success ? (data.data ?? null) : null;
 }

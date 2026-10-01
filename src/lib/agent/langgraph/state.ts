@@ -155,7 +155,7 @@ export function shouldContinuePlanWork(state: {
   toolSummaries: string[];
   maxIterations: number;
   /** 最近一次实质动作已是可见交付时，停下来问用户，不再注入计划续跑 */
-  observations?: ReadonlyArray<{ tool: string; success: boolean }>;
+  observations?: ReadonlyArray<{ tool: string; success: boolean; data?: unknown }>;
 }): boolean {
   if (latestActionIsVisibleDeliverable(state.observations ?? [])) return false;
   return (

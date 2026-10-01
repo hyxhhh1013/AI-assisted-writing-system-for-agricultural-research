@@ -162,6 +162,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **工作台随内容自适应（2026-08-07）**：蓝图 schema 新增可选 `projectMode`/`language`（生成时用项目兜底填充）；工作台按顶层章节把 `sectionGuides` 树形分组（`" > "` 层级，顶层可折叠）、按论文类型显示徽标与配图提示（综述→概念图/对比表，研究→方法流程图/结果数据图）、空区块（前置条件/配图/章节导览/写作顺序）自动隐藏。分组纯函数 `groupSectionGuides` 在 `lib/blueprint-utils.ts`。
 - **蓝图顺序注入 Agent 简报（2026-08-08）**：修复「蓝图建议写作顺序与实际写作顺序不一致」——此前 `project-briefing` 只给 LLM「写作蓝图：有 + thesis 摘要」，`writingOrder` 与 `sectionGuides` 未进 Agent 决策输入，Agent 靠直觉/大纲顺序写。现在 `loadAgentProject` 额外提取 `blueprintWritingOrder`/`blueprintSectionGuides`（`project-loader.ts`），简报注入「建议写作顺序（蓝图）：1. x → 2. y → …」+「各节写作要点（蓝图）」区块（`project-briefing.ts`）。Agent 写作前即可见蓝图建议顺序并按序推进。
 - **蓝图真正驱动 Writer（2026-08-09）**：修复「批准蓝图后正文仍不按蓝图生成」。根因：①`loadAgentProject` 曾把 `WritingBlueprint` JSON 误 `as WritingGlobalContext`，`prepare-context` 读 `globalContext.blueprint` 恒为 undefined，【写作蓝图摘要】不进 Writer；②`write_section` 未调用工作台同款的本节蓝图注入（purpose/keyPoints/配图）。现：loader 用 `parseWritingBlueprint` 正确嵌套 `globalContext.blueprint` 并附 outline/sectionPreviews；`lib/agent/blueprint-write-context.ts` 将英文 section key 映射到大纲/蓝图中文路径，聚合本节 guides 注入 `【写作蓝图（本节）】`；简报补 keyPoints + 配图计划；system prompt / 工具说明要求对齐蓝图。
+- **蓝图配图在写节后真正出图（2026-10-01）**：此前 figurePlan 只进 Writer 提示（规划配图文案），Agent slim Writer 还禁止 【FIGURE】JSON，所以段落扩写不会画图。现 `write_section` 落库后 `toolsNode` 按 `figurePlan.dataBinding` / 试验表目录自动排队 `generate_chart(chartIndex, sectionKey)`；专家工具扩写同样用绑定数据走 `generateFigure`。流程图仍须 `draft_mechanism_figure`。无绑定数据的必需图会提示上传 CSV/Excel。实现：`lib/blueprint-chart-jobs.ts`。
 - **综述正文禁止一次写整章（2026-08-09）**：Agent 曾把 phase 文案「一次任务可连续写多节」理解成对 `literature_body` 一次写出 5–7k 字（UI 可达万字+），导致超时/质量塌陷。现：① phase-pack / planner / review_write nudge / system prompt 明确「按蓝图子节 + subsectionTitle 逐节写」；② `write_section` 在 `literature_body` 无 `subsectionTitle` 且蓝图有 ≥2 子节路径时 soft-gate 拒绝并列出建议标题。
 - **论证并入写作蓝图（2026-08-09，方案 A）**：产品主路径改为 `配置 → 大纲 → 写作蓝图 → 分节写`。`SectionGuide` 增加 `claim` / `evidenceHint` / `warrant` / `rebuttal`；全文级 `researchQuestion` / `argumentGaps`。`ensure-write-prereqs` / phase-gate 不再要求 `build_argument_blueprint`；检查点只对 `generate_writing_blueprint` 暂停。Passport Phase 3 有写作蓝图即 done。旧 `argumentBlueprint` 列保留只读兼容。
 - **卸掉弃用工具注册（2026-08-11）**：`createAgentTools` 不再注册 `build_argument_blueprint`（源文件保留作说明，`UNREGISTERED_TOOL_FILES`）；planner / Phase 3 hint 文案改为「确认写作蓝图主张」，不再引导生成独立论证蓝图。
@@ -285,7 +286,7 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 
 **已落地 ARCH-01**：`lib/agent/tools/registry.ts` 为 `createReadOnlyTools` / `createAgentTools` 唯一挂载点。
 
-**已落地 ARCH-02（会话工具轨迹）**：快照字段 `toolTrace?: AgentToolTrace[]`（`{ at, tool, ok, intentKind? }`，上限 `MAX_TOOL_TRACE=50`）。`toolsNode` / `runParallelReads` 每次工具调用结局（execute 成败、门禁 reject/soft/hard、未知工具、prereq 步骤、抛错）都 append 一条，图状态 reducer `slice(-50)` 截断。**不进前端 UI**，排障时 `AgentSession.snapshot.toolTrace` 里能看到「最近调了什么、成没成」，不必翻 pm2 日志。旧快照缺字段兜底 `[]`。
+**已落地 ARCH-02（会话工具轨迹）**：快照字段 `toolTrace?: AgentToolTrace[]`（`{ at, tool, ok, intentKind?, reason?, via?, ms? }`，上限 `MAX_TOOL_TRACE=50`）。`toolsNode` / `runParallelReads` 每次工具调用结局（execute 成败、门禁 reject/soft/hard、未知工具、prereq、抛错、空转熔断）都 append 一条，失败带截断原因与通道（`pre-gate` / `throw` / `budget` 等）。图状态 reducer `slice(-50)` 截断。**不进写作侧栏**；Admin「Agent 会话」列表筛 `intentKind` / `failTool` / `failVia`（失败条件最多扫最近 400 条）、详情展示轨迹，排障包含 `lastFails`。终态 `error`（或带失败轨迹的完成/中断）打一行 JSON 到 PM2：`{"tag":"agent-session", sessionId, status, intentKind, goal, error, lastFails}`；快照写入失败打 `persist-failed`，不再静默吞掉。旧快照缺字段兜底 `[]`。
 
 ## 机理图 / 识图自检（2026-08-09）
 
@@ -293,7 +294,7 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 
 | 层 | 行为 |
 |----|------|
-| L1 草稿 | `draft_mechanism_figure` 先编译 `MechanismSpecV1`（主张进 caption，步骤括号条件上边）；多机理图任务前 **FigureBrief clarify**；可选 `templateId`。未锁 `layout` 且 ≥4 步会带 chain/fork 两套候选，只入库推荐稿。**不用文生图当主渲染器** |
+| L1 草稿 | `draft_mechanism_figure` 先编译 `MechanismSpecV1`（主张进 caption，步骤括号条件上边）；多机理图任务前 **FigureBrief clarify**；可选 `templateId`。未锁 `layout` 且 ≥4 步会带 chain/fork 两套候选，只入库推荐稿。**不用文生图当主渲染器**（Flux/SD/DALL-E 出的图不可回放、箭头易胡编，不能进 `/plot` 改节点） |
 | L2 硬闭环 | **机理图**先看 `draft_mechanism_figure.qaReport`（`block` 不入库、按 findings 改 Spec）；过线后 toolsNode 才注入 `read_figure(mode=qa)` 扫残余观感。**数据图**看 `generate_chart.qaReport`（不跑视觉识图）。QA 未通过则禁止空口收尾 + 门禁 `replaceImageUrl`；同 caption/section 无 replace 时工具内自动就地替换（防叠图） |
 | L3 精修 | **配图坞**（输入框上方常驻最近出图，免翻聊天）+ 结果卡：落点说明（默认**节末落盘**）+「查看正文位置」+ 结构化「按意见改」（含分叉/三面板/脱氧等快捷）+ `/plot?chartAssetId=&replaceImageUrl=` 深链（优先资产快照回放，精修回写默认真地替换）；编辑器「本节插图」可挪位 |
 | 图质检两级（2026-08-09；008 收窄；MECH-QA 2026-08-23） | 机理图主尺是 `MechanismSpec` + `qaReport`（`contracts/mechanism-spec.ts` / `mechanism-qa.ts`）。识图 `figure-qa.ts` 只扫残余观感。数据图只看 ChartSpec `qaReport`。 |
@@ -301,7 +302,8 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 
 | 工具 | 作用 |
 |------|------|
-| `draft_mechanism_figure` / `generate_chart` | 出图并写入图表库；可插章节。**改图传 `replaceImageUrl`/`replaceChartId` 就地替换**；同标题已有图自动 replace。机理图走 MechanismSpec（`claim` / 边条件 / `qaReport` / 版式候选）。数据图走 ChartSpec：显著性用 `significanceJson`；`configJson` 仅白名单（刊宽/DPI/`tight_layout` 会丢弃） |
+| `draft_mechanism_figure` / `generate_chart` | 出图并写入图表库；**默认插入已写章节**（省略 sectionKey 落入 results/methods）并回看正文是否含 URL。**改图传 `replaceImageUrl`/`replaceChartId` 就地替换**；同标题已有图自动 replace。机理图走 MechanismSpec。数据图走 ChartSpec。 |
+| `generate_table` | 三线表默认插入正文并回看表题；未 `insertedSection` 不算交付 |
 | `remove_figure` | 删图表资产 + 默认去掉正文对应 `![](url)`（清重复旧图）；**需用户确认** |
 | `read_figure` | `describe` 可识任意图；`mode=qa` **仅机理图**（占位/英文模板/空栏）。数据图跳过识图，看 `qaReport` |
 

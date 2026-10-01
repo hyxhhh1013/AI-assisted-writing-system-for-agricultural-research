@@ -57,7 +57,17 @@ vi.mock("@/lib/agent/project-persist", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   default: {
-    project: { findFirst: vi.fn(), update: vi.fn() },
+    project: {
+      findFirst: vi.fn(),
+      findUnique: vi.fn(async () => ({ abstract: "" })),
+      update: vi.fn(),
+    },
+    section: {
+      findUnique: vi.fn(async () => ({
+        content: "已有正文\n\n![趋势图](/api/charts/test.png)\n",
+      })),
+      upsert: vi.fn(),
+    },
     agentAttachment: { findFirst: vi.fn() },
   },
 }));
@@ -223,8 +233,9 @@ describe("agent tools wave2", () => {
     expect(result.data).toMatchObject({
       imageUrl: "/api/charts/test.png",
       hasReplay: true,
+      insertedSection: "results",
     });
-    expect(result.summary).toMatch(/登记/);
+    expect(result.summary).toMatch(/登记|插入|回看/);
   });
 
   it("generate_chart inserts into section when sectionKey set", async () => {

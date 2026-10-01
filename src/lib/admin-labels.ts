@@ -119,6 +119,40 @@ export function adminToolLabel(tool: string): string {
   return ADMIN_TOOL_LABEL[tool] ?? tool;
 }
 
+export const ADMIN_INTENT_KIND_LABEL: Record<string, string> = {
+  pipeline_fix: "管道修复",
+  pipeline_abstract: "摘要管道",
+  pipeline_review: "审查管道",
+  pipeline_check: "查重管道",
+  citation_apply: "写回引用",
+  abstract_finish: "收口摘要",
+  review_request: "审查请求",
+  literature: "文献",
+  draft: "扩写",
+  review_write: "综述",
+  citation: "引用",
+  diagnose: "诊断",
+  classify: "分类",
+  ap_full: "全流程",
+};
+
+export function adminIntentKindLabel(kind: string): string {
+  return ADMIN_INTENT_KIND_LABEL[kind] ?? kind;
+}
+
+export const ADMIN_FAIL_VIA_LABEL: Record<string, string> = {
+  fail: "执行失败",
+  throw: "抛错",
+  unknown: "未知工具",
+  "pre-gate": "前门禁",
+  "post-gate": "后门禁",
+  budget: "配额",
+};
+
+export function adminFailViaLabel(via: string): string {
+  return ADMIN_FAIL_VIA_LABEL[via] ?? via;
+}
+
 export function adminRoadmapStatusLabel(status: string): string {
   return ADMIN_ROADMAP_STATUS_LABEL[status] ?? status;
 }

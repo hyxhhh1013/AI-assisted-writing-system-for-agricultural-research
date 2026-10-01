@@ -4,11 +4,12 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { getErrorMessage } from "@/lib/error-utils";
 import { PYTHON_CMD, formatPythonSpawnError } from "@/lib/python-cmd";
-import { appendAgentSectionMarkdown } from "@/lib/agent/project-persist";
+import { AGENT_WRITING_SECTIONS } from "@/lib/agent/writing-sections";
 import {
-  AGENT_WRITING_SECTIONS,
-  isAgentWritingSectionKey,
-} from "@/lib/agent/writing-sections";
+  appendSectionAndVerify,
+  formatInsertSummary,
+  resolveInsertSectionKey,
+} from "@/lib/agent/insert-section";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 
 const SCRIPTS_DIR = path.join(process.cwd(), "scripts", "charts");
@@ -80,7 +81,8 @@ export const generateTableTool: ToolDefinition = {
   description:
     "生成 GB/T 7714 三线表 + 统计文字。groups 传每组 {label, n, mean, sd}；"
     + "可传 anova {F,df1,df2,p} 与 posthoc [{pair:[A,B],p}] 生成方差分析与差异字母。"
-    + "传 sectionKey 会把 HTML 表格插入章节正文（可在预览中渲染）。",
+    + "默认插入正文：有 sectionKey 用该节，否则插入已有正文的结果/方法节（研究默认 results）。"
+    + "生成后会回看正文是否含表题；未插入禁止当作已完成。",
   parameters: {
     type: "object",
     properties: {
@@ -103,7 +105,8 @@ export const generateTableTool: ToolDefinition = {
       note: { type: "string", description: "表注（默认标准句式）" },
       sectionKey: {
         type: "string",
-        description: `可选：论文章节 key，提供则插入 HTML 表格到该章节。可用：${AGENT_WRITING_SECTIONS.join(", ")}`,
+        description:
+          `插入章节。省略则自动落入已写章节（优先 results/methods）。可用：${AGENT_WRITING_SECTIONS.join(", ")}`,
       },
     },
     required: ["title", "groups"],
@@ -114,19 +117,14 @@ export const generateTableTool: ToolDefinition = {
       return { success: false, error: "generate_table 需要关联 projectId" };
     }
 
-    const sectionKeyRaw = params.sectionKey ? String(params.sectionKey).trim() : "";
-    const sectionKey =
-      sectionKeyRaw && isAgentWritingSectionKey(sectionKeyRaw)
-        ? sectionKeyRaw
-        : sectionKeyRaw
-          ? null
-          : undefined;
-    if (sectionKeyRaw && sectionKey === null) {
-      return {
-        success: false,
-        error: `无效 sectionKey: ${sectionKeyRaw}。可用：${AGENT_WRITING_SECTIONS.join(", ")}`,
-      };
+    const resolved = resolveInsertSectionKey(
+      params.sectionKey,
+      ctx.projectSnapshot,
+    );
+    if ("error" in resolved) {
+      return { success: false, error: resolved.error };
     }
+    const sectionKey = resolved.sectionKey;
 
     const groups = Array.isArray(params.groups) ? params.groups : [];
     if (groups.length === 0) {
@@ -145,24 +143,32 @@ export const generateTableTool: ToolDefinition = {
 
     try {
       const result = await runTableGeneration(config);
-
-      let insertedSection: string | undefined;
-      if (sectionKey && result.html) {
-        await appendAgentSectionMarkdown(
-          ctx.userId,
-          ctx.projectId,
-          sectionKey,
-          `\n\n${result.html}\n\n`,
-        );
-        insertedSection = sectionKey;
-      }
+      const title = String(config.title);
+      const chunk = `\n\n${result.html}\n\n`;
+      const landed = await appendSectionAndVerify({
+        userId: ctx.userId,
+        projectId: ctx.projectId,
+        sectionKey,
+        markdown: chunk,
+        needle: title,
+      });
 
       return {
         success: true,
-        data: { ...result, insertedSection },
+        data: {
+          ...result,
+          insertedSection: landed.insertedSection,
+          verifiedInBody: landed.verifiedInBody,
+          bodyExcerpt: landed.bodyExcerpt,
+          inferredSection: resolved.inferred,
+        },
         summary:
-          `已生成三线表「${config.title}」`
-          + (insertedSection ? `，表格已插入章节 ${insertedSection}` : "（未插入，可传 sectionKey）"),
+          `已生成三线表「${title}」。`
+          + formatInsertSummary({
+            inferred: resolved.inferred,
+            insertedSection: landed.insertedSection,
+            verifiedInBody: landed.verifiedInBody,
+          }),
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

@@ -11,7 +11,7 @@ import {
   adminKnowledgeDeleteSchema,
   adminKnowledgeReindexSchema,
 } from "@/lib/validations";
-import { mapAdminKnowledgeFile } from "@/lib/admin-knowledge-map";
+import { mapAdminKnowledgeFile, knowledgeIndexStatusWhere } from "@/lib/admin-knowledge-map";
 
 const ARTICLES_DIR = resolveProjectRuntimePath(process.env.RAG_ARTICLES_DIR || "papers");
 
@@ -43,11 +43,13 @@ export async function GET(req: NextRequest) {
   const where: Prisma.KnowledgeFileWhereInput = {};
   if (q) where.name = { contains: q };
   if (category) where.category = category;
+  const indexWhere = knowledgeIndexStatusWhere(indexStatus);
+  if (indexWhere) Object.assign(where, indexWhere);
 
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? 20;
 
-  const [allForCats, rawFiles] = await Promise.all([
+  const [allForCats, rawFiles, total] = await Promise.all([
     prisma.knowledgeFile.groupBy({
       by: ["category"],
       _count: true,
@@ -55,15 +57,15 @@ export async function GET(req: NextRequest) {
     }),
     prisma.knowledgeFile.findMany({
       where,
-      orderBy: indexStatus ? { name: "asc" } : buildOrderBy(params.sortBy, params.sortOrder),
-      ...(indexStatus
-        ? {}
-        : { skip: (page - 1) * pageSize, take: pageSize }),
+      orderBy: buildOrderBy(params.sortBy, params.sortOrder),
+      skip: (page - 1) * pageSize,
+      take: pageSize,
       include: { _count: { select: { chunks: true } } },
     }),
+    prisma.knowledgeFile.count({ where }),
   ]);
 
-  let mapped = rawFiles.map((f) =>
+  const mapped = rawFiles.map((f) =>
     mapAdminKnowledgeFile({
       id: f.id,
       name: f.name,
@@ -78,15 +80,6 @@ export async function GET(req: NextRequest) {
       chunkRowCount: f._count.chunks,
     }),
   );
-
-  let total: number;
-  if (indexStatus) {
-    mapped = mapped.filter((f) => f.indexStatus === indexStatus);
-    total = mapped.length;
-    mapped = mapped.slice((page - 1) * pageSize, page * pageSize);
-  } else {
-    total = await prisma.knowledgeFile.count({ where });
-  }
 
   const response = paginated(mapped, total, params);
   const body = (await response.json()) as Record<string, unknown>;

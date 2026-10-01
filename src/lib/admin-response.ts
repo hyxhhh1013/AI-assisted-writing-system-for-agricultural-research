@@ -61,5 +61,12 @@ export function parseListParams(searchParams: URLSearchParams): AdminListParams 
     projectId: searchParams.get("projectId") || undefined,
     indexStatus: searchParams.get("indexStatus") || undefined,
     status: searchParams.get("status") || undefined,
+    intentKind: searchParams.get("intentKind") || undefined,
+    failTool: searchParams.get("failTool") || undefined,
+    failVia: searchParams.get("failVia") || undefined,
+    days: (() => {
+      const raw = Number(searchParams.get("days") || "");
+      return Number.isFinite(raw) && raw > 0 ? raw : undefined;
+    })(),
   };
 }

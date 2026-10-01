@@ -5,23 +5,31 @@ import { Loader2, Bot, AlertTriangle, Target, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { getAdminInsights, type AdminInsights } from "@/services/admin";
 import { adminToolLabel } from "@/lib/admin-labels";
-import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import { AdminPageHeader, AdminFilterPills } from "@/components/admin/admin-page-header";
 import { AdminMetricStrip } from "@/components/admin/admin-stat-card";
 import { AdminPanel, AdminCompactList } from "@/components/admin/admin-panel";
 import { AdminHBarChart } from "@/components/admin/admin-bar-chart";
 
+const WINDOW_OPTIONS = [
+  { value: "7", label: "近 7 天" },
+  { value: "30", label: "近 30 天" },
+  { value: "90", label: "近 90 天" },
+];
+
 export default function AdminInsightsPage() {
+  const [days, setDays] = useState("30");
   const [insights, setInsights] = useState<AdminInsights | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getAdminInsights()
+    setLoading(true);
+    getAdminInsights(Number(days))
       .then(setInsights)
       .catch(() => toast.error("加载使用洞察失败"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [days]);
 
-  if (loading) {
+  if (loading && !insights) {
     return (
       <div className="flex justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-[#6b7c72]" />
@@ -38,6 +46,11 @@ export default function AdminInsightsPage() {
     value: t.count,
     hint: "调用",
   }));
+  const failToolItems = (insights.failTools ?? []).map((t) => ({
+    label: adminToolLabel(t.tool),
+    value: t.count,
+    hint: "失败",
+  }));
   const errorTotal = Math.max(insights.errorSessionCount, 1);
   const errorItems = insights.errorPatterns.map((p) => ({
     label: p.pattern,
@@ -49,12 +62,15 @@ export default function AdminInsightsPage() {
     <div className="space-y-4">
       <AdminPageHeader
         title="使用洞察"
-        subtitle="从用户会话聚合高频信号，支撑针对性优化"
+        subtitle={`扫描最近 ${insights.windowDays ?? days} 天、最多 ${insights.scanned ?? insights.totalSessions} 条会话`}
+        actions={
+          <AdminFilterPills value={days} options={WINDOW_OPTIONS} onChange={setDays} />
+        }
       />
 
       <AdminMetricStrip
         items={[
-          { label: "总会话", value: insights.totalSessions, icon: Bot },
+          { label: "窗口会话", value: insights.totalSessions, icon: Bot },
           { label: "错误会话", value: insights.errorSessionCount, icon: AlertTriangle },
           { label: "高频意图词", value: insights.goalIntents.length, icon: Target },
           { label: "使用过的工具", value: insights.toolCalls.length, icon: Wrench },
@@ -84,6 +100,14 @@ export default function AdminInsightsPage() {
           <AdminCompactList items={errorItems} />
         ) : (
           <p className="py-8 text-center text-xs text-[#9aa8a0]">暂无失败记录</p>
+        )}
+      </AdminPanel>
+
+      <AdminPanel title="失败工具榜" subtitle="toolTrace 中 ok=false 的工具">
+        {failToolItems.length > 0 ? (
+          <AdminCompactList items={failToolItems} />
+        ) : (
+          <p className="py-8 text-center text-xs text-[#9aa8a0]">暂无工具失败记录</p>
         )}
       </AdminPanel>
     </div>

@@ -12,7 +12,8 @@
 > **超时（2026-10-01）**：`src/lib/python-runner.ts` 的 `runCommand` 到点 `kill`。图表渲染（120s）和 `POST /api/table`（55s，超时 504，临时目录仍删）已接入。其余 Python spawn 还在各路由里。  
 > **Agent 参数面（007 done）**：`generate_chart` 显著性走 `significanceJson`；`configJson` 仅白名单（`src/lib/chart-spec-extras.ts`）。刊宽 / DPI / `tight_layout` 丢弃并写入 observation。  
 > **QA 分流（008 done）**：数据图只看 `qaReport`（`block` 续跑改 Spec）；`read_figure(mode=qa)` 仅机理图/流程/分子扫残余观感。柱状/折线/热力会跳过视觉识图。  
-> **机理图质量（FIG-MECH-QA-001）**：`draft_mechanism_figure` 先编译 `MechanismSpecV1`（主张进 caption，括号条件上边），确定性质检 + ≤2 次 spec 补丁；`block` 不入库。未指定 layout 且 ≥4 步时额外渲一套 chain/fork 候选，只入库推荐稿。主渲染器仍是 Graphviz / `mechanism_panel`，**不**接文生图。  
+> **机理图质量（FIG-MECH-QA-001）**：`draft_mechanism_figure` 先编译 `MechanismSpecV1`（主张进 caption，括号条件上边），确定性质检 + ≤2 次 spec 补丁；`block` 不入库。未指定 layout 且 ≥4 步时额外渲一套 chain/fork 候选，只入库推荐稿。主渲染器仍是 Graphviz / `mechanism_panel`，**不**接文生图（结构必须可编辑回放）。  
+> **正文落点（2026-10-01）**：`generate_table` / `generate_chart` / `draft_mechanism_figure` 省略 `sectionKey` 时插入已写章节（优先 results），并回看正文含表题/图片 URL。仅进图表库不算交付，Agent 不得口头收尾。  
 > **/plot 回放（FIG-MECH-QA-002）**：`POST /api/flow-diagram` 与 `POST /api/mechanism-panel` 出图前走同一套 `refinePlotFlow` / `refinePlotPanelConfig`（保留用户拓扑，只上边条件、改英文占位）。回传 `qaReport` + 修补后的 nodes/panels；`/plot` 画布同步并显示质检条。不因 QA 拒绝出图。  
 > **刊规包 / 导出清单（009 done）**：`src/contracts/chart-export.ts`（栏宽 mm 与 Python 对齐）。出图后写 `{uuid}.csv` + `{uuid}.json`；`POST /api/chart` / `generate_chart` 回传 `exportManifest`。`GET /api/charts/:file` 可取 csv/json。  
 > **三件套收口（010 done）**：`bar_grouped` / `line` / `heatmap` 为质量剖面。热力不再按矩阵长宽比撑刊宽；折线先 `set_xticks`；显著性读 `chartSpec.annotations`。`test:figures` 含 agr_journal 双栏 ±8% + svg/pdf、误差折线、热力刊宽。其余类型仍禁止扩新。
@@ -124,10 +125,13 @@
 ## Agent 配图链路（2026-07-25）
 
 ```text
-Data Tab 上传 CSV → Project.dataSources（含 chartConfigs）
-    → list_plot_sources（候选 index）
-    → generate_chart(chartIndex / csvData+chartType)
+Data Tab / Agent 附件上传 CSV → Project.dataSources（含 chartConfigs）
+    → 写作蓝图 type=chart 填 dataBinding.chartConfigIndex
+    → write_section 落库后自动 generate_chart(chartIndex, sectionKey)
+      （blueprint-chart-jobs.ts；专家工具扩写走 generateFigure）
+    或 list_plot_sources → 手调 generate_chart(chartIndex / csvData+chartType)
     → Python runChartGeneration → data/charts/*.png（`getChartsDir()`）
+    → ChartSpec qaReport：repair ≤2 次；block 不入库、不插节
     → Project.charts（含 figureSpecEnc 可回放；**只存 URL，二进制不入库**）
     → 可选 sectionKey：Markdown 图片写入章节
     → 工作台刷新 project.charts + Agent 气泡缩略图
@@ -135,7 +139,9 @@ Data Tab 上传 CSV → Project.dataSources（含 chartConfigs）
 
 | 文件 | 职责 |
 |------|------|
+| `lib/blueprint-chart-jobs.ts` | 蓝图 figurePlan → chartIndex 出图任务 |
 | `lib/agent/plot-sources.ts` | 候选目录 |
+| `lib/blueprint-chart-jobs.ts` | 蓝图 figurePlan → chartIndex 出图任务 |
 | `lib/agent/tools/generate-chart.ts` | 出图 + 回放快照 + 可选插章节 |
 | `lib/agent/chart-persist.ts` | 写入 `Project.charts` |
 | `lib/agent/chart-persisted.ts` | 前端解析 observation |

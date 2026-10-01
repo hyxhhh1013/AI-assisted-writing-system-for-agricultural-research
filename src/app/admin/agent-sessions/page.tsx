@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Loader2, Ban, Bot, AlertTriangle, Activity, Wrench, Copy } from "lucide-react";
 import {
@@ -16,7 +17,7 @@ import {
 } from "@/services/admin";
 import type { AgentUiMessage } from "@/contracts/agent-session";
 import { useAdminList } from "@/hooks/use-admin-list";
-import { adminAgentStatusLabel } from "@/lib/admin-labels";
+import { adminAgentStatusLabel, adminFailViaLabel, adminIntentKindLabel, adminToolLabel } from "@/lib/admin-labels";
 import { AdminPageHeader, AdminFilterPills } from "@/components/admin/admin-page-header";
 import { AdminPagination } from "@/components/admin/admin-pagination";
 import { AdminExpandableList } from "@/components/admin/admin-expandable-list";
@@ -29,6 +30,27 @@ const STATUS_OPTIONS = [
   { value: "interrupted", label: "已中断" },
   { value: "completed", label: "已完成" },
   { value: "error", label: "出错" },
+];
+
+const INTENT_OPTIONS = [
+  { value: "", label: "全部意图" },
+  { value: "literature", label: "文献" },
+  { value: "draft", label: "扩写" },
+  { value: "review_write", label: "综述" },
+  { value: "citation", label: "引用" },
+  { value: "diagnose", label: "诊断" },
+  { value: "ap_full", label: "全流程" },
+  { value: "pipeline_fix", label: "管道修复" },
+];
+
+const FAIL_VIA_OPTIONS = [
+  { value: "", label: "全部通道" },
+  { value: "fail", label: "执行失败" },
+  { value: "throw", label: "抛错" },
+  { value: "pre-gate", label: "前门禁" },
+  { value: "post-gate", label: "后门禁" },
+  { value: "budget", label: "配额" },
+  { value: "unknown", label: "未知工具" },
 ];
 
 const STATUS_COLOR: Record<string, string> = {
@@ -127,6 +149,9 @@ function TranscriptTimeline({ transcript }: { transcript: AgentUiMessage[] }) {
 export default function AdminAgentSessionsPage() {
   const searchParams = useSearchParams();
   const [statusFilter, setStatusFilter] = useState(() => searchParams.get("status") ?? "");
+  const [intentFilter, setIntentFilter] = useState(() => searchParams.get("intentKind") ?? "");
+  const [failViaFilter, setFailViaFilter] = useState(() => searchParams.get("failVia") ?? "");
+  const [failToolFilter, setFailToolFilter] = useState(() => searchParams.get("failTool") ?? "");
   const [detail, setDetail] = useState<AdminAgentSessionDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [interrupting, setInterrupting] = useState<string | null>(null);
@@ -140,7 +165,12 @@ export default function AdminAgentSessionsPage() {
 
   const { setPage, data: sessions, meta, loading, reload } = useAdminList({
     fetcher: listAdminAgentSessions,
-    filters: { status: statusFilter || undefined },
+    filters: {
+      status: statusFilter || undefined,
+      intentKind: intentFilter || undefined,
+      failVia: failViaFilter || undefined,
+      failTool: failToolFilter.trim() || undefined,
+    },
     urlSync: true,
   });
 
@@ -171,6 +201,15 @@ export default function AdminAgentSessionsPage() {
       error: detail.error,
       plan: detail.plan,
       toolTrace: detail.toolTrace ?? [],
+      lastFails: (detail.toolTrace ?? [])
+        .filter((t) => !t.ok)
+        .slice(-8)
+        .map((t) => ({
+          tool: t.tool,
+          via: t.via ?? null,
+          reason: t.reason ?? null,
+          ms: t.ms ?? null,
+        })),
       uiTranscript: detail.uiTranscript ?? [],
     };
     try {
@@ -203,10 +242,23 @@ export default function AdminAgentSessionsPage() {
     <div className="space-y-4">
       <AdminPageHeader
         title="Agent 会话监控"
+        subtitle="按状态、意图、失败工具与通道筛最近会话"
         actions={
           <AdminFilterPills value={statusFilter} options={STATUS_OPTIONS} onChange={setStatusFilter} />
         }
       />
+      <div className="flex flex-col gap-2">
+        <AdminFilterPills value={intentFilter} options={INTENT_OPTIONS} onChange={setIntentFilter} />
+        <div className="flex flex-wrap items-center gap-2">
+          <AdminFilterPills value={failViaFilter} options={FAIL_VIA_OPTIONS} onChange={setFailViaFilter} />
+          <Input
+            className="h-8 w-56 text-xs"
+            value={failToolFilter}
+            onChange={(e) => setFailToolFilter(e.target.value)}
+            placeholder="失败工具名，如 search_knowledge"
+          />
+        </div>
+      </div>
 
       {stats && (
         <div className="space-y-4">
@@ -269,9 +321,20 @@ export default function AdminAgentSessionsPage() {
                 {s.userName ?? s.userId.slice(0, 8)}
                 {s.projectTitle ? ` · ${s.projectTitle}` : ""}
                 {s.directionSlug ? ` · 方向 ${s.directionSlug}` : ""}
+                {s.intentKind ? ` · ${adminIntentKindLabel(s.intentKind)}` : ""}
                 {" · "}
                 {new Date(s.updatedAt).toLocaleString("zh-CN")}
               </p>
+              {s.lastFail ? (
+                <p className="mt-0.5 truncate text-[10px] text-amber-700">
+                  {adminToolLabel(s.lastFail.tool)}
+                  {s.lastFail.via ? ` · ${adminFailViaLabel(s.lastFail.via)}` : ""}
+                  {s.lastFail.reason ? ` · ${s.lastFail.reason}` : ""}
+                </p>
+              ) : null}
+              {s.errorMessage ? (
+                <p className="mt-0.5 truncate text-[10px] text-red-600">{s.errorMessage}</p>
+              ) : null}
             </div>
             <Badge className={`shrink-0 ${STATUS_COLOR[s.status] || ""}`}>
               {adminAgentStatusLabel(s.status)}
@@ -334,6 +397,48 @@ export default function AdminAgentSessionsPage() {
                   </p>
                 </div>
               )}
+
+              {detail.error && detail.error !== detail.errorMessage ? (
+                <div>
+                  <p className="text-[10px] font-semibold text-red-600">快照 error</p>
+                  <p className="whitespace-pre-wrap rounded border border-red-100 bg-red-50 p-2 text-xs text-red-700">
+                    {detail.error}
+                  </p>
+                </div>
+              ) : null}
+
+              {detail.intentKind ? (
+                <p className="text-[10px] text-[#6b7c72]">意图 <b>{detail.intentKind}</b></p>
+              ) : null}
+
+              {detail.toolTrace && detail.toolTrace.length > 0 ? (
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold text-[#1a5632]/60">工具轨迹（最近失败会标红）</p>
+                  <ol className="max-h-56 space-y-1 overflow-y-auto rounded border border-[#1a5632]/10 bg-white p-2">
+                    {detail.toolTrace.map((t, i) => (
+                      <li
+                        key={`${t.at}-${t.tool}-${i}`}
+                        className={`flex flex-wrap items-baseline gap-x-2 text-[11px] ${
+                          t.ok ? "text-[#3d4f46]" : "text-red-700"
+                        }`}
+                      >
+                        <span className="tabular-nums text-[#9aa8a0]">
+                          {new Date(t.at).toLocaleTimeString("zh-CN")}
+                        </span>
+                        <code className="font-mono">{t.tool}</code>
+                        <span>{t.ok ? "成功" : "失败"}</span>
+                        {t.via && t.via !== "ok" && t.via !== "fail" ? (
+                          <span className="text-[#9aa8a0]">{t.via}</span>
+                        ) : null}
+                        {typeof t.ms === "number" ? (
+                          <span className="tabular-nums text-[#9aa8a0]">{t.ms}ms</span>
+                        ) : null}
+                        {t.reason ? <span className="min-w-0 break-words">{t.reason}</span> : null}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ) : null}
 
               {detail.uiTranscript && detail.uiTranscript.length > 0 && (
                 <div>

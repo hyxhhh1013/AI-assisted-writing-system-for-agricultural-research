@@ -26,6 +26,12 @@ import { AdminPagination } from "@/components/admin/admin-pagination";
 import { AdminConfirmDialog } from "@/components/admin/admin-confirm-dialog";
 import { AdminDataTable } from "@/components/admin/admin-data-table";
 import { KnowledgeIndexBadge } from "@/components/shared/knowledge/knowledge-index-badge";
+import { KnowledgeReindexProgress } from "@/components/shared/knowledge/knowledge-reindex-progress";
+import {
+  applyReindexEvent,
+  INITIAL_REINDEX_PROGRESS,
+  type ReindexProgressState,
+} from "@/contracts/reindex";
 
 const INDEX_STATUS_OPTIONS = [
   { value: "", label: "全部状态" },
@@ -50,6 +56,8 @@ export default function AdminKnowledgePage() {
   const [metricsDryRun, setMetricsDryRun] = useState(false);
   const [lastMetricsImport, setLastMetricsImport] = useState<AdminJournalMetricsLastImport | null>(null);
   const reindexAbortRef = useRef<AbortController | null>(null);
+  const [reindexProgress, setReindexProgress] = useState<ReindexProgressState>(INITIAL_REINDEX_PROGRESS);
+  const [reindexPanelOpen, setReindexPanelOpen] = useState(false);
 
   const refreshLastMetricsImport = useCallback(() => {
     void getAdminJournalMetricsLastImport().then(setLastMetricsImport).catch(() => {});
@@ -105,6 +113,8 @@ export default function AdminKnowledgePage() {
     if (names.length === 1) setReindexing(names[0]);
     else setBulkReindexing(true);
 
+    setReindexPanelOpen(true);
+    setReindexProgress({ ...INITIAL_REINDEX_PROGRESS, phase: "启动索引任务", percent: 1, pipelineStage: "scan" });
     toast.info(label || `正在重索引 ${names.length} 篇文献…`);
 
     try {
@@ -112,6 +122,7 @@ export default function AdminKnowledgePage() {
         if (controller.signal.aborted) break;
         await reindexKnowledgeStream(
           (event) => {
+            setReindexProgress((prev) => applyReindexEvent(prev, event));
             if (event.type === "error") throw new Error(event.message);
           },
           controller.signal,
@@ -199,6 +210,7 @@ export default function AdminKnowledgePage() {
     <div className="space-y-4">
       <AdminPageHeader
         title="文献管理"
+        subtitle="索引状态走数据库近似筛选（未索引/已索引/待完善），不再全表扫内存"
         actions={
           <div className="flex items-center gap-2">
             {selected.size > 0 && (
@@ -276,6 +288,14 @@ export default function AdminKnowledgePage() {
           </div>
         </div>
       </details>
+
+      <KnowledgeReindexProgress
+        isIndexing={Boolean(reindexing) || bulkReindexing}
+        panelOpen={reindexPanelOpen}
+        indexProgress={reindexProgress}
+        onCancel={() => reindexAbortRef.current?.abort()}
+        onDismiss={() => setReindexPanelOpen(false)}
+      />
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <AdminSearchInput value={q} onChange={setQ} placeholder="搜索文件名..." />

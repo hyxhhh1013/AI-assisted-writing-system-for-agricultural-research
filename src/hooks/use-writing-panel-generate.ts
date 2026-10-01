@@ -2,7 +2,7 @@
 
 import { useRef, useCallback, type Dispatch, type SetStateAction } from "react";
 import { toast } from "sonner";
-import type { ProjectData } from "@/contracts/project";
+import { parseDataSources, type ProjectData } from "@/contracts/project";
 import { parseWritingBlueprint } from "@/contracts/writing-blueprint";
 import type { OutlineTask } from "@/lib/utils";
 import {
@@ -10,9 +10,14 @@ import {
   getOutlineTaskIdsForSectionCompletion,
 } from "@/lib/utils";
 import { applyBlueprintSectionHintToContext } from "@/lib/blueprint-utils";
-import { detectedFigureToPlotHref } from "@/contracts/figure";
+import { detectedFigureToPlotHref, collectChartConfigsFromSources } from "@/contracts/figure";
 import { generateFigure } from "@/services/figures";
 import { findFigureBlocks, replacePlaceholders } from "@/hooks/use-figure-pipeline";
+import {
+  boundChartJobToFigureConfig,
+  collectBoundChartJobsForSection,
+  jobAlreadyCoveredByText,
+} from "@/lib/blueprint-chart-jobs";
 import type { UseWritingStreamReturn } from "@/hooks/use-writing-stream";
 import { batchUpsertReferences } from "@/services/references";
 import type { WritingPreviewPayload } from "@/components/shared/writing/writing-types";
@@ -249,6 +254,28 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
         if (!tool || !config || !caption) continue;
         detectedFigures.push({ tool, config: JSON.stringify(config), caption });
         processedText = processedText.replace(block.raw, `\n\n*[正在生成 ${caption}...]*\n\n`);
+        figureCountRef.current++;
+      }
+
+      const bpJobs = collectBoundChartJobsForSection({
+        blueprint: parseWritingBlueprint(project.writingBlueprint),
+        sectionKey: targetSectionKey,
+        mode: project.mode,
+        subsectionTitle: subTitle,
+        chartConfigs: collectChartConfigsFromSources(parseDataSources(project)),
+      }).jobs.filter(
+        (job) =>
+          !jobAlreadyCoveredByText(processedText, job)
+          && !detectedFigures.some((f) => f.caption === job.caption),
+      );
+      for (const job of bpJobs) {
+        const fig = boundChartJobToFigureConfig(job);
+        detectedFigures.push({
+          tool: fig.tool,
+          config: JSON.stringify(fig.config),
+          caption: fig.caption,
+        });
+        processedText += `\n\n*[正在生成 ${fig.caption}...]*\n\n`;
         figureCountRef.current++;
       }
 

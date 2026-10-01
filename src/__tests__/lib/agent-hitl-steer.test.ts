@@ -60,6 +60,14 @@ describe("visible deliverable stop", () => {
       ]),
     ).toBe(false);
   });
+
+  it("does not stop after generate_table that never entered the body", () => {
+    expect(
+      latestActionIsVisibleDeliverable([
+        { tool: "generate_table", success: true, data: { html: "<table/>" } },
+      ]),
+    ).toBe(false);
+  });
 });
 
 describe("literature batch stop", () => {

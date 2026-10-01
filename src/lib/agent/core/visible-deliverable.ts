@@ -3,6 +3,8 @@
  * 自查/阅读类观察往回跳过，避免「写完再 validate」被当成还能接着写下一节。
  */
 
+import { assetLandedInBody } from "@/lib/agent/insert-section";
+
 const PASS_THROUGH_TOOLS = new Set([
   "validate_citations",
   "verify_content",
@@ -40,14 +42,24 @@ const VISIBLE_DELIVERABLE_TOOLS = new Set([
   "update_paper_config",
 ]);
 
+/** 图表/三线表必须真正进正文，才算对用户可见的论文交付 */
+const BODY_LANDING_TOOLS = new Set([
+  "generate_chart",
+  "draft_mechanism_figure",
+  "generate_table",
+  "generate_xrd_analysis",
+]);
+
 export function latestActionIsVisibleDeliverable(
-  observations: readonly { tool: string; success: boolean }[],
+  observations: readonly { tool: string; success: boolean; data?: unknown }[],
 ): boolean {
   for (let i = observations.length - 1; i >= 0; i--) {
     const obs = observations[i];
     if (!obs?.success) continue;
     if (PASS_THROUGH_TOOLS.has(obs.tool)) continue;
-    return VISIBLE_DELIVERABLE_TOOLS.has(obs.tool);
+    if (!VISIBLE_DELIVERABLE_TOOLS.has(obs.tool)) return false;
+    if (BODY_LANDING_TOOLS.has(obs.tool)) return assetLandedInBody(obs.data);
+    return true;
   }
   return false;
 }

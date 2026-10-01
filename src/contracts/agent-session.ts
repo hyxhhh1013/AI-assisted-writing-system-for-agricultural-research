@@ -63,9 +63,18 @@ export interface AgentActiveWrite {
   completedSummary?: string;
 }
 
+export type AgentToolTraceVia =
+  | "ok"
+  | "fail"
+  | "throw"
+  | "unknown"
+  | "pre-gate"
+  | "post-gate"
+  | "budget";
+
 /**
  * 会话工具轨迹（W3-AP-ARCH-02）：一次工具调用的结局。
- * 排障用（空转/乱搜时可一眼看「最近调了什么、成没成」），不进前端 UI。
+ * 排障用（空转/乱搜时可一眼看「最近调了什么、成没成、为何失败」），不进写作侧栏。
  * 落快照时截断到 MAX_TOOL_TRACE 条。
  */
 export interface AgentToolTrace {
@@ -75,6 +84,12 @@ export interface AgentToolTrace {
   ok: boolean;
   /** 该工具执行时的会话意图（跟聊继承；旧轨迹可能缺） */
   intentKind?: IntentKind | null;
+  /** 失败/门禁原因，截断约 240 字；成功可缺 */
+  reason?: string;
+  /** 结局通道，便于按门禁/抛错聚合 */
+  via?: AgentToolTraceVia;
+  /** 工具 execute 耗时 ms（门禁拦截可缺） */
+  ms?: number;
 }
 
 export interface AgentSessionSnapshot {

@@ -15,7 +15,18 @@ function baseHealth(over: Partial<AdminHealthData> = {}): AdminHealthData {
       categoryDriftInSample: 0,
     },
     index: { indexFiles: ["index.bin"], totalSizeBytes: 1 },
-    server: { uptime: 1, nodeVersion: "v20", platform: "win32", memoryMB: 200 },
+    server: {
+      uptime: 1,
+      nodeVersion: "v20",
+      platform: "win32",
+      memoryMB: 200,
+      heapUsedMB: 80,
+      heapTotalMB: 120,
+      heapPct: 67,
+      chromiumAvailable: true,
+      chromiumPath: "/usr/bin/chromium",
+      pm2: null,
+    },
     ai: {
       providers: [{ provider: "deepseek", name: "DeepSeek", keyCount: 1, model: "x" }],
       missingKeyProviders: [],
@@ -90,5 +101,28 @@ describe("buildAdminHealthAlerts", () => {
     );
     expect(alerts.some((a) => a.message.includes("PDF"))).toBe(true);
     expect(alerts.some((a) => a.message.includes("分类"))).toBe(true);
+  });
+
+  it("alerts on high heap, missing chromium, and pm2 restarts", () => {
+    const alerts = buildAdminHealthAlerts(
+      baseHealth({
+        server: {
+          uptime: 1,
+          nodeVersion: "v22",
+          platform: "linux",
+          memoryMB: 1500,
+          heapUsedMB: 900,
+          heapTotalMB: 1000,
+          heapPct: 90,
+          chromiumAvailable: false,
+          chromiumPath: null,
+          pm2: { name: "grainscript", status: "online", restarts: 8, memoryMB: 1400 },
+        },
+      }),
+    );
+    expect(alerts.some((a) => a.message.includes("heap"))).toBe(true);
+    expect(alerts.some((a) => a.message.includes("RSS"))).toBe(true);
+    expect(alerts.some((a) => a.message.includes("Chromium"))).toBe(true);
+    expect(alerts.some((a) => a.message.includes("重启"))).toBe(true);
   });
 });

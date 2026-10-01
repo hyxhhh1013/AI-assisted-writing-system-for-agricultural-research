@@ -8,6 +8,7 @@ import { MODEL_PROVIDERS, type ModelProviderKey } from "@/lib/models";
 import { bibHasIssnOrJournal, parseMetricsJson } from "@/lib/journal-metrics";
 import { getSetting } from "@/lib/settings";
 import type { AdminJournalMetricsLastImport } from "@/contracts/admin";
+import { collectProcessHealth } from "@/lib/admin-process-health";
 import fs from "fs";
 import path from "path";
 
@@ -60,6 +61,7 @@ export async function GET(req: NextRequest) {
     agentError24h,
     agentRunning,
     lastImportRaw,
+    processHealth,
   ] = await Promise.all([
     prisma.knowledgeFile.count(),
     prisma.knowledgeChunk.count(),
@@ -79,6 +81,7 @@ export async function GET(req: NextRequest) {
     }),
     prisma.agentSession.count({ where: { status: "running" } }),
     getSetting("JOURNAL_METRICS_LAST_IMPORT"),
+    collectProcessHealth(),
   ]);
 
   let pdfMissingOnDisk = 0;
@@ -168,7 +171,13 @@ export async function GET(req: NextRequest) {
       uptime: process.uptime(),
       nodeVersion: process.version,
       platform: process.platform,
-      memoryMB: Math.round(process.memoryUsage().rss / 1024 / 1024),
+      memoryMB: processHealth.rssMB,
+      heapUsedMB: processHealth.heapUsedMB,
+      heapTotalMB: processHealth.heapTotalMB,
+      heapPct: processHealth.heapPct,
+      chromiumAvailable: processHealth.chromiumAvailable,
+      chromiumPath: processHealth.chromiumPath,
+      pm2: processHealth.pm2,
     },
     ai: {
       providers: aiProviders,

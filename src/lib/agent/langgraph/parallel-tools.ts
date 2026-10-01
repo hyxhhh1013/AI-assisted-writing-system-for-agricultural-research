@@ -24,6 +24,7 @@ import { advancePlanAfterTool } from "@/lib/agent/core/plan-progress";
 import { formatToolObservationForLlm } from "@/lib/agent/observation-memory";
 import type { AgentGraphStateType } from "@/lib/agent/langgraph/state";
 import type { AgentToolTrace } from "@/contracts/agent-session";
+import { makeToolTrace, type AgentToolTraceVia } from "@/lib/agent/tool-trace";
 import type { AgentGraphRuntime } from "@/lib/agent/langgraph/runtime";
 import {
   evaluatePhaseGate,
@@ -84,20 +85,28 @@ export async function runParallelReads(
   const newSummaries: string[] = [];
   const newObservations: ToolObservation[] = [];
   const newTrace: AgentToolTrace[] = [];
-  const trace = (toolName: string, ok: boolean) => {
-    newTrace.push({
-      at: Date.now(),
-      tool: toolName,
-      ok,
-      intentKind: state.intentKind ?? null,
-    });
+  const trace = (
+    toolName: string,
+    ok: boolean,
+    extra?: { reason?: string | null; via?: AgentToolTraceVia; ms?: number },
+  ) => {
+    newTrace.push(
+      makeToolTrace({
+        tool: toolName,
+        ok,
+        intentKind: state.intentKind ?? null,
+        reason: extra?.reason,
+        via: extra?.via,
+        ms: extra?.ms,
+      }),
+    );
   };
   let toolCallCount = state.toolCallCount;
   let error: string | null = null;
   let plan = state.plan;
 
   const rejectGate = (toolName: string, err: string) => {
-    trace(toolName, false);
+    trace(toolName, false, { reason: err, via: "pre-gate" });
     newSummaries.push(`[${toolName}] 失败: ${err}`);
     newMessages.push({
       role: "user",
@@ -128,6 +137,7 @@ export async function runParallelReads(
     ) {
       error = `单次任务最多调用 ${agentContext.budget.maxToolCalls} 次工具`;
       events.push({ type: "agent/error", error });
+      trace(toolCall.name, false, { reason: error, via: "budget" });
       break;
     }
 
@@ -150,13 +160,13 @@ export async function runParallelReads(
     const gateVerdict = evaluatePreGates(gateInput);
     if (!gateVerdict.ok) {
       if (gateVerdict.kind === "hard") {
-        trace(tool.name, false);
+        trace(tool.name, false, { reason: gateVerdict.error, via: "pre-gate" });
         error = gateVerdict.error;
         events.push({ type: "agent/error", error });
         break;
       }
       if (gateVerdict.kind === "soft") {
-        trace(tool.name, false);
+        trace(tool.name, false, { reason: gateVerdict.error, via: "pre-gate" });
         newSummaries.push(`[${tool.name}] ${gateVerdict.error}`);
         newMessages.push({
           role: "user",
@@ -195,23 +205,32 @@ export async function runParallelReads(
   const results = await Promise.all(
     batch.map(async ({ tool, params }) => {
       agentContext.budget.toolCallCount += 1;
+      const startedAt = Date.now();
       try {
-        return { tool, params, result: await tool.execute(params, agentContext) };
+        const result = await tool.execute(params, agentContext);
+        return { tool, params, result, ms: Date.now() - startedAt };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         return {
           tool,
           params,
           result: { success: false as const, error: msg },
+          ms: Date.now() - startedAt,
+          thrown: true,
         };
       }
     }),
   );
 
   // 按原顺序记录结果
-  for (const { tool, result } of results) {
+  for (const item of results) {
+    const { tool, result, ms } = item;
     toolCallCount += 1;
-    trace(tool.name, result.success);
+    trace(tool.name, result.success, {
+      reason: result.success ? undefined : result.error,
+      via: "thrown" in item && item.thrown ? "throw" : result.success ? "ok" : "fail",
+      ms,
+    });
     const line = result.success
       ? `[${tool.name}] ${result.summary ?? "完成"}`
       : `[${tool.name}] 失败: ${result.error ?? "未知错误"}`;
@@ -230,7 +249,7 @@ export async function runParallelReads(
       tool: tool.name,
       success: result.success,
       error: result.error,
-      data: result.data,
+      data: "data" in result ? result.data : undefined,
     });
     plan = advancePlanAfterTool(plan, tool.name, result.success);
     noteToolProgress(

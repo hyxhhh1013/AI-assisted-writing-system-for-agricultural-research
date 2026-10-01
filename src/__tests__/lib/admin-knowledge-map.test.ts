@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapAdminKnowledgeFile } from "@/lib/admin-knowledge-map";
+import { mapAdminKnowledgeFile, knowledgeIndexStatusWhere } from "@/lib/admin-knowledge-map";
 
 describe("mapAdminKnowledgeFile", () => {
   it("maps unindexed file", () => {
@@ -36,5 +36,19 @@ describe("mapAdminKnowledgeFile", () => {
     });
     expect(row.doi).toBe("10.1234/test");
     expect(row.indexStatus).toBe("ready");
+  });
+
+  it("builds SQL-ish filters for indexStatus", () => {
+    expect(knowledgeIndexStatusWhere("")).toBeNull();
+    expect(knowledgeIndexStatusWhere("unindexed")).toEqual({
+      chunkCount: 0,
+      parseWarning: null,
+      size: { gt: 0 },
+    });
+    expect(knowledgeIndexStatusWhere("ready")).toMatchObject({
+      chunkCount: { gt: 0 },
+      parseWarning: null,
+    });
+    expect(knowledgeIndexStatusWhere("partial")?.OR).toHaveLength(3);
   });
 });

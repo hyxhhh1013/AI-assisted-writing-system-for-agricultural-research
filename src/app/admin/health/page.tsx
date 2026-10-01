@@ -66,7 +66,7 @@ export default function AdminHealthPage() {
 
   return (
     <div className="space-y-6">
-      <AdminPageHeader title="系统健康" subtitle="数据库 · AI · 知识库 · Agent · 期刊指标" />
+      <AdminPageHeader title="系统健康" subtitle="数据库 · AI · 知识库 · Agent · 进程存活 · 期刊指标" />
 
       <AdminAlertStrip alerts={alerts} />
 
@@ -74,7 +74,7 @@ export default function AdminHealthPage() {
         items={[
           { label: "文献", value: data.knowledge.fileCount, icon: FileText },
           { label: "索引文件", value: data.index.indexFiles.length, icon: HardDrive },
-          { label: "内存", value: data.server.memoryMB, icon: Server, suffix: "MB" },
+          { label: "RSS", value: data.server.memoryMB, icon: Server, suffix: "MB" },
           {
             label: data.db.connected ? "数据库" : "DB 异常",
             value: Math.max(0, Math.round(data.db.sizeBytes / 1024 / 1024)),
@@ -120,11 +120,16 @@ export default function AdminHealthPage() {
             }
           />
           <AdminRingMetric
-            label="内存占用"
-            value={data.server.memoryMB}
-            max={1024}
-            unit="MB"
-            status={data.server.memoryMB < 768 ? "ok" : "warn"}
+            label="Heap"
+            value={data.server.heapPct ?? 0}
+            unit="%"
+            status={
+              (data.server.heapPct ?? 0) < 70
+                ? "ok"
+                : (data.server.heapPct ?? 0) < 85
+                  ? "warn"
+                  : "error"
+            }
           />
         </div>
       </AdminPanel>
@@ -227,6 +232,23 @@ export default function AdminHealthPage() {
               Node {data.server.nodeVersion} · 运行 {uptimeStr} ·{" "}
               {fmtBytes(data.index.totalSizeBytes)} 索引
             </p>
+            <p className="text-xs text-[#9aa8a0]">
+              Heap {data.server.heapUsedMB ?? "—"}/{data.server.heapTotalMB ?? "—"} MB
+              （{data.server.heapPct ?? "—"}%）
+              {" · "}Chromium{" "}
+              {data.server.chromiumAvailable
+                ? "可用"
+                : "未检测到"}
+              {data.server.chromiumPath ? ` · ${data.server.chromiumPath}` : ""}
+            </p>
+            {data.server.pm2 ? (
+              <p className="text-xs text-[#9aa8a0]">
+                PM2 {data.server.pm2.name} · {data.server.pm2.status} · 重启{" "}
+                {data.server.pm2.restarts} · {data.server.pm2.memoryMB} MB
+              </p>
+            ) : (
+              <p className="text-xs text-[#9aa8a0]">本机未读到 PM2 grainscript（开发环境正常）</p>
+            )}
           </div>
         </AdminPanel>
 

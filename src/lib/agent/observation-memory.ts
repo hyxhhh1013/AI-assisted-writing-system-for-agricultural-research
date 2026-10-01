@@ -89,6 +89,42 @@ function formatEvidence(toolName: string, data: unknown): string {
     return truncate(`${meta}\n\n${body}`, MAX_SECTION_EVIDENCE_CHARS);
   }
 
+  if (
+    (toolName === "generate_table"
+      || toolName === "generate_chart"
+      || toolName === "draft_mechanism_figure"
+      || toolName === "generate_xrd_analysis")
+    && typeof data === "object"
+    && data !== null
+  ) {
+    const row = data as {
+      insertedSection?: unknown;
+      verifiedInBody?: unknown;
+      bodyExcerpt?: unknown;
+      inferredSection?: unknown;
+      imageUrl?: unknown;
+      title?: unknown;
+    };
+    const meta = [
+      row.insertedSection ? `inserted=${String(row.insertedSection)}` : "inserted=false",
+      row.verifiedInBody === true
+        ? "verified=true"
+        : row.verifiedInBody === false
+          ? "verified=false（正文未见标记，须 read_section）"
+          : null,
+      row.inferredSection === true ? "section=inferred" : null,
+      typeof row.imageUrl === "string" ? `imageUrl=${row.imageUrl}` : null,
+    ]
+      .filter(Boolean)
+      .join(" | ");
+    const excerpt = typeof row.bodyExcerpt === "string" ? row.bodyExcerpt : "";
+    const next =
+      row.insertedSection && row.verifiedInBody !== false
+        ? "向用户确认落点后再写下一节，不要口头说已经插好却不核对。"
+        : "未进正文：立刻带 sectionKey 再插入，禁止收尾。";
+    return truncate(`${meta}\n${next}\n\n${excerpt}`, MAX_SECTION_EVIDENCE_CHARS);
+  }
+
   if (typeof data === "object" && data !== null && "items" in data && "markdown" in data) {
     const payload = data as {
       items?: unknown;

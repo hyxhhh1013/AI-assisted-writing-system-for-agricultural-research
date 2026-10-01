@@ -54,9 +54,9 @@
 | ADMIN-031 | 仪表盘可点击告警（与 Health 对齐） | ADMIN-030 | 0.5h | done | 2026-06-17 |
 | ADMIN-032 | 项目页 AdminDataTable 统一 | ADMIN-030 | 2h | done | 2026-06-17 |
 | ADMIN-039 | Admin 视觉组件库 + 仪表盘/Health/Usage 升级 | ADMIN-032 | 4h | done | 2026-06-17 |
-| ADMIN-033 | 文献 indexStatus DB 冗余字段 + 服务端筛选 | ADMIN-030 | 4h | todo | — |
+| ADMIN-033 | 文献 indexStatus **SQL 近似筛选**（chunkCount/parseWarning/size；非独立 DB 字段） | ADMIN-030 | 4h | done | 2026-10-01 |
 | ADMIN-034 | Admin 操作审计日志（AdminAuditLog） | ADMIN-030 | 4h | todo | — |
-| ADMIN-035 | 文献重索引进度条 + 批量队列 UI | ADMIN-033 | 3h | todo | — |
+| ADMIN-035 | 文献重索引进度条（Admin 页复用 `applyReindexEvent`） | ADMIN-033 | 3h | done | 2026-10-01 |
 | ADMIN-036 | Usage 按功能/用户趋势 + 保留策略 | ADMIN-022 | 3h | todo | — |
 | ADMIN-037 | `/admin` 纳入 proxy 受保护路由 | ADMIN-030 | 1h | todo | — |
 | ADMIN-038 | Admin 列表 RSC 首屏 + Playwright 冒烟 | ADMIN-037 | 4h | todo | — |
@@ -68,6 +68,9 @@
 | ADMIN-044 | Insights 意图词补齐（方向/蓝图/桥接/申报） | — | 1h | done | 2026-08-09 |
 | ADMIN-045 | DOMAIN_INDEX / 文档与已上线 Admin 页对齐 | — | 0.5h | done | 2026-08-09 |
 | ADMIN-046 | 用户角色与 Direction PI 语义澄清（admin≠PI 可选） | ADMIN-002 | 1～2d | todo | — |
+| ADMIN-047 | 健康页进程存活：heap / RSS / Chromium / PM2 | ADMIN-042 | 2h | done | 2026-10-01 |
+| ADMIN-048 | Agent 会话 intentKind + failTool/failVia 筛选与 lastFail | AGENT-TRACE | 2h | done | 2026-10-01 |
+| ADMIN-049 | Insights 时间窗 + 失败工具榜（扫描上限 2000） | ADMIN-044 | 1h | done | 2026-10-01 |
 
 ### 1.1 与主队列的关系
 
