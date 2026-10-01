@@ -170,6 +170,36 @@ export function isPlanLeftoverSpeech(text: string): boolean {
   return /还有未完成步骤|你可以直接说「继续」或指定下一步/.test(text);
 }
 
+/** 系统追加的「还有未完成步骤」段，不参与「用户要不要先回答」判断 */
+export function stripPlanLeftover(text: string): string {
+  return text.replace(/\n*——\n还有未完成步骤：[\s\S]*$/, "").trim();
+}
+
+/**
+ * 模型已经在正文里请用户选 1/2/3。这时不能再追加「可以说继续」，
+ * 也不能用「继续推进」把选择盖掉。
+ */
+export function extractUserChoicePrompt(text: string | null | undefined): string | null {
+  const body = stripPlanLeftover(text ?? "");
+  if (!body) return null;
+  const asks =
+    /回复\s*[1１]\s*[\/、,，或]\s*2/.test(body)
+    || /下一步请选/.test(body)
+    || /请回复\s*[1１]/.test(body);
+  if (!asks) return null;
+
+  const head = body.search(/下一步请选|请回复\s*[1１]|回复\s*[1１]\s*[\/、,，或]\s*2/);
+  if (head < 0) return null;
+  const lineStart = body.lastIndexOf("\n", head);
+  const fromMarker = body.slice(lineStart >= 0 ? lineStart + 1 : 0).trim();
+  if (/^回复\s*[1１]/.test(fromMarker) && lineStart > 0) {
+    const lines = body.split("\n");
+    const hit = lines.findIndex((line) => /回复\s*[1１]/.test(line) || /下一步请选/.test(line));
+    if (hit >= 0) return lines.slice(Math.max(0, hit - 6), hit + 1).join("\n").trim();
+  }
+  return fromMarker.length >= 4 ? fromMarker : null;
+}
+
 /** 口头宣布要调用某工具、观察里还没有成功记录 */
 export function thoughtAnnouncesUnfinishedTool(
   content: string | null | undefined,

@@ -71,20 +71,20 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 
 **计划推进（2026-08-23）**：`advancePlanAfterTool` 有 `toolHints` 时只认 hints，不再用标题里的「大纲/文献」串味。`list_references` / `generate_outline` 不得把「依据大纲生成写作蓝图」标完成。口头宣布要生成蓝图/`write_section` 但未调用工具时注入续跑，禁止空 `agent/complete`。`开始吧` 视为跟聊继承意图；SSE 中途断开不再伪装成「已完成」。`finished=true` 时不得因续跑计数再打回 `agent`（否则 `planContinueCount` 停在 1–2 会自环到 LangGraph 512）。读/检索不清零续跑计数。
 
-**任务结束 vs 续跑条（2026-08-23）**：图循环 `finished=true` → `finalize` → `agent/complete` 才是一轮结束。续跑条只看**本轮**（上一句用户之后）的 thought / observation，禁止拿上一轮「口头未执行」摘要继续推荐同一节。本轮 `write_section` 成功后改为「已写回」并指向下一空节。前端 SSE 已断但 DB 仍 `running` 时，跟聊/续跑先 `interruptRunningSession`（不再等 45s），界面出示「接上进度 / 强制结束」，409 不再叠用户气泡、不当红框失败。收尾「还有未完成步骤」不再举例「先写引言」（会误触发 write_section 宣布）；续跑条有未完成计划时只发「继续」，不改推写另一节。
+**任务结束 vs 续跑条（2026-08-23）**：图循环 `finished=true` → `finalize` → `agent/complete` 才是一轮结束。续跑条只看**本轮**（上一句用户之后）的 thought / observation，禁止拿上一轮「口头未执行」摘要继续推荐同一节。本轮 `write_section` 成功后改为「已写回」并指向下一空节。前端 SSE 已断但 DB 仍 `running` 时，跟聊/续跑先 `interruptRunningSession`（不再等 45s），界面出示「接上进度 / 强制结束」，409 不再叠用户气泡、不当红框失败。收尾「还有未完成步骤」不再举例「先写引言」（会误触发 write_section 宣布）；续跑条有未完成计划时只发「继续」，不改推写另一节。正文已经在请用户「回复 1/2/3」时，不再追加这句，也不再出「继续推进」；顶栏改为「等你回复」，输入框上方打开回答框，未完成子任务显示「等你决定」而不是转圈的「执行中」。
 
 **下一步唯一叙事（2026-09-08）**：`suggestNextAgentActions` 按阶段互斥（文献 / 大纲 / 蓝图 / 写节），禁止同时抛「检索文献」和「写引言」。`resolvePhaseTaskPack.goal` 与 `inspect_project.suggestedGoal` 共用该函数。有续跑条时输入区不再铺阶段芯片；空闲空对话的「建议」按钮走同一条主建议。
 
 **确认/检查点不是孤儿会话（2026-08-23）**：`import_reference` 等人勾选、以及 `outline_approve` 等检查点期间，SSE 会按终态结束（`inFlight=false`）但 DB session 仍 `running`。不得把「接上进度 / 强制结束」叠在确认卡上。`shouldShowOrphanedSession`：有 `pendingConfirm` / `pendingCheckpoint` 或 `status=awaiting_checkpoint` 时隐藏孤儿条。项目打开时若最近会话仍 `running` 且快照带 `awaitingCheckpoint` / `awaitingConfirm`，历史接口随 transcript 一并返回，前端直接恢复确认卡，不必先点「接上进度」。
 
-**大纲人控（2026-08-23；过目页 2026-09-03；手改 + 一二级 2026-09-30）**：`generate_outline` 一旦 `persistToProject` 写回，**一律**弹 `outline_approve`。过目页区分一级 / 二级 / 三级标题，可直接改 Markdown 写回项目，或让 Agent 按意见重排。**结构只确认这一次**：写作蓝图仍会生成（各节主张/配图计划），但不再弹 `blueprint_approve`。实现：`lib/agent/outline-review.ts` + `core/checkpoints.ts` + `components/shared/agent/agent-outline-review.tsx`。
+**大纲人控（2026-08-23；过目页 2026-09-03；手改 + 一二级 2026-09-30）**：`generate_outline` 一旦 `persistToProject` 写回，**一律**弹 `outline_approve`。过目页区分一级 / 二级 / 三级标题，可直接改 Markdown 写回项目，或让 Agent 按意见重排。批准后再生成写作蓝图，并弹 `blueprint_approve`。实现：`lib/agent/outline-review.ts` + `core/checkpoints.ts` + `components/shared/agent/agent-outline-review.tsx`。弹层用 `disablePointerDismissal`，并忽略 `focus-out`：自动打开时焦点进入对话框会被 Base UI 当成外部失焦立刻关掉。
 
 **人控过目页家族（2026-09-03）**：所有「等人拍板」不再用 96px `<pre>` + 批准/需修改。共用 `AgentHitlBanner`（需要你拍板 · 已暂停），自动打开 Dialog 通读后再点 CTA：
 
 | 节点 | 组件 | 用户看到什么 |
 |------|------|----------------|
 | `outline_approve` | `agent-outline-review.tsx` | 一/二级标题层级 + 可手改 Markdown + 可选让 Agent 改 |
-| `blueprint_approve` | `agent-blueprint-review.tsx` | **旧会话残留**；新生成蓝图不再弹窗 |
+| `blueprint_approve` | `agent-blueprint-review.tsx` | 主张、各节要点、配图计划；写回后停等批准 |
 | `clarify`（`ask_user`） | `agent-clarify-card.tsx` | 问题引用块 + 大回答框（侧栏即可，不弹层） |
 | `config_confirm` | `agent-config-qa.tsx` + HITL 眉题 | 一问一答表单，检查点时加高 |
 | `import_reference` / `remove_figure` / `remove_references` | `agent-tool-confirm.tsx` | 导入勾选列表或删除对象全文；破坏性操作用红色眉题 |
@@ -132,6 +132,8 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 
 `tryAcquireAgentSession` 用 Postgres `updateMany` 原子抢占（仅 `status ∈ fromStatuses` 时置 running）。resume（interrupted/error）与跟聊（completed/interrupted/error）路径都走原子抢占；冲突 → HTTP 409「会话仍在执行中」，防止同一会话并发跑图、快照互相覆盖。`reclaimStaleRunningSessions` 回收进程退出遗留的僵尸 running。
 
+写入 `goal` / `snapshot` / `errorMessage` 前经 `stripNullBytes` 去掉 U+0000。Postgres 文本与 json 不接受空字节；模型或 PDF 抽取带上 `\u0000` 时，`agentSession.update` 会报 `22P05`，大纲/蓝图检查点随快照一起落库失败。
+
 ## import_reference 确认批量选择（2026-08-07）
 
 **问题**：Agent 自动收集到多篇文献后，确认卡原来只按模型传入的单篇 `hitJson` 弹一次「确认导入一篇」，导致「收集到很多、确认导入却一次一篇」。
@@ -140,7 +142,8 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 
 - 确认生成（`nodes.ts` → `lib/agent/import-confirm.ts`）：`buildImportReferenceConfirmParams` 在 `enrichImportReferenceParams` 之上注入 `params.importItems` = 候选文献数组（`resolveImportReferenceCandidates` = 模型请求的 hits（`hitIndices`→last-search / `hitsJson` / `hitJson` / `doi`）∪ 最近一次检索全部命中，按 id/doi 去重，≤25）。
 - `agent/confirm` 事件携带含 `importItems` 的 params，随快照持久化进 DB `awaitingConfirm`。
-- 前端确认卡（`agent-tool-confirm.tsx` 挂 `import-confirm-list.tsx`）：`importItems` 存在时自动打开确认页，checkbox 列表（默认全选）+ 全选/全不选 + 「确认导入 N 篇」。点标题可展开作者、摘要（检索未带摘要则提示打开原文）和 DOI/OA 链接；侧栏只留「打开确认页」收口卡。不再用截断标题 preview 顶替正文。
+- 前端确认卡（`agent-tool-confirm.tsx` 挂 `import-confirm-list.tsx`）：`importItems` 存在时自动打开确认页，checkbox 列表（默认全选）+ 全选/全不选 + 「确认导入 N 篇」。每行默认露出推荐理由、摘要前三行，以及「对口 / 边缘」（课题词在标题或 DOI 一致为对口，只在摘要命中或未命中为边缘）。检索没带摘要时，确认前最多补 8 篇 OpenAlex 摘要或非 PDF 落地页首段（单篇 2.5s 超时，只留 480 字，失败保持「未带摘要」）。点开仍可看作者和 DOI/OA 链接。侧栏只留「打开确认页」收口卡。不再用截断标题 preview 顶替正文。
+- **大纲过目对照已导入文献（2026-10-01）**：`outline_approve` 每个标题下显示能对上的 `[n]`。只认题录里的实词重叠，或写作蓝图主张里已经写明的 `[n]`。对不上就写「还对不上」，不编造编号。没有参考文献时不显示这行。批准后仍不会自动连写下一节。
 - **进行中 UI（2026-08-23）**：`use-agent` 的 `isRunning` 看 SSE 是否还在飞（`inFlight`），不再只看最后一条 `agent/status`。V4 关 thinking 后 LLM 可能长时间无 `thought_delta`，节点开始时 live 推 `thinking`；写节完成卡不再挡住底部「正在思考/导入」指示器（`displayProgress` 只在 `isWriteStatusLive` 时抑制）。
 - **侧栏高度断点（2026-09-03）**：质量收口看板在 Agent Tab 顶部、与 `AgentPanel` 兄弟排布。面板必须包在 `flex-1 min-h-0 overflow-hidden` 里，否则 `h-full` + 收口条会超出父级、`overflow-hidden` 裁掉输入框。收口芯片改为单行横滑；顶栏 Plan 用 `compact` 限高；配置问答 max-height 从 52vh 收到约 16–18rem，避免把对话区挤没。
 - 用户批准：`use-agent.ts resolveConfirm(true, selectedIndices)` 回传 `confirmDecision.selectedIndices`（0 起索引数组）；`run-graph.ts` 把 `selectedIndices` 并入 `trustedParams` 重放。
@@ -150,9 +153,9 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 
 **契约**：`AgentRequest.confirmDecision.selectedIndices?: number[]`（`contracts/agent.ts` + `validations.ts`，`z.array(z.number().int().min(0)).max(50).optional()`）；`lib/agent/types.ts` 同源。旧客户端/旧快照无 `importItems` 时行为不变（仍走原单篇/批量确认）。
 
-## 蓝图不再单独确认（2026-09-30）
+## 大纲与蓝图都要确认（2026-09-30 收回「蓝图不再弹窗」）
 
-`shouldPauseForBlueprintApprove` 恒为 false：大纲过目是唯一结构人控。`generate_writing_blueprint` 仍写回项目并算可见结果（一轮停一次），但 **不再** 弹 `blueprint_approve`。旧会话若仍卡在该检查点，过目页可用。细改各节主张仍可打开蓝图工作台。
+`generate_writing_blueprint` 写回且 `persisted !== false` 时 `shouldPauseForBlueprintApprove` 为 true，弹出 `blueprint_approve`。当天曾改成恒 false，确认窗因此不再出现；与大纲窗一起，还会因对话框 `focus-out` 被立刻关掉。现两项都停等人批准。细改各节主张仍可打开蓝图工作台。
 
 - **查看/编辑完整蓝图**：`agent-panel` 的 `onOpenBlueprint`，由 workbench 接 `handleOpenBlueprintDialog`。
 - **对话里「看看蓝图」调出工作台（2026-08-07）**：只读工具 `open_blueprint_workspace`。仅当用户明确要求打开/编辑时调用；**禁止**在 `generate_writing_blueprint` 后自动调用。前端仅对本轮**新追加**的成功 observation 自动打开（`blueprint-open-guard`）；会话恢复/面板重挂载不因历史记录误弹。observation 卡另有「打开蓝图工作台」按钮可手点。
@@ -168,7 +171,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **破坏性删除需确认（2026-08-11）**：`remove_figure` / `remove_references` 标 `requiresConfirmation` + `safety: "destructive"`，确认卡文案见 `confirm-message.ts`。
 - **写作蓝图「结构无效」修复（2026-08-09）**：首因是 prompt 示例 `language: Chinese/English`（schema 仅 `zh|en`）。复查后发现仍会因 `dataSource`/`projectMode` 非法枚举、`keyPoints` 写成字符串、`estimatedWordCount` 写成 `"6000-12000"`、缺 `version`/空 items 等失败。现：① prompt 按 review/research 分示例并写明枚举约束；② `blueprint-coerce.ts` 纠偏上述偏差并在必要时合成最小合法 figure/guides；③ 错误文案带字段路径。API 与 `generate_writing_blueprint` 共用。
 - **蓝图文献源 + 分析笔记进 Writer（2026-08-09）**：`sectionGuides.assignedSources`（文件名或 `[n]`）经 `blueprint-write-context` 解析为 `selectedSourceIds`，Agent `write_section` 限 RAG 范围（解析为空则不限，避免误清空）。`loadAgentProject` 加载 `analysisResults` 进 `globalContext.analysisResults`，与工作台扩写一致。
-- **自动补齐插入批准检查点（2026-08-08；2026-08-23 大纲一律确认；2026-09-30 蓝图不再单独确认）**：`ensureNextWritePrerequisite` 一次只补一个缺失前置；`buildPrereqCheckpoint` 在大纲写回后暂停，蓝图写回不再弹窗。缺大纲时先 `clarify`。最近一次实质动作已是可见结果时不再注入计划续跑。详规 [`plans/W3-AP-HITL-STEER.md`](../plans/W3-AP-HITL-STEER.md)。
+- **自动补齐插入批准检查点（2026-08-08；2026-08-23 大纲一律确认；2026-09-30 蓝图确认收回）**：`ensureNextWritePrerequisite` 一次只补一个缺失前置；`buildPrereqCheckpoint` 在大纲或写作蓝图写回后暂停。缺大纲时先 `clarify`。最近一次实质动作已是可见结果时不再注入计划续跑。详规 [`plans/W3-AP-HITL-STEER.md`](../plans/W3-AP-HITL-STEER.md)。
 - **蓝图常驻入口（2026-08-07）**：工作台侧栏头（非 Agent Tab）与 Agent 面板头均新增「蓝图」按钮（Map 图标），随时可打开蓝图工作台；无蓝图时点击自动切到「章节结构」侧栏引导生成。
 - **文献分类编码持久化（2026-08-07）**：新增写工具 `save_reference_classification`（`tools/save-reference-classification.ts`），把「文献分类编码」结果批量 upsert 到 `ReferenceSource`（refIndex 1 基 → sourceName/category/citation），与前端「引用-文献映射」同一张表。`list_references` 输出附带 `category`/`sourceName`，写作时 Agent 能看到分类。属 `PROJECT_MUTATING_TOOLS`，保存后工作台刷新。之前 Agent 只能靠多次关键词检索在对话里"分类"、结果不落库，现已闭环。
 - **删除不相关文献（2026-08-07）**：新增写工具 `remove_references`（`tools/remove-references.ts`），按引用编号（1 基 [n]）删除不相关/误导入文献，自动重排后续编号，并同步清理/重排 `ReferenceSource` 分类映射。若正文已引用被删编号，工具说明要求随后 `validate_citations` 检查越界引用。

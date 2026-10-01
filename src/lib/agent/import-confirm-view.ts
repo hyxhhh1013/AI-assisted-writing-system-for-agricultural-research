@@ -2,6 +2,22 @@ import type { ExternalLiteratureHit, LiteratureSource } from "@/contracts/litera
 import { LITERATURE_SOURCES } from "@/contracts/literature";
 import { externalLiteratureHitSchema } from "@/lib/validations";
 
+/** 对口 = 课题词在标题或 DOI 一致；边缘 = 只在摘要命中或未命中 */
+export type ImportTopicFit = "aligned" | "marginal";
+
+export interface ImportConfirmItem extends ExternalLiteratureHit {
+  why?: string;
+  relevanceScore?: number;
+  topicFit?: ImportTopicFit;
+  /** 摘要是 OA/DOI 首段摘录，不是检索自带的全文摘要 */
+  abstractExcerpt?: boolean;
+}
+
+export const TOPIC_FIT_LABEL: Record<ImportTopicFit, string> = {
+  aligned: "对口",
+  marginal: "边缘",
+};
+
 const SOURCE_SET = new Set<string>(LITERATURE_SOURCES);
 
 function asSource(raw: unknown): LiteratureSource {
@@ -15,17 +31,37 @@ function asStringList(raw: unknown): string[] {
   return raw.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
 }
 
+function readDisplayFields(
+  raw: unknown,
+): Pick<ImportConfirmItem, "why" | "relevanceScore" | "topicFit" | "abstractExcerpt"> {
+  if (!raw || typeof raw !== "object") return {};
+  const o = raw as Record<string, unknown>;
+  const why = typeof o.why === "string" ? o.why.trim() : "";
+  const score = typeof o.relevanceScore === "number" && Number.isFinite(o.relevanceScore)
+    ? o.relevanceScore
+    : undefined;
+  const topicFit = o.topicFit === "aligned" || o.topicFit === "marginal" ? o.topicFit : undefined;
+  return {
+    ...(why ? { why } : {}),
+    ...(score != null ? { relevanceScore: score } : {}),
+    ...(topicFit ? { topicFit } : {}),
+    ...(o.abstractExcerpt === true ? { abstractExcerpt: true } : {}),
+  };
+}
+
 /**
  * 把确认卡 params.importItems 收成可展示的文献。
  * 优先走正式 schema；缺 id/source 的历史快照也能展开标题和摘要。
+ * why / topicFit 不进文献 schema，这里单独保留给确认卡。
  */
-export function parseImportConfirmItems(raw: unknown): ExternalLiteratureHit[] {
+export function parseImportConfirmItems(raw: unknown): ImportConfirmItem[] {
   if (!Array.isArray(raw)) return [];
-  const out: ExternalLiteratureHit[] = [];
+  const out: ImportConfirmItem[] = [];
   for (const item of raw) {
+    const display = readDisplayFields(item);
     const parsed = externalLiteratureHitSchema.safeParse(item);
     if (parsed.success) {
-      out.push(parsed.data);
+      out.push({ ...parsed.data, ...display });
       continue;
     }
     if (!item || typeof item !== "object") continue;
@@ -55,6 +91,7 @@ export function parseImportConfirmItems(raw: unknown): ExternalLiteratureHit[] {
       openAccessUrl: typeof o.openAccessUrl === "string" ? o.openAccessUrl : undefined,
       isOpenAccess: o.isOpenAccess === true,
       source: asSource(o.source),
+      ...display,
     });
   }
   return out;

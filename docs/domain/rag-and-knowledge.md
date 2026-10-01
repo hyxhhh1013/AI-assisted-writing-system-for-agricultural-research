@@ -62,7 +62,7 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 ## 书目元数据（ENG-PR-027/028 后）
 
 - **读**：`src/lib/knowledge-metadata.ts` → Prisma `KnowledgeFile`
-- **写**：`POST /api/knowledge` 上传时只 upsert 基础字段；完整书目在 **索引 Stage 2** 后由 `sync-knowledge-metadata-to-prisma.mjs` 写入
+- **写**：`POST /api/knowledge` 只接受 `.pdf`（MIME 若填写也须像 PDF），超过 `KNOWLEDGE_MAX_UPLOAD_BYTES`（默认 100MB）在读入内存前返回 413。通过后 upsert 基础字段；完整书目在 **索引 Stage 2** 后由 `sync-knowledge-metadata-to-prisma.mjs` 写入
 - **Fallback**：`USE_METADATA_JSON_FALLBACK=true` 时才读旧 `data/metadata.json`
 - **用户编辑保护**：`bibEdited=true` 时，自动解析不覆盖 `bib` / `documentType`
 
@@ -103,7 +103,7 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 
 - **两阶段检索**：先 BM25（含同义词扩展词项）召回候选；向量在候选集上精排。**BM25 弱命中**（候选过少或最高分偏低）时对该分类**全池向量扫描**，避免语义相关但被 lexical 挡住的片段。
 - **多 query RRF**：`expandRagQueries` 自动生成 2～4 个变体（如 `biochar` ↔ `生物炭`），分路检索再 RRF 合并（默认开启，`multiQuery: false` 可关）。
-- **查询分类提示**：`inferCategoriesFromQuery` 从 query 推断分类（茶/热解/biochar 等）；全库检索时**优先在相关分类子集检索**，避免大块分类（如控释肥类）压制 Top1；命中不足再与全库 RRF 合并。
+- **查询分类提示**：`inferCategoriesFromQuery` 从 query 推断分类（茶/热解/biochar 等）；全库检索时**优先在相关分类子集检索**，避免大块分类（如控释肥类）压制 Top1；命中不足再与全库 RRF 合并。`resolveRagCategoryName` 把口语别名「热解」映射到磁盘实名「热化学」（没有 `index_热解.json`）。索引路径走 `resolveProjectRuntimePath("data")`，不跟 `process.cwd()`。
 - **索引 n-gram 对齐（RAG-PR-013）**：倒排写入 CJK char + bigram（短段补 trigram），与 query 分词一致；否则「热解」「生物炭」等词在 BM25 侧几乎失联。
 - **提质减负（RAG-PR-015）**：
   - CJK 功能单字（的/了/是…）与英文停用词不入倒排/查询，缩小 posting、减少假命中。

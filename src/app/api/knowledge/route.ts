@@ -20,7 +20,9 @@ import {
   clearKnowledgePdfDiskCache,
 } from "@/lib/knowledge-metadata";
 import { localRAG, invalidateBibCache } from "@/lib/rag";
+import { resolveRagCategoryName } from "@/lib/knowledge-category-hints";
 import { validateBody } from "@/lib/api-validate";
+import { rejectKnowledgeUpload } from "@/lib/knowledge-upload";
 import {
   knowledgeBatchMoveSchema,
   knowledgeCategoryPatchSchema,
@@ -47,7 +49,8 @@ export async function GET(req: NextRequest) {
     const pageSize = parseInt(searchParams.get("pageSize") || "10");
 
     if (searchType === "semantic" && query) {
-      const cat = category && category !== "全部" ? category : undefined;
+      const catRaw = category && category !== "全部" ? category : undefined;
+      const cat = resolveRagCategoryName(catRaw);
       let results: Awaited<ReturnType<typeof localRAG.search>> = [];
       try {
         results = await localRAG.search(query, { limit: 50, category: cat });
@@ -191,6 +194,11 @@ export async function POST(req: NextRequest) {
     );
     if (fieldError) return fieldError;
     const { category, documentType } = uploadFields;
+
+    const rejected = rejectKnowledgeUpload(file);
+    if (rejected) {
+      return NextResponse.json({ error: rejected.error }, { status: rejected.status });
+    }
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const targetPath = resolveKnowledgeFilePath(ARTICLES_DIR, category, file.name);

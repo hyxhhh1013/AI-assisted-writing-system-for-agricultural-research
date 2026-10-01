@@ -30,6 +30,7 @@ import {
   buildContinueNudge,
   getFocusSubtask,
   markFocusRunning,
+  extractUserChoicePrompt,
   planHasPendingWork,
   shouldResetPlanContinueCount,
 } from "@/lib/agent/core/plan-progress";
@@ -412,7 +413,8 @@ export async function agentNode(
         || state.intentKind === "citation"
         || state.intentKind === "draft"
         || state.intentKind === "review_write";
-      if (!hint && !suppressPlanHint && planHasPendingWork(plan) && plan) {
+      const alreadyAsking = Boolean(extractUserChoicePrompt(updates.finalThought));
+      if (!hint && !alreadyAsking && !suppressPlanHint && planHasPendingWork(plan) && plan) {
         const left = plan.subtasks
           .filter((s) => s.status === "pending" || s.status === "running")
           .map((s) => s.title);

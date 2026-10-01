@@ -43,6 +43,8 @@ describe("AgentToolConfirm", () => {
             doi: "10.1/x",
             abstract: "This paper reviews biomass catalytic pyrolysis.",
             source: "openalex",
+            why: "标题/摘要命中：pyrolysis",
+            topicFit: "aligned",
           },
         ]}
         importSelected={new Set([0])}
@@ -54,6 +56,9 @@ describe("AgentToolConfirm", () => {
       />,
     );
     expect(screen.getByText("Catalytic pyrolysis review")).toBeTruthy();
+    expect(screen.getByText("对口")).toBeTruthy();
+    expect(screen.getByText("标题/摘要命中：pyrolysis")).toBeTruthy();
+    expect(screen.getByText("This paper reviews biomass catalytic pyrolysis.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "确认导入 1 篇" })).toBeTruthy();
   });
 

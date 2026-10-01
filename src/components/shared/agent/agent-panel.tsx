@@ -31,6 +31,7 @@ import {
   sectionKeyFromWriteTip,
   skipSectionKeysAfterWrite,
 } from "@/lib/agent/continue-hint";
+import { extractUserChoicePrompt } from "@/lib/agent/core/plan-progress";
 import { AgentConfigQa } from "@/components/shared/agent/agent-config-qa";
 import { AgentOutlineReview } from "@/components/shared/agent/agent-outline-review";
 import { AgentBlueprintReview } from "@/components/shared/agent/agent-blueprint-review";
@@ -276,6 +277,30 @@ export function AgentPanel({
     [quickPrompts],
   );
 
+  const choicePrompt = useMemo(() => {
+    if (
+      !projectId
+      || agent.isRunning
+      || agent.pendingCheckpoint
+      || agent.pendingConfirm
+      || agent.orphanedRunning
+    ) {
+      return null;
+    }
+    const turn = collectTurnContinueSignals(agent.messages);
+    return (
+      extractUserChoicePrompt(turn.lastSummaryText)
+      ?? extractUserChoicePrompt(turn.lastAssistantText)
+    );
+  }, [
+    projectId,
+    agent.isRunning,
+    agent.messages,
+    agent.pendingCheckpoint,
+    agent.pendingConfirm,
+    agent.orphanedRunning,
+  ]);
+
   const continueHint = useMemo(() => {
     if (
       !projectId
@@ -284,6 +309,7 @@ export function AgentPanel({
       || agent.pendingCheckpoint
       || agent.pendingConfirm
       || agent.orphanedRunning
+      || choicePrompt
     ) {
       return null;
     }
@@ -308,6 +334,7 @@ export function AgentPanel({
     projectId,
     agent.isRunning,
     agent.messages,
+    choicePrompt,
     agent.pendingCheckpoint,
     agent.pendingConfirm,
     agent.orphanedRunning,
@@ -424,6 +451,12 @@ export function AgentPanel({
     },
     [projectId, project, applyProjectSnapshot, onProjectMutated],
   );
+
+  const handleHitlOpenChange = useCallback((next: boolean, details?: { reason?: string }) => {
+    // 自动打开时焦点进弹层会触发 focus-out，Base UI 会据此立刻关掉，看起来像没弹出。
+    if (!next && details?.reason === "focus-out") return;
+    setHitlPageOpen(next);
+  }, []);
 
   useEffect(() => {
     const kind = agent.pendingCheckpoint?.kind;
@@ -658,7 +691,7 @@ export function AgentPanel({
               "rounded-full px-2 py-0.5 text-[11px]",
               agent.isRunning
                 ? "bg-primary/10 text-primary"
-                : agent.status === "awaiting_checkpoint"
+                : agent.status === "awaiting_checkpoint" || choicePrompt
                   ? "bg-[#e8f0ea] text-[#1a5632]"
                   : "bg-muted text-muted-foreground",
             )}
@@ -671,6 +704,8 @@ export function AgentPanel({
                 </span>
                 {statusHint}
               </span>
+            ) : choicePrompt ? (
+              "等你回复"
             ) : (
               statusHint
             )}
@@ -870,7 +905,7 @@ export function AgentPanel({
         </AnimatePresence>
 
         {agent.plan && agent.plan.subtasks.length > 0 ? (
-          <AgentPlanCard plan={agent.plan} compact />
+          <AgentPlanCard plan={agent.plan} compact paused={!agent.isRunning} />
         ) : null}
       </header>
 
@@ -1331,11 +1366,13 @@ export function AgentPanel({
                   preview={agent.pendingCheckpoint.preview}
                   projectOutline={project?.outline}
                   open={hitlPageOpen}
-                  onOpenChange={setHitlPageOpen}
+                  onOpenChange={handleHitlOpenChange}
                   onApprove={() => void agent.resolveCheckpoint("approve")}
                   onRevise={(note) => void agent.resolveCheckpoint("revise", note)}
                   onOpenOutlineTab={onOpenOutline}
                   onSaveOutline={projectId ? persistOutlineMarkdown : undefined}
+                  references={project?.references}
+                  blueprintJson={project?.writingBlueprint}
                 />
               </div>
             ) : isBlueprintCheckpoint ? (
@@ -1345,7 +1382,7 @@ export function AgentPanel({
                   preview={agent.pendingCheckpoint.preview}
                   projectBlueprintJson={project?.writingBlueprint}
                   open={hitlPageOpen}
-                  onOpenChange={setHitlPageOpen}
+                  onOpenChange={handleHitlOpenChange}
                   onApprove={() => void agent.resolveCheckpoint("approve")}
                   onRevise={(note) => void agent.resolveCheckpoint("revise", note)}
                   onOpenBlueprintTab={onOpenBlueprint}
@@ -1369,7 +1406,7 @@ export function AgentPanel({
               message={agent.pendingConfirm.message}
               preview={agent.pendingConfirm.preview}
               open={hitlPageOpen}
-              onOpenChange={setHitlPageOpen}
+              onOpenChange={handleHitlOpenChange}
               importItems={isImportBatchConfirm ? confirmImportItems : []}
               importSelected={importSelection}
               onToggleImport={toggleImportItem}
@@ -1419,6 +1456,20 @@ export function AgentPanel({
         onJumpToSection={onJumpToSection}
         projectId={projectId}
       />
+
+      {choicePrompt ? (
+        <div className="shrink-0 border-t border-[#1a5632]/15 bg-[#f6f8f6] px-3 py-2.5">
+          <AgentClarifyCard
+            question={choicePrompt}
+            onSubmit={(answer) => {
+              const text = answer.trim();
+              if (!text) return;
+              void agent.sendGoal(text);
+            }}
+            onSkip={() => void agent.sendGoal("先不选，按你的判断停在这一步")}
+          />
+        </div>
+      ) : null}
 
       {/* 输入始终可见 */}
       <AgentInputBar

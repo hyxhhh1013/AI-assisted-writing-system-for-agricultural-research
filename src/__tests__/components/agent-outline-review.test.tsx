@@ -28,6 +28,21 @@ describe("AgentOutlineReview", () => {
     expect(screen.getByText(/木质纤维素热解/)).toBeTruthy();
   });
 
+  it("shows imported reference numbers beside a matching heading", () => {
+    render(
+      <AgentOutlineReview
+        preview={"## 生物炭土壤效应\n要点\n## 引言\n背景"}
+        references={["[1] 张三. 生物炭提高土壤碳. 2024.", "[2] 李四. 聚合物催化. 2020."]}
+        open
+        onOpenChange={vi.fn()}
+        onApprove={vi.fn()}
+        onRevise={vi.fn()}
+      />,
+    );
+    expect(screen.getAllByText(/\[1\]/).length).toBeGreaterThan(0);
+    expect(screen.getByText("已导入文献里还对不上这一节")).toBeTruthy();
+  });
+
   it("keeps a sidebar entry when the review page is closed", () => {
     render(
       <AgentOutlineReview

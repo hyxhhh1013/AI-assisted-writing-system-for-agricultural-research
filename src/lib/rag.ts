@@ -9,7 +9,11 @@ import {
   invalidateKnowledgeBibCache,
   listKnowledgeCategories,
 } from "@/lib/knowledge-metadata";
-import { EXTERNAL_ABSTRACT_CATEGORY } from "@/lib/knowledge-category-hints";
+import {
+  EXTERNAL_ABSTRACT_CATEGORY,
+  resolveRagCategoryName,
+} from "@/lib/knowledge-category-hints";
+import { resolveProjectRuntimePath } from "@/lib/runtime-paths";
 import { cosineSimilarity } from "./similarity";
 import { buildRagSearchTerms, buildRagSearchTermWeights, expandRagQueries, inferCategoriesFromQuery, collectIndexTermTf, shouldUseMultiQuery } from "@/lib/rag-query-expand";
 import {
@@ -161,12 +165,13 @@ class EmbeddingStore {
   }
 
   private embPath(category: string): string {
-    return path.join(process.cwd(), `data/index_${category}.emb`);
+    const cat = resolveRagCategoryName(category) ?? category;
+    return resolveProjectRuntimePath("data", `index_${cat}.emb`);
   }
 
   /** 读取任一 index_*.emb 的文件头维度（用于 query 向量一致性校验）；无 .emb 或读失败返回 0 */
   anyDim(): number {
-    const dir = path.join(process.cwd(), "data");
+    const dir = resolveProjectRuntimePath("data");
     let embFile: string | null = null;
     try {
       for (const f of fs.readdirSync(dir)) {
@@ -633,13 +638,14 @@ export class LocalRAG {
   private categoryAccessOrder: string[] = [];
   /** 当前检索正在使用的分类，淘汰时跳过 */
   private categoryPin = new Set<string>();
-  private indexPath = path.join(process.cwd(), "data/index.json");
+  private indexPath = resolveProjectRuntimePath("data", "index.json");
   private embStore = new EmbeddingStore();
   /** query 向量与索引 .emb 维度不一致时只告警一次（换 model 未重建会触发） */
   private embDimMismatchWarned = false;
 
   private getCategoryIndexPath(category: string): string {
-    return path.join(process.cwd(), `data/index_${category}.json`);
+    const cat = resolveRagCategoryName(category) ?? category;
+    return resolveProjectRuntimePath("data", `index_${cat}.json`);
   }
 
   /** 列出所有可用的分类（含「未分类」，确保根目录 PDF 也能进检索） */
@@ -706,30 +712,32 @@ export class LocalRAG {
 
   /** 异步加载单个分类的索引（仅文本 + 倒排索引，不含 embedding），并发去重 */
   private async ensureCategoryLoaded(category: string): Promise<void> {
-    if (this.categoryChunks.has(category)) {
-      this.touchCategory(category);
+    const cat = resolveRagCategoryName(category) ?? category;
+    if (this.categoryChunks.has(cat)) {
+      this.touchCategory(cat);
       return;
     }
-    const existing = this.categoryLoadInFlight.get(category);
+    const existing = this.categoryLoadInFlight.get(cat);
     if (existing) {
       await existing;
-      this.touchCategory(category);
+      this.touchCategory(cat);
       return;
     }
-    const p = this.loadCategory(category);
-    this.categoryLoadInFlight.set(category, p);
+    const p = this.loadCategory(cat);
+    this.categoryLoadInFlight.set(cat, p);
     try {
       await p;
-      this.touchCategory(category);
+      this.touchCategory(cat);
       this.evictCategoriesIfNeeded();
     } finally {
-      this.categoryLoadInFlight.delete(category);
+      this.categoryLoadInFlight.delete(cat);
     }
   }
 
   private async loadCategory(category: string): Promise<void> {
-    if (this.categoryChunks.has(category)) return;
-    const catPath = this.getCategoryIndexPath(category);
+    const cat = resolveRagCategoryName(category) ?? category;
+    if (this.categoryChunks.has(cat)) return;
+    const catPath = this.getCategoryIndexPath(cat);
 
     if (fs.existsSync(catPath)) {
       try {
@@ -737,19 +745,21 @@ export class LocalRAG {
         const parsed = JSON.parse(raw) as RagChunk[];
         const chunks = parsed.filter((c) => c?.content && String(c.content).trim().length > 0);
         const index = await buildInvertedIndexAsync(chunks); // 协作式，不冻结事件循环
-        this.categoryChunks.set(category, chunks);
-        this.categoryIndexes.set(category, index);
+        this.categoryChunks.set(cat, chunks);
+        this.categoryIndexes.set(cat, index);
         return;
       } catch (e) {
-        log.fail(`failed to load category index [${category}]`, e);
+        log.fail(`failed to load category index [${cat}]`, e);
       }
     }
     // 回退：从主索引中过滤
     await this.ensureLoaded();
     if (this.chunks) {
-      const filtered = this.chunks.filter((c) => c.metadata.category === category);
-      this.categoryChunks.set(category, filtered);
-      this.categoryIndexes.set(category, await buildInvertedIndexAsync(filtered));
+      const filtered = this.chunks.filter(
+        (c) => c.metadata.category === cat || c.metadata.category === category,
+      );
+      this.categoryChunks.set(cat, filtered);
+      this.categoryIndexes.set(cat, await buildInvertedIndexAsync(filtered));
     }
   }
 
@@ -1036,7 +1046,17 @@ export class LocalRAG {
     const q = query.trim();
     if (!q) return [];
 
-    const primary = await this.searchOnce(q, { limit, category, categories, maxPerSource });
+    const resolvedCategory = resolveRagCategoryName(category);
+    const resolvedCategories = categories
+      ?.map((c) => resolveRagCategoryName(c))
+      .filter((c): c is string => Boolean(c));
+
+    const primary = await this.searchOnce(q, {
+      limit,
+      category: resolvedCategory,
+      categories: resolvedCategories,
+      maxPerSource,
+    });
 
     const useMulti =
       multiMode === true
@@ -1126,7 +1146,11 @@ export class LocalRAG {
       queryHints: string[];
     },
   ): Promise<RagChunk[]> {
-    const { limit, category, categories, maxPerSource, queryHints } = opts;
+    const { limit, maxPerSource, queryHints } = opts;
+    const category = resolveRagCategoryName(opts.category) ?? opts.category;
+    const categories = opts.categories
+      ?.map((c) => resolveRagCategoryName(c) ?? c)
+      .filter((c) => Boolean(c));
 
     // 分段计时（仅 RAG_PERF_LOG=1 时输出，生产可见）
     const perf = process.env.RAG_PERF_LOG === "1";

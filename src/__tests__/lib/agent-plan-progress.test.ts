@@ -7,6 +7,7 @@ import {
   planHasPendingWork,
   thoughtAnnouncesUnfinishedTool,
   isPlanLeftoverSpeech,
+  extractUserChoicePrompt,
   shouldResetPlanContinueCount,
 } from "@/lib/agent/core/plan-progress";
 import { MAX_PLAN_CONTINUES, routeAfterAgent } from "@/lib/agent/langgraph/state";
@@ -160,6 +161,25 @@ describe("plan-progress", () => {
       "还有未完成步骤：生成图2并保存。你可以直接说「继续」或指定下一步（例如「先写引言」）。";
     expect(isPlanLeftoverSpeech(leftover)).toBe(true);
     expect(thoughtAnnouncesUnfinishedTool(leftover, [])).toBeNull();
+  });
+
+  it("extracts a 1/2/3 choice and drops the system leftover", () => {
+    const text = [
+      "引用修正完成。",
+      "下一步请选：",
+      "1. 继续写下一子节",
+      "2. 先写结论",
+      "3. 先补文献",
+      "回复 1/2/3 即可。",
+      "",
+      "——",
+      "还有未完成步骤：按蓝图补检索。可以说「继续」接着做。",
+    ].join("\n");
+    const prompt = extractUserChoicePrompt(text);
+    expect(prompt).toContain("下一步请选");
+    expect(prompt).toContain("回复 1/2/3");
+    expect(prompt).not.toContain("还有未完成步骤");
+    expect(extractUserChoicePrompt("这一节已经写完，可以继续。")).toBeNull();
   });
 });
 

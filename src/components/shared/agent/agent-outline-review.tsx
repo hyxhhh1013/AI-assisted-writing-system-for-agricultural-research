@@ -15,7 +15,9 @@ import { cn } from "@/lib/utils";
 import {
   OUTLINE_REVISE_CHIPS,
   countOutlineChars,
+  blueprintCitesFromJson,
   outlineHeadingChips,
+  outlineHeadingCoverage,
   outlineLevelLabel,
   pickOutlineBody,
   splitOutlineBlocks,
@@ -25,11 +27,14 @@ interface AgentOutlineReviewProps {
   preview?: string;
   projectOutline?: string | null;
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onOpenChange: (open: boolean, details?: { reason?: string }) => void;
   onApprove: () => void;
   onRevise: (note?: string) => void;
   onOpenOutlineTab?: () => void;
   onSaveOutline?: (markdown: string) => Promise<void>;
+  /** 已导入参考文献题录（顺序即 [n]）。没有就不编编号。 */
+  references?: readonly string[];
+  blueprintJson?: string | null;
 }
 
 export function AgentOutlineReview({
@@ -41,6 +46,8 @@ export function AgentOutlineReview({
   onRevise,
   onOpenOutlineTab,
   onSaveOutline,
+  references = [],
+  blueprintJson,
 }: AgentOutlineReviewProps) {
   const markdown = pickOutlineBody(preview, projectOutline);
   const [draft, setDraft] = useState(markdown);
@@ -56,6 +63,14 @@ export function AgentOutlineReview({
   const liveMarkdown = mode === "edit" ? draft : markdown;
   const blocks = useMemo(() => splitOutlineBlocks(liveMarkdown), [liveMarkdown]);
   const chips = useMemo(() => outlineHeadingChips(blocks), [blocks]);
+  const blueprintCites = useMemo(() => blueprintCitesFromJson(blueprintJson), [blueprintJson]);
+  const coverageById = useMemo(() => {
+    const map = new Map<string, number[]>();
+    for (const chip of chips) {
+      map.set(chip.id, outlineHeadingCoverage(chip.title, references, blueprintCites));
+    }
+    return map;
+  }, [chips, references, blueprintCites]);
   const chars = countOutlineChars(liveMarkdown);
   const headingCount = chips.length;
   const dirty = draft.trim() !== markdown.trim();
@@ -123,10 +138,18 @@ export function AgentOutlineReview({
         </div>
       </div>
 
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog
+        open={open}
+        disablePointerDismissal
+        onOpenChange={(next, details) => {
+          if (!next && details.reason === "focus-out") return;
+          onOpenChange(next, details);
+        }}
+      >
         <DialogContent
           showCloseButton
-          className="flex max-h-[min(92vh,52rem)] w-[min(100%-1.5rem,48rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl"
+          finalFocus={false}
+          className="flex max-h-[min(92vh,52rem)] w-[calc(100vw-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl"
         >
           <DialogHeader className="shrink-0 border-b border-[#1a5632]/10 bg-[#f6f8f6] px-5 py-4 pr-12 text-left">
             <p className="text-[10px] font-medium tracking-wide text-[#1a5632]">
@@ -136,8 +159,8 @@ export function AgentOutlineReview({
               一起确认大纲
             </DialogTitle>
             <DialogDescription className="text-[12px] leading-relaxed text-[#5a7a68]">
-              这里确认的是章节目录（一级 / 二级标题）。各节主张会按这份结构自动生成，不再单独弹「蓝图」。
-              可直接改 Markdown；也可以让我按意见重排。
+              这里确认的是章节目录（一级 / 二级标题）。可直接改 Markdown，也可以让我按意见重排。
+              批准后会生成写作蓝图，并再请你确认蓝图。
             </DialogDescription>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[#5a7a68]">
               <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-[#1a5632]/12">
@@ -186,12 +209,17 @@ export function AgentOutlineReview({
                 >
                   <span className="mr-1 opacity-70">{outlineLevelLabel(chip.level)}</span>
                   {chip.title}
+                  {(coverageById.get(chip.id)?.length ?? 0) > 0 ? (
+                    <span className="ml-1 opacity-80">
+                      {(coverageById.get(chip.id) ?? []).map((n) => `[${n}]`).join("")}
+                    </span>
+                  ) : null}
                 </button>
               ))}
             </div>
           ) : null}
 
-          <div className="min-h-0 flex-1 overflow-y-auto bg-white px-5 py-4">
+          <div className="min-h-48 max-h-[min(60vh,28rem)] overflow-y-auto bg-white px-5 py-4">
             {mode === "edit" ? (
               <Textarea
                 value={draft}
@@ -234,6 +262,13 @@ export function AgentOutlineReview({
                           {block.title}
                         </h4>
                       )}
+                      {references.length > 0 ? (
+                        <p className="mt-0.5 text-[10px] text-[#5a7a68]">
+                          {(coverageById.get(block.id)?.length ?? 0) > 0
+                            ? `本节可对上 ${(coverageById.get(block.id) ?? []).map((n) => `[${n}]`).join(" ")}`
+                            : "已导入文献里还对不上这一节"}
+                        </p>
+                      ) : null}
                     </div>
                   ) : (
                     <p

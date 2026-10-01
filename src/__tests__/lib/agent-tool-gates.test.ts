@@ -259,7 +259,7 @@ describe("evaluatePostGates", () => {
     }
   });
 
-  it("写作蓝图写回不再弹检查点", () => {
+  it("写作蓝图写回后弹检查点", () => {
     const v = evaluatePostGates(
       makePostInput({
         tool: makeTool("generate_writing_blueprint"),
@@ -271,7 +271,10 @@ describe("evaluatePostGates", () => {
         },
       }),
     );
-    expect(v).toMatchObject({ ok: true });
+    expect(v).toMatchObject({ ok: false, kind: "checkpoint" });
+    if (!v.ok && v.kind === "checkpoint") {
+      expect(v.checkpoint.kind).toBe("blueprint_approve");
+    }
   });
 
   it("antispam 停滞熔断触发时累计 breakCount（供二次熔断硬停机）", () => {

@@ -1,4 +1,3 @@
-import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
@@ -13,6 +12,7 @@ import type { ChartSpecPatch } from "@/lib/chart-spec-patches";
 import { applyChartSpecPatches } from "@/lib/chart-spec-patches";
 import { getErrorMessage } from "@/lib/error-utils";
 import { PYTHON_CMD, formatPythonSpawnError } from "@/lib/python-cmd";
+import { runCommand } from "@/lib/python-runner";
 import { ensureChartsDir } from "@/lib/charts-dir";
 
 /** 首次渲染之外最多再渲 2 次 */
@@ -198,46 +198,32 @@ function spawnChartPython(input: {
   configPath: string;
   outputPath: string;
 }): Promise<{ success: boolean; error?: string; meta?: Record<string, unknown> }> {
-  return new Promise((resolve) => {
-    const proc = spawn(
-      PYTHON_CMD,
-      [input.scriptPath, "--data", input.dataPath, "--config", input.configPath, "--output", input.outputPath],
-      {
-        shell: false,
-        env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" },
-      },
-    );
-
-    let stdout = "";
-    let stderr = "";
-
-    proc.stdout.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString();
-    });
-    proc.stderr.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
-    proc.on("close", (code) => {
-      if (code !== 0) {
-        resolve({
-          success: false,
-          error: stderr || stdout || `Python 进程退出码 ${code}`,
-        });
-        return;
-      }
-      let meta: Record<string, unknown> | undefined;
-      try {
-        const line = stdout.trim().split(/\r?\n/).filter(Boolean).pop();
-        if (line) meta = JSON.parse(line) as Record<string, unknown>;
-      } catch {
-        meta = undefined;
-      }
-      resolve({ success: true, meta });
-    });
-    proc.on("error", (err) => {
-      resolve({ success: false, error: formatPythonSpawnError(getErrorMessage(err)) });
-    });
-  });
+  return runCommand(
+    PYTHON_CMD,
+    [input.scriptPath, "--data", input.dataPath, "--config", input.configPath, "--output", input.outputPath],
+    {
+      timeoutMs: 120_000,
+      env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" },
+    },
+  ).then((result) => {
+    if (result.code !== 0) {
+      return {
+        success: false as const,
+        error: result.stderr || result.stdout || `Python 进程退出码 ${result.code}`,
+      };
+    }
+    let meta: Record<string, unknown> | undefined;
+    try {
+      const line = result.stdout.trim().split(/\r?\n/).filter(Boolean).pop();
+      if (line) meta = JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      meta = undefined;
+    }
+    return { success: true as const, meta };
+  }).catch((err: unknown) => ({
+    success: false as const,
+    error: formatPythonSpawnError(getErrorMessage(err)),
+  }));
 }
 
 /** registry.json 中 endpoint=/api/chart 的 figure id */

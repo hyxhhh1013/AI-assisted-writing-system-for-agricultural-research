@@ -8,7 +8,7 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-09-30（Phase 19 文献过目挂单；检索分波进度已落地）  
+> **最后更新**：2026-10-01（Phase 19 LIT-01 导入确认默认露出理由与摘要）  
 > **实时 status 只看 §1 Phase 13 / Phase 14 / Phase 16 / Phase 17 / Phase 18 与 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
@@ -295,7 +295,7 @@
 | — | 任务单细节 | — | — | — | [`plans/W3-AP-RUNTIME.md`](./plans/W3-AP-RUNTIME.md) |
 | **Phase 16 — Wave 4 抛光与安全加固（SEC-04～08 + 工程债）** |
 | W4-SEC-04 | SSE 透传 abort + lastRefMapping 合并 | — | 1～2h | **done** | 2026-09-30；`chat`/`translate`/`plagiarism`/`analyze` 传 `req.signal`；多 bullet 引用映射合并后一次 upsert |
-| W4-SEC-05 | 上传校验 + Python 子进程超时/清理 | — | 5～7h | todo | **范围大幅扩大**：spawn 点 4→**19**（`src/app/api/` 13 + `src/lib/` 6）；原估 1～2h 上调；可降级拆 a/b |
+| W4-SEC-05 | 上传校验 + Python 子进程超时/清理 | — | 5～7h | todo | 上传门已做。`runCommand` 已接入图表渲染与三线表。其余约 17 处 spawn 仍待换 |
 | W4-SEC-06 | XSS：两处 `dangerouslySetInnerHTML` 消毒 | — | 1～1.5h | **done** | 2026-09-30；`sanitizeHtml` + Python `html.escape`；`plot-insert-dialog` / `table-panel` |
 | W4-SEC-07 | `createProjectFromRoadmap` 事务化 + auto-save 增量 + 创建幂等 | — | 2～3h | todo | 三项均未做；`use-auto-save.ts` 仍全量 `projectStore.save` |
 | W4-SEC-08 | reindex 原子化 + cookie `Secure` | — | 2～3h | todo | cookie 半做（`getSecureFlag()` 已抽出但硬编码 `''`）；reindex 需按 RAG-PR-014/016 后现状重写任务单 |
@@ -321,10 +321,10 @@
 | W3-AP-QNEXT-06 | 按阶段露出工具技能包 | QNEXT-05 | 2d | **blocked** | 板块 6；须先有稳定「选错合法工具」评测 |
 | W3-AP-QNEXT-07 | 写节 Refiner/Verifier 可关策略 + golden A/B | QNEXT-02 | 1d | **blocked** | 板块 7；L0–L4 回退则不准合；不解冻旧扩写 |
 | **Phase 19 — 文献过目与大纲对照（挂单，不挡写稿）** |
-| **W3-AP-HITL-LIT** | **主轴：导入确认能判断取舍；大纲能对照已导入文献** | HITL-STEER | 1w | todo | 2026-09-30 挂单；不改 LangGraph。详规 [`plans/W3-AP-HITL-LIT.md`](./plans/W3-AP-HITL-LIT.md) |
-| W3-AP-HITL-LIT-01 | 导入确认：相关度 why / 默开摘要 / 与课题对齐标签 | — | 1d | todo | 数据已在 `importItems`；禁止一次只露标题 |
-| W3-AP-HITL-LIT-02 | 确认卡读摘要失败时拉 OA 首段或 DOI landing | LIT-01 | 1.5d | todo | 超时软失败；不把全文塞进确认 params |
-| W3-AP-HITL-LIT-03 | 大纲过目：标题芯片对照已导入 [n] 覆盖 | LIT-01 | 1.5d | todo | `outline_approve` 显示「本节用到哪些文献」；不自动连写 |
+| **W3-AP-HITL-LIT** | **主轴：导入确认能判断取舍；大纲能对照已导入文献** | HITL-STEER | 1w | **done** | 2026-10-01；LIT-01～03 + SEARCH-UX。不改 LangGraph |
+| W3-AP-HITL-LIT-01 | 导入确认：相关度 why / 默开摘要 / 与课题对齐标签 | — | 1d | **done** | 2026-10-01；每行默认 why + 摘要前三行；标题/DOI 命中标对口，其余标边缘 |
+| W3-AP-HITL-LIT-02 | 确认卡读摘要失败时拉 OA 首段或 DOI landing | LIT-01 | 1.5d | **done** | 2026-10-01；OpenAlex 或非 PDF 落地页首段，≤480 字，超时软失败 |
+| W3-AP-HITL-LIT-03 | 大纲过目：标题芯片对照已导入 [n] 覆盖 | LIT-01 | 1.5d | **done** | 2026-10-01；题录实词或蓝图已写明的 [n]；对不上不编造 |
 | W3-AP-SEARCH-UX | 检索分波 `agent/progress` stage=searching | — | 0.5d | **done** | 2026-09-30；OpenAlex/S2 → 补 CrossRef；输入区进度条 |
 | — | 任务单细节 | — | — | — | [`plans/W3-AP-QUALITY-NEXT.md`](./plans/W3-AP-QUALITY-NEXT.md) |
 
@@ -1421,6 +1421,14 @@ src/app/api/（13）                       src/lib/（6）
 | 2026-09-30 | W3-AP-QNEXT-UX | AI | Agent 写作页可切段落：编辑器下拉 + 写回跟节不切 Tab；续跑条标题 / 收口灯 / 已写回可 peek 对应节。 |
 | 2026-09-30 | W3-AP-SEARCH-UX | AI | 外部/知识库检索分波进度：`agent/progress` stage=searching；输入区进度条。Phase 19 文献过目挂单。 |
 | 2026-09-30 | W3-AP-OUTLINE-UX | AI | 大纲过目分一/二级；可手改 Markdown；蓝图不再单独弹窗；综述正文剥离 C1/C2 段首标题。 |
+| 2026-09-30 | W3-AP-HITL-POPUP | AI | 收回蓝图不弹窗：写回后仍 `blueprint_approve`。大纲/蓝图对话框忽略 focus-out，避免自动打开后立刻被关掉。 |
+| 2026-10-01 | AGENT-NUL | AI | 会话快照入库前去掉 U+0000。线上 `agentSession.update` 因 `\u0000` 报 Postgres 22P05，检查点随快照落库失败。 |
+| 2026-10-01 | W3-AP-HITL-LIT-01 | AI | 导入确认每行默认露出 why 与摘要前三行，并标对口/边缘。展示字段不参与导入门禁。 |
+| 2026-10-01 | AGENT-CHOICE | AI | 正文已请用户回复 1/2/3 时，收起「继续推进」，输入框上方打开回答框；停住的子任务显示「等你决定」。 |
+| 2026-10-01 | W3-AP-HITL-LIT-02 | AI | 导入确认缺摘要时补 OpenAlex 或落地页首段（≤480 字）。超时或 PDF 链接软失败，不把全文写入确认参数。 |
+| 2026-10-01 | W3-AP-HITL-LIT-03 | AI | 大纲过目标题旁只显示题录对得上或蓝图已写明的 [n]。Phase 19 主轴收口。 |
+| 2026-10-01 | W4-SEC-05a | AI | 知识库上传只收 PDF，超过 100MB 在读入前 413。`runCommand` 超时杀进程；图表渲染与三线表已接入。其余 spawn 仍待收口。 |
+| 2026-09-30 | RAG-CAT-ALIAS | AI | `search_knowledge(category=热解)` 0 命中：别名映射到 `热化学`；索引改走 `GRAINSCRIPT_DATA_ROOT`。 |
 
 ---
 
@@ -1431,10 +1439,10 @@ src/app/api/（13）                       src/lib/（6）
 
 | 优先级 | ID | 说明 |
 |--------|-----|------|
-| **now** | W3-AP-HITL-STEER | ✅ 2026-09-23 已落地。**2026-09-30**：大纲唯一结构确认；过目页可手改；蓝图不再弹窗 |
-| **now** | W3-AP-HITL-LIT | 挂单。导入确认要能判断去留；大纲对照已导入文献。详规 `plans/W3-AP-HITL-LIT.md`。SEARCH-UX 已先落地 |
+| **now** | W3-AP-HITL-STEER | ✅ 2026-09-23 已落地。**2026-09-30**：大纲可手改；蓝图确认曾关掉，已收回（写回后仍弹 `blueprint_approve`） |
+| **now** | W3-AP-HITL-LIT | ✅ 2026-10-01 LIT-01～03 已落地。下一步 W4-SEC-05 |
 | **now** | W4-SEC-06 → W4-SEC-04 | ✅ 2026-09-30 已落地。XSS 消毒 + SSE abort / 引用映射合并 |
-| **now** | W4-SEC-05 | 上传校验 + Python 子进程超时。触及 FIG-QA 图表链路，做完必须跑 `npm run test:figures`。可降级：先 runner + `src/app/api/` 13 处 |
+| **now** | W4-SEC-05 | 上传门与 `runCommand` 已落地（图表、三线表）。接着把其余 spawn 换成它，换完跑 `npm run test:figures` |
 | next | W4-SEC-07 → W4-SEC-08 | 数据完整性。**SEC-08 开工前先决策全量 vs 增量 reindex 的原子化语义**（§3.1） |
 | next | W4-WB-SLIM-A → B | 纯重构，无行为变化，可随时插入；A 完成即可合，B 独立跟 |
 | **blocked** | W4-LATEX | 无交付定义。**先答 §3.1 末尾 5 个问题**，否则不开 PR |

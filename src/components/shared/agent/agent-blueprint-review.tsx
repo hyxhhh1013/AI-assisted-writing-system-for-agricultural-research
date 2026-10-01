@@ -22,7 +22,7 @@ interface AgentBlueprintReviewProps {
   preview?: string;
   projectBlueprintJson?: string | null;
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onOpenChange: (open: boolean, details?: { reason?: string }) => void;
   onApprove: () => void;
   onRevise: (note?: string) => void;
   onOpenBlueprintTab?: () => void;
@@ -87,10 +87,18 @@ export function AgentBlueprintReview({
         </div>
       </div>
 
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog
+        open={open}
+        disablePointerDismissal
+        onOpenChange={(next, details) => {
+          if (!next && details.reason === "focus-out") return;
+          onOpenChange(next, details);
+        }}
+      >
         <DialogContent
           showCloseButton
-          className="flex max-h-[min(92vh,52rem)] w-[min(100%-1.5rem,48rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl"
+          finalFocus={false}
+          className="flex max-h-[min(92vh,52rem)] w-[calc(100vw-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl"
         >
           <DialogHeader className="shrink-0 border-b border-[#1a5632]/10 bg-[#f6f8f6] px-5 py-4 pr-12 text-left">
             <p className="text-[10px] font-medium tracking-wide text-[#1a5632]">
@@ -134,7 +142,7 @@ export function AgentBlueprintReview({
             </div>
           </DialogHeader>
 
-          <div className="min-h-0 flex-1 overflow-y-auto bg-white px-5 py-4">
+          <div className="min-h-48 max-h-[min(60vh,28rem)] overflow-y-auto bg-white px-5 py-4">
             {blueprint ? (
               <BlueprintBody blueprint={blueprint} />
             ) : text ? (

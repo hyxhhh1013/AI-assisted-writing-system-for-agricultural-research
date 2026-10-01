@@ -107,3 +107,96 @@ export function outlineHeadingChips(
     .filter((b): b is Extract<OutlineReviewBlock, { type: "heading" }> => b.type === "heading")
     .filter((b) => b.level <= 3);
 }
+
+/** 章节名本身不能当成「这篇文献对上了本节」 */
+const GENERIC_HEADING = new Set([
+  "引言", "方法", "结果", "讨论", "结论", "摘要", "综述", "概述", "研究", "分析",
+  "现状", "背景", "文献", "进展", "章节", "展望", "总题",
+  "introduction", "methods", "results", "discussion", "conclusion", "abstract", "review",
+]);
+
+export interface OutlineBlueprintCite {
+  label: string;
+  cites: number[];
+}
+
+function headingTokens(title: string): string[] {
+  const parts = title.split(/[\s,，。；;、/／（）()【】[\]：:]+/).map((s) => s.trim()).filter(Boolean);
+  const out: string[] = [];
+  for (const part of parts) {
+    if (/[a-z]/i.test(part)) {
+      const word = part.toLowerCase();
+      if (word.length >= 3 && !GENERIC_HEADING.has(word)) out.push(word);
+      continue;
+    }
+    const chunks = part.match(/[\u4e00-\u9fff]{2,}/g) ?? [];
+    for (const word of chunks) {
+      if (!GENERIC_HEADING.has(word)) out.push(word);
+      if (word.length >= 4) {
+        for (let i = 0; i < word.length - 1; i++) {
+          const gram = word.slice(i, i + 2);
+          if (!GENERIC_HEADING.has(gram)) out.push(gram);
+        }
+      }
+    }
+  }
+  return [...new Set(out)];
+}
+
+/** 蓝图主张里已经写明的 [n]，且节名能对上当前标题。没有写 [n] 的主张不编编号。 */
+export function blueprintCitesFromJson(raw: string | null | undefined): OutlineBlueprintCite[] {
+  if (!raw?.trim()) return [];
+  let data: { sectionGuides?: unknown };
+  try {
+    data = JSON.parse(raw) as { sectionGuides?: unknown };
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(data.sectionGuides)) return [];
+  const cites: OutlineBlueprintCite[] = [];
+  for (const guide of data.sectionGuides) {
+    if (!guide || typeof guide !== "object") continue;
+    const g = guide as Record<string, unknown>;
+    const label = typeof g.sectionPath === "string" ? g.sectionPath : "";
+    const points = Array.isArray(g.keyPoints) ? g.keyPoints.filter((p): p is string => typeof p === "string") : [];
+    const blob = [g.claim, g.evidenceHint, g.purpose, ...points]
+      .filter((part): part is string => typeof part === "string")
+      .join(" ");
+    const nums = [...blob.matchAll(/\[(\d+)\]/g)]
+      .map((m) => Number(m[1]))
+      .filter((n) => Number.isInteger(n) && n > 0);
+    if (!label || nums.length === 0) continue;
+    cites.push({ label, cites: [...new Set(nums)] });
+  }
+  return cites;
+}
+
+/**
+ * 大纲标题能对上哪些已导入文献。
+ * 只认题录/摘要里的实词重叠，或蓝图主张里已经写出的 [n]。对不上就空，不编造。
+ */
+export function outlineHeadingCoverage(
+  heading: string,
+  references: readonly string[],
+  blueprintCites: readonly OutlineBlueprintCite[] = [],
+): number[] {
+  const tokens = headingTokens(heading);
+  if (tokens.length === 0 || references.length === 0) return [];
+  const known = new Set(references.map((_, i) => i + 1));
+  const hits = new Set<number>();
+  references.forEach((ref, i) => {
+    const hay = ref.toLowerCase();
+    if (tokens.some((token) => hay.includes(token.toLowerCase()))) hits.add(i + 1);
+  });
+  const headingLower = heading.toLowerCase();
+  for (const cite of blueprintCites) {
+    const labelTokens = headingTokens(cite.label);
+    const aligned = labelTokens.some((token) => headingLower.includes(token.toLowerCase()))
+      || tokens.some((token) => cite.label.toLowerCase().includes(token.toLowerCase()));
+    if (!aligned) continue;
+    for (const n of cite.cites) {
+      if (known.has(n)) hits.add(n);
+    }
+  }
+  return [...hits].sort((a, b) => a - b).slice(0, 6);
+}

@@ -228,7 +228,7 @@ export const outlineApproveGate: PostToolGate = ({ tool, result, state }) => {
   return { ok: false, kind: "checkpoint", checkpoint: buildOutlineCheckpoint(preview), updateFocus: true };
 };
 
-/** 蓝图写回后不再单独暂停；结构只在大纲过目确认一次。保留门禁以便旧会话仍能解析 checkpoint。 */
+/** 蓝图写回后暂停，等人过目再写正文。 */
 export const blueprintApproveGate: PostToolGate = ({ tool, result, state }) => {
   if (
     !shouldPauseForBlueprintApprove({

@@ -24,6 +24,39 @@ describe("parseImportConfirmItems", () => {
     expect(items[0]?.authors).toEqual(["Zhang"]);
   });
 
+  it("keeps why and topicFit that the literature schema would drop", () => {
+    const items = parseImportConfirmItems([
+      {
+        id: "doi:10.1/x",
+        title: "Biochar soil amendment",
+        authors: ["Zhang"],
+        source: "openalex",
+        why: "标题/摘要命中：biochar、soil",
+        relevanceScore: 0.8,
+        topicFit: "aligned",
+      },
+    ]);
+    expect(items[0]?.why).toBe("标题/摘要命中：biochar、soil");
+    expect(items[0]?.topicFit).toBe("aligned");
+    expect(items[0]?.relevanceScore).toBe(0.8);
+    expect(items[0]?.abstractExcerpt).toBeUndefined();
+  });
+
+  it("keeps the OA excerpt flag", () => {
+    const items = parseImportConfirmItems([
+      {
+        id: "doi:10.1/x",
+        title: "Biochar soil amendment",
+        authors: ["Zhang"],
+        source: "openalex",
+        abstract: "First paragraph only.",
+        abstractExcerpt: true,
+      },
+    ]);
+    expect(items[0]?.abstract).toBe("First paragraph only.");
+    expect(items[0]?.abstractExcerpt).toBe(true);
+  });
+
   it("falls back when schema fields are missing", () => {
     const items = parseImportConfirmItems([
       { title: "No id paper", abstract: "Short note.", doi: "10.2/y" },

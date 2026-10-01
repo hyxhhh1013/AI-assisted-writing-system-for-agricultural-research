@@ -114,7 +114,7 @@ describe("AgentPanel × 导入确认卡", () => {
     mockAgent = makeAgent();
   });
 
-  it("点开候选项后显示摘要，勾选不受展开影响", () => {
+  it("摘要默认露出，点开后看链接，勾选不受展开影响", () => {
     mockAgent = makeAgent({
       isRunning: false,
       status: "completed",
@@ -143,9 +143,9 @@ describe("AgentPanel × 导入确认卡", () => {
     render(<AgentPanel />);
     expect(screen.getByText("Catalytic pyrolysis review")).toBeTruthy();
     expect(screen.getByRole("button", { name: /确认导入 1 篇/ })).toBeTruthy();
-    expect(screen.queryByText(/This paper reviews/)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /Catalytic pyrolysis review/ }));
     expect(screen.getByText(/This paper reviews biomass catalytic pyrolysis/)).toBeTruthy();
+    expect(screen.queryByText("打开 OA 全文")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Catalytic pyrolysis review/ }));
     expect(screen.getByText("打开 OA 全文")).toBeTruthy();
   });
 });
@@ -190,6 +190,41 @@ describe("AgentPanel × 继续推进条", () => {
     render(<AgentPanel projectId="p1" />);
     fireEvent.click(screen.getByRole("button", { name: /继续推进/ }));
     expect(sendGoal).toHaveBeenCalledWith("继续", { attachmentIds: [] });
+  });
+
+  it("正文在请用户选 1/2/3 时打开回答框，不再出继续推进", () => {
+    const sendGoal = vi.fn();
+    mockAgent = makeAgent({
+      isRunning: false,
+      status: "completed",
+      sendGoal,
+      plan: {
+        subtasks: [
+          { id: "1", title: "检索文献", status: "done" },
+          { id: "2", title: "补检索实验室文献", status: "running" },
+        ],
+      },
+      messages: [
+        { kind: "user", text: "继续写" },
+        {
+          kind: "summary",
+          summary: {
+            text: "下一步请选：\n1. 继续写子节\n2. 先写结论\n回复 1/2/3 即可。",
+            toolCallCount: 1,
+            keyFindings: [],
+          },
+        },
+      ],
+    });
+    render(<AgentPanel projectId="p1" />);
+    expect(screen.queryByRole("button", { name: /继续推进/ })).toBeNull();
+    expect(screen.getByText("等你回复")).toBeTruthy();
+    expect(screen.getByText("等你决定")).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText("直接写你的决定或补充…"), {
+      target: { value: "1" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "回答后继续" }));
+    expect(sendGoal).toHaveBeenCalledWith("1");
   });
 
   it("检查点期间不显示续跑条", () => {

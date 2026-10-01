@@ -1,6 +1,5 @@
 import { logger } from "@/lib/logger";
 import { NextRequest, NextResponse } from "next/server";
-import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
@@ -8,6 +7,7 @@ import { validateBody } from "@/lib/api-validate";
 import { tableGenerateSchema } from "@/lib/validations";
 import { getErrorMessage } from "@/lib/error-utils";
 import { PYTHON_CMD, formatPythonSpawnError } from "@/lib/python-cmd";
+import { ChildTimeoutError, runCommand } from "@/lib/python-runner";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -29,59 +29,50 @@ export async function POST(req: NextRequest) {
     const { data: body, errorResponse: ve } = await validateBody(tableGenerateSchema, rawBody);
     if (ve) return ve;
 
-    // 写入临时配置文件
     const tmpDir = path.join(process.cwd(), ".tmp", randomUUID());
     fs.mkdirSync(tmpDir, { recursive: true });
+    try {
+      const configPath = path.join(tmpDir, "table_config.json");
+      fs.writeFileSync(configPath, JSON.stringify(body, null, 2), "utf-8");
 
-    const configPath = path.join(tmpDir, "table_config.json");
-    fs.writeFileSync(configPath, JSON.stringify(body, null, 2), "utf-8");
-
-    // 调 Python
-    const scriptPath = path.join(SCRIPTS_DIR, "make_table.py");
-
-    await new Promise<void>((resolve, reject) => {
-      const proc = spawn(PYTHON_CMD, [
+      const scriptPath = path.join(SCRIPTS_DIR, "make_table.py");
+      const child = await runCommand(PYTHON_CMD, [
         scriptPath,
         "--config", configPath,
         "--output", tmpDir,
-      ], { shell: false, env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" } });
-
-      let stderr = "";
-      proc.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
-      proc.on("close", (code) => {
-        if (code !== 0) reject(new Error(stderr || `Python 进程退出码 ${code}`));
-        else resolve();
+      ], {
+        timeoutMs: 55_000,
+        env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" },
       });
-      proc.on("error", (err) => {
-        reject(new Error(formatPythonSpawnError(getErrorMessage(err))));
+      if (child.code !== 0) {
+        throw new Error(child.stderr || `Python 进程退出码 ${child.code}`);
+      }
+
+      const resultPath = path.join(tmpDir, "result.json");
+      const resultJson = JSON.parse(fs.readFileSync(resultPath, "utf-8"));
+      if (resultJson.status !== "ok") {
+        return NextResponse.json(
+          { error: resultJson.message || "三线表生成失败" },
+          { status: 500 },
+        );
+      }
+
+      return NextResponse.json({
+        latex: resultJson.latex,
+        html: resultJson.html,
+        statsText: resultJson.stats_text,
+        letters: resultJson.letters,
       });
-    });
-
-    // 从文件读取结果，绕开管道编码问题
-    const resultPath = path.join(tmpDir, "result.json");
-    const resultJson = JSON.parse(fs.readFileSync(resultPath, "utf-8"));
-
-    // 清理临时文件
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-
-    if (resultJson.status !== "ok") {
-      return NextResponse.json(
-        { error: resultJson.message || "三线表生成失败" },
-        { status: 500 }
-      );
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     }
 
-    return NextResponse.json({
-      latex: resultJson.latex,
-      html: resultJson.html,
-      statsText: resultJson.stats_text,
-      letters: resultJson.letters,
-    });
   } catch (error: unknown) {
     logger.error("Table API error:", error);
+    const timedOut = error instanceof ChildTimeoutError;
     return NextResponse.json(
-      { error: getErrorMessage(error) || "三线表生成失败" },
-      { status: 500 }
+      { error: timedOut ? error.message : (formatPythonSpawnError(getErrorMessage(error)) || "三线表生成失败") },
+      { status: timedOut ? 504 : 500 },
     );
   }
 }

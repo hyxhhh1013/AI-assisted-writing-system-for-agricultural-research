@@ -56,6 +56,9 @@ function hit(id: string, title: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   clearLastAgentSearch(ctx.userId);
+  vi.stubGlobal("fetch", vi.fn(async () => {
+    throw new Error("offline");
+  }));
 });
 
 describe("resolveRequestedHits", () => {
@@ -142,6 +145,44 @@ describe("buildImportReferenceConfirmParams", () => {
     expect((p.importItems as unknown[]).length).toBe(1);
     expect(p.query).toBe("biochar");
     expect(p.why).toBe("与生物炭改良土壤课题直接相关，需要引用");
+    const first = (p.importItems as { why?: string; topicFit?: string }[])[0];
+    expect(first?.why).toMatch(/命中|未命中|DOI/);
+    expect(first?.topicFit === "aligned" || first?.topicFit === "marginal").toBe(true);
+  });
+
+  it("标题命中课题词标对口，只在摘要命中标边缘", async () => {
+    storeLastAgentSearch(ctx.userId, [
+      {
+        ...hit("doi:1", "Biochar amendment improves soil"),
+        abstract: "A field study.",
+      },
+      {
+        ...hit("doi:2", "Unrelated catalysis review"),
+        abstract: "Mentions biochar only in the abstract body.",
+      },
+    ]);
+    const p = await buildImportReferenceConfirmParams(
+      { hitIndices: "[1]", query: "biochar soil" },
+      ctx,
+    );
+    const items = p.importItems as { id: string; topicFit?: string; why?: string }[];
+    expect(items.find((x) => x.id === "doi:1")?.topicFit).toBe("aligned");
+    expect(items.find((x) => x.id === "doi:2")?.topicFit).toBe("marginal");
+    expect(items.find((x) => x.id === "doi:2")?.why).toMatch(/biochar/);
+  });
+
+  it("补摘要失败时确认卡仍列出这篇，不带摘要", async () => {
+    storeLastAgentSearch(ctx.userId, [{
+      ...hit("doi:10.1000/excerpt", "Soil study"),
+      doi: "10.1000/excerpt",
+    }]);
+    const p = await buildImportReferenceConfirmParams(
+      { hitIndices: "[1]", query: "biochar" },
+      ctx,
+    );
+    const first = (p.importItems as { title?: string; abstract?: string }[])[0];
+    expect(first?.title).toBe("Soil study");
+    expect(first?.abstract).toBeUndefined();
   });
 
   it("no importItems when nothing resolved", async () => {

@@ -49,10 +49,13 @@ export const AgentPlanCard = memo(function AgentPlanCard({
   defaultOpen = true,
   /** 顶栏内：限制列表高度，避免把对话区和输入框挤没 */
   compact = false,
+  /** 本轮已停：running 不再转圈，避免和「等你回复」打架 */
+  paused = false,
 }: {
   plan: AgentPlan;
   defaultOpen?: boolean;
   compact?: boolean;
+  paused?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const total = plan.subtasks.length;
@@ -92,7 +95,14 @@ export const AgentPlanCard = memo(function AgentPlanCard({
           )}
         >
           {plan.subtasks.map((s) => {
-            const meta = SUB_STATUS[s.status] ?? SUB_STATUS.pending;
+            const waiting = paused && s.status === "running";
+            const meta = waiting
+              ? {
+                  label: "等你决定",
+                  textCls: "text-[#3d4f46]",
+                  icon: <Circle className="h-3 w-3 text-[#a07832]" />,
+                }
+              : (SUB_STATUS[s.status] ?? SUB_STATUS.pending);
             return (
               <li
                 key={s.id}

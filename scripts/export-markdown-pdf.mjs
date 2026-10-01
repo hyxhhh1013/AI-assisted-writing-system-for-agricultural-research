@@ -82,7 +82,11 @@ const html = `<!DOCTYPE html>
 
 writeFileSync(tmpHtml, html, "utf8");
 
-const browser = await chromium.launch();
+const browser = await chromium.launch(
+  process.env.PLAYWRIGHT_CHANNEL
+    ? { channel: process.env.PLAYWRIGHT_CHANNEL }
+    : {},
+);
 try {
   const page = await browser.newPage();
   await page.goto(pathToFileURL(tmpHtml).href, { waitUntil: "networkidle", timeout: 120_000 });

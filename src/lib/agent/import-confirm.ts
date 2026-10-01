@@ -11,7 +11,12 @@ import type { ExternalLiteratureHit } from "@/contracts/literature";
 import { externalLiteratureHitSchema } from "@/lib/validations";
 import { searchExternalLiterature } from "@/lib/literature-search";
 import { getLastAgentSearch } from "@/lib/agent/last-search";
-import { enrichImportReferenceParams } from "@/lib/agent/literature-relevance";
+import {
+  enrichImportReferenceParams,
+  scoreLiteratureRelevance,
+} from "@/lib/agent/literature-relevance";
+import type { ImportConfirmItem } from "@/lib/agent/import-confirm-view";
+import { fillMissingAbstractExcerpts } from "@/lib/agent/import-abstract-excerpt";
 import { coerceExternalHitCandidate } from "@/lib/agent/tools/import-reference";
 import type { AgentContext } from "@/lib/agent/types";
 
@@ -172,6 +177,31 @@ export async function resolveImportReferenceCandidates(
   return out.slice(0, MAX_IMPORT_ITEMS);
 }
 
+/**
+ * 给确认卡每篇补上「为什么推荐」和对口/边缘。
+ * 对口 = 课题词出现在标题，或 DOI 与检索词一致；只在摘要里命中、或没命中，标边缘。
+ * 这些字段只供展示，导入时会被文献 schema 丢掉，不能当成人工 why。
+ */
+export function annotateImportCandidates(
+  query: string,
+  items: ExternalLiteratureHit[],
+): ImportConfirmItem[] {
+  const q = query.trim();
+  if (!q) return items;
+  return items.map((hit) => {
+    const rel = scoreLiteratureRelevance(q, hit);
+    const title = (hit.title ?? "").toLowerCase();
+    const titleHit = rel.matchedTokens.some((tok) => title.includes(tok.toLowerCase()));
+    const doiHit = rel.why.startsWith("DOI");
+    return {
+      ...hit,
+      why: rel.why,
+      relevanceScore: rel.score,
+      topicFit: titleHit || doiHit ? "aligned" : "marginal",
+    };
+  });
+}
+
 /** 注入 importItems 的确认参数（在原 enrichImportReferenceParams 之上） */
 export async function buildImportReferenceConfirmParams(
   params: Record<string, unknown>,
@@ -180,5 +210,7 @@ export async function buildImportReferenceConfirmParams(
   const enriched = enrichImportReferenceParams(params);
   const items = await resolveImportReferenceCandidates(params, ctx);
   if (items.length === 0) return enriched;
-  return { ...enriched, importItems: items };
+  const query = typeof enriched.query === "string" ? enriched.query : "";
+  const withExcerpts = await fillMissingAbstractExcerpts(items);
+  return { ...enriched, importItems: annotateImportCandidates(query, withExcerpts) };
 }

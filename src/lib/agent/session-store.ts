@@ -22,6 +22,27 @@ export {
 /** 进程被杀后会话会永远停在 running，导致跟聊 409 */
 const STALE_RUNNING_MS = 90_000;
 
+/**
+ * Postgres text/json 拒绝 U+0000。模型输出或 PDF 抽取带上空字节时，
+ * `agentSession.update` 报 22P05（unsupported Unicode escape sequence），快照（含检查点）落不了库。
+ */
+export function stripNullBytes<T>(value: T): T {
+  if (typeof value === "string") {
+    return value.replaceAll("\u0000", "") as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => stripNullBytes(item)) as T;
+  }
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      out[key] = stripNullBytes(child);
+    }
+    return out as T;
+  }
+  return value;
+}
+
 export async function reclaimStaleRunningSessions(params: {
   userId: string;
   projectId?: string;
@@ -74,11 +95,11 @@ export async function createAgentSession(params: {
   const row = await prisma.agentSession.create({
     data: {
       userId: params.userId,
-      goal: params.goal,
+      goal: stripNullBytes(params.goal),
       projectId: params.projectId ?? null,
       directionSlug: params.directionSlug ?? null,
       status: "running",
-      snapshot: emptyAgentSessionSnapshot(params.goal) as object,
+      snapshot: stripNullBytes(emptyAgentSessionSnapshot(params.goal)) as object,
     },
     select: { id: true },
   });
@@ -118,12 +139,16 @@ export async function saveAgentSessionSnapshot(
   status?: AgentSessionStatus,
   errorMessage?: string | null,
 ): Promise<void> {
+  const cleanError =
+    errorMessage === undefined || errorMessage === null
+      ? errorMessage
+      : stripNullBytes(errorMessage);
   await prisma.agentSession.update({
     where: { id: sessionId },
     data: {
-      snapshot: snapshot as object,
+      snapshot: stripNullBytes(snapshot) as object,
       ...(status ? { status } : {}),
-      ...(errorMessage !== undefined ? { errorMessage } : {}),
+      ...(cleanError !== undefined ? { errorMessage: cleanError } : {}),
     },
   });
 }
@@ -157,7 +182,7 @@ export async function tryAcquireAgentSession(
   const claimed = await prisma.agentSession.updateMany({
     where: { id: sessionId, userId, status: { in: [...fromStatuses] } },
     data: {
-      ...(opts?.goal !== undefined ? { goal: opts.goal.trim() } : {}),
+      ...(opts?.goal !== undefined ? { goal: stripNullBytes(opts.goal).trim() } : {}),
       status: "running",
       errorMessage: null,
     },

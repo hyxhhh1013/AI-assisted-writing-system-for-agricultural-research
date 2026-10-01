@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { AgentHitlBanner } from "@/components/shared/agent/agent-hitl-banner";
 import { ImportConfirmList } from "@/components/shared/agent/import-confirm-list";
-import type { ExternalLiteratureHit } from "@/contracts/literature";
+import type { ImportConfirmItem } from "@/lib/agent/import-confirm-view";
 import {
   confirmToolDetail,
   confirmToolTitle,
@@ -23,8 +23,8 @@ interface AgentToolConfirmProps {
   message: string;
   preview?: string;
   open: boolean;
-  onOpenChange: (open: boolean) => void;
-  importItems?: ExternalLiteratureHit[];
+  onOpenChange: (open: boolean, details?: { reason?: string }) => void;
+  importItems?: ImportConfirmItem[];
   importSelected?: Set<number> | null;
   onToggleImport?: (idx: number, checked: boolean) => void;
   onSetAllImport?: (checked: boolean) => void;
@@ -91,10 +91,17 @@ export function AgentToolConfirm({
         </div>
       </div>
 
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog
+        open={open}
+        disablePointerDismissal
+        onOpenChange={(next, details) => {
+          if (!next && details.reason === "focus-out") return;
+          onOpenChange(next, details);
+        }}
+      >
         <DialogContent
           showCloseButton
-          className="flex max-h-[min(92vh,52rem)] w-[min(100%-1.5rem,42rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl"
+          className="flex max-h-[min(92vh,52rem)] w-[calc(100vw-2rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl"
         >
           <DialogHeader
             className={cn(

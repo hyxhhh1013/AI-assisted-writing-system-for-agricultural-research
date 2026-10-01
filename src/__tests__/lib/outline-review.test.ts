@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   capOutlinePreview,
   countOutlineChars,
+  blueprintCitesFromJson,
   outlineHeadingChips,
+  outlineHeadingCoverage,
   outlineTextFromToolData,
   pickOutlineBody,
   splitOutlineBlocks,
@@ -30,6 +32,23 @@ describe("outline review helpers", () => {
     expect(chips.map((c) => c.title)).toEqual(["总题", "摘要", "引言", "背景小节"]);
     expect(chips.map((c) => c.level)).toEqual([1, 2, 2, 3]);
     expect(countOutlineChars("# 总题\n导语")).toBeGreaterThan(0);
+  });
+
+  it("matches imported references by title overlap and explicit blueprint cites only", () => {
+    const refs = [
+      "[1] 张三. 生物炭提高土壤碳. 2024.",
+      "[2] 李四. 聚合物催化综述. 2023.",
+    ];
+    expect(outlineHeadingCoverage("生物炭对土壤碳的影响", refs)).toEqual([1]);
+    expect(outlineHeadingCoverage("引言", refs)).toEqual([]);
+    const cites = blueprintCitesFromJson(JSON.stringify({
+      sectionGuides: [
+        { sectionPath: "土壤碳", claim: "生物炭提高土壤碳 [2]", keyPoints: [] },
+        { sectionPath: "别的节", claim: "不要算到这一节 [1]", keyPoints: [] },
+      ],
+    }));
+    expect(outlineHeadingCoverage("土壤碳库", refs, cites)).toEqual([1, 2]);
+    expect(outlineHeadingCoverage("没有对应", [])).toEqual([]);
   });
 
   it("caps only extremely long previews", () => {

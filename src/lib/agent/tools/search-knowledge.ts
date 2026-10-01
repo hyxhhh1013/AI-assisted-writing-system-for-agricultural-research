@@ -1,4 +1,5 @@
 import { localRAG, formatRagCitation, type RagChunk } from "@/lib/rag";
+import { resolveRagCategoryName } from "@/lib/knowledge-category-hints";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import {
   basenameKey,
@@ -45,7 +46,9 @@ export const searchKnowledgeTool: ToolDefinition = {
     }
 
     const limit = Math.min(Math.max(Number(params.limit) || 12, 1), 20);
-    const category = params.category ? String(params.category).trim() : undefined;
+    const category = resolveRagCategoryName(
+      params.category ? String(params.category).trim() : undefined,
+    );
     const sourceKey = params.sourceKey ? String(params.sourceKey).trim() : "";
     if (sourceKey) {
       const n = resolveRefIndexBySourceKey(

@@ -19,8 +19,9 @@ describe("lab-scope", () => {
   it("lists bound knowledge categories", () => {
     const cats = allLabCategoryNames();
     expect(cats).toEqual(
-      expect.arrayContaining(["热化学", "热解", "烟草", "烟花", "茶学", "控释肥类"]),
+      expect.arrayContaining(["热化学", "烟草", "烟花", "茶学", "控释肥类"]),
     );
+    expect(cats).not.toContain("热解");
   });
 
   it("formatLabScopeBlock forbids topic pivot", () => {

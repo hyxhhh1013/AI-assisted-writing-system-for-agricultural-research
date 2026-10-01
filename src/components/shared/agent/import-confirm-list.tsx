@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { ChevronDown, ExternalLink } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { ExternalLiteratureHit } from "@/contracts/literature";
 import {
   IMPORT_SOURCE_LABELS,
+  TOPIC_FIT_LABEL,
   literatureLandingUrl,
+  type ImportConfirmItem,
 } from "@/lib/agent/import-confirm-view";
 import { cn } from "@/lib/utils";
 
@@ -18,7 +19,7 @@ export function ImportConfirmList({
   className,
   listClassName,
 }: {
-  items: ExternalLiteratureHit[];
+  items: ImportConfirmItem[];
   selected: Set<number> | null;
   onToggle: (idx: number, checked: boolean) => void;
   onSetAll: (checked: boolean) => void;
@@ -32,7 +33,7 @@ export function ImportConfirmList({
     <div className={cn("mt-2", className)}>
       <div className="mb-1 flex items-center justify-between">
         <span className="text-[10px] text-[#3d4f46]/80">
-          已收集 {items.length} 篇，已选 {selectedCount} 篇 · 点开可看摘要
+          已收集 {items.length} 篇，已选 {selectedCount} 篇 · 理由和摘要前几行已展开
         </span>
         <div className="flex gap-2">
           <button
@@ -78,7 +79,7 @@ function ImportConfirmRow({
   onToggleChecked,
   onToggleOpen,
 }: {
-  item: ExternalLiteratureHit;
+  item: ImportConfirmItem;
   checked: boolean;
   open: boolean;
   onToggleChecked: (checked: boolean) => void;
@@ -114,8 +115,20 @@ function ImportConfirmRow({
           <p className="truncate text-[9px] text-[#6b7c72]">
             {[item.year, item.journal, item.doi].filter(Boolean).join(" · ")}
           </p>
-          {(item.citedByCount != null || item.source || item.isOpenAccess) && (
+          {(item.citedByCount != null || item.source || item.isOpenAccess || item.topicFit) && (
             <div className="mt-0.5 flex flex-wrap items-center gap-1">
+              {item.topicFit ? (
+                <span
+                  className={cn(
+                    "rounded px-1 py-px text-[8px] leading-none",
+                    item.topicFit === "aligned"
+                      ? "bg-emerald-600/15 text-emerald-800"
+                      : "bg-amber-500/15 text-amber-800",
+                  )}
+                >
+                  {TOPIC_FIT_LABEL[item.topicFit]}
+                </span>
+              ) : null}
               {item.citedByCount != null && (
                 <span className="rounded bg-muted px-1 py-px text-[8px] leading-none text-muted-foreground">
                   被引 {item.citedByCount}
@@ -133,8 +146,22 @@ function ImportConfirmRow({
               )}
             </div>
           )}
+          {item.why ? (
+            <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-[#3d4f46]">
+              {item.why}
+            </p>
+          ) : null}
+          {!open && item.abstract?.trim() ? (
+            <p className="mt-0.5 line-clamp-3 text-[10px] leading-relaxed text-[#122820]/80">
+              {item.abstractExcerpt ? "开放获取首段：" : ""}
+              {item.abstract.trim()}
+            </p>
+          ) : null}
+          {!open && !item.abstract?.trim() ? (
+            <p className="mt-0.5 text-[10px] text-[#6b7c72]">检索未带摘要，点开可看链接。</p>
+          ) : null}
           <span className="mt-0.5 inline-flex items-center gap-0.5 text-[9px] text-[#1a5632]">
-            {open ? "收起" : item.abstract?.trim() ? "查看摘要" : "查看详情"}
+            {open ? "收起" : "作者与链接"}
             <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
           </span>
         </button>

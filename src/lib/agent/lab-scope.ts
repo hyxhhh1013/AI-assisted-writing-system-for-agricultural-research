@@ -14,7 +14,7 @@ export const LAB_DIRECTIONS: readonly LabDirectionScope[] = [
   {
     slug: "thermochemistry",
     name: "热化学",
-    categories: ["热化学", "热解"],
+    categories: ["热化学"],
   },
   {
     slug: "tobacco",

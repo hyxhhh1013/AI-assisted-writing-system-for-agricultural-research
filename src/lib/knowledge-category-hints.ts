@@ -4,6 +4,19 @@
 
 export const EXTERNAL_ABSTRACT_CATEGORY = "外部摘要";
 
+/** 实验室口语/别名 → 磁盘 `index_<分类>.json` 实名。搜「热解」不能去读不存在的 index_热解.json。 */
+export const RAG_CATEGORY_ALIASES: Readonly<Record<string, string>> = {
+  热解: "热化学",
+};
+
+export function resolveRagCategoryName(category: string | undefined | null): string | undefined {
+  if (category == null) return undefined;
+  const t = category.trim();
+  if (!t) return undefined;
+  if (t === "全部") return t;
+  return RAG_CATEGORY_ALIASES[t] ?? t;
+}
+
 /** 题目/方向 → 知识库分类提示 */
 export const TITLE_CATEGORY_HINTS: Array<{ pattern: RegExp; category: string }> = [
   { pattern: /茶|绿茶|红茶|乌龙|普洱|香气|挥发性|杀青|摊放|茶汤/, category: "茶学" },
