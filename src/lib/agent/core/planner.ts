@@ -83,7 +83,7 @@ export function fallbackPlan(goal: string, literatureAlreadyEnough = false): Age
       subtasks: [
         {
           id: "1",
-          title: "先 search_knowledge，再 import_reference(knowledgeHitIndices)",
+          title: "search_knowledge 一次后立刻 import_reference(knowledgeHitIndices)",
           status: "pending",
           toolHints: ["search_knowledge", "import_reference"],
         },

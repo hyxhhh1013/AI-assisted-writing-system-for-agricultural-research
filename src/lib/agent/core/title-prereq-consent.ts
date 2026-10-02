@@ -28,9 +28,16 @@ const GENERIC_CONTINUE_RE =
 export function isPlaceholderPaperTitle(title: string | undefined | null): boolean {
   const t = (title ?? "").trim();
   if (!t) return true;
-  return /^(未命名(论文|项目)?|新项目|untitled( paper| project)?|new project|论文草稿|草稿)$/i.test(
+  return /^(未命名(论文|项目)?|新项目|新综述|新文献综述|文献综述|untitled( paper| project)?|new project|论文草稿|草稿)$/i.test(
     t,
   );
+}
+
+/** 用户在要备选题目，不是在提交正式题名 */
+export function looksLikeTitleInstruction(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  return /备选|几个题目|帮我拟|帮我定题|根据已有文献|请给我.{0,8}题|推荐几个题|你根据/.test(t);
 }
 
 export function titlePrereqQuestion(currentTitle: string): string {
@@ -48,10 +55,16 @@ export function shouldAskTitleBeforeOutline(opts: {
   observations: readonly ToolObservation[];
 }): boolean {
   if (isPlaceholderPaperTitle(opts.title)) return true;
-  if (/确认.{0,8}题目|先定题|先确认题/.test(opts.goal)) return true;
-  if (opts.intentKind === "literature") return true;
-  if (isLiteratureHuntGoal(opts.goal)) return true;
-  return opts.observations.some((o) => o.tool === "import_reference" && o.success);
+  if (/确认.{0,8}题目|先定题|先确认题/.test(opts.goal) && isPlaceholderPaperTitle(opts.title)) {
+    return true;
+  }
+  if (opts.intentKind === "literature" || isLiteratureHuntGoal(opts.goal)) {
+    return isPlaceholderPaperTitle(opts.title);
+  }
+  return (
+    opts.observations.some((o) => o.tool === "import_reference" && o.success)
+    && isPlaceholderPaperTitle(opts.title)
+  );
 }
 
 function noteFromUserAnswer(content: string): string | null {
@@ -76,6 +89,9 @@ export function readTitlePrereqConsent(
       return isPlaceholderPaperTitle(currentTitle) ? { kind: "unset" } : { kind: "keep" };
     }
     const firstLine = note.split(/\n/)[0]!.trim();
+    if (looksLikeTitleInstruction(firstLine)) {
+      return isPlaceholderPaperTitle(currentTitle) ? { kind: "unset" } : { kind: "keep" };
+    }
     if (firstLine.length >= 6 && firstLine.length <= 200) {
       return { kind: "title", title: firstLine };
     }

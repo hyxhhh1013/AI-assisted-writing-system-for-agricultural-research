@@ -551,6 +551,67 @@ export function checkKnowledgeFirstGate(
   };
 }
 
+function lastKnowledgeFileCount(observations: readonly ToolObservation[]): number {
+  for (let i = observations.length - 1; i >= 0; i--) {
+    const o = observations[i];
+    if (o.tool !== "search_knowledge" || !o.success) continue;
+    const data = o.data as { fileCount?: unknown } | undefined;
+    const n = typeof data?.fileCount === "number" ? data.fileCount : Number(data?.fileCount);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return 0;
+}
+
+/**
+ * 本地库一次已按篇召回。换同义词连搜只会冲掉相关度、拖慢导入。
+ * sourceKey 精读单篇不算。
+ */
+export function checkKnowledgeRepeatGate(
+  goal: string,
+  toolName: string,
+  observations: readonly ToolObservation[],
+  intentKind?: IntentKind | null,
+  params?: Record<string, unknown>,
+  refCount = 0,
+): GoalIntentGateResult {
+  if (toolName !== "search_knowledge") return { ok: true };
+  if (String(params?.sourceKey ?? "").trim()) return { ok: true };
+  const hunt = matchesIntent(
+    intentKind,
+    ["literature"],
+    () => isLiteratureHuntGoal(goal),
+  );
+  if (!hunt) return { ok: true };
+
+  if (refCount >= 12) {
+    return {
+      ok: false,
+      error:
+        `项目已有 ${refCount} 篇文献，足够写综述骨架。请确认题目后 generate_outline，`
+        + "不要再换应用/土壤/催化等关键词 search_knowledge（会漂题）。",
+    };
+  }
+
+  const n = countSuccessfulTool(observations, "search_knowledge");
+  const files = lastKnowledgeFileCount(observations);
+  if (n >= 1 && files >= 8) {
+    return {
+      ok: false,
+      error:
+        `本地库已检索到 ${files} 篇 PDF。请立刻 import_reference(knowledgeHitIndices) 导入相关条目，`
+        + "不要换关键词再 search_knowledge。本地仍不够再 search_external。",
+    };
+  }
+  if (n >= 2) {
+    return {
+      ok: false,
+      error:
+        "本轮已 search_knowledge 两次。请对已有 files 调用 import_reference，不要继续换词检索本地库。",
+    };
+  }
+  return { ok: true };
+}
+
 export function outlineRevisionNudge(): string {
   return (
     "【系统】本轮是修订/生成大纲：list_references 或 inspect 后立刻 generate_outline（可用 userSkeleton）。"
@@ -667,11 +728,12 @@ export function literatureHuntNudge(goal = ""): string {
   return (
     "【系统】本轮是给当前论文备文献，不是方向页的「研究缺口识别」，也不是扫实验室四方向。"
     + "先 list_references 看已有篇数；已经够用就停下来汇报，问要不要确认题目后生成大纲。"
-    + `不足则先 search_knowledge（category=当前论文分类），用 import_reference(knowledgeHitIndices) 导入本地 PDF 全文。`
+    + `不足则先 search_knowledge 一次（query 跟题目走），用 import_reference(knowledgeHitIndices) 导入相关度高的本地 PDF。`
     + `本地不足再 search_external，默认目标约 ${n} 篇。外部命中多为摘要，不要作为首选。`
-    + "效率优先：单次 limit=20～25，用 1～2 个跟题目走的英文 query，不要碎成很多次小搜。"
+    + "禁止换同义词连搜本地库：一次检索已按篇去重、题目锚定、相关度排序。有 files 立刻导入。"
     + "禁止未确认题目就 generate_outline。禁止为对齐四方向去搜烟草/茶学/控释肥/烟花。"
     + "用户确认入库后停下来汇报篇数并请用户确认题目。"
+    + "已有 ≥8 篇本地全文时，下一步只给「用推荐题目 / 自拟题目」，禁止默认选项「再补检索到 30 篇」。"
     + "命中离题则说明；禁止改题；禁止编造 hitJson；禁止写缺口识别长报告。"
   );
 }
@@ -997,7 +1059,7 @@ export function reviewRefsShortageNudge(refCount: number, target = 30): string |
   if (refCount >= target) return null;
   return (
     `【系统】当前项目参考文献仅 ${refCount} 篇，写综述通常至少需要约 ${target} 篇。`
-    + "请先多轮 search_external / search_knowledge + import_reference 批量导入，"
+    + "请先 search_knowledge 一次并 import_reference 导入相关本地 PDF，不足再 search_external 批量导入，"
     + "达到体量后再按蓝图子节 write_section(literature_body, subsectionTitle=…)。不要只用两三篇硬写综述。"
   );
 }
@@ -1334,14 +1396,14 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
     nudge: (ctx) => {
       if (ctx.importCount === 0 && ctx.refTotal < ctx.importTarget && ctx.searchedOk) {
         return `【系统】已检索但项目文献仍不足（现有 ${ctx.refTotal} 篇，目标约 ${ctx.importTarget} 篇）。`
-          + `请立刻批量 import_reference(knowledgeHitIndices 或 hitIndices, query, why≥8字)；本地不足再 search_external。`;
+          + `请立刻批量 import_reference(knowledgeHitIndices 或 hitIndices, query, why≥8字)；不要换关键词再 search_knowledge。本地不足再 search_external。`;
       }
       if (!ctx.searchedOk && ctx.refTotal < ctx.importTarget) {
         return `【系统】写综述/备文献需要约 ${ctx.importTarget} 篇，当前仅 ${ctx.refTotal} 篇。`
-          + "请先 search_knowledge，import_reference(knowledgeHitIndices) 导入本地 PDF；不足再 search_external。";
+          + "请先 search_knowledge 一次，import_reference(knowledgeHitIndices) 导入本地 PDF；不足再 search_external。";
       }
       return `【系统】已有/本轮导入合计仍不足：项目 ${ctx.refTotal} 篇，本轮导入约 ${ctx.importCount} 篇，目标约 ${ctx.importTarget} 篇。`
-        + "请继续 search + import_reference(hitsJson=...) 补足。";
+        + "请对已有 files/hits 立刻 import_reference；不要再碎搜本地库。";
     },
     stopAsk: (ctx) =>
       buildIntentStopAskUser({ kind: "literature", ...stopAskOpts(ctx) }),

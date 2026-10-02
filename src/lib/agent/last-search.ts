@@ -20,6 +20,8 @@ export interface KnowledgeSearchHit {
   category?: string;
   citation?: string;
   excerpt?: string;
+  relevanceScore?: number;
+  why?: string;
 }
 
 const knowledgeStore = new Map<string, KnowledgeSearchHit[]>();
@@ -40,11 +42,38 @@ export function clearLastAgentSearch(userId: string): void {
   store.delete(userId);
 }
 
+function knowledgeHitKey(source: string): string {
+  const t = source.replace(/\\/g, "/").trim();
+  return (t.split("/").pop() ?? t).toLowerCase();
+}
+
 export function storeLastKnowledgeSearch(
   userId: string,
   hits: KnowledgeSearchHit[],
 ): void {
   knowledgeStore.set(userId, hits.slice(0, MAX_KEPT));
+}
+
+/** 多轮检索合并：同文件保留相关度更高的一条，按分排序。 */
+export function mergeLastKnowledgeSearch(
+  userId: string,
+  hits: KnowledgeSearchHit[],
+): KnowledgeSearchHit[] {
+  const prev = knowledgeStore.get(userId) ?? [];
+  const byKey = new Map<string, KnowledgeSearchHit>();
+  for (const h of [...prev, ...hits]) {
+    const key = knowledgeHitKey(h.source);
+    if (!key) continue;
+    const old = byKey.get(key);
+    if (!old || (h.relevanceScore ?? 0) >= (old.relevanceScore ?? 0)) {
+      byKey.set(key, h);
+    }
+  }
+  const merged = [...byKey.values()]
+    .sort((a, b) => (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0))
+    .slice(0, MAX_KEPT);
+  knowledgeStore.set(userId, merged);
+  return merged;
 }
 
 export function getLastKnowledgeSearch(userId: string): KnowledgeSearchHit[] {

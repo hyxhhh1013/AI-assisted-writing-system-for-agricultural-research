@@ -25,6 +25,7 @@ import {
   checkDiagnoseInspectGate,
   checkDraftSearchGate,
   checkKnowledgeFirstGate,
+  checkKnowledgeRepeatGate,
   checkOutlineSearchGate,
   checkReviewRequestGate,
 } from "@/lib/agent/core/goal-intents";
@@ -102,7 +103,13 @@ export const figureReplaceGate: PreToolGate = ({ tool, params, recentObservation
 };
 
 /** 意图门禁组：诊断 inspect / 草稿检索 / 引用核查 / 引用绕行 / 收口摘要 / 审查审稿 / 先读后写 */
-export const intentGate: PreToolGate = ({ state, tool, params, recentObservations }) => {
+export const intentGate: PreToolGate = ({
+  state,
+  tool,
+  params,
+  recentObservations,
+  agentContext,
+}) => {
   const thisRun = observationsThisRun(recentObservations, state.intentObsOffset);
   const gates: Array<() => { ok: boolean; error?: string }> = [
     () => checkContinueWriteSpinGate(state.goal, tool.name, thisRun, state.intentKind),
@@ -116,6 +123,15 @@ export const intentGate: PreToolGate = ({ state, tool, params, recentObservation
         tool.name,
         observationsThisRun(state.observations ?? [], state.intentObsOffset),
         state.intentKind,
+      ),
+    () =>
+      checkKnowledgeRepeatGate(
+        state.goal,
+        tool.name,
+        observationsThisRun(state.observations ?? [], state.intentObsOffset),
+        state.intentKind,
+        params,
+        agentContext.projectSnapshot?.references.length ?? 0,
       ),
     () => checkCitationCheckGate(state.goal, tool.name, recentObservations, state.intentKind),
     () => checkCitationSpinGate(state.goal, tool.name, recentObservations, state.intentKind),

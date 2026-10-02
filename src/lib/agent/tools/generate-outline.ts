@@ -1,4 +1,5 @@
 import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
+import { looksLikeTitleInstruction } from "@/lib/agent/core/title-prereq-consent";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import {
   buildFrameworkPromptBlock,
@@ -120,8 +121,10 @@ export const generateOutlineTool: ToolDefinition = {
     const { provider, keyError } = getAgentModelConfig("writer");
     if (keyError) return { success: false, error: keyError };
 
-    const confirmedTitle =
+    const rawConfirmed =
       typeof params.confirmedTitle === "string" ? params.confirmedTitle.trim() : "";
+    const confirmedTitle =
+      rawConfirmed && !looksLikeTitleInstruction(rawConfirmed) ? rawConfirmed : "";
     if (persist && confirmedTitle.length >= 2 && confirmedTitle !== project.title.trim()) {
       await prisma.project.update({
         where: { id: ctx.projectId },

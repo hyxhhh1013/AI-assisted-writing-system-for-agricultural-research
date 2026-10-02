@@ -4,9 +4,11 @@ import {
   resolveAgentHitIndices,
   clearLastAgentSearch,
   storeLastKnowledgeSearch,
+  mergeLastKnowledgeSearch,
   resolveKnowledgeHitIndices,
   clearLastKnowledgeSearch,
   knowledgeHitToExternal,
+  getLastKnowledgeSearch,
 } from "@/lib/agent/last-search";
 
 const hits = [
@@ -67,5 +69,19 @@ describe("last-search knowledgeHitIndices", () => {
     const ext = knowledgeHitToExternal({ source: "a.pdf", citation: "[1] A paper" });
     expect(ext.id.startsWith("kb:")).toBe(true);
     expect(ext.journal).toContain("本地知识库");
+  });
+
+  it("merges later searches by source and keeps higher score", () => {
+    storeLastKnowledgeSearch("u1", [
+      { source: "a.pdf", relevanceScore: 0.2 },
+      { source: "b.pdf", relevanceScore: 0.5 },
+    ]);
+    const merged = mergeLastKnowledgeSearch("u1", [
+      { source: "a.pdf", relevanceScore: 0.8 },
+      { source: "c.pdf", relevanceScore: 0.4 },
+    ]);
+    expect(merged.map((h) => h.source)).toEqual(["a.pdf", "b.pdf", "c.pdf"]);
+    expect(merged[0]?.relevanceScore).toBe(0.8);
+    expect(getLastKnowledgeSearch("u1")[0]?.source).toBe("a.pdf");
   });
 });

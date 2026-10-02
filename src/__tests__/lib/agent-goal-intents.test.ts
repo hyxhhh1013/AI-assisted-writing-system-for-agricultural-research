@@ -8,6 +8,7 @@ import {
   checkDiagnoseInspectGate,
   checkDraftSearchGate,
   checkKnowledgeFirstGate,
+  checkKnowledgeRepeatGate,
   checkOutlineSearchGate,
   checkReviewRequestGate,
   isExistingRefsOnlyGoal,
@@ -100,6 +101,54 @@ describe("goal-intents", () => {
       ).ok,
     ).toBe(true);
     expect(checkKnowledgeFirstGate("写引言", "search_external", [], "draft").ok).toBe(true);
+  });
+
+  it("备文献：已有足够篇数后不再换词检索", () => {
+    const goal = "检索并导入相关文献";
+    expect(
+      checkKnowledgeRepeatGate(goal, "search_knowledge", [], "literature", {}, 14).ok,
+    ).toBe(false);
+  });
+
+  it("备文献：本地已够篇后拦换词再搜", () => {
+    const goal = "检索并导入相关文献";
+    expect(checkKnowledgeRepeatGate(goal, "search_knowledge", [], "literature").ok).toBe(true);
+    expect(
+      checkKnowledgeRepeatGate(
+        goal,
+        "search_knowledge",
+        [{ tool: "search_knowledge", success: true, data: { fileCount: 12 } }],
+        "literature",
+      ).ok,
+    ).toBe(false);
+    expect(
+      checkKnowledgeRepeatGate(
+        goal,
+        "search_knowledge",
+        [{ tool: "search_knowledge", success: true, data: { fileCount: 2 } }],
+        "literature",
+      ).ok,
+    ).toBe(true);
+    expect(
+      checkKnowledgeRepeatGate(
+        goal,
+        "search_knowledge",
+        [
+          { tool: "search_knowledge", success: true, data: { fileCount: 2 } },
+          { tool: "search_knowledge", success: true, data: { fileCount: 3 } },
+        ],
+        "literature",
+      ).ok,
+    ).toBe(false);
+    expect(
+      checkKnowledgeRepeatGate(
+        goal,
+        "search_knowledge",
+        [{ tool: "search_knowledge", success: true, data: { fileCount: 12 } }],
+        "literature",
+        { sourceKey: "a.pdf" },
+      ).ok,
+    ).toBe(true);
   });
 
   it("treats 基于 N 条文献修订大纲 as outline revision, not a search", () => {

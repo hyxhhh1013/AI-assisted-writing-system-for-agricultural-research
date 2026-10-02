@@ -218,7 +218,27 @@ describe("evaluatePreGates", () => {
         recentObservations: [{ tool: "search_knowledge", success: true }],
       }),
     );
-    expect(v).toEqual({ ok: true });
+    expect(v.ok).toBe(true);
+  });
+
+  it("本地库已命中足够篇后拦截再次 search_knowledge", () => {
+    const v = evaluatePreGates(
+      makePreInput({
+        tool: makeTool("search_knowledge"),
+        params: { query: "biochar" },
+        state: makeState({
+          goal: "检索并导入相关文献",
+          intentKind: "literature",
+          observations: [{
+            tool: "search_knowledge",
+            success: true,
+            data: { fileCount: 12 },
+          }],
+        }),
+      }),
+    );
+    expect(v).toMatchObject({ ok: false, kind: "reject" });
+    if (!v.ok) expect(v.error).toMatch(/import_reference/);
   });
 });
 

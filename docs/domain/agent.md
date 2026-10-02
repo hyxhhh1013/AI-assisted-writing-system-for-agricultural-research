@@ -1,6 +1,6 @@
 # Agent 编排（写作助手）
 
-> L3 域文档 · 更新：2026-10-02（备文献本地 PDF 优先；先确认题目再出大纲）  
+> L3 域文档 · 更新：2026-10-02（本地库按篇召回 + 相关度排序；备文献禁止换词连搜）  
 > 契约唯一权威源：`src/contracts/agent.ts`（SSE 事件）、`src/contracts/agent-session.ts`（会话消息）、`src/contracts/agent-intent.ts`（`IntentKind`）。
 
 ## 概览
@@ -36,6 +36,7 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 | `src/lib/agent/langgraph/tool-gates.ts` | toolsNode 门禁中间件：前置链（重复/配额/意图+先读后写）+ 阶段 + 后置链（antispam/clarify/outline） |
 | `src/lib/agent/langgraph/graph.ts` | 编译 LangGraph |
 | `src/lib/agent/tools/*.ts` | 各工具定义（`ToolDefinition`） |
+| `src/lib/agent/knowledge-search-rank.ts` | 本地库按篇去重/相关度；题目锚定 query |
 | `src/lib/agent/lab-scope.ts` | 实验室四方向围栏；**检索分类跟当前题目**，禁止扫齐烟草/茶学 |
 | `src/lib/agent/ingest-project-data.ts` | 表格入库合并 + 只 PATCH `dataSources`/`dataClaims`（`ingest_project_data`） |
 | `src/lib/agent/writing-progress.ts` | 写节进度翻译层（管道事件 → `agent/progress` label） |
@@ -205,6 +206,8 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **热化学综述被规划成扫烟草/茶学（2026-10-02）**：`formatLabScopeBlock` 列出实验室四方向本意是禁止改题，规划器却写成「按四方向检索」。处理：简报只锁定当前方向；规划器事后改写含四方向/茶学的子任务；`search_knowledge` 不扩到其它实验室分类。茶学规则不再用「挥发性/香气」当开关（热解气也有挥发性产物）。
 - **开场芯片「检索并总结研究缺口」（2026-10-02）**：方向页 D3 的「研究缺口」被复用成写作 Agent 第一步，规划器去凑篇数、扫实验室覆盖。芯片改为「按本题检索并导入相关文献」；已有文献不再推检索；禁止写缺口识别长报告。
 - **本地库优先 + 先定题再出大纲（2026-10-02）**：备文献曾直接 `search_external` 导入仅有摘要的 OpenAlex，再按文献簇自行出大纲（生物炭环境 vs 热解制油）。处理：`checkKnowledgeFirstGate` 拦外部检索直到**上一轮**已成功 `search_knowledge`（同批并行合成观察不算）；无 `hitIndices` 时确认卡优先最近本地 PDF，不混旧 OpenAlex；`generate_outline` 前 clarify 确认题目。空点「继续推进」/「已收到你的回复」不当成新题目。走查见 `agent-lit-front-flow.test.ts`。
+- **本地库检索质量（2026-10-02）**：`search_knowledge` 默认每篇最多 4 个片段、一共 12 条 → 大约 3 篇 PDF，Agent 只好连搜，且按片段先到先得，方法段会顶掉题名相关篇。处理：备文献 `maxPerSource=1`、召回 48 段后**按篇**用题名/摘要相关度排序；query 叠当前题目；多轮命中合并；命中 ≥8 篇或已搜两次则拦换词再搜，逼 `import_reference`。
+- **备文献漂题 + 把「备选」写成题目（2026-10-02，`cmuqmsr1r`）**：主题「生物质热解制炭」后，选项 3 反复「再补到 30 篇」，query 漂到土壤/吸附/缓释肥；定题后又问一遍，用户回「给我几个备选」被当成 `confirmedTitle`，大纲列出茶园/萎凋。处理：制炭查询降权缓释肥/催化/茶学；摘要不取参考文献页；项目已有正式题不再二次确认；「备选/你根据…」不当题名；≥12 篇拦再搜；收尾禁止默认「再补检索」。
 - **写章节缺文献照常写（2026-08-08 / RULES-01 2026-08-15）**：条文现只写在 `AGENT_RULES` id=`draft-missing-refs`；`buildAgentSystemPrompt` 与 `draftGoalNudge` 同读 `ruleText`。跟聊 goal 失真（「A/继续」）的写章节纪律由 `snapshot.intentKind` 继承（INTENT-01/02）。`checkDraftSearchGate` / 收尾兜底只认 `intentKind === "draft"`。
 
 ## 断点续跑 / 门禁旁路修复（2026-08-09）

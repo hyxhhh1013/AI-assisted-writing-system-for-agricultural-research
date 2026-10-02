@@ -9,7 +9,19 @@ describe("title-prereq-consent", () => {
   it("treats unnamed projects as placeholder titles", () => {
     expect(isPlaceholderPaperTitle("")).toBe(true);
     expect(isPlaceholderPaperTitle("未命名论文")).toBe(true);
+    expect(isPlaceholderPaperTitle("新文献综述")).toBe(true);
     expect(isPlaceholderPaperTitle("生物质热解催化转化制生物油")).toBe(false);
+  });
+
+  it("does not re-ask title once the project already has a real title", () => {
+    expect(
+      shouldAskTitleBeforeOutline({
+        goal: "检索并导入相关文献",
+        intentKind: "literature",
+        title: "生物质热解制炭工艺与生物炭理化性质调控研究进展",
+        observations: [{ tool: "import_reference", success: true }],
+      }),
+    ).toBe(false);
   });
 
   it("asks before outline after literature hunt even if title looks real", () => {
@@ -70,6 +82,12 @@ describe("title-prereq-consent", () => {
       readTitlePrereqConsent(
         [{ role: "user", content: "【用户回答】已收到你的回复。请继续。" }],
         "生物质热解催化转化",
+      ),
+    ).toEqual({ kind: "keep" });
+    expect(
+      readTitlePrereqConsent(
+        [{ role: "user", content: "【用户回答】你根据已有文献给我几个备选\n请据此继续" }],
+        "生物质热解制炭工艺与生物炭理化性质调控研究进展",
       ),
     ).toEqual({ kind: "keep" });
   });

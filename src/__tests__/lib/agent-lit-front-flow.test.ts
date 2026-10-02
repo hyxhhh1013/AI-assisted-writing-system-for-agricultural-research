@@ -97,6 +97,8 @@ describe("备文献前流程走查", () => {
     expect(nudge).toContain("search_knowledge");
     expect(nudge).toContain("knowledgeHitIndices");
     expect(nudge).toMatch(/确认题目/);
+    expect(nudge).toMatch(/禁止换同义词/);
+    expect(nudge).toMatch(/再补检索/);
     const plan = fallbackPlan("检索并导入相关文献");
     expect(plan.subtasks[0]?.toolHints).toEqual(["search_knowledge", "import_reference"]);
     expect(plan.subtasks[0]?.toolHints).not.toContain("search_external");
