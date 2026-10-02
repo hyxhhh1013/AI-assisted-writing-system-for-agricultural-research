@@ -146,7 +146,7 @@ export function checkClassificationRetrieveGate(
         error:
           "本轮是文献分类编码：已调用过 list_references，请直接调用 save_reference_classification"
           + "一次性提交全部分类（refIndex 1 基 → category，sourceName 可省略），不要再反复检索。"
-          + "分类参考大纲/蓝图主题（如 热解 / 烟草 / 生物油 / 合成气 / 碳材料）。",
+          + "分类用本文大纲/蓝图主题词（如 生物油 / 合成气 / 碳材料），不要用实验室其它方向名（烟草/茶学）当标签。",
       };
     }
   }
@@ -637,10 +637,13 @@ export function draftGoalNudge(goal = "", intentKind?: IntentKind | null): strin
 export function literatureHuntNudge(goal = ""): string {
   const n = parseLiteratureImportTarget(goal);
   return (
-    "【系统】本轮是检索并导入：优先 search_knowledge；外部用 search_external（中文自动转英文）。"
-    + `默认目标约 ${n} 篇。效率优先：单次 limit=20～25，用 1～2 个宽泛英文 query 即可，不要碎成很多次小搜；`
-    + "立刻 import_reference(hitIndices=data.suggestedHitIndices, query, why≥8字) 交给用户勾选（单次最多约 15 篇，hitIndices 最省 token 不截断；也可 hitsJson）。"
-    + "用户确认入库后停下来汇报篇数，问要不要再补一轮。命中离题则说明；禁止改题；禁止编造 hitJson。"
+    "【系统】本轮是给当前论文备文献，不是方向页的「研究缺口识别」，也不是扫实验室四方向。"
+    + "先 list_references 看已有篇数；已经够用就停下来汇报，问要不要生成大纲。"
+    + `不足则 search_knowledge（category=当前论文分类）+ search_external，默认目标约 ${n} 篇。`
+    + "效率优先：单次 limit=20～25，用 1～2 个跟题目走的英文 query，不要碎成很多次小搜；"
+    + "立刻 import_reference(hitIndices=data.suggestedHitIndices, query, why≥8字) 交给用户勾选。"
+    + "禁止为对齐四方向去搜烟草/茶学/控释肥/烟花。用户确认入库后停下来汇报篇数。"
+    + "命中离题则说明；禁止改题；禁止编造 hitJson；禁止写缺口识别长报告。"
   );
 }
 
@@ -650,7 +653,8 @@ export function referenceClassificationNudge(): string {
     "【系统】本轮是文献分类编码：先 list_references 一次拿到全量文献（含编号与来源），"
     + "再一次性调用 save_reference_classification 提交全部分类（refIndex 1 基 → sourceName/category）。"
     + "禁止用多次 list_references 关键词检索来『分类』（既不落库又低效）；"
-    + "分类可参考蓝图/大纲的主题（如 热解 / 烟草 / 生物油 / 合成气 / 碳材料 等），sourceName 填知识库源文件名，外部导入无 PDF 用标题或 DOI 标识。"
+    + "分类用本文大纲/蓝图主题词（如 生物油 / 合成气 / 碳材料），不要用烟草/茶学等其它实验室方向当标签。"
+    + "sourceName 填知识库源文件名，外部导入无 PDF 用标题或 DOI 标识。"
     + "完成后用中文汇报各类别覆盖的文献编号。"
   );
 }

@@ -44,17 +44,18 @@ export function resolvePhaseTaskPack(
       sectionChars: sectionCharsFromFills(snapshot.sectionFills),
     })
     : null;
-  const nextTips = suggestNextAgentActions({
-    currentPhase: pack.phase,
-    writeEnabled: true,
-    hasOutline: Boolean(snapshot?.outline?.trim() && snapshot.outline.trim().length >= 20),
-    hasWritingBlueprint: Boolean(snapshot?.hasWritingBlueprint),
-    emptySections: empty,
-    nextSectionKey: coverage?.nextSectionKey,
-    thinOrGapSections: coverage
-      ? [...coverage.requiredGaps, ...coverage.thinKeys]
-      : undefined,
-  });
+    const nextTips = suggestNextAgentActions({
+      currentPhase: pack.phase,
+      writeEnabled: true,
+      hasOutline: Boolean(snapshot?.outline?.trim() && snapshot.outline.trim().length >= 20),
+      hasWritingBlueprint: Boolean(snapshot?.hasWritingBlueprint),
+      emptySections: empty,
+      nextSectionKey: coverage?.nextSectionKey,
+      thinOrGapSections: coverage
+        ? [...coverage.requiredGaps, ...coverage.thinKeys]
+        : undefined,
+      referenceCount: snapshot?.references.length ?? 0,
+    });
   const goal = nextTips[0] ?? pack.goal;
 
   const briefingExtra = [

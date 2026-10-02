@@ -33,7 +33,7 @@ const FALLBACK_WRITE = [
 
 const FALLBACK_READ = [
   "看看项目卡在哪",
-  "检索相关文献并总结缺口",
+  "按本题检索并导入相关文献",
   "检查当前引用",
 ] as const;
 

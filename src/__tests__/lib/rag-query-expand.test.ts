@@ -44,6 +44,8 @@ describe("rag-query-expand", () => {
   it("infers 茶学 from tea aroma query", () => {
     expect(inferCategoriesFromQuery("绿茶香气挥发性")).toContain("茶学");
     expect(inferCategoriesFromQuery("biochar pyrolysis")).toContain("热化学");
+    expect(inferCategoriesFromQuery("生物油挥发性组分")).toContain("热化学");
+    expect(inferCategoriesFromQuery("生物油挥发性组分")).not.toContain("茶学");
   });
 
   it("shouldUseMultiQuery for pure English", () => {

@@ -103,7 +103,7 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 
 - **两阶段检索**：先 BM25（含同义词扩展词项）召回候选；向量在候选集上精排。**BM25 弱命中**（候选过少或最高分偏低）时对该分类**全池向量扫描**，避免语义相关但被 lexical 挡住的片段。
 - **多 query RRF**：`expandRagQueries` 自动生成 2～4 个变体（如 `biochar` ↔ `生物炭`），分路检索再 RRF 合并（默认开启，`multiQuery: false` 可关）。
-- **查询分类提示**：`inferCategoriesFromQuery` 从 query 推断分类（茶/热解/biochar 等）；全库检索时**优先在相关分类子集检索**，避免大块分类（如控释肥类）压制 Top1；命中不足再与全库 RRF 合并。`resolveRagCategoryName` 把口语别名「热解」映射到磁盘实名「热化学」（没有 `index_热解.json`）。索引路径走 `resolveProjectRuntimePath("data")`，不跟 `process.cwd()`。
+- **查询分类提示**：`inferCategoriesFromQuery` 从 query 推断分类（茶/热解/biochar 等）；**不用「挥发性/香气/coating」当茶学或控释肥开关**。全库检索时**优先在相关分类子集检索**，避免大块分类（如控释肥类）压制 Top1；命中不足再与全库 RRF 合并。`resolveRagCategoryName` 把口语别名「热解」映射到磁盘实名「热化学」（没有 `index_热解.json`）。索引路径走 `resolveProjectRuntimePath("data")`，不跟 `process.cwd()`。
 - **索引 n-gram 对齐（RAG-PR-013）**：倒排写入 CJK char + bigram（短段补 trigram），与 query 分词一致；否则「热解」「生物炭」等词在 BM25 侧几乎失联。
 - **提质减负（RAG-PR-015）**：
   - CJK 功能单字（的/了/是…）与英文停用词不入倒排/查询，缩小 posting、减少假命中。
@@ -115,7 +115,7 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 - **条件化 multi-query**：默认 `auto`——弱召回、纯英文、或 Top 分类偏离提示时才展开变体；避免每请求 4 路全扫。
 - **`.emb` 按需 pread**：`EmbeddingStore` 不再把整个 `.emb` 读进内存，只保留文件句柄 + 维度；`get()` 用 `fs.readSync` 按偏移读单条向量（配合两阶段，每次仅读候选那几千条）。内存不再随库大小线性膨胀。
 - **倒排索引协作式构建**：`buildInvertedIndexAsync` 分批 `setImmediate` 让出事件循环，避免大库构建时冻结整个服务；全库索引由各分类索引按 offset **合并**得到（`mergeInvertedIndexInto`），不重复分词。
-- **范围检索**：`search({ categories })` 只加载相关分类（子集缓存 `subsetCache`）。扩写经 `writing-context.ts` 用**已有参考文献 ∪ 用户勾选**反推分类；若仍为空则按题名/方向关键词提示分类（如「绿茶香气」→ 茶学）；范围内 0 命中则自动扩到全库。
+- **范围检索**：`search({ categories })` 只加载相关分类（子集缓存 `subsetCache`）。扩写经 `writing-context.ts` 用**已有参考文献 ∪ 用户勾选**反推分类；若仍为空则按题名/方向关键词提示分类（如「绿茶香气」→ 茶学）；范围内 0 命中则自动扩到全库。Agent `search_knowledge` 按项目题名锁定分类（热化学综述不扩到烟草/茶学）。
 - **主题过滤**：检索后按题名/方向主题词过滤跑题片段（`filterChunksByTopicRelevance`）；已有参考文献 pin 保留；过严时 soft top-K 兜底。
 - **按节取证（RAG-PR-016）**：扩写检索多取一倍命中，再按 `metadata.section` 把 Introduction/Methods/Results 等提前；旧索引无该字段时保持原排序。
 - **并发去重**：`categoryLoadInFlight` / `allLoadInFlight` 避免 warmup 与检索并发触发重复构建。

@@ -1,6 +1,6 @@
 # Agent 编排（写作助手）
 
-> L3 域文档 · 更新：2026-10-02（补引用勿检索；选项解析勿把 3.2 当 1/2/3）  
+> L3 域文档 · 更新：2026-10-02（开场检索不再叫研究缺口）  
 > 契约唯一权威源：`src/contracts/agent.ts`（SSE 事件）、`src/contracts/agent-session.ts`（会话消息）、`src/contracts/agent-intent.ts`（`IntentKind`）。
 
 ## 概览
@@ -36,7 +36,7 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 | `src/lib/agent/langgraph/tool-gates.ts` | toolsNode 门禁中间件：前置链（重复/配额/意图+先读后写）+ 阶段 + 后置链（antispam/clarify/outline） |
 | `src/lib/agent/langgraph/graph.ts` | 编译 LangGraph |
 | `src/lib/agent/tools/*.ts` | 各工具定义（`ToolDefinition`） |
-| `src/lib/agent/tools/registry.ts` | **工具唯一挂载表**（`READ_TOOLS` / `WRITE_TOOLS`）；`createAgentTools` 只读此表（W3-AP-ARCH-01） |
+| `src/lib/agent/lab-scope.ts` | 实验室四方向围栏；**检索分类跟当前题目**，禁止扫齐烟草/茶学 |
 | `src/lib/agent/ingest-project-data.ts` | 表格入库合并 + 只 PATCH `dataSources`/`dataClaims`（`ingest_project_data`） |
 | `src/lib/agent/writing-progress.ts` | 写节进度翻译层（管道事件 → `agent/progress` label） |
 | `src/lib/agent/writing-quality.ts` | WQC 写作质检轻量：喉清开场 / 综上所述堆砌 / overclaim / 段长方差（确定性规则，warn 级不阻断） |
@@ -202,6 +202,8 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **软可疑不再劫持「继续」（2026-10-01）**：生产会话 `cmuntp1ls000m126h08fhzsn6` 写完 3.4 后每次「继续」都去 refine 同一批缺摘要语义可疑项，写不出 3.5。`analyzeReflection` 只对硬检未过推 refine；跟聊「继续」且有 `nextWriteHint` 时即使快照 `intentKind` 为空也注入写下一子节。
 - **跟聊「1」又变成引用核查（2026-10-01）**：同一会话后期用户点 1/2/3 只把 goal 存成 `1`，快照 `intentKind` 空，写完子节仍被 reflect 强制 `validate_citations`，收尾标题变成核查报告，执行摘要还回放近 20 条旧工具。处理：数字回复还原成上轮选项；跟聊清空 `toolSummaries`；起草/`ap_full` 写完不再强制引用自查（越界仍由导出硬检拦）。
 - **回「1」被解析成子节号 3.2（2026-10-02）**：`cmuntp1ls` 用户选补引用，收尾却跟计划里的「检索导入」。选项解析把「织入 3.2 合成气」拆成选项 3；`「1」=` 列表解析不到。处理：选项号后禁跟数字；识别 `「1」=`；「补引用」禁 search/import；诊断后「继续」不再 inherit inspect。
+- **热化学综述被规划成扫烟草/茶学（2026-10-02）**：`formatLabScopeBlock` 列出实验室四方向本意是禁止改题，规划器却写成「按四方向检索」。处理：简报只锁定当前方向；规划器事后改写含四方向/茶学的子任务；`search_knowledge` 不扩到其它实验室分类。茶学规则不再用「挥发性/香气」当开关（热解气也有挥发性产物）。
+- **开场芯片「检索并总结研究缺口」（2026-10-02）**：方向页 D3 的「研究缺口」被复用成写作 Agent 第一步，规划器去凑篇数、扫实验室覆盖。芯片改为「按本题检索并导入相关文献」；已有文献不再推检索；禁止写缺口识别长报告。
 - **写章节缺文献照常写（2026-08-08 / RULES-01 2026-08-15）**：条文现只写在 `AGENT_RULES` id=`draft-missing-refs`；`buildAgentSystemPrompt` 与 `draftGoalNudge` 同读 `ruleText`。跟聊 goal 失真（「A/继续」）的写章节纪律由 `snapshot.intentKind` 继承（INTENT-01/02）。`checkDraftSearchGate` / 收尾兜底只认 `intentKind === "draft"`。
 
 ## 断点续跑 / 门禁旁路修复（2026-08-09）

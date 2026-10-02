@@ -145,6 +145,19 @@ describe("resolvePhaseTaskPack", () => {
     expect(r.goal).toMatch(/introduction|引言/);
   });
 
+  it("phase 1 with existing refs asks for outline not another hunt", () => {
+    const r = resolvePhaseTaskPack(
+      snap({
+        currentPhase: 1,
+        outline: "",
+        references: ["[1] a", "[2] b"],
+        hasWritingBlueprint: false,
+      }),
+    );
+    expect(r.goal).toMatch(/大纲/);
+    expect(r.goal).not.toMatch(/检索/);
+  });
+
   it("does not tell phase-4 to write when outline is missing", () => {
     const r = resolvePhaseTaskPack(
       snap({

@@ -3,6 +3,10 @@
  * 提升 BM25 召回，尤其是 Agent 短 query / 英文术语 / 跨表述检索
  */
 
+import { inferCategoriesFromQuery } from "@/lib/knowledge-category-hints";
+
+export { inferCategoriesFromQuery };
+
 /** 同义词组：检索时任一组内词项一并加入 BM25 terms */
 const SYNONYM_GROUPS: string[][] = [
   ["生物炭", "biochar", "char", "pyrogenic carbon", "black carbon"],
@@ -273,24 +277,4 @@ export function expandRagQueries(query: string): string[] {
 
   const list = Array.from(variants).slice(0, 4);
   return list.length > 0 ? list : [q];
-}
-
-/** 查询 → 知识库分类提示（与 writing-context 对齐，避免 rag ↔ services 循环依赖） */
-const QUERY_CATEGORY_HINTS: Array<{ pattern: RegExp; category: string }> = [
-  { pattern: /茶|绿茶|红茶|乌龙|普洱|香气|挥发性|杀青|摊放|茶汤|茶多酚|catechins|tea\b/i, category: "茶学" },
-  { pattern: /烟花|烟火|推进剂|含能|火药|燃烧剂|高氯酸|firework|propellant/i, category: "烟花" },
-  { pattern: /烤烟|烟草|烟叶|植烟|卷烟|tobacco|curing/i, category: "烟草" },
-  { pattern: /热解|共热解|热化学|裂解|气化|生物质.*塑料|碳纳米|秸秆.*热解|pyrolysis|gasification/i, category: "热化学" },
-  { pattern: /控释|缓释|包衣|包膜|肥料|氮素淋|生物炭基肥|fertilizer|coating/i, category: "控释肥类" },
-  { pattern: /生物炭|biochar/i, category: "热化学" },
-];
-
-export function inferCategoriesFromQuery(query: string): string[] {
-  const blob = query.trim();
-  if (!blob) return [];
-  const cats = new Set<string>();
-  for (const { pattern, category } of QUERY_CATEGORY_HINTS) {
-    if (pattern.test(blob)) cats.add(category);
-  }
-  return Array.from(cats);
 }

@@ -55,17 +55,18 @@ export const PHASE_TASK_PACKS: Record<number, PhaseTaskPack> = {
   1: {
     phase: 1,
     title: "文献",
-    goal: "检索与题目相关的实验室文献，总结缺口，必要时导入参考文献",
+    goal: "按当前论文题目检索并导入参考文献（确认后入库）",
     preferredTools: [
+      "list_references",
       "search_knowledge",
       "search_external",
-      "list_references",
       "import_reference",
     ],
     constraints: [
-      "先检索并在结论中保留证据摘要",
+      "只跟当前题目所属方向检索，不要扫实验室其它方向",
+      "先 list_references；已有文献够用就转入大纲，不要为凑篇数继续搜",
       "import_reference 需用户确认",
-      "不要跳过文献直接硬写长文（可先大纲）",
+      "不要写成方向页的「研究缺口识别」或总结实验室四方向覆盖",
     ],
     humanFallback: "知识库 / 读者 Tab 导入文献",
   },

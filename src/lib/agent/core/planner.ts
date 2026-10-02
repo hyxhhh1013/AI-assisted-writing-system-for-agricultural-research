@@ -1,5 +1,12 @@
 import type { AgentPlan } from "@/contracts/agent";
 import { callAINonStreamingWithTools } from "@/lib/agent/core/llm-tools";
+import {
+  parseLiteratureImportTarget,
+} from "@/lib/agent/core/goal-intents";
+import {
+  resolveProjectSearchCategories,
+  sanitizePlanAgainstLabScope,
+} from "@/lib/agent/lab-scope";
 import type { AgentContext } from "@/lib/agent/types";
 
 export async function createPlan(
@@ -7,24 +14,37 @@ export async function createPlan(
   context: AgentContext,
   projectBriefing?: string,
 ): Promise<AgentPlan> {
+  const allowed = resolveProjectSearchCategories({
+    title: context.projectSnapshot?.title,
+    researchDirection: context.projectSnapshot?.researchDirection,
+    directionSlug: context.directionSlug,
+  });
+  const refN = context.projectSnapshot?.references.length ?? 0;
+  const target = parseLiteratureImportTarget(goal);
+  const litEnough = refN >= target;
+  const allowedLine = allowed.length > 0 ? allowed.join("、") : "（未锁定，只跟题名词）";
+
   const messages = [
     {
       role: "system" as const,
       content: `你是农业科研写作助手的任务规划器。将用户目标拆解为 2-5 个可执行子任务（偏少、可对话，不要堆成整篇流水线）。
 只输出 JSON，格式：{"subtasks":[{"id":"1","title":"...","status":"pending","toolHints":["inspect_project"]}]}
 规则：
-- 第一步优先 inspect_project 或检索，再写
+- 用户要写/继续写：优先 write_section，不要先规划检索
 - 对齐 academic-paper 阶段思路，但只规划「本轮对话能做完」的事
 - 用户明确要求撰写某章时才加 write_section；不要默认规划全文八阶段
 - 缺大纲/蓝图时用 generate_* 工具名写进标题或 toolHints
-- 综述/备文献：规划多轮检索 + 分批导入；综述目标约 ≥30 篇，普通检索约 15 篇
+- 仅当用户明确要检索且文献不足时，才规划 search/import；综述目标约 ≥30 篇，普通约 15 篇
+- 检索只覆盖「${allowedLine}」。禁止写成「按实验室四方向检索」，禁止把其它方向写进导入分类
 - 子任务标题写清意图，便于执行与向用户汇报`,
     },
     {
       role: "user" as const,
       content: `目标：${goal}
 ${context.projectId ? `项目 ID：${context.projectId}` : ""}
-${context.directionSlug ? `研究方向：${context.directionSlug}` : ""}
+${context.directionSlug ? `研究方向 slug：${context.directionSlug}` : ""}
+项目已有文献 ${refN} 篇（本轮目标约 ${target} 篇）${litEnough ? "；数量已够，禁止规划检索/导入" : ""}
+允许检索分类：${allowedLine}
 ${projectBriefing ? `\n【项目简报】\n${projectBriefing}` : ""}`,
     },
   ];
@@ -35,19 +55,20 @@ ${projectBriefing ? `\n【项目简报】\n${projectBriefing}` : ""}`,
       signal: context.signal,
       userId: context.userId,
       temperature: 0,
-      // 规划是短任务，走便宜模型（默认 zhipu，未配置回落 deepseek）
       role: "planner",
     });
     const parsed = parsePlanJson(raw.content ?? "");
-    if (parsed.subtasks.length > 0) return parsed;
+    if (parsed.subtasks.length > 0) {
+      return sanitizePlanAgainstLabScope(parsed, allowed);
+    }
   } catch {
     /* fallback below */
   }
 
-  return fallbackPlan(goal);
+  return sanitizePlanAgainstLabScope(fallbackPlan(goal, litEnough), allowed);
 }
 
-function fallbackPlan(goal: string): AgentPlan {
+export function fallbackPlan(goal: string, literatureAlreadyEnough = false): AgentPlan {
   const wantsFull =
     /整篇|全文|academic-paper|一键|完整论文|从零|从头写/.test(goal);
   const wantsWrite = /写|扩写|起草|生成.*(引言|方法|结果|讨论|结论|摘要|章节|综述)/.test(goal);
@@ -57,18 +78,18 @@ function fallbackPlan(goal: string): AgentPlan {
     && (/检索|导入.*文献|找.*文献|补充.*文献|备齐.*文献/.test(goal)
       || /literature\s*review/i.test(goal));
 
-  if (wantsLitOnly) {
+  if (wantsLitOnly && !literatureAlreadyEnough) {
     return {
       subtasks: [
         {
           id: "1",
-          title: "多轮 search_knowledge / search_external（换同义英文 query）",
+          title: "按本题方向 search_knowledge / search_external（换同义英文 query）",
           status: "pending",
           toolHints: ["search_knowledge", "search_external"],
         },
         {
           id: "2",
-          title: "分批 import_reference 导入约 15 篇（hitsJson；综述再抬到 30）",
+          title: "分批 import_reference 导入本题相关文献",
           status: "pending",
           toolHints: ["import_reference"],
         },
@@ -85,12 +106,14 @@ function fallbackPlan(goal: string): AgentPlan {
     return {
       subtasks: [
         { id: "1", title: "inspect_project 看清进度与缺口", status: "pending", toolHints: ["inspect_project"] },
-        {
-          id: "2",
-          title: "检索并导入足量文献（综述级约 ≥30 篇）",
-          status: "pending",
-          toolHints: ["search_knowledge", "search_external", "import_reference"],
-        },
+        ...(literatureAlreadyEnough
+          ? []
+          : [{
+              id: "2",
+              title: "仅当文献不足时检索导入本题方向文献",
+              status: "pending" as const,
+              toolHints: ["search_knowledge", "search_external", "import_reference"],
+            }]),
         { id: "3", title: "若缺大纲则 generate_outline 并请你确认", status: "pending", toolHints: ["generate_outline"] },
         { id: "4", title: "向你汇报现状并建议下一步（停下来等你）", status: "pending" },
       ],
@@ -110,16 +133,18 @@ function fallbackPlan(goal: string): AgentPlan {
       subtasks: [
         {
           id: "1",
-          title: "inspect / list_references 检查文献体量（目标约 ≥30 篇）",
+          title: "inspect / list_references 看清已有文献与子节缺口",
           status: "pending",
           toolHints: ["inspect_project", "list_references"],
         },
-        {
-          id: "2",
-          title: "不足则多轮检索并分批 import_reference",
-          status: "pending",
-          toolHints: ["search_external", "import_reference"],
-        },
+        ...(literatureAlreadyEnough || !/检索|导入|找文献/.test(goal)
+          ? []
+          : [{
+              id: "2",
+              title: "不足则按本题方向检索并分批 import_reference",
+              status: "pending" as const,
+              toolHints: ["search_external", "import_reference"],
+            }]),
         {
           id: "3",
           title:
@@ -140,9 +165,8 @@ function fallbackPlan(goal: string): AgentPlan {
           status: "pending",
           toolHints: ["generate_outline", "generate_writing_blueprint"],
         },
-        { id: "2", title: "检索与本章相关的文献要点", status: "pending", toolHints: ["search_knowledge"] },
-        { id: "3", title: "调用 write_section 生成并写回章节", status: "pending", toolHints: ["write_section"] },
-        { id: "4", title: "向用户确认写回结果", status: "pending" },
+        { id: "2", title: "调用 write_section 生成并写回章节", status: "pending", toolHints: ["write_section"] },
+        { id: "3", title: "向用户确认写回结果", status: "pending" },
       ],
     };
   }

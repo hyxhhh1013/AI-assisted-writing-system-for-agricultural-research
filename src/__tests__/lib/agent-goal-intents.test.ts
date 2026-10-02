@@ -74,6 +74,13 @@ describe("goal-intents", () => {
     expect(parseLiteratureImportTarget("找几篇热解相关文献")).toBe(15);
   });
 
+  it("literature hunt hint is import-for-this-paper not D3 gap report", () => {
+    const text = mergeGoalWithIntentHint("按本题检索并导入相关文献");
+    expect(text).toContain("备文献");
+    expect(text).toContain("研究缺口识别");
+    expect(text).toContain("list_references");
+  });
+
   it("treats 基于 N 条文献修订大纲 as outline revision, not a search", () => {
     const goal = "基于 27 条文献修订大纲";
     expect(isOutlineRevisionGoal(goal)).toBe(true);

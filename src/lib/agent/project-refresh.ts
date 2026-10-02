@@ -74,7 +74,7 @@ export async function refreshAgentProjectContext(
   ctx.projectSnapshot = snap;
   ctx.projectDirty = false;
   let briefing = appendPhasePackToBriefing(
-    formatAgentProjectBriefing(snap),
+    formatAgentProjectBriefing(snap, { directionSlug: ctx.directionSlug }),
     snap,
   );
   // withMemory=false（前导/confirm 用）：跨会话记忆由 run-graph 主流程按门禁+软超时拼一次，

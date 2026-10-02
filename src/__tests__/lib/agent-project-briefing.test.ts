@@ -54,6 +54,8 @@ describe("agent project briefing", () => {
     expect(text).toContain("实验室范围");
     expect(text).toContain("热化学");
     expect(text).toContain("烟草");
+    expect(text).toContain("只允许：热化学");
+    expect(text).toContain("禁止规划「按实验室四方向检索」");
     expect(text).toContain("下一未写子节");
     expect(text).toContain("write_section(section=literature_body");
   });
@@ -77,7 +79,7 @@ describe("agent project briefing", () => {
     expect(msg).not.toBeNull();
     expect(msg!.content).toContain("【项目简报");
     expect(msg!.content).toContain("生物炭综述");
-    expect(msg!.content).toContain("四个研究方向");
+    expect(msg!.content).toContain("只允许：热化学");
     // system prompt 不再内嵌易变的项目简报
     const prompt = buildAgentSystemPrompt([]);
     expect(prompt).not.toContain("【项目简报");
@@ -106,8 +108,21 @@ describe("agent project briefing", () => {
       emptySections: ["introduction", "literature_body"],
       nextSectionKey: "introduction",
     });
-    expect(tips).toEqual(["检索相关文献并总结研究缺口"]);
+    expect(tips).toEqual(["按本题检索并导入相关文献"]);
     expect(tips.some((t) => t.startsWith("写"))).toBe(false);
+  });
+
+  it("does not keep hunting literature when refs already exist but outline is missing", () => {
+    const tips = suggestNextAgentActions({
+      currentPhase: 1,
+      writeEnabled: true,
+      hasOutline: false,
+      hasWritingBlueprint: false,
+      emptySections: ["introduction"],
+      referenceCount: 12,
+    });
+    expect(tips[0]).toContain("大纲");
+    expect(tips.some((t) => t.includes("检索"))).toBe(false);
   });
 
   it("skips stale phase-1 literature tip once an outline exists", () => {

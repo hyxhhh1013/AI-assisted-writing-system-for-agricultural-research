@@ -43,7 +43,7 @@ export const inspectProjectTool: ToolDefinition = {
       return { success: false, error: "项目不存在或无权访问" };
     }
 
-    const briefing = formatAgentProjectBriefing(project);
+    const briefing = formatAgentProjectBriefing(project, { directionSlug: ctx.directionSlug });
     ctx.projectBriefing = briefing;
 
     const pack = resolvePhaseTaskPack(project);
@@ -145,6 +145,7 @@ export const inspectProjectTool: ToolDefinition = {
       emptySections: empty.filter((k) => k !== "abstract"),
       nextSectionKey: draftCoverage.nextSectionKey,
       thinOrGapSections: [...draftCoverage.requiredGaps, ...draftCoverage.thinKeys],
+      referenceCount: project.references.length,
     });
     const suggestedGoal = nextTips[0] ?? pack.goal;
     const nextNote = suggestedGoal;

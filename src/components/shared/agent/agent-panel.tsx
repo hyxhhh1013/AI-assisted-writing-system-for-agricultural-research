@@ -257,6 +257,7 @@ export function AgentPanel({
           emptySections,
           nextSectionKey: coverage.nextSectionKey,
           thinOrGapSections: thinOrGap,
+          referenceCount: p.references?.length ?? 0,
         }),
       ]
         .filter((x, i, arr) => arr.indexOf(x) === i)

@@ -69,6 +69,11 @@ describe("classifyIntentFromRegex", () => {
     expect(classifyIntentFromRegex("写引言")).toBe("draft");
   });
 
+  it("maps 按本题检索并导入相关文献 to literature", () => {
+    expect(classifyIntentFromRegex("按本题检索并导入相关文献")).toBe("literature");
+    expect(classifyIntentFromRegex("检索相关文献并总结研究缺口")).toBe("literature");
+  });
+
   it("maps 优先补引用 to review_write not literature", () => {
     expect(classifyIntentFromRegex("优先补引用")).toBe("review_write");
     expect(classifyIntentFromRegex("把现有未引用文献织入正文")).toBe("review_write");

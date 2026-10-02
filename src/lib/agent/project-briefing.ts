@@ -38,9 +38,14 @@ function sectionLabel(key: string): string {
 /** 压缩项目快照为 Agent 系统提示中的「当前项目」简报（尽量多上下文） */
 export function formatAgentProjectBriefing(
   project: AgentProjectSnapshot | null | undefined,
-  options?: { knowledgeCategories?: readonly string[] },
+  options?: { knowledgeCategories?: readonly string[]; directionSlug?: string },
 ): string {
-  const scopeBlock = formatLabScopeBlock(options?.knowledgeCategories);
+  const scopeBlock = formatLabScopeBlock({
+    knowledgeCategories: options?.knowledgeCategories,
+    title: project?.title,
+    researchDirection: project?.researchDirection,
+    directionSlug: options?.directionSlug,
+  });
 
   if (!project) {
     return (
@@ -177,7 +182,8 @@ export interface SuggestNextAgentActionsInput {
   hasArgumentBlueprint?: boolean;
   hasWritingBlueprint?: boolean;
   emptySections: string[];
-  /** 优先于 emptySections 的薄节/缺口 */
+  /** 项目已有参考文献条数；有文献时不要再推「检索」开场 */
+  referenceCount?: number;
   nextSectionKey?: string | null;
   thinOrGapSections?: string[];
 }
@@ -211,12 +217,16 @@ export function suggestNextAgentActions(input: SuggestNextAgentActionsInput): st
   const hasOutline = input.hasOutline;
   const writeEnabled = input.writeEnabled;
   const writeTarget = writeTargetOf(input);
+  const refN = input.referenceCount ?? 0;
 
   if ((phase ?? 0) >= 7) {
     return ["运行下一轮论文审查"];
   }
   if ((phase ?? 1) <= 1 && !hasOutline) {
-    return ["检索相关文献并总结研究缺口"];
+    if (refN >= 1) {
+      return ["生成大纲与写作蓝图并写回项目"];
+    }
+    return ["按本题检索并导入相关文献"];
   }
   if (!hasOutline) {
     return ["生成大纲与写作蓝图并写回项目"];
