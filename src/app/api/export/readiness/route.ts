@@ -18,8 +18,8 @@ const isProjectData = (value: unknown): value is ProjectData => {
 
 /**
  * POST /api/export/readiness
- * 导出前就绪检查（引用硬检 + bib_only 精确数据软告警）。
- * 软告警不阻断 ok；硬检未过则 ok=false。
+ * 导出前就绪检查（引用硬检 + 归属硬检 + bib_only 软告警）。
+ * 越界或句子对不上该篇则 ok=false。
  */
 export async function POST(req: NextRequest) {
   try {
@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
       bibOnlyPrecise: readiness.bibOnlyPrecise,
       counterpartAbstract: readiness.counterpartAbstract,
       chartAssetCount: readiness.chartAssets.length,
+      attributionBlocked: readiness.attributionBlocked ?? false,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? getErrorMessage(error) : "未知错误";

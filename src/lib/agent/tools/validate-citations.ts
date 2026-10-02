@@ -5,6 +5,7 @@ import {
   evaluateCitationGrounding,
   refsFromLiteRows,
 } from "@/lib/citation-grounding";
+import { enrichCitedRefsWithPassages } from "@/lib/citation-passage-enrich";
 import {
   createLLMClaimJudge,
   evaluateCitationClaimGrounding,
@@ -23,8 +24,8 @@ import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 export const validateCitationsTool: ToolDefinition = {
   name: "validate_citations",
   description:
-    "一次检查全文引用（硬检越界、文献表与正文引用是否对齐、语义可疑项）。优先于逐条 read_reference；"
-    + "可省略 draftText 自动用项目全文。交付前必调；核查任务第一步应调用本工具",
+    "一次检查全文引用（越界硬检 + 该篇文献是否撑得住该句）。错引必须改号或删引才能导出；"
+    + "优先于逐条 read_reference。可省略 draftText 自动用项目全文。交付前必调。",
   parameters: {
     type: "object",
     properties: {
@@ -89,9 +90,22 @@ export const validateCitationsTool: ToolDefinition = {
       refCount,
     });
 
+    const groundingRefs = refsFromLiteRows(references);
+    let groundedRefs = groundingRefs;
+    try {
+      groundedRefs = await enrichCitedRefsWithPassages({
+        projectId: ctx.projectId,
+        draftText,
+        references: groundingRefs,
+        citedNumbers: gate.uniqueNumbers,
+      });
+    } catch {
+      groundedRefs = groundingRefs;
+    }
+
     const grounding = evaluateCitationGrounding({
       draftText,
-      references: refsFromLiteRows(references),
+      references: groundedRefs,
     });
 
     // bib_only 精确数据告警（软信号，不阻断 exportReady）：
@@ -125,7 +139,7 @@ export const validateCitationsTool: ToolDefinition = {
     ) {
       try {
         claimGrounding = await evaluateCitationClaimGrounding(
-          { draftText, references: refsFromLiteRows(references) },
+          { draftText, references: groundedRefs },
           createLLMClaimJudge({ signal: ctx.signal, userId: ctx.userId }),
         );
       } catch {
@@ -135,27 +149,34 @@ export const validateCitationsTool: ToolDefinition = {
 
     await syncProjectPaperPassport(ctx.projectId).catch(() => null);
 
-    const blocked = !gate.exportReady;
+    const contradictCount = claimGrounding?.contradictCount ?? 0;
+    const attributionBlocked = grounding.blocksExport || contradictCount > 0;
+    const exportReady = gate.exportReady && !attributionBlocked;
     const soft = grounding.softPool;
     const softHint =
       soft.unusedRatio != null && soft.unusedRatio >= 0.5
         ? `；soft 池未引用 ${soft.softUnusedCount}/${soft.softGroundableCount}`
         : "";
 
+    const sampleWrong = grounding.hits
+      .filter((h) => h.suspicious)
+      .slice(0, 6)
+      .map((h) =>
+        h.betterNumber ? `[${h.number}]→[${h.betterNumber}]` : `[${h.number}]`,
+      )
+      .join("、");
+
     let summary: string;
-    if (blocked) {
+    if (!gate.exportReady) {
       summary = `引用硬检未通过：${gate.hint}【必须修正越界编号后才能继续，请直接改引或删引】`;
+    } else if (attributionBlocked) {
+      summary =
+        `引用归属未通过，禁止导出：${grounding.hint}`
+        + (sampleWrong ? ` 请立刻改号或删引：${sampleWrong}。` : " 请改号或删引。")
+        + (contradictCount > 0 ? ` claim 判定 contradict ${contradictCount} 处。` : "")
+        + `用 refine_content 按清单改写，不要把不相关的文献挂在句子上。`;
     } else if (!gate.passed) {
       summary = `可导出，但 Phase 5 未完成：${gate.hint}`;
-    } else if (grounding.suspiciousCount > 0) {
-      // 软可疑（语义勉强/缺摘要无法判定）≠ 必须修的硬错引：
-      // 明确给 Agent 收敛出口，避免「改一处→重验→又报另一处」的无限打地鼠循环。
-      // 可判定且确实错引的才改；缺摘要/语义勉强可接受或改引一次，不要反复重验。
-      summary =
-        `硬检通过，${grounding.suspiciousCount} 处语义可疑引用（${grounding.hint}${softHint}）。`
-        + `判断：优先修正【可判定且明显错引】的编号（改引或删引）；`
-        + `【缺摘要/语义勉强】属软性提示，可接受或改引一次，不要反复 validate 重验——`
-        + `修完这轮即可向用户汇报并给出下一步`;
     } else if (gate.unusedCount > 0) {
       const sample = gate.unusedIndexes.slice(0, 12).join(", ");
       const more = gate.unusedCount > 12 ? "…" : "";
@@ -188,12 +209,14 @@ export const validateCitationsTool: ToolDefinition = {
       success: true,
       data: {
         gate,
-        exportReady: gate.exportReady,
-        phase5Passed: gate.passed,
+        exportReady,
+        phase5Passed: gate.passed && !attributionBlocked,
+        attributionBlocked,
         grounding: {
           checkedCount: grounding.checkedCount,
           suspiciousCount: grounding.suspiciousCount,
           ungroundableCount: grounding.ungroundableCount,
+          blocksExport: grounding.blocksExport,
           hint: grounding.hint,
           softPool: grounding.softPool,
           suspicious: grounding.hits.filter((h) => h.suspicious).slice(0, 8),

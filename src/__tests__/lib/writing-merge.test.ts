@@ -30,6 +30,19 @@ describe("mergeSubsectionIntoSection", () => {
     expect(next).toContain("2.2 下一节");
   });
 
+  it("strips blueprint breadcrumb glued to the first sentence", () => {
+    const next = mergeSubsectionIntoSection({
+      existingText: "",
+      incoming:
+        "1.1 引言 > 2.2 核心概念与问题框架 热解温度通常指反应器所达到的峰值温度。",
+      subsectionTitle: "1.1 引言 > 2.2 核心概念与问题框架",
+      sectionKey: "background",
+    });
+    expect(next).not.toContain(">");
+    expect(next).toMatch(/^2\.\d+ 核心概念与问题框架\n/);
+    expect(next).toContain("热解温度通常指反应器所达到的峰值温度。");
+  });
+
   it("fills an empty subsection without duplicating the heading", () => {
     const existing = "2.1 温度\n\n2.2 下一节\n别的。";
     const next = mergeSubsectionIntoSection({

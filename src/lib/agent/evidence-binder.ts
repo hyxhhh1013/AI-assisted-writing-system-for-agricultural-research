@@ -13,7 +13,7 @@ import type {
   SectionSpecV1,
 } from "@/contracts/section-spec";
 import type { WritingQaFinding } from "@/contracts/writing-qa";
-import { termOverlapRatio } from "@/lib/citation-grounding";
+import { collectionWeightedScores, termOverlapRatio } from "@/lib/citation-grounding";
 
 const MIN_BIND_SCORE = 0.14;
 const MAX_REFS_PER_CARD = 3;
@@ -99,8 +99,13 @@ function bindRefsForClaim(
   pool: BindableReference[],
   usedNs: Set<number>,
 ): ClaimEvidence[] {
+  const corpora = pool.map((ref) => corpusOf(ref));
+  const idfScores = collectionWeightedScores(claim, corpora);
   const scored = pool
-    .map((ref) => ({ ref, score: termOverlapRatio(claim, corpusOf(ref)) }))
+    .map((ref, i) => ({
+      ref,
+      score: Math.max(idfScores[i] ?? 0, termOverlapRatio(claim, corpora[i] ?? "")),
+    }))
     .filter((row) => row.score >= MIN_BIND_SCORE)
     .sort((a, b) => {
       const d = b.score - a.score;

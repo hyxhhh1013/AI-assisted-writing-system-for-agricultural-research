@@ -19,13 +19,14 @@ interface CitationReportData {
     suspiciousCount?: number;
     ungroundableCount?: number;
     hint?: string;
-    suspicious?: Array<{
-      number?: number;
-      overlap?: number;
-      citedSentence?: string;
-      refTitle?: string;
-      reason?: string;
-    }>;
+                suspicious?: Array<{
+                  number?: number;
+                  overlap?: number;
+                  citedSentence?: string;
+                  refTitle?: string;
+                  reason?: string;
+                  betterNumber?: number;
+                }>;
   };
 }
 
@@ -105,6 +106,11 @@ export function AgentCitationReportCard({
               {hit.citedSentence ? (
                 <p className="mt-0.5 line-clamp-2 text-[#122820]/80">{hit.citedSentence}</p>
               ) : null}
+              {typeof hit.betterNumber === "number" ? (
+                <p className="mt-0.5 text-amber-800">建议改引 [{hit.betterNumber}] 或删引</p>
+              ) : (
+                <p className="mt-0.5 text-amber-800">必须改号或删引</p>
+              )}
             </li>
           ))}
           {suspiciousCount > 6 ? (

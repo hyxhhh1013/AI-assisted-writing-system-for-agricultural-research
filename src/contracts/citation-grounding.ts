@@ -1,5 +1,5 @@
 /**
- * W3-AP-CITE-GROUND — 引用语义接地报告（编号合法但句意与题录/摘要不对齐）
+ * W3-AP-CITE-GROUND — 引用语义接地报告（编号合法但句意与该条题录/摘要/段落不对齐）
  */
 
 export interface CitationGroundingRef {
@@ -21,6 +21,8 @@ export interface CitationGroundingHit {
   citedSentence: string;
   refTitle?: string;
   reason: string;
+  /** 集合内更可能支撑该句的编号（改引用线索） */
+  betterNumber?: number;
 }
 
 export interface SoftGroundPoolStats {
@@ -36,6 +38,8 @@ export interface CitationGroundingReport {
   checkedCount: number;
   suspiciousCount: number;
   ungroundableCount: number;
+  /** 可判定且错引：阻断导出 */
+  blocksExport: boolean;
   hits: CitationGroundingHit[];
   softPool: SoftGroundPoolStats;
   hint: string;

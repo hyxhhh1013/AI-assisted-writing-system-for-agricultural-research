@@ -8,7 +8,7 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-10-02（本地库按篇召回；备文献禁止换词连搜）  
+> **最后更新**：2026-10-02（错引硬门：句子对上该篇才能导出）  
 > **实时 status 只看 §1 Phase 13 / Phase 14 / Phase 16 / Phase 17 / Phase 18 与 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
@@ -328,7 +328,8 @@
 | W3-AP-HITL-LIT-02 | 确认卡读摘要失败时拉 OA 首段或 DOI landing | LIT-01 | 1.5d | **done** | 2026-10-01；OpenAlex 或非 PDF 落地页首段，≤480 字，超时软失败 |
 | W3-AP-HITL-LIT-03 | 大纲过目：标题芯片对照已导入 [n] 覆盖 | LIT-01 | 1.5d | **done** | 2026-10-01；题录实词或蓝图已写明的 [n]；对不上不编造 |
 | W3-AP-SEARCH-UX | 检索分波 `agent/progress` stage=searching | — | 0.5d | **done** | 2026-09-30；OpenAlex/S2 → 补 CrossRef；输入区进度条 |
-| **W3-AP-LIT-RANK** | **本地库按篇召回 + 相关度；禁止换词连搜** | LIT-LOCAL | 0.3d | **done** | 2026-10-02；`knowledge-search-rank` + merge last-search + repeat gate |
+| W3-AP-LIT-RANK | **本地库按篇召回 + 相关度；禁止换词连搜** | LIT-LOCAL | 0.3d | **done** | 2026-10-02；`knowledge-search-rank` + merge last-search + repeat gate |
+| **W3-AP-CITE-ATTR** | **错引硬门：句子必须对上该篇；对不上禁导出** | W3-AP-CITE-GROUND | 0.5d | **done** | 2026-10-02；集合 IDF + PDF 段落补语料；validate/export/Word/PDF |
 | — | 任务单细节 | — | — | — | [`plans/W3-AP-QUALITY-NEXT.md`](./plans/W3-AP-QUALITY-NEXT.md) |
 
 | 来源 | 本队列处理方式 |
@@ -1444,6 +1445,8 @@ src/app/api/（13）                       src/lib/（6）
 | 2026-10-02 | W3-AP-LIT-IDF | AI | 不写死黑名单：当次命中 IDF 降权集合词；过宽主题少建议；确认卡不并全集、默认只勾请求序号。 |
 | 2026-10-02 | W3-AP-LIT-LOCAL | AI | 备文献先 search_knowledge 导入本地 PDF；拦 search_external；generate_outline 前确认题目。走查：同批并行不放外部、确认卡不混旧 OpenAlex、空继续不当成新题。 |
 | 2026-10-02 | ADMIN-050 | AI | 仪表盘 heap/RSS/PM2 误报：used/allocated 当压力、lifetime 重启当故障。改为 V8 上限与 unstable_restarts；探测系统 Chrome。 |
+| 2026-10-02 | WRITE-SUB-PATH | AI | 蓝图「父 > 子」被写成段首。写回只用叶子标题并剥面包屑；Writer/简报禁止把路径粘进正文。 |
+| 2026-10-02 | W3-AP-CITE-ATTR | AI | 错引硬门：集合 IDF + 可选 PDF 段落；validate/导出阻断；绑文献不再只靠共享领域词。 |
 | 2026-09-30 | RAG-CAT-ALIAS | AI | `search_knowledge(category=热解)` 0 命中：别名映射到 `热化学`；索引改走 `GRAINSCRIPT_DATA_ROOT`。 |
 
 ---

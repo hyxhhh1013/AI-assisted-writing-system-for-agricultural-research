@@ -11,6 +11,7 @@ import {
 } from "@/contracts/writing";
 import type { PreparedWritingContext, WritingPipelineEmit } from "../types";
 import { finalizeAndEmitCitations } from "./finalize";
+import { manuscriptSubsectionTitle } from "@/lib/writing-merge";
 
 const tick = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -45,8 +46,11 @@ export async function runExpandBulletPhase(
     subsectionTitle: subsectionTitle || "bullet",
     partCount: Math.max(normalizedBullets.length, 2),
   });
+  const subLabel = subsectionTitle
+    ? manuscriptSubsectionTitle(subsectionTitle)
+    : "";
   const userContent = `论文题目：${title}
-当前写作章节：${section}${subsectionTitle ? `\n当前子节：${subsectionTitle}` : ""}
+当前写作章节：${section}${subLabel ? `\n当前子节：${subLabel}` : ""}
 
 【本节已写入内容（请自然衔接，勿重复）】
 ${adopted}
@@ -57,7 +61,8 @@ ${idx + 1}. ${normalizedBullets[idx]}
 【其他要点（本条勿展开）】
 ${otherBullets || "（无）"}${context?.trim() ? `\n\n【补充说明】\n${context.trim()}` : ""}
 
-指令：${resolvedSectionPrompt}`;
+指令：${resolvedSectionPrompt}
+禁止把「父节 > 子节」路径写进段落开头。`;
 
   emit({ type: "status", status: "writing" });
   emit({
@@ -114,16 +119,21 @@ export async function runWriterPhase(
   emit: WritingPipelineEmit,
   signal: AbortSignal,
 ): Promise<WriterPhaseResult> {
-  const { title, section, context, bullets } = data;
+  const { title, section, context, bullets, subsectionTitle } = data;
   const { systemPrompt, resolvedSectionPrompt } = prepared;
 
   const normalizedBullets = normalizeWritingBullets(bullets);
+  const subLabel = subsectionTitle
+    ? manuscriptSubsectionTitle(subsectionTitle)
+    : "";
+  const subLine = subLabel ? `\n当前子节：${subLabel}` : "";
+  const pathRule = "\n禁止把「父节 > 子节」路径写进段落开头；子节名单独作标题行。";
   const userContent =
     normalizedBullets.length >= MIN_WRITING_BULLETS
-      ? `论文题目：${title}\n当前写作章节：${section}\n本节扩写要点（须逐条覆盖，不得遗漏或合并无关内容）：\n${formatWritingBulletsForPrompt(normalizedBullets)}${
+      ? `论文题目：${title}\n当前写作章节：${section}${subLine}\n本节扩写要点（须逐条覆盖，不得遗漏或合并无关内容）：\n${formatWritingBulletsForPrompt(normalizedBullets)}${
           context?.trim() ? `\n\n补充说明：${context.trim()}` : ""
-        }\n\n指令：${resolvedSectionPrompt}`
-      : `论文题目：${title}\n当前写作章节：${section}\n研究内容/上下文信息：${context}\n\n指令：${resolvedSectionPrompt}`;
+        }\n\n指令：${resolvedSectionPrompt}${pathRule}`
+      : `论文题目：${title}\n当前写作章节：${section}${subLine}\n研究内容/上下文信息：${context}\n\n指令：${resolvedSectionPrompt}${pathRule}`;
 
   emit({ type: "status", status: "writing" });
   emit({ type: "pipeline_step", step: "writing", status: "running", detail: "AI 正在生成初稿..." });

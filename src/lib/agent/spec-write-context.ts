@@ -7,6 +7,7 @@ import {
   type SectionSpecV1,
 } from "@/contracts/section-spec";
 import { formatEvidenceBindHint } from "@/lib/agent/evidence-binder";
+import { manuscriptSubsectionTitle } from "@/lib/writing-merge";
 
 export type WriteSpecSource = "provided" | "compiled" | "empty";
 
@@ -36,9 +37,11 @@ export function formatWriterContextFromSpec(spec: SectionSpecV1): string {
   const figs = spec.figureSlots.length
     ? `规划配图：${spec.figureSlots.join("、")}`
     : "";
-  const sub = spec.subsectionTitle ? `子节：${spec.subsectionTitle}` : "";
+  const sub = spec.subsectionTitle
+    ? `子节：${manuscriptSubsectionTitle(spec.subsectionTitle)}`
+    : "";
   return [
-    "【本节主张】把下列判断写进连续论述。禁止把 C1/C2 或主张原文写成小标题、加粗行或段首标签。",
+    "【本节主张】把下列判断写进连续论述。禁止把 C1/C2 或主张原文写成小标题、加粗行或段首标签。禁止把「父节 > 子节」蓝图路径写进正文；子节名单独占一行标题。",
     sub,
     ...(cards.length > 0 ? cards : ["（尚无主张卡，按语域扩写，不要虚构 [n]）"]),
     `字数带 ${spec.constraints.minChars}–${spec.constraints.maxChars}`,

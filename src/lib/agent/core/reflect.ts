@@ -69,14 +69,22 @@ function validateReportFields(o: ToolObservation): {
   const d = o.data as {
     exportReady?: unknown;
     phase5Passed?: unknown;
-    gate?: { refCount?: unknown; citationCount?: unknown };
-    grounding?: { suspiciousCount?: unknown };
+    attributionBlocked?: unknown;
+    gate?: { refCount?: unknown; citationCount?: unknown; exportReady?: unknown };
+    grounding?: { suspiciousCount?: unknown; blocksExport?: unknown };
   };
   const suspicious =
     typeof d?.grounding?.suspiciousCount === "number"
       ? d.grounding.suspiciousCount
       : 0;
-  const blocked = d?.exportReady === false || d?.phase5Passed === false;
+  const attribution =
+    d?.attributionBlocked === true
+    || d?.grounding?.blocksExport === true
+    || suspicious > 0;
+  const blocked =
+    d?.exportReady === false
+    || d?.phase5Passed === false
+    || attribution;
   const gate = d?.gate;
   const refCount = typeof gate?.refCount === "number" ? gate.refCount : -1;
   const citationCount =
@@ -89,8 +97,8 @@ function validateReportFields(o: ToolObservation): {
 }
 
 /**
- * 硬检未过（越界编号等）。语义可疑 / 缺摘要是软提示，不算硬问题。
- * 空项目（0 文献 0 引用）的「未过」不算错引。
+ * 硬检未过：越界编号，或可判定的错引（句子对不上该篇）。
+ * 缺摘要无法判定不算硬问题。空项目（0 文献 0 引用）的「未过」不算错引。
  */
 export function validateHasHardIssues(o: ToolObservation): boolean {
   const { blocked, emptyProject } = validateReportFields(o);
@@ -138,8 +146,7 @@ export function analyzeReflection(
     }
   }
 
-  // validate 覆盖了该写入：仅硬检未过才推 refine。
-  // 语义可疑/缺摘要是软提示（文献无摘要时会永远 >0），再推 refine 会让「继续」卡住改引、写不了下一子节。
+  // validate 覆盖了该写入：越界或可判定错引都推 refine（缺摘要不推）。
   if (lastValidateIdx > lastWriteIdx) {
     const lastValidate = observations[lastValidateIdx];
     if (!validateHasHardIssues(lastValidate)) {

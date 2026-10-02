@@ -5,6 +5,7 @@ import {
   evaluateDraftCoverage,
   sectionCharsFromFills,
 } from "@/lib/draft-coverage";
+import { manuscriptSubsectionTitle } from "@/lib/writing-merge";
 
 const PHASE_LABELS: Record<number, string> = {
   0: "配置",
@@ -151,7 +152,7 @@ export function formatAgentProjectBriefing(
     `已有正文：${filled || "无"}`,
     ...(project.nextWriteHint
       ? [
-          `下一未写子节：立刻 write_section(section=${project.nextWriteHint.sectionKey}, subsectionTitle="${project.nextWriteHint.subsectionPath}")；用户说「继续」时禁止再 list_references / read_section / 检索。`,
+          `下一未写子节：立刻 write_section(section=${project.nextWriteHint.sectionKey}, subsectionTitle="${manuscriptSubsectionTitle(project.nextWriteHint.subsectionPath)}")；用户说「继续」时禁止再 list_references / read_section / 检索。正文禁止粘贴「父节 > 子节」路径。`,
         ]
       : []),
     `空白章节：${empty || "无"}`,

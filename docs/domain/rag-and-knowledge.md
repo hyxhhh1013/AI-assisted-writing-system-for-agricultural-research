@@ -217,6 +217,10 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 2. 本会话精读一次，后续子节复用 `readingPack`
 3. 小点扩写只写**一个**自然段（不要 1～2 段）
 
+写完后 `validate_citations` 会按**被引那一篇**的题录/摘要（有 `ReferenceSource` 时再补该 PDF 相关段落）做集合 IDF 接地：限定词对不上则禁止导出，必须改号或删引。
+
+## 索引文件格式
+
 ## UI
 
 - `src/app/knowledge/page.tsx` — 搜索、分类 Tab、语义/文件名模式

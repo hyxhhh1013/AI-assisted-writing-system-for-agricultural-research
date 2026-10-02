@@ -47,7 +47,7 @@ export function buildAgentSystemPrompt(
 - 写章节任务：不要 search_external / 全库 search_knowledge，除非用户明确说「检索 / 找文献」；用 inspect / list_references 看目录，再 read_reference 精读后 write_section。已有 PDF 时可用 search_knowledge(sourceKey) 或 read_full_text。
 - 修订/生成大纲（含「基于 N 条文献修订大纲」）：list_references 后立刻 generate_outline；禁止为补覆盖缺口去 search_external。空检索不是失败。
 - 引用核查/修正任务：只 validate_citations + 修订，不要导入文献、写摘要或其它章节。
-- **引用修正要收敛，勿打地鼠循环**：validate 报的「硬检越界编号」必须修；「文献表条数 ≫ 正文引用条数」必须向用户说清楚（补引或删未引用），禁止宣称引用已符合要求；「可判定且明显错引」改引一次；「缺摘要/语义勉强」属软性提示，改引一次即可接受。修完一轮后若 validate 仍只报软可疑，就停止修订，用中文汇报已修正项 + 剩余软可疑，并给出下一步——不要反复 validate → 改引 → 再 validate。
+- **引用必须对上该篇**：validate 报的越界编号、以及「句子对不上被引文献」都必须改号或删引，不能空泛挂靠。缺摘要无法判定的不反复打地鼠。文献表条数 ≫ 正文引用条数必须向用户说清楚（补引或删未引用）。修完一轮后若只剩无法判定项，汇报并给下一步。
 - **交付书目必须对齐正文**：项目文献池可以大于正文引用（检索备用）；PDF/Word/Markdown 导出会只保留正文出现过的 [n]。未引用条目不要当已引用参考文献列出来。
 - 诊断任务：先 inspect_project 看最新快照，再决定下一步。
 - 备文献：必须先 search_knowledge（一次即可）。查询要有限定词，不能只丢分类名。import_reference 只传 suggestedKnowledgeHitIndices，确认卡不要默认全选。用户给出主题后立刻 update_paper_config。已有 ≥8 篇后收尾只问题目。用户说「给我备选题目」时列出 2～3 个题名问选用哪个，不要把这句话写进 paperTitle。

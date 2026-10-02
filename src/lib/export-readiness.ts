@@ -7,6 +7,8 @@
 
 import { evaluateCitationGate } from "@/lib/citation-gate";
 import type { CitationGateResult } from "@/contracts/citation-gate";
+import type { CitationGroundingRef } from "@/contracts/citation-grounding";
+import { evaluateCitationGrounding } from "@/lib/citation-grounding";
 import type { ProjectData } from "@/contracts/project";
 import { parsePaperPassport } from "@/contracts/paper-passport";
 import { parseProjectCharts, type ProjectChartAsset } from "@/contracts/figure";
@@ -23,17 +25,22 @@ export interface ExportReadiness {
   counterpartAbstract: { lang: "zh" | "en"; text: string } | null;
   chartAssets: ProjectChartAsset[];
   /**
-   * 软警告（不阻断 ok）。含 bib_only 精确数据等。
-   * Word/PDF 导出前 toast；硬检仍只看 citation-gate。
+   * 软警告。含 bib_only 精确数据、未引用文献等。
+   * 错引归属失败会同时把 ok 置 false。
    */
   warnings: string[];
   /** bib_only + 精确数据命中（结构化，供前端/API） */
   bibOnlyPrecise: BibOnlyPreciseDataFinding[];
+  /** 句子对不上该篇时阻断导出 */
+  attributionBlocked?: boolean;
+  attributionHint?: string;
 }
 
 export interface AssessExportReadinessOptions {
   /** 1-based bib_only 编号；缺省则不做精确数据软检 */
   bibOnlyIndexes?: ReadonlySet<number>;
+  /** 有题录/摘要时做归属硬检 */
+  groundingReferences?: CitationGroundingRef[];
 }
 
 function collectProjectTexts(project: ProjectData): string[] {
@@ -81,12 +88,29 @@ export function assessExportReadiness(
     if (warn) warnings.push(warn);
   }
 
+  let attributionBlocked = false;
+  let attributionHint: string | undefined;
+  const groundingRefs = options?.groundingReferences;
+  if (groundingRefs && groundingRefs.length > 0) {
+    const grounding = evaluateCitationGrounding({
+      draftText: texts.join("\n\n"),
+      references: groundingRefs,
+    });
+    if (grounding.blocksExport) {
+      attributionBlocked = true;
+      attributionHint = grounding.hint;
+      warnings.unshift(grounding.hint);
+    }
+  }
+
   return {
-    ok: gate.exportReady,
+    ok: gate.exportReady && !attributionBlocked,
     gate,
     counterpartAbstract,
     chartAssets: parseProjectCharts(project.charts),
     warnings,
     bibOnlyPrecise,
+    attributionBlocked,
+    attributionHint,
   };
 }

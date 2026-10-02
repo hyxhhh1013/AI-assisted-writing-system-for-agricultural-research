@@ -45,21 +45,29 @@ export function useDocxExport({ project, activeSection, editingContent, saveProj
     await saveProject();
     const merged = mergeEditorIntoProject(project, activeSection, editingContent);
 
-    // W4-EXPORT：与 PDF 共用引用硬检；越界不可「可过稿」导出
+    // W4-EXPORT：越界或错引均不可导出
     const readiness = assessExportReadiness(merged);
     if (!readiness.ok) {
       toast.error(readiness.gate.hint || "引用编号未通过硬检，暂不可导出 Word");
       return;
     }
 
-    // bib_only 精确数据软告警（不阻断）；失败降级为静默
     try {
       const full = await fetchExportReadiness(merged);
+      if (!full.ok) {
+        toast.error(
+          full.warnings[0]
+          || full.gate.hint
+          || "引用未通过归属检查，暂不可导出 Word",
+        );
+        return;
+      }
       if (full.warnings.length > 0) {
         toast.warning(full.warnings.join("\n"));
       }
     } catch {
-      // soft-only；网络失败不挡导出
+      toast.error("无法完成引用归属检查，暂不可导出 Word");
+      return;
     }
 
     const { project: p, removed } = toCitedOnlyManuscript(merged);

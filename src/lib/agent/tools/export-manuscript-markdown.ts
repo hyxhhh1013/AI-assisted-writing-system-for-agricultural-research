@@ -1,8 +1,14 @@
 import { evaluateCitationGate } from "@/lib/citation-gate";
+import {
+  evaluateCitationGrounding,
+  refsFromLiteRows,
+} from "@/lib/citation-grounding";
+import { enrichCitedRefsWithPassages } from "@/lib/citation-passage-enrich";
 import { parsePaperPassport } from "@/contracts/paper-passport";
 import { parseProjectCharts } from "@/contracts/figure";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import prisma from "@/lib/prisma";
+import { findReferenceRowsLite } from "@/lib/reference-rows";
 import { toCitedOnlyManuscript } from "@/lib/reference-reorder";
 
 const SECTION_ORDER = [
@@ -101,6 +107,28 @@ export const exportManuscriptMarkdownTool: ToolDefinition = {
       texts,
       refCount: project.references.length,
     });
+    let exportReady = gate.exportReady;
+    let attributionHint = "";
+    try {
+      const rows = await findReferenceRowsLite(ctx.projectId, ctx.userId);
+      let refs = refsFromLiteRows(rows);
+      refs = await enrichCitedRefsWithPassages({
+        projectId: ctx.projectId,
+        draftText: texts.join("\n\n"),
+        references: refs,
+        citedNumbers: gate.uniqueNumbers,
+      });
+      const grounding = evaluateCitationGrounding({
+        draftText: texts.join("\n\n"),
+        references: refs,
+      });
+      if (grounding.blocksExport) {
+        exportReady = false;
+        attributionHint = grounding.hint;
+      }
+    } catch {
+      // 无摘要时仍以编号硬检为准
+    }
     const sectionRecord: Record<string, string> = {};
     for (const s of project.sections) {
       sectionRecord[s.key] = s.content ?? "";
@@ -150,26 +178,26 @@ export const exportManuscriptMarkdownTool: ToolDefinition = {
         title: project.title,
         markdown,
         charCount: markdown.length,
-        exportReady: gate.exportReady,
+        exportReady,
         citationGate: {
-          passed: gate.passed,
-          exportReady: gate.exportReady,
+          passed: gate.passed && exportReady,
+          exportReady,
           outOfBounds: gate.outOfBounds,
           refCount: gate.refCount,
           unusedCount: gate.unusedCount,
           citedCount: gate.uniqueNumbers.length,
-          hint: gate.hint,
+          hint: attributionHint || gate.hint,
         },
         citedRefCount: cited.references.length,
         uncitedDropped: removed,
         chartCount,
         phase: passport?.currentPhase ?? null,
       },
-      summary: gate.exportReady
+      summary: exportReady
         ? removed > 0
           ? `已打包 Markdown（${markdown.length} 字符）；手稿参考文献 ${cited.references.length} 条（去掉未引用 ${removed} 条，项目文献池未删）`
           : `已打包 Markdown 手稿（${markdown.length} 字符），引用检查通过`
-        : `已打包 Markdown（${markdown.length} 字符）；${gate.hint}`,
+        : `已打包 Markdown（${markdown.length} 字符）；${attributionHint || gate.hint}`,
     };
   },
 };

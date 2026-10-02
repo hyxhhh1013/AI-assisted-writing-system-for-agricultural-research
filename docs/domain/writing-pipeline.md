@@ -79,6 +79,7 @@ route.ts               SSE 外壳
 ## 业务不变量（热规则摘要）
 
 - 引用编号必须在 RAG 返回的 `[1]…[N]` 范围内；越界会被 strip + 警告。
+- **导出错引硬门**：正文 `[n]` 还须能在该条题录/摘要（及已映射的 PDF 段落）上对上限定词；对不上则 `exportReady=false`（`citation-grounding` 集合 IDF）。缺摘要无法判定不挡导出。
 - **正文引用格式**：仅半角方括号 `[1]`、`[2,3]`、`[1-3]`。禁止 `【16】`、`［16］`、`[文献16]` 等变体（Prompt 与后处理均约束）。
 - **禁止章节内嵌文献表**：章节正文末尾不得输出「参考文献 / References」列表（由 `stripEmbeddedBibliography` 剥离）；文献表只在项目侧栏维护。
 - **引用归一化**：`src/lib/citation.ts` 的 `normalizeAllCitationFormats`（含角括号 `【n】` → `[n]`、转义 `\[n\]` → `[n]`）在 Refiner、预览、应用到章节时执行；测试见 `src/__tests__/lib/citation-bounds.test.ts`。

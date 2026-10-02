@@ -117,6 +117,34 @@ describe("assessExportReadiness", () => {
     expect(r.warnings.join("\n")).toMatch(/未引用/);
   });
 
+  it("blocks export when a citation does not match that paper", () => {
+    const r = assessExportReadiness(
+      baseProject({
+        abstract: "金属镍改性提高焦油重整活性[1]。",
+        sections: { introduction: "背景。" },
+        references: ["temp paper", "ni paper"],
+      }),
+      {
+        groundingReferences: [
+          {
+            index: 1,
+            title: "Pretreatment temperature of biomass pyrolysis",
+            abstract:
+              "Pyrolysis of straw. Pretreatment temperature changed biochar yield and drying.",
+          },
+          {
+            index: 2,
+            title: "Nickel modification of biochar catalysts",
+            abstract:
+              "Pyrolysis of straw. Ni metal loading increased catalytic tar reforming activity.",
+          },
+        ],
+      },
+    );
+    expect(r.ok).toBe(false);
+    expect(r.attributionBlocked).toBe(true);
+  });
+
   it("returns empty unused warning when every listed ref is cited", () => {
     const r = assessExportReadiness(
       baseProject({

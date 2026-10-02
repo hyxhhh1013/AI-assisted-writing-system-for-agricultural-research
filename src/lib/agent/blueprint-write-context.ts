@@ -14,7 +14,10 @@ import {
 import { getSectionLabelForMode } from "@/lib/section-registry";
 import { buildOutlineTasks, mapToSectionForMode } from "@/lib/utils";
 import type { AgentProjectSnapshot } from "@/lib/agent/project-loader";
-import { subsectionHeadingPattern } from "@/lib/writing-merge";
+import {
+  manuscriptSubsectionTitle,
+  subsectionHeadingPattern,
+} from "@/lib/writing-merge";
 
 const BLUEPRINT_SECTION_HINT_HEAD = "【写作蓝图（本节）】";
 
@@ -103,7 +106,9 @@ export function formatBlueprintSectionHintForKey(
     for (const g of guides) {
       const kp =
         g.keyPoints.length > 0 ? `；要点：${g.keyPoints.join("；")}` : "";
-      parts.push(`  · ${g.sectionPath}：${g.purpose}${kp}`);
+      parts.push(
+        `  · ${manuscriptSubsectionTitle(g.sectionPath)}：${g.purpose}${kp}`,
+      );
       pushGuideArgs(g, "    ");
     }
   }
@@ -148,12 +153,11 @@ export function listBlueprintSubsectionPathsForKey(
 }
 
 export function subsectionPathLeaf(path: string): string {
-  const parts = path.split(">").map((s) => s.trim()).filter(Boolean);
-  return parts[parts.length - 1] ?? path.trim();
+  return manuscriptSubsectionTitle(path);
 }
 
 export function bodyCoversSubsectionTitle(body: string, title: string): boolean {
-  const t = title.trim();
+  const t = manuscriptSubsectionTitle(title);
   if (!t) return true;
   const padded = `\n${body.replace(/\r\n/g, "\n")}\n`;
   return subsectionHeadingPattern(t).test(padded);

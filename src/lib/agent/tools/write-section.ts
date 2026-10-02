@@ -25,6 +25,7 @@ import {
   multiSubsectionWriteError,
   prepareAgentWriteBlueprintContext,
 } from "@/lib/agent/blueprint-write-context";
+import { manuscriptSubsectionTitle } from "@/lib/writing-merge";
 import {
   compileSectionSpec,
   type CompileSectionSpecResult,
@@ -403,8 +404,11 @@ export const writeSectionTool: ToolDefinition = {
       return { success: false, error: keyError };
     }
 
-    const subsectionTitle = params.subsectionTitle
-      ? String(params.subsectionTitle)
+    const subsectionTitleRaw = params.subsectionTitle
+      ? String(params.subsectionTitle).trim()
+      : "";
+    const subsectionTitle = subsectionTitleRaw
+      ? manuscriptSubsectionTitle(subsectionTitleRaw)
       : undefined;
 
     // 嵌套 blueprint + 本节蓝图 hint + assignedSources→检索范围（与工作台扩写对齐）
@@ -415,7 +419,7 @@ export const writeSectionTool: ToolDefinition = {
       project,
       sectionKey: sectionRaw,
       draftContext: draftContext || context || "（按本节主张扩写）",
-      subsectionTitle,
+      subsectionTitle: subsectionTitleRaw || subsectionTitle,
     });
 
     const compiled = providedSpec

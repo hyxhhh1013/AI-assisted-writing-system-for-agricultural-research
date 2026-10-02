@@ -1,6 +1,7 @@
 /**
- * W3-AP-CITE-GROUND — 编号合法前提下，对照「该条」题录/摘要做词重叠语义检查。
- * 默认 warn，不阻断导出（硬门禁仍在 citation-gate）。
+ * W3-AP-CITE-GROUND — 编号合法前提下，对照「该条」题录/摘要/段落做语义接地。
+ * 集合高频词（热解/biochar）降权；限定词对不上则判错引。
+ * 可判定的错引阻断导出（缺摘要仍不挡，只标无法判定）。
  */
 
 import type {
@@ -19,22 +20,42 @@ import {
   isSoftGroundable,
   MIN_ABSTRACT_CHARS_FOR_GROUNDING,
 } from "@/lib/reference-evidence";
+import {
+  expandRagQueries,
+  isEnglishStopword,
+  isGenericAcademicEnTerm,
+} from "@/lib/rag-query-expand";
 
 const DEFAULT_OVERLAP_THRESHOLD = 0.12;
 const DEFAULT_MAX_SUSPICIOUS = 12;
 /** 题录/摘要合计少于此长度则标 ungroundable（无法判语义） */
 const MIN_REF_TEXT_CHARS = 40;
+/** 出现在 ≥ 该比例文献中的词视为集合词，几乎不拉开对错 */
+const COLLECTION_TERM_DF = 0.5;
+const BETTER_MATCH_RATIO = 1.35;
+const BETTER_MATCH_MIN = 0.2;
 
 export function extractKeyTerms(text: string): Set<string> {
   const terms = new Set<string>();
   const englishWords = text.toLowerCase().match(/[a-z]{3,}/g);
-  if (englishWords) englishWords.forEach((w) => terms.add(w));
+  if (englishWords) {
+    for (const w of englishWords) {
+      if (isEnglishStopword(w) || isGenericAcademicEnTerm(w)) continue;
+      terms.add(w);
+    }
+  }
   // 中文只用 bigram，避免单字「度/下/了」造成跨主题假重叠
   const chineseChars = text.replace(/[^一-龥]/g, "");
   for (let i = 0; i < chineseChars.length - 1; i++) {
     terms.add(chineseChars.substring(i, i + 2));
   }
   return terms;
+}
+
+/** 中英同义词展开后再抽词，避免中文句对英文摘要被跳过 */
+export function expandGroundingText(text: string): string {
+  const variants = expandRagQueries(text);
+  return [text, ...variants].join("\n");
 }
 
 export function termOverlapRatio(a: string, b: string): number {
@@ -47,6 +68,68 @@ export function termOverlapRatio(a: string, b: string): number {
     if (sourceTerms.has(term)) overlapCount++;
   }
   return overlapCount / draftTerms.size;
+}
+
+function tokenWeight(df: number, n: number): number {
+  if (n <= 0) return 1;
+  const frac = df / n;
+  if (frac >= COLLECTION_TERM_DF) return 0.08;
+  return Math.log((n + 1) / (df + 1));
+}
+
+function documentFrequency(termSets: Set<string>[]): Map<string, number> {
+  const df = new Map<string, number>();
+  for (const terms of termSets) {
+    for (const t of terms) {
+      df.set(t, (df.get(t) ?? 0) + 1);
+    }
+  }
+  return df;
+}
+
+function weightedRecall(
+  queryTerms: Set<string>,
+  paperTerms: Set<string>,
+  df: Map<string, number>,
+  n: number,
+): number {
+  let num = 0;
+  let den = 0;
+  for (const t of queryTerms) {
+    const d = df.get(t) ?? 0;
+    if (d < 1) continue;
+    const w = tokenWeight(d, n);
+    den += w;
+    if (paperTerms.has(t)) num += w;
+  }
+  if (den <= 0) return 0;
+  return num / den;
+}
+
+/**
+ * 查询相对一组语料的集合 IDF 加权分（写节绑文献与引用核查共用）。
+ */
+export function collectionWeightedScores(query: string, corpora: string[]): number[] {
+  const queryTerms = extractKeyTerms(expandGroundingText(query));
+  const paperSets = corpora.map((c) => extractKeyTerms(expandGroundingText(c)));
+  const df = documentFrequency(paperSets);
+  const n = Math.max(paperSets.length, 1);
+  return paperSets.map((paper) => weightedRecall(queryTerms, paper, df, n));
+}
+
+function distinctiveTerms(
+  queryTerms: Set<string>,
+  df: Map<string, number>,
+  n: number,
+): string[] {
+  const out: string[] = [];
+  for (const t of queryTerms) {
+    const d = df.get(t) ?? 0;
+    if (d < 1) continue;
+    if (d / n >= COLLECTION_TERM_DF) continue;
+    out.push(t);
+  }
+  return out;
 }
 
 function refCorpus(ref: CitationGroundingRef): string {
@@ -62,13 +145,115 @@ function isRefGroundable(ref: CitationGroundingRef | undefined): boolean {
   return true;
 }
 
-/** 句与题录需同脚本足够多，否则中文正文对英文摘要易误报 */
-function sameScriptComparable(sentence: string, corpus: string): boolean {
-  const zhS = (sentence.match(/[一-龥]/g) || []).length;
-  const zhC = (corpus.match(/[一-龥]/g) || []).length;
-  const enS = (sentence.match(/[a-zA-Z]{3,}/g) || []).length;
-  const enC = (corpus.match(/[a-zA-Z]{3,}/g) || []).length;
-  return (zhS >= 4 && zhC >= 4) || (enS >= 2 && enC >= 2);
+/** 每个 [n] 出现一次记一条（同号多次只保留最低 overlap） */
+function collectPerNumberHits(
+  draftText: string,
+  refMap: Map<number, CitationGroundingRef>,
+  threshold: number,
+): CitationGroundingHit[] {
+  const refs = [...refMap.entries()]
+    .filter(([idx]) => idx >= 1)
+    .sort((a, b) => a[0] - b[0]);
+  const paperSets = refs.map(([, ref]) =>
+    extractKeyTerms(expandGroundingText(refCorpus(ref))),
+  );
+  const df = documentFrequency(paperSets);
+  const nPapers = Math.max(paperSets.length, 1);
+  const indexByPos = refs.map(([idx]) => idx);
+
+  const normalized = normalizeAllCitationFormats(draftText);
+  const bestByNumber = new Map<number, CitationGroundingHit>();
+  const re = new RegExp(CITATION_GROUP_RE.source, CITATION_GROUP_RE.flags);
+  let m: RegExpExecArray | null;
+
+  while ((m = re.exec(normalized)) !== null) {
+    const nums = expandCitationGroup(m[1]);
+    const sentence = extractCitationContext(normalized, m.index);
+    const queryTerms = extractKeyTerms(expandGroundingText(sentence));
+    const scores = paperSets.map((paper) =>
+      weightedRecall(queryTerms, paper, df, nPapers),
+    );
+    const distinctive = distinctiveTerms(queryTerms, df, nPapers);
+    let bestOtherIdx = -1;
+    let bestOtherScore = 0;
+    for (let i = 0; i < scores.length; i++) {
+      if (scores[i] > bestOtherScore) {
+        bestOtherScore = scores[i];
+        bestOtherIdx = i;
+      }
+    }
+
+    for (const num of nums) {
+      if (num < 1) continue;
+      const ref = refMap.get(num);
+      const hasText = isRefGroundable(ref);
+      const pos = indexByPos.indexOf(num);
+      const overlap = pos >= 0 ? scores[pos] ?? 0 : 0;
+      let reason = "无可用题录/摘要，跳过语义判定";
+      let refTitle: string | undefined;
+      let groundable = false;
+      let suspicious = false;
+      let betterNumber: number | undefined;
+
+      if (ref && hasText) {
+        refTitle = ref.title?.trim() || undefined;
+        groundable = true;
+        const paperTerms = pos >= 0 ? paperSets[pos] : new Set<string>();
+        const distinctiveHits = distinctive.filter((t) => paperTerms.has(t)).length;
+        const distinctiveMiss =
+          distinctive.length >= 2 && distinctiveHits === 0;
+        const betterPos =
+          bestOtherIdx >= 0 && indexByPos[bestOtherIdx] !== num
+            ? bestOtherIdx
+            : -1;
+        const betterIsStrong =
+          betterPos >= 0
+          && bestOtherScore >= BETTER_MATCH_MIN
+          && bestOtherScore >= overlap * BETTER_MATCH_RATIO;
+        if (distinctiveMiss || (overlap < threshold && distinctive.length > 0 && distinctiveHits === 0)) {
+          suspicious = true;
+          reason = "该句限定词在被引文献题录/摘要/段落中对不上，属于错引";
+        } else if (betterIsStrong && distinctiveHits === 0) {
+          suspicious = true;
+          betterNumber = indexByPos[betterPos];
+          reason = `句意更接近 [${betterNumber}]，当前 [${num}] 不能支撑该主张`;
+        } else if (overlap < threshold && distinctive.length === 0) {
+          suspicious = overlap < Math.min(threshold, 0.08);
+          reason = suspicious
+            ? "句意与该条文献几乎无重叠，可能错引或空泛挂靠"
+            : "句意仅为领域套话，集合词可对上该条";
+        } else {
+          reason = "句意与该条题录/摘要/段落限定词可对上";
+        }
+        if (suspicious && betterIsStrong) {
+          betterNumber = indexByPos[betterPos];
+        }
+      } else if (ref && !hasText) {
+        reason = "该条几乎无可对照文本（无摘要且题录过短）";
+        refTitle = ref.title?.trim() || undefined;
+      } else {
+        reason = "项目文献池中无此编号（应由硬检报越界）";
+      }
+
+      const hit: CitationGroundingHit = {
+        number: num,
+        overlap: Math.round(overlap * 1000) / 1000,
+        suspicious,
+        groundable,
+        citedSentence: sentence.slice(0, 160),
+        refTitle: refTitle?.slice(0, 120),
+        reason,
+        betterNumber,
+      };
+
+      const prev = bestByNumber.get(num);
+      if (!prev || hit.overlap < prev.overlap || (hit.suspicious && !prev.suspicious)) {
+        bestByNumber.set(num, hit);
+      }
+    }
+  }
+
+  return Array.from(bestByNumber.values()).sort((a, b) => a.number - b.number);
 }
 
 export function extractCitationContext(text: string, position: number): string {
@@ -104,70 +289,6 @@ function buildRefMap(references: CitationGroundingRef[]): Map<number, CitationGr
     if (idx >= 1) map.set(idx, r);
   }
   return map;
-}
-
-/** 每个 [n] 出现一次记一条（同号多次只保留最低 overlap） */
-function collectPerNumberHits(
-  draftText: string,
-  refMap: Map<number, CitationGroundingRef>,
-  threshold: number,
-): CitationGroundingHit[] {
-  const normalized = normalizeAllCitationFormats(draftText);
-  const bestByNumber = new Map<number, CitationGroundingHit>();
-  const re = new RegExp(CITATION_GROUP_RE.source, CITATION_GROUP_RE.flags);
-  let m: RegExpExecArray | null;
-
-  while ((m = re.exec(normalized)) !== null) {
-    const nums = expandCitationGroup(m[1]);
-    const sentence = extractCitationContext(normalized, m.index);
-    for (const num of nums) {
-      if (num < 1) continue;
-      const ref = refMap.get(num);
-      const hasText = isRefGroundable(ref);
-      let overlap = 1;
-      let reason = "无可用题录/摘要，跳过语义判定";
-      let refTitle: string | undefined;
-      let groundable = false;
-
-      if (ref && hasText) {
-        const corpus = refCorpus(ref);
-        refTitle = ref.title?.trim() || undefined;
-        if (!sameScriptComparable(sentence, corpus)) {
-          groundable = false;
-          reason = "正文与题录/摘要脚本不一致（如中文句对英文摘要），跳过自动语义判定";
-        } else {
-          groundable = true;
-          overlap = termOverlapRatio(sentence, corpus);
-          reason =
-            overlap >= threshold
-              ? "句意与该条题录/摘要词重叠达标"
-              : "句意与该条题录/摘要词重叠偏低，可能错引或空泛挂靠";
-        }
-      } else if (ref && !hasText) {
-        reason = "该条几乎无可对照文本（无摘要且题录过短）";
-        refTitle = ref.title?.trim() || undefined;
-      } else {
-        reason = "项目文献池中无此编号（应由硬检报越界）";
-      }
-
-      const hit: CitationGroundingHit = {
-        number: num,
-        overlap: Math.round(overlap * 1000) / 1000,
-        suspicious: groundable && overlap < threshold,
-        groundable,
-        citedSentence: sentence.slice(0, 160),
-        refTitle: refTitle?.slice(0, 120),
-        reason,
-      };
-
-      const prev = bestByNumber.get(num);
-      if (!prev || hit.overlap < prev.overlap) {
-        bestByNumber.set(num, hit);
-      }
-    }
-  }
-
-  return Array.from(bestByNumber.values()).sort((a, b) => a.number - b.number);
 }
 
 export function computeSoftGroundPoolStats(
@@ -213,7 +334,7 @@ function buildHint(report: Omit<CitationGroundingReport, "hint">): string {
       .map((h) => h.number)
       .join(", ");
     parts.push(
-      `语义接地：${report.suspiciousCount}/${report.checkedCount} 个编号与对应题录/摘要重叠偏低（如 [${sample}]），请人工核对或改引`,
+      `错引硬门：${report.suspiciousCount}/${report.checkedCount} 个编号的句子对不上该篇文献（如 [${sample}]），必须改号或删引后才能导出`,
     );
   }
   if (report.ungroundableCount > 0) {
@@ -230,7 +351,7 @@ function buildHint(report: Omit<CitationGroundingReport, "hint">): string {
 
 /**
  * 评估正文引用相对「各自」参考文献的语义重叠。
- * 不替代编号硬检；可疑项默认不阻断 exportReady。
+ * 可判定的错引（suspicious）阻断导出；缺摘要 ungroundable 不阻断。
  */
 export function evaluateCitationGrounding(
   input: CitationGroundingInput,
@@ -258,6 +379,7 @@ export function evaluateCitationGrounding(
     checkedCount: allHits.length,
     suspiciousCount: suspicious.length,
     ungroundableCount: ungroundable.length,
+    blocksExport: suspicious.length > 0,
     hits,
     softPool,
   };

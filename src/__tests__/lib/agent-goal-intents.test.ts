@@ -200,24 +200,21 @@ describe("goal-intents", () => {
     expect(resolveApPipelineStep(goal, [])).toBeNull();
   });
 
-  it("stops paging the same section after hard-pass validate", () => {
+  it("allows reading to fix attribution failures", () => {
     const goal = "按 academic-paper 流程继续：起草→引用检查→双语摘要→审查";
-    const softOnly = [
+    const attr = [
       ok("write_section", { persisted: true }),
       ok("validate_citations", {
-        exportReady: true,
-        phase5Passed: true,
-        grounding: { suspiciousCount: 2 },
+        exportReady: false,
+        phase5Passed: false,
+        attributionBlocked: true,
+        grounding: { suspiciousCount: 2, blocksExport: true },
       }),
     ];
-    expect(checkCitationSpinGate(goal, "read_section", softOnly).ok).toBe(false);
-    expect(checkCitationSpinGate(goal, "read_reference", softOnly).ok).toBe(false);
-    expect(checkCitationSpinGate(goal, "write_bilingual_abstract", softOnly).ok).toBe(
+    expect(checkCitationSpinGate(goal, "read_section", attr).ok).toBe(true);
+    expect(checkCitationSpinGate(goal, "write_bilingual_abstract", attr).ok).toBe(
       true,
     );
-    expect(
-      checkCitationSpinGate("写引言", "read_section", softOnly, "draft").ok,
-    ).toBe(true);
   });
 
   it("allows two section reads when hard citation issues remain, then stops", () => {
@@ -236,21 +233,22 @@ describe("goal-intents", () => {
     ).toBe(false);
   });
 
-  it("soft-only suspicious citations do not trap AP flow in citation_fix", () => {
+  it("attribution failures trap AP flow in citation_fix", () => {
     const goal = "按 academic-paper 流程继续：起草→引用检查→双语摘要→审查";
-    const softOnly = [
+    const attr = [
       ok("write_section", { persisted: true }),
       ok("validate_citations", {
-        exportReady: true,
-        phase5Passed: true,
-        grounding: { suspiciousCount: 21 },
+        exportReady: false,
+        phase5Passed: false,
+        attributionBlocked: true,
+        grounding: { suspiciousCount: 21, blocksExport: true },
       }),
     ];
-    expect(resolveApPipelineStep(goal, softOnly)).toBe("abstract");
+    expect(resolveApPipelineStep(goal, attr)).toBe("citation_fix");
     expect(
-      checkCitationSideTripGate(goal, "write_bilingual_abstract", softOnly).ok,
-    ).toBe(true);
-    expect(isCitationApplyGoal("好", softOnly)).toBe(false);
+      checkCitationSideTripGate(goal, "write_bilingual_abstract", attr).ok,
+    ).toBe(false);
+    expect(isCitationApplyGoal("好", attr)).toBe(true);
   });
 
   it("resolves pipeline steps after drafting, validate and refine", () => {

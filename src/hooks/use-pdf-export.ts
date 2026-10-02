@@ -22,7 +22,11 @@ export function usePdfExport(
       try {
         const readiness = await fetchExportReadiness(exportProject);
         if (!readiness.ok) {
-          toast.error(readiness.gate.hint || "引用编号未通过硬检，暂不可导出 PDF");
+          toast.error(
+            readiness.warnings[0]
+            || readiness.gate.hint
+            || "引用未通过检查，暂不可导出 PDF",
+          );
           return;
         }
         if (readiness.warnings.length > 0) {

@@ -48,11 +48,17 @@ export async function POST(req: NextRequest) {
         return Response.json(
           {
             success: false,
-            error: readiness.gate.hint,
+            error:
+              readiness.attributionHint
+              || readiness.gate.hint
+              || "引用未通过归属检查，暂不可导出",
             gate: readiness.gate,
             warnings: readiness.warnings,
             bibOnlyPrecise: readiness.bibOnlyPrecise,
-            code: "CITATION_GATE_BLOCKED",
+            attributionBlocked: readiness.attributionBlocked,
+            code: readiness.attributionBlocked
+              ? "CITATION_ATTRIBUTION_BLOCKED"
+              : "CITATION_GATE_BLOCKED",
           },
           { status: 422 },
         );

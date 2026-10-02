@@ -165,6 +165,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **蓝图真正驱动 Writer（2026-08-09）**：修复「批准蓝图后正文仍不按蓝图生成」。根因：①`loadAgentProject` 曾把 `WritingBlueprint` JSON 误 `as WritingGlobalContext`，`prepare-context` 读 `globalContext.blueprint` 恒为 undefined，【写作蓝图摘要】不进 Writer；②`write_section` 未调用工作台同款的本节蓝图注入（purpose/keyPoints/配图）。现：loader 用 `parseWritingBlueprint` 正确嵌套 `globalContext.blueprint` 并附 outline/sectionPreviews；`lib/agent/blueprint-write-context.ts` 将英文 section key 映射到大纲/蓝图中文路径，聚合本节 guides 注入 `【写作蓝图（本节）】`；简报补 keyPoints + 配图计划；system prompt / 工具说明要求对齐蓝图。
 - **蓝图配图在写节后真正出图（2026-10-01）**：此前 figurePlan 只进 Writer 提示（规划配图文案），Agent slim Writer 还禁止 【FIGURE】JSON，所以段落扩写不会画图。现 `write_section` 落库后 `toolsNode` 按 `figurePlan.dataBinding` / 试验表目录自动排队 `generate_chart(chartIndex, sectionKey)`；专家工具扩写同样用绑定数据走 `generateFigure`。流程图仍须 `draft_mechanism_figure`。无绑定数据的必需图会提示上传 CSV/Excel。实现：`lib/blueprint-chart-jobs.ts`。
 - **综述正文禁止一次写整章（2026-08-09）**：Agent 曾把 phase 文案「一次任务可连续写多节」理解成对 `literature_body` 一次写出 5–7k 字（UI 可达万字+），导致超时/质量塌陷。现：① phase-pack / planner / review_write nudge / system prompt 明确「按蓝图子节 + subsectionTitle 逐节写」；② `write_section` 在 `literature_body` 无 `subsectionTitle` 且蓝图有 ≥2 子节路径时 soft-gate 拒绝并列出建议标题。
+- **子节标题不要蓝图路径（2026-10-02）**：`subsectionTitle` 若带「父 > 子」，模型会把路径粘在段首。写回用叶子标题并剥段首面包屑；Writer/简报禁止把路径写进正文。
 - **论证并入写作蓝图（2026-08-09，方案 A）**：产品主路径改为 `配置 → 大纲 → 写作蓝图 → 分节写`。`SectionGuide` 增加 `claim` / `evidenceHint` / `warrant` / `rebuttal`；全文级 `researchQuestion` / `argumentGaps`。`ensure-write-prereqs` / phase-gate 不再要求 `build_argument_blueprint`；检查点只对 `generate_writing_blueprint` 暂停。Passport Phase 3 有写作蓝图即 done。旧 `argumentBlueprint` 列保留只读兼容。
 - **卸掉弃用工具注册（2026-08-11）**：`createAgentTools` 不再注册 `build_argument_blueprint`（源文件保留作说明，`UNREGISTERED_TOOL_FILES`）；planner / Phase 3 hint 文案改为「确认写作蓝图主张」，不再引导生成独立论证蓝图。
 - **工具挂载表（2026-08-16，W3-AP-ARCH-01）**：`tools/registry.ts` 为唯一挂载点。加工具：新建 `tools/<name>.ts` + 推进 `READ_TOOLS` 或 `WRITE_TOOLS`。禁止运行时扫磁盘。忘了挂表则 `agent-tool-registry.test.ts` 红。
@@ -189,7 +190,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 
 **修正（2026-08-07）**：进入「引用修正」意图/阶段必须满足**最近一次 validate 报告确实发现待修问题**。写完自查的干净报告（0 问题）不再把会话顶进修正模式，后续 `write_section` 正常放行。覆盖链路：跟聊短确认、AP 流程 `citation_fix` 阶段、并行只读批门禁（`parallel-tools.ts` 同源）。
 
-**修正（2026-08-22）——软可疑不再卡死双语摘要**：`citation_fix` / `isCitationApplyGoal` 只认硬检（`validateHasHardIssues`：`exportReady/phase5Passed` 未过，且非空项目）。`suspiciousCount > 0` 但硬检已过时，流程进入摘要，`write_bilingual_abstract` 放行。门禁文案「请先 read_section + refine_content…」不再弹红框。
+**修正（2026-10-02）——可判定错引阻断导出**：编号合法但句子对不上该篇（集合 IDF + 可选 PDF 段落）视为硬问题：`validate_citations.exportReady=false`，AP 流程进 `citation_fix`，必须改号或删引。缺摘要无法判定仍不挡。跟聊「继续」若已有下一子节，仍写下一节。
 
 **修正（2026-08-22）——硬检通过后禁止分页空转**：`checkCitationSpinGate` 在 AP/引用/摘要收口下，validate 硬检已过则拦截继续 `read_section` / `read_reference`（无摘要题录读不出接地）。硬检未过最多读 2 次章节，然后必须 `refine_content`。连续同章翻页警告不当红框。
 
@@ -200,7 +201,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 
 - **引用修正收敛（2026-08-08）**：修复「Agent 陷入 validate→改引→再 validate 打地鼠循环，不收尾、没下一步」——`validate_citations` 的 summary 按硬错/软可疑分级引导（硬检越界必须修；可判定且明显错引改引一次；缺摘要/语义勉强属软性可接受，**不要反复重验**），并在通过时明确「引用已符合要求，请汇报并给下一步」；`buildAgentSystemPrompt` 增加「引用修正要收敛，勿打地鼠循环」规则。双保险让 Agent 在改引循环里能停下并给出下一步计划。
 - **文献表 ≫ 正文引用（2026-10-01）**：`evaluateCitationGate` 增加 `unusedCount` / `unusedIndexes`。编号无越界但表 25 / 正文 11 时 **不得** 说「引用已符合要求」。`validate_citations` / `inspect_project` 明示未引用编号，问用户补引或 `remove_references` / 工作台「清理未引用文献」。**导出手稿**（PDF/Word/Markdown/`export_manuscript_markdown`）走 `toCitedOnlyManuscript` 只保留正文出现过的条目并重排 [n]；**不自动删项目文献池**。未引用不阻断 `exportReady`（中间稿仍可导出）。`reflect.validateIssueCount` 仍不算 unused 为硬错，避免写节后卡在改书目。
-- **软可疑不再劫持「继续」（2026-10-01）**：生产会话 `cmuntp1ls000m126h08fhzsn6` 写完 3.4 后每次「继续」都去 refine 同一批缺摘要语义可疑项，写不出 3.5。`analyzeReflection` 只对硬检未过推 refine；跟聊「继续」且有 `nextWriteHint` 时即使快照 `intentKind` 为空也注入写下一子节。
+- **引用归属硬门（2026-10-02）**：`evaluateCitationGrounding` 用当次文献集 IDF 降权集合词（热解/biochar），句子限定词对不上该篇题录/摘要（有知识库映射时含 PDF 段落）则 `blocksExport`。`validate_citations` / PDF / Word / Markdown 导出走 `exportReady = 编号合法 ∧ 无错引`。缺摘要仍不挡导出。写节绑文献 `evidence-binder` 同步用集合 IDF，避免全库挂 `[1]`。跟聊「继续」且已有下一子节时仍写下一节，不把起草卡死在改引。
 - **跟聊「1」又变成引用核查（2026-10-01）**：同一会话后期用户点 1/2/3 只把 goal 存成 `1`，快照 `intentKind` 空，写完子节仍被 reflect 强制 `validate_citations`，收尾标题变成核查报告，执行摘要还回放近 20 条旧工具。处理：数字回复还原成上轮选项；跟聊清空 `toolSummaries`；起草/`ap_full` 写完不再强制引用自查（越界仍由导出硬检拦）。
 - **回「1」被解析成子节号 3.2（2026-10-02）**：`cmuntp1ls` 用户选补引用，收尾却跟计划里的「检索导入」。选项解析把「织入 3.2 合成气」拆成选项 3；`「1」=` 列表解析不到。处理：选项号后禁跟数字；识别 `「1」=`；「补引用」禁 search/import；诊断后「继续」不再 inherit inspect。
 - **热化学综述被规划成扫烟草/茶学（2026-10-02）**：`formatLabScopeBlock` 列出实验室四方向本意是禁止改题，规划器却写成「按四方向检索」。处理：简报只锁定当前方向；规划器事后改写含四方向/茶学的子任务；`search_knowledge` 不扩到其它实验室分类。茶学规则不再用「挥发性/香气」当开关（热解气也有挥发性产物）。

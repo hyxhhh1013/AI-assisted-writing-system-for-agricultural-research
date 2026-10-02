@@ -5,9 +5,49 @@
 import {
   majorNumberFromSectionId,
   maxSecondLevelInText,
+  stripLeadingEnumeration,
 } from "@/lib/academic-numbering";
 
 const STUB_BODY_CHARS = 24;
+
+/** 蓝图路径「1.1 引言 > 2.2 核心概念」→ 正文标题只用叶子且去掉编号。 */
+export function manuscriptSubsectionTitle(pathOrTitle: string): string {
+  const parts = pathOrTitle.split(">").map((s) => s.trim()).filter(Boolean);
+  const leaf = parts[parts.length - 1] ?? pathOrTitle.trim();
+  return stripLeadingEnumeration(leaf.replace(/^#{1,6}\s*/, ""));
+}
+
+/**
+ * 模型常把蓝图路径粘在段首（「1.1 引言 > 2.2 核心概念 热解温度…」）。
+ * 写回前剥掉路径，只留论述。
+ */
+export function stripSubsectionPathRunIn(
+  content: string,
+  pathOrTitle: string,
+): string {
+  let text = content.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trimStart();
+  const leaf = manuscriptSubsectionTitle(pathOrTitle);
+  const firstLine = text.split("\n")[0] ?? "";
+  if (firstLine.includes(">") && (firstLine.includes(leaf) || pathOrTitle.includes(">"))) {
+    const glued =
+      /^(?:#{1,6}\s*)?(?:\d+(?:\.\d+)*\s+)*(?:[^\n>]{1,100}>\s*)+[^\n>]{1,100}(?=\s+\S)/;
+    if (glued.test(firstLine)) {
+      text = text.replace(glued, "").trimStart();
+    } else {
+      const firstBody = stripLeadingEnumeration(
+        firstLine.replace(/^#{1,6}\s*/, ""),
+      );
+      if (
+        firstBody.includes(">")
+        && (firstBody.endsWith(leaf) || firstBody.includes(`> ${leaf}`))
+      ) {
+        const nl = text.indexOf("\n");
+        text = (nl !== -1 ? text.slice(nl + 1) : "").trimStart();
+      }
+    }
+  }
+  return text;
+}
 
 export function subsectionHeadingPattern(title: string): RegExp {
   const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -50,9 +90,9 @@ export function mergeSubsectionIntoSection(input: {
   appendIfPresent?: boolean;
 }): string {
   const existingText = input.existingText;
-  const subsectionTitle = input.subsectionTitle.trim();
+  const subsectionTitle = manuscriptSubsectionTitle(input.subsectionTitle);
   const appendIfPresent = input.appendIfPresent !== false;
-  const processed = input.incoming;
+  const processed = stripSubsectionPathRunIn(input.incoming, input.subsectionTitle);
   const headingPattern = subsectionHeadingPattern(subsectionTitle);
   const match = existingText.match(headingPattern);
   const contentToInsert = stripLeadingMatchingHeading(processed, subsectionTitle);

@@ -96,7 +96,7 @@
 | 统一质量中心 | `src/app/plagiarism/page.tsx` | `/api/plagiarism/v2` SSE | `QualityWorkspace`（总览默认）、`quality-state.ts` |
 | 审查工位 | `/plagiarism?tab=review` | `POST /api/review`；`POST /api/review/rounds` | `review-tab.tsx`、`review-issue-card.tsx`、`review-service.ts` |
 | 引用硬检 | Passport Phase 5 / PDF 导出 | `GET|POST /api/citations/gate` | `lib/citation-gate.ts`（含 unusedCount）；导出剪枝 `toCitedOnlyManuscript` |
-| 引用语义接地 | Agent `validate_citations` / inspect |（工具内） | `lib/citation-grounding.ts`、`contracts/citation-grounding.ts`（W3-AP-CITE-GROUND） |
+| 引用语义接地 | Agent `validate_citations` / 导出 | `/api/citations/gate` + `/api/export/readiness` | `lib/citation-grounding.ts`（集合 IDF 错引硬门）、`citation-passage-enrich.ts` |
 | 分节完整度 | Agent inspect / 简报 |（工具内） | `lib/draft-coverage.ts`、`contracts/draft-coverage.ts`（W3-AP-DRAFT-COVER） |
 | 查重 | 质量中心 | `POST /api/plagiarism/v2` | `plagiarism-service.ts`、`use-plagiarism-check` |
 | 降重改写 | 质量中心降重 Tab | `/api/plagiarism/rewrite` | `rewrite-service.ts`、`rewrite-view.tsx` |

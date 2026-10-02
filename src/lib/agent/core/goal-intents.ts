@@ -9,6 +9,7 @@ import type { IntentClosureKind, IntentKind } from "@/contracts/agent-intent";
 import { withRule } from "@/lib/agent/core/agent-rules";
 import type { ToolObservation } from "@/lib/agent/types";
 import { validateHasHardIssues } from "@/lib/agent/core/reflect";
+import { manuscriptSubsectionTitle } from "@/lib/writing-merge";
 
 export type { IntentKind, IntentClosureKind } from "@/contracts/agent-intent";
 
@@ -640,7 +641,7 @@ export function continueDraftWriteNudge(
   next?: { sectionKey: string; subsectionPath: string } | null,
 ): string {
   const spec = next
-    ? `立刻调用 write_section(section=${next.sectionKey}, subsectionTitle="${next.subsectionPath}") 写回该子节。`
+    ? `立刻调用 write_section(section=${next.sectionKey}, subsectionTitle="${manuscriptSubsectionTitle(next.subsectionPath)}") 写回该子节。正文用独立标题写子节名，禁止把「父节 > 子节」路径粘在段落开头。`
     : "立刻调用 write_section，带 subsectionTitle 写蓝图中下一未写子节（background 或 literature_body）。";
   return (
     "【系统】用户说「继续」是接着写，不是再摸底。"
@@ -977,7 +978,7 @@ export function checkCitationSpinGate(
       return {
         ok: false,
         error:
-          "硬检未过：不要再分页 read_section。用已读正文立刻 refine_content 写回越界编号，"
+          "引用未过：不要再分页 read_section。立刻 refine_content 改号或删引（越界或句子对不上该篇），"
           + "不要逐条读无摘要文献。",
       };
     }
@@ -987,8 +988,8 @@ export function checkCitationSpinGate(
   return {
     ok: false,
     error:
-      "硬检已通过，剩余为软可疑/缺摘要/语义 contradict。停止 read_section / read_reference。"
-      + "立刻 write_bilingual_abstract，或用中文汇报 [n] 后问用户是否改引。无摘要题录读不出接地证据。",
+      "编号硬检已通过且未见可判定错引。停止 read_section / read_reference。"
+      + "立刻 write_bilingual_abstract，或用中文汇报后问用户下一步。无摘要题录读不出接地证据。",
   };
 }
 
@@ -1165,12 +1166,12 @@ export function mergeFollowUpGoalHint(
   }
   if (
     isShortContinueGoal(goal)
-    && !isCitationApplyGoal(goal, observations)
+    && nextWrite
     && (
       intentKind === "draft"
       || intentKind === "review_write"
       || intentKind === "diagnose"
-      || (intentKind == null && Boolean(nextWrite))
+      || intentKind == null
     )
   ) {
     return continueDraftWriteNudge(nextWrite);

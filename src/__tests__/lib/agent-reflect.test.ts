@@ -37,16 +37,17 @@ const REFINE = obs("refine_content", {
 });
 
 describe("validateHasHardIssues", () => {
-  it("treats exportReady + suspicious-only as soft", () => {
+  it("treats suspicious attribution as hard", () => {
     expect(
       validateHasHardIssues(
         obs("validate_citations", {
-          exportReady: true,
-          phase5Passed: true,
-          grounding: { suspiciousCount: 21 },
+          exportReady: false,
+          phase5Passed: false,
+          attributionBlocked: true,
+          grounding: { suspiciousCount: 2, blocksExport: true },
         }),
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("treats exportReady false as hard unless the project is empty", () => {
@@ -102,16 +103,17 @@ describe("analyzeReflection", () => {
     expect(r.nudge).toContain("refine_content");
   });
 
-  it("soft suspicious citations after write do not force refine", () => {
+  it("suspicious citations after write force refine", () => {
     const r = analyzeReflection([
       WRITE,
       obs("validate_citations", {
-        exportReady: true,
-        phase5Passed: true,
-        grounding: { suspiciousCount: 3 },
+        exportReady: false,
+        phase5Passed: false,
+        attributionBlocked: true,
+        grounding: { suspiciousCount: 3, blocksExport: true },
       }),
     ]);
-    expect(r.action).toBeNull();
+    expect(r.action).toBe("refine");
   });
 
   it("validate issues then refine → done", () => {

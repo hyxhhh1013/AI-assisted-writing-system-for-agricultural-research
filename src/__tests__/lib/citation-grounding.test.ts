@@ -59,7 +59,8 @@ describe("evaluateCitationGrounding", () => {
       report.hits.filter((h) => h.suspicious).map((h) => [h.number, h]),
     );
     expect(byNum[2]?.suspicious).toBe(true);
-    expect(report.hint).toMatch(/重叠偏低|核对/);
+    expect(report.blocksExport).toBe(true);
+    expect(report.hint).toMatch(/错引|对不上|改号/);
   });
 
   it("does not flag aligned citation", () => {
@@ -67,6 +68,7 @@ describe("evaluateCitationGrounding", () => {
       "多项研究表明生物炭显著降低土壤容重并增加总孔隙度[1]。";
     const report = evaluateCitationGrounding({ draftText: draft, references: refs });
     expect(report.suspiciousCount).toBe(0);
+    expect(report.blocksExport).toBe(false);
   });
 
   it("marks short refs as ungroundable rather than suspicious", () => {
@@ -78,12 +80,14 @@ describe("evaluateCitationGrounding", () => {
     expect(hit?.suspicious).toBe(false);
   });
 
-  it("skips bilingual mismatch instead of false-positive", () => {
-    const draft = "生物炭降低容重并提高孔隙度已有系统证据[4]。";
-    const report = evaluateCitationGrounding({ draftText: draft, references: refs });
-    // 中文句 vs 英文摘要 → 不判可疑
+  it("grounds bilingual citation via synonym expansion instead of skipping", () => {
+    const draft = "生物炭降低容重并提高孔隙度已有系统证据[1]。";
+    const report = evaluateCitationGrounding({
+      draftText: draft,
+      references: [{ ...refs[3], index: 1 }],
+    });
     expect(report.suspiciousCount).toBe(0);
-    expect(report.ungroundableCount).toBeGreaterThanOrEqual(1);
+    expect(report.blocksExport).toBe(false);
   });
 
   it("handles citation groups [1,2]", () => {
@@ -100,6 +104,42 @@ describe("evaluateCitationGrounding", () => {
     expect(report.softPool.softGroundableCount).toBeGreaterThanOrEqual(2);
     expect(report.softPool.softUnusedIndexes.length).toBeGreaterThan(0);
     expect(report.softPool.unusedRatio).toBeGreaterThan(0);
+  });
+
+  it("does not let collection words hide a wrong paper in the same field", () => {
+    const fieldRefs = [
+      {
+        index: 1,
+        title: "Effect of pretreatment temperature on biochar yield from biomass pyrolysis",
+        abstract:
+          "Biomass pyrolysis produces biochar. Pretreatment temperature and drying conditions changed char yield and volatile release during slow pyrolysis of straw.",
+      },
+      {
+        index: 2,
+        title: "Nickel modification of biochar catalysts for tar reforming",
+        abstract:
+          "Biomass pyrolysis produces biochar. Ni metal loading on biochar increased catalytic activity for tar reforming compared with unmodified char.",
+      },
+    ];
+    const wrong = evaluateCitationGrounding({
+      draftText: "金属镍改性可提高焦油重整催化活性[1]。",
+      references: fieldRefs,
+    });
+    expect(wrong.suspiciousCount).toBeGreaterThanOrEqual(1);
+    expect(wrong.hits.find((h) => h.number === 1)?.suspicious).toBe(true);
+    expect(wrong.blocksExport).toBe(true);
+
+    const right = evaluateCitationGrounding({
+      draftText: "预处理温度显著影响生物炭产率[1]。",
+      references: fieldRefs,
+    });
+    expect(right.hits.find((h) => h.number === 1)?.suspicious).not.toBe(true);
+
+    const generic = evaluateCitationGrounding({
+      draftText: "生物质热解是制备生物炭的常用途径[1]。",
+      references: fieldRefs,
+    });
+    expect(generic.suspiciousCount).toBe(0);
   });
 });
 
