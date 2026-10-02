@@ -131,6 +131,8 @@ export interface AdminHealthData {
     memoryMB: number;
     heapUsedMB: number;
     heapTotalMB: number;
+    /** V8 heap_size_limit（--max-old-space-size），告警用 used/limit 而非 used/total */
+    heapLimitMB: number;
     heapPct: number;
     chromiumAvailable: boolean;
     chromiumPath: string | null;
@@ -138,6 +140,8 @@ export interface AdminHealthData {
       name: string;
       status: string;
       restarts: number;
+      unstableRestarts: number;
+      maxMemoryMB: number | null;
       memoryMB: number;
     } | null;
   };

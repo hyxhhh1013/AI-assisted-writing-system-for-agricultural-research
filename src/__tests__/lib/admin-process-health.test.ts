@@ -6,6 +6,7 @@ describe("admin-process-health", () => {
     const mem = collectNodeMemory();
     expect(mem.heapUsedMB).toBeGreaterThan(0);
     expect(mem.heapTotalMB).toBeGreaterThanOrEqual(mem.heapUsedMB);
+    expect(mem.heapLimitMB).toBeGreaterThanOrEqual(mem.heapTotalMB);
     expect(mem.rssMB).toBeGreaterThan(0);
     expect(mem.heapPct).toBeGreaterThanOrEqual(0);
     expect(mem.heapPct).toBeLessThanOrEqual(100);
@@ -15,12 +16,17 @@ describe("admin-process-health", () => {
     const raw = JSON.stringify([
       {
         name: "other",
-        pm2_env: { status: "online", restart_time: 1 },
+        pm2_env: { status: "online", restart_time: 1, unstable_restarts: 0 },
         monit: { memory: 10 },
       },
       {
         name: "grainscript",
-        pm2_env: { status: "online", restart_time: 3 },
+        pm2_env: {
+          status: "online",
+          restart_time: 3,
+          unstable_restarts: 1,
+          max_memory_restart: 4000 * 1024 * 1024,
+        },
         monit: { memory: 50 * 1024 * 1024 },
       },
     ]);
@@ -28,6 +34,8 @@ describe("admin-process-health", () => {
       name: "grainscript",
       status: "online",
       restarts: 3,
+      unstableRestarts: 1,
+      maxMemoryMB: 4000,
       memoryMB: 50,
     });
     expect(parsePm2App("not-json", "grainscript")).toBeNull();

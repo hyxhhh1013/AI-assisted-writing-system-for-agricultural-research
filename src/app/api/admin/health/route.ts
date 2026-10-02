@@ -174,6 +174,7 @@ export async function GET(req: NextRequest) {
       memoryMB: processHealth.rssMB,
       heapUsedMB: processHealth.heapUsedMB,
       heapTotalMB: processHealth.heapTotalMB,
+      heapLimitMB: processHealth.heapLimitMB,
       heapPct: processHealth.heapPct,
       chromiumAvailable: processHealth.chromiumAvailable,
       chromiumPath: processHealth.chromiumPath,

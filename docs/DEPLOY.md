@@ -198,6 +198,8 @@ PYTHON_CMD=python3
 | `grainscript-db` 未运行 | Docker 未启动 | `docker start grainscript-db` |
 | RAG 无结果 | 无 `data/index_*.json` | 同步 `data/` 或服务器重建索引 |
 | 文献库路径不对 | 无 `papers/` 或 `RAG_ARTICLES_DIR` 指错 | 同步 `papers` 或设绝对路径 |
+| 后台「未检测到 Chromium」 | Playwright 浏览器未装，也没有系统 Chrome | `sudo apt-get install -y chromium-browser` 或设 `CHROMIUM_PATH`；`npx playwright install chromium` |
+| 后台「尚未导入实验室期刊 IF」 | 知识库从未上传 JCR/IF 表 | 文献页导入 `data/journal-metrics.example.csv` 同结构的实验室表 |
 
 ---
 

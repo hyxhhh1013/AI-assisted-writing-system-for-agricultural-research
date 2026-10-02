@@ -69,6 +69,7 @@
 | ADMIN-045 | DOMAIN_INDEX / 文档与已上线 Admin 页对齐 | — | 0.5h | done | 2026-08-09 |
 | ADMIN-046 | 用户角色与 Direction PI 语义澄清（admin≠PI 可选） | ADMIN-002 | 1～2d | todo | — |
 | ADMIN-047 | 健康页进程存活：heap / RSS / Chromium / PM2 | ADMIN-042 | 2h | done | 2026-10-01 |
+| ADMIN-050 | 健康告警去误报：heap 用 V8 上限、RSS 对 PM2 cap、PM2 看 unstable | ADMIN-047 | 1h | done | 2026-10-02 |
 | ADMIN-048 | Agent 会话 intentKind + failTool/failVia 筛选与 lastFail | AGENT-TRACE | 2h | done | 2026-10-01 |
 | ADMIN-049 | Insights 时间窗 + 失败工具榜（扫描上限 2000） | ADMIN-044 | 1h | done | 2026-10-01 |
 
@@ -648,3 +649,4 @@ Session G（Phase 5）: ADMIN-045 → ADMIN-040 → ADMIN-041 → ADMIN-042 → 
 | 2026-08-09 | ADMIN-042 | AI | health API 扩 AI/Agent/期刊/PDF；`buildAdminHealthAlerts` 仪表盘共用 |
 | 2026-08-09 | ADMIN-043 | AI | 导入摘要落 SystemSetting；GET journal-metrics；文献页展示最近导入 |
 | 2026-08-09 | ADMIN-044 | AI | Insights INTENT_WORDS 补方向/蓝图/桥接/申报等 |
+| 2026-10-02 | ADMIN-050 | AI | heapPct=used/heap_size_limit；RSS 对 PM2 max_memory；重启看 unstable_restarts；系统 Chrome 路径探测供 PDF |

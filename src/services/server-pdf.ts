@@ -14,6 +14,7 @@ import { markOutOfBoundsCitations } from "@/lib/citation";
 import { cleanMarkdownArtifacts } from "@/lib/utils";
 import { getRenderableSections, type TemplateSectionDef } from "@/lib/template-sections";
 import { getChartsDir } from "@/lib/charts-dir";
+import { detectChromium } from "@/lib/chromium-path";
 
 type PdfTemplate = "sci" | "ieee" | "gbt7713" | "nature" | "cas";
 
@@ -1052,8 +1053,9 @@ export function renderProjectPdfHtml(project: ProjectData): string {
 }
 
 export async function renderProjectPdf(project: ProjectData): Promise<Uint8Array> {
+  const detected = detectChromium();
   const browser = await chromium.launch({
-    executablePath: chromium.executablePath(),
+    ...(detected.path ? { executablePath: detected.path } : {}),
     headless: true,
   });
   const page = await browser.newPage();

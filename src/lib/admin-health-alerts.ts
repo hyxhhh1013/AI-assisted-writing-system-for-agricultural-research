@@ -79,15 +79,21 @@ export function buildAdminHealthAlerts(health: AdminHealthData): AdminHealthAler
 
   const server = health.server;
   if (typeof server.heapPct === "number" && server.heapPct >= 85) {
+    const cap = server.heapLimitMB ?? server.heapTotalMB;
     alerts.push({
-      message: `Node heap ${server.heapPct}%（${server.heapUsedMB}/${server.heapTotalMB} MB）`,
+      message: `Node heap ${server.heapPct}%（${server.heapUsedMB}/${cap} MB 上限）`,
       href: "/admin/health",
       label: "看健康",
     });
   }
-  if (typeof server.memoryMB === "number" && server.memoryMB >= 1400) {
+  const rssMB = typeof server.memoryMB === "number" ? server.memoryMB : 0;
+  const rssCap =
+    server.pm2?.maxMemoryMB && server.pm2.maxMemoryMB > 0
+      ? server.pm2.maxMemoryMB
+      : null;
+  if (rssCap && rssMB >= Math.round(rssCap * 0.85)) {
     alerts.push({
-      message: `进程 RSS ${server.memoryMB} MB，接近常见 1.6GB 上限`,
+      message: `进程 RSS ${rssMB} MB，接近 PM2 上限 ${rssCap} MB`,
       href: "/admin/health",
       label: "看健康",
     });
@@ -107,9 +113,9 @@ export function buildAdminHealthAlerts(health: AdminHealthData): AdminHealthAler
         href: "/admin/health",
         label: "看健康",
       });
-    } else if (pm2.restarts >= 5) {
+    } else if ((pm2.unstableRestarts ?? 0) >= 3) {
       alerts.push({
-        message: `PM2 ${pm2.name} 已重启 ${pm2.restarts} 次`,
+        message: `PM2 ${pm2.name} 短时反复重启 ${pm2.unstableRestarts} 次`,
         href: "/admin/health",
         label: "看健康",
       });

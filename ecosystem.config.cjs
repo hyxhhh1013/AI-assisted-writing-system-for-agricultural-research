@@ -83,6 +83,11 @@ module.exports = {
           "5",
         ),
         WRITING_DEFAULT_MODE: pick("WRITING_DEFAULT_MODE", "fast"),
+        CHROMIUM_PATH: pick("CHROMIUM_PATH", ""),
+        PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: pick(
+          "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH",
+          "",
+        ),
         // Wave 2 Agent（须 .env 中 AGENT_ENABLED=1；NEXT_PUBLIC_* 另需在 build 时注入）
         AGENT_ENABLED: pick("AGENT_ENABLED", "0"),
         AGENT_WRITE_ENABLED: pick("AGENT_WRITE_ENABLED", "0"),

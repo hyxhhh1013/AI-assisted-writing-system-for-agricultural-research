@@ -233,8 +233,8 @@ export default function AdminHealthPage() {
               {fmtBytes(data.index.totalSizeBytes)} 索引
             </p>
             <p className="text-xs text-[#9aa8a0]">
-              Heap {data.server.heapUsedMB ?? "—"}/{data.server.heapTotalMB ?? "—"} MB
-              （{data.server.heapPct ?? "—"}%）
+              Heap {data.server.heapUsedMB ?? "—"}/{data.server.heapLimitMB ?? data.server.heapTotalMB ?? "—"} MB 上限
+              （已分配 {data.server.heapTotalMB ?? "—"} MB，{data.server.heapPct ?? "—"}%）
               {" · "}Chromium{" "}
               {data.server.chromiumAvailable
                 ? "可用"
@@ -243,8 +243,16 @@ export default function AdminHealthPage() {
             </p>
             {data.server.pm2 ? (
               <p className="text-xs text-[#9aa8a0]">
-                PM2 {data.server.pm2.name} · {data.server.pm2.status} · 重启{" "}
-                {data.server.pm2.restarts} · {data.server.pm2.memoryMB} MB
+                PM2 {data.server.pm2.name} · {data.server.pm2.status} · 累计重启{" "}
+                {data.server.pm2.restarts}
+                {typeof data.server.pm2.unstableRestarts === "number"
+                  ? ` · 短时反复 ${data.server.pm2.unstableRestarts}`
+                  : ""}
+                {data.server.pm2.maxMemoryMB
+                  ? ` · 上限 ${data.server.pm2.maxMemoryMB} MB`
+                  : ""}
+                {" · "}
+                {data.server.pm2.memoryMB} MB
               </p>
             ) : (
               <p className="text-xs text-[#9aa8a0]">本机未读到 PM2 grainscript（开发环境正常）</p>

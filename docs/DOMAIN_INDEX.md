@@ -131,7 +131,7 @@
 | 使用统计 | `admin/usage` | `GET /api/admin/usage`, `usage/trends` | `services/admin-usage.ts` |
 | Agent 会话 | `admin/agent-sessions` | `/api/admin/agent-sessions` | 回放 / 中断 / 统计；intentKind、failTool/failVia（失败筛最多扫 400 条）、lastFail |
 | 使用洞察 | `admin/insights` | `GET /api/admin/insights?days=` | 窗口聚合意图词 / 工具榜 / 失败模式 / 失败工具；最多 2000 条 |
-| 系统健康 | `admin/health` | `GET /api/admin/health` | AI Key / Agent 错误 / heap·RSS·Chromium·PM2 / 期刊 IF / PDF 漂移（`admin-health-alerts`） |
+| 系统健康 | `admin/health` | `GET /api/admin/health` | AI Key / Agent 错误 / heap 相对 V8 上限、RSS 相对 PM2 上限、系统 Chromium 探测、PM2 短时反复重启 / 期刊 IF / PDF 漂移（`admin-health-alerts`） |
 | 设置/Key+模型+开关 | `admin/settings` | `PUT /api/admin/settings` · `GET /api/admin/illustration-status` · `POST /api/admin/illustration-test` | `lib/settings.ts`；`AGENT_ROLE_*`；OA/写并发/auto-fix；机理示意即梦/智谱绘图 |
 
 详见 [`ADMIN_ENHANCEMENT_PLAN.md`](./ADMIN_ENHANCEMENT_PLAN.md)（Phase 5：ADMIN-040～046）。

@@ -1,9 +1,11 @@
-import fs from "fs";
 import { execFile } from "child_process";
+import v8 from "v8";
+import { detectChromium } from "@/lib/chromium-path";
 
 export interface AdminProcessHealth {
   heapUsedMB: number;
   heapTotalMB: number;
+  heapLimitMB: number;
   rssMB: number;
   heapPct: number;
   chromiumAvailable: boolean;
@@ -12,44 +14,29 @@ export interface AdminProcessHealth {
     name: string;
     status: string;
     restarts: number;
+    unstableRestarts: number;
+    maxMemoryMB: number | null;
     memoryMB: number;
   } | null;
 }
 
 export function collectNodeMemory(): Pick<
   AdminProcessHealth,
-  "heapUsedMB" | "heapTotalMB" | "rssMB" | "heapPct"
+  "heapUsedMB" | "heapTotalMB" | "heapLimitMB" | "rssMB" | "heapPct"
 > {
   const mem = process.memoryUsage();
   const heapUsedMB = Math.round(mem.heapUsed / 1024 / 1024);
   const heapTotalMB = Math.round(mem.heapTotal / 1024 / 1024);
   const rssMB = Math.round(mem.rss / 1024 / 1024);
-  const heapPct = heapTotalMB > 0 ? Math.round((heapUsedMB / heapTotalMB) * 100) : 0;
-  return { heapUsedMB, heapTotalMB, rssMB, heapPct };
+  const heapLimitMB = Math.round(v8.getHeapStatistics().heap_size_limit / 1024 / 1024);
+  const denom = heapLimitMB > 0 ? heapLimitMB : heapTotalMB;
+  const heapPct = denom > 0 ? Math.round((heapUsedMB / denom) * 100) : 0;
+  return { heapUsedMB, heapTotalMB, heapLimitMB, rssMB, heapPct };
 }
 
-export function detectChromium(): { available: boolean; path: string | null } {
-  const envPath =
-    process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
-    || process.env.CHROMIUM_PATH
-    || "";
-  if (envPath.startsWith("/") || /^[A-Za-z]:\\/.test(envPath)) {
-    if (fs.existsSync(envPath)) return { available: true, path: envPath };
-  }
-  try {
-    // playwright 可能未装；探测失败不当成健康接口错误
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { chromium } = require("playwright") as {
-      chromium: { executablePath: () => string };
-    };
-    const execPath = chromium.executablePath();
-    if (execPath && fs.existsSync(execPath)) {
-      return { available: true, path: execPath };
-    }
-    return { available: false, path: execPath || null };
-  } catch {
-    return { available: false, path: null };
-  }
+function bytesToMb(n: unknown): number | null {
+  if (typeof n !== "number" || !Number.isFinite(n) || n <= 0) return null;
+  return Math.round(n / 1024 / 1024);
 }
 
 export function parsePm2App(
@@ -59,7 +46,12 @@ export function parsePm2App(
   try {
     const list = JSON.parse(raw) as Array<{
       name?: string;
-      pm2_env?: { status?: string; restart_time?: number };
+      pm2_env?: {
+        status?: string;
+        restart_time?: number;
+        unstable_restarts?: number;
+        max_memory_restart?: number;
+      };
       monit?: { memory?: number };
     }>;
     const app = list.find((item) => item.name === name);
@@ -68,6 +60,8 @@ export function parsePm2App(
       name,
       status: app.pm2_env?.status ?? "unknown",
       restarts: app.pm2_env?.restart_time ?? 0,
+      unstableRestarts: app.pm2_env?.unstable_restarts ?? 0,
+      maxMemoryMB: bytesToMb(app.pm2_env?.max_memory_restart),
       memoryMB: Math.round((app.monit?.memory ?? 0) / 1024 / 1024),
     };
   } catch {

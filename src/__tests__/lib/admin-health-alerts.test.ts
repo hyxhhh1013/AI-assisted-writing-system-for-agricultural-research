@@ -22,7 +22,8 @@ function baseHealth(over: Partial<AdminHealthData> = {}): AdminHealthData {
       memoryMB: 200,
       heapUsedMB: 80,
       heapTotalMB: 120,
-      heapPct: 67,
+      heapLimitMB: 3072,
+      heapPct: 3,
       chromiumAvailable: true,
       chromiumPath: "/usr/bin/chromium",
       pm2: null,
@@ -103,26 +104,64 @@ describe("buildAdminHealthAlerts", () => {
     expect(alerts.some((a) => a.message.includes("分类"))).toBe(true);
   });
 
-  it("alerts on high heap, missing chromium, and pm2 restarts", () => {
+  it("does not treat allocated-heap fill or lifetime pm2 restarts as incidents", () => {
     const alerts = buildAdminHealthAlerts(
       baseHealth({
         server: {
           uptime: 1,
           nodeVersion: "v22",
           platform: "linux",
-          memoryMB: 1500,
-          heapUsedMB: 900,
-          heapTotalMB: 1000,
-          heapPct: 90,
+          memoryMB: 2076,
+          heapUsedMB: 1476,
+          heapTotalMB: 1530,
+          heapLimitMB: 3072,
+          heapPct: 48,
+          chromiumAvailable: true,
+          chromiumPath: "/usr/bin/chromium",
+          pm2: {
+            name: "grainscript",
+            status: "online",
+            restarts: 50,
+            unstableRestarts: 0,
+            maxMemoryMB: 4000,
+            memoryMB: 2076,
+          },
+        },
+      }),
+    );
+    expect(alerts.some((a) => a.message.includes("heap"))).toBe(false);
+    expect(alerts.some((a) => a.message.includes("RSS"))).toBe(false);
+    expect(alerts.some((a) => a.message.includes("重启"))).toBe(false);
+  });
+
+  it("alerts on heap vs limit, RSS near pm2 cap, missing chromium, and unstable restarts", () => {
+    const alerts = buildAdminHealthAlerts(
+      baseHealth({
+        server: {
+          uptime: 1,
+          nodeVersion: "v22",
+          platform: "linux",
+          memoryMB: 3600,
+          heapUsedMB: 2800,
+          heapTotalMB: 2900,
+          heapLimitMB: 3072,
+          heapPct: 91,
           chromiumAvailable: false,
           chromiumPath: null,
-          pm2: { name: "grainscript", status: "online", restarts: 8, memoryMB: 1400 },
+          pm2: {
+            name: "grainscript",
+            status: "online",
+            restarts: 8,
+            unstableRestarts: 4,
+            maxMemoryMB: 4000,
+            memoryMB: 3600,
+          },
         },
       }),
     );
     expect(alerts.some((a) => a.message.includes("heap"))).toBe(true);
     expect(alerts.some((a) => a.message.includes("RSS"))).toBe(true);
     expect(alerts.some((a) => a.message.includes("Chromium"))).toBe(true);
-    expect(alerts.some((a) => a.message.includes("重启"))).toBe(true);
+    expect(alerts.some((a) => a.message.includes("反复重启"))).toBe(true);
   });
 });
