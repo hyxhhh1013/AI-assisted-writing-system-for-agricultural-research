@@ -80,6 +80,24 @@ describe("applyWritingPatches", () => {
     expect(patched.patches).toEqual([]);
     expect(patched.draft).toBe(sentences);
   });
+
+  it("strips hanging [n] when claims are unbound", () => {
+    const draft = "热解温度升高使孔隙增加[1]。该趋势与田间试验一致。";
+    const patched = applyWritingPatches(
+      draft,
+      [
+        {
+          code: "evidence_unbound",
+          layer: "L0",
+          action: "repair",
+          message: "未绑却硬挂",
+        },
+      ],
+      { allowedCiteNs: [] },
+    );
+    expect(patched.draft).not.toContain("[1]");
+    expect(patched.draft).toContain("热解温度升高使孔隙增加");
+  });
 });
 
 describe("formatWritingRefineFeedback", () => {

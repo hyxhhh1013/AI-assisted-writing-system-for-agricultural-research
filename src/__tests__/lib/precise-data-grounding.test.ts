@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   evaluateBibOnlyPreciseData,
   evaluateSoftPreciseNotInAbstract,
+  evaluateTempNotInAbstractPool,
   extractPreciseData,
   formatBibOnlyPreciseWarning,
 } from "@/lib/agent/precise-data-grounding";
@@ -97,5 +98,25 @@ describe("evaluateSoftPreciseNotInAbstract", () => {
       softRefs: [{ n: 1, abstract: "Yield decreased to 42.5% at higher pyrolysis temperature." }],
     });
     expect(hits).toEqual([]);
+  });
+});
+
+describe("evaluateTempNotInAbstractPool", () => {
+  it("flags temperatures that never appear in any abstract", () => {
+    expect(
+      evaluateTempNotInAbstractPool({
+        draftText: "预处理常在 260℃ 下进行。",
+        abstracts: ["Biochar generally improves soil aggregation under field conditions."],
+      }),
+    ).toEqual(expect.arrayContaining(["260℃"]));
+  });
+
+  it("accepts temperatures already in the pool", () => {
+    expect(
+      evaluateTempNotInAbstractPool({
+        draftText: "热解温度 500℃ 下孔隙更发达。",
+        abstracts: ["Pyrolysis at 500 °C increased porosity."],
+      }),
+    ).toEqual([]);
   });
 });

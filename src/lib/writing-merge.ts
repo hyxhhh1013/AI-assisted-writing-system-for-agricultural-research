@@ -1,5 +1,6 @@
 /**
- * 段落扩写追加、子节写回合并。禁止用新稿整节覆盖已有正文。
+ * 段落扩写追加、子节写回合并。
+ * Agent 同名子节默认替换（避免 3.1/2.1 叠稿）；工作台扩写显式 appendIfPresent。
  */
 
 import {
@@ -91,7 +92,7 @@ export function mergeSubsectionIntoSection(input: {
 }): string {
   const existingText = input.existingText;
   const subsectionTitle = manuscriptSubsectionTitle(input.subsectionTitle);
-  const appendIfPresent = input.appendIfPresent !== false;
+  const appendIfPresent = input.appendIfPresent === true;
   const processed = stripSubsectionPathRunIn(input.incoming, input.subsectionTitle);
   const headingPattern = subsectionHeadingPattern(subsectionTitle);
   const match = existingText.match(headingPattern);

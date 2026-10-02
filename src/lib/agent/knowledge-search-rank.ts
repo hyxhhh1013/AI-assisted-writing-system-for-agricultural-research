@@ -122,13 +122,15 @@ export function composeKnowledgeSearchQuery(
 export function rankKnowledgePapers(
   chunks: RagChunk[],
   query: string,
+  topic?: string,
 ): RankedKnowledgePaper[] {
-  return rankKnowledgePapersDetailed(chunks, query).papers;
+  return rankKnowledgePapersDetailed(chunks, query, topic).papers;
 }
 
 export function rankKnowledgePapersDetailed(
   chunks: RagChunk[],
   query: string,
+  topic?: string,
 ): KnowledgePaperRankResult {
   const groups = new Map<string, { chunks: RagChunk[]; firstRank: number }>();
   chunks.forEach((c, i) => {
@@ -178,6 +180,15 @@ export function rankKnowledgePapersDetailed(
   }
   const distinctiveTokens = tokens.filter((t) => (weights.get(t) ?? 0) > 0.35);
 
+  const topicToks = queryKnowledgeTokens((topic ?? "").trim());
+  const topicDf = new Map<string, number>();
+  for (const tok of topicToks) {
+    topicDf.set(tok, drafts.filter((d) => d.hay.includes(tok)).length);
+  }
+  const topicDistinct = topicToks.filter(
+    (t) => tokenWeight(topicDf.get(t) ?? 0, n) > 0.35,
+  );
+
   const papers: RankedKnowledgePaper[] = drafts.map((d) => {
     let num = 0;
     let den = 0;
@@ -195,7 +206,20 @@ export function rankKnowledgePapersDetailed(
     }
     const lexical = den > 0 ? num / (den * 2) : 0;
     const rankBonus = Math.max(0, 0.06 * (1 - d.firstRank / Math.max(chunks.length, 1)));
-    const score = Math.min(1, Math.max(0, Math.round((lexical + rankBonus) * 100) / 100));
+    let topicHit = 0;
+    for (const tok of topicDistinct) {
+      if (d.hay.includes(tok)) topicHit += 1;
+    }
+    const missTopic =
+      topicDistinct.length >= 2 && topicHit === 0
+        ? 0.32
+        : topicDistinct.length >= 3 && topicHit === 1
+          ? 0.1
+          : 0;
+    const score = Math.min(
+      1,
+      Math.max(0, Math.round((lexical + rankBonus - missTopic) * 100) / 100),
+    );
     const why =
       distinctiveTokens.length === 0
         ? "查询词在本库多数文献题名中都会出现，相关度拉不开，请补限定词后再导入"

@@ -152,6 +152,24 @@ export function evaluateSoftPreciseNotInAbstract(params: {
   return [...found.values()].sort((a, b) => a.number - b.number);
 }
 
+/**
+ * 引言/综述：温度数字即使剥掉 [n]，也不能在摘要池里对不上还写回。
+ */
+export function evaluateTempNotInAbstractPool(params: {
+  draftText: string;
+  abstracts: readonly string[];
+}): string[] {
+  if (!params.draftText || params.abstracts.length === 0) return [];
+  const blob = params.abstracts.join("").replace(/\s+/g, "");
+  return extractPreciseData(params.draftText)
+    .filter((sample) => /℃|°C/.test(sample))
+    .filter((sample) => {
+      const key = digitKey(sample);
+      return key.length > 0 && !blob.includes(key);
+    })
+    .slice(0, 6);
+}
+
 /** 导出 / validate_citations 共用的软告警文案（不阻断 exportReady） */
 export function formatBibOnlyPreciseWarning(
   findings: readonly BibOnlyPreciseDataFinding[],

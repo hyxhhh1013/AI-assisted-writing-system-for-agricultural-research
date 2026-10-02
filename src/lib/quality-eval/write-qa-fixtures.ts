@@ -4,7 +4,8 @@
 
 import type { EvidenceClaim } from "@/contracts/data-source";
 import type { SectionSpecV1 } from "@/contracts/section-spec";
-import type { WritingQaReport } from "@/contracts/writing-qa";
+import type { WritingQaFinding, WritingQaReport } from "@/contracts/writing-qa";
+import { shouldPersistWritingDraft } from "@/contracts/writing-qa";
 import { evaluateSectionWritingQa } from "@/lib/agent/writing-qa-run";
 
 export interface WriteQaGolden {
@@ -14,6 +15,9 @@ export interface WriteQaGolden {
   expect: "pass" | "repair" | "block";
   expectCodes?: string[];
   forbidCodes?: string[];
+  /** 省略则不检；事实门用 false 锁死写回 */
+  expectPersist?: boolean;
+  extraFindings?: WritingQaFinding[];
   text: string;
   dataClaims?: EvidenceClaim[];
   spec?: SectionSpecV1;
@@ -123,6 +127,7 @@ export const WRITE_QA_GOLDENS: WriteQaGolden[] = [
     sectionKey: "results",
     expect: "block",
     expectCodes: ["number_not_in_claims"],
+    expectPersist: false,
     text: "处理组产量为 99.99 kg/ha。这可能反映根系吸收增强。田间小区设置三个重复。",
     dataClaims: [SOC_CLAIM],
   },
@@ -138,6 +143,7 @@ export const WRITE_QA_GOLDENS: WriteQaGolden[] = [
     sectionKey: "discussion",
     expect: "repair",
     expectCodes: ["overclaim"],
+    expectPersist: false,
     text: "本研究毫无疑问证明生物炭最优，显著优于一切现有改良剂。田间小区设置三个重复。",
   },
   {
@@ -173,6 +179,7 @@ export const WRITE_QA_GOLDENS: WriteQaGolden[] = [
     subsectionTitle: "生物炭与有机碳",
     expect: "repair",
     expectCodes: ["cite_semantic_mismatch"],
+    expectPersist: false,
     text: "炭化使产率降至 42.5%[1]。各研究在原料与保温时间上并不一致。",
     softRefs: [
       {
@@ -181,6 +188,51 @@ export const WRITE_QA_GOLDENS: WriteQaGolden[] = [
           "Biochar generally improves soil aggregation and organic carbon stocks under field conditions without reporting pyrolysis yield percentages.",
       },
     ],
+  },
+  {
+    id: "introduction/invented-temp",
+    sectionKey: "introduction",
+    expect: "repair",
+    expectCodes: ["cite_semantic_mismatch"],
+    expectPersist: false,
+    text:
+      "生物炭施用后土壤有机碳储量上升。不同热解温度下营养元素保留率仍不清楚。"
+      + "田间试验设置三个温度水平。该趋势与已有吸附研究一致，预处理常在 260℃ 进行。",
+    softRefs: [
+      {
+        n: 1,
+        abstract: "Biochar generally improves soil aggregation under field conditions.",
+      },
+    ],
+  },
+  {
+    id: "introduction/unbound-cite",
+    sectionKey: "introduction",
+    expect: "repair",
+    expectCodes: ["evidence_unbound"],
+    expectPersist: false,
+    extraFindings: [
+      {
+        code: "evidence_unbound",
+        layer: "L0",
+        action: "repair",
+        message: "主张未绑却硬挂 [n]",
+        count: 1,
+      },
+    ],
+    text:
+      "生物炭施用后土壤有机碳储量上升[1]。不同热解温度下营养元素保留率仍不清楚。"
+      + "田间试验设置三个温度水平。该趋势与已有吸附研究一致。",
+  },
+  {
+    id: "introduction/cite-oob",
+    sectionKey: "introduction",
+    expect: "repair",
+    expectCodes: ["cite_oob"],
+    text:
+      "生物炭施用后土壤有机碳储量上升[9]。不同热解温度下营养元素保留率仍不清楚。"
+      + "田间试验设置三个温度水平。该趋势与已有吸附研究一致。",
+    maxRefIndex: 2,
   },
 ];
 
@@ -199,16 +251,20 @@ export function runWriteQaGolden(g: WriteQaGolden): WriteQaGoldenRun {
     spec: g.spec,
     maxRefIndex: g.maxRefIndex,
     softRefs: g.softRefs,
+    extraFindings: g.extraFindings,
   });
   const codes = report.findings.map((f) => f.code);
   const missing = (g.expectCodes ?? []).filter((c) => !codes.includes(c));
   const unexpected = (g.forbidCodes ?? []).filter((c) => codes.includes(c));
   const verdictOk = report.verdict === g.expect;
-  const ok = verdictOk && missing.length === 0 && unexpected.length === 0;
+  const persist = shouldPersistWritingDraft(report);
+  const persistOk = g.expectPersist === undefined || persist === g.expectPersist;
+  const ok = verdictOk && missing.length === 0 && unexpected.length === 0 && persistOk;
   const bits: string[] = [];
   if (!verdictOk) bits.push(`verdict ${report.verdict}≠${g.expect}`);
   if (missing.length) bits.push(`缺 ${missing.join(",")}`);
   if (unexpected.length) bits.push(`多 ${unexpected.join(",")}`);
+  if (!persistOk) bits.push(`persist ${persist}≠${g.expectPersist}`);
   return {
     id: g.id,
     report,

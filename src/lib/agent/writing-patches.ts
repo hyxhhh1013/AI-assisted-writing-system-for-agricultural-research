@@ -16,6 +16,7 @@ import {
   WRITING_QA_HOLLOW_REGEXES,
 } from "@/lib/agent/writing-qa-run";
 import {
+  stripDisallowedCitations,
   stripEmbeddedBibliography,
   stripOutOfRangeCitations,
 } from "@/lib/reference-reorder";
@@ -31,6 +32,7 @@ const DETERMINISTIC_CODES = new Set([
   "overclaim",
   "review_as_experiment",
   "claim_id_heading",
+  "evidence_unbound",
 ]);
 
 const BLEED_REPLACEMENTS: ReadonlyArray<readonly [string, string]> = [
@@ -59,6 +61,8 @@ export interface WritingPatch {
 export interface ApplyWritingPatchesInput {
   maxRefIndex?: number;
   sectionKey?: string;
+  /** 主张已绑的 [n]；空数组表示未绑，剥掉全部文内引用 */
+  allowedCiteNs?: readonly number[];
 }
 
 export interface ApplyWritingPatchesResult {
@@ -186,6 +190,8 @@ export function applyWritingPatches(
       next = tidyPunctuation(next.split("本研究").join("已有研究"));
     } else if (finding.code === "claim_id_heading") {
       next = stripClaimIdHeadings(next);
+    } else if (finding.code === "evidence_unbound") {
+      next = stripDisallowedCitations(next, new Set(opts.allowedCiteNs ?? []));
     }
 
     recordPatch(patches, finding.code, before, next);

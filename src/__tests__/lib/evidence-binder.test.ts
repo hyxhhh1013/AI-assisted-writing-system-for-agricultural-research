@@ -126,6 +126,13 @@ describe("bindSectionEvidence", () => {
     });
     expect(finding?.code).toBe("evidence_unbound");
     expect(finding?.action).toBe("warn");
+    expect(
+      evidenceUnboundFinding(["C1"], {
+        hadBindablePool: true,
+        draftText: "热解温度升高使孔隙增加[1]。",
+        allowedCiteNs: [],
+      })?.action,
+    ).toBe("repair");
     expect(evidenceUnboundFinding(["C1"], { hadBindablePool: false })).toBeNull();
   });
 

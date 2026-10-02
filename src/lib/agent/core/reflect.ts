@@ -24,6 +24,8 @@ const VERIFY_TOOLS = new Set([
   "verify_content",
   "review_content",
   "run_review_rounds",
+  "inspect_project",
+  "check_consistency",
 ]);
 
 export type ReflectionAction = "verify" | "refine" | null;
@@ -184,7 +186,8 @@ export function analyzeReflection(
     section,
     nudge:
       `【系统】你刚写入了${section ? `「${section}」` : "章节"}，但尚未自查。`
-      + "收尾前请先 validate_citations 检查引用，或 verify_content / review_content / run_review_rounds 做质量审查，"
-      + "若报告有问题按报告 refine_content 修正写回，再向用户总结。不要只汇报不检查。",
+      + "收尾前请先 inspect_project 阅读 writingAudit（稿面扫描会列出重复子节、空综述章、错引温度等，不限于你刚写的这一节），"
+      + "再 validate_citations；灰区再用 check_consistency。"
+      + "writingAudit 有须处理项必须向用户点名，不要只报已写回。",
   };
 }

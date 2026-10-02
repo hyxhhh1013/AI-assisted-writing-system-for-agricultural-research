@@ -13,6 +13,11 @@ import type {
   SectionSpecV1,
 } from "@/contracts/section-spec";
 import type { WritingQaFinding } from "@/contracts/writing-qa";
+import {
+  CITATION_GROUP_RE,
+  expandCitationGroup,
+  normalizeAllCitationFormats,
+} from "@/lib/citation";
 import { collectionWeightedScores, termOverlapRatio } from "@/lib/citation-grounding";
 
 const MIN_BIND_SCORE = 0.14;
@@ -243,22 +248,58 @@ export function formatEvidenceBindHint(spec: SectionSpecV1): string {
     return `${card.id} ${card.claim.slice(0, 40)} → ${tail}`;
   });
   return [
-    "【证据绑定】优先引用下列编号。综述还可概括引用项目参考文献里其它有摘要/全文的 [n]，勿编造精确数据。soft=只可概括。",
+    "【证据绑定】优先引用下列编号。每条 [n] 必须与该条题录主题相符，禁止把 [1][2] 当通用综述。综述还可概括引用项目参考文献里其它有摘要/全文的 [n]，勿编造精确数据。soft=只可概括。",
     ...lines,
   ].join("\n");
 }
 
+export function boundRefNumbers(spec: SectionSpecV1 | null | undefined): number[] {
+  if (!spec) return [];
+  const ns = new Set<number>();
+  for (const card of spec.claimCards) {
+    for (const e of card.evidence) {
+      if (e.kind === "ref") ns.add(e.n);
+    }
+  }
+  return [...ns].sort((a, b) => a - b);
+}
+
+/** 正文 [n] 不在已绑编号内（全未绑时任意 [n] 都不许）。 */
+export function draftHasDisallowedCitations(
+  draftText: string | undefined,
+  allowedCiteNs: readonly number[] | undefined,
+): boolean {
+  if (!draftText) return false;
+  const allowed = new Set(allowedCiteNs ?? []);
+  const normalized = normalizeAllCitationFormats(draftText);
+  const re = new RegExp(CITATION_GROUP_RE.source, CITATION_GROUP_RE.flags);
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(normalized)) !== null) {
+    for (const n of expandCitationGroup(m[1])) {
+      if (n >= 1 && !allowed.has(n)) return true;
+    }
+  }
+  return false;
+}
+
 export function evidenceUnboundFinding(
   unboundCardIds: string[],
-  opts?: { hadBindablePool?: boolean },
+  opts?: {
+    hadBindablePool?: boolean;
+    draftText?: string;
+    allowedCiteNs?: readonly number[];
+  },
 ): WritingQaFinding | null {
   if (unboundCardIds.length === 0) return null;
   if (opts && opts.hadBindablePool === false) return null;
+  const hanging = draftHasDisallowedCitations(opts?.draftText, opts?.allowedCiteNs);
   return {
     code: "evidence_unbound",
     layer: "L0",
-    action: "warn",
-    message: `${unboundCardIds.length} 张主张未绑到文献（${unboundCardIds.join("、")}），勿硬挂 [n]`,
+    action: hanging ? "repair" : "warn",
+    message: hanging
+      ? `${unboundCardIds.length} 张主张未绑到文献（${unboundCardIds.join("、")}），正文硬挂了未绑 [n]，禁止写回`
+      : `${unboundCardIds.length} 张主张未绑到文献（${unboundCardIds.join("、")}），勿硬挂 [n]`,
     count: unboundCardIds.length,
     examples: unboundCardIds.slice(0, 3),
   };

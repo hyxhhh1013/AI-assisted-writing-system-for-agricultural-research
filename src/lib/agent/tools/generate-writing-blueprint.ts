@@ -1,5 +1,6 @@
 import type { WritingBlueprint } from "@/contracts/writing-blueprint";
 import { parsePaperConfigWordRange } from "@/contracts/paper-passport";
+import { formatProjectBibliographyBlock } from "@/lib/agent/bibliography-index";
 import { formatBlueprintPreview } from "@/lib/agent/blueprint-review";
 import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
@@ -85,6 +86,12 @@ export const generateWritingBlueprintTool: ToolDefinition = {
       projectMode: project.mode,
       targetJournal: project.paperConfig?.targetJournal?.trim() || undefined,
       targetWordCount: targetWordCount || undefined,
+      bibliographyBlock: formatProjectBibliographyBlock({
+        references: project.references,
+        evidence: project.referenceEvidence,
+        max: 40,
+        withAbstract: false,
+      }),
     });
 
     const response = await callAI({

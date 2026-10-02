@@ -96,7 +96,7 @@ export async function persistAgentDraft(
       incoming: content,
       subsectionTitle,
       sectionKey,
-      appendIfPresent: true,
+      appendIfPresent: false,
     });
   }
 

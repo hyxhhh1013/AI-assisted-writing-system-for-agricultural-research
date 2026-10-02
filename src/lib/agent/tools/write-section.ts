@@ -26,12 +26,15 @@ import {
   prepareAgentWriteBlueprintContext,
 } from "@/lib/agent/blueprint-write-context";
 import { manuscriptSubsectionTitle } from "@/lib/writing-merge";
+import { auditBoundProjectManuscript } from "@/lib/agent/manuscript-audit";
+import { formatProjectBibliographyBlock } from "@/lib/agent/bibliography-index";
 import {
   compileSectionSpec,
   type CompileSectionSpecResult,
 } from "@/lib/agent/section-compiler";
 import {
   bindSectionEvidence,
+  boundRefNumbers,
   evidenceUnboundFinding,
   type BindSectionEvidenceResult,
 } from "@/lib/agent/evidence-binder";
@@ -115,10 +118,12 @@ function resolveWriteSpec(
   return { bind: null, specSource: "empty", compileSource: "empty" };
 }
 
-function extraFromBind(bind: BindSectionEvidenceResult | null) {
+function extraFromBind(bind: BindSectionEvidenceResult | null, draftText?: string) {
   const extra = bind
     ? evidenceUnboundFinding(bind.unboundCardIds, {
         hadBindablePool: bind.hadBindablePool,
+        draftText,
+        allowedCiteNs: boundRefNumbers(bind.spec),
       })
     : null;
   return extra ? [extra] : undefined;
@@ -145,7 +150,7 @@ function qaWithBind(
   return evaluateSectionWritingQa({
     text,
     sectionKey,
-    extraFindings: extraFromBind(bind),
+    extraFindings: extraFromBind(bind, text),
     maxRefIndex,
     dataClaims,
     spec: bind?.spec ?? null,
@@ -156,6 +161,27 @@ function qaWithBind(
 
 function refCeiling(existing: string[], added?: string[]): number {
   return existing.length + (added?.length ?? 0);
+}
+
+async function tryWritingAudit(
+  ctx: AgentContext,
+  project: AgentProjectSnapshot,
+  overlay?: { key: string; text: string },
+) {
+  if (!ctx.projectId) return undefined;
+  try {
+    return await auditBoundProjectManuscript({
+      userId: ctx.userId,
+      projectId: ctx.projectId,
+      mode: project.mode,
+      outline: project.outline,
+      references: project.references,
+      referenceEvidence: project.referenceEvidence,
+      overlay,
+    });
+  } catch {
+    return undefined;
+  }
 }
 
 export const writeSectionTool: ToolDefinition = {
@@ -345,6 +371,7 @@ export const writeSectionTool: ToolDefinition = {
       const patched = applyWritingPatches(resume.draft, qa0.findings, {
         maxRefIndex,
         sectionKey: sectionRaw,
+        allowedCiteNs: boundRefNumbers(bind?.spec),
       });
       const resumeDraft = patched.draft;
       const qaReport = resumeDraft === resume.draft
@@ -374,6 +401,11 @@ export const writeSectionTool: ToolDefinition = {
       }
       ctx.activeWrite = null;
       await ctx.patchActiveWrite?.(null);
+      const writingAudit = await tryWritingAudit(
+        ctx,
+        project,
+        { key: sectionRaw, text: resumeDraft },
+      );
       return {
         success: true,
         data: {
@@ -391,11 +423,12 @@ export const writeSectionTool: ToolDefinition = {
           specSource: providedSpec ? "provided" : compiled ? "compiled" : "empty",
           writingPatches: patched.patches,
           blocked: blocked || undefined,
+          writingAudit,
         },
         summary: appendPatchNoteToSummary(
           appendQaNoteToSummary(resume.summary, qaReport),
           { patches: patched.patches, refined: false },
-        ),
+        ) + (writingAudit ? ` · ${writingAudit.summary}` : ""),
       };
     }
 
@@ -447,13 +480,20 @@ export const writeSectionTool: ToolDefinition = {
         error: "请提供 sectionSpec、context/bullets，或先生成写作蓝图",
       };
     }
-    const draftForWriter = boundSpec
+    const specDraft = boundSpec
       ? buildSpecWriterDraft({
           spec: boundSpec,
           context,
           source: specSource === "provided" ? "provided" : compileSource,
         })
       : context || draftContext;
+    const bibBlock = formatProjectBibliographyBlock({
+      references: project.references,
+      evidence: project.referenceEvidence,
+      max: 36,
+      withAbstract: false,
+    });
+    const draftForWriter = [specDraft, bibBlock].filter(Boolean).join("\n\n");
     // 蓝图勾选可收窄检索；不要用证据卡绑中的 2～3 个 PDF 锁死 RAG，否则 50 篇综述只会引用前几号
     const ragIds = mergeRagSourceIds(selectedSourceIds, readingPackSourceKeys(ctx));
     const writerEvidence = mergePackWithSlimEvidence(
@@ -566,7 +606,8 @@ export const writeSectionTool: ToolDefinition = {
       const repaired = await repairSectionDraft({
         draft: result.draft,
         sectionKey: sectionRaw,
-        extraFindings: extraFromBind(bind),
+        extraFindingsFor: (text) => extraFromBind(bind, text),
+        allowedCiteNs: boundRefNumbers(boundSpec),
         maxRefIndex,
         userId: ctx.userId,
         signal: ctx.signal,
@@ -594,6 +635,12 @@ export const writeSectionTool: ToolDefinition = {
         );
       }
 
+      const writingAudit = await tryWritingAudit(
+        ctx,
+        project,
+        { key: sectionRaw, text: repaired.draft },
+      );
+
       const fixNote =
         result.pipelineMode === "full"
           ? result.issueCount > 0
@@ -609,7 +656,7 @@ export const writeSectionTool: ToolDefinition = {
           qaReport,
         ),
         repaired,
-      );
+      ) + (writingAudit ? ` · ${writingAudit.summary}` : "");
 
       // 保留 completed 断点：刚写完就断线续跑时可去重，不必再烧 AI
       const completed = buildActive("completed", {
@@ -640,6 +687,7 @@ export const writeSectionTool: ToolDefinition = {
           writingPatches: repaired.patches,
           writingRefined: repaired.refined || undefined,
           blocked: blocked || undefined,
+          writingAudit,
         },
         summary,
       };

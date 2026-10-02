@@ -30,6 +30,18 @@ describe("mergeSubsectionIntoSection", () => {
     expect(next).toContain("2.2 下一节");
   });
 
+  it("replaces the same subsection by default so Agent 不叠 3.1/2.1", () => {
+    const existing = "2.1 温度\n第一段已经写好了，并且超过四十个汉字用来避免被当成占位 stub。\n\n2.2 下一节\n别的。";
+    const next = mergeSubsectionIntoSection({
+      existingText: existing,
+      incoming: "改写后的唯一一段。",
+      subsectionTitle: "温度",
+    });
+    expect(next).not.toContain("第一段已经写好了");
+    expect(next).toContain("改写后的唯一一段。");
+    expect(next).toContain("2.2 下一节");
+  });
+
   it("strips blueprint breadcrumb glued to the first sentence", () => {
     const next = mergeSubsectionIntoSection({
       existingText: "",

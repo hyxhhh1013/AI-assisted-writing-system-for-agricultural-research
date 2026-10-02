@@ -3,6 +3,8 @@ import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
 import { resolvePhaseTaskPack } from "@/lib/agent/phase-task-pack";
 import { assessDataFoundation } from "@/lib/agent/data-foundation";
 import { loadAgentPlotSources } from "@/lib/agent/plot-sources";
+import { auditManuscript } from "@/lib/agent/manuscript-audit";
+import { isSoftGroundable } from "@/lib/reference-evidence";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import {
   evaluateCitationGrounding,
@@ -22,7 +24,7 @@ import { findReferenceRowsLite } from "@/lib/reference-rows";
 export const inspectProjectTool: ToolDefinition = {
   name: "inspect_project",
   description:
-    "读取当前论文项目的最新状态：阶段、配置、大纲/蓝图、各章节字数与薄节/缺口、文献、证据、配图候选、引用语义告警与建议下一步。写之前或不知道卡在哪时先调用",
+    "读取当前论文项目的最新状态：阶段、配置、大纲/蓝图、各章节字数、文献，以及已写正文的稿面扫描（重复子节、空综述章、错引温度、引用扎堆等）。写完或不知道稿子哪里有问题时先调用。",
   parameters: {
     type: "object",
     properties: {
@@ -81,13 +83,23 @@ export const inspectProjectTool: ToolDefinition = {
       unusedCount: number;
     } | null = null;
 
+    let writingAudit: ReturnType<typeof auditManuscript> | null = null;
+
     try {
       const rows = await findReferenceRowsLite(ctx.projectId, ctx.userId);
-      const sections = await prisma.section.findMany({
-        where: { projectId: ctx.projectId },
-        select: { content: true },
+      const owned = await prisma.project.findFirst({
+        where: { id: ctx.projectId, userId: ctx.userId },
+        select: {
+          abstract: true,
+          sections: { select: { key: true, content: true } },
+        },
       });
-      const draftText = sections.map((s) => s.content).join("\n\n");
+      const sectionMap: Record<string, string> = {};
+      for (const s of owned?.sections ?? []) {
+        if (s.content?.trim()) sectionMap[s.key] = s.content;
+      }
+      if (owned?.abstract?.trim()) sectionMap.abstract = owned.abstract;
+      const draftText = Object.values(sectionMap).join("\n\n");
       const gate = evaluateCitationGate({
         texts: [draftText],
         refCount: rows.length,
@@ -108,6 +120,16 @@ export const inspectProjectTool: ToolDefinition = {
         softUnusedRatio: report.softPool.unusedRatio,
         hint: report.hint,
       };
+      const softRefs = (project.referenceEvidence ?? [])
+        .filter((ev) => isSoftGroundable(ev.abstract) && Boolean(ev.abstract))
+        .map((ev) => ({ n: ev.index, abstract: ev.abstract ?? "" }));
+      writingAudit = auditManuscript({
+        mode: project.mode,
+        outline: project.outline,
+        sections: sectionMap,
+        maxRefIndex: rows.length,
+        softRefs,
+      });
     } catch {
       citationGrounding = null;
     }
@@ -137,6 +159,12 @@ export const inspectProjectTool: ToolDefinition = {
       draftCoverage.requiredGaps.length > 0 || draftCoverage.thinKeys.length > 0
         ? `；薄节/缺口 ${[...new Set([...draftCoverage.requiredGaps, ...draftCoverage.thinKeys])].slice(0, 4).join(",")}`
         : "";
+    const auditNote =
+      writingAudit && writingAudit.issueCount > 0
+        ? `；${writingAudit.summary}`
+        : writingAudit
+          ? "；稿面扫描通过"
+          : "";
     const nextTips = suggestNextAgentActions({
       currentPhase: project.currentPhase,
       writeEnabled: true,
@@ -197,12 +225,13 @@ export const inspectProjectTool: ToolDefinition = {
           hint: draftCoverage.hint,
         },
         citationGrounding,
+        writingAudit,
         preferredTools: pack.pack.preferredTools,
         constraints: pack.pack.constraints,
         skillHint: `academic-paper Phase ${pack.pack.phase}（${pack.pack.title}）→ 推荐 ${pack.pack.preferredTools.join(" → ") || "对话确认配置"}`,
         ...(includeBriefing ? { briefing } : {}),
       },
-      summary: `项目「${project.title}」阶段 ${project.currentPhase ?? "?"}（${pack.pack.title}）；空白节 ${empty.length}；文献 ${project.references.length}${unusedNote}；${dataFoundation.brief}；${foundationNote}；可配图 ${plotCandidates}${coverNote}${susNote}${softNote}。${nextNote}`,
+      summary: `项目「${project.title}」阶段 ${project.currentPhase ?? "?"}（${pack.pack.title}）；空白节 ${empty.length}；文献 ${project.references.length}${unusedNote}；${dataFoundation.brief}；${foundationNote}；可配图 ${plotCandidates}${coverNote}${susNote}${softNote}${auditNote}。${nextNote}`,
     };
   },
 };

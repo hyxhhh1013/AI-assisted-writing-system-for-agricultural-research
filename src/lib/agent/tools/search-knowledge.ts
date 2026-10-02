@@ -162,7 +162,11 @@ export const searchKnowledgeTool: ToolDefinition = {
       };
     }
 
-    const detailed = rankKnowledgePapersDetailed(chunks, query);
+    const detailed = rankKnowledgePapersDetailed(
+      chunks,
+      query,
+      ctx.projectSnapshot?.title,
+    );
     const ranked = detailed.papers.slice(0, paperLimit);
     const stored = mergeLastKnowledgeSearch(
       ctx.userId,

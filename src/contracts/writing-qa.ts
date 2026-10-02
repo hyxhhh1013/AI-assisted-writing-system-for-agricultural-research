@@ -6,7 +6,7 @@
 
 export type WritingQaLayer = "L0" | "L1" | "L2" | "L3" | "L4" | "L5";
 
-/** block=不可写回；repair=改草稿/spec 再检；pass/warn=可写回 */
+/** block=不可写回；repair=改草稿/spec 再检且默认不写回；pass/warn=可写回 */
 export type WritingQaAction = "block" | "repair" | "pass" | "warn";
 
 export type WritingQaVerdict = "block" | "repair" | "pass";
@@ -84,9 +84,19 @@ export function verdictFromWritingFindings(
   return "pass";
 }
 
-/** WRITE-QA-006：只有 block 不写回；repair/pass/warn 仍可 persist */
+/** 事实类 repair 不写回；喉清/主张未覆盖等仍可落库后再改。 */
+const DO_NOT_PERSIST_REPAIR_CODES = new Set([
+  "cite_semantic_mismatch",
+  "evidence_unbound",
+  "overclaim",
+]);
+
+/** WRITE-QA-011：block 永不写回；错引/未绑硬挂/overclaim 的 repair 也不写回。 */
 export function shouldPersistWritingDraft(report: WritingQaReport): boolean {
-  return report.verdict !== "block";
+  if (report.verdict === "block") return false;
+  return !report.findings.some(
+    (f) => f.action === "repair" && DO_NOT_PERSIST_REPAIR_CODES.has(f.code),
+  );
 }
 
 /**

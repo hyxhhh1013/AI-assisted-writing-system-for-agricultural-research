@@ -8,7 +8,7 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-10-02（错引硬门：句子对上该篇才能导出）  
+> **最后更新**：2026-10-02（WRITE-QA-011：事实类 repair 不写回）  
 > **实时 status 只看 §1 Phase 13 / Phase 14 / Phase 16 / Phase 17 / Phase 18 与 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
@@ -233,6 +233,7 @@
 | WRITE-QA-008 | Golden：引言/方法/结果/讨论/综述子节 + `eval:quality` | 003 | 1.5d | **done** | 2026-08-22；`write-qa-fixtures.ts`；`eval:quality` 打印并门禁；LLM-judge 不进热路径 |
 | WRITE-QA-009 | `write_section` 主路径改吃 Spec；context 只作适配 | 002, 006 | 1d | **done** | 2026-08-22；`spec-write-context.ts`；可传 `sectionSpec`；Writer 看【本节主张】 |
 | WRITE-QA-010 | 剖面收口：results + literature_body 子节 + introduction | 008, 009 | 1.5d | **done** | 2026-08-22；`writing-profiles.ts`：缺口句 / 无数量 / 综述写成试验 |
+| WRITE-QA-011 | 事实类 repair 不 persist；未绑禁挂 [n]；同子节覆盖 | 006 | 0.5d | **done** | 2026-10-02；`shouldPersistWritingDraft` 拦 mismatch/unbound/overclaim；剥未绑引用；`persistAgentDraft` 默认替换 |
 | — | 任务单细节 | — | — | — | [`plans/WRITE-QA-quality-system.md`](./plans/WRITE-QA-quality-system.md) |
 | **Phase 15 — 提交前质量中心 UX（QUALITY-UX）** |
 | **QUALITY-UX-000** | **规划：入口合一 + 总览仪表 + 工位** | — | 0.5d | **done** | 2026-09-08；[`plans/QUALITY-UX-workspace.md`](./plans/QUALITY-UX-workspace.md) |
@@ -316,7 +317,7 @@
 | **W3-AP-QNEXT** | **主轴：L4 主张覆盖 + findings 给人看；不重构编排** | W3-AP-HITL-STEER | 1～2w | todo | 2026-09-30 挂单；**01–04 已落地**；05–07 仍 blocked。详规 [`plans/W3-AP-QUALITY-NEXT.md`](./plans/W3-AP-QUALITY-NEXT.md)。与 Phase 16 并行、互不挡 |
 | W3-AP-QNEXT-01 | 写节 `qaReport` repair/block 抬到续跑条与收口文风 | HITL-STEER | 0.5d | **done** | 2026-09-30；`continue-hint` + `ui-transcript` 落 slim qaReport；收口文风可跳节 |
 | W3-AP-QNEXT-02 | L4 `claim_uncovered`（默认不 block）+ golden | QNEXT-01 | 1d | **done** | 2026-09-30；`blueprint_claim_uncovered` 改 repair；不触发定向 refine；golden `literature_body/claim-miss` |
-| W3-AP-QNEXT-03 | soft 精确数字 + unbound 主张写进 observation | QNEXT-02 | 0.5d | **done** | 2026-09-30；`evaluateSoftPreciseNotInAbstract` → `cite_semantic_mismatch`；`evidence_unbound` 改 repair 进续跑条 |
+| W3-AP-QNEXT-03 | soft 精确数字 + unbound 主张写进 observation | QNEXT-02 | 0.5d | **done** | 2026-09-30；`cite_semantic_mismatch`；011 起 mismatch/未绑硬挂不 persist |
 | W3-AP-QNEXT-04 | ingest 可恢复提示；inspect/简报列出 dataClaims | — | 0.5d | **done** | 2026-09-30；附件失败文案 + inspect `claimSamples` + 简报 0 条声明提示 |
 | W3-AP-QNEXT-UX | Agent 页内切节（不必去章节结构 Tab） | QNEXT-01 | 0.5d | **done** | 2026-09-30；编辑器标题下拉；写回跟节不切 Tab；续跑条/收口灯/已写回可 peek |
 | W3-AP-QNEXT-05 | 门禁审计：只删已有 eval/vitest 证明的误拦 | QNEXT-01 | 1d | **blocked** | 板块 5；无失败用例不开；禁止新 `isXxxGoal` |
@@ -1446,7 +1447,11 @@ src/app/api/（13）                       src/lib/（6）
 | 2026-10-02 | W3-AP-LIT-LOCAL | AI | 备文献先 search_knowledge 导入本地 PDF；拦 search_external；generate_outline 前确认题目。走查：同批并行不放外部、确认卡不混旧 OpenAlex、空继续不当成新题。 |
 | 2026-10-02 | ADMIN-050 | AI | 仪表盘 heap/RSS/PM2 误报：used/allocated 当压力、lifetime 重启当故障。改为 V8 上限与 unstable_restarts；探测系统 Chrome。 |
 | 2026-10-02 | WRITE-SUB-PATH | AI | 蓝图「父 > 子」被写成段首。写回只用叶子标题并剥面包屑；Writer/简报禁止把路径粘进正文。 |
+| 2026-10-02 | WRITE-BIB-GROUND | AI | 大纲/蓝图/写节注入项目参考文献目录；禁止点名表外；检索用题目限定词压偏题篇。 |
 | 2026-10-02 | W3-AP-CITE-ATTR | AI | 错引硬门：集合 IDF + 可选 PDF 段落；validate/导出阻断；绑文献不再只靠共享领域词。 |
+| 2026-10-02 | WRITE-QA-011 | AI | 错引/未绑硬挂 [n]/overclaim 不 persist；剥未绑引用；引言温度须能在摘要池对上；Agent 同子节覆盖不叠稿。 |
+| 2026-10-02 | WRITE-QA-CORPUS | AI | 线上 harvest 写节 qaReport；golden 锁 invented-temp / unbound-cite / persist=false。 |
+| 2026-10-02 | WRITE-AUDIT | AI | 稿面扫描 writingAudit：叠子节/空综述/错温/引用扎堆；inspect 与写节带回；reflect 催 inspect。 |
 | 2026-09-30 | RAG-CAT-ALIAS | AI | `search_knowledge(category=热解)` 0 命中：别名映射到 `热化学`；索引改走 `GRAINSCRIPT_DATA_ROOT`。 |
 
 ---

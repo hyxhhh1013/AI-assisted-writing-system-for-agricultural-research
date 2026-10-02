@@ -17,8 +17,10 @@ export function buildBlueprintPrompt(params: {
   targetWordCount?: string;
   /** 写作时需标注"此处需补实验数据"的缺口 */
   pendingExperiments?: string[];
+  /** 项目已导入参考文献目录；主张/证据只能点这些篇 */
+  bibliographyBlock?: string;
 }): string {
-  const { title, researchDirection, outline, language, projectMode, chartCatalog, motivationFromGap, targetJournal, targetWordCount, pendingExperiments } = params;
+  const { title, researchDirection, outline, language, projectMode, chartCatalog, motivationFromGap, targetJournal, targetWordCount, pendingExperiments, bibliographyBlock } = params;
   const domainExpertise = buildDomainExpertise(researchDirection);
   const isResearch = projectMode === "research";
   const langLabel = language === "en" ? "English" : "Chinese";
@@ -56,10 +58,11 @@ export function buildBlueprintPrompt(params: {
       : "中文论文若用户未指定，通常 6000–12000。"
   }
 3. 规划配图：先估总量（totalMin/totalMax），再分配到具体大纲节点（sectionPath 必须与大纲中的「完整路径」一致，用 " > " 连接层级，如 "结果与分析 > 产量变化"）。
-4. 为重要章节写 sectionGuides：purpose + keyPoints，并尽量填写论证字段 claim / evidenceHint / warrant（必要时 rebuttal）。
+4. 为重要章节写 sectionGuides：purpose + keyPoints，并尽量填写论证字段 claim / evidenceHint / warrant（必要时 rebuttal）。evidenceHint 只写项目参考文献里有的篇，禁止点名表外作者。
 5. 给出建议写作顺序 writingOrder（sectionPath 数组）。
 6. 列出 prerequisites（如需先备实验数据、先画流程图等）；可选 argumentGaps（证据缺口）。
 7. 论证不再单独成文件：主张—证据—推理写进各节 sectionGuides，全文缺口进 argumentGaps。
+${bibliographyBlock?.trim() ? `\n${bibliographyBlock.trim()}\n` : ""}
 
 【配图规则】
 ${figureRules}

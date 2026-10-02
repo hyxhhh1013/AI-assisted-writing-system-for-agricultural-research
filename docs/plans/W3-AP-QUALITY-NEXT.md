@@ -18,7 +18,7 @@
 |----|------|------|------|
 | QNEXT-01 | 4 下一刀可见 | 便捷→质量 | ✅ 本轮 `qaReport` 的 repair/block 进续跑条；收口「文风」点按跳节 |
 | QNEXT-02 | 1 主张覆盖 L4 | 质量 | ✅ `blueprint_claim_uncovered` 为 repair（不 block、不触发定向 refine） |
-| QNEXT-03 | 2 证据钉死 | 质量 | ✅ soft 句内精确数据未在摘要 → `cite_semantic_mismatch`；unbound 改 repair |
+| QNEXT-03 | 2 证据钉死 | 质量 | ✅ soft 句内精确数据未在摘要 → `cite_semantic_mismatch`（011 起不 persist）；unbound 硬挂 [n] 为 repair 并剥引用 |
 | QNEXT-04 | 3 结果数字合同 | 质量+便捷 | ✅ ingest 失败可恢复文案；inspect/简报列出 dataClaims；不放宽无数据写 results |
 | QNEXT-05 | 5 控制面审计 | 便捷 | 每个拟删门禁先有 `eval:agent`/vitest 失败用例；禁止再加 `isXxxGoal` |
 | QNEXT-06 | 6 技能包 | 延后 | **blocked**：须先出现稳定「选错合法工具」评测模式 |
@@ -51,6 +51,14 @@ Phase 16（SEC / workbench 瘦身）是**另一条轨**，不挡本波，也不�
 - 改 01–04：`npm run eval:quality`（分节 golden）必须绿。
 - 改 05：现有 `eval:agent` 全绿；新增「自查 0 问题后跟聊继续 → 不进 citation_apply」。
 - 06/07：未满足 blocked 条件不得改热路径。
+
+## 语料闭环（不靠人一篇篇点）
+
+线上写节用 `scripts/harvest-write-qa-corpus.py` 扫最近 `AgentSession` 的 `qaReport`：code × 是否 persist。
+
+Agent 当场发现靠 `writingAudit`（`inspect_project` / 写节 observation）。自进化仍是：harvest 或扫描出现新洞 → golden → 规则。禁止运行时改 prompt 当进化。
+
+每一类只走一次：harvest 出现新洞 → 最短坏样进 `write-qa-fixtures.ts`（事实类加 `expectPersist: false`）→ `eval:quality` 红直到规则落地。确定性规则进 WRITE-QA；写错章 / 检索过宽进编排门。改 Writer 前先跑 harvest + golden。
 
 ## 明确不做
 

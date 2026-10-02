@@ -14,6 +14,7 @@ const QA_CODES =
   + "abstract_has_cite / cite_oob / md_heading / embedded_bib / "
   + "hollow_phrase / throat_clear / results_discussion_bleed / "
   + "overclaim / number_not_in_claims / evidence_unbound / "
+  + "cite_semantic_mismatch / "
   + "intro_gap_missing / review_as_experiment / claim_id_heading";
 
 const SLIM_SECTION_ZH: Record<string, string> = {

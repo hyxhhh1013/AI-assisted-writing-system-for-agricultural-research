@@ -157,5 +157,24 @@ describe("evaluateSectionWritingQa", () => {
     });
     expect(report.verdict).toBe("pass");
     expect(report.findings.some((f) => f.code === "evidence_unbound")).toBe(true);
+    expect(report.findings.find((f) => f.code === "evidence_unbound")?.action).toBe("warn");
+  });
+
+  it("引言温度不在摘要池 → cite_semantic_mismatch 且不写回", () => {
+    const report = evaluateSectionWritingQa({
+      sectionKey: "introduction",
+      text: [
+        "生物炭施用后土壤有机碳储量上升。",
+        "不同热解温度下营养元素保留率仍不清楚。",
+        "田间试验设置三个温度水平。",
+        "该趋势与已有吸附研究一致，预处理常在 260℃ 进行。",
+      ].join(""),
+      softRefs: [
+        { n: 1, abstract: "Biochar generally improves soil aggregation under field conditions." },
+      ],
+    });
+    expect(report.findings.some((f) => f.code === "cite_semantic_mismatch")).toBe(true);
+    expect(report.verdict).toBe("repair");
+    expect(appendQaNoteToSummary("已生成 introduction", report)).toContain("未写入章节");
   });
 });

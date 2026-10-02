@@ -83,8 +83,15 @@ describe("analyzeReflection", () => {
   it("write without any verify → verify nudge", () => {
     const r = analyzeReflection([WRITE]);
     expect(r.action).toBe("verify");
+    expect(r.nudge).toContain("inspect_project");
     expect(r.nudge).toContain("validate_citations");
     expect(r.section).toBe("literature_body");
+  });
+
+  it("inspect_project after write counts as self-check", () => {
+    expect(
+      analyzeReflection([WRITE, obs("inspect_project", { writingAudit: { issueCount: 1 } })]).action,
+    ).toBeNull();
   });
 
   it("verify before write does not count", () => {

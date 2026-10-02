@@ -94,6 +94,18 @@ describe("rankKnowledgePapers", () => {
     expect(suggestedKnowledgeIndices(broad.papers, true).length).toBeLessThanOrEqual(5);
   });
 
+  it("题目限定词会把共热解/CNT 篇压到温度—性质篇之后", () => {
+    const ranked = rankKnowledgePapers(
+      [
+        chunk("中草药残渣与聚丙烯共热解碳纳米管.pdf", "co-pyrolysis polypropylene carbon nanotubes"),
+        chunk("热解温度影响稻秆稻壳生物炭性质.pdf", "pyrolysis temperature rice straw husk biochar properties"),
+      ],
+      "热解",
+      "热解温度与预处理对生物炭理化性质的影响研究进展",
+    );
+    expect(ranked[0]?.source).toMatch(/热解温度/);
+  });
+
   it("建议导入只保留相对高分篇", () => {
     const idx = suggestedKnowledgeIndices([
       { relevanceScore: 0.9 },

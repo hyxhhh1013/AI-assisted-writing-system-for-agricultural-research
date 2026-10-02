@@ -1,3 +1,4 @@
+import { formatProjectBibliographyBlock } from "@/lib/agent/bibliography-index";
 import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
 import { looksLikeTitleInstruction } from "@/lib/agent/core/title-prereq-consent";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
@@ -139,12 +140,26 @@ export const generateOutlineTool: ToolDefinition = {
       limit: 10,
       category: targetCategory || undefined,
     });
-    const contextText = contextChunks
+    const ragText = contextChunks
       .map((c) => {
         const cleaned = c.content.replace(/\[(\d+[\d,\s\-–—]*)\]/g, "[文献$1]");
         return `[来自文献: ${formatRagCitation(c)}]\n${cleaned}`;
       })
       .join("\n\n");
+    const bibBlock = formatProjectBibliographyBlock({
+      references: project.references,
+      evidence: project.referenceEvidence,
+      max: 40,
+      withAbstract: true,
+    });
+    const contextText = [
+      bibBlock,
+      ragText
+        ? `【知识库摘录（仅背景；禁止点名未出现在项目参考文献中的作者）】\n${ragText}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n") || "（项目尚无参考文献，按题目列待补主题，不要虚构作者）";
 
     const systemPrompt = buildOutlinePrompt({
       title,

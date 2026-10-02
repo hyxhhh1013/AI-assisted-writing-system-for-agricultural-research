@@ -1,6 +1,6 @@
 /**
- * WRITE-QA-003 / 006：写节热路径确定性质检。
- * persist 只看 verdict=block（number_not_in_claims 等）；repair 仍写回。
+ * WRITE-QA-003 / 006 / 011：写节热路径确定性质检。
+ * persist：block 以及错引/未绑硬挂/overclaim 的 repair 不写回。
  */
 
 import {
@@ -9,6 +9,7 @@ import {
 } from "@/contracts/section-spec";
 import {
   liftWritingQualityFindings,
+  shouldPersistWritingDraft,
   verdictFromWritingFindings,
   writingQaVerdictLabel,
   type WritingQaFinding,
@@ -20,7 +21,10 @@ import { checkWritingQuality } from "@/lib/agent/writing-quality";
 import { collectWritingProfileFindings } from "@/lib/agent/writing-profiles";
 import { reconcileResultsNumbers } from "@/lib/agent/results-number-reconcile";
 import { collectInvalidCitationNumbers } from "@/lib/reference-reorder";
-import { evaluateSoftPreciseNotInAbstract } from "@/lib/agent/precise-data-grounding";
+import {
+  evaluateSoftPreciseNotInAbstract,
+  evaluateTempNotInAbstractPool,
+} from "@/lib/agent/precise-data-grounding";
 
 const HOLLOW_PHRASES = [
   "具有重要的意义",
@@ -222,22 +226,39 @@ function collectNumberClaimFindings(
 
 function collectSoftPreciseFindings(
   text: string,
+  register: SectionRegister | null,
   softRefs?: ReadonlyArray<{ n: number; abstract: string }>,
 ): WritingQaFinding[] {
   if (!softRefs?.length) return [];
   const hits = evaluateSoftPreciseNotInAbstract({ draftText: text, softRefs });
-  if (hits.length === 0) return [];
+  const checkPool = register === "introduction" || register === "review_body";
+  const temps = checkPool
+    ? evaluateTempNotInAbstractPool({
+        draftText: text,
+        abstracts: softRefs.map((r) => r.abstract),
+      })
+    : [];
+  if (hits.length === 0 && temps.length === 0) return [];
+  const citeBit = hits.length
+    ? `soft 文献句内精确数据未出现在摘要（${hits
+        .slice(0, 3)
+        .map((h) => `[${h.number}] ${h.data.join("、")}`)
+        .join("；")}）`
+    : "";
+  const tempBit = temps.length
+    ? `温度等精确数字未出现在项目摘要（${temps.slice(0, 3).join("、")}）`
+    : "";
   return [
     {
       code: "cite_semantic_mismatch",
       layer: "L3",
       action: "repair",
-      message: `soft 文献句内精确数据未出现在摘要（${hits
-        .slice(0, 3)
-        .map((h) => `[${h.number}] ${h.data.join("、")}`)
-        .join("；")}）`,
-      count: hits.length,
-      examples: hits.slice(0, 3).map((h) => `[${h.number}] ${h.data[0] ?? ""}`),
+      message: [citeBit, tempBit].filter(Boolean).join("；"),
+      count: hits.length + temps.length,
+      examples: [
+        ...hits.slice(0, 2).map((h) => `[${h.number}] ${h.data[0] ?? ""}`),
+        ...temps.slice(0, 2),
+      ].slice(0, 3),
     },
   ];
 }
@@ -276,7 +297,7 @@ export function evaluateSectionWritingQa(
     ...collectSectionFindings(text, register),
     ...collectCiteOobFindings(text, input.maxRefIndex),
     ...collectNumberClaimFindings(text, register, input.dataClaims),
-    ...collectSoftPreciseFindings(text, input.softRefs),
+    ...collectSoftPreciseFindings(text, register, input.softRefs),
     ...collectWritingProfileFindings({
       text,
       sectionKey: input.sectionKey,
@@ -302,7 +323,7 @@ export function evaluateSectionWritingQa(
 
 export function appendQaNoteToSummary(summary: string, report: WritingQaReport): string {
   if (report.findings.length === 0) return `${summary} · 文风质检通过`;
-  if (report.verdict === "block") {
+  if (!shouldPersistWritingDraft(report)) {
     return `${summary} · 文风质检 ${report.findings.length} 条（${writingQaVerdictLabel(report.verdict)}，未写入章节）`;
   }
   return `${summary} · 文风质检 ${report.findings.length} 条（${writingQaVerdictLabel(report.verdict)}，不阻断写回）`;

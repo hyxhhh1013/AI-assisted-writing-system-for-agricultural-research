@@ -41,12 +41,12 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 | `src/lib/agent/ingest-project-data.ts` | 表格入库合并 + 只 PATCH `dataSources`/`dataClaims`（`ingest_project_data`） |
 | `src/lib/agent/writing-progress.ts` | 写节进度翻译层（管道事件 → `agent/progress` label） |
 | `src/lib/agent/writing-quality.ts` | WQC 写作质检轻量：喉清开场 / 综上所述堆砌 / overclaim / 段长方差（确定性规则，warn 级不阻断） |
-| `src/lib/agent/writing-qa-run.ts` | WRITE-QA-003 写节热路径 QA：`evaluateSectionWritingQa` → `WritingQaReport`（`block` 不 persist） |
+| `src/lib/agent/writing-qa-run.ts` | WRITE-QA-003/011 写节热路径 QA：`evaluateSectionWritingQa` → `WritingQaReport`（block 与错引/未绑硬挂/overclaim 的 repair 不 persist） |
 | `src/lib/agent/section-compiler.ts` | WRITE-QA-002：蓝图/要点/语域 → `SectionSpecV1` |
 | `src/lib/agent/evidence-binder.ts` | WRITE-QA-004：主张钉到项目题录/摘要/dataClaims（词重叠，不做 per-card RAG） |
 | `src/lib/agent/writing-patches.ts` | WRITE-QA-005：`applyWritingPatches` 纯函数表（喉清/空话/越界引用/摘要引用/MD 标题/文末文献表/结果混讨论/overclaim） |
 | `src/lib/agent/writing-patch-run.ts` | WRITE-QA-005：写节回修环；确定性之后最多 1 次定向 refine |
-| `src/lib/agent/quality-closure.ts` | 质量收口看板：节完整度 / 摘要 / 引用硬检 / 审查 / 文风质检（WRITE-QA-006） |
+| `src/lib/agent/manuscript-audit.ts` | 已写正文稿面扫描：写节 QA + 叠子节 / 空综述章 / 引用扎堆 / 大纲未写上 |
 | `src/lib/agent/writer-prompt.ts` | WRITE-QA-007：Agent slim Writer；禁令改 QA code 指针，不堆「禁止」 |
 | `src/lib/agent/spec-write-context.ts` | WRITE-QA-009：Writer 上下文由 Spec 生成；`sectionSpec` JSON 解析 |
 | `src/lib/agent/writing-profiles.ts` | WRITE-QA-010：引言缺口 / 结果无数量 / 综述写成试验 |
@@ -166,6 +166,9 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **蓝图配图在写节后真正出图（2026-10-01）**：此前 figurePlan 只进 Writer 提示（规划配图文案），Agent slim Writer 还禁止 【FIGURE】JSON，所以段落扩写不会画图。现 `write_section` 落库后 `toolsNode` 按 `figurePlan.dataBinding` / 试验表目录自动排队 `generate_chart(chartIndex, sectionKey)`；专家工具扩写同样用绑定数据走 `generateFigure`。流程图仍须 `draft_mechanism_figure`。无绑定数据的必需图会提示上传 CSV/Excel。实现：`lib/blueprint-chart-jobs.ts`。
 - **综述正文禁止一次写整章（2026-08-09）**：Agent 曾把 phase 文案「一次任务可连续写多节」理解成对 `literature_body` 一次写出 5–7k 字（UI 可达万字+），导致超时/质量塌陷。现：① phase-pack / planner / review_write nudge / system prompt 明确「按蓝图子节 + subsectionTitle 逐节写」；② `write_section` 在 `literature_body` 无 `subsectionTitle` 且蓝图有 ≥2 子节路径时 soft-gate 拒绝并列出建议标题。
 - **子节标题不要蓝图路径（2026-10-02）**：`subsectionTitle` 若带「父 > 子」，模型会把路径粘在段首。写回用叶子标题并剥段首面包屑；Writer/简报禁止把路径写进正文。
+- **写节事实门（2026-10-02）**：`cite_semantic_mismatch`（句内精确数据/温度对不上摘要）、未绑主张却硬挂 `[n]`、`overclaim` 在修补后仍在则 **不 persist**。未绑引用确定性剥掉。Agent 同名子节覆盖旧稿，工作台扩写仍可追加。
+- **稿面自检（2026-10-02）**：`auditManuscript` 扫已落库全文（不限于刚写的一节）。`write_section` / `inspect_project` 回 `writingAudit`；写后 reflect 先催 inspect。发现新洞仍要进 golden，不在运行时改自己的规则。`check_consistency` 仍是跨章 LLM 灰区。
+- **大纲与写节锁项目参考文献（2026-10-02）**：`generate_outline` 曾只喂全库 RAG，大纲点名库外作者；写节把 [1] 当通用综述。现大纲/蓝图/Writer 注入【项目参考文献】编号题录，禁止点名表外；检索用题目限定词压共热解/CNT 等偏题篇。
 - **论证并入写作蓝图（2026-08-09，方案 A）**：产品主路径改为 `配置 → 大纲 → 写作蓝图 → 分节写`。`SectionGuide` 增加 `claim` / `evidenceHint` / `warrant` / `rebuttal`；全文级 `researchQuestion` / `argumentGaps`。`ensure-write-prereqs` / phase-gate 不再要求 `build_argument_blueprint`；检查点只对 `generate_writing_blueprint` 暂停。Passport Phase 3 有写作蓝图即 done。旧 `argumentBlueprint` 列保留只读兼容。
 - **卸掉弃用工具注册（2026-08-11）**：`createAgentTools` 不再注册 `build_argument_blueprint`（源文件保留作说明，`UNREGISTERED_TOOL_FILES`）；planner / Phase 3 hint 文案改为「确认写作蓝图主张」，不再引导生成独立论证蓝图。
 - **工具挂载表（2026-08-16，W3-AP-ARCH-01）**：`tools/registry.ts` 为唯一挂载点。加工具：新建 `tools/<name>.ts` + 推进 `READ_TOOLS` 或 `WRITE_TOOLS`。禁止运行时扫磁盘。忘了挂表则 `agent-tool-registry.test.ts` 红。
@@ -288,7 +291,7 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 > **冻结**：不解冻 `POST /api/writing`；不复刻十二代理；禁止再往 `writing.ts` 堆「禁止」；热路径不用 LLM-judge。  
 > **与 3.7 关系**：CITE-GROUND / DRAFT-COVER / WQC / ABS-FLOW 是地板，本波不推倒。  
 > **契约（001 done）**：`src/contracts/section-spec.ts`（`SectionSpecV1`）+ `writing-qa.ts`（`WritingQaReport`）。旧 `write_section.context/bullets` 经 `liftWriteSectionInputToSpec` 升格；现有 WQC 经 `liftWritingQualityFindings` 升格。  
-> **热路径（001–010 done）**：`write_section` 吃 `sectionSpec`（或编译）→ 绑定项目文献池 → **slim Writer** → QA（含引言/结果/综述剖面）→ 确定性修补 → 非 full 时最多定向 refine 1 次。`block` 不 persist。`eval:quality` 带分节 golden。专家工具扩写仍用 legacy 长 prompt。
+> **热路径（001–011）**：`write_section` 吃 `sectionSpec`（或编译）→ 绑定项目文献池 → **slim Writer** → QA（含引言/结果/综述剖面）→ 确定性修补 → 非 full 时最多定向 refine 1 次。`block` 以及错引/未绑硬挂 `[n]` / overclaim 的 `repair` 不 persist。同名子节写回替换不追加。`eval:quality` 带分节 golden。专家工具扩写仍用 legacy 长 prompt。
 
 ## 车间图纸（2026-08-16 规划，Wave 3.10）
 

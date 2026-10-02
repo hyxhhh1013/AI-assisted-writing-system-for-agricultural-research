@@ -1,6 +1,6 @@
 /**
  * WRITE-QA-005：写节回修环。
- * 先 applyWritingPatches，再最多 1 次定向 refine。persist 由 006 看 qaReport.verdict。
+ * persist 由 011 看 block + 事实类 repair（错引/未绑硬挂/overclaim）。
  */
 
 import type { EvidenceClaim } from "@/contracts/data-source";
@@ -22,6 +22,9 @@ export interface RepairSectionDraftInput {
   draft: string;
   sectionKey: string;
   extraFindings?: WritingQaFinding[];
+  /** 按当前草稿重算 extra（unbound 是否硬挂 [n]） */
+  extraFindingsFor?: (draft: string) => WritingQaFinding[] | undefined;
+  allowedCiteNs?: readonly number[];
   maxRefIndex: number;
   userId: string;
   signal: AbortSignal;
@@ -66,21 +69,32 @@ function runQa(
 export async function repairSectionDraft(
   input: RepairSectionDraftInput,
 ): Promise<RepairSectionDraftResult> {
-  const extra = input.extraFindings;
+  const extrasFor = (text: string) =>
+    input.extraFindingsFor?.(text) ?? input.extraFindings;
   const maxRefIndex = input.maxRefIndex;
   const claims = input.dataClaims;
   const spec = input.spec;
   const sub = input.subsectionTitle;
   const softRefs = input.softRefs;
-  const first = runQa(input.draft, input.sectionKey, extra, maxRefIndex, claims, spec, sub, softRefs);
+  const first = runQa(
+    input.draft,
+    input.sectionKey,
+    extrasFor(input.draft),
+    maxRefIndex,
+    claims,
+    spec,
+    sub,
+    softRefs,
+  );
   const applied = applyWritingPatches(input.draft, first.findings, {
     maxRefIndex,
     sectionKey: input.sectionKey,
+    allowedCiteNs: input.allowedCiteNs,
   });
   let draft = applied.draft;
   let qaReport = draft === input.draft
     ? first
-    : runQa(draft, input.sectionKey, extra, maxRefIndex, claims, spec, sub, softRefs);
+    : runQa(draft, input.sectionKey, extrasFor(draft), maxRefIndex, claims, spec, sub, softRefs);
 
   let refined = false;
   if (input.allowRefine !== false && hasWritingRefineCandidate(qaReport.findings)) {
@@ -96,7 +110,16 @@ export async function repairSectionDraft(
       });
       if (out.draft.trim().length >= 10) {
         draft = out.draft;
-        qaReport = runQa(draft, input.sectionKey, extra, maxRefIndex, claims, spec, sub, softRefs);
+        qaReport = runQa(
+          draft,
+          input.sectionKey,
+          extrasFor(draft),
+          maxRefIndex,
+          claims,
+          spec,
+          sub,
+          softRefs,
+        );
         refined = true;
       }
     } catch {

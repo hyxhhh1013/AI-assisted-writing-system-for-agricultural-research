@@ -66,6 +66,28 @@ describe("WritingQaReport", () => {
     expect(writingQaVerdictLabel("block")).toBe("不可写回");
     expect(writingQaVerdictLabel("pass")).toBe("可接受");
     expect(shouldPersistWritingDraft(parsed!)).toBe(false);
+    expect(shouldPersistWritingDraft({
+      verdict: "repair",
+      findings: [{
+        code: "cite_semantic_mismatch",
+        layer: "L3",
+        action: "repair",
+        message: "260℃ 不在摘要",
+      }],
+    })).toBe(false);
+    expect(shouldPersistWritingDraft({
+      verdict: "repair",
+      findings: [{
+        code: "throat_clear",
+        layer: "L2",
+        action: "repair",
+        message: "喉清",
+      }],
+    })).toBe(true);
+    expect(shouldPersistWritingDraft({
+      verdict: "pass",
+      findings: [],
+    })).toBe(true);
     expect(isWriteSectionSettled({ persisted: null, blocked: true })).toBe(true);
     expect(isWriteSectionSettled({ persisted: { sectionKey: "results" } })).toBe(true);
     expect(isWriteSectionSettled({ persisted: null })).toBe(false);
