@@ -211,6 +211,26 @@ describe("buildImportReferenceConfirmParams", () => {
     const p = await buildImportReferenceConfirmParams({ hitJson: "not-json" }, ctx);
     expect(p.importItems).toBeUndefined();
   });
+
+  it("knowledgeHitIndices 不把整次检索并进确认卡", async () => {
+    storeLastKnowledgeSearch(ctx.userId, [
+      { source: "a.pdf", citation: "A", relevanceScore: 0.9 },
+      { source: "b.pdf", citation: "B", relevanceScore: 0.4 },
+      { source: "c.pdf", citation: "C", relevanceScore: 0.2 },
+    ]);
+    const items = await resolveImportReferenceCandidates(
+      { knowledgeHitIndices: "[1]", query: "热解温度" },
+      ctx,
+    );
+    expect(items).toHaveLength(1);
+    expect(items[0]?.id).toContain("a.pdf");
+    const p = await buildImportReferenceConfirmParams(
+      { knowledgeHitIndices: "[1]", query: "热解温度", why: "与热解温度课题直接相关需要引用" },
+      ctx,
+    );
+    expect((p.importItems as unknown[]).length).toBe(1);
+    expect(p.defaultSelectedIndices).toEqual([0]);
+  });
 });
 
 describe("importReferenceTool selectedIndices batch path", () => {

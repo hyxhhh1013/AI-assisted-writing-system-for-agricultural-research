@@ -3,6 +3,7 @@ import type { RagChunk } from "@/lib/rag";
 import {
   composeKnowledgeSearchQuery,
   rankKnowledgePapers,
+  rankKnowledgePapersDetailed,
   suggestedKnowledgeIndices,
 } from "@/lib/agent/knowledge-search-rank";
 
@@ -32,6 +33,10 @@ describe("composeKnowledgeSearchQuery", () => {
       "生物质热解",
     );
     expect(q).toBe("生物质热解 生物油");
+  });
+
+  it("不把占位题名叠进 query", () => {
+    expect(composeKnowledgeSearchQuery("热解", "新文献综述", "")).toBe("热解");
   });
 });
 
@@ -73,15 +78,30 @@ describe("rankKnowledgePapers", () => {
     expect(ranked[0]?.source).toMatch(/热解温度/);
   });
 
-  it("建议导入只含相关篇", () => {
+  it("单字分类词在整库都出现时判过宽，限定词能把对口篇提前", () => {
+    const pool = [
+      chunk("中草药残渣与聚乙烯共热解产物分布.pdf", "co-pyrolysis plastics"),
+      chunk("镍基催化剂催化热解中药渣.pdf", "catalytic pyrolysis nickel"),
+      chunk("茶树壳氧化固化热解产物.pdf", "camellia shell pyrolysis"),
+      chunk("纱布药瓶共热解炭油气体.pdf", "gauze bottle co-pyrolysis"),
+      chunk("废轮胎粘土催化热解.pdf", "waste tire catalytic pyrolysis"),
+      chunk("热解温度影响稻秆稻壳生物炭性质.pdf", "pyrolysis temperature rice straw biochar"),
+    ];
+    const broad = rankKnowledgePapersDetailed(pool, "热解");
+    expect(broad.topicTooBroad).toBe(true);
+    const narrow = rankKnowledgePapersDetailed(pool, "热解温度 预处理 理化性质");
+    expect(narrow.papers[0]?.source).toMatch(/热解温度/);
+    expect(suggestedKnowledgeIndices(broad.papers, true).length).toBeLessThanOrEqual(5);
+  });
+
+  it("建议导入只保留相对高分篇", () => {
     const idx = suggestedKnowledgeIndices([
-      { relevanceScore: 0.6 },
-      { relevanceScore: 0.4 },
-      { relevanceScore: 0.02 },
-      { relevanceScore: 0.5 },
-      { relevanceScore: 0.3 },
+      { relevanceScore: 0.9 },
+      { relevanceScore: 0.85 },
+      { relevanceScore: 0.2 },
+      { relevanceScore: 0.88 },
     ]);
-    expect(idx).toEqual([1, 2, 4, 5]);
+    expect(idx).toEqual([1, 2, 4]);
     expect(idx).not.toContain(3);
   });
 });

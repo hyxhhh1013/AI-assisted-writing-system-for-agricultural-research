@@ -116,7 +116,7 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 - **`.emb` 按需 pread**：`EmbeddingStore` 不再把整个 `.emb` 读进内存，只保留文件句柄 + 维度；`get()` 用 `fs.readSync` 按偏移读单条向量（配合两阶段，每次仅读候选那几千条）。内存不再随库大小线性膨胀。
 - **倒排索引协作式构建**：`buildInvertedIndexAsync` 分批 `setImmediate` 让出事件循环，避免大库构建时冻结整个服务；全库索引由各分类索引按 offset **合并**得到（`mergeInvertedIndexInto`），不重复分词。
 - **范围检索**：`search({ categories })` 只加载相关分类（子集缓存 `subsetCache`）。扩写经 `writing-context.ts` 用**已有参考文献 ∪ 用户勾选**反推分类；若仍为空则按题名/方向关键词提示分类（如「绿茶香气」→ 茶学）；范围内 0 命中则自动扩到全库。Agent `search_knowledge` 按项目题名锁定分类（热化学综述不扩到烟草/茶学）。
-- **Agent 备文献按篇召回（2026-10-02）**：写作 RAG 仍可每篇多片段；`search_knowledge` 备文献用 `maxPerSource=1`、召回约 48 段后按题名/摘要相关度排 **PDF**，query 叠当前题目，低相关篇不进建议导入。避免默认 12 段×每篇 4 条只带回约 3 篇、逼模型连搜。
+- **Agent 备文献按篇召回（2026-10-02）**：写作 RAG 仍可每篇多片段；`search_knowledge` 备文献用 `maxPerSource=1`、召回约 48 段后按题名 **IDF** 排序（当次命中里人人都有的词降权）。过宽主题（如只搜「热解」）只建议预览几篇。确认导入时指定 `knowledgeHitIndices` 不再并上整次检索。
 - **主题过滤**：检索后按题名/方向主题词过滤跑题片段（`filterChunksByTopicRelevance`）；已有参考文献 pin 保留；过严时 soft top-K 兜底。
 - **按节取证（RAG-PR-016）**：扩写检索多取一倍命中，再按 `metadata.section` 把 Introduction/Methods/Results 等提前；旧索引无该字段时保持原排序。
 - **并发去重**：`categoryLoadInFlight` / `allLoadInFlight` 避免 warmup 与检索并发触发重复构建。

@@ -1441,7 +1441,7 @@ src/app/api/（13）                       src/lib/（6）
 | 2026-10-02 | AGENT-CITE-LOOP | AI | cmuntp1ls：回「1」被 3.2 子节号解析错，计划残留检索；补引用后仍 search/import。选项号后禁跟数字；禁织入时检索；诊断后继续不再 inspect。 |
 | 2026-10-02 | AGENT-LAB-SCOPE | AI | 规划器把四方向围栏当成检索清单；茶学规则用「挥发性」误伤热解。简报只锁当前方向；计划标题消毒；分类提示去掉跨领域词。 |
 | 2026-10-02 | AGENT-LIT-CHIP | AI | 开场「检索并总结研究缺口」混进方向页 D3。芯片改为按本题导入；已有文献改推大纲。 |
-| 2026-10-02 | W3-AP-LIT-DRIFT | AI | cmuqmsr1r：制炭检索漂到缓释肥/土壤；选项3连补到28篇；「给我备选」写成题目，大纲出现茶学。降权漂题、禁二次问标题、≥12篇停搜。 |
+| 2026-10-02 | W3-AP-LIT-IDF | AI | 不写死黑名单：当次命中 IDF 降权集合词；过宽主题少建议；确认卡不并全集、默认只勾请求序号。 |
 | 2026-10-02 | W3-AP-LIT-LOCAL | AI | 备文献先 search_knowledge 导入本地 PDF；拦 search_external；generate_outline 前确认题目。走查：同批并行不放外部、确认卡不混旧 OpenAlex、空继续不当成新题。 |
 | 2026-10-02 | ADMIN-050 | AI | 仪表盘 heap/RSS/PM2 误报：used/allocated 当压力、lifetime 重启当故障。改为 V8 上限与 unstable_restarts；探测系统 Chrome。 |
 | 2026-09-30 | RAG-CAT-ALIAS | AI | `search_knowledge(category=热解)` 0 命中：别名映射到 `热化学`；索引改走 `GRAINSCRIPT_DATA_ROOT`。 |

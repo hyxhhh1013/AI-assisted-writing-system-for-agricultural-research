@@ -16,7 +16,7 @@ import {
   composeKnowledgeSearchQuery,
   KNOWLEDGE_PAPER_CHUNK_LIMIT,
   KNOWLEDGE_PAPER_MAX_PER_SOURCE,
-  rankKnowledgePapers,
+  rankKnowledgePapersDetailed,
   suggestedKnowledgeIndices,
 } from "@/lib/agent/knowledge-search-rank";
 
@@ -162,7 +162,8 @@ export const searchKnowledgeTool: ToolDefinition = {
       };
     }
 
-    const ranked = rankKnowledgePapers(chunks, query).slice(0, paperLimit);
+    const detailed = rankKnowledgePapersDetailed(chunks, query);
+    const ranked = detailed.papers.slice(0, paperLimit);
     const stored = mergeLastKnowledgeSearch(
       ctx.userId,
       ranked.map((p) => ({
@@ -183,7 +184,7 @@ export const searchKnowledgeTool: ToolDefinition = {
       relevanceScore: f.relevanceScore,
       why: f.why,
     }));
-    const suggested = suggestedKnowledgeIndices(files);
+    const suggested = suggestedKnowledgeIndices(files, detailed.topicTooBroad);
     const hits = ranked.slice(0, 12).map((p, i) => ({
       index: i + 1,
       source: p.source,
@@ -195,6 +196,9 @@ export const searchKnowledgeTool: ToolDefinition = {
 
     const scopeNote = expandedScope ? "（分类命中不足，已在本方向扩检索）" : "";
     const queryNote = query !== rawQuery ? `（已叠题目「${query.slice(0, 40)}…」）` : "";
+    const broadNote = detailed.topicTooBroad
+      ? "主题过宽：这些词在本分类多数文献题名里都会出现，相关度拉不开。请补 2～3 个限定词（工艺/产物/材料性质/应用等）或先确认正式题目后再导入；本次只建议预览前几篇。"
+      : "";
     return {
       success: true,
       data: {
@@ -205,12 +209,17 @@ export const searchKnowledgeTool: ToolDefinition = {
         suggestedKnowledgeHitIndices: suggested,
         expandedScope,
         searchQuery: query,
+        topicTooBroad: detailed.topicTooBroad,
+        distinctiveTokens: detailed.distinctiveTokens,
       },
       summary:
-        `检索「${rawQuery}」${queryNote}命中 ${files.length} 篇本地 PDF（按相关度排序）${scopeNote}`
-        + (files.length > 0
-          ? `。立刻 import_reference(knowledgeHitIndices=[${suggested.join(",")}], why) 导入全文，不要再换词 search_knowledge。`
-          : "。本地无命中时再 search_external（外部多为摘要）。"),
+        `检索「${rawQuery}」${queryNote}命中 ${files.length} 篇本地 PDF（按题名 IDF 排序）${scopeNote}`
+        + (broadNote ? `。${broadNote}` : "")
+        + (files.length > 0 && suggested.length > 0
+          ? ` 立刻 import_reference(knowledgeHitIndices=[${suggested.join(",")}], why) 只导入建议序号，不要勾选全部命中。`
+          : files.length > 0
+            ? " 请先补限定词或确认题目，不要批量导入。"
+            : "。本地无命中时再 search_external（外部多为摘要）。"),
     };
   },
 };

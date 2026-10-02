@@ -497,14 +497,24 @@ export function AgentPanel({
     if (atBottom) el.scrollTop = el.scrollHeight;
   }, [agent.messages, agent.status, agent.streamingText, agent.pendingCheckpoint, agent.pendingConfirm, agent.writeStatus, atBottom]);
 
-  /** import_reference 确认卡候选变化时重置勾选：默认全选 */
+  /** import_reference 确认卡候选变化时重置勾选：默认只勾本次请求的篇（defaultSelectedIndices） */
   useEffect(() => {
     const items = agent.pendingConfirm?.params?.importItems;
-    if (Array.isArray(items)) {
-      setImportSelection(new Set(items.map((_, i) => i)));
-    } else {
+    if (!Array.isArray(items)) {
       setImportSelection(null);
+      return;
     }
+    const raw = agent.pendingConfirm?.params?.defaultSelectedIndices;
+    if (Array.isArray(raw) && raw.length > 0) {
+      const next = new Set<number>();
+      for (const v of raw) {
+        const n = Number(v);
+        if (Number.isInteger(n) && n >= 0 && n < items.length) next.add(n);
+      }
+      setImportSelection(next.size > 0 ? next : new Set(items.map((_, i) => i)));
+      return;
+    }
+    setImportSelection(new Set(items.map((_, i) => i)));
   }, [agent.pendingConfirm]);
 
   /**

@@ -10,7 +10,7 @@
 import type { ExternalLiteratureHit } from "@/contracts/literature";
 import { externalLiteratureHitSchema } from "@/lib/validations";
 import { searchExternalLiterature } from "@/lib/literature-search";
-import { getLastAgentSearch, getLastKnowledgeSearch, knowledgeHitToExternal, resolveKnowledgeHitIndices } from "@/lib/agent/last-search";
+import { getLastAgentSearch, getLastKnowledgeSearch, knowledgeHitToExternal, knowledgeSourceFromHitId, resolveKnowledgeHitIndices } from "@/lib/agent/last-search";
 import {
   enrichImportReferenceParams,
   scoreLiteratureRelevance,
@@ -171,8 +171,8 @@ function hitKey(h: ExternalLiteratureHit): string {
 }
 
 /**
- * 确认卡候选：模型请求的 hits ∪ 最近一次检索的全部命中（去重，≤ MAX_IMPORT_ITEMS）。
- * 这样「agent 收集到很多」时，确认卡能列出全部，用户一次勾选批量导入。
+ * 确认卡候选。指定 knowledgeHitIndices 时只列这些篇，不再并上整次检索（避免默认导入 25 篇）。
+ * 外部检索仍可附带最近一次其它命中，供勾选；默认只勾「本次请求」的那些。
  */
 export async function resolveImportReferenceCandidates(
   params: Record<string, unknown>,
@@ -192,9 +192,12 @@ export async function resolveImportReferenceCandidates(
 
   const explicitExternal = hasExplicitExternalImportParams(params);
   const explicitKnowledge = hasExplicitKnowledgeImportParams(params);
-  const storedKb = getLastKnowledgeSearch(ctx.userId);
+  if (explicitKnowledge) {
+    return out.slice(0, MAX_IMPORT_ITEMS);
+  }
 
-  if (explicitKnowledge || (!explicitExternal && storedKb.length > 0)) {
+  const storedKb = getLastKnowledgeSearch(ctx.userId);
+  if (!explicitExternal && storedKb.length > 0) {
     for (const h of storedKb) push(knowledgeHitToExternal(h));
     return out.slice(0, MAX_IMPORT_ITEMS);
   }
@@ -229,14 +232,21 @@ function hasExplicitExternalImportParams(params: Record<string, unknown>): boole
 export function annotateImportCandidates(
   query: string,
   items: ExternalLiteratureHit[],
+  knowledgeHits?: { source: string; relevanceScore?: number; why?: string }[],
 ): ImportConfirmItem[] {
   return items.map((hit) => {
     if (hit.id.startsWith("kb:")) {
+      const src = knowledgeSourceFromHitId(hit.id);
+      const stored = knowledgeHits?.find(
+        (h) => src && h.source.toLowerCase() === src.toLowerCase(),
+      );
+      const score = stored?.relevanceScore;
+      const aligned = score == null || score >= 0.35;
       return {
         ...hit,
-        why: "本地知识库全文 PDF",
-        relevanceScore: 1,
-        topicFit: "aligned" as const,
+        why: stored?.why || "本地知识库全文 PDF",
+        relevanceScore: score ?? 0.5,
+        topicFit: aligned ? ("aligned" as const) : ("marginal" as const),
       };
     }
     const q = query.trim();
@@ -264,6 +274,19 @@ export async function buildImportReferenceConfirmParams(
   if (items.length === 0) return enriched;
   const query = typeof enriched.query === "string" ? enriched.query : "";
   const knowledgeOnly = items.every((h) => h.id.startsWith("kb:"));
+  const requested = await resolveRequestedHits(params, ctx);
   const withExcerpts = knowledgeOnly ? items : await fillMissingAbstractExcerpts(items);
-  return { ...enriched, importItems: annotateImportCandidates(query, withExcerpts) };
+  const annotated = annotateImportCandidates(
+    query,
+    withExcerpts,
+    getLastKnowledgeSearch(ctx.userId),
+  );
+  const defaultSelectedIndices = requested
+    .map((_, i) => i)
+    .filter((i) => i < annotated.length);
+  return {
+    ...enriched,
+    importItems: annotated,
+    defaultSelectedIndices,
+  };
 }
