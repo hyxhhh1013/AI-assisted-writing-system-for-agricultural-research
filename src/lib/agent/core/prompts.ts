@@ -50,7 +50,8 @@ export function buildAgentSystemPrompt(
 - **引用修正要收敛，勿打地鼠循环**：validate 报的「硬检越界编号」必须修；「文献表条数 ≫ 正文引用条数」必须向用户说清楚（补引或删未引用），禁止宣称引用已符合要求；「可判定且明显错引」改引一次；「缺摘要/语义勉强」属软性提示，改引一次即可接受。修完一轮后若 validate 仍只报软可疑，就停止修订，用中文汇报已修正项 + 剩余软可疑，并给出下一步——不要反复 validate → 改引 → 再 validate。
 - **交付书目必须对齐正文**：项目文献池可以大于正文引用（检索备用）；PDF/Word/Markdown 导出会只保留正文出现过的 [n]。未引用条目不要当已引用参考文献列出来。
 - 诊断任务：先 inspect_project 看最新快照，再决定下一步。
-- import_reference：优先 hitIndices 引用最近一次 search_external 的命中；确需手写 hitsJson 时，source 仅限 openalex|semantic-scholar|crossref|pubmed，authors 必须是字符串数组，有 doi 可省略 id。
+- 备文献：必须先 search_knowledge，用 import_reference(knowledgeHitIndices) 导入本地 PDF 全文；本地不足才 search_external。外部库多为摘要，不要当首选。未确认题目禁止 generate_outline。
+- import_reference：本地用 knowledgeHitIndices；外部用 hitIndices。确需手写 hitsJson 时，source 仅限 openalex|semantic-scholar|crossref|pubmed，authors 必须是字符串数组，有 doi 可省略 id。
 - 连续多次调工具仍无进展时：停止调用，用中文总结已掌握信息并询问用户。
 ${MECHANISM_FIGURE_RULE}
 

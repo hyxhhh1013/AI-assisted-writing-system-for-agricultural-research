@@ -53,7 +53,8 @@ async function loadOutlineAttachmentCandidates(
 export const generateOutlineTool: ToolDefinition = {
   name: "generate_outline",
   description:
-    "基于题目与研究方向生成论文大纲（Markdown），默认写回项目。"
+    "基于已确认的题目与研究方向生成论文大纲（Markdown），默认写回项目。"
+    + "检索导入后必须先让用户确认题目，禁止用占位标题或自行改题后直接出大纲。"
     + "若本会话有大纲/框架类附件（或传入 attachmentId），会先读附件并按其一级标题写回，禁止另起炉灶。"
     + "写回后必须等用户批准检查点，不要接着生成蓝图。",
   parameters: {
@@ -71,6 +72,10 @@ export const generateOutlineTool: ToolDefinition = {
       persistToProject: {
         type: "string",
         description: "是否写回项目 outline（默认 true）",
+      },
+      confirmedTitle: {
+        type: "string",
+        description: "用户刚确认或新定的论文题目；有值时覆盖项目标题并写回",
       },
     },
     required: [],
@@ -115,7 +120,15 @@ export const generateOutlineTool: ToolDefinition = {
     const { provider, keyError } = getAgentModelConfig("writer");
     if (keyError) return { success: false, error: keyError };
 
-    const title = project.title.trim() || "未命名论文";
+    const confirmedTitle =
+      typeof params.confirmedTitle === "string" ? params.confirmedTitle.trim() : "";
+    if (persist && confirmedTitle.length >= 2 && confirmedTitle !== project.title.trim()) {
+      await prisma.project.update({
+        where: { id: ctx.projectId },
+        data: { title: confirmedTitle.slice(0, 200), lastUpdated: new Date() },
+      });
+    }
+    const title = confirmedTitle || project.title.trim() || "未命名论文";
     const researchDirection =
       project.researchDirection.trim() || title;
     const targetCategory = await matchCategoryFromDirection(researchDirection);

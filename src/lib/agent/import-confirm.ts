@@ -10,7 +10,7 @@
 import type { ExternalLiteratureHit } from "@/contracts/literature";
 import { externalLiteratureHitSchema } from "@/lib/validations";
 import { searchExternalLiterature } from "@/lib/literature-search";
-import { getLastAgentSearch } from "@/lib/agent/last-search";
+import { getLastAgentSearch, getLastKnowledgeSearch, knowledgeHitToExternal, resolveKnowledgeHitIndices } from "@/lib/agent/last-search";
 import {
   enrichImportReferenceParams,
   scoreLiteratureRelevance,
@@ -118,6 +118,25 @@ export async function resolveRequestedHits(
   params: Record<string, unknown>,
   ctx: AgentContext,
 ): Promise<ExternalLiteratureHit[]> {
+  const kb = resolveKnowledgeHitIndices(params.knowledgeHitIndices, ctx.userId);
+  if (!("error" in kb) && kb.hits.length > 0) {
+    return kb.hits.map(knowledgeHitToExternal);
+  }
+  const sourceKeysRaw = params.sourceKeys;
+  if (sourceKeysRaw != null && String(sourceKeysRaw).trim()) {
+    const names = String(sourceKeysRaw)
+      .split(/[,，\n]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (names.length > 0) {
+      const stored = getLastKnowledgeSearch(ctx.userId);
+      return names.map((source) => {
+        const hit = stored.find((h) => h.source.toLowerCase() === source.toLowerCase());
+        return knowledgeHitToExternal(hit ?? { source });
+      });
+    }
+  }
+
   const fromHitsJson = parseModelHitsJson(params);
   if (fromHitsJson.length > 0) return fromHitsJson;
 
@@ -171,10 +190,35 @@ export async function resolveImportReferenceCandidates(
   const requested = await resolveRequestedHits(params, ctx);
   for (const h of requested) push(h);
 
+  const explicitExternal = hasExplicitExternalImportParams(params);
+  const explicitKnowledge = hasExplicitKnowledgeImportParams(params);
+  const storedKb = getLastKnowledgeSearch(ctx.userId);
+
+  if (explicitKnowledge || (!explicitExternal && storedKb.length > 0)) {
+    for (const h of storedKb) push(knowledgeHitToExternal(h));
+    return out.slice(0, MAX_IMPORT_ITEMS);
+  }
+
   const store = getLastAgentSearch(ctx.userId);
   for (const h of store) push(h);
 
   return out.slice(0, MAX_IMPORT_ITEMS);
+}
+
+function hasExplicitKnowledgeImportParams(params: Record<string, unknown>): boolean {
+  return (
+    (params.knowledgeHitIndices != null && String(params.knowledgeHitIndices).trim() !== "")
+    || (params.sourceKeys != null && String(params.sourceKeys).trim() !== "")
+  );
+}
+
+function hasExplicitExternalImportParams(params: Record<string, unknown>): boolean {
+  return (
+    (params.hitIndices != null && String(params.hitIndices).trim() !== "")
+    || (params.hitsJson != null && String(params.hitsJson).trim() !== "")
+    || (params.hitJson != null && String(params.hitJson).trim() !== "")
+    || (params.doi != null && String(params.doi).trim() !== "")
+  );
 }
 
 /**
@@ -186,9 +230,17 @@ export function annotateImportCandidates(
   query: string,
   items: ExternalLiteratureHit[],
 ): ImportConfirmItem[] {
-  const q = query.trim();
-  if (!q) return items;
   return items.map((hit) => {
+    if (hit.id.startsWith("kb:")) {
+      return {
+        ...hit,
+        why: "本地知识库全文 PDF",
+        relevanceScore: 1,
+        topicFit: "aligned" as const,
+      };
+    }
+    const q = query.trim();
+    if (!q) return hit;
     const rel = scoreLiteratureRelevance(q, hit);
     const title = (hit.title ?? "").toLowerCase();
     const titleHit = rel.matchedTokens.some((tok) => title.includes(tok.toLowerCase()));
@@ -211,6 +263,7 @@ export async function buildImportReferenceConfirmParams(
   const items = await resolveImportReferenceCandidates(params, ctx);
   if (items.length === 0) return enriched;
   const query = typeof enriched.query === "string" ? enriched.query : "";
-  const withExcerpts = await fillMissingAbstractExcerpts(items);
+  const knowledgeOnly = items.every((h) => h.id.startsWith("kb:"));
+  const withExcerpts = knowledgeOnly ? items : await fillMissingAbstractExcerpts(items);
   return { ...enriched, importItems: annotateImportCandidates(query, withExcerpts) };
 }

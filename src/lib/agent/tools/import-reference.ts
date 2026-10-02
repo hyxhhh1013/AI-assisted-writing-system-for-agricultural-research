@@ -2,6 +2,7 @@ import type { ExternalLiteratureHit } from "@/contracts/literature";
 import {
   importExternalReferenceToProject,
   importExternalReferencesToProject,
+  importKnowledgeFilesToProject,
 } from "@/lib/agent/import-reference";
 import {
   MIN_IMPORT_CITEDBY,
@@ -11,7 +12,7 @@ import {
   scoreLiteratureRelevance,
 } from "@/lib/agent/literature-relevance";
 import { searchExternalLiterature } from "@/lib/literature-search";
-import { resolveAgentHitIndices } from "@/lib/agent/last-search";
+import { resolveAgentHitIndices, knowledgeSourceFromHitId, resolveKnowledgeHitIndices, getLastKnowledgeSearch } from "@/lib/agent/last-search";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import { externalLiteratureHitSchema } from "@/lib/validations";
 import { formatExternalLiteratureHit } from "@/lib/external-literature-format";
@@ -186,22 +187,66 @@ function parseHitsBatch(params: Record<string, unknown>): ExternalLiteratureHit[
   return hits;
 }
 
+function parseSourceKeys(raw: unknown): string[] {
+  if (raw == null || raw === "") return [];
+  const parts: string[] = [];
+  const push = (v: unknown) => {
+    const s = String(v ?? "").trim();
+    if (s) parts.push(s);
+  };
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (Array.isArray(parsed)) parsed.forEach(push);
+      else push(parsed);
+    } catch {
+      trimmed.split(/[,，\n]+/).forEach(push);
+    }
+  } else if (Array.isArray(raw)) {
+    raw.forEach(push);
+  } else {
+    push(raw);
+  }
+  return [...new Set(parts)];
+}
+
+function knowledgeSourcesFromImportItems(items: unknown[]): string[] {
+  const out: string[] = [];
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    const fromId = knowledgeSourceFromHitId(String(o.id ?? ""));
+    const named = typeof o.knowledgeSource === "string" ? o.knowledgeSource.trim() : "";
+    const source = fromId || named;
+    if (source) out.push(source);
+  }
+  return [...new Set(out)];
+}
+
 export const importReferenceTool: ToolDefinition = {
   name: "import_reference",
   description:
-    "将文献导入项目。**优先 hitIndices**：引用最近一次 search_external 返回的命中 index（1 起，如 \"[1,3,5]\"），参数小、不会被截断，不要手写 JSON。"
-    + "仅当没有可用 hitIndices 时才用 hitsJson；手写合法示例："
-    + `[{"id":"doi:10.1000/abc","title":"论文标题","authors":["作者A","作者B"],"year":2023,"journal":"期刊名","doi":"10.1000/abc","source":"crossref"}]`
-    + "（source 仅限 openalex|semantic-scholar|crossref|pubmed；authors 必须是字符串数组；有 doi 可省略 id）。"
+    "将文献导入项目。**优先本地 PDF**：search_knowledge 之后用 knowledgeHitIndices（1 起，如 \"[1,3,5]\"）导入全文。"
+    + "外部库（OpenAlex 等）多数只有摘要，仅本地不足时用 hitIndices 引用最近一次 search_external。"
     + "须传 query 与 why（≥8字）。综述目标通常 ≥30 篇，可分批导入",
   parameters: {
     type: "object",
     properties: {
+      knowledgeHitIndices: {
+        type: "string",
+        description:
+          "多篇：最近一次 search_knowledge 返回的 files[].index，如 \"[1,2,3]\"（1 起）。导入本地 PDF 全文，优先于外部 hitIndices。",
+      },
+      sourceKeys: {
+        type: "string",
+        description: "可选：知识库文件名列表（逗号或 JSON 数组），与 knowledgeHitIndices 等价",
+      },
       hitIndices: {
         type: "string",
         description:
           "多篇：最近一次 search_external 返回的 items[].index 数组，如 \"[1,2,3]\" 或 \"1,2,3\"（1 起）。"
-          + "与 hitsJson 二选一，最推荐（参数小、不会被模型截断）",
+          + "仅本地库不足时使用。",
       },
       hitJson: {
         type: "string",
@@ -260,63 +305,94 @@ export const importReferenceTool: ToolDefinition = {
         return { success: false, error: "未勾选任何文献，已取消导入" };
       }
       const picked: ExternalLiteratureHit[] = [];
+      const pickedRaw: unknown[] = [];
       for (const idx of selectedIndices) {
         const item = idx < importItems.length ? importItems[idx] : undefined;
         if (!item || typeof item !== "object") continue;
+        pickedRaw.push(item);
         const parsed = externalLiteratureHitSchema.safeParse(
           coerceExternalHitCandidate(item),
         );
         if (parsed.success) picked.push(parsed.data);
       }
-      if (picked.length === 0) {
+      const kbNames = knowledgeSourcesFromImportItems(pickedRaw.length ? pickedRaw : picked);
+      const externalPicked = picked.filter((h) => !knowledgeSourceFromHitId(h.id));
+      if (kbNames.length === 0 && picked.length === 0) {
         return { success: false, error: "未勾选任何可导入的文献" };
       }
       try {
-        const result = await importExternalReferencesToProject(
-          ctx.userId,
-          ctx.projectId,
-          picked,
-          { directionSlug: ctx.directionSlug },
-          importProgressEmitter(ctx),
-        );
+        let imported = 0;
+        let skippedDuplicate = 0;
+        let skippedNonCitable = 0;
+        let referenceCount = 0;
+        let withAbstract = 0;
+        let knowledgeWithPdf = 0;
         const kbParts: string[] = [];
-        if (result.knowledgeWithPdf && result.knowledgeWithPdf > 0) {
-          kbParts.push(`OA PDF ${result.knowledgeWithPdf} 篇`);
+        if (kbNames.length > 0) {
+          const storeHits = getLastKnowledgeSearch(ctx.userId);
+          const byName = new Map(storeHits.map((h) => [h.source.toLowerCase(), h]));
+          const kbResult = await importKnowledgeFilesToProject(
+            ctx.userId,
+            ctx.projectId,
+            kbNames.map((source) => {
+              const stored = byName.get(source.toLowerCase());
+              return {
+                source,
+                category: stored?.category,
+                citation: stored?.citation,
+                excerpt: stored?.excerpt,
+              };
+            }),
+          );
+          imported += kbResult.imported;
+          skippedDuplicate += kbResult.skippedDuplicate;
+          referenceCount = kbResult.referenceCount;
+          withAbstract += kbResult.withAbstract;
+          knowledgeWithPdf += kbResult.knowledgeWithPdf ?? 0;
+          if (kbResult.imported > 0) kbParts.push(`本地 PDF ${kbResult.imported} 篇`);
         }
-        if (result.knowledgeWithAbstract && result.knowledgeWithAbstract > 0) {
-          kbParts.push(`摘要可检索 ${result.knowledgeWithAbstract} 篇`);
+        if (externalPicked.length > 0) {
+          const result = await importExternalReferencesToProject(
+            ctx.userId,
+            ctx.projectId,
+            externalPicked,
+            { directionSlug: ctx.directionSlug },
+            importProgressEmitter(ctx),
+          );
+          imported += result.imported;
+          skippedDuplicate += result.skippedDuplicate;
+          skippedNonCitable += result.skippedNonCitable;
+          referenceCount = result.referenceCount;
+          withAbstract += result.withAbstract;
+          if (result.knowledgeWithPdf && result.knowledgeWithPdf > 0) {
+            kbParts.push(`OA PDF ${result.knowledgeWithPdf} 篇`);
+          }
+          if (result.knowledgeWithAbstract && result.knowledgeWithAbstract > 0) {
+            kbParts.push(`摘要可检索 ${result.knowledgeWithAbstract} 篇`);
+          }
         }
-        if (
-          kbParts.length === 0
-          && result.knowledgeCreated
-          && result.knowledgeCreated > 0
-        ) {
-          kbParts.push(`书目登记 ${result.knowledgeCreated} 篇`);
-        }
-        const kbHint = kbParts.length > 0 ? `；知识库${kbParts.join("，")}` : "";
+        const kbHint = kbParts.length > 0 ? `；${kbParts.join("，")}` : "";
         return {
           success: true,
           data: {
             persisted: true,
             batch: true,
-            imported: result.imported,
-            skippedDuplicate: result.skippedDuplicate,
-            skippedNonCitable: result.skippedNonCitable,
-            referenceCount: result.referenceCount,
-            withAbstract: result.withAbstract,
-            knowledgeCreated: result.knowledgeCreated,
-            knowledgeWithAbstract: result.knowledgeWithAbstract,
-            knowledgeWithPdf: result.knowledgeWithPdf,
+            imported,
+            skippedDuplicate,
+            skippedNonCitable,
+            referenceCount,
+            withAbstract,
+            knowledgeWithPdf,
             why: String(params.why ?? "").trim() || "勾选导入",
           },
           summary:
-            `已按勾选导入 ${result.imported} 篇`
-            + (result.skippedDuplicate ? `（跳过重复 ${result.skippedDuplicate}` : "")
-            + (result.skippedNonCitable
-              ? `${result.skippedDuplicate ? "；" : "（"}跳过审稿/非论文 ${result.skippedNonCitable}`
+            `已按勾选导入 ${imported} 篇`
+            + (skippedDuplicate ? `（跳过重复 ${skippedDuplicate}` : "")
+            + (skippedNonCitable
+              ? `${skippedDuplicate ? "；" : "（"}跳过审稿/非论文 ${skippedNonCitable}`
               : "")
-            + (result.skippedDuplicate || result.skippedNonCitable ? "）" : "")
-            + `；参考文献共 ${result.referenceCount} 条${kbHint}`,
+            + (skippedDuplicate || skippedNonCitable ? "）" : "")
+            + `；参考文献共 ${referenceCount} 条${kbHint}`,
         };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -328,6 +404,50 @@ export const importReferenceTool: ToolDefinition = {
     const why = parseWhyParam(params.why);
     const whyOk = why.length >= 8;
     const userConfirmed = parseUserConfirmed(params.userConfirmed);
+
+    const kbResolved = resolveKnowledgeHitIndices(params.knowledgeHitIndices, ctx.userId);
+    if ("error" in kbResolved) {
+      return { success: false, error: kbResolved.error };
+    }
+    const extraKeys = parseSourceKeys(params.sourceKeys);
+    const kbFiles = [
+      ...kbResolved.hits,
+      ...extraKeys
+        .filter((k) => !kbResolved.hits.some((h) => h.source.toLowerCase() === k.toLowerCase()))
+        .map((source) => ({ source })),
+    ];
+    if (kbFiles.length > 0) {
+      if (!userConfirmed) {
+        return { success: false, error: "导入本地知识库 PDF 需要用户确认" };
+      }
+      try {
+        const result = await importKnowledgeFilesToProject(
+          ctx.userId,
+          ctx.projectId,
+          kbFiles.slice(0, MAX_BATCH),
+        );
+        return {
+          success: true,
+          data: {
+            persisted: true,
+            batch: true,
+            imported: result.imported,
+            skippedDuplicate: result.skippedDuplicate,
+            referenceCount: result.referenceCount,
+            withAbstract: result.withAbstract,
+            knowledgeWithPdf: result.knowledgeWithPdf,
+            why,
+          },
+          summary:
+            `已导入本地知识库 PDF ${result.imported} 篇`
+            + (result.skippedDuplicate ? `（跳过重复 ${result.skippedDuplicate}）` : "")
+            + `；参考文献共 ${result.referenceCount} 条（含全文）`,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { success: false, error: message };
+      }
+    }
 
     const batchOrErr = parseHitsBatch(params);
     if ("error" in batchOrErr) {

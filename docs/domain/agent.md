@@ -1,6 +1,6 @@
 # Agent 编排（写作助手）
 
-> L3 域文档 · 更新：2026-10-02（开场检索不再叫研究缺口）  
+> L3 域文档 · 更新：2026-10-02（备文献本地 PDF 优先；先确认题目再出大纲）  
 > 契约唯一权威源：`src/contracts/agent.ts`（SSE 事件）、`src/contracts/agent-session.ts`（会话消息）、`src/contracts/agent-intent.ts`（`IntentKind`）。
 
 ## 概览
@@ -204,6 +204,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **回「1」被解析成子节号 3.2（2026-10-02）**：`cmuntp1ls` 用户选补引用，收尾却跟计划里的「检索导入」。选项解析把「织入 3.2 合成气」拆成选项 3；`「1」=` 列表解析不到。处理：选项号后禁跟数字；识别 `「1」=`；「补引用」禁 search/import；诊断后「继续」不再 inherit inspect。
 - **热化学综述被规划成扫烟草/茶学（2026-10-02）**：`formatLabScopeBlock` 列出实验室四方向本意是禁止改题，规划器却写成「按四方向检索」。处理：简报只锁定当前方向；规划器事后改写含四方向/茶学的子任务；`search_knowledge` 不扩到其它实验室分类。茶学规则不再用「挥发性/香气」当开关（热解气也有挥发性产物）。
 - **开场芯片「检索并总结研究缺口」（2026-10-02）**：方向页 D3 的「研究缺口」被复用成写作 Agent 第一步，规划器去凑篇数、扫实验室覆盖。芯片改为「按本题检索并导入相关文献」；已有文献不再推检索；禁止写缺口识别长报告。
+- **本地库优先 + 先定题再出大纲（2026-10-02）**：备文献曾直接 `search_external` 导入仅有摘要的 OpenAlex，再按文献簇自行出大纲（生物炭环境 vs 热解制油）。处理：`checkKnowledgeFirstGate` 拦外部检索直到**上一轮**已成功 `search_knowledge`（同批并行合成观察不算）；无 `hitIndices` 时确认卡优先最近本地 PDF，不混旧 OpenAlex；`generate_outline` 前 clarify 确认题目。空点「继续推进」/「已收到你的回复」不当成新题目。走查见 `agent-lit-front-flow.test.ts`。
 - **写章节缺文献照常写（2026-08-08 / RULES-01 2026-08-15）**：条文现只写在 `AGENT_RULES` id=`draft-missing-refs`；`buildAgentSystemPrompt` 与 `draftGoalNudge` 同读 `ruleText`。跟聊 goal 失真（「A/继续」）的写章节纪律由 `snapshot.intentKind` 继承（INTENT-01/02）。`checkDraftSearchGate` / 收尾兜底只认 `intentKind === "draft"`。
 
 ## 断点续跑 / 门禁旁路修复（2026-08-09）

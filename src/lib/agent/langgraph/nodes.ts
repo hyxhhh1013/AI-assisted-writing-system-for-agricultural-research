@@ -82,6 +82,12 @@ import {
   readOutlinePrereqConsent,
 } from "@/lib/agent/core/outline-prereq-consent";
 import {
+  TITLE_PREREQ_HOLD_MESSAGE,
+  readTitlePrereqConsent,
+  shouldAskTitleBeforeOutline,
+  titlePrereqQuestion,
+} from "@/lib/agent/core/title-prereq-consent";
+import {
   parseLiteratureImportTarget,
   pickIntentNudge,
   pickIntentStopAsk,
@@ -715,6 +721,67 @@ export async function toolsNode(
       continue;
     }
 
+    if (tool.name === "generate_outline") {
+      const currentTitle = agentContext.projectSnapshot?.title ?? "";
+      const recentObs = [...state.observations, ...newObservations];
+      if (
+        shouldAskTitleBeforeOutline({
+          goal: state.goal,
+          intentKind: state.intentKind,
+          title: currentTitle,
+          observations: recentObs,
+        })
+      ) {
+        const consent = readTitlePrereqConsent(state.messages, currentTitle);
+        if (consent.kind === "unset") {
+          const checkpoint = buildClarifyCheckpoint(titlePrereqQuestion(currentTitle));
+          events.push({ type: "agent/checkpoint", checkpoint });
+          events.push({ type: "agent/status", status: "awaiting_checkpoint" });
+          return {
+            pendingToolCalls: toolQueue.slice(tcIdx),
+            toolCallCount,
+            toolSummaries: newSummaries,
+            observations: newObservations,
+            messages: newMessages,
+            events,
+            plan,
+            toolTrace: newTrace,
+            awaitingCheckpoint: checkpoint,
+            finished: true,
+          };
+        }
+        if (consent.kind === "hold") {
+          newSummaries.push(`[${tool.name}] ${TITLE_PREREQ_HOLD_MESSAGE}`);
+          newMessages.push({
+            role: "user",
+            content: TITLE_PREREQ_HOLD_MESSAGE,
+          });
+          events.push({
+            type: "agent/observation",
+            tool: tool.name,
+            result: { success: false, error: TITLE_PREREQ_HOLD_MESSAGE },
+            error: TITLE_PREREQ_HOLD_MESSAGE,
+          });
+          trace(tool.name, false, { reason: TITLE_PREREQ_HOLD_MESSAGE, via: "pre-gate" });
+          return {
+            pendingToolCalls: [],
+            toolCallCount,
+            toolSummaries: newSummaries,
+            observations: newObservations,
+            messages: newMessages,
+            events,
+            plan,
+            toolTrace: newTrace,
+            finalThought: TITLE_PREREQ_HOLD_MESSAGE,
+            finished: true,
+          };
+        }
+        if (consent.kind === "title") {
+          params = { ...params, confirmedTitle: consent.title };
+        }
+      }
+    }
+
     // 写节前补大纲/蓝图。缺大纲先问用户；生成后大纲和蓝图都暂停等人批准。
     if (isWriteToolNeedingPrereqs(tool.name)) {
       const prereqRan: string[] = [];
@@ -725,6 +792,64 @@ export async function toolsNode(
         const missing = listMissingWritePrereqs(agentContext.projectSnapshot);
         let outlineExtra: Record<string, unknown> | undefined;
         if (missing[0] === "generate_outline") {
+          const currentTitle = agentContext.projectSnapshot?.title ?? "";
+          const recentObs = [...state.observations, ...newObservations];
+          if (
+            shouldAskTitleBeforeOutline({
+              goal: state.goal,
+              intentKind: state.intentKind,
+              title: currentTitle,
+              observations: recentObs,
+            })
+          ) {
+            const titleConsent = readTitlePrereqConsent(state.messages, currentTitle);
+            if (titleConsent.kind === "unset") {
+              const checkpoint = buildClarifyCheckpoint(titlePrereqQuestion(currentTitle));
+              events.push({ type: "agent/checkpoint", checkpoint });
+              events.push({ type: "agent/status", status: "awaiting_checkpoint" });
+              return {
+                pendingToolCalls: toolQueue.slice(tcIdx),
+                toolCallCount,
+                toolSummaries: newSummaries,
+                observations: newObservations,
+                messages: newMessages,
+                events,
+                plan,
+                toolTrace: newTrace,
+                awaitingCheckpoint: checkpoint,
+                finished: true,
+              };
+            }
+            if (titleConsent.kind === "hold") {
+              newSummaries.push(`[${tool.name}] ${TITLE_PREREQ_HOLD_MESSAGE}`);
+              newMessages.push({
+                role: "user",
+                content: TITLE_PREREQ_HOLD_MESSAGE,
+              });
+              events.push({
+                type: "agent/observation",
+                tool: tool.name,
+                result: { success: false, error: TITLE_PREREQ_HOLD_MESSAGE },
+                error: TITLE_PREREQ_HOLD_MESSAGE,
+              });
+              trace(tool.name, false, { reason: TITLE_PREREQ_HOLD_MESSAGE, via: "pre-gate" });
+              return {
+                pendingToolCalls: [],
+                toolCallCount,
+                toolSummaries: newSummaries,
+                observations: newObservations,
+                messages: newMessages,
+                events,
+                plan,
+                toolTrace: newTrace,
+                finalThought: TITLE_PREREQ_HOLD_MESSAGE,
+                finished: true,
+              };
+            }
+            if (titleConsent.kind === "title") {
+              outlineExtra = { ...(outlineExtra ?? {}), confirmedTitle: titleConsent.title };
+            }
+          }
           const consent = readOutlinePrereqConsent(state.messages);
           if (consent.kind === "unset") {
             const checkpoint = buildClarifyCheckpoint(OUTLINE_PREREQ_QUESTION);
@@ -770,7 +895,7 @@ export async function toolsNode(
             };
           }
           if (consent.kind === "skeleton") {
-            outlineExtra = { userSkeleton: consent.skeleton };
+            outlineExtra = { ...(outlineExtra ?? {}), userSkeleton: consent.skeleton };
           }
         }
 

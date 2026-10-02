@@ -523,6 +523,34 @@ export function checkOutlineSearchGate(
   return { ok: true };
 }
 
+/**
+ * 备文献必须先 search_knowledge。外部库多数只有摘要，本地 PDF 才有全文。
+ */
+export function checkKnowledgeFirstGate(
+  goal: string,
+  toolName: string,
+  observations: readonly ToolObservation[],
+  intentKind?: IntentKind | null,
+): GoalIntentGateResult {
+  if (toolName !== "search_external") return { ok: true };
+  if (/外部检索|openalex|网上检索|只搜外部|本地没有|知识库没有|库里没有/i.test(goal)) {
+    return { ok: true };
+  }
+  const hunt = matchesIntent(
+    intentKind,
+    ["literature"],
+    () => isLiteratureHuntGoal(goal),
+  );
+  if (!hunt) return { ok: true };
+  if (hasSuccessfulTool(observations, "search_knowledge")) return { ok: true };
+  return {
+    ok: false,
+    error:
+      "备文献请先 search_knowledge 检索本地知识库全文 PDF，再用 import_reference(knowledgeHitIndices) 导入。"
+      + "外部库（OpenAlex 等）多数只有摘要，质量不够；本地不足或用户明确要求后再 search_external。",
+  };
+}
+
 export function outlineRevisionNudge(): string {
   return (
     "【系统】本轮是修订/生成大纲：list_references 或 inspect 后立刻 generate_outline（可用 userSkeleton）。"
@@ -638,11 +666,12 @@ export function literatureHuntNudge(goal = ""): string {
   const n = parseLiteratureImportTarget(goal);
   return (
     "【系统】本轮是给当前论文备文献，不是方向页的「研究缺口识别」，也不是扫实验室四方向。"
-    + "先 list_references 看已有篇数；已经够用就停下来汇报，问要不要生成大纲。"
-    + `不足则 search_knowledge（category=当前论文分类）+ search_external，默认目标约 ${n} 篇。`
-    + "效率优先：单次 limit=20～25，用 1～2 个跟题目走的英文 query，不要碎成很多次小搜；"
-    + "立刻 import_reference(hitIndices=data.suggestedHitIndices, query, why≥8字) 交给用户勾选。"
-    + "禁止为对齐四方向去搜烟草/茶学/控释肥/烟花。用户确认入库后停下来汇报篇数。"
+    + "先 list_references 看已有篇数；已经够用就停下来汇报，问要不要确认题目后生成大纲。"
+    + `不足则先 search_knowledge（category=当前论文分类），用 import_reference(knowledgeHitIndices) 导入本地 PDF 全文。`
+    + `本地不足再 search_external，默认目标约 ${n} 篇。外部命中多为摘要，不要作为首选。`
+    + "效率优先：单次 limit=20～25，用 1～2 个跟题目走的英文 query，不要碎成很多次小搜。"
+    + "禁止未确认题目就 generate_outline。禁止为对齐四方向去搜烟草/茶学/控释肥/烟花。"
+    + "用户确认入库后停下来汇报篇数并请用户确认题目。"
     + "命中离题则说明；禁止改题；禁止编造 hitJson；禁止写缺口识别长报告。"
   );
 }
@@ -1305,11 +1334,11 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
     nudge: (ctx) => {
       if (ctx.importCount === 0 && ctx.refTotal < ctx.importTarget && ctx.searchedOk) {
         return `【系统】已检索但项目文献仍不足（现有 ${ctx.refTotal} 篇，目标约 ${ctx.importTarget} 篇）。`
-          + `请立刻批量 import_reference(hitsJson=suggestedHitsJson, query, why≥8字)；不够则换 query 再搜再导。`;
+          + `请立刻批量 import_reference(knowledgeHitIndices 或 hitIndices, query, why≥8字)；本地不足再 search_external。`;
       }
       if (!ctx.searchedOk && ctx.refTotal < ctx.importTarget) {
         return `【系统】写综述/备文献需要约 ${ctx.importTarget} 篇，当前仅 ${ctx.refTotal} 篇。`
-          + "请先 search_knowledge / search_external（多换同义英文 query），再分批 import_reference。";
+          + "请先 search_knowledge，import_reference(knowledgeHitIndices) 导入本地 PDF；不足再 search_external。";
       }
       return `【系统】已有/本轮导入合计仍不足：项目 ${ctx.refTotal} 篇，本轮导入约 ${ctx.importCount} 篇，目标约 ${ctx.importTarget} 篇。`
         + "请继续 search + import_reference(hitsJson=...) 补足。";

@@ -4,6 +4,7 @@ import {
   isOffTopicLabCategory,
   resolveProjectSearchCategories,
 } from "@/lib/agent/lab-scope";
+import { storeLastKnowledgeSearch } from "@/lib/agent/last-search";
 import type { AgentContext, ToolDefinition } from "@/lib/agent/types";
 import {
   basenameKey,
@@ -30,8 +31,8 @@ function mergeChunksById(primary: RagChunk[], extra: RagChunk[], cap: number): R
 export const searchKnowledgeTool: ToolDefinition = {
   name: "search_knowledge",
   description:
-    "在本地知识库检索文献片段（BM25+向量+同义词扩展+多 query RRF）。"
-    + "可选 category 收窄分类（须跟当前论文方向，热化学综述不要搜烟草/茶学）。可选 sourceKey 只看一篇（精读，不算全库检索）。分类命中少时只在本方向扩检索，不扩到实验室其它方向",
+    "在本地知识库检索文献片段（BM25+向量+同义词扩展+多 query RRF）。**备文献时必须先用本工具**，命中后用 import_reference(knowledgeHitIndices) 把 PDF 挂进项目（有全文）。"
+    + "本地不足再 search_external。可选 category 收窄分类（须跟当前论文方向）。可选 sourceKey 只看一篇（精读，不算全库检索）。分类命中少时只在本方向扩检索，不扩到实验室其它方向",
   parameters: {
     type: "object",
     properties: {
@@ -131,11 +132,56 @@ export const searchKnowledgeTool: ToolDefinition = {
       recordSourceKeyRead(ctx, sourceKey, "full");
     }
 
+    const files: Array<{
+      index: number;
+      source: string;
+      category?: string;
+      citation?: string;
+      excerpt?: string;
+    }> = [];
+    const seen = new Set<string>();
+    for (const h of hits) {
+      const key = basenameKey(h.source);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      files.push({
+        index: files.length + 1,
+        source: h.source,
+        category: h.category,
+        citation: h.citation,
+        excerpt: h.excerpt,
+      });
+    }
+    if (!sourceKey) {
+      storeLastKnowledgeSearch(
+        ctx.userId,
+        files.map((f) => ({
+          source: f.source,
+          category: f.category,
+          citation: f.citation,
+          excerpt: f.excerpt,
+        })),
+      );
+    }
+
     const scopeNote = expandedScope ? "（分类命中不足，已在本方向扩检索）" : "";
+    const topN = Math.min(15, files.length);
+    const suggested = files.slice(0, topN).map((f) => f.index);
     return {
       success: true,
-      data: { count: hits.length, hits, expandedScope },
-      summary: `检索「${query}」命中 ${hits.length} 条片段${scopeNote}`,
+      data: {
+        count: hits.length,
+        hits,
+        files,
+        fileCount: files.length,
+        suggestedKnowledgeHitIndices: suggested,
+        expandedScope,
+      },
+      summary:
+        `检索「${query}」命中 ${hits.length} 条片段、${files.length} 篇本地 PDF${scopeNote}`
+        + (files.length > 0
+          ? `。优先 import_reference(knowledgeHitIndices=[${suggested.join(",")}], why) 导入全文，不要先 search_external。`
+          : "。本地无命中时再 search_external（外部多为摘要）。"),
     };
   },
 };

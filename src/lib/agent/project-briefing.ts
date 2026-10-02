@@ -224,7 +224,7 @@ export function suggestNextAgentActions(input: SuggestNextAgentActionsInput): st
   }
   if ((phase ?? 1) <= 1 && !hasOutline) {
     if (refN >= 1) {
-      return ["生成大纲与写作蓝图并写回项目"];
+    return ["确认论文题目后生成大纲与写作蓝图并写回项目"];
     }
     return ["按本题检索并导入相关文献"];
   }

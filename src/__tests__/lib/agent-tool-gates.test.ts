@@ -176,6 +176,50 @@ describe("evaluatePreGates", () => {
       expect(v.error).not.toMatch(/质检未通过/);
     }
   });
+
+  it("备文献未先 search_knowledge 时拦截 search_external", () => {
+    const v = evaluatePreGates(
+      makePreInput({
+        tool: makeTool("search_external"),
+        params: { query: "pyrolysis" },
+        state: makeState({ goal: "检索并导入相关文献", intentKind: "literature" }),
+      }),
+    );
+    expect(v).toMatchObject({ ok: false, kind: "reject" });
+    if (!v.ok) expect(v.error).toMatch(/search_knowledge/);
+  });
+
+  it("同批合成 search_knowledge 观察不能放行 search_external", () => {
+    const v = evaluatePreGates(
+      makePreInput({
+        tool: makeTool("search_external"),
+        params: { query: "pyrolysis" },
+        state: makeState({
+          goal: "检索并导入相关文献",
+          intentKind: "literature",
+          observations: [],
+        }),
+        recentObservations: [{ tool: "search_knowledge", success: true }],
+      }),
+    );
+    expect(v).toMatchObject({ ok: false, kind: "reject" });
+  });
+
+  it("上一轮已成功 search_knowledge 后允许 search_external", () => {
+    const v = evaluatePreGates(
+      makePreInput({
+        tool: makeTool("search_external"),
+        params: { query: "pyrolysis" },
+        state: makeState({
+          goal: "检索并导入相关文献",
+          intentKind: "literature",
+          observations: [{ tool: "search_knowledge", success: true }],
+        }),
+        recentObservations: [{ tool: "search_knowledge", success: true }],
+      }),
+    );
+    expect(v).toEqual({ ok: true });
+  });
 });
 
 describe("evaluatePostGates", () => {

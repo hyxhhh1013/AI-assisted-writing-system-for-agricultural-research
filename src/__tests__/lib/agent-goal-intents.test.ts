@@ -7,6 +7,7 @@ import {
   checkCiteExistingGate,
   checkDiagnoseInspectGate,
   checkDraftSearchGate,
+  checkKnowledgeFirstGate,
   checkOutlineSearchGate,
   checkReviewRequestGate,
   isExistingRefsOnlyGoal,
@@ -79,6 +80,26 @@ describe("goal-intents", () => {
     expect(text).toContain("备文献");
     expect(text).toContain("研究缺口识别");
     expect(text).toContain("list_references");
+    expect(text).toContain("search_knowledge");
+    expect(text).toContain("knowledgeHitIndices");
+    expect(text).toContain("确认题目");
+  });
+
+  it("blocks search_external until search_knowledge succeeded this run", () => {
+    const goal = "检索并导入相关文献";
+    expect(checkKnowledgeFirstGate(goal, "search_external", [], "literature").ok).toBe(false);
+    expect(
+      checkKnowledgeFirstGate(goal, "search_knowledge", [], "literature").ok,
+    ).toBe(true);
+    expect(
+      checkKnowledgeFirstGate(
+        goal,
+        "search_external",
+        [{ tool: "search_knowledge", success: true }],
+        "literature",
+      ).ok,
+    ).toBe(true);
+    expect(checkKnowledgeFirstGate("写引言", "search_external", [], "draft").ok).toBe(true);
   });
 
   it("treats 基于 N 条文献修订大纲 as outline revision, not a search", () => {

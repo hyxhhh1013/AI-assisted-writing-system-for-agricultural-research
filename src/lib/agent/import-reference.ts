@@ -1,5 +1,6 @@
 import type { ExternalLiteratureHit } from "@/contracts/literature";
 import { formatExternalLiteratureHit } from "@/lib/external-literature-format";
+import { formatReference } from "@/lib/ref-format";
 import {
   canonicalizeLiteratureDoi,
   isNonCitableLiteratureHit,
@@ -254,5 +255,122 @@ export async function importExternalReferencesToProject(
     knowledgeCreated,
     knowledgeWithAbstract,
     knowledgeWithPdf,
+  };
+}
+
+export interface ImportKnowledgeFileInput {
+  source: string;
+  category?: string;
+  citation?: string;
+  excerpt?: string;
+}
+
+function basenameKey(name: string): string {
+  const t = name.replace(/\\/g, "/").trim();
+  const leaf = t.split("/").pop() ?? t;
+  return leaf.toLowerCase();
+}
+
+/** 把本地知识库 PDF 写入项目参考文献，并挂 ReferenceSource.sourceName（可全文精读） */
+export async function importKnowledgeFilesToProject(
+  userId: string,
+  projectId: string,
+  files: ImportKnowledgeFileInput[],
+): Promise<ImportAgentReferencesBatchResult> {
+  const owned = await prisma.project.findFirst({
+    where: { id: projectId, userId },
+    select: { id: true },
+  });
+  if (!owned) {
+    throw new Error("项目不存在或无权访问");
+  }
+
+  const { contents } = await loadReferenceDedupKeys(projectId);
+  const existingSources = await prisma.referenceSource.findMany({
+    where: { projectId },
+    select: { sourceName: true },
+  });
+  const existingKeys = new Set(existingSources.map((s) => basenameKey(s.sourceName)));
+
+  const seen = new Set<string>();
+  const accepted: ImportKnowledgeFileInput[] = [];
+  let skippedDuplicate = 0;
+
+  for (const file of files) {
+    const source = file.source.trim();
+    if (!source) continue;
+    const key = basenameKey(source);
+    if (!key || seen.has(key) || existingKeys.has(key)) {
+      skippedDuplicate += 1;
+      continue;
+    }
+    const citation =
+      (file.citation ?? "").replace(/^\[\d+\]\s*/, "").trim()
+      || formatReference(source, { style: "gbt7714" });
+    if (contents.has(citation.trim())) {
+      skippedDuplicate += 1;
+      continue;
+    }
+    seen.add(key);
+    contents.add(citation.trim());
+    accepted.push({ ...file, source, citation });
+  }
+
+  const citations: string[] = [];
+  let withAbstract = 0;
+  for (const file of accepted) {
+    const citation = file.citation ?? file.source;
+    await createReferenceWithEvidence(projectId, citation, {
+      title: citation.slice(0, 300),
+      abstract: file.excerpt?.slice(0, 4000),
+    });
+    const last = await prisma.reference.findFirst({
+      where: { projectId },
+      orderBy: { order: "desc" },
+      select: { order: true },
+    });
+    const refIndex = (last?.order ?? 0) + 1;
+    await prisma.referenceSource.upsert({
+      where: { projectId_refIndex: { projectId, refIndex } },
+      update: {
+        sourceName: file.source,
+        category: file.category ?? "",
+        citation,
+      },
+      create: {
+        projectId,
+        refIndex,
+        sourceName: file.source,
+        category: file.category ?? "",
+        citation,
+      },
+    });
+    citations.push(citation);
+    if (file.excerpt?.trim()) withAbstract += 1;
+  }
+
+  if (accepted.length > 0) {
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { lastUpdated: new Date() },
+    });
+    try {
+      await syncProjectPaperPassport(projectId);
+    } catch {
+      /* 不阻塞 */
+    }
+  }
+
+  const referenceCount = await prisma.reference.count({ where: { projectId } });
+  return {
+    imported: citations.length,
+    skippedDuplicate,
+    skippedNonCitable: 0,
+    citations,
+    referenceCount,
+    withAbstract,
+    knowledgeCreated: 0,
+    knowledgeWithAbstract: 0,
+    knowledgeWithPdf: accepted.length,
   };
 }

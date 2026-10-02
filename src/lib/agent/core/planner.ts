@@ -83,15 +83,15 @@ export function fallbackPlan(goal: string, literatureAlreadyEnough = false): Age
       subtasks: [
         {
           id: "1",
-          title: "按本题方向 search_knowledge / search_external（换同义英文 query）",
+          title: "先 search_knowledge，再 import_reference(knowledgeHitIndices)",
           status: "pending",
-          toolHints: ["search_knowledge", "search_external"],
+          toolHints: ["search_knowledge", "import_reference"],
         },
         {
           id: "2",
-          title: "分批 import_reference 导入本题相关文献",
+          title: "本地全文不足才 search_external",
           status: "pending",
-          toolHints: ["import_reference"],
+          toolHints: ["search_external", "import_reference"],
         },
         {
           id: "3",
@@ -114,7 +114,7 @@ export function fallbackPlan(goal: string, literatureAlreadyEnough = false): Age
               status: "pending" as const,
               toolHints: ["search_knowledge", "search_external", "import_reference"],
             }]),
-        { id: "3", title: "若缺大纲则 generate_outline 并请你确认", status: "pending", toolHints: ["generate_outline"] },
+        { id: "3", title: "向用户确认题目后再 generate_outline", status: "pending", toolHints: ["generate_outline"] },
         { id: "4", title: "向你汇报现状并建议下一步（停下来等你）", status: "pending" },
       ],
     };
@@ -123,7 +123,7 @@ export function fallbackPlan(goal: string, literatureAlreadyEnough = false): Age
     return {
       subtasks: [
         { id: "1", title: "list_references / inspect 看现有文献", status: "pending", toolHints: ["list_references", "inspect_project"] },
-        { id: "2", title: "generate_outline 生成并写回大纲", status: "pending", toolHints: ["generate_outline"] },
+        { id: "2", title: "确认题目后 generate_outline 生成并写回大纲", status: "pending", toolHints: ["generate_outline"] },
         { id: "3", title: "generate_writing_blueprint 写回写作蓝图", status: "pending", toolHints: ["generate_writing_blueprint"] },
       ],
     };

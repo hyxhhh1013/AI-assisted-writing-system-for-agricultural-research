@@ -8,7 +8,7 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-10-02（开场检索不再叫研究缺口）  
+> **最后更新**：2026-10-02（备文献本地 PDF 优先；先确认题目再出大纲）  
 > **实时 status 只看 §1 Phase 13 / Phase 14 / Phase 16 / Phase 17 / Phase 18 与 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
@@ -328,6 +328,7 @@
 | W3-AP-HITL-LIT-02 | 确认卡读摘要失败时拉 OA 首段或 DOI landing | LIT-01 | 1.5d | **done** | 2026-10-01；OpenAlex 或非 PDF 落地页首段，≤480 字，超时软失败 |
 | W3-AP-HITL-LIT-03 | 大纲过目：标题芯片对照已导入 [n] 覆盖 | LIT-01 | 1.5d | **done** | 2026-10-01；题录实词或蓝图已写明的 [n]；对不上不编造 |
 | W3-AP-SEARCH-UX | 检索分波 `agent/progress` stage=searching | — | 0.5d | **done** | 2026-09-30；OpenAlex/S2 → 补 CrossRef；输入区进度条 |
+| **W3-AP-LIT-LOCAL** | **备文献本地 PDF 优先；确认题目后再 generate_outline** | HITL-LIT | 0.5d | **done** | 2026-10-02；knowledgeHitIndices + knowledge-first 门禁 + title clarify |
 | — | 任务单细节 | — | — | — | [`plans/W3-AP-QUALITY-NEXT.md`](./plans/W3-AP-QUALITY-NEXT.md) |
 
 | 来源 | 本队列处理方式 |
@@ -1440,6 +1441,7 @@ src/app/api/（13）                       src/lib/（6）
 | 2026-10-02 | AGENT-CITE-LOOP | AI | cmuntp1ls：回「1」被 3.2 子节号解析错，计划残留检索；补引用后仍 search/import。选项号后禁跟数字；禁织入时检索；诊断后继续不再 inspect。 |
 | 2026-10-02 | AGENT-LAB-SCOPE | AI | 规划器把四方向围栏当成检索清单；茶学规则用「挥发性」误伤热解。简报只锁当前方向；计划标题消毒；分类提示去掉跨领域词。 |
 | 2026-10-02 | AGENT-LIT-CHIP | AI | 开场「检索并总结研究缺口」混进方向页 D3。芯片改为按本题导入；已有文献改推大纲。 |
+| 2026-10-02 | W3-AP-LIT-LOCAL | AI | 备文献先 search_knowledge 导入本地 PDF；拦 search_external；generate_outline 前确认题目。走查：同批并行不放外部、确认卡不混旧 OpenAlex、空继续不当成新题。 |
 | 2026-09-30 | RAG-CAT-ALIAS | AI | `search_knowledge(category=热解)` 0 命中：别名映射到 `热化学`；索引改走 `GRAINSCRIPT_DATA_ROOT`。 |
 
 ---
@@ -1453,6 +1455,7 @@ src/app/api/（13）                       src/lib/（6）
 |--------|-----|------|
 | **now** | W3-AP-HITL-STEER | ✅ 2026-09-23 已落地。**2026-09-30**：大纲可手改；蓝图确认曾关掉，已收回（写回后仍弹 `blueprint_approve`） |
 | **now** | W3-AP-HITL-LIT | ✅ 2026-10-01 LIT-01～03 已落地。下一步 W4-SEC-05 |
+| **now** | W3-AP-LIT-LOCAL | ✅ 2026-10-02 本地 PDF 优先 + 出大纲前确认题目 |
 | **now** | W4-SEC-06 → W4-SEC-04 | ✅ 2026-09-30 已落地。XSS 消毒 + SSE abort / 引用映射合并 |
 | **now** | W4-SEC-05 | 上传门与 `runCommand` 已落地（图表、三线表）。接着把其余 spawn 换成它，换完跑 `npm run test:figures` |
 | next | W4-SEC-07 → W4-SEC-08 | 数据完整性。**SEC-08 开工前先决策全量 vs 增量 reindex 的原子化语义**（§3.1） |

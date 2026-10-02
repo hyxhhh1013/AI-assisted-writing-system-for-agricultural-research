@@ -14,6 +14,17 @@ import type { ExternalLiteratureHit } from "@/contracts/literature";
 const MAX_KEPT = 25;
 const store = new Map<string, ExternalLiteratureHit[]>();
 
+/** 最近一次 search_knowledge 按文件去重后的命中，供 import_reference(knowledgeHitIndices) */
+export interface KnowledgeSearchHit {
+  source: string;
+  category?: string;
+  citation?: string;
+  excerpt?: string;
+}
+
+const knowledgeStore = new Map<string, KnowledgeSearchHit[]>();
+export const KNOWLEDGE_HIT_ID_PREFIX = "kb:";
+
 export function storeLastAgentSearch(
   userId: string,
   hits: ExternalLiteratureHit[],
@@ -29,22 +40,57 @@ export function clearLastAgentSearch(userId: string): void {
   store.delete(userId);
 }
 
-/**
- * 解析 hitIndices（JSON 数组或逗号/空格分隔的 index，1 起），从最近一次检索结果取命中。
- * 无 hitIndices / 无命中时返回空数组（调用方回退到 hitsJson）。
- */
-export function resolveAgentHitIndices(
-  raw: unknown,
+export function storeLastKnowledgeSearch(
   userId: string,
-): { hits: ExternalLiteratureHit[]; indices: number[] } | { error: string } {
-  const nums: number[] = [];
-  if (raw == null || raw === "") return { hits: [], indices: [] };
+  hits: KnowledgeSearchHit[],
+): void {
+  knowledgeStore.set(userId, hits.slice(0, MAX_KEPT));
+}
 
+export function getLastKnowledgeSearch(userId: string): KnowledgeSearchHit[] {
+  return knowledgeStore.get(userId) ?? [];
+}
+
+export function clearLastKnowledgeSearch(userId: string): void {
+  knowledgeStore.delete(userId);
+}
+
+export function isKnowledgeHitId(id: string | undefined): boolean {
+  return Boolean(id?.startsWith(KNOWLEDGE_HIT_ID_PREFIX));
+}
+
+export function knowledgeSourceFromHitId(id: string): string | null {
+  if (!isKnowledgeHitId(id)) return null;
+  const raw = id.slice(KNOWLEDGE_HIT_ID_PREFIX.length);
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw || null;
+  }
+}
+
+export function knowledgeHitToExternal(hit: KnowledgeSearchHit): ExternalLiteratureHit {
+  const title =
+    (hit.citation ?? "").replace(/^\[\d+\]\s*/, "").trim()
+    || hit.source.replace(/\.pdf$/i, "").trim()
+    || hit.source;
+  return {
+    id: `${KNOWLEDGE_HIT_ID_PREFIX}${encodeURIComponent(hit.source)}`,
+    title,
+    authors: [],
+    journal: hit.category ? `本地知识库/${hit.category}` : "本地知识库 PDF",
+    source: "openalex",
+    abstract: hit.excerpt,
+  };
+}
+
+function parseIndexList(raw: unknown): number[] {
+  const nums: number[] = [];
   const push = (v: unknown) => {
     const n = Number(v);
     if (Number.isFinite(n)) nums.push(Math.floor(n));
   };
-
+  if (raw == null || raw === "") return [];
   if (typeof raw === "string") {
     const trimmed = raw.trim();
     try {
@@ -62,9 +108,20 @@ export function resolveAgentHitIndices(
   } else {
     push(raw);
   }
+  return [...new Set(nums)];
+}
 
+/**
+ * 解析 hitIndices（JSON 数组或逗号/空格分隔的 index，1 起），从最近一次检索结果取命中。
+ * 无 hitIndices / 无命中时返回空数组（调用方回退到 hitsJson）。
+ */
+export function resolveAgentHitIndices(
+  raw: unknown,
+  userId: string,
+): { hits: ExternalLiteratureHit[]; indices: number[] } | { error: string } {
+  if (raw == null || raw === "") return { hits: [], indices: [] };
+  const unique = parseIndexList(raw);
   const storeHits = getLastAgentSearch(userId);
-  const unique = [...new Set(nums)];
   const out: ExternalLiteratureHit[] = [];
   for (const idx of unique) {
     const hit = storeHits[idx - 1]; // search_external 的 index 为 1 起
@@ -74,6 +131,27 @@ export function resolveAgentHitIndices(
     return {
       error:
         "hitIndices 超出最近检索结果范围。请先 search_external，再按返回的 items[].index 导入。",
+    };
+  }
+  return { hits: out, indices: unique };
+}
+
+export function resolveKnowledgeHitIndices(
+  raw: unknown,
+  userId: string,
+): { hits: KnowledgeSearchHit[]; indices: number[] } | { error: string } {
+  if (raw == null || raw === "") return { hits: [], indices: [] };
+  const unique = parseIndexList(raw);
+  const storeHits = getLastKnowledgeSearch(userId);
+  const out: KnowledgeSearchHit[] = [];
+  for (const idx of unique) {
+    const hit = storeHits[idx - 1];
+    if (hit) out.push(hit);
+  }
+  if (unique.length > 0 && out.length === 0) {
+    return {
+      error:
+        "knowledgeHitIndices 超出最近一次 search_knowledge 结果。请先检索本地库，再按 files[].index 导入。",
     };
   }
   return { hits: out, indices: unique };

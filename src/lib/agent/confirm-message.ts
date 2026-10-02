@@ -14,6 +14,7 @@ export function buildToolConfirmMessage(
     // 确认卡已注入候选列表（importItems）：按候选数提示批量
     if (Array.isArray(params.importItems) && params.importItems.length > 0) {
       const items = params.importItems as Array<{
+        id?: string;
         title?: string;
         year?: number;
         doi?: string;
@@ -28,6 +29,9 @@ export function buildToolConfirmMessage(
       return {
         message:
           `确认批量导入 ${n} 篇文献到项目参考文献？`
+          + (items.some((x) => String(x.id ?? "").startsWith("kb:"))
+            ? "（本地知识库 PDF 全文）"
+            : "")
           + (titles.length ? `\n含：${titles.join("；")}${n > 3 ? "…" : ""}` : "")
           + (why.length >= 8 ? `\n理由：${why.slice(0, 120)}` : ""),
         preview: titles.join("\n"),

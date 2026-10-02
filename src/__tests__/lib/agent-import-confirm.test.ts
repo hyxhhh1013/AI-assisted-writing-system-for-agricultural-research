@@ -7,6 +7,8 @@ import {
 import {
   storeLastAgentSearch,
   clearLastAgentSearch,
+  storeLastKnowledgeSearch,
+  clearLastKnowledgeSearch,
 } from "@/lib/agent/last-search";
 import { importReferenceTool } from "@/lib/agent/tools/import-reference";
 import type { AgentContext } from "@/lib/agent/types";
@@ -27,6 +29,15 @@ vi.mock("@/lib/agent/import-reference", () => ({
     citations: ["a", "b"],
     referenceCount: 5,
     withAbstract: 1,
+  })),
+  importKnowledgeFilesToProject: vi.fn(async () => ({
+    imported: 1,
+    skippedDuplicate: 0,
+    skippedNonCitable: 0,
+    citations: ["local"],
+    referenceCount: 4,
+    withAbstract: 1,
+    knowledgeWithPdf: 1,
   })),
 }));
 
@@ -56,6 +67,7 @@ function hit(id: string, title: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   clearLastAgentSearch(ctx.userId);
+  clearLastKnowledgeSearch(ctx.userId);
   vi.stubGlobal("fetch", vi.fn(async () => {
     throw new Error("offline");
   }));
@@ -99,6 +111,16 @@ describe("resolveImportReferenceCandidates", () => {
     storeLastAgentSearch(ctx.userId, [hit("doi:1", "A"), hit("doi:3", "C")]);
     const items = await resolveImportReferenceCandidates({ hitIndices: "[1]" }, ctx);
     expect(items.map((h) => h.id)).toEqual(["doi:1", "doi:3"]);
+  });
+
+  it("有本地知识库命中时，未点名外部则确认卡用 PDF 而非旧 OpenAlex", async () => {
+    storeLastAgentSearch(ctx.userId, [hit("doi:old", "Stale OpenAlex")]);
+    storeLastKnowledgeSearch(ctx.userId, [
+      { source: "pyrolysis.pdf", citation: "热解综述", excerpt: "full" },
+    ]);
+    const items = await resolveImportReferenceCandidates({ why: "导入本地全文 PDF 文献" }, ctx);
+    expect(items.every((h) => h.id.startsWith("kb:"))).toBe(true);
+    expect(items.some((h) => h.id === "doi:old")).toBe(false);
   });
 
   it("dedups when requested hit also in store", async () => {

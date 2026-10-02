@@ -24,6 +24,7 @@ import {
   checkCiteExistingGate,
   checkDiagnoseInspectGate,
   checkDraftSearchGate,
+  checkKnowledgeFirstGate,
   checkOutlineSearchGate,
   checkReviewRequestGate,
 } from "@/lib/agent/core/goal-intents";
@@ -109,6 +110,13 @@ export const intentGate: PreToolGate = ({ state, tool, params, recentObservation
     () => checkDiagnoseInspectGate(state.goal, tool.name, recentObservations, state.intentKind),
     () => checkDraftSearchGate(state.goal, tool.name, recentObservations, state.intentKind, params),
     () => checkOutlineSearchGate(state.goal, tool.name),
+    () =>
+      checkKnowledgeFirstGate(
+        state.goal,
+        tool.name,
+        observationsThisRun(state.observations ?? [], state.intentObsOffset),
+        state.intentKind,
+      ),
     () => checkCitationCheckGate(state.goal, tool.name, recentObservations, state.intentKind),
     () => checkCitationSpinGate(state.goal, tool.name, recentObservations, state.intentKind),
     () => checkCitationSideTripGate(state.goal, tool.name, recentObservations, state.intentKind),

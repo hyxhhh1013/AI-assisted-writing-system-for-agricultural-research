@@ -31,7 +31,8 @@ export const searchExternalTool: ToolDefinition = {
   name: "search_external",
   description:
     "在外部数据库检索学术文献（OpenAlex/S2，不足再补 CrossRef/PubMed；中文自动转英文同义）。"
-    + "返回按相关度排序的 items。单次尽量 limit=20～25，少换 query；多篇用 import_reference(hitsJson=...)",
+    + "**仅当本轮已 search_knowledge 且本地全文不足时再调用**。外部命中多为摘要，质量低于本地 PDF。"
+    + "返回按相关度排序的 items。单次尽量 limit=20～25，少换 query；多篇用 import_reference(hitIndices=...)",
   parameters: {
     type: "object",
     properties: {
