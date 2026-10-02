@@ -166,6 +166,24 @@ const ANNOUNCED_TOOLS: Array<{ re: RegExp; tool: string; label: string }> = [
   },
 ];
 
+/** 命中附近是否在否认/假设，而不是「现在就要调用」 */
+const ANNOUNCE_NEGATION_RE =
+  /从未|未曾|不会|不要|不必|无需|禁止|已有|已存在|不(?:会|要|再)调用|没有要|不是要|并非|若你|如果你|请明确|请再说|误触发|覆盖现有|未表示/;
+
+function hasPositiveAnnouncement(text: string, re: RegExp): boolean {
+  const global = new RegExp(re.source, re.flags.includes("g") ? re.flags : `${re.flags}g`);
+  let m: RegExpExecArray | null = global.exec(text);
+  while (m) {
+    const ctx = text.slice(
+      Math.max(0, m.index - 40),
+      Math.min(text.length, m.index + m[0].length + 32),
+    );
+    if (!ANNOUNCE_NEGATION_RE.test(ctx)) return true;
+    m = global.exec(text);
+  }
+  return false;
+}
+
 /** 收尾提示里的「先写引言」示例，不能当成口头宣布要 write_section */
 export function isPlanLeftoverSpeech(text: string): boolean {
   return /还有未完成步骤|你可以直接说「继续」或指定下一步/.test(text);
@@ -185,20 +203,26 @@ export function extractUserChoicePrompt(text: string | null | undefined): string
   if (!body) return null;
   const asks =
     /回复\s*[1１]\s*[\/、,，或]\s*2/.test(body)
+    || /回[「""']?\s*[1１]\s*[\/、,，或 ]+\s*2/.test(body)
     || /下一步请选/.test(body)
     || /请回复\s*[1１]/.test(body);
   if (!asks) return null;
 
-  const head = body.search(/下一步请选|请回复\s*[1１]|回复\s*[1１]\s*[\/、,，或]\s*2/);
+  const head = body.search(
+    /下一步请选|请回复\s*[1１]|回复\s*[1１]\s*[\/、,，或]\s*2|回[「""']?\s*[1１]\s*[\/、,，或 ]+\s*2/,
+  );
   if (head < 0) return null;
   const lineStart = body.lastIndexOf("\n", head);
   let fromMarker = body.slice(lineStart >= 0 ? lineStart + 1 : 0).trim();
   const execCut = fromMarker.search(/执行摘要[:：]|【执行摘要】|\[[a-z][\w_]*\]/);
   if (execCut > 8) fromMarker = fromMarker.slice(0, execCut).trim();
-  if (/^回复\s*[1１]/.test(fromMarker) && lineStart > 0) {
+  const replyLine = /^(?:请)?回(?:复)?\s*[「""']?[1１]/;
+  if (replyLine.test(fromMarker) && lineStart > 0) {
     const lines = body.split("\n");
-    const hit = lines.findIndex((line) => /回复\s*[1１]/.test(line) || /下一步请选/.test(line));
-    if (hit >= 0) return lines.slice(Math.max(0, hit - 6), hit + 1).join("\n").trim();
+    const hit = lines.findIndex(
+      (line) => replyLine.test(line.trim()) || /下一步请选/.test(line),
+    );
+    if (hit >= 0) return lines.slice(Math.max(0, hit - 8), hit + 1).join("\n").trim();
   }
   return fromMarker.length >= 4 ? fromMarker : null;
 }
@@ -210,8 +234,9 @@ export function thoughtAnnouncesUnfinishedTool(
 ): { tool: string; label: string } | null {
   const text = content?.trim() ?? "";
   if (!text || isPlanLeftoverSpeech(text)) return null;
+  if (extractUserChoicePrompt(text)) return null;
   for (const item of ANNOUNCED_TOOLS) {
-    if (!item.re.test(text)) continue;
+    if (!hasPositiveAnnouncement(text, item.re)) continue;
     if (observations.some((o) => o.tool === item.tool && o.success)) continue;
     return { tool: item.tool, label: item.label };
   }

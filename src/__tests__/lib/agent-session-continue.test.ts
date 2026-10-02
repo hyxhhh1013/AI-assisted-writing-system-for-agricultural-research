@@ -83,4 +83,15 @@ describe("session-continue", () => {
     expect(next.goal).toContain("生物油");
     expect(next.intentKind).toBe("review_write");
   });
+
+  it("keeps 文生图 intent when follow-up goal is only 图1、4", () => {
+    const snap = emptyAgentSessionSnapshot("用文生图画流程图");
+    snap.messages = Array.from({ length: 42 }, (_, i) => ({
+      role: i % 2 === 0 ? "user" : "assistant",
+      content: `old-${i}`,
+    }));
+    snap.uiTranscript = [{ kind: "user", text: "用文生图画流程图" }];
+    const next = buildFollowUpInitialState("图1、4", snap);
+    expect(next.messages?.some((m) => String(m.content).includes("文生图"))).toBe(true);
+  });
 });

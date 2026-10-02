@@ -4,6 +4,7 @@ import { classifyIntent } from "@/lib/agent/core/classify-intent";
 import { snapshotToInitialState } from "@/lib/agent/session-snapshot";
 import type { AgentGraphStateType } from "@/lib/agent/langgraph/state";
 import { expandChoiceDigitGoal } from "@/lib/agent/choice-prompt-display";
+import { wantsMechanismIllustration } from "@/lib/agent/figure-loop";
 import type { LLMMessage } from "@/lib/agent/types";
 
 const MAX_HISTORY_MESSAGES = 40;
@@ -18,6 +19,16 @@ export function buildFollowUpInitialState(
   const goal = expandChoiceDigitGoal(newGoal.trim(), snapshot.uiTranscript);
   const base = snapshotToInitialState(goal, snapshot);
   const history = clipMessages(base.messages ?? [], MAX_HISTORY_MESSAGES);
+  const transcriptUser = (snapshot.uiTranscript ?? [])
+    .flatMap((m) => (m.kind === "user" && m.text.trim() ? [m.text.trim()] : []));
+  const historyWithIllustrationHint =
+    wantsMechanismIllustration(goal, history, transcriptUser)
+    && !wantsMechanismIllustration(goal, history)
+      ? ([
+          ...history,
+          { role: "user", content: "【此前要求】用文生图出流程图观感候选，结构过线后必须 illustrate_mechanism_figure。" },
+        ] satisfies LLMMessage[])
+      : history;
   const previousKind = isIntentKind(snapshot.intentKind) ? snapshot.intentKind : null;
   const classified = classifyIntent({
     goal,
@@ -29,7 +40,7 @@ export function buildFollowUpInitialState(
     ...base,
     goal,
     intentKind: classified.kind,
-    messages: [...history, { role: "user", content: goal }],
+    messages: [...historyWithIllustrationHint, { role: "user", content: goal }],
     plan: null,
     iteration: 0,
     toolCallCount: 0,

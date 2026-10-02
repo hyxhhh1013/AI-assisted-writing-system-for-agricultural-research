@@ -55,6 +55,7 @@ import {
   buildChartQaBlockNudge,
   buildMechanismQaBlockNudge,
   buildFigureQaContinueNudge,
+  buildIllustrateGenerateCall,
   buildReadFigureQaCall,
   extractChartQaFindingCodes,
   extractFigureImageUrl,
@@ -63,6 +64,7 @@ import {
   isFigureQaNeedsPolish,
   isFigureQaNeedsRegen,
   lastFigureQaNeedsReplace,
+  shouldInjectIllustrationAfterQa,
   shouldInjectVisionFigureQa,
   shouldPauseForFigureBrief,
 } from "@/lib/agent/figure-loop";
@@ -1213,6 +1215,24 @@ export async function toolsNode(
           content: buildFigureQaPolishNudge(polishUrl || undefined),
         });
         newSummaries.push("[figure-loop] QA 可接受·建议精修（不强制重画）");
+      }
+
+      const illInject = shouldInjectIllustrationAfterQa({
+        result,
+        goal: state.goal,
+        messages: [...state.messages, ...newMessages],
+        observations: [...state.observations, ...newObservations],
+        queued: toolQueue.slice(tcIdx + 1),
+      });
+      if (tool.name === "read_figure" && illInject) {
+        toolQueue.splice(tcIdx + 1, 0, buildIllustrateGenerateCall(illInject.imageUrl));
+        newMessages.push({
+          role: "user",
+          content:
+            `System: 结构已过线且用户要求文生图。立刻 illustrate_mechanism_figure action=generate，sourceImageUrl="${illInject.imageUrl}"。`
+            + "禁止只让用户去 /plot，禁止自动 adopt。",
+        });
+        newSummaries.push(`[illustrate] 结构过线，排队即梦观感候选 → ${illInject.imageUrl}`);
       }
 
       // 后置门禁链（antispam 停滞 / clarify / outline 检查点）：

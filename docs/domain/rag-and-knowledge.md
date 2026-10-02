@@ -182,7 +182,7 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 - 大索引禁止 `readFileSync` 整文件加载（RAG-PR-002+）
 - 同名 PDF 出现在多个分类目录时，`scanFiles` 按 basename 去重**只保留首个目录副本**（其余不进索引，重建时打 ⚠ warning 列出冲突）；分类权威源是 Prisma `KnowledgeFile.category`，**不是目录名**——手动移动/复制文件到新目录不会改变分类
 - 外部导入 OA PDF（`external-knowledge-ingest.ts`）落盘前会检测跨分类同名：同名同分类复用、跨分类跳过下载，避免制造孤儿目录；增量索引失败时导入结果 `reason: "oa_pdf_index_failed"`
-- **知识库页「加入知识库」（2026-08-18）**：`POST /api/knowledge/ingest-external` 不依赖项目；有 OA → 下载+增量索引，有摘要 → 摘要 chunk，否则书目占位。UI：外部检索 Tab「加入知识库」+ 可选分类。
+- **检索命中进参考文献（2026-10-02）**：实验室 PDF 常命名为 `序号-年份-作者-题名`。无 Prisma 书目时导出/预览不得输出 `8 2021 罗伟 题名` 这种空格串；`formatReference` 解析为 `作者. 题名[J]. 年.`。批量格式化改 `POST /api/references?format=true` JSON，避免 GET 用逗号拆 GB/T 题名。
 - `listKnowledgeCategories()` 默认过滤「未分类」（UI 分类 Tab / `matchCategoryFromDirection` 用）；`LocalRAG.getCategories()` 传 `true` **纳入「未分类」**，确保 `papers/` 根目录 PDF（`index_未分类.json`）也能进检索
 - 外部导入无 PDF 摘要若目标分类已有 `.emb`（含真实 PDF 向量），`appendAbstractChunks` 会重定向到「外部摘要」分类，避免 chunk↔.emb 下标错位
 - **外部摘要入库（2026-08-18）**：Agent `import_reference` / `ingest-external` 写入的**无 PDF 摘要 chunk 一律落入 `index_外部摘要.json`**（避免混进烟草等 PDF 分类 `.emb`）。追加时若该分类残留错位 `.emb` 会删掉。

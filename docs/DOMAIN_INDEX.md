@@ -10,7 +10,7 @@
 | 工作台主界面 | `src/app/workbench/page.tsx` | `GET/PATCH /api/projects` | `useProjectLoader`, `useAutoSave`, `useEditorSync` |
 | PaperPassport / Cockpit | 工作台 `structure` 侧栏顶部 | `PATCH .../paper-passport`；`POST .../sync` | `project-cockpit-bar.tsx`, `paper-config-panel.tsx`, `paper-passport-*.ts` |
 | 章节编辑保存 | 同上 | `PATCH .../sections/[key]` | `src/services/projects.ts` |
-| 参考文献 | 工作台侧栏 | `PATCH .../references` | `useReferenceReorder`, `contracts/project.ts`；预览点 [n] → `citation-inspect-dialog.tsx`（三态出处） |
+| 参考文献 | 工作台侧栏 | `PATCH .../references`；`POST /api/references?format=true` | `useReferenceReorder`；本地 PDF 无书目时 `formatReference` 解析「序号-年-作者-题名」为 GB/T |
 | 分析结果 | 工作台 `data` Tab | `PATCH .../analysis-results` | `patchAnalysisResults` service |
 | 项目列表 | `src/app/projects/page.tsx` | `/api/projects` | — |
 | 写作 Agent 引导 | `src/app/academic-paper/page.tsx` | Project 列表 | `academic-paper-studio/components/AgentGuidePage.tsx` → `/workbench?tab=agent` |

@@ -330,6 +330,75 @@ export function hasFigureBriefAnswer(messages: readonly LLMMessage[]): boolean {
   );
 }
 
+const ILLUSTRATION_WANT_RE =
+  /文生图|即梦|seedream|观感候选|示意候选/i;
+const ILLUSTRATION_DECLINE_RE =
+  /不要\s*(即梦|文生图|观感|seedream)|不用\s*(即梦|文生图)|跳过文生图/i;
+
+export function wantsMechanismIllustration(
+  goal: string,
+  messages: readonly LLMMessage[] = [],
+  extraUserTexts: readonly string[] = [],
+): boolean {
+  const userBits = messages
+    .filter((m) => m.role === "user" && typeof m.content === "string")
+    .map((m) => m.content)
+    .concat(extraUserTexts)
+    .join("\n");
+  const blob = `${goal}\n${userBits}`;
+  if (ILLUSTRATION_DECLINE_RE.test(blob)) return false;
+  return ILLUSTRATION_WANT_RE.test(blob);
+}
+
+export function buildIllustrateGenerateCall(sourceImageUrl: string): ParsedToolCall {
+  return {
+    id: `ill_gen_${randomUUID().slice(0, 8)}`,
+    name: "illustrate_mechanism_figure",
+    args: { action: "generate", sourceImageUrl },
+  };
+}
+
+function illustrationAlreadyQueuedOrDone(
+  observations: readonly ToolObservation[],
+  queued: readonly ParsedToolCall[],
+  imageUrl: string,
+): boolean {
+  if (queued.some((c) => c.name === "illustrate_mechanism_figure")) return true;
+  for (let i = observations.length - 1; i >= 0; i--) {
+    const o = observations[i];
+    if (!o || o.tool !== "illustrate_mechanism_figure") continue;
+    if (!o.success || !o.data || typeof o.data !== "object") continue;
+    const data = o.data as { action?: unknown; sourceImageUrl?: unknown };
+    if (data.action === "adopt") return true;
+    if (data.action === "generate" && data.sourceImageUrl === imageUrl) return true;
+  }
+  return false;
+}
+
+/** 结构识图过线后，用户要文生图则排队即梦候选（不插入） */
+export function shouldInjectIllustrationAfterQa(input: {
+  result: AgentToolResult;
+  goal: string;
+  messages: readonly LLMMessage[];
+  observations: readonly ToolObservation[];
+  queued: readonly ParsedToolCall[];
+}): { imageUrl: string } | null {
+  if (!wantsMechanismIllustration(input.goal, input.messages)) return null;
+  if (!input.result.success) return null;
+  if (isFigureQaNeedsRegen(input.result)) return null;
+  const data = input.result.data;
+  if (!data || typeof data !== "object") return null;
+  const rec = data as { figureId?: unknown; mode?: unknown };
+  const figureId = typeof rec.figureId === "string" ? rec.figureId : "";
+  if (figureId && !isSchematicFigureId(figureId)) return null;
+  const imageUrl = extractFigureImageUrl(input.result);
+  if (!imageUrl) return null;
+  if (illustrationAlreadyQueuedOrDone(input.observations, input.queued, imageUrl)) {
+    return null;
+  }
+  return { imageUrl };
+}
+
 export function shouldPauseForFigureBrief(input: {
   toolName: string;
   params: Record<string, unknown>;
@@ -343,6 +412,7 @@ export function shouldPauseForFigureBrief(input: {
   if (String(input.params.skipFigureBrief ?? "").toLowerCase() === "true") {
     return false;
   }
+  if (wantsMechanismIllustration(input.goal, input.messages)) return false;
   if (!isMultiFigureGoal(input.goal)) return false;
   if (hasFigureBriefAnswer(input.messages)) return false;
   return true;

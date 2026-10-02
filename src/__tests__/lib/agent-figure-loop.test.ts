@@ -14,9 +14,11 @@ import {
   isSchematicFigureId,
   lastFigureQaNeedsReplace,
   listMechanismTemplateIds,
-  shouldInjectVisionFigureQa,
   resolveReplaceForAntiStack,
+  shouldInjectIllustrationAfterQa,
+  shouldInjectVisionFigureQa,
   shouldPauseForFigureBrief,
+  wantsMechanismIllustration,
 } from "@/lib/agent/figure-loop";
 import type { ToolObservation } from "@/lib/agent/types";
 
@@ -157,6 +159,62 @@ describe("figure-loop", () => {
       }),
     ).toBe(false);
     expect(isMultiFigureGoal("画一张柱状图")).toBe(false);
+    expect(
+      shouldPauseForFigureBrief({
+        toolName: "draft_mechanism_figure",
+        params: {},
+        goal: "图1、4",
+        messages: [{ role: "user", content: "用文生图画流程图" }],
+      }),
+    ).toBe(false);
+  });
+
+  it("wantsMechanismIllustration and inject after schematic QA pass", () => {
+    expect(wantsMechanismIllustration("图1、4", [])).toBe(false);
+    expect(
+      wantsMechanismIllustration("图1、4", [{ role: "user", content: "用文生图画流程图" }]),
+    ).toBe(true);
+    expect(
+      wantsMechanismIllustration("不要文生图", [{ role: "user", content: "重画流程图" }]),
+    ).toBe(false);
+
+    const pass = {
+      success: true as const,
+      data: {
+        mode: "qa",
+        figureId: "flow",
+        qaVerdict: "pass",
+        imageUrl: "/api/charts/ok-flow.png",
+        description: "结论：可接受",
+      },
+    };
+    expect(
+      shouldInjectIllustrationAfterQa({
+        result: pass,
+        goal: "图1、4",
+        messages: [{ role: "user", content: "用文生图画流程图" }],
+        observations: [],
+        queued: [],
+      }),
+    ).toEqual({ imageUrl: "/api/charts/ok-flow.png" });
+    expect(
+      shouldInjectIllustrationAfterQa({
+        result: { ...pass, data: { ...pass.data, needsRegen: true, qaVerdict: "regen" } },
+        goal: "图1、4",
+        messages: [{ role: "user", content: "用文生图画流程图" }],
+        observations: [],
+        queued: [],
+      }),
+    ).toBeNull();
+    expect(
+      shouldInjectIllustrationAfterQa({
+        result: pass,
+        goal: "图1、4",
+        messages: [{ role: "user", content: "用文生图画流程图" }],
+        observations: [],
+        queued: [{ id: "x", name: "illustrate_mechanism_figure", args: {} }],
+      }),
+    ).toBeNull();
   });
 
   it("mechanism templates exist with Chinese structure", () => {

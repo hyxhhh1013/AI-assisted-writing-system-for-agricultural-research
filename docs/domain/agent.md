@@ -1,6 +1,6 @@
 # Agent 编排（写作助手）
 
-> L3 域文档 · 更新：2026-10-01（文献表与正文引用条数必须对齐；导出剪未引用）  
+> L3 域文档 · 更新：2026-10-02（诊断勿自动覆盖蓝图；「回 1/2/3」才出选择题）  
 > 契约唯一权威源：`src/contracts/agent.ts`（SSE 事件）、`src/contracts/agent-session.ts`（会话消息）、`src/contracts/agent-intent.ts`（`IntentKind`）。
 
 ## 概览
@@ -71,7 +71,7 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 
 **计划推进（2026-08-23）**：`advancePlanAfterTool` 有 `toolHints` 时只认 hints，不再用标题里的「大纲/文献」串味。`list_references` / `generate_outline` 不得把「依据大纲生成写作蓝图」标完成。口头宣布要生成蓝图/`write_section` 但未调用工具时注入续跑，禁止空 `agent/complete`。`开始吧` 视为跟聊继承意图；SSE 中途断开不再伪装成「已完成」。`finished=true` 时不得因续跑计数再打回 `agent`（否则 `planContinueCount` 停在 1–2 会自环到 LangGraph 512）。读/检索不清零续跑计数。
 
-**任务结束 vs 续跑条（2026-08-23）**：图循环 `finished=true` → `finalize` → `agent/complete` 才是一轮结束。续跑条只看**本轮**（上一句用户之后）的 thought / observation，禁止拿上一轮「口头未执行」摘要继续推荐同一节。本轮 `write_section` 成功后改为「已写回」并指向下一空节。前端 SSE 已断但 DB 仍 `running` 时，跟聊/续跑先 `interruptRunningSession`（不再等 45s），界面出示「接上进度 / 强制结束」，409 不再叠用户气泡、不当红框失败。收尾「还有未完成步骤」不再举例「先写引言」（会误触发 write_section 宣布）；续跑条有未完成计划时只发「继续」，不改推写另一节。正文已经在请用户「回复 1/2/3」时，不再追加这句，也不再出「继续推进」；顶栏改为「等你回复」，输入框上方 `AgentClarifyCard` 只展示选项（截掉粘在后面的「执行摘要」工具日志），编号列表 + 快捷 1/2/3，回答框固定在卡片底部不被顶没。未完成子任务显示「等你决定」而不是转圈的「执行中」。
+**任务结束 vs 续跑条（2026-08-23）**：图循环 `finished=true` → `finalize` → `agent/complete` 才是一轮结束。续跑条只看**本轮**（上一句用户之后）的 thought / observation，禁止拿上一轮「口头未执行」摘要继续推荐同一节。本轮 `write_section` 成功后改为「已写回」并指向下一空节。前端 SSE 已断但 DB 仍 `running` 时，跟聊/续跑先 `interruptRunningSession`（不再等 45s），界面出示「接上进度 / 强制结束」，409 不再叠用户气泡、不当红框失败。收尾「还有未完成步骤」不再举例「先写引言」（会误触发 write_section 宣布）；续跑条有未完成计划时只发「继续」，不改推写另一节。正文已经在请用户「回复 1/2/3」或「回「1 / 2 / 3」」时，不再追加这句，也不再出「继续推进」；顶栏改为「等你回复」，输入框上方 `AgentClarifyCard` 只展示选项（截掉粘在后面的「执行摘要」工具日志），编号列表 + 快捷 1/2/3，回答框固定在卡片底部不被顶没。未完成子任务显示「等你决定」而不是转圈的「执行中」。**提及「已有写作蓝图 / 不会调用」不算口头宣布生成蓝图**（否则诊断会误强制 `generate_writing_blueprint`，续跑条与正文选项不一致）。
 
 **下一步唯一叙事（2026-09-08）**：`suggestNextAgentActions` 按阶段互斥（文献 / 大纲 / 蓝图 / 写节），禁止同时抛「检索文献」和「写引言」。`resolvePhaseTaskPack.goal` 与 `inspect_project.suggestedGoal` 共用该函数。有续跑条时输入区不再铺阶段芯片；空闲空对话的「建议」按钮走同一条主建议。
 
@@ -298,7 +298,7 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 | 层 | 行为 |
 |----|------|
 | L1 草稿 | `draft_mechanism_figure` 先编译 `MechanismSpecV1`（主张进 caption，步骤括号条件上边）；多机理图任务前 **FigureBrief clarify**；可选 `templateId`。未锁 `layout` 且 ≥4 步会带 chain/fork 两套候选，只入库推荐稿。**结构主渲染器仍是 Graphviz/多面板**（文生图不可回放改节点） |
-| L1.5 观感候选 | 结构过线后 `illustrate_mechanism_figure`：即梦 Seedream 图生图，智谱 CogView 备选。Admin「系统设置 → 机理示意模型」可配方舟 Key / 接入点 ID / 接口地址、智谱绘图模型与专用 Key，并可测连通。`generate` **禁止插入正文**；人选后 `adopt` 才落盘 |
+| L1.5 观感候选 | 用户说「文生图/即梦」时：**跳过 FigureBrief**；`read_figure(qa)` 过线后 toolsNode **自动排队** `illustrate_mechanism_figure action=generate`（即梦图生图，智谱备选），禁止用 `/plot` 代替。`generate` **禁止插入正文**；人选后 `adopt` 才落盘。Admin 可管 Key/模型 |
 | L2 硬闭环 | **机理图**先看 `draft_mechanism_figure.qaReport`（`block` 不入库、按 findings 改 Spec）；过线后 toolsNode 才注入 `read_figure(mode=qa)` 扫残余观感。**数据图**看 `generate_chart.qaReport`（不跑视觉识图）。QA 未通过则禁止空口收尾 + 门禁 `replaceImageUrl`；同 caption/section 无 replace 时工具内自动就地替换（防叠图） |
 | L3 精修 | **配图坞**（输入框上方常驻最近出图，免翻聊天）+ 结果卡：落点说明（默认**节末落盘**）+「查看正文位置」+ 结构化「按意见改」（含分叉/三面板/脱氧等快捷）+ `/plot?chartAssetId=&replaceImageUrl=` 深链（优先资产快照回放，精修回写默认真地替换）；编辑器「本节插图」可挪位 |
 | 图质检两级（2026-08-09；008 收窄；MECH-QA 2026-08-23） | 机理图主尺是 `MechanismSpec` + `qaReport`（`contracts/mechanism-spec.ts` / `mechanism-qa.ts`）。识图 `figure-qa.ts` 只扫残余观感。数据图只看 ChartSpec `qaReport`。 |
@@ -312,7 +312,7 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 | `remove_figure` | 删图表资产 + 默认去掉正文对应 `![](url)`（清重复旧图）；**需用户确认** |
 | `read_figure` | `describe` 可识任意图；`mode=qa` **仅机理图**（占位/英文模板/空栏）。数据图跳过识图，看 `qaReport` |
 
-实现：`lib/agent/figure-loop.ts`、`langgraph/tool-gates.ts`（`figureReplaceGate`）、`langgraph/nodes.ts`（自动排队 QA / FigureBrief）。视觉 provider：`callAI({ provider: "vision" })`（DeepSeek `deepseek-v4-flash-vision-exp`，复用写作 Key）。
+实现：`lib/agent/figure-loop.ts`、`langgraph/tool-gates.ts`（`figureReplaceGate`）、`langgraph/nodes.ts`（自动排队 QA / 文生图 generate / FigureBrief）。视觉 provider：`callAI({ provider: "vision" })`（DeepSeek `deepseek-v4-flash-vision-exp`，复用写作 Key）。
 
 ## 循环防护与写回保护（2026-08-06 修复）
 

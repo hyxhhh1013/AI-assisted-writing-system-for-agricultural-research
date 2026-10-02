@@ -381,13 +381,26 @@ export function checkDiagnoseInspectGate(
     return { ok: true };
   }
   if (toolName === "inspect_project") return { ok: true };
-  if (hasSuccessfulInspect(observations)) return { ok: true };
-  return {
-    ok: false,
-    error:
-      "本轮是诊断任务：请先调用 inspect_project 读取最新项目快照，再决定检索/写回。"
-      + "不要仅凭【近期对话记忆】或 recall_recent_work 下结论。",
-  };
+  if (!hasSuccessfulInspect(observations)) {
+    return {
+      ok: false,
+      error:
+        "本轮是诊断任务：请先调用 inspect_project 读取最新项目快照，再决定检索/写回。"
+        + "不要仅凭【近期对话记忆】或 recall_recent_work 下结论。",
+    };
+  }
+  if (
+    (toolName === "generate_writing_blueprint" || toolName === "generate_outline")
+    && !/重新生成蓝图|生成写作蓝图|生成大纲/.test(goal)
+  ) {
+    return {
+      ok: false,
+      error:
+        "诊断任务不要自动覆盖大纲或写作蓝图。先用中文汇报缺口并给出 1～3 个选项；"
+        + "只有用户明确说「重新生成蓝图」或「生成大纲」才可调用。",
+    };
+  }
+  return { ok: true };
 }
 
 /**

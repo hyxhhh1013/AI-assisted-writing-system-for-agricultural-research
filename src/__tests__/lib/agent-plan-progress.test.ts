@@ -181,6 +181,16 @@ describe("plan-progress", () => {
     expect(prompt).not.toContain("还有未完成步骤");
     expect(extractUserChoicePrompt("这一节已经写完，可以继续。")).toBeNull();
   });
+
+  it("does not treat 已有蓝图 / 不会调用 as announced generate_writing_blueprint", () => {
+    const deny =
+      "我从未表示要生成写作蓝图。项目已有写作蓝图，因此我不会调用 generate_writing_blueprint。"
+      + "\n补引用覆盖\n出图2 / 表2\n继续写正文\n回「1 / 2 / 3」即可。"
+      + "若你确实想重新生成写作蓝图，请明确说「重新生成蓝图」。";
+    expect(thoughtAnnouncesUnfinishedTool(deny, [{ tool: "inspect_project", success: true }])).toBeNull();
+    const prompt = extractUserChoicePrompt(deny);
+    expect(prompt).toMatch(/1\s*\/\s*2/);
+  });
 });
 
 describe("routeAfterAgent plan continue", () => {

@@ -13,6 +13,7 @@ import {
   EXTERNAL_ABSTRACT_CATEGORY,
   resolveRagCategoryName,
 } from "@/lib/knowledge-category-hints";
+import { parseLabPdfFilename } from "@/lib/lab-pdf-filename";
 import { resolveProjectRuntimePath } from "@/lib/runtime-paths";
 import { cosineSimilarity } from "./similarity";
 import { buildRagSearchTerms, buildRagSearchTermWeights, expandRagQueries, inferCategoriesFromQuery, collectIndexTermTf, shouldUseMultiQuery } from "@/lib/rag-query-expand";
@@ -1527,6 +1528,10 @@ export function formatRagCitation(chunk: RagChunk): string {
   }
 
   const src = cleanSourceName(chunk.metadata.source);
+  const parsed = parseLabPdfFilename(chunk.metadata.source);
+  if (parsed) {
+    return `[J] ${parsed.author} (${parsed.year}) ${parsed.title}${pageStr}`;
+  }
   if (p != null && pageEnd != null && pageEnd !== p) return `${src} (pp. ${p}-${pageEnd})`;
   if (p != null) return `${src} (p. ${p})`;
   return src;

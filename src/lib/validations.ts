@@ -655,6 +655,12 @@ export const projectReferencesPatchSchema = z.object({
 });
 export type ProjectReferencesPatchInput = z.infer<typeof projectReferencesPatchSchema>;
 
+/** POST /api/references?format=true — 批量文件名 → GB/T 7714（避免 GET 逗号拆题名） */
+export const formatReferenceFilenamesSchema = z.object({
+  filenames: z.array(z.string().min(1)).min(1).max(200),
+});
+export type FormatReferenceFilenamesInput = z.infer<typeof formatReferenceFilenamesSchema>;
+
 const analysisResultPatchOpSchema = z.discriminatedUnion("op", [
   z.object({
     op: z.literal("create"),

@@ -7,6 +7,7 @@
 
 import type { BibEntry } from "@/lib/rag";
 import { resolveBibEntry, cleanSourceName } from "@/lib/rag";
+import { parseLabPdfFilename } from "@/lib/lab-pdf-filename";
 
 // ── 清洗 ────────────────────────────────────────────────────────────────────
 
@@ -84,27 +85,21 @@ function hasValidBib(bib: BibEntry["bib"] | null): boolean {
   return hasYear && (hasAuthor || hasJournal);
 }
 
-/** 从文件名中提取中文作者名（兜底方案） */
+function looksLikeFormattedCitation(raw: string): boolean {
+  const t = raw.replace(/^\[\d+\]\s*/, "").trim();
+  if (/\.pdf$/i.test(t)) return false;
+  return /\[[A-Z]\]/.test(t) || /DOI:\s*10\./i.test(t) || /https?:\/\/doi\.org/i.test(t);
+}
+
+/** 从文件名中提取作者名（兜底方案） */
 function extractAuthorFromFilename(filename: string): string {
-  // 文件名格式常见两种：
-  //   "标题_作者.pdf"（作者在末尾）
-  //   "28-2024-董航-油茶壳...研究.pdf"（序号-年份-作者-标题，作者在年份后）
+  const parsed = parseLabPdfFilename(filename);
+  if (parsed) return parsed.author;
   const cleaned = filename.replace(/\.pdf$/i, "");
   const parts = cleaned.split(/[_\-]/).map((p) => p.trim()).filter(Boolean);
   if (parts.length < 2) return "";
-
-  // 优先：年份后的第一个 2-5 字中文名（序号-年份-作者-标题 模式）
-  let afterYear = false;
-  for (const p of parts) {
-    if (/^(19|20)\d{2}$/.test(p)) {
-      afterYear = true;
-      continue;
-    }
-    if (afterYear && /^[一-鿿]{2,5}$/.test(p)) return p;
-  }
-  // 兜底：最后一个 2-5 字中文名（标题_作者 模式）
   for (let i = parts.length - 1; i >= 0; i--) {
-    if (/^[一-鿿]{2,5}$/.test(parts[i])) return parts[i];
+    if (/^[一-鿿]{2,5}$/.test(parts[i] ?? "")) return parts[i] ?? "";
   }
   return "";
 }
@@ -126,7 +121,10 @@ export function formatReference(
   }
 ): string {
   const style = options?.style || "gbt7714";
-  const entry = resolveBibEntry(filename);
+  const stripped = filename.replace(/^\[\d+\]\s*/, "").trim();
+  if (looksLikeFormattedCitation(stripped)) return stripped;
+
+  const entry = resolveBibEntry(filename) ?? resolveBibEntry(stripped);
   const rawBib = entry?.bib;
   const bib = sanitizeBib(rawBib);
   const docTag = entry?.gbTag || "J";
@@ -190,28 +188,34 @@ export function formatReference(
   }
 
   // ── 兜底：从文件名提取 ──
-  const fallbackAuthor = extractAuthorFromFilename(filename);
+  const parsed = parseLabPdfFilename(filename);
+  const fallbackAuthor = parsed?.author || extractAuthorFromFilename(filename);
   const cleanedName = cleanSourceName(filename);
-  const year = filename.match(/(19|20)\d{2}/)?.[0] ?? "";
+  const year = parsed?.year || filename.match(/(19|20)\d{2}/)?.[0] || "";
+  const titlePart = parsed?.title
+    || (() => {
+      let t = cleanedName;
+      if (year) t = t.replace(year, " ");
+      if (fallbackAuthor) t = t.replace(fallbackAuthor, " ");
+      return t.replace(/^\s*\d+\s*/, "").replace(/\s+/g, " ").trim();
+    })();
 
   if (style === "rag") {
     const pageStr = options?.pageStart != null
       ? ` (p. ${options.pageStart}${options.pageEnd && options.pageEnd !== options.pageStart ? `-${options.pageEnd}` : ""})`
       : "";
+    if (fallbackAuthor && titlePart) {
+      return `[${docTag}] ${fallbackAuthor}${year ? ` (${year})` : ""} ${titlePart}${pageStr}`;
+    }
     return `${cleanedName}${pageStr}`;
   }
 
-  // GB/T 7714 兜底：优先「作者. 标题[J], 年份.」，去掉文件名里的序号/年份/作者
-  if (fallbackAuthor) {
-    let titlePart = cleanedName;
-    if (year) titlePart = titlePart.replace(year, " ");
-    titlePart = titlePart.replace(fallbackAuthor, " ");
-    titlePart = titlePart.replace(/^\s*\d+\s*/, "").replace(/\s+/g, " ").trim();
-    if (titlePart) {
-      return `${fallbackAuthor}. ${titlePart}[${docTag}]${year ? `, ${year}` : ""}.`;
-    }
+  // GB/T 7714 兜底：作者. 题名[J]. 年.  （[J]. 带句点，避免 Markdown 把文末 [J] 当链接吃掉）
+  if (fallbackAuthor && titlePart) {
+    return `${fallbackAuthor}. ${titlePart}[${docTag}].${year ? ` ${year}` : ""}.`;
   }
-  return `${cleanedName}[${docTag}]`;
+  return `${cleanedName}[${docTag}].`;
 }
 
+export { parseLabPdfFilename } from "@/lib/lab-pdf-filename";
 export { formatExternalLiteratureHit } from "@/lib/external-literature-format";

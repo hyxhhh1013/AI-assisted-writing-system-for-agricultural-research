@@ -17,7 +17,7 @@ const MECHANISM_FIGURE_RULE = [
   "数据图 generate_chart 只看 qaReport，不要对柱状/折线/热力跑 read_figure(qa)。",
   "若需重画：必须带 replaceImageUrl 指向旧图 URL 就地替换，禁止再追加一张叠在下面；",
   "也可先 remove_figure 删旧图再生成。清多余重复图用 remove_figure。",
-  "结构过线后若用户要更好观感：illustrate_mechanism_figure action=generate，用即梦 Seedream 按结构图出候选（禁止自动插入）；用户选定后再 action=adopt。智谱仅作备选。",
+  "用户说「文生图/即梦」时：Graphviz 只是结构草稿；read_figure(qa) 过线后必须立刻 illustrate_mechanism_figure action=generate，禁止用 /plot 精修代替、禁止只给 1/2/3 收尾。候选禁止自动插入，人选后再 adopt。智谱仅作备选。",
 ].join("");
 
 /**

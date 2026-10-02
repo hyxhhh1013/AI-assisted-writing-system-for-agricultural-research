@@ -8,7 +8,7 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-10-01（文献表 vs 正文引用对齐；导出剪未引用）  
+> **最后更新**：2026-10-02（本地 PDF 参考文献 GB/T 文件名兜底）  
 > **实时 status 只看 §1 Phase 13 / Phase 14 / Phase 16 / Phase 17 / Phase 18 与 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
@@ -219,6 +219,7 @@
 | **FIG-MECH-QA-001** | **机理图 MechanismSpec + 边条件 + 确定性质检 + 双布局候选** | FIG-QA-008 | 1.5d | **done** | 2026-08-23；`contracts/mechanism-spec.ts` + `mechanism-qa.ts`；compiler/patches；`draft_mechanism_figure` 热路径；不接文生图 |
 | **FIG-MECH-QA-002** | **/plot 流程图/多面板走同一套 Spec 修补并回放画布** | FIG-MECH-QA-001 | 0.5d | **done** | 2026-08-23；`mechanism-spec-run.ts`；flow-diagram / mechanism-panel 回传 qaReport；画布同步 |
 | **FIG-MECH-ILLUSTRATE** | **即梦 Seedream 观感层 + 智谱备选 + 人选后插入** | FIG-MECH-QA-001 | 1d | **done** | 2026-10-01；`illustrate_mechanism_figure`；`POST /api/illustrate-mechanism`；结构 Graphviz 仍为主渲染器 |
+| **FIG-MECH-ILLUSTRATE-HITL** | **用户要文生图时 QA 过线必须排队 generate** | FIG-MECH-ILLUSTRATE | 0.3d | **done** | 2026-10-01；线上会话只 Graphviz 循环未调用 illustrate；过线注入 + 跳过 FigureBrief |
 | — | 任务单细节 | — | — | — | [`plans/FIG-QA-quality-system.md`](./plans/FIG-QA-quality-system.md) |
 | **Phase 14 — 写作质量系统（WRITE-QA：编译器 + 证据绑定 + 确定性质检）** |
 | **WRITE-QA-000** | **规划：诊断 + 质量合同 + SectionSpec 架构** | — | 0.5d | **done** | 2026-08-22；[`plans/WRITE-QA-quality-system.md`](./plans/WRITE-QA-quality-system.md) |
@@ -1435,6 +1436,7 @@ src/app/api/（13）                       src/lib/（6）
 | 2026-10-01 | AGENT-TRACE | AI | toolTrace 补 reason/via/ms；Admin 会话页展示失败轨迹；终态与 persist 失败打 agent-session JSON 到 PM2。 |
 | 2026-10-01 | ADMIN-047～049 | AI | 健康页 heap/RSS/Chromium/PM2；会话 intentKind+失败筛选；文献 indexStatus SQL 近似+重索引进度；Insights 时间窗与失败工具榜。 |
 | 2026-10-01 | AGENT-LOOP-1 | AI | 线上 cmuntp1ls：用户回 1 被当成空意图+写完强制 validate，执行摘要回放旧工具。数字选项还原、跟聊清空摘要、起草写完不再强制引用自查。 |
+| 2026-10-02 | CITE-LAB-PDF | AI | 本地知识库 PDF 文件名进参考文献表变成「8 2021 罗伟 题名」。解析序号-年-作者-题名成 GB/T；批量格式化改 POST JSON。 |
 | 2026-09-30 | RAG-CAT-ALIAS | AI | `search_knowledge(category=热解)` 0 命中：别名映射到 `热化学`；索引改走 `GRAINSCRIPT_DATA_ROOT`。 |
 
 ---

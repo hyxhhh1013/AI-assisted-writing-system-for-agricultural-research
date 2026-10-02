@@ -23,9 +23,11 @@ describe("references service", () => {
 
     const result = await formatFilenames(["a.pdf"]);
     expect(result).toEqual({ "a.pdf": "[1] Author. Title[J]. 2020." });
-    expect(fetch).toHaveBeenCalledWith(
-      "/api/references?format=true&filenames=a.pdf",
-    );
+    expect(fetch).toHaveBeenCalledWith("/api/references?format=true", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filenames: ["a.pdf"] }),
+    });
   });
 
   it("listByProject throws on failed response", async () => {

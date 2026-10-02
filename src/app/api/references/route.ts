@@ -4,6 +4,8 @@ import prisma from "@/lib/prisma";
 import { ensureBibMapLoaded } from "@/lib/rag";
 import { formatReference } from "@/lib/ref-format";
 import { getErrorMessage } from "@/lib/error-utils";
+import { validateBody } from "@/lib/api-validate";
+import { formatReferenceFilenamesSchema } from "@/lib/validations";
 
 /**
  * 引用-文献映射管理
@@ -12,7 +14,10 @@ import { getErrorMessage } from "@/lib/error-utils";
  *   返回项目的所有引用-文献映射
  *
  * GET /api/references?format=true&filenames=a,b,c
- *   批量格式化文件名 → GB/T 7714 引用
+ *   批量格式化（题名含逗号时可能被拆坏；优先 POST ?format=true）
+ *
+ * POST /api/references?format=true
+ *   Body: { filenames: string[] } → GB/T 7714
  *
  * POST /api/references
  *   Body: { projectId, refIndex, sourceName, category, citation }
@@ -70,6 +75,20 @@ function formatFilenameToCitation(filename: string): string {
 export async function POST(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
+    if (searchParams.get("format") === "true") {
+      const { data, errorResponse } = await validateBody(
+        formatReferenceFilenamesSchema,
+        await req.json(),
+      );
+      if (errorResponse) return errorResponse;
+      await ensureBibMapLoaded();
+      const formatted: Record<string, string> = {};
+      for (const filename of data.filenames) {
+        formatted[filename] = formatReference(filename, { style: "gbt7714" });
+      }
+      return NextResponse.json({ formatted });
+    }
+
     const isBatch = searchParams.get("batch") === "true";
 
     if (isBatch) {

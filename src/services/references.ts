@@ -20,10 +20,11 @@ export type {
 /** 批量将文件名格式化为 GB/T 7714 引文字符串 */
 export async function formatFilenames(filenames: string[]): Promise<Record<string, string>> {
   if (filenames.length === 0) return {};
-  const param = filenames.join(",");
-  const res = await fetch(
-    `/api/references?format=true&filenames=${encodeURIComponent(param)}`,
-  );
+  const res = await fetch("/api/references?format=true", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filenames }),
+  });
   if (!res.ok) return {};
   const data = (await res.json()) as FormattedRefsResponse;
   return data.formatted ?? {};

@@ -147,6 +147,19 @@ describe("resolveAgentContinueHint", () => {
     expect(hint.eyebrow).not.toContain("还没执行");
   });
 
+  it("does not treat a diagnose reply that refuses blueprint as 只宣布了", () => {
+    const text =
+      "我从未表示要生成写作蓝图。项目已有写作蓝图，因此我不会调用 generate_writing_blueprint。"
+      + "\n回「1 / 2 / 3」即可。";
+    const hint = resolveAgentContinueHint({
+      lastAssistantText: text,
+      lastSummaryText: text,
+      suggestedActions: ["写综述正文并保存到当前项目"],
+    });
+    expect(hint.eyebrow).not.toContain("还没执行");
+    expect(hint.title).not.toBe("生成写作蓝图");
+  });
+
   it("uses write tip when nothing else is pending", () => {
     const hint = resolveAgentContinueHint({
       suggestedActions: ["写结论并保存到当前项目"],

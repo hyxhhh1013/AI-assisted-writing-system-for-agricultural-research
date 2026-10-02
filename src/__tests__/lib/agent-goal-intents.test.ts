@@ -316,6 +316,20 @@ describe("goal-intents", () => {
       [ok("inspect_project")],
     );
     expect(after.ok).toBe(true);
+    expect(
+      checkDiagnoseInspectGate(
+        "看看项目卡在哪，建议下一步",
+        "generate_writing_blueprint",
+        [ok("inspect_project")],
+      ).ok,
+    ).toBe(false);
+    expect(
+      checkDiagnoseInspectGate(
+        "重新生成蓝图",
+        "generate_writing_blueprint",
+        [ok("inspect_project")],
+      ).ok,
+    ).toBe(true);
   });
 
   it("draft blocks search even after context read", () => {
