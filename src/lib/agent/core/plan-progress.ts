@@ -160,7 +160,7 @@ const ANNOUNCED_TOOLS: Array<{ re: RegExp; tool: string; label: string }> = [
   { re: /写作蓝图|generate_writing_blueprint/i, tool: "generate_writing_blueprint", label: "生成写作蓝图" },
   { re: /生成大纲|generate_outline/i, tool: "generate_outline", label: "生成大纲" },
   {
-    re: /撰写(?:引言|章节|本节)|写引言(?:并|章节)|write_section|对齐蓝图要点/i,
+    re: /立刻写|马上写|现在写|撰写(?:引言|章节|本节)|写引言(?:并|章节)|write_section|对齐蓝图要点/i,
     tool: "write_section",
     label: "撰写章节",
   },
@@ -205,11 +205,14 @@ export function extractUserChoicePrompt(text: string | null | undefined): string
     /回复\s*[1１]\s*[\/、,，或]\s*2/.test(body)
     || /回[「""']?\s*[1１]\s*[\/、,，或 ]+\s*2/.test(body)
     || /下一步请选/.test(body)
-    || /请回复\s*[1１]/.test(body);
+    || /请回复\s*[1１]/.test(body)
+    || /请回一个字/.test(body)
+    || /回[「""'][1１][」""']\s*或/.test(body)
+    || /\*\*[「""'][1１][」""']\*\*\s*[=＝]/.test(body);
   if (!asks) return null;
 
   const head = body.search(
-    /下一步请选|请回复\s*[1１]|回复\s*[1１]\s*[\/、,，或]\s*2|回[「""']?\s*[1１]\s*[\/、,，或 ]+\s*2/,
+    /下一步请选|请回一个字|请回复\s*[1１]|回复\s*[1１]\s*[\/、,，或]\s*2|回[「""']?\s*[1１]\s*[\/、,，或 ]+\s*2|回[「""'][1１][」""']\s*或|\*\*[「""'][1１][」""']\*\*\s*[=＝]/,
   );
   if (head < 0) return null;
   const lineStart = body.lastIndexOf("\n", head);
@@ -234,9 +237,10 @@ export function thoughtAnnouncesUnfinishedTool(
 ): { tool: string; label: string } | null {
   const text = content?.trim() ?? "";
   if (!text || isPlanLeftoverSpeech(text)) return null;
-  if (extractUserChoicePrompt(text)) return null;
+  const askingChoice = Boolean(extractUserChoicePrompt(text));
   for (const item of ANNOUNCED_TOOLS) {
     if (!hasPositiveAnnouncement(text, item.re)) continue;
+    if (askingChoice && item.tool !== "write_section") continue;
     if (observations.some((o) => o.tool === item.tool && o.success)) continue;
     return { tool: item.tool, label: item.label };
   }

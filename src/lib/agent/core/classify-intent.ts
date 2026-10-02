@@ -16,6 +16,7 @@ import {
   isDiagnoseStyleGoal,
   isEvidenceUnboundRepairGoal,
   isLiteratureHuntGoal,
+  isWeaveExistingCitationsGoal,
   isReferenceClassificationGoal,
   isReviewRequestGoal,
   isReviewWritingGoal,
@@ -65,6 +66,7 @@ export function classifyIntentFromRegex(
   if (isAbstractFinishGoal(goal)) return "abstract_finish";
   if (isReviewRequestGoal(goal)) return "review_request";
   if (isEvidenceUnboundRepairGoal(goal)) return "draft";
+  if (isWeaveExistingCitationsGoal(goal)) return "review_write";
   if (isLiteratureHuntGoal(goal)) return "literature";
   if (isReviewWritingGoal(goal)) return "review_write";
   if (isSectionDraftGoal(goal)) return "draft";
@@ -84,6 +86,14 @@ export function classifyIntent(input: ClassifyIntentInput): IntentClassification
       fromGoal,
       fromObs,
     });
+  }
+
+  if (
+    previousKind === "diagnose"
+    && FOLLOW_UP_RE.test(goal)
+    && !isDiagnoseStyleGoal(goal)
+  ) {
+    return { kind: "review_write", source: "regex" };
   }
 
   if (previousKind && looksLikeFollowUpUtterance(goal)) {

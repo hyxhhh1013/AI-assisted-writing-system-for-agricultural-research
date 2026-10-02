@@ -1,6 +1,6 @@
 # Agent 编排（写作助手）
 
-> L3 域文档 · 更新：2026-10-02（诊断勿自动覆盖蓝图；「回 1/2/3」才出选择题）  
+> L3 域文档 · 更新：2026-10-02（补引用勿检索；选项解析勿把 3.2 当 1/2/3）  
 > 契约唯一权威源：`src/contracts/agent.ts`（SSE 事件）、`src/contracts/agent-session.ts`（会话消息）、`src/contracts/agent-intent.ts`（`IntentKind`）。
 
 ## 概览
@@ -201,6 +201,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **文献表 ≫ 正文引用（2026-10-01）**：`evaluateCitationGate` 增加 `unusedCount` / `unusedIndexes`。编号无越界但表 25 / 正文 11 时 **不得** 说「引用已符合要求」。`validate_citations` / `inspect_project` 明示未引用编号，问用户补引或 `remove_references` / 工作台「清理未引用文献」。**导出手稿**（PDF/Word/Markdown/`export_manuscript_markdown`）走 `toCitedOnlyManuscript` 只保留正文出现过的条目并重排 [n]；**不自动删项目文献池**。未引用不阻断 `exportReady`（中间稿仍可导出）。`reflect.validateIssueCount` 仍不算 unused 为硬错，避免写节后卡在改书目。
 - **软可疑不再劫持「继续」（2026-10-01）**：生产会话 `cmuntp1ls000m126h08fhzsn6` 写完 3.4 后每次「继续」都去 refine 同一批缺摘要语义可疑项，写不出 3.5。`analyzeReflection` 只对硬检未过推 refine；跟聊「继续」且有 `nextWriteHint` 时即使快照 `intentKind` 为空也注入写下一子节。
 - **跟聊「1」又变成引用核查（2026-10-01）**：同一会话后期用户点 1/2/3 只把 goal 存成 `1`，快照 `intentKind` 空，写完子节仍被 reflect 强制 `validate_citations`，收尾标题变成核查报告，执行摘要还回放近 20 条旧工具。处理：数字回复还原成上轮选项；跟聊清空 `toolSummaries`；起草/`ap_full` 写完不再强制引用自查（越界仍由导出硬检拦）。
+- **回「1」被解析成子节号 3.2（2026-10-02）**：`cmuntp1ls` 用户选补引用，收尾却跟计划里的「检索导入」。选项解析把「织入 3.2 合成气」拆成选项 3；`「1」=` 列表解析不到。处理：选项号后禁跟数字；识别 `「1」=`；「补引用」禁 search/import；诊断后「继续」不再 inherit inspect。
 - **写章节缺文献照常写（2026-08-08 / RULES-01 2026-08-15）**：条文现只写在 `AGENT_RULES` id=`draft-missing-refs`；`buildAgentSystemPrompt` 与 `draftGoalNudge` 同读 `ruleText`。跟聊 goal 失真（「A/继续」）的写章节纪律由 `snapshot.intentKind` 继承（INTENT-01/02）。`checkDraftSearchGate` / 收尾兜底只认 `intentKind === "draft"`。
 
 ## 断点续跑 / 门禁旁路修复（2026-08-09）

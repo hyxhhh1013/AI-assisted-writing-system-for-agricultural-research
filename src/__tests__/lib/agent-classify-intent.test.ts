@@ -14,6 +14,13 @@ describe("classifyIntent", () => {
     expect(result).toEqual({ kind: "draft", source: "inherit" });
   });
 
+  it("does not inherit diagnose on 继续", () => {
+    expect(classifyIntent({ goal: "继续", previousKind: "diagnose" })).toEqual({
+      kind: "review_write",
+      source: "regex",
+    });
+  });
+
   it("inherits on 继续 / 好 / 开始吧", () => {
     expect(classifyIntent({ goal: "继续", previousKind: "citation" }).source).toBe(
       "inherit",
@@ -60,6 +67,11 @@ describe("looksLikeFollowUpUtterance", () => {
 describe("classifyIntentFromRegex", () => {
   it("maps 写引言 to draft", () => {
     expect(classifyIntentFromRegex("写引言")).toBe("draft");
+  });
+
+  it("maps 优先补引用 to review_write not literature", () => {
+    expect(classifyIntentFromRegex("优先补引用")).toBe("review_write");
+    expect(classifyIntentFromRegex("把现有未引用文献织入正文")).toBe("review_write");
   });
 
   it("maps evidence_unbound 修补 to draft not literature/review_write", () => {

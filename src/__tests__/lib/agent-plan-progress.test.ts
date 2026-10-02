@@ -191,6 +191,15 @@ describe("plan-progress", () => {
     const prompt = extractUserChoicePrompt(deny);
     expect(prompt).toMatch(/1\s*\/\s*2/);
   });
+
+  it("still announces write_section when 立刻写 sits next to a 1/2/3 prompt", () => {
+    const text =
+      "建议下一步：1. 优先补引用 2. 继续写 3.3\n回「1 / 2 / 3」即可。\n理解，立刻写 3.3 碳纳米材料子节。";
+    const hit = thoughtAnnouncesUnfinishedTool(text, [
+      { tool: "inspect_project", success: true },
+    ]);
+    expect(hit?.tool).toBe("write_section");
+  });
 });
 
 describe("routeAfterAgent plan continue", () => {

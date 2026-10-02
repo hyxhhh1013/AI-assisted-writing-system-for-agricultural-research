@@ -4,6 +4,7 @@ import {
   checkCitationCheckGate,
   checkCitationSpinGate,
   checkCitationSideTripGate,
+  checkCiteExistingGate,
   checkDiagnoseInspectGate,
   checkDraftSearchGate,
   checkOutlineSearchGate,
@@ -48,6 +49,7 @@ describe("goal-intents", () => {
     expect(isSectionDraftGoal("写引言")).toBe(true);
     expect(isSectionDraftGoal("检索并导入 1 篇文献")).toBe(false);
     expect(isReviewWritingGoal("写一篇生物炭综述")).toBe(true);
+    expect(isReviewWritingGoal("优先补引用")).toBe(true);
     expect(isReviewWritingGoal("修补已写的综述正文（evidence_unbound）：勿硬挂")).toBe(false);
     expect(isSectionDraftGoal("修补已写的综述正文（evidence_unbound）：未绑到文献")).toBe(true);
   });
@@ -95,6 +97,14 @@ describe("goal-intents", () => {
     expect(shouldSkipPlanner("检索并导入文献")).toBe(false);
     expect(shouldSkipPlanner("garbage", [], "draft")).toBe(true);
     expect(shouldSkipPlanner("写引言", [], "literature")).toBe(false);
+    expect(shouldSkipPlanner("优先补引用")).toBe(true);
+  });
+
+  it("blocks search/import when weaving existing citations", () => {
+    expect(checkCiteExistingGate("优先补引用", "search_external").ok).toBe(false);
+    expect(checkCiteExistingGate("优先补引用", "import_reference").ok).toBe(false);
+    expect(checkCiteExistingGate("优先补引用", "write_section").ok).toBe(true);
+    expect(checkCiteExistingGate("外部新增文献补到 40 篇", "search_external").ok).toBe(true);
   });
 
   it("detects citation check goals", () => {

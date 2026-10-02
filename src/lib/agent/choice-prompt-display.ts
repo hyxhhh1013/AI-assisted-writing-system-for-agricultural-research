@@ -9,13 +9,18 @@ export function normalizeChoiceMarkdown(raw: string): string {
     .replace(/\*\*([^*]+)\*\*/g, (_, inner: string) => `**${inner.trim()}**`);
 }
 
+/** 选项序号后不能紧跟数字，避免把「3.2 合成气」拆成选项 3 */
+const OPTION_NUM = String.raw`\d{1,2}[.、．](?!\d)`;
+
 /** 模型常把「1. …； 2. …」写在同一行。拆开后 Markdown 才能排成列表。 */
 export function formatChoicePrompt(raw: string): string {
   const text = normalizeChoiceMarkdown(raw.trim());
   if (!text) return "请确认一下再继续。";
+  const splitBeforeOpt = new RegExp(String.raw`[；;]\s*(?=${OPTION_NUM}\s*)`, "g");
+  const splitSpaceBeforeOpt = new RegExp(String.raw`(?<=\S)\s+(?=${OPTION_NUM}\s*)`, "g");
   return text
-    .replace(/[；;]\s*(?=\d{1,2}[.、．]\s*)/g, "\n")
-    .replace(/(?<=\S)\s+(?=\d{1,2}[.、．]\s*)/g, "\n")
+    .replace(splitBeforeOpt, "\n")
+    .replace(splitSpaceBeforeOpt, "\n")
     .replace(/([。！？])\s*(回复\s*[1１])/g, "$1\n\n$2");
 }
 
@@ -26,13 +31,12 @@ export interface ParsedChoicePrompt {
 }
 
 /** 把「下一步请选 + 编号选项」拆成结构化 UI，不依赖 Markdown 解析 */
-export function parseChoicePrompt(raw: string): ParsedChoicePrompt | null {
-  const text = formatChoicePrompt(raw);
-  const firstOpt = text.search(/\d{1,2}[.、．]\s*/);
+function parseDottedChoicePrompt(text: string): ParsedChoicePrompt | null {
+  const firstOpt = text.search(new RegExp(OPTION_NUM + String.raw`\s*`));
   if (firstOpt < 0) return null;
   const lead = text.slice(0, firstOpt).replace(/\*\*/g, "").trim();
   const rest = text.slice(firstOpt);
-  const optRe = /(?:^|\n)(\d{1,2})[.、．]\s*([^\n]+)/g;
+  const optRe = new RegExp(String.raw`(?:^|\n)(\d{1,2})[.、．](?!\d)\s*([^\n]+)`, "g");
   const options: string[] = [];
   let m: RegExpExecArray | null;
   let lastEnd = 0;
@@ -52,6 +56,37 @@ export function parseChoicePrompt(raw: string): ParsedChoicePrompt | null {
     .replace(/\*\*/g, "")
     .trim();
   return { lead, options, tail };
+}
+
+/** `- **「1」** = 补引用` 这种不是 `1.` 列表 */
+function parseQuotedChoicePrompt(raw: string): ParsedChoicePrompt | null {
+  const text = normalizeChoiceMarkdown(raw);
+  const optRe =
+    /(?:^|\n)\s*(?:[-*]\s*)?(?:\*\*)?[「"']([1-9])(?:[」"']|\s*\+[^」"'\n]*[」"'])(?:\*\*)?\s*[=＝:：]\s*(.+)/g;
+  const byDigit = new Map<number, string>();
+  let m: RegExpExecArray | null;
+  while ((m = optRe.exec(text)) !== null) {
+    const n = Number(m[1]);
+    const line = (m[2] ?? "")
+      .replace(/\*\*/g, "")
+      .replace(/[。．]\s*$/, "")
+      .trim();
+    if (n >= 1 && line) byDigit.set(n, line);
+  }
+  if (byDigit.size < 2) return null;
+  const max = Math.max(...byDigit.keys());
+  const options: string[] = [];
+  for (let i = 1; i <= max; i++) {
+    options.push(byDigit.get(i) ?? "");
+  }
+  if (options.filter(Boolean).length < 2) return null;
+  return { lead: "", options, tail: "" };
+}
+
+/** 把「下一步请选 + 编号选项」拆成结构化 UI，不依赖 Markdown 解析 */
+export function parseChoicePrompt(raw: string): ParsedChoicePrompt | null {
+  const text = formatChoicePrompt(raw);
+  return parseDottedChoicePrompt(text) ?? parseQuotedChoicePrompt(raw);
 }
 
 const FULLWIDTH_DIGIT: Record<string, string> = {
@@ -92,7 +127,7 @@ export function expandChoiceDigitGoal(
     const { body } = splitExecSummary(text);
     const parsed = parseChoicePrompt(body);
     const option = parsed?.options[digit - 1]?.trim();
-    if (option) return option;
+    if (option && !/^\d(\s|$)/.test(option)) return option;
   }
   return goal;
 }

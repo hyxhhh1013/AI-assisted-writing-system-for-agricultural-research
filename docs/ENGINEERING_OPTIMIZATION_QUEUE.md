@@ -8,7 +8,7 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-10-02（本地 PDF 参考文献 GB/T 文件名兜底）  
+> **最后更新**：2026-10-02（回 1 被 3.2 子节号带偏成检索导入）  
 > **实时 status 只看 §1 Phase 13 / Phase 14 / Phase 16 / Phase 17 / Phase 18 与 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
@@ -1437,6 +1437,7 @@ src/app/api/（13）                       src/lib/（6）
 | 2026-10-01 | ADMIN-047～049 | AI | 健康页 heap/RSS/Chromium/PM2；会话 intentKind+失败筛选；文献 indexStatus SQL 近似+重索引进度；Insights 时间窗与失败工具榜。 |
 | 2026-10-01 | AGENT-LOOP-1 | AI | 线上 cmuntp1ls：用户回 1 被当成空意图+写完强制 validate，执行摘要回放旧工具。数字选项还原、跟聊清空摘要、起草写完不再强制引用自查。 |
 | 2026-10-02 | CITE-LAB-PDF | AI | 本地知识库 PDF 文件名进参考文献表变成「8 2021 罗伟 题名」。解析序号-年-作者-题名成 GB/T；批量格式化改 POST JSON。 |
+| 2026-10-02 | AGENT-CITE-LOOP | AI | cmuntp1ls：回「1」被 3.2 子节号解析错，计划残留检索；补引用后仍 search/import。选项号后禁跟数字；禁织入时检索；诊断后继续不再 inspect。 |
 | 2026-09-30 | RAG-CAT-ALIAS | AI | `search_knowledge(category=热解)` 0 命中：别名映射到 `热化学`；索引改走 `GRAINSCRIPT_DATA_ROOT`。 |
 
 ---

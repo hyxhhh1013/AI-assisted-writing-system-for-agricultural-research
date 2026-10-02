@@ -141,9 +141,11 @@ export const readSectionTool: ToolDefinition = {
         hint: hints.join("；") || undefined,
       },
       summary:
-        truncated
-          ? `已读取 ${section}（全文约 ${chars} 字，本窗 ${start}-${end}/${totalLen}${hints.length ? `；${hints[0]}` : ""}）`
-          : `已读取 ${section}（约 ${chars} 字，完整）`,
+        !truncated
+          ? `已读取 ${section}（约 ${chars} 字，完整）`
+          : !hasMoreAfter
+            ? `已读取 ${section}（全文约 ${chars} 字，本窗 ${start}-${end}/${totalLen}，已到文末，勿再读同一窗口）`
+            : `已读取 ${section}（全文约 ${chars} 字，本窗 ${start}-${end}/${totalLen}${hints.length ? `；${hints[0]}` : ""}）`,
     };
   },
 };

@@ -21,6 +21,7 @@ import {
   checkCitationSideTripGate,
   checkClassificationRetrieveGate,
   checkContinueWriteSpinGate,
+  checkCiteExistingGate,
   checkDiagnoseInspectGate,
   checkDraftSearchGate,
   checkOutlineSearchGate,
@@ -104,6 +105,7 @@ export const intentGate: PreToolGate = ({ state, tool, params, recentObservation
   const thisRun = observationsThisRun(recentObservations, state.intentObsOffset);
   const gates: Array<() => { ok: boolean; error?: string }> = [
     () => checkContinueWriteSpinGate(state.goal, tool.name, thisRun, state.intentKind),
+    () => checkCiteExistingGate(state.goal, tool.name),
     () => checkDiagnoseInspectGate(state.goal, tool.name, recentObservations, state.intentKind),
     () => checkDraftSearchGate(state.goal, tool.name, recentObservations, state.intentKind, params),
     () => checkOutlineSearchGate(state.goal, tool.name),

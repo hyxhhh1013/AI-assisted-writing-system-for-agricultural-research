@@ -76,8 +76,17 @@ export function isDiagnoseStyleGoal(goal: string): boolean {
   );
 }
 
+/** 把已有未引用文献织入正文，不是再检索导入 */
+export function isWeaveExistingCitationsGoal(goal: string): boolean {
+  if (/外部(新增|补)|仍要(检索|导入)|补到\s*\d+\s*篇|目标总篇数/.test(goal)) {
+    return false;
+  }
+  return /补引用|织入(正文|对应子节|未引用)|现有未引用|不导入新文献/.test(goal);
+}
+
 /** 明确要求检索/导入文献 */
 export function isLiteratureHuntGoal(goal: string): boolean {
+  if (isWeaveExistingCitationsGoal(goal)) return false;
   return /检索|搜索|搜一篇|搜几篇|导入.*文献|找.*文献|search.*paper|文献库|导入\s*\d|补充.*文献|找几篇|备齐.*文献|扩充.*文献/.test(
     goal,
   );
@@ -153,6 +162,7 @@ export function isEvidenceUnboundRepairGoal(goal: string): boolean {
 
 export function isReviewWritingGoal(goal: string): boolean {
   if (isEvidenceUnboundRepairGoal(goal)) return false;
+  if (isWeaveExistingCitationsGoal(goal)) return true;
   return /综述|literature\s*review|literature_body|系统综述|文献综述/i.test(goal);
 }
 
@@ -317,6 +327,7 @@ export function shouldSkipPlanner(
   observations: readonly ToolObservation[] = [],
   intentKind?: IntentKind | null,
 ): boolean {
+  if (isWeaveExistingCitationsGoal(goal)) return true;
   return matchesIntent(
     intentKind,
     SKIP_PLANNER_KINDS,
@@ -401,6 +412,36 @@ export function checkDiagnoseInspectGate(
     };
   }
   return { ok: true };
+}
+
+/** 补引用：禁止再检索/导入，逼写回正文 */
+export function checkCiteExistingGate(
+  goal: string,
+  toolName: string,
+): GoalIntentGateResult {
+  if (!isWeaveExistingCitationsGoal(goal)) return { ok: true };
+  if (
+    toolName !== "search_external"
+    && toolName !== "search_knowledge"
+    && toolName !== "import_reference"
+  ) {
+    return { ok: true };
+  }
+  return {
+    ok: false,
+    error:
+      "用户要补引用（织入已有未引用文献），禁止再检索/导入。"
+      + "请 write_section 或 refine_content 把未引用编号写进对应子节。",
+  };
+}
+
+export function citeExistingNudge(): string {
+  return (
+    "【系统】本轮是补引用：把项目里已有、正文未引用的文献织入对应子节。"
+    + "禁止 search_* / import_reference，也不要再问要不要外部新增。"
+    + "读一次 literature_body 后立刻 write_section(..., subsectionTitle=缺口子节) 写回。"
+    + "窗口已到文末就不要再 read_section。"
+  );
 }
 
 /**
@@ -546,8 +587,8 @@ export function checkContinueWriteSpinGate(
   if (
     !matchesIntent(
       intentKind,
-      ["draft", "review_write"],
-      () => isSectionDraftGoal(goal) || isReviewWritingGoal(goal),
+      ["draft", "review_write", "diagnose"],
+      () => isSectionDraftGoal(goal) || isReviewWritingGoal(goal) || isDiagnoseStyleGoal(goal),
     )
   ) {
     return { ok: true };
@@ -1009,6 +1050,7 @@ export function nudgeForKind(
       return literatureHuntNudge(goal);
     case "draft":
     case "review_write":
+      if (isWeaveExistingCitationsGoal(goal)) return citeExistingNudge();
       return draftGoalNudge(goal, kind);
     default:
       return null;
@@ -1022,12 +1064,16 @@ export function mergeFollowUpGoalHint(
   intentKind?: IntentKind | null,
   nextWrite?: { sectionKey: string; subsectionPath: string } | null,
 ): string | null {
+  if (isWeaveExistingCitationsGoal(goal)) {
+    return citeExistingNudge();
+  }
   if (
     isShortContinueGoal(goal)
     && !isCitationApplyGoal(goal, observations)
     && (
       intentKind === "draft"
       || intentKind === "review_write"
+      || intentKind === "diagnose"
       || (intentKind == null && Boolean(nextWrite))
     )
   ) {
@@ -1070,6 +1116,9 @@ export function mergeGoalWithIntentHint(
   goal: string,
   intentKind?: IntentKind | null,
 ): string {
+  if (isWeaveExistingCitationsGoal(goal)) {
+    return `${goal}\n\n${citeExistingNudge()}`;
+  }
   if (intentKind !== undefined) {
     const hint =
       nudgeForKind(intentKind, goal, [])
