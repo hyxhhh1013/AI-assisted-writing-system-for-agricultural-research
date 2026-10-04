@@ -321,7 +321,7 @@
 | W3-AP-QNEXT-04 | ingest 可恢复提示；inspect/简报列出 dataClaims | — | 0.5d | **done** | 2026-09-30；附件失败文案 + inspect `claimSamples` + 简报 0 条声明提示 |
 | W3-AP-QNEXT-UX | Agent 页内切节（不必去章节结构 Tab） | QNEXT-01 | 0.5d | **done** | 2026-09-30；编辑器标题下拉；写回跟节不切 Tab；续跑条/收口灯/已写回可 peek |
 | W3-AP-QNEXT-05 | 门禁审计：只删已有 eval/vitest 证明的误拦 | QNEXT-01 | 1d | **blocked** | 板块 5；无失败用例不开；禁止新 `isXxxGoal` |
-| W3-AP-QNEXT-06 | 按阶段露出工具技能包 | QNEXT-05 | 2d | **blocked** | 板块 6；须先有稳定「选错合法工具」评测 |
+| W3-AP-QNEXT-06 | 按阶段露出工具技能包 | QNEXT-05 | 2d | **blocked** | 板块 6；须先有稳定「选错合法工具」评测。**2026-10-04 由 Phase 20 W3-AP-PHASE-03～12 接手**（影子数据代替评测前置） |
 | W3-AP-QNEXT-07 | 写节 Refiner/Verifier 可关策略 + golden A/B | QNEXT-02 | 1d | **blocked** | 板块 7；L0–L4 回退则不准合；不解冻旧扩写 |
 | **Phase 19 — 文献过目与大纲对照（挂单，不挡写稿）** |
 | **W3-AP-HITL-LIT** | **主轴：导入确认能判断取舍；大纲能对照已导入文献** | HITL-STEER | 1w | **done** | 2026-10-01；LIT-01～03 + SEARCH-UX。不改 LangGraph |
@@ -332,6 +332,33 @@
 | W3-AP-LIT-RANK | **本地库按篇召回 + 相关度；禁止换词连搜** | LIT-LOCAL | 0.3d | **done** | 2026-10-02；`knowledge-search-rank` + merge last-search + repeat gate |
 | **W3-AP-CITE-ATTR** | **错引硬门：句子必须对上该篇；对不上禁导出** | W3-AP-CITE-GROUND | 0.5d | **done** | 2026-10-02；集合 IDF + PDF 段落补语料；validate/export/Word/PDF |
 | — | 任务单细节 | — | — | — | [`plans/W3-AP-QUALITY-NEXT.md`](./plans/W3-AP-QUALITY-NEXT.md) |
+| **Phase 20 — Agent 阶段制（代码定阶段、按阶段给工具、撞墙由代码接手）** |
+| **W3-AP-PHASE** | **主轴：先影子后生效、每阶段独立开关；旧门禁证明不可达才删** | PHASE-00 | 9w | **todo** | 2026-10-04 规划；D1–D6 已拍板（蓝图并入大纲；综述可检索、研究型不可；意图明确才切阶段；影子 ≥30 轮且误拦 <5%；墙 3/6/6/2；缓存失效可接受）。吸收 QNEXT-05/06。不换 LangGraph |
+| W3-AP-PHASE-00 | 撞墙出口 `wall-policy` + 出图重画上限 3 + harvest 转圈扫描 | — | 0.5d | **done** | 2026-10-04；= WALL-01；待部署后验收「选 1 不再重画」 |
+| W3-AP-PHASE-01 | harvest `--json` / `--compare` / `--since` + 新病码 | 00 | 0.5d | todo | 只动脚本 |
+| W3-AP-PHASE-02 | `resolveAgentPhase` 单一来源（4 处「下一步」合一） | — | 1.5d | todo | 先写特征测试锁现状；不改行为 |
+| W3-AP-PHASE-03 | `PHASE_TOOLSETS` 阶段工具集数据表 | 02 | 0.5d | todo | 只定义不使用；注册表覆盖单测 |
+| W3-AP-PHASE-04 | 影子模式：轨迹 `via=phase-shadow` | 01, 03 | 1d | todo | `AGENT_PHASE_MODE=shadow`；不拦 |
+| W3-AP-PHASE-05 | 状态卡通道（替换式，不进 messages） | 02 | 1d | todo | `AGENT_PHASE_CARD`；只新增 |
+| W3-AP-PHASE-06a | 催促迁移 1：出图 / 插入回看 / 文生图 | 05 | 1d | todo | `turnSignals` |
+| W3-AP-PHASE-06b | 催促迁移 2：计划 / 意图 / 宣布 / 熔断 | 06a | 1d | todo | 不改停止判断 |
+| W3-AP-PHASE-07 | 决策点：影子数据评审 | 04 ≥2w | 0.5d | todo | **D4 门槛**：文献 ≥30 轮、误拦 <5%、无阶段算错；达不到不开 08 |
+| W3-AP-PHASE-08 | 文献阶段 enforce + 跨阶段临时切换 | 07, WALL-R | 1.5d | todo | `AGENT_PHASE_ENFORCE=literature` |
+| W3-AP-PHASE-09 | 文献小步 + 删不可达门禁 | 08 ≥1w | 1d | todo | 删 KnowledgeFirst / KnowledgeRepeat |
+| W3-AP-PHASE-10 | 起草阶段 enforce + 收尾 | 09 | 2d | todo | 删 DraftSearch / ContinueWriteSpin / ReadBeforeWrite |
+| W3-AP-PHASE-11 | 引用阶段 enforce + 收尾 | 10 | 1.5d | todo | 删 CiteExisting / SideTrip / CitationCheck / Spin |
+| W3-AP-PHASE-12 | 摘要 / 审查 / 诊断阶段 enforce + 收尾 | 11 | 1.5d | todo | 全阶段覆盖 |
+| W3-AP-PHASE-13a | 完成条件影子（新旧该不该停对比） | 12 | 1d | todo | `AGENT_PHASE_DONE=shadow` |
+| W3-AP-PHASE-13b | 完成条件替代计划续跑 / 意图续跑 / reflect | 13a ≥1w | 2d | todo | `AGENT_PHASE_DONE=on` |
+| W3-AP-PHASE-14 | 意图收口为入口路由；删无引用 `isXxxGoal` | 13b | 1.5d | todo | `goal-intents.ts` ≤500 行 |
+| W3-AP-PHASE-15 | 删旧路径与开关；拆 `toolsNode` | 14 ≥2w | 2d | todo | `nodes.ts` ≤700 行 |
+| W3-AP-WALL-R | `restrict` / `run` 决策落地（下一轮只许用指定工具） | PHASE-00 | 1d | todo | `restrictToolsOnce` + `tool_choice=required` |
+| W3-AP-WALL-02 | 逐篇读上限（一轮读 ≥6） | WALL-R | 0.5d | todo | 线上 `read_reference` ×17 |
+| W3-AP-WALL-03 | 检索墙（连搜 ≥6 无新增 → 导入确认或问） | WALL-R | 1d | todo | 8/18 会话 search_storm |
+| W3-AP-WALL-04 | 门禁二次回弹 → 只许用门禁点名工具 | WALL-R | 1d | todo | `GateVerdict.suggestTool` |
+| W3-AP-WALL-05 | 空转熔断改选项卡，不再硬停报错 | WALL-R | 0.5d | todo | |
+| W3-AP-WALL-06 | 孤儿 running 会话回收（>15min） | — | 0.5d | todo | 2/18 stuck_running |
+| — | 任务单细节 | — | — | — | [`plans/W3-AP-PHASE-MACHINE.md`](./plans/W3-AP-PHASE-MACHINE.md) |
 
 | 来源 | 本队列处理方式 |
 |------|----------------|
@@ -347,6 +374,7 @@
 | `docs/plans/W3-AP-HITL-STEER.md` | Wave 3.14 Agent 每步等人；合并时同步 §1 Phase 17 |
 | `docs/plans/W3-AP-QUALITY-NEXT.md` | Wave 3.15 写节质量缺口；合并时同步 §1 Phase 18 |
 | `docs/plans/W3-AP-HITL-LIT.md` | Wave 3.16 文献过目与大纲对照；合并时同步 §1 Phase 19 |
+| `docs/plans/W3-AP-PHASE-MACHINE.md` | Wave 3.17 Agent 阶段制 + 撞墙策略；合并时同步 §1 Phase 20 |
 | `docs/plans/FIG-QA-quality-system.md` | Wave 3.11 图表质量系统；合并时同步 §1 Phase 13 |
 | `docs/plans/WRITE-QA-quality-system.md` | Wave 3.12 写作质量系统；合并时同步 §1 Phase 14 |
 
@@ -1453,6 +1481,8 @@ src/app/api/（13）                       src/lib/（6）
 | 2026-10-02 | WRITE-QA-CORPUS | AI | 线上 harvest 写节 qaReport；golden 锁 invented-temp / unbound-cite / persist=false。 |
 | 2026-10-02 | WRITE-AUDIT | AI | 稿面扫描 writingAudit：叠子节/空综述/错温/引用扎堆；inspect 与写节带回；reflect 催 inspect。 |
 | 2026-09-30 | RAG-CAT-ALIAS | AI | `search_knowledge(category=热解)` 0 命中：别名映射到 `热化学`；索引改走 `GRAINSCRIPT_DATA_ROOT`。 |
+| 2026-10-04 | W3-AP-PHASE-00 | AI | 线上 18 会话扫描：8 个连搜、1 个出图来回 9 张，熔断 0 次触发。出图质检连败 3 次改弹选项卡，由代码决定下一步。Phase 20 计划落 `plans/W3-AP-PHASE-MACHINE.md`。 |
+| 2026-10-04 | W3-AP-PHASE-D1-6 | 维护者 | 阶段制 D1–D6 按建议拍板：蓝图确认并入大纲；综述起草可检索导入、研究型不可；意图明确才临时切阶段否则先问；影子放行须文献 ≥30 轮、误拦 <5%、无阶段算错；墙上限 3/6/6/2；切阶段缓存失效可接受，enforce 后观察一周用量。 |
 
 ---
 

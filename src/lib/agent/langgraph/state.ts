@@ -11,7 +11,7 @@ import { planHasPendingWork } from "@/lib/agent/core/plan-progress";
 import { latestActionIsVisibleDeliverable } from "@/lib/agent/core/visible-deliverable";
 import { analyzeReflection, MAX_REFLECT_ROUNDS } from "@/lib/agent/core/reflect";
 import type { IntentKind } from "@/contracts/agent-intent";
-import { lastFigureQaNeedsReplace } from "@/lib/agent/figure-loop";
+import { pendingFigureRedraw } from "@/lib/agent/figure-loop";
 import { getAgentGraphRuntime } from "@/lib/agent/langgraph/runtime";
 import type { LLMMessage, ParsedToolCall, ToolObservation } from "@/lib/agent/types";
 
@@ -197,9 +197,9 @@ export function routeAfterAgent(
   ) {
     return "agent";
   }
-  // 图质检未通过：即使 finished / 续跑计数耗尽，仍回 agent（安全阀=maxIterations）
+  // 图质检未通过：即使 finished / 续跑计数耗尽，仍回 agent；本轮连败到墙后交给用户选
   if (
-    lastFigureQaNeedsReplace(state.observations)
+    pendingFigureRedraw(state.observations, state.intentObsOffset)
     && state.iteration < maxIterations
   ) {
     return "agent";

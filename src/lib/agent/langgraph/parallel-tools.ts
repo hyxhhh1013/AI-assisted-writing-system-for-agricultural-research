@@ -40,7 +40,11 @@ import type {
 import {
   buildFigureQaContinueNudge,
   collectFigureQaFailures,
+  countFigureQaFailsThisRun,
+  latestFigurePlotHref,
 } from "@/lib/agent/figure-loop";
+import { buildClarifyCheckpoint } from "@/lib/agent/core/checkpoints";
+import { decideAfterWall } from "@/lib/agent/core/wall-policy";
 
 /** 纯读、无确认、无 checkpoint/记忆副作用、可乱序并行的工具白名单 */
 export const PARALLEL_READ_TOOLS = new Set([
@@ -262,6 +266,35 @@ export async function runParallelReads(
 
   // 并行 read_figure(qa) 未走串行 figure-loop：在此补硬 nudge，避免模型空口收尾
   const qaFails = collectFigureQaFailures(newObservations);
+  if (qaFails.length > 0) {
+    const allObs = [...state.observations, ...newObservations];
+    const wall = decideAfterWall({
+      kind: "figure_qa",
+      hits: countFigureQaFailsThisRun(allObs, state.intentObsOffset),
+      plotHref: latestFigurePlotHref(allObs) ?? undefined,
+    });
+    if (wall.kind === "ask") {
+      trace("figure_qa_wall", false, { reason: wall.reason, via: "post-gate" });
+      newSummaries.push(`[figure-loop] ${wall.reason}，等用户选择`);
+      const checkpoint = buildClarifyCheckpoint(wall.question);
+      events.push({ type: "agent/checkpoint", checkpoint });
+      events.push({ type: "agent/status", status: "awaiting_checkpoint" });
+      if (plan) events.push({ type: "agent/plan", plan });
+      return {
+        pendingToolCalls: [],
+        toolCallCount,
+        toolSummaries: newSummaries,
+        observations: newObservations,
+        messages: newMessages,
+        events,
+        error,
+        toolTrace: newTrace,
+        plan,
+        awaitingCheckpoint: checkpoint,
+        finished: true,
+      };
+    }
+  }
   for (const imageUrl of qaFails) {
     newSummaries.push(`[figure-loop] QA 未通过：下一轮必须 replaceImageUrl=${imageUrl}`);
     newMessages.push({

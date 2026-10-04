@@ -166,7 +166,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **蓝图配图在写节后真正出图（2026-10-01）**：此前 figurePlan 只进 Writer 提示（规划配图文案），Agent slim Writer 还禁止 【FIGURE】JSON，所以段落扩写不会画图。现 `write_section` 落库后 `toolsNode` 按 `figurePlan.dataBinding` / 试验表目录自动排队 `generate_chart(chartIndex, sectionKey)`；专家工具扩写同样用绑定数据走 `generateFigure`。流程图仍须 `draft_mechanism_figure`。无绑定数据的必需图会提示上传 CSV/Excel。实现：`lib/blueprint-chart-jobs.ts`。
 - **综述正文禁止一次写整章（2026-08-09）**：Agent 曾把 phase 文案「一次任务可连续写多节」理解成对 `literature_body` 一次写出 5–7k 字（UI 可达万字+），导致超时/质量塌陷。现：① phase-pack / planner / review_write nudge / system prompt 明确「按蓝图子节 + subsectionTitle 逐节写」；② `write_section` 在 `literature_body` 无 `subsectionTitle` 且蓝图有 ≥2 子节路径时 soft-gate 拒绝并列出建议标题。
 - **子节标题不要蓝图路径（2026-10-02）**：`subsectionTitle` 若带「父 > 子」，模型会把路径粘在段首。写回用叶子标题并剥段首面包屑；Writer/简报禁止把路径写进正文。
-- **写节事实门（2026-10-02）**：`cite_semantic_mismatch`（句内精确数据/温度对不上摘要）、未绑主张却硬挂 `[n]`、`overclaim` 在修补后仍在则 **不 persist**。未绑引用确定性剥掉。Agent 同名子节覆盖旧稿，工作台扩写仍可追加。
+- **写节事实门（2026-10-02）**：`cite_semantic_mismatch`（句内精确数据/温度对不上摘要）、未绑主张却硬挂 `[n]`、`overclaim` 在修补后仍在则 **不 persist**。未绑引用确定性剥掉；区间 `[1-3]` 按每个编号过滤，两端在白名单而中间不在时不再整段保留。质检已拦住的 `write_section`（`blocked`）算本轮收口，不再追加「还没落地，请再写」。Agent 同名子节覆盖旧稿，工作台扩写仍可追加。
 - **稿面自检（2026-10-02）**：`auditManuscript` 扫已落库全文（不限于刚写的一节）。`write_section` / `inspect_project` 回 `writingAudit`；写后 reflect 先催 inspect。发现新洞仍要进 golden，不在运行时改自己的规则。`check_consistency` 仍是跨章 LLM 灰区。
 - **大纲与写节锁项目参考文献（2026-10-02）**：`generate_outline` 曾只喂全库 RAG，大纲点名库外作者；写节把 [1] 当通用综述。现大纲/蓝图/Writer 注入【项目参考文献】编号题录，禁止点名表外；检索用题目限定词压共热解/CNT 等偏题篇。
 - **论证并入写作蓝图（2026-08-09，方案 A）**：产品主路径改为 `配置 → 大纲 → 写作蓝图 → 分节写`。`SectionGuide` 增加 `claim` / `evidenceHint` / `warrant` / `rebuttal`；全文级 `researchQuestion` / `argumentGaps`。`ensure-write-prereqs` / phase-gate 不再要求 `build_argument_blueprint`；检查点只对 `generate_writing_blueprint` 暂停。Passport Phase 3 有写作蓝图即 done。旧 `argumentBlueprint` 列保留只读兼容。
@@ -323,6 +323,8 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 | `generate_table` | 三线表默认插入正文并回看表题；未 `insertedSection` 不算交付 |
 | `remove_figure` | 删图表资产 + 默认去掉正文对应 `![](url)`（清重复旧图）；**需用户确认** |
 | `read_figure` | `describe` 可识任意图；`mode=qa` **仅机理图**（占位/英文模板/空栏）。数据图跳过识图，看 `qaReport` |
+
+**重画上限（撞墙策略，2026-10-04）**：线上出现过一轮内「出图 → 识图要重画」来回 9 张、每次只换说法的空转（熔断把出图算进展，从不触发）。现由 `core/wall-policy.ts` 的 `decideAfterWall` 接管：本轮（`intentObsOffset` 之后）自上次过线以来累计 `AGENT_WALL_LIMITS.figure_qa`=3 张没过质检（识图 regen 或 qaReport=block），串行 `toolsNode` 与并行只读批都改弹 `clarify` 选项卡（先用这版 / 去 `/plot` 精修 / 说怎么改再画 / 删图），不再塞「必须重画」；`agentNode` 强制续跑与 `routeAfterAgent` 回弹改用 `pendingFigureRedraw`，到墙即让路。检查点回答不清零（用户选再画，下一张不过会再问），图过线或用户发新消息才清零。轨迹记 `figure_qa_wall`（via=`post-gate`）。线上转圈语料：`scripts/harvest-agent-loop.py`。
 
 实现：`lib/agent/figure-loop.ts`、`langgraph/tool-gates.ts`（`figureReplaceGate`）、`langgraph/nodes.ts`（自动排队 QA / 文生图 generate / FigureBrief）。视觉 provider：`callAI({ provider: "vision" })`（DeepSeek `deepseek-v4-flash-vision-exp`，复用写作 Key）。
 

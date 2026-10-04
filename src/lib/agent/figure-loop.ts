@@ -4,6 +4,7 @@
  */
 import type { AgentToolResult } from "@/contracts/agent";
 import type { ProjectChartAsset } from "@/contracts/figure";
+import { isAgentWallReached } from "@/lib/agent/core/wall-policy";
 import { parseFigureQaVerdict } from "@/lib/agent/figure-qa";
 import type { LLMMessage, ParsedToolCall, ToolObservation } from "@/lib/agent/types";
 import { randomUUID } from "crypto";
@@ -180,6 +181,80 @@ export function lastFigureQaNeedsReplace(
     }
   }
   return null;
+}
+
+function readFigureQaVerdictOf(o: ToolObservation): "regen" | "pass" | null {
+  if (o.tool !== "read_figure" || !o.success || !o.data || typeof o.data !== "object") {
+    return null;
+  }
+  const data = o.data as {
+    needsRegen?: unknown;
+    mode?: unknown;
+    description?: unknown;
+    qaVerdict?: unknown;
+  };
+  if (data.mode != null && data.mode !== "qa") return null;
+  const needs =
+    data.needsRegen === true
+    || data.qaVerdict === "regen"
+    || (typeof data.description === "string"
+      && parseFigureQaVerdict(data.description).needsRegen);
+  return needs ? "regen" : "pass";
+}
+
+/** 一次出图/识图结果是否算「质检没过」（机理图识图要重画，或 qaReport=block 未入库） */
+export function isFigureQaFailObservation(o: ToolObservation): boolean {
+  if (readFigureQaVerdictOf(o) === "regen") return true;
+  return FIGURE_GENERATE_TOOLS.has(o.tool) && o.success && isChartQaBlocked(o.data);
+}
+
+/**
+ * 本轮（用户最近一次发话之后）自上次过线以来，累计几张图没过质检。
+ * 过线：识图判定可接受，或数据图出图未被 block。检查点回答不清零，换来的是「每多画一张就再问一次」。
+ */
+export function countFigureQaFailsThisRun(
+  observations: readonly ToolObservation[],
+  intentObsOffset?: number | null,
+): number {
+  const start = Math.max(0, Math.min(intentObsOffset ?? 0, observations.length));
+  let fails = 0;
+  for (let i = observations.length - 1; i >= start; i--) {
+    const o = observations[i];
+    if (!o) continue;
+    if (isFigureQaFailObservation(o)) {
+      fails += 1;
+      continue;
+    }
+    if (readFigureQaVerdictOf(o) === "pass") break;
+    if (o.tool === "generate_chart" && o.success) break;
+  }
+  return fails;
+}
+
+/** 最近一次出图返回的 /plot 精修深链 */
+export function latestFigurePlotHref(observations: readonly ToolObservation[]): string | null {
+  for (let i = observations.length - 1; i >= 0; i--) {
+    const o = observations[i];
+    if (!o || !FIGURE_GENERATE_TOOLS.has(o.tool) || !o.data || typeof o.data !== "object") {
+      continue;
+    }
+    const href = (o.data as { href?: unknown }).href;
+    if (typeof href === "string" && href.startsWith("/plot")) return href;
+  }
+  return null;
+}
+
+/** 需要自动续跑重画的那张图；本轮失败次数到墙后返回 null，交给用户选 */
+export function pendingFigureRedraw(
+  observations: readonly ToolObservation[],
+  intentObsOffset?: number | null,
+): { imageUrl: string } | null {
+  if (
+    isAgentWallReached("figure_qa", countFigureQaFailsThisRun(observations, intentObsOffset))
+  ) {
+    return null;
+  }
+  return lastFigureQaNeedsReplace(observations);
 }
 
 /**

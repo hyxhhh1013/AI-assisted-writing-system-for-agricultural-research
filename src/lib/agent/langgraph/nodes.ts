@@ -57,17 +57,22 @@ import {
   buildFigureQaContinueNudge,
   buildIllustrateGenerateCall,
   buildReadFigureQaCall,
+  countFigureQaFailsThisRun,
   extractChartQaFindingCodes,
   extractFigureImageUrl,
   FIGURE_BRIEF_QUESTION,
+  FIGURE_GENERATE_TOOLS,
   isChartQaBlocked,
+  isFigureQaFailObservation,
   isFigureQaNeedsPolish,
   isFigureQaNeedsRegen,
-  lastFigureQaNeedsReplace,
+  latestFigurePlotHref,
+  pendingFigureRedraw,
   shouldInjectIllustrationAfterQa,
   shouldInjectVisionFigureQa,
   shouldPauseForFigureBrief,
 } from "@/lib/agent/figure-loop";
+import { decideAfterWall } from "@/lib/agent/core/wall-policy";
 import { buildToolConfirmMessage } from "@/lib/agent/confirm-message";
 import { isConfirmGranted } from "@/lib/agent/core/confirm-grant";
 import {
@@ -211,6 +216,35 @@ export async function planNode(
       finished: true,
     };
   }
+}
+
+const LANDED_CHANGE_TOOLS = new Set([
+  "refine_content",
+  "update_paper_config",
+  "generate_outline",
+  "write_bilingual_abstract",
+  "import_reference",
+  "generate_chart",
+  "draft_mechanism_figure",
+  "illustrate_mechanism_figure",
+  "apply_revision_item",
+  "generate_writing_blueprint",
+]);
+
+/**
+ * 本轮是否已经动过稿。
+ * write_section 被质检拦住（blocked）也算收口，避免「没落地，请再写一节」把同一节打成循环。
+ * 配图 QA block 仍不算落地。
+ */
+export function countsAsLandedMutation(obs: {
+  tool: string;
+  success: boolean;
+  data?: unknown;
+}): boolean {
+  if (!obs.success) return false;
+  if (obs.tool === "write_section") return isWriteSectionSettled(obs.data);
+  if (!LANDED_CHANGE_TOOLS.has(obs.tool)) return false;
+  return !isChartQaBlocked(obs.data);
 }
 
 export async function agentNode(
@@ -380,7 +414,7 @@ export async function agentNode(
     const canIntentContinue = state.planContinueCount < MAX_INTENT_CONTINUES;
     const intentNudge = !canIntentContinue ? null : pickIntentNudge(intentCtx);
     // QA 未通过：优先于计划续跑/收尾，强制再跑一轮工具（避免长篇推演后 finished）
-    const figureQaPending = lastFigureQaNeedsReplace(observations);
+    const figureQaPending = pendingFigureRedraw(observations, state.intentObsOffset);
     const canFigureQaContinue =
       Boolean(figureQaPending)
       && nextIteration < agentContext.budget.maxIterations;
@@ -447,17 +481,7 @@ export async function agentNode(
         state.intentKind === "draft" || state.intentKind === "review_write"
           ? thisRun
           : observations;
-      const landedWrite = writeObs.some(
-        (o) => o.success
-          && (o.tool === "write_section" || o.tool === "refine_content"
-            || o.tool === "update_paper_config" || o.tool === "generate_outline"
-            || o.tool === "write_bilingual_abstract" || o.tool === "import_reference"
-            || o.tool === "generate_chart" || o.tool === "draft_mechanism_figure"
-            || o.tool === "illustrate_mechanism_figure"
-            || o.tool === "apply_revision_item"
-            || o.tool === "generate_writing_blueprint")
-          && !isChartQaBlocked(o.data),
-      );
+      const landedWrite = writeObs.some((o) => countsAsLandedMutation(o));
       if (
         !hint
         && (execWords.test(state.goal)
@@ -1117,6 +1141,39 @@ export async function toolsNode(
         await refreshAgentProjectContext(agentContext);
         // 项目有实际写进展：放行被隔离的读章节
         clearBlockedReads(repeatTracker);
+      }
+
+      // 撞墙：本轮连续几张图都没过质检 → 停下给选项，不再塞「必须重画」让模型换说法重掷
+      const lastObs = newObservations[newObservations.length - 1];
+      if (lastObs && isFigureQaFailObservation(lastObs)) {
+        const allObs = [...state.observations, ...newObservations];
+        const wall = decideAfterWall({
+          kind: "figure_qa",
+          hits: countFigureQaFailsThisRun(allObs, state.intentObsOffset),
+          plotHref: latestFigurePlotHref(allObs) ?? undefined,
+        });
+        if (wall.kind === "ask") {
+          trace("figure_qa_wall", false, { reason: wall.reason, via: "post-gate" });
+          newSummaries.push(`[figure-loop] ${wall.reason}，等用户选择`);
+          const checkpoint = buildClarifyCheckpoint(wall.question);
+          events.push({ type: "agent/checkpoint", checkpoint });
+          events.push({ type: "agent/status", status: "awaiting_checkpoint" });
+          return {
+            pendingToolCalls: toolQueue
+              .slice(tcIdx + 1)
+              .filter((c) => !FIGURE_GENERATE_TOOLS.has(c.name) && c.name !== "read_figure"),
+            toolCallCount,
+            toolSummaries: newSummaries,
+            observations: newObservations,
+            messages: newMessages,
+            events,
+            plan,
+            toolTrace: newTrace,
+            ...(reflectReset ? { reflectCount: 0 } : {}),
+            awaitingCheckpoint: checkpoint,
+            finished: true,
+          };
+        }
       }
 
       // partial 断点复用跳过了 Verifier/Refiner → 硬排队 refine_content
