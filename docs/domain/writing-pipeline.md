@@ -83,6 +83,7 @@ route.ts               SSE 外壳
 - **正文引用格式**：仅半角方括号 `[1]`、`[2,3]`、`[1-3]`。禁止 `【16】`、`［16］`、`[文献16]` 等变体（Prompt 与后处理均约束）。
 - **禁止章节内嵌文献表**：章节正文末尾不得输出「参考文献 / References」列表（由 `stripEmbeddedBibliography` 剥离）；文献表只在项目侧栏维护。
 - **引用归一化**：`src/lib/citation.ts` 的 `normalizeAllCitationFormats`（含角括号 `【n】` → `[n]`、转义 `\[n\]` → `[n]`）在 Refiner、预览、应用到章节时执行；测试见 `src/__tests__/lib/citation-bounds.test.ts`。
+- **公式与化学式**：预览和 PDF 在渲染前走 `normalizeMathDelimiters`。已有 `$...$` 交给 KaTeX；裸写的 `CO2` / `H_2O` / `Ca2+` / `NH4+` 收成 `$\mathrm{...}$`，单位指数如 `ha^{-1}` 同样包进数学。Agent 写节提示要求直接输出 `$\mathrm{CO_2}$` 这种写法。`[1]` 与普通英文词不包。
 - 综述模式章节 Prompt：`src/lib/prompts/review-writing.ts`；综述引用规则：`review-synthesis-rules.ts`。
 - Verifier 检查 overclaim、Results/Discussion 混淆，不只查引用真假。
 - Prompt 已注入 nature-polishing 原则（见 `prompts.ts` 注释）。

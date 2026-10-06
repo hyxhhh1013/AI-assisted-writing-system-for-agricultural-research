@@ -126,6 +126,7 @@ ${params.sectionInstruction}
 不要使用 Markdown # 标题。不要给每个自然段加小标题；多数段落就是论述，没有标题。
 不要插入【FIGURE】JSON 或插图占位（配图走 generate_chart）。
 不要写元文字、编辑批注、道歉。
+公式和化学式整段放进 $...$，例如 $\\mathrm{CO_2}$、$\\mathrm{H_2O}$、$\\mathrm{NH_4^+}$、$\\mathrm{Ca^{2+}}$。不要写成 CO2、H2O、Ca2+。
 
 ${QA_CODES}
 `;
@@ -140,6 +141,7 @@ ${params.sectionInstruction}
 —— Evidence cards ——
 If the context has an evidence-bind table: cover the claims, but do not print C1/C2 in the body; prefer listed [n]; a review may also paraphrase other in-project refs that have an abstract or full text.
 In-text cites: half-width [n] only. No bibliography. No Markdown # headings. Do not title every paragraph. No 【FIGURE】 JSON.
+Put each formula or chemical inside $...$, e.g. $\\mathrm{CO_2}$, $\\mathrm{H_2O}$, $\\mathrm{NH_4^+}$, $\\mathrm{Ca^{2+}}$. Do not write CO2, H2O, or Ca2+.
 
 ${QA_CODES}
 `;

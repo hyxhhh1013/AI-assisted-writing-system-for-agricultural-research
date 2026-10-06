@@ -124,8 +124,8 @@ export const MarkdownContent = ({
   return (
     <div onClick={onCiteClick ? handleCiteClick(onCiteClick) : undefined}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[...(onCiteClick ? [rehypeRaw] : []), rehypeKatex]}
+        remarkPlugins={[remarkMath, remarkGfm]}
+        rehypePlugins={[...(onCiteClick ? [rehypeRaw] : []), [rehypeKatex, { throwOnError: false, strict: false }]]}
         components={{
           h1: () => <span className="hidden" />,
           h2: () => <span className="hidden" />,
@@ -149,8 +149,8 @@ export const CompactMarkdown = ({ content, onCiteClick }: { content: string; onC
   return (
     <span onClick={onCiteClick ? handleCiteClick(onCiteClick) : undefined}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[...(onCiteClick ? [rehypeRaw] : []), rehypeKatex]}
+        remarkPlugins={[remarkMath, remarkGfm]}
+        rehypePlugins={[...(onCiteClick ? [rehypeRaw] : []), [rehypeKatex, { throwOnError: false, strict: false }]]}
         components={{
           h1: ({ children, node: _n, ...props }: MdProps<'h1'>) => <span {...props}>{children}</span>,
           h2: ({ children, node: _n, ...props }: MdProps<'h2'>) => <span {...props}>{children}</span>,

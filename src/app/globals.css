@@ -64,6 +64,12 @@
   animation: shimmer 2.5s infinite linear;
 }
 
+/* Tailwind preflight 把 svg 设成 display:block，KaTeX 的分数线、根号会被拉成整行 */
+.katex svg {
+  display: inline;
+  max-width: none;
+}
+
 :root {
   --background: rgb(255, 255, 255);
   --foreground: rgb(10, 10, 10);

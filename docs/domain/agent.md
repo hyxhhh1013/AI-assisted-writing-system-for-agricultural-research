@@ -47,7 +47,7 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 | `src/lib/agent/writing-patches.ts` | WRITE-QA-005：`applyWritingPatches` 纯函数表（喉清/空话/越界引用/摘要引用/MD 标题/文末文献表/结果混讨论/overclaim） |
 | `src/lib/agent/writing-patch-run.ts` | WRITE-QA-005：写节回修环；确定性之后最多 1 次定向 refine |
 | `src/lib/agent/manuscript-audit.ts` | 已写正文稿面扫描：写节 QA + 叠子节 / 空综述章 / 引用扎堆 / 大纲未写上 |
-| `src/lib/agent/writer-prompt.ts` | WRITE-QA-007：Agent slim Writer；禁令改 QA code 指针，不堆「禁止」 |
+| `src/lib/agent/writer-prompt.ts` | WRITE-QA-007：Agent slim Writer；禁令改 QA code 指针，不堆「禁止」。公式和化学式要求整段写进 `$...$`（`\mathrm{CO_2}`） |
 | `src/lib/agent/spec-write-context.ts` | WRITE-QA-009：Writer 上下文由 Spec 生成；`sectionSpec` JSON 解析 |
 | `src/lib/agent/writing-profiles.ts` | WRITE-QA-010：引言缺口 / 结果无数量 / 综述写成试验 |
 | `src/lib/quality-eval/write-qa-fixtures.ts` | WRITE-QA-008：分节 golden；`eval:quality` 规则尺 |

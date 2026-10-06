@@ -321,6 +321,7 @@ ${section === "introduction" ? "—— Gap Language ——\n· Use: \"remains po
 · 正确示例：$Y_{bio-oil} = \\frac{m_{bio-oil}}{m_{raw}} \\times 100\\%$
 · 错误示例：$\\frac{m_{bio-oil}}{m_{raw}}$ \\times 100\\%（运算符和数字在 $ 外面）
 · 下标用 _{...}，上标用 ^{...}，都在 $ 内部。
+· 化学式同样整段放进 $...$，写成 $\\mathrm{CO_2}$、$\\mathrm{H_2O}$、$\\mathrm{Ca^{2+}}$，不要写成 CO2 / H2O / Ca2+。
 · 独占一行的长公式用 $$...$$。
 
 —— 插图规则 ——
