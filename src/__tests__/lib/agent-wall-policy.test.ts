@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   AGENT_WALL_LIMITS,
   decideAfterWall,
+  resolveLlmToolRequest,
+  toolsUnderRestrict,
 } from "@/lib/agent/core/wall-policy";
 import {
   countFigureQaFailsThisRun,
@@ -54,6 +56,51 @@ describe("decideAfterWall", () => {
       expect(ask.question).toContain("1.");
       expect(ask.question).toContain("/plot?fig=x");
     }
+  });
+
+  it("read / search / gate walls stay a hint until the limit, then restrict or run", () => {
+    expect(AGENT_WALL_LIMITS.read_spam).toBe(6);
+    expect(AGENT_WALL_LIMITS.search_storm).toBe(6);
+    expect(AGENT_WALL_LIMITS.gate_bounce).toBe(2);
+    expect(decideAfterWall({ kind: "read_spam", hits: 5 }).kind).toBe("hint");
+    const restricted = decideAfterWall({
+      kind: "read_spam",
+      hits: 6,
+      suggestTools: ["refine_content"],
+    });
+    expect(restricted).toMatchObject({ kind: "restrict", tools: ["refine_content"] });
+    const run = decideAfterWall({
+      kind: "search_storm",
+      hits: 6,
+      runCall: { id: "c1", name: "import_reference", args: {} },
+    });
+    expect(run).toMatchObject({ kind: "run", call: { name: "import_reference" } });
+    expect(decideAfterWall({ kind: "gate_bounce", hits: 2 }).kind).toBe("ask");
+  });
+});
+
+describe("resolveLlmToolRequest", () => {
+  const tools = [
+    { name: "ask_user" },
+    { name: "write_section" },
+    { name: "search_knowledge" },
+    { name: "refine_content" },
+  ];
+
+  it("leaves the full set alone when nothing is restricted", () => {
+    const req = resolveLlmToolRequest(tools, null);
+    expect(req.toolChoice).toBe("auto");
+    expect(req.clearRestrict).toBe(false);
+    expect(req.tools.map((tool) => tool.name)).toEqual(tools.map((tool) => tool.name));
+  });
+
+  it("one restricted turn keeps only the named tools plus ask_user, then clears", () => {
+    const req = resolveLlmToolRequest(tools, ["refine_content"]);
+    expect(req.toolChoice).toBe("required");
+    expect(req.clearRestrict).toBe(true);
+    expect(req.tools.map((tool) => tool.name)).toEqual(["ask_user", "refine_content"]);
+    expect(toolsUnderRestrict(tools, ["search_knowledge"]).map((tool) => tool.name))
+      .toEqual(["ask_user", "search_knowledge"]);
   });
 });
 
@@ -131,6 +178,7 @@ describe("routeAfterAgent figure wall", () => {
       intentObsOffset: 0,
       approvedCheckpointKinds: [],
       toolTrace: [],
+      restrictToolsOnce: null,
       ...overrides,
     };
   }

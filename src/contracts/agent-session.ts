@@ -70,7 +70,10 @@ export type AgentToolTraceVia =
   | "unknown"
   | "pre-gate"
   | "post-gate"
-  | "budget";
+  | "budget"
+  | "phase-shadow"
+  | "phase"
+  | "wall";
 
 /**
  * 会话工具轨迹（W3-AP-ARCH-02）：一次工具调用的结局。
@@ -126,6 +129,11 @@ export interface AgentSessionSnapshot {
   toolTrace?: AgentToolTrace[];
   /** 本会话精读包（跟聊续写；旧快照可缺） */
   readingPack?: import("@/lib/agent/reading-pack").ReadingPackEntry[];
+  /**
+   * 撞墙后下一轮只许用这些工具（WALL-R）。用过一轮即清空。
+   * 旧快照缺字段当 null。
+   */
+  restrictToolsOnce?: string[] | null;
 }
 
 export interface AgentSessionListItem {

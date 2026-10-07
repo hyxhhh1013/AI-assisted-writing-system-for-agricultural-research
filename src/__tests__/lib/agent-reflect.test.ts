@@ -178,6 +178,7 @@ describe("reflection routing", () => {
       intentObsOffset: 0,
       approvedCheckpointKinds: [],
       toolTrace: [],
+      restrictToolsOnce: null,
       ...overrides,
     };
   }

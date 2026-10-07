@@ -9,7 +9,7 @@ import type { AgentChartPersistedInfo } from "@/lib/agent/chart-persisted";
 import type { AgentProjectMutatedInfo } from "@/lib/agent/project-mutated";
 import type { AgentSectionPersistedInfo } from "@/lib/agent/section-persisted";
 import { isAgentWritePublicEnabled } from "@/lib/agent/core/safety";
-import { suggestNextAgentActions } from "@/lib/agent/project-briefing";
+import { resolveAgentPhase } from "@/lib/agent/core/agent-phase";
 import { resolveAgentLastFailure } from "@/lib/agent/ui-failure";
 import {
   evaluateDraftCoverage,
@@ -157,6 +157,10 @@ export function AgentPanel({
   const [thinOrGapSections, setThinOrGapSections] = useState<string[]>([]);
   const [phasePack, setPhasePack] = useState<PhaseTaskPack | null>(null);
   const [phaseGoal, setPhaseGoal] = useState<string | null>(null);
+  const [phaseNext, setPhaseNext] = useState<{ action: string | null; sectionKey: string | null }>({
+    action: null,
+    sectionKey: null,
+  });
   const [hitlPageOpen, setHitlPageOpen] = useState(false);
   const [configSaving, setConfigSaving] = useState(false);
   /** 手动打开问答（不依赖检查点也能填） */
@@ -201,10 +205,6 @@ export function AgentPanel({
     const passport = parsePaperPassport(p.paperPassport);
     const mode = p.mode === "research" ? "research" : "review";
     const keys = getCoreSectionKeysForMode(mode);
-    const emptySections = keys.filter((key) => {
-      const content = key === "abstract" ? p.abstract : p.sections?.[key];
-      return !(content?.trim().length);
-    });
     const sectionFills = keys.map((key) => {
       const content = key === "abstract" ? p.abstract : p.sections?.[key];
       return {
@@ -234,8 +234,13 @@ export function AgentPanel({
       hasPaperConfig: hasCompletePaperConfig(passport?.config),
     };
     const resolved = resolvePhaseTaskPack(snapshot);
+    const phaseState = resolveAgentPhase({ snapshot, writeEnabled: WRITE_PUBLIC });
     setPhasePack(resolved.pack);
     setPhaseGoal(resolved.goal);
+    setPhaseNext({
+      action: phaseState.nextAction,
+      sectionKey: phaseState.nextSectionKey ?? null,
+    });
     const coverage = evaluateDraftCoverage({
       mode,
       language: snapshot.language,
@@ -247,19 +252,8 @@ export function AgentPanel({
     ];
     setThinOrGapSections(thinOrGap);
     setQuickPrompts(
-      [
-        INSPECT_GOAL,
-        ...suggestNextAgentActions({
-          currentPhase: passport?.currentPhase ?? null,
-          writeEnabled: WRITE_PUBLIC,
-          hasOutline: (p.outline?.trim().length ?? 0) >= 20,
-          hasWritingBlueprint: Boolean(p.writingBlueprint?.trim()),
-          emptySections,
-          nextSectionKey: coverage.nextSectionKey,
-          thinOrGapSections: thinOrGap,
-          referenceCount: p.references?.length ?? 0,
-        }),
-      ]
+      [INSPECT_GOAL, phaseState.nextAction]
+        .filter((x): x is string => Boolean(x))
         .filter((x, i, arr) => arr.indexOf(x) === i)
         .slice(0, 4),
     );
@@ -328,6 +322,8 @@ export function AgentPanel({
       observations: turn.observations,
       planSubtasks: agent.plan?.subtasks,
       suggestedActions: quickPrompts,
+      nextAction: phaseNext.action,
+      nextSectionKey: phaseNext.sectionKey,
       skipSectionKeys: skip,
       thinOrGapSections,
     });
@@ -342,6 +338,7 @@ export function AgentPanel({
     agent.plan?.subtasks,
     agent.lastPersisted,
     quickPrompts,
+    phaseNext,
     thinOrGapSections,
   ]);
 
@@ -372,14 +369,12 @@ export function AgentPanel({
       setProject(null);
       setPhasePack(null);
       setPhaseGoal(null);
-      setQuickPrompts(
-        suggestNextAgentActions({
-          writeEnabled: WRITE_PUBLIC,
-          hasOutline: false,
-          hasWritingBlueprint: false,
-          emptySections: [],
-        }),
-      );
+      const phaseState = resolveAgentPhase({ snapshot: null, writeEnabled: WRITE_PUBLIC });
+      setPhaseNext({
+        action: phaseState.nextAction,
+        sectionKey: phaseState.nextSectionKey ?? null,
+      });
+      setQuickPrompts(phaseState.nextAction ? [phaseState.nextAction] : []);
       setThinOrGapSections([]);
       return;
     }

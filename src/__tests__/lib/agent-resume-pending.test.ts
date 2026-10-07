@@ -64,6 +64,7 @@ function baseState(overrides: Partial<AgentGraphStateType> = {}): AgentGraphStat
     intentObsOffset: 0,
     approvedCheckpointKinds: [],
     toolTrace: [],
+    restrictToolsOnce: null,
     ...overrides,
   };
 }

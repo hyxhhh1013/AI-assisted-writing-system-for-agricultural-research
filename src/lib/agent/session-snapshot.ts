@@ -37,6 +37,7 @@ export function graphStateToSnapshot(
     intentKind: state.intentKind ?? null,
     intentObsOffset: state.intentObsOffset ?? 0,
     toolTrace: state.toolTrace,
+    restrictToolsOnce: state.restrictToolsOnce ?? null,
     activeWrite: activeWrite ?? null,
     ...(uiTranscript ? { uiTranscript } : {}),
     ...(mem ? { workMemory: mem } : {}),
@@ -72,5 +73,6 @@ export function snapshotToInitialState(
     intentKind: snapshot.intentKind ?? null,
     toolTrace: snapshot.toolTrace ?? [],
     intentObsOffset: snapshot.intentObsOffset ?? 0,
+    restrictToolsOnce: snapshot.restrictToolsOnce ?? null,
   };
 }

@@ -32,6 +32,7 @@ function baseState(overrides: Partial<AgentGraphStateType> = {}): AgentGraphStat
     intentObsOffset: 0,
     approvedCheckpointKinds: [],
     toolTrace: [],
+    restrictToolsOnce: null,
     ...overrides,
   };
 }
@@ -80,5 +81,14 @@ describe("agent session snapshot", () => {
       { ...snap, toolTrace: undefined as never },
     );
     expect(legacy.toolTrace).toEqual([]);
+  });
+
+  it("round-trips restrictToolsOnce; legacy snapshot without it falls back to null", () => {
+    const snap = graphStateToSnapshot(baseState({ restrictToolsOnce: ["refine_content"] }));
+    expect(snap.restrictToolsOnce).toEqual(["refine_content"]);
+    expect(snapshotToInitialState("写引言", snap).restrictToolsOnce).toEqual(["refine_content"]);
+
+    const legacy = snapshotToInitialState("写引言", { ...snap, restrictToolsOnce: undefined });
+    expect(legacy.restrictToolsOnce).toBeNull();
   });
 });

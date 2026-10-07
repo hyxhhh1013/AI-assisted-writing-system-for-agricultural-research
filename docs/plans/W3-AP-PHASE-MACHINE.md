@@ -1,6 +1,6 @@
 # W3-AP-PHASE-MACHINE — Agent 阶段制改造（PR 计划表）
 
-> **状态**：规划生效（2026-10-04）；§9 D1–D6 **已拍板**（同日按建议落地）；PHASE-00 已完成，其余 todo。
+> **状态**：规划生效（2026-10-04）；§9 D1–D6 **已拍板**。PHASE-00、01、02、03、WALL-R 已落地（2026-10-07）；enforce / 删门禁 / 状态卡仍待影子期，不得跳过。
 > **挂载**：队列 **Phase 20 `W3-AP-PHASE-*` / `W3-AP-WALL-*`**；实时 status 只看 [`ENGINEERING_OPTIMIZATION_QUEUE.md`](../ENGINEERING_OPTIMIZATION_QUEUE.md) §1。
 > **对照图**：Cursor 画布 `agent-phase-architecture.canvas.tsx`（现在 vs 阶段制、门禁去向、迁移步骤）。
 > **不换** LangGraph，**不加**热路径 LLM 分类/评委，**不推倒重写**。
@@ -131,9 +131,9 @@
 | ID | 标题 | 依赖 | 估时 | 风险 | 改行为 | 开关 | 状态 |
 |----|------|------|------|------|--------|------|------|
 | PHASE-00 | 撞墙出口 `wall-policy.ts` + 出图重画上限 + 转圈扫描脚本 | — | 0.5d | 中 | 是 | 无（上限=3） | **done** 2026-10-04 |
-| PHASE-01 | harvest：`--json` 基线 / `--compare` 对比 / 新病码 | 00 | 0.5d | 低 | 否 | — | todo |
-| PHASE-02 | `resolveAgentPhase` 单一来源（4 处「下一步」合一） | — | 1.5d | 低 | 否 | — | todo |
-| PHASE-03 | 阶段工具集数据表 `PHASE_TOOLSETS`（只定义不使用） | 02 | 0.5d | 低 | 否 | — | todo |
+| PHASE-01 | harvest：`--json` 基线 / `--compare` 对比 / 新病码 | 00 | 0.5d | 低 | 否 | — | **done** 2026-10-07 |
+| PHASE-02 | `resolveAgentPhase` 单一来源（4 处「下一步」合一） | — | 1.5d | 低 | 否 | — | **done** 2026-10-07 |
+| PHASE-03 | 阶段工具集数据表 `PHASE_TOOLSETS`（只定义不使用） | 02 | 0.5d | 低 | 否 | — | **done** 2026-10-07 |
 | PHASE-04 | 影子模式：记录「阶段制会不会拦这次调用」 | 01, 03 | 1d | 低 | 否（只记录） | `AGENT_PHASE_MODE=shadow` | todo |
 | PHASE-05 | 状态卡通道（只新增，不删旧催促） | 02 | 1d | 中 | 轻 | `AGENT_PHASE_CARD` | todo |
 | PHASE-06a | 催促迁移第 1 批：出图 / 插入回看 / 文生图（5 处） | 05 | 1d | 中 | 是 | `AGENT_PHASE_CARD` | todo |
@@ -154,7 +154,7 @@
 | ID | 标题 | 依赖 | 估时 | 风险 | 改行为 | 状态 |
 |----|------|------|------|------|--------|------|
 | WALL-01 | 出图质检连败 3 次 → 选项卡 | — | — | 中 | 是 | **done**（= PHASE-00） |
-| WALL-R | `restrict` 决策落地：下一轮只许用指定工具 | 00 | 1d | 中 | 是（仅被调用时） | todo |
+| WALL-R | `restrict` 决策落地：下一轮只许用指定工具 | 00 | 1d | 中 | 是（仅被调用时） | **done** 2026-10-07 |
 | WALL-02 | 逐篇读上限：一轮 `read_reference`/`read_section` ≥6 | WALL-R | 0.5d | 中 | 是 | todo |
 | WALL-03 | 检索墙：连搜无新增 → 弹导入确认或问用户 | WALL-R | 1d | 中 | 是 | todo |
 | WALL-04 | 门禁二次回弹 → 只许用门禁点名的工具 | WALL-R | 1d | 中 | 是 | todo |

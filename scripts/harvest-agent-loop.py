@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
@@ -33,6 +34,8 @@ CODE_DESC = {
     "budget": "撞迭代 / 工具总数预算",
     "stuck_running": "状态 running 但 1 小时没更新",
     "session_error": "会话以 error 结束",
+    "figure_qa_wall": "轨迹出现 figure_qa_wall（出图质检撞墙）",
+    "phase_shadow_block": "轨迹 via=phase-shadow（阶段制影子会拦）",
 }
 
 
@@ -44,7 +47,10 @@ def psql(sql: str) -> str:
     )
 
 
-def fetch_sessions(limit: int) -> list[dict]:
+def fetch_sessions(limit: int, since: str) -> list[dict]:
+    where = ""
+    if since:
+        where = f"""WHERE \"updatedAt\" >= '{since}'"""
     sql = f"""
 SELECT json_build_object(
   'sid', id,
@@ -69,6 +75,7 @@ SELECT json_build_object(
   ), '[]'::jsonb)
 )::text
 FROM "AgentSession"
+{where}
 ORDER BY "updatedAt" DESC
 LIMIT {limit};
 """
@@ -190,6 +197,50 @@ def classify_turn(turn: dict) -> list[str]:
     return codes
 
 
+def next_turn_import_succeeded(turn: dict) -> bool:
+    """下一轮里第一个 import_reference 成功，算上一轮检索有收获（确认落在下一轮）。"""
+    for obs in turn.get("observations") or []:
+        if obs.get("tool") == "import_reference":
+            return not obs.get("error")
+    return False
+
+
+def apply_search_gain_carry(turns: list[dict], coded: list[list[str]]) -> None:
+    for i, codes in enumerate(coded):
+        if "search_no_gain" not in codes:
+            continue
+        if i + 1 < len(turns) and next_turn_import_succeeded(turns[i + 1]):
+            codes.remove("search_no_gain")
+
+
+def trace_session_codes(trace: list[dict]) -> list[str]:
+    codes: list[str] = []
+    if any(t.get("tool") == "figure_qa_wall" for t in trace):
+        codes.append("figure_qa_wall")
+    if any(t.get("via") == "phase-shadow" for t in trace):
+        codes.append("phase_shadow_block")
+    seen: set[str] = set()
+    for item in trace:
+        if item.get("via") != "wall":
+            continue
+        code = f"wall_{item.get('tool') or 'unknown'}"
+        if code not in seen:
+            seen.add(code)
+            codes.append(code)
+    return codes
+
+
+_SHADOW_REASON = re.compile(r"phase=(\S+)\s+不含\s+(\S+)")
+
+
+def shadow_key(item: dict) -> str:
+    reason = str(item.get("reason") or "")
+    matched = _SHADOW_REASON.search(reason)
+    if matched:
+        return f"{matched.group(1)}×{matched.group(2)}"
+    return f"?×{item.get('tool') or '?'}"
+
+
 def classify_session(row: dict) -> tuple[list[str], list[dict]]:
     codes: list[str] = []
     trace = row.get("toolTrace") or []
@@ -213,6 +264,10 @@ def classify_session(row: dict) -> tuple[list[str], list[dict]]:
         or (isinstance(calls, int) and calls >= MAX_TOOL_CALLS)
     ):
         codes.append("budget")
+    for extra in trace_session_codes(trace):
+        if extra not in codes:
+            codes.append(extra)
+            CODE_DESC.setdefault(extra, f"轨迹 via=wall tool={extra.removeprefix('wall_')}")
     if row.get("status") == "error":
         codes.append("session_error")
     if row.get("status") == "running":
@@ -223,9 +278,11 @@ def classify_session(row: dict) -> tuple[list[str], list[dict]]:
         except ValueError:
             pass
 
+    turns = split_turns(row.get("ui") or [])
+    coded = [classify_turn(turn) for turn in turns]
+    apply_search_gain_carry(turns, coded)
     turn_hits: list[dict] = []
-    for idx, turn in enumerate(split_turns(row.get("ui") or [])):
-        tcodes = classify_turn(turn)
+    for idx, (turn, tcodes) in enumerate(zip(turns, coded)):
         if tcodes:
             turn_hits.append({
                 "turn": idx,
@@ -240,18 +297,105 @@ def classify_session(row: dict) -> tuple[list[str], list[dict]]:
     return codes, turn_hits
 
 
+def build_report(
+    rows: list[dict],
+    code_sessions: Counter[str],
+    code_turns: Counter[str],
+    status_count: Counter[str],
+    gate_reasons: Counter[str],
+    shadow_blocks: Counter[str],
+    wall_hits: Counter[str],
+    sick_sessions: int,
+    total_turns: int,
+) -> dict:
+    n = len(rows) or 1
+    return {
+        "sessions": len(rows),
+        "turns": total_turns,
+        "sickSessions": sick_sessions,
+        "status": dict(status_count),
+        "codes": {
+            code: {
+                "sessions": code_sessions[code],
+                "turns": code_turns[code],
+                "sessionShare": code_sessions[code] / n if rows else 0,
+            }
+            for code in sorted(set(code_sessions) | set(CODE_DESC))
+            if code_sessions[code] or code_turns[code]
+        },
+        "gateReasons": [
+            {"reason": reason, "count": count}
+            for reason, count in gate_reasons.most_common(15)
+        ],
+        "phaseShadowBlocks": [
+            {"phaseTool": key, "count": count}
+            for key, count in shadow_blocks.most_common()
+        ],
+        "walls": [
+            {"tool": tool, "count": count}
+            for tool, count in wall_hits.most_common()
+        ],
+    }
+
+
+def print_compare(base: dict, current: dict) -> None:
+    print()
+    print("=== 对比基线（会话占比 / 轮数；变差标 WORSE）===")
+    codes = set(base.get("codes") or {}) | set(current.get("codes") or {})
+    worse = 0
+    for code in sorted(codes):
+        b = (base.get("codes") or {}).get(code) or {}
+        c = (current.get("codes") or {}).get(code) or {}
+        b_sessions = int(b.get("sessions") or 0)
+        c_sessions = int(c.get("sessions") or 0)
+        b_turns = int(b.get("turns") or 0)
+        c_turns = int(c.get("turns") or 0)
+        b_share = float(b.get("sessionShare") or 0)
+        c_share = float(c.get("sessionShare") or 0)
+        flag = ""
+        if c_share > b_share + 1e-12 or c_turns > b_turns:
+            flag = " WORSE"
+            worse += 1
+        print(
+            f"  {code:22} 会话 {b_sessions:4}→{c_sessions:<4} ({c_sessions - b_sessions:+d})"
+            f"  占比 {b_share:.1%}→{c_share:.1%}"
+            f"  轮 {b_turns:4}→{c_turns:<4} ({c_turns - b_turns:+d}){flag}"
+        )
+    print(f"WORSE 病码数={worse}")
+
+
+def load_rows(args: argparse.Namespace) -> list[dict]:
+    if args.sessions:
+        with open(args.sessions, encoding="utf-8") as f:
+            raw = json.load(f)
+        rows = raw if isinstance(raw, list) else []
+    else:
+        rows = fetch_sessions(args.limit, args.since)
+    if args.since:
+        rows = [row for row in rows if str(row.get("updatedAt") or "")[:10] >= args.since]
+    return rows
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=200)
     ap.add_argument("--out", default="")
+    ap.add_argument("--json", dest="json_path", default="")
+    ap.add_argument("--compare", default="")
+    ap.add_argument("--since", default="")
+    ap.add_argument("--sessions", default="", help="离线 JSON 数组，不连库")
     ap.add_argument("--examples", type=int, default=4)
     args = ap.parse_args()
+    if args.since and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", args.since):
+        raise SystemExit("--since 须为 YYYY-MM-DD")
 
-    rows = fetch_sessions(args.limit)
+    rows = load_rows(args)
     code_sessions: Counter[str] = Counter()
     code_turns: Counter[str] = Counter()
     examples: dict[str, list[str]] = defaultdict(list)
     gate_reasons: Counter[str] = Counter()
+    shadow_blocks: Counter[str] = Counter()
+    wall_hits: Counter[str] = Counter()
     status_count: Counter[str] = Counter()
     intent_by_code: dict[str, Counter[str]] = defaultdict(Counter)
     sick_sessions = 0
@@ -264,6 +408,10 @@ def main() -> None:
         for t in row.get("toolTrace") or []:
             if t.get("via") == "pre-gate":
                 gate_reasons[f"{t.get('tool')}: {str(t.get('reason') or '')[:70]}"] += 1
+            elif t.get("via") == "phase-shadow":
+                shadow_blocks[shadow_key(t)] += 1
+            elif t.get("via") == "wall":
+                wall_hits[str(t.get("tool") or "?")] += 1
 
         scodes, turn_hits = classify_session(row)
         all_codes = set(scodes)
@@ -306,7 +454,7 @@ def main() -> None:
             continue
         intents = ", ".join(f"{k}:{v}" for k, v in intent_by_code[code].most_common(4))
         print(
-            f"  {code:15} 会话 {code_sessions[code]:4}  轮 {code_turns[code]:4}  "
+            f"  {code:22} 会话 {code_sessions[code]:4}  轮 {code_turns[code]:4}  "
             f"{CODE_DESC[code]}  | 意图 {intents}"
         )
 
@@ -328,6 +476,28 @@ def main() -> None:
                 f.write(json.dumps(item, ensure_ascii=False) + "\n")
         print()
         print(f"病例已写出 {len(corpus)} 条 → {args.out}")
+
+    report = build_report(
+        rows,
+        code_sessions,
+        code_turns,
+        status_count,
+        gate_reasons,
+        shadow_blocks,
+        wall_hits,
+        sick_sessions,
+        total_turns,
+    )
+    if args.json_path:
+        with open(args.json_path, "w", encoding="utf-8") as f:
+            json.dump(report, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+        print()
+        print(f"汇总已写出 → {args.json_path}")
+    if args.compare:
+        with open(args.compare, encoding="utf-8") as f:
+            base = json.load(f)
+        print_compare(base, report)
 
 
 if __name__ == "__main__":

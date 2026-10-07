@@ -72,7 +72,7 @@ import {
   shouldInjectVisionFigureQa,
   shouldPauseForFigureBrief,
 } from "@/lib/agent/figure-loop";
-import { decideAfterWall } from "@/lib/agent/core/wall-policy";
+import { decideAfterWall, resolveLlmToolRequest } from "@/lib/agent/core/wall-policy";
 import { buildToolConfirmMessage } from "@/lib/agent/confirm-message";
 import { isConfirmGranted } from "@/lib/agent/core/confirm-grant";
 import {
@@ -289,7 +289,8 @@ export async function agentNode(
   // 不每轮注入【计划焦点】假 user；改为提前结束时用 buildContinueNudge 轻推（见下方 canContinue）
   const extraMessages: AgentGraphStateType["messages"] = [];
 
-  const systemPrompt = buildAgentSystemPrompt(tools, state.intentKind);
+  const llmRequest = resolveLlmToolRequest(tools, state.restrictToolsOnce);
+  const systemPrompt = buildAgentSystemPrompt(llmRequest.tools, state.intentKind);
   // 项目简报经独立 user 消息注入（system prompt 前缀恒定 → provider 前缀缓存友好）
   const briefingMsg = buildAgentBriefingMessage(agentContext.projectBriefing);
   // 长会话压缩：超过阈值时把早期轮次的工具观察压成摘要块，控制 LLM 输入长度
@@ -307,7 +308,8 @@ export async function agentNode(
       response = await callAIStreamingWithTools(
         {
           messages: llmMessages,
-          tools: toolsToOpenAISchema(tools),
+          tools: toolsToOpenAISchema(llmRequest.tools),
+          toolChoice: llmRequest.toolChoice,
           signal: agentContext.signal,
           userId: agentContext.userId,
           temperature: 0.3,
@@ -325,7 +327,8 @@ export async function agentNode(
       if (degenerate) {
         response = await callAINonStreamingWithTools({
           messages: llmMessages,
-          tools: toolsToOpenAISchema(tools),
+          tools: toolsToOpenAISchema(llmRequest.tools),
+          toolChoice: llmRequest.toolChoice,
           signal: agentContext.signal,
           userId: agentContext.userId,
           temperature: 0.3,
@@ -334,7 +337,8 @@ export async function agentNode(
     } catch {
       response = await callAINonStreamingWithTools({
         messages: llmMessages,
-        tools: toolsToOpenAISchema(tools),
+        tools: toolsToOpenAISchema(llmRequest.tools),
+        toolChoice: llmRequest.toolChoice,
         signal: agentContext.signal,
         userId: agentContext.userId,
         temperature: 0.3,
@@ -349,6 +353,7 @@ export async function agentNode(
       finished: true,
       messages: [...extraMessages, { role: "user", content: `[System error] ${message}` }],
       plan: plan ?? state.plan,
+      ...(llmRequest.clearRestrict ? { restrictToolsOnce: null } : {}),
     };
   }
 
@@ -359,6 +364,7 @@ export async function agentNode(
     plan: plan
       ? { ...plan, focusSubtaskId: getFocusSubtask(plan)?.id ?? null }
       : state.plan,
+    ...(llmRequest.clearRestrict ? { restrictToolsOnce: null } : {}),
   };
 
   if (response.content) {
@@ -1172,6 +1178,25 @@ export async function toolsNode(
             ...(reflectReset ? { reflectCount: 0 } : {}),
             awaitingCheckpoint: checkpoint,
             finished: true,
+          };
+        }
+        if (wall.kind === "run") {
+          trace("figure_qa", false, { reason: wall.reason, via: "wall" });
+          toolQueue.splice(tcIdx + 1, 0, wall.call);
+        } else if (wall.kind === "restrict") {
+          trace("figure_qa", false, { reason: wall.reason, via: "wall" });
+          return {
+            pendingToolCalls: toolQueue.slice(tcIdx + 1),
+            restrictToolsOnce: wall.tools,
+            toolCallCount,
+            toolSummaries: newSummaries,
+            observations: newObservations,
+            messages: newMessages,
+            events,
+            plan,
+            toolTrace: newTrace,
+            ...(reflectReset ? { reflectCount: 0 } : {}),
+            finished: false,
           };
         }
       }

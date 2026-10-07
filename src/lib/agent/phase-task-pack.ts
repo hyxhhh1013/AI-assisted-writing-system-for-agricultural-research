@@ -3,14 +3,8 @@ import {
   type PhaseTaskPack,
 } from "@/contracts/phase-task-pack";
 import type { AgentProjectSnapshot } from "@/lib/agent/project-loader";
-import {
-  formatAgentProjectBriefing,
-  suggestNextAgentActions,
-} from "@/lib/agent/project-briefing";
-import {
-  evaluateDraftCoverage,
-  sectionCharsFromFills,
-} from "@/lib/draft-coverage";
+import { resolveAgentPhase } from "@/lib/agent/core/agent-phase";
+import { formatAgentProjectBriefing } from "@/lib/agent/project-briefing";
 
 export interface ResolvedPhaseTaskPack {
   pack: PhaseTaskPack;
@@ -32,31 +26,12 @@ export function resolvePhaseTaskPack(
         : 1;
   const pack = getPhaseTaskPack(phase);
 
-  const empty = snapshot
-    ? snapshot.sectionFills
-      .filter((s) => s.chars === 0 && s.key !== "abstract")
-      .map((s) => s.key)
-    : [];
-  const coverage = snapshot
-    ? evaluateDraftCoverage({
-      mode: snapshot.mode,
-      language: snapshot.language,
-      sectionChars: sectionCharsFromFills(snapshot.sectionFills),
-    })
-    : null;
-    const nextTips = suggestNextAgentActions({
-      currentPhase: pack.phase,
+  const goal =
+    resolveAgentPhase({
+      snapshot,
       writeEnabled: true,
-      hasOutline: Boolean(snapshot?.outline?.trim() && snapshot.outline.trim().length >= 20),
-      hasWritingBlueprint: Boolean(snapshot?.hasWritingBlueprint),
-      emptySections: empty,
-      nextSectionKey: coverage?.nextSectionKey,
-      thinOrGapSections: coverage
-        ? [...coverage.requiredGaps, ...coverage.thinKeys]
-        : undefined,
-      referenceCount: snapshot?.references.length ?? 0,
-    });
-  const goal = nextTips[0] ?? pack.goal;
+      phaseOverride: phase,
+    }).nextAction ?? pack.goal;
 
   const briefingExtra = [
     `【阶段任务包】Phase ${pack.phase} ${pack.title}`,

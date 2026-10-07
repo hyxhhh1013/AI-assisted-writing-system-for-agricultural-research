@@ -1,4 +1,4 @@
-import { formatAgentProjectBriefing, suggestNextAgentActions } from "@/lib/agent/project-briefing";
+import { formatAgentProjectBriefing } from "@/lib/agent/project-briefing";
 import { getAgentProjectSnapshot } from "@/lib/agent/project-refresh";
 import { resolvePhaseTaskPack } from "@/lib/agent/phase-task-pack";
 import { assessDataFoundation } from "@/lib/agent/data-foundation";
@@ -165,17 +165,7 @@ export const inspectProjectTool: ToolDefinition = {
         : writingAudit
           ? "；稿面扫描通过"
           : "";
-    const nextTips = suggestNextAgentActions({
-      currentPhase: project.currentPhase,
-      writeEnabled: true,
-      hasOutline: project.outline.trim().length >= 20,
-      hasWritingBlueprint: project.hasWritingBlueprint,
-      emptySections: empty.filter((k) => k !== "abstract"),
-      nextSectionKey: draftCoverage.nextSectionKey,
-      thinOrGapSections: [...draftCoverage.requiredGaps, ...draftCoverage.thinKeys],
-      referenceCount: project.references.length,
-    });
-    const suggestedGoal = nextTips[0] ?? pack.goal;
+    const suggestedGoal = pack.goal;
     const nextNote = suggestedGoal;
     const claimSamples = project.dataClaims.slice(0, 3).map((c) => ({
       id: c.id,

@@ -345,9 +345,9 @@
 | **Phase 20 — Agent 阶段制（代码定阶段、按阶段给工具、撞墙由代码接手）** |
 | **W3-AP-PHASE** | **主轴：先影子后生效、每阶段独立开关；旧门禁证明不可达才删** | PHASE-00 | 9w | **todo** | 2026-10-04 规划；D1–D6 已拍板（蓝图并入大纲；综述可检索、研究型不可；意图明确才切阶段；影子 ≥30 轮且误拦 <5%；墙 3/6/6/2；缓存失效可接受）。吸收 QNEXT-05/06。不换 LangGraph |
 | W3-AP-PHASE-00 | 撞墙出口 `wall-policy` + 出图重画上限 3 + harvest 转圈扫描 | — | 0.5d | **done** | 2026-10-04；= WALL-01；待部署后验收「选 1 不再重画」 |
-| W3-AP-PHASE-01 | harvest `--json` / `--compare` / `--since` + 新病码 | 00 | 0.5d | todo | 只动脚本 |
-| W3-AP-PHASE-02 | `resolveAgentPhase` 单一来源（4 处「下一步」合一） | — | 1.5d | todo | 先写特征测试锁现状；不改行为 |
-| W3-AP-PHASE-03 | `PHASE_TOOLSETS` 阶段工具集数据表 | 02 | 0.5d | todo | 只定义不使用；注册表覆盖单测 |
+| W3-AP-PHASE-01 | harvest `--json` / `--compare` / `--since` + 新病码 | 00 | 0.5d | **done** | 2026-10-07；离线 `--sessions` 可自对比。基线文件仍待服务器跑 |
+| W3-AP-PHASE-02 | `resolveAgentPhase` 单一来源（4 处「下一步」合一） | — | 1.5d | **done** | 2026-10-07；特征测试锁文案；不改判断 |
+| W3-AP-PHASE-03 | `PHASE_TOOLSETS` 阶段工具集数据表 | 02 | 0.5d | **done** | 2026-10-07；只定义不使用。大纲包里的 search_knowledge 故意不进工具集 |
 | W3-AP-PHASE-04 | 影子模式：轨迹 `via=phase-shadow` | 01, 03 | 1d | todo | `AGENT_PHASE_MODE=shadow`；不拦 |
 | W3-AP-PHASE-05 | 状态卡通道（替换式，不进 messages） | 02 | 1d | todo | `AGENT_PHASE_CARD`；只新增 |
 | W3-AP-PHASE-06a | 催促迁移 1：出图 / 插入回看 / 文生图 | 05 | 1d | todo | `turnSignals` |
@@ -362,7 +362,7 @@
 | W3-AP-PHASE-13b | 完成条件替代计划续跑 / 意图续跑 / reflect | 13a ≥1w | 2d | todo | `AGENT_PHASE_DONE=on` |
 | W3-AP-PHASE-14 | 意图收口为入口路由；删无引用 `isXxxGoal` | 13b | 1.5d | todo | `goal-intents.ts` ≤500 行 |
 | W3-AP-PHASE-15 | 删旧路径与开关；拆 `toolsNode` | 14 ≥2w | 2d | todo | `nodes.ts` ≤700 行 |
-| W3-AP-WALL-R | `restrict` / `run` 决策落地（下一轮只许用指定工具） | PHASE-00 | 1d | todo | `restrictToolsOnce` + `tool_choice=required` |
+| W3-AP-WALL-R | `restrict` / `run` 决策落地（下一轮只许用指定工具） | PHASE-00 | 1d | **done** | 2026-10-07；上限 3/6/6/2 已写入。读/搜/门禁墙的计数触发仍是 WALL-02～04 |
 | W3-AP-WALL-02 | 逐篇读上限（一轮读 ≥6） | WALL-R | 0.5d | todo | 线上 `read_reference` ×17 |
 | W3-AP-WALL-03 | 检索墙（连搜 ≥6 无新增 → 导入确认或问） | WALL-R | 1d | todo | 8/18 会话 search_storm |
 | W3-AP-WALL-04 | 门禁二次回弹 → 只许用门禁点名工具 | WALL-R | 1d | todo | `GateVerdict.suggestTool` |
@@ -1494,6 +1494,7 @@ src/app/api/（13）                       src/lib/（6）
 | 2026-10-04 | W3-AP-PHASE-00 | AI | 线上 18 会话扫描：8 个连搜、1 个出图来回 9 张，熔断 0 次触发。出图质检连败 3 次改弹选项卡，由代码决定下一步。Phase 20 计划落 `plans/W3-AP-PHASE-MACHINE.md`。 |
 | 2026-10-04 | W3-AP-PHASE-D1-6 | 维护者 | 阶段制 D1–D6 按建议拍板：蓝图确认并入大纲；综述起草可检索导入、研究型不可；意图明确才临时切阶段否则先问；影子放行须文献 ≥30 轮、误拦 <5%、无阶段算错；墙上限 3/6/6/2；切阶段缓存失效可接受，enforce 后观察一周用量。 |
 | 2026-10-07 | RAG-PROP | AI | 影子阅读顺序与 recall/金句尺子落地，未晋级。线上切块与写作检索不变。重切、补页、reload 只允许北京时间 00:30–05:00，一夜一个分类。 |
+| 2026-10-07 | W3-AP-PHASE-01～03 / WALL-R | AI | 阶段机地基：`resolveAgentPhase` 合一下一步；`PHASE_TOOLSETS` 只定义不拦工具；harvest 可 `--json/--compare/--since`。撞墙可输出 restrict/run，读/搜/门禁墙尚未触发。enforce、删门禁、状态卡未做（须先影子）。 |
 
 ---
 

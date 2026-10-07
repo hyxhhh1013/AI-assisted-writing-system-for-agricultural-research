@@ -39,6 +39,18 @@ describe("buildChatCompletionsBody", () => {
     expect(body.tool_choice).toBe("auto");
   });
 
+  it("passes tool_choice required through to the request body", () => {
+    const body = buildChatCompletionsBody({
+      provider: "deepseek",
+      model: "deepseek-v4-flash",
+      messages: [{ role: "user", content: "改引言" }],
+      tools: [tool],
+      tool_choice: "required",
+      stream: false,
+    });
+    expect(body.tool_choice).toBe("required");
+  });
+
   it("does not send thinking for Zhipu tool calls", () => {
     const body = buildChatCompletionsBody({
       provider: "zhipu",

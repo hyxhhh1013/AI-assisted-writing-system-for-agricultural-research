@@ -105,6 +105,11 @@ export const AgentGraphState = Annotation.Root({
     reducer: (_, next) => next,
     default: () => [],
   }),
+  /** 撞墙 restrict：下一轮 LLM 只看到这些工具，调用后由 agentNode 清空 */
+  restrictToolsOnce: Annotation<string[] | null>({
+    reducer: (_, next) => next,
+    default: () => null,
+  }),
 });
 
 export type AgentGraphStateType = typeof AgentGraphState.State;

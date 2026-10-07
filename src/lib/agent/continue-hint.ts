@@ -194,11 +194,36 @@ export function collectTurnContinueSignals(messages: readonly AgentUiMessage[]):
  * 输入区「继续推进」条。
  * 本轮已成功 write_section 时禁止再显示「只宣布了」或重复写同一节。
  */
+/** 下一空节以阶段机的 nextSectionKey / nextAction 为准；没传时仍解析建议文案 */
+function writeTipForHint(
+  input: {
+    suggestedActions?: readonly string[];
+    nextAction?: string | null;
+    nextSectionKey?: string | null;
+  },
+  skipKeys: ReadonlySet<string>,
+): string | null {
+  const fromActions = firstWriteTip(input.suggestedActions, skipKeys);
+  if (input.nextSectionKey == null && input.nextAction == null) return fromActions;
+  const action = input.nextAction?.trim() ?? "";
+  const actionKey = action ? sectionKeyFromWriteTip(action) : null;
+  const key = input.nextSectionKey ?? actionKey;
+  if (key && skipKeys.has(key)) return fromActions;
+  if (action && /^写/.test(action) && (actionKey == null || actionKey === key || input.nextSectionKey == null)) {
+    return action;
+  }
+  return fromActions;
+}
+
 export function resolveAgentContinueHint(input: {
   lastAssistantText?: string | null;
   lastSummaryText?: string | null;
   planSubtasks?: ReadonlyArray<{ title: string; status: string }>;
   suggestedActions?: readonly string[];
+  /** resolveAgentPhase().nextAction；写节文案与芯片同源 */
+  nextAction?: string | null;
+  /** resolveAgentPhase().nextSectionKey */
+  nextSectionKey?: string | null;
   observations?: readonly ContinueHintObservation[];
   skipSectionKeys?: readonly string[];
   thinOrGapSections?: readonly string[];
@@ -219,7 +244,7 @@ export function resolveAgentContinueHint(input: {
   const announced = wroteThisTurn || leftover
     ? null
     : thoughtAnnouncesUnfinishedTool(blob, input.observations ?? []);
-  const writeTip = firstWriteTip(input.suggestedActions, skipKeys);
+  const writeTip = writeTipForHint(input, skipKeys);
   const planTitle = firstOpenPlanTitle(input.planSubtasks, skipKeys);
   const writeQa = lastWriteQaObservation(input.observations);
   const qaActionable = writeQa?.qaReport

@@ -226,6 +226,7 @@ describe("routeAfterAgent plan continue", () => {
       intentObsOffset: 0,
       approvedCheckpointKinds: [],
       toolTrace: [],
+      restrictToolsOnce: null,
       ...overrides,
     };
   }
