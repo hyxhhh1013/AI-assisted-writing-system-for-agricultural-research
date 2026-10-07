@@ -52,7 +52,7 @@ node scripts/shadow-reading-order.mjs --category=热化学
 node scripts/shadow-reading-order.mjs --files=a.pdf,b.pdf
 ```
 
-影子结果在 `data/shadow/chunks/<分类>/`。后台「文献管理」先点选一个分类，再点「影子重建」。一次只能一个分类。跨栏页保留旧抽取。`--rechunk` 仍会改写线上索引，不能用来试新阅读顺序。主张召回基线：
+影子结果在 `data/shadow/chunks/<分类>/`。后台「文献管理」先点选一个分类，再点「影子重建」。同一页显示进度，并可点开一篇看正文顺序。一次只能一个分类。跨栏页保留旧抽取。`--rechunk` 仍会改写线上索引，不能用来试新阅读顺序。主张召回基线：
 
 ```bash
 RAG_PROP_EVAL=1 npx tsx scripts/eval-rag-prop.mjs src/__tests__/fixtures/rag-prop-queries.json

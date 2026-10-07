@@ -31,6 +31,7 @@ import type {
   AdminUserDetail,
   AdminUserRecord,
 } from "@/contracts/admin";
+import type { ShadowDocumentPreview, ShadowRebuildView } from "@/contracts/shadow-reindex";
 
 export type {
   AdminAgentSessionDetail,
@@ -219,7 +220,7 @@ export async function listAdminKnowledge(
   };
 }
 
-/** POST /api/admin/knowledge/shadow-reindex — 深夜影子重建，不改线上索引 */
+/** POST /api/admin/knowledge/shadow-reindex — 影子重建，不改线上索引 */
 export async function startAdminShadowReindex(
   category: string,
   resume = false,
@@ -240,6 +241,27 @@ export async function startAdminShadowReindex(
     message: data.message || "已开始影子重建",
     fileCount: data.data?.fileCount ?? 0,
   };
+}
+
+/** GET /api/admin/knowledge/shadow-reindex — 进度，或单篇正文抽查 */
+export async function getAdminShadowStatus(
+  category: string,
+): Promise<{ ok: true; data: ShadowRebuildView } | { ok: false; error: string }> {
+  const res = await fetch(`/api/admin/knowledge/shadow-reindex?category=${encodeURIComponent(category)}`);
+  const body = (await res.json().catch(() => ({}))) as { error?: string; data?: ShadowRebuildView };
+  if (!res.ok || !body.data) return { ok: false, error: body.error || "读不到影子进度" };
+  return { ok: true, data: body.data };
+}
+
+export async function getAdminShadowPreview(
+  category: string,
+  file: string,
+): Promise<{ ok: true; data: ShadowDocumentPreview } | { ok: false; error: string }> {
+  const params = new URLSearchParams({ category, file });
+  const res = await fetch(`/api/admin/knowledge/shadow-reindex?${params.toString()}`);
+  const body = (await res.json().catch(() => ({}))) as { error?: string; data?: ShadowDocumentPreview };
+  if (!res.ok || !body.data) return { ok: false, error: body.error || "读不到这篇影子" };
+  return { ok: true, data: body.data };
 }
 
 /** POST /api/admin/knowledge — 单篇重索引 */

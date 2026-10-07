@@ -25,6 +25,7 @@ import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminSearchInput } from "@/components/admin/admin-search-input";
 import { AdminPagination } from "@/components/admin/admin-pagination";
 import { AdminConfirmDialog } from "@/components/admin/admin-confirm-dialog";
+import { AdminShadowRebuildPanel } from "@/components/admin/admin-shadow-rebuild-panel";
 import { AdminDataTable } from "@/components/admin/admin-data-table";
 import { KnowledgeIndexBadge } from "@/components/shared/knowledge/knowledge-index-badge";
 import { KnowledgeReindexProgress } from "@/components/shared/knowledge/knowledge-reindex-progress";
@@ -51,6 +52,7 @@ export default function AdminKnowledgePage() {
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [shadowConfirmOpen, setShadowConfirmOpen] = useState(false);
   const [shadowStarting, setShadowStarting] = useState(false);
+  const [shadowRefreshKey, setShadowRefreshKey] = useState(0);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [reindexing, setReindexing] = useState<string | null>(null);
   const [bulkReindexing, setBulkReindexing] = useState(false);
@@ -220,6 +222,7 @@ export default function AdminKnowledgePage() {
       }
       toast.success(result.message);
       setShadowConfirmOpen(false);
+      setShadowRefreshKey((key) => key + 1);
     } finally {
       setShadowStarting(false);
     }
@@ -325,6 +328,8 @@ export default function AdminKnowledgePage() {
         onCancel={() => reindexAbortRef.current?.abort()}
         onDismiss={() => setReindexPanelOpen(false)}
       />
+
+      <AdminShadowRebuildPanel category={cat} refreshKey={shadowRefreshKey} />
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <AdminSearchInput value={q} onChange={setQ} placeholder="搜索文件名..." />
