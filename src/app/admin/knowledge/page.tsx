@@ -446,7 +446,7 @@ export default function AdminKnowledgePage() {
         confirmLabel="开始影子重建"
         description={
           <p>
-            只处理分类「{cat}」。新阅读顺序写入 data/shadow，不覆盖线上索引，写作检索不会变。仅北京时间 00:30–05:00 会真正开始。
+            只处理分类「{cat}」。新阅读顺序写入 data/shadow，不覆盖线上索引，写作检索不会变。一次一个分类。
           </p>
         }
         onConfirm={startShadowReindex}

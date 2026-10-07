@@ -63,7 +63,7 @@ DOI 邻域只连接库内两边都有的 DOI。它不代替语义召回。无 DO
 
 | 时段 | 允许 | 禁止 |
 |------|------|------|
-| 白天（05:00–24:00，北京时间） | 照常写作和上传。金句由人抄录、对照已经产好的影子。看上一夜的附录 | 解析 PDF、重切、嵌入、MinerU / GROBID、`--promote`、`pm2 reload` |
+| 白天（05:00–24:00，北京时间） | 照常写作和上传。影子重建（只写 `data/shadow`，一次一个分类）。金句由人抄录 | 线上重切、失败页补写线上索引、嵌入、MinerU / GROBID、`--promote`、`pm2 reload` |
 | 深夜（00:30–05:00） | 一个分类的影子抽取或失败页补文本或向量或晋级。到 05:00 没跑完就停，下一夜从断点续 | 第二个分类。全库。和写作请求并行打满 CPU |
 
 索引在进程里有缓存（`LocalRAG` 按分类留在内存）。只换磁盘文件，已经打开的进程仍读旧块。所以晋级的最后一步才是 `pm2 reload grainscript`，而且要先看没有进行中的写作或 Agent 生成。有人还在写，这一夜就只把文件放进 `data/shadow/ready/`，reload 顺延到下一夜，不把写到一半的流打断。
@@ -323,7 +323,7 @@ node scripts/harvest-rag-prop-queries.mjs snapshot.json
 # 失败页补文本。窗口外直接退出，不读写索引
 node scripts/repair-reading-order-pages.mjs
 
-# 影子重建。窗口外直接退出。一次一个分类，只写 data/shadow
+# 影子重建。不限时钟。一次一个分类，只写 data/shadow，不改线上索引
 node scripts/shadow-reading-order.mjs --category=热化学
 node scripts/shadow-reading-order.mjs --files=a.pdf,b.pdf
 node scripts/shadow-reading-order.mjs --category=热化学 --resume

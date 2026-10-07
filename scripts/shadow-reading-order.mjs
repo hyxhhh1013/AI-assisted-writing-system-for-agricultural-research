@@ -1,18 +1,16 @@
 /**
- * 深夜影子重建。只写 data/shadow，不覆盖线上索引。
+ * 影子重建。只写 data/shadow，不覆盖线上索引。
  *
  *   node scripts/shadow-reading-order.mjs --category=热化学
  *   node scripts/shadow-reading-order.mjs --files=a.pdf,b.pdf
  *
- * 北京时间 00:30–05:00 之外直接退出。到 05:00 停，下一夜加 --resume 续。
- * 一次只能一个分类。
+ * 不限时钟。一次只能一个分类。中断后用 --resume 续。
  */
 
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import pdfjs from "pdfjs-dist/legacy/build/pdf.js";
-import { isDeepNightWindow } from "./lib/reading-order-repair.mjs";
 import {
   buildShadowPages,
   chunkShadowPages,
@@ -28,15 +26,6 @@ const shadowRoot = path.resolve(root, "data", "shadow");
 function argValue(flag) {
   const hit = process.argv.find((arg) => arg.startsWith(`${flag}=`));
   return hit ? hit.slice(flag.length + 1) : "";
-}
-
-function now() {
-  const stamped = process.env.RAG_PROP_NOW ? new Date(process.env.RAG_PROP_NOW) : new Date();
-  if (Number.isNaN(stamped.getTime())) {
-    console.error("RAG_PROP_NOW 不是有效时间");
-    process.exit(1);
-  }
-  return stamped;
 }
 
 export async function shadowOnePdf(fileInfo) {
@@ -62,11 +51,6 @@ export async function shadowOnePdf(fileInfo) {
 }
 
 async function main() {
-  const clock = now();
-  if (!isDeepNightWindow(clock)) {
-    console.log("不在深夜窗口 00:30–05:00（北京时间），已退出，未读写索引。");
-    process.exit(0);
-  }
   const names = argValue("--files").split(",").map((name) => name.trim()).filter(Boolean);
   const category = argValue("--category");
   const files = selectShadowFiles(listPdfFiles(articlesDir), { names, category });
@@ -76,11 +60,6 @@ async function main() {
   fs.mkdirSync(shadowRoot, { recursive: true });
   let wrote = 0;
   for (const fileInfo of files) {
-    if (!isDeepNightWindow(now())) {
-      fs.writeFileSync(resumePath, JSON.stringify({ category: fileInfo.category, done: [...done] }, null, 2));
-      console.log("已到 05:00，停止。下一夜用 --resume 续。未改线上索引。");
-      process.exit(0);
-    }
     if (done.has(fileInfo.name)) continue;
     const target = await shadowOnePdf(fileInfo);
     done.add(fileInfo.name);

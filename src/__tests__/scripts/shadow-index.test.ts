@@ -97,12 +97,21 @@ describe("shadow output path", () => {
 });
 
 describe("shadow rebuild command", () => {
-  it("exits outside the night window without reading papers", () => {
-    const out = execFileSync(process.execPath, ["scripts/shadow-reading-order.mjs", "--category=热化学"], {
-      cwd: process.cwd(),
-      env: { ...process.env, RAG_PROP_NOW: "2026-10-07T14:00:00.000Z" },
-      encoding: "utf8",
-    });
-    expect(out).toContain("未读写索引");
+  it("does not wait for the night window and refuses an empty library", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "rag-shadow-empty-"));
+    try {
+      execFileSync(process.execPath, ["scripts/shadow-reading-order.mjs", "--category=热化学"], {
+        cwd: process.cwd(),
+        env: { ...process.env, RAG_ARTICLES_DIR: dir, RAG_PROP_NOW: "2026-10-07T14:00:00.000Z" },
+        encoding: "utf8",
+      });
+      throw new Error("空库应当失败");
+    } catch (err) {
+      const failed = err as { status?: number; stdout?: string; stderr?: string };
+      expect(failed.status).toBe(1);
+      const text = `${failed.stdout ?? ""}${failed.stderr ?? ""}`;
+      expect(text).toContain("没有要处理的 PDF");
+      expect(text).not.toContain("深夜窗口");
+    }
   });
 });
