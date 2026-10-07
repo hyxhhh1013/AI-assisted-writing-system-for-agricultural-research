@@ -4,6 +4,13 @@ import { findReferenceRowsLite } from "@/lib/reference-rows";
 import { localRAG } from "@/lib/rag";
 import { getErrorMessage } from "@/lib/error-utils";
 import type { ReferenceSourceDetail } from "@/contracts/references";
+import { normalizeBibliographyDoi } from "@/lib/bib-import/doi";
+import {
+  findKnowledgePdfByDoi,
+  isKnowledgePdfName,
+  upsertReferencePdfSource,
+  type KnowledgePdfHit,
+} from "@/lib/reference-pdf-link";
 
 /**
  * GET /api/projects/:id/references/source?refIndexes=1,2,3
@@ -12,8 +19,8 @@ import type { ReferenceSourceDetail } from "@/contracts/references";
  * 取代旧实现里「用引用文本做语义检索猜原文」的做法（对外部导入的无 PDF 摘要文献失效）。
  *
  * 三态判定：
- *   - full      知识库 PDF（sourceName 可 getFullText 命中）→ 返回原文片段
- *   - abstract  外部导入软落地（无 PDF 全文，有 Reference.abstract 证据）→ 返回摘要
+ *   - full      知识库 PDF（sourceName 或同 DOI 的知识库 PDF 可 getFullText 命中）→ 返回原文片段
+ *   - abstract  有 Reference.abstract、索引里还没有全文 → 返回摘要（若已挂上 PDF 文件名，前端改提示）
  *   - bib_only  仅书目（无原文/摘要）→ 返回 citation + doi/openAccessUrl
  */
 export async function GET(
@@ -51,12 +58,14 @@ export async function GET(
       select: { refIndex: true, sourceName: true, category: true, citation: true },
     });
     const sourceByIndex = new Map(sources.map((s) => [s.refIndex, s]));
+    const pdfByDoi = new Map<string, KnowledgePdfHit | null>();
 
     const items: ReferenceSourceDetail[] = await Promise.all(
       refIndexes.map(async (refIndex) => {
         const row = byOrder.get(refIndex - 1);
         const src = sourceByIndex.get(refIndex);
-        const sourceName = src?.sourceName?.trim() || null;
+        let sourceName = src?.sourceName?.trim() || null;
+        let category = src?.category ?? "";
         const citation =
           row?.content?.trim() || src?.citation?.trim() || `[${refIndex}]`;
 
@@ -70,8 +79,50 @@ export async function GET(
           }
         }
 
-        const abstract = row?.abstract?.trim() || null;
         const doi = row?.doi?.trim() || null;
+        const doiKey = doi ? normalizeBibliographyDoi(doi) : undefined;
+        if (!fullText.trim() && doi && doiKey) {
+          let pdf = pdfByDoi.get(doiKey);
+          if (pdf === undefined) {
+            try {
+              pdf = await findKnowledgePdfByDoi(doi);
+            } catch {
+              pdf = null;
+            }
+            pdfByDoi.set(doiKey, pdf);
+          }
+          if (pdf) {
+            const currentLeaf = sourceName?.replace(/\\/g, "/").split("/").pop()?.toLowerCase();
+            const pdfLeaf = pdf.name.replace(/\\/g, "/").split("/").pop()?.toLowerCase();
+            const sameFile = isKnowledgePdfName(sourceName) && currentLeaf === pdfLeaf;
+            if (!sameFile) {
+              let alt = "";
+              try {
+                alt = await localRAG.getFullText(pdf.name);
+              } catch {
+                alt = "";
+              }
+              if (alt.trim() || !isKnowledgePdfName(sourceName)) {
+                sourceName = pdf.name;
+                category = pdf.category || category;
+                fullText = alt;
+                try {
+                  await upsertReferencePdfSource({
+                    projectId,
+                    refIndex,
+                    sourceName: pdf.name,
+                    category,
+                    citation,
+                  });
+                } catch {
+                  /* 挂接失败仍返回本次查到的文件名 */
+                }
+              }
+            }
+          }
+        }
+
+        const abstract = row?.abstract?.trim() || null;
         const openAccessUrl = row?.openAccessUrl?.trim() || null;
         const title = row?.title?.trim() || null;
 

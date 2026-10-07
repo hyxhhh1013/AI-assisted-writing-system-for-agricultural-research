@@ -115,12 +115,23 @@ export function ReferenceSourceView({
   }
 
   if (detail.mode === "abstract" && detail.abstract) {
+    const pdfName = detail.sourceName?.toLowerCase().endsWith(".pdf") ? detail.sourceName : null;
     return (
       <div className="space-y-3">
-        <p className="text-[11px] text-[#6b7c72]">无 PDF 全文，摘要仅供概括引用，核对事实请打开原文。</p>
+        <p className="text-[11px] text-[#6b7c72]">
+          {pdfName
+            ? "知识库已有这篇 PDF，全文索引还没就绪，下面仍是导入时的摘要。打开阅读器核对。"
+            : "无 PDF 全文，摘要仅供概括引用，核对事实请打开原文。"}
+        </p>
         <div className="max-h-56 overflow-y-auto rounded-lg bg-[#f6f5f1] px-3.5 py-3 text-[13px] leading-relaxed text-[#122820]">
           {detail.abstract}
         </div>
+        {!hideActions && pdfName ? (
+          <SourceAction href={`/reader?file=${encodeURIComponent(pdfName)}`}>
+            <BookOpen className="h-3.5 w-3.5" />
+            阅读全文
+          </SourceAction>
+        ) : null}
         {!hideActions && detail.openAccessUrl ? (
           <SourceAction href={detail.openAccessUrl} external>
             <ExternalLink className="h-3.5 w-3.5" />
@@ -150,7 +161,7 @@ export function sourcePrimaryAction(detail: ReferenceSourceDetail | null): {
   label: string;
 } | null {
   if (!detail) return null;
-  if (detail.mode === "full" && detail.sourceName) {
+  if (detail.sourceName?.toLowerCase().endsWith(".pdf")) {
     return {
       href: `/reader?file=${encodeURIComponent(detail.sourceName)}`,
       external: false,

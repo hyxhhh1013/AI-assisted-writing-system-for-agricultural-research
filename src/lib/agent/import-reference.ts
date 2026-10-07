@@ -15,6 +15,7 @@ import {
   loadReferenceDedupKeys,
 } from "@/lib/reference-rows";
 import { syncProjectPaperPassport } from "@/lib/project-paper-passport-sync";
+import { upsertReferencePdfSource } from "@/lib/reference-pdf-link";
 import prisma from "@/lib/prisma";
 import { createLogger } from "@/lib/logger";
 
@@ -120,6 +121,16 @@ export async function importExternalReferenceToProject(
     /* 不阻塞导入 */
   }
 
+  const createdOrder = index !== undefined
+    ? index
+    : (
+      await prisma.reference.findFirst({
+        where: { projectId },
+        orderBy: { order: "desc" },
+        select: { order: true },
+      })
+    )?.order;
+
   let knowledge: ImportAgentReferenceResult["knowledge"];
   if (bridge?.ingestToKnowledge !== false) {
     try {
@@ -134,6 +145,22 @@ export async function importExternalReferenceToProject(
         researchDirection,
       });
       knowledge = { name: k.name, category: k.category, mode: k.mode };
+      if (k.mode === "pdf" && createdOrder !== undefined) {
+        try {
+          await upsertReferencePdfSource({
+            projectId,
+            refIndex: createdOrder + 1,
+            sourceName: k.name,
+            category: k.category,
+            citation,
+          });
+        } catch (linkErr) {
+          log.fail("link imported pdf to reference failed", linkErr, {
+            title: hit.title?.slice(0, 80),
+            doi: hit.doi,
+          });
+        }
+      }
     } catch (e) {
       log.fail("ingest external hit to knowledge failed", e, {
         title: hit.title?.slice(0, 80),
@@ -216,6 +243,17 @@ export async function importExternalReferencesToProject(
     }
   }
 
+  const newestOrders = acceptedHits.length > 0
+    ? (
+      await prisma.reference.findMany({
+        where: { projectId },
+        orderBy: { order: "desc" },
+        take: acceptedHits.length,
+        select: { order: true },
+      })
+    ).map((row) => row.order)
+    : [];
+
   let knowledgeCreated = 0;
   let knowledgeWithAbstract = 0;
   let knowledgeWithPdf = 0;
@@ -237,6 +275,25 @@ export async function importExternalReferencesToProject(
       knowledgeCreated = k.created;
       knowledgeWithAbstract = k.withAbstract;
       knowledgeWithPdf = k.withPdf;
+      for (let i = 0; i < k.results.length; i++) {
+        const hitResult = k.results[i];
+        if (!hitResult || hitResult.mode !== "pdf") continue;
+        const order = newestOrders[acceptedHits.length - 1 - i];
+        if (order === undefined) continue;
+        try {
+          await upsertReferencePdfSource({
+            projectId,
+            refIndex: order + 1,
+            sourceName: hitResult.name,
+            category: hitResult.category,
+            citation: citations[i] ?? "",
+          });
+        } catch (linkErr) {
+          log.fail("link imported pdf to reference failed", linkErr, {
+            title: acceptedHits[i]?.title?.slice(0, 80),
+          });
+        }
+      }
     } catch (e) {
       log.fail("batch ingest external hits to knowledge failed", e, {
         hitCount: acceptedHits.length,
