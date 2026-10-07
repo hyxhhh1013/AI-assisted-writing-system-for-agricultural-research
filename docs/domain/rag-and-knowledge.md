@@ -39,7 +39,15 @@ node scripts/index-pdfs.mjs --progress       # 输出 SSE 进度行（API reinde
 
 写作检索仍读 `data/index_<分类>.json` 里现有的块。`extractPageText` 在 `--promote` 之前仍按 Y 再 X 拼接。横带分栏在 `scripts/extractors/reading-order.mjs`，只给影子用。跨栏片段不写入正文，失败页保留旧句。
 
-重切、版面补页、嵌入、换上分类索引和 `pm2 reload` 只在北京时间 00:30–05:00，一夜一个分类，第二天照常使用后再换下一类。窗口外 `node scripts/repair-reading-order-pages.mjs` 直接退出，不读写索引。主张召回基线：
+重切、版面补页、嵌入、换上分类索引和 `pm2 reload` 只在北京时间 00:30–05:00，一夜一个分类，第二天照常使用后再换下一类。窗口外下面两条命令都直接退出，不读写线上索引：
+
+```bash
+node scripts/shadow-reading-order.mjs --category=热化学
+node scripts/shadow-reading-order.mjs --files=a.pdf,b.pdf
+node scripts/repair-reading-order-pages.mjs
+```
+
+影子结果在 `data/shadow/chunks/<分类>/`。后台「文献管理」先点选一个分类，再点「影子重建」。窗口外接口直接拒绝。一次只能一个分类。跨栏页保留旧抽取。`--rechunk` 仍会改写线上索引，不能用来试新阅读顺序。主张召回基线：
 
 ```bash
 RAG_PROP_EVAL=1 npx tsx scripts/eval-rag-prop.mjs src/__tests__/fixtures/rag-prop-queries.json

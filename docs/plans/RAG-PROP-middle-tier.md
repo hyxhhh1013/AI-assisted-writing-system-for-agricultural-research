@@ -323,6 +323,11 @@ node scripts/harvest-rag-prop-queries.mjs snapshot.json
 # 失败页补文本。窗口外直接退出，不读写索引
 node scripts/repair-reading-order-pages.mjs
 
+# 影子重建。窗口外直接退出。一次一个分类，只写 data/shadow
+node scripts/shadow-reading-order.mjs --category=热化学
+node scripts/shadow-reading-order.mjs --files=a.pdf,b.pdf
+node scripts/shadow-reading-order.mjs --category=热化学 --resume
+
 # 邻域（服务器，有 OPENALEX_MAILTO，且在深夜窗口）
 node scripts/build-citation-neighbors.mjs
 ```

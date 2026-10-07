@@ -130,6 +130,7 @@
 | PROP-02 | 快照抽出待标注清单 | PROP-01 | 0.5h | done | `harvest-rag-prop-queries.mjs` 只读 JSON，不写库。命中不是金标 |
 | PROP-03 | recall@10 尺子 | PROP-01 | 0.5h | partial | 假想题单测已绿。真题库基线未跑：白天不打本地索引 |
 | PROP-10～13 | 横带分栏 + 页眉 | PROP-01 | 1d | done | 影子函数。线上 `extractPageText` 仍是 Y 再 X |
+| PROP-11 | 影子重建入口 | PROP-10 | 0.5d | done | `shadow-reading-order.mjs` + 后台「文献管理 / 影子重建」。00:30–05:00 才写 `data/shadow`。不写线上 index。一次一个分类 |
 | PROP-14 | 7 篇金句 | PROP-10 | 0.5d | blocked | 对照函数已有。生产 PDF 的 21 句还没抄，不能晋级 |
 | PROP-15 | 失败页深夜补文本 | PROP-14 | 0.5d | partial | 窗口外退出已测。没有失败页清单，未跑解析器 |
 | PROP-20 | 分句函数 | PROP-10 | 0.5h | partial | `Intl.Segmenter` 单测已绿。未接入切块，也不进写作 |

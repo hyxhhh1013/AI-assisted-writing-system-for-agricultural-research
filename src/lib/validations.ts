@@ -724,6 +724,13 @@ export const adminKnowledgeReindexSchema = z.object({
 });
 export type AdminKnowledgeReindexInput = z.infer<typeof adminKnowledgeReindexSchema>;
 
+/** Admin：深夜影子重建，只写 data/shadow */
+export const adminShadowReindexSchema = z.object({
+  category: z.string().trim().min(1, "请先选择一个分类").max(80),
+  resume: z.boolean().optional(),
+});
+export type AdminShadowReindexInput = z.infer<typeof adminShadowReindexSchema>;
+
 /** Admin：补建外部摘要索引并自动归类 */
 export const adminRebuildExternalAbstractsSchema = z.object({
   /** true：即使已有 chunk 也重算 preferredCategory / Prisma.category */

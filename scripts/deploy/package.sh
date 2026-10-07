@@ -39,6 +39,7 @@ cp -a scripts/deploy deploy-pkg/scripts/
 cp scripts/rebuild-external-abstracts.cjs deploy-pkg/scripts/ 2>/dev/null || true
 # 知识库索引：API spawn `node scripts/index-pdfs.mjs`，不会进 standalone file trace
 cp scripts/index-pdfs.mjs deploy-pkg/scripts/
+cp scripts/shadow-reading-order.mjs deploy-pkg/scripts/
 cp scripts/doc-type-registry.mjs deploy-pkg/scripts/
 cp scripts/sync-knowledge-metadata-to-prisma.mjs deploy-pkg/scripts/
 cp -a scripts/lib deploy-pkg/scripts/

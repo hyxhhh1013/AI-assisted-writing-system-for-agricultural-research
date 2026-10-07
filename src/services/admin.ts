@@ -219,6 +219,29 @@ export async function listAdminKnowledge(
   };
 }
 
+/** POST /api/admin/knowledge/shadow-reindex — 深夜影子重建，不改线上索引 */
+export async function startAdminShadowReindex(
+  category: string,
+  resume = false,
+): Promise<{ ok: true; message: string; fileCount: number } | { ok: false; error: string }> {
+  const res = await fetch("/api/admin/knowledge/shadow-reindex", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ category, resume }),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    message?: string;
+    data?: { fileCount?: number };
+  };
+  if (!res.ok) return { ok: false, error: data.error || data.message || "影子重建没有开始" };
+  return {
+    ok: true,
+    message: data.message || "已开始影子重建",
+    fileCount: data.data?.fileCount ?? 0,
+  };
+}
+
 /** POST /api/admin/knowledge — 单篇重索引 */
 export async function reindexAdminKnowledge(name: string, category: string): Promise<boolean> {
   const res = await fetch("/api/admin/knowledge", {

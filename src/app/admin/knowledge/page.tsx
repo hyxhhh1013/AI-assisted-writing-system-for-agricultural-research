@@ -16,6 +16,7 @@ import {
   getAdminJournalMetricsLastImport,
   importAdminJournalMetrics,
   listAdminKnowledge,
+  startAdminShadowReindex,
   type AdminKnowledgeFile,
 } from "@/services/admin";
 import { reindexKnowledgeStream } from "@/services/knowledge";
@@ -48,6 +49,8 @@ export default function AdminKnowledgePage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<AdminKnowledgeFile | null>(null);
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [shadowConfirmOpen, setShadowConfirmOpen] = useState(false);
+  const [shadowStarting, setShadowStarting] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [reindexing, setReindexing] = useState<string | null>(null);
   const [bulkReindexing, setBulkReindexing] = useState(false);
@@ -206,6 +209,22 @@ export default function AdminKnowledgePage() {
 
   const selectedNames = files.filter((f) => selected.has(f.id)).map((f) => f.name);
 
+  const startShadowReindex = async () => {
+    if (!cat) return;
+    setShadowStarting(true);
+    try {
+      const result = await startAdminShadowReindex(cat);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(result.message);
+      setShadowConfirmOpen(false);
+    } finally {
+      setShadowStarting(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <AdminPageHeader
@@ -213,6 +232,16 @@ export default function AdminKnowledgePage() {
         subtitle="索引状态走数据库近似筛选（未索引/已索引/待完善），不再全表扫内存"
         actions={
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!cat || shadowStarting}
+              title={cat ? `只重建「${cat}」的影子，不改线上索引` : "先点选一个分类"}
+              onClick={() => setShadowConfirmOpen(true)}
+            >
+              {shadowStarting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+              影子重建
+            </Button>
             {selected.size > 0 && (
               <>
                 <Button
@@ -408,6 +437,20 @@ export default function AdminKnowledgePage() {
       />
 
       <AdminPagination meta={meta} onPageChange={setPage} />
+
+      <AdminConfirmDialog
+        open={shadowConfirmOpen}
+        onOpenChange={setShadowConfirmOpen}
+        title="确认影子重建"
+        loading={shadowStarting}
+        confirmLabel="开始影子重建"
+        description={
+          <p>
+            只处理分类「{cat}」。新阅读顺序写入 data/shadow，不覆盖线上索引，写作检索不会变。仅北京时间 00:30–05:00 会真正开始。
+          </p>
+        }
+        onConfirm={startShadowReindex}
+      />
 
       <AdminConfirmDialog
         open={!!deleteTarget}
