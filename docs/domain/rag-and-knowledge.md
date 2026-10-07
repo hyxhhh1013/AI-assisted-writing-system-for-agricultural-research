@@ -35,6 +35,18 @@ node scripts/index-pdfs.mjs --progress       # 输出 SSE 进度行（API reinde
 
 `RAG_RECHUNK=1` 与 `--rechunk` 等价。默认增量仍只看 PDF mtime，**不会**因为切块规则升级而重解析全库。
 
+### 影子阅读顺序（RAG-PROP，未晋级）
+
+写作检索仍读 `data/index_<分类>.json` 里现有的块。`extractPageText` 在 `--promote` 之前仍按 Y 再 X 拼接。横带分栏在 `scripts/extractors/reading-order.mjs`，只给影子用。跨栏片段不写入正文，失败页保留旧句。
+
+重切、版面补页、嵌入、换上分类索引和 `pm2 reload` 只在北京时间 00:30–05:00，一夜一个分类，第二天照常使用后再换下一类。窗口外 `node scripts/repair-reading-order-pages.mjs` 直接退出，不读写索引。主张召回基线：
+
+```bash
+RAG_PROP_EVAL=1 npx tsx scripts/eval-rag-prop.mjs src/__tests__/fixtures/rag-prop-queries.json
+```
+
+未设置 `RAG_PROP_EVAL=1` 时，这条命令不读取本地索引。真题的 `expectSources` 要人工填写该引哪篇，不能把当时的命中当成金标。详情见 [`plans/RAG-PROP-middle-tier.md`](../plans/RAG-PROP-middle-tier.md)。
+
 ### IMRaD 切块与按节取证（RAG-PR-016）
 
 Stage 1 先按 Introduction / Methods / Results 等短行标题分段，再在段内做 1000/200 字切块；`metadata.section` 写入 chunk。写作检索（`searchWritingRagChunks`）会把对应文献章节提前。
@@ -98,6 +110,7 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 - `getBibMap` / `getCategories` / `search` 走 Prisma 缓存
 - 写作上下文：`services/writing-context.ts` 组装 `contextText` + `refMapping`
 - **WRITE-NO-RAG（2026-09-30）**：正式写节在 **≥2 条** soft-groundable 摘要 **且** 题名/方向主题词能对上摘要时才跳过知识库 RAG；单条摘要或跑题摘要仍检索。勾选知识库来源 / `WRITING_FORCE_KNOWLEDGE_RAG=1` / `WRITING_SKIP_KNOWLEDGE_RAG=0` 强制检索。预览始终走 RAG。
+- **先篇后段 + 主张检索（2026-10-07）**：写作检索和备文献 `search_knowledge` 开 `paperFirst`（默认 12 篇）。篇分 = 块分的一部分 + 连续中文词组落在题名/正文；年份 ≥2018、被引 ≥20、IF ≥5 只做很小乘数。蓝图本节 `claim` / `keyPoints` 最多 3 条，每条单独检索再 RRF（`writing-claims.ts`）。最终候选再用连续词组做词面重排。有主张且非测试时，`RAG_CLAIM_RERANK` 默认再调一次短模型重排前 12 段；`RAG_CLAIM_RERANK=0` 关闭。向量文件仍然按分类放在 `data/*.emb`，缺文件时这一层退回词面。
 
 ### 检索性能（库变大后）
 

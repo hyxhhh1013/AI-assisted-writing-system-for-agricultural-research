@@ -124,6 +124,15 @@
 | RAG-PR-014 | 增量索引：新文献只写变更分类、保留 `.emb` | RAG-PR-010 | 0.5d | done | 2026-09-06；`--files` 不再误删缓存/向量；上传后自动单篇索引 |
 | RAG-PR-015 | 检索提质减负：停用词/参考文献/加权 BM25 | RAG-PR-013 | 0.5d | done | 2026-09-06；CJK 停用单字、参考文献页过滤、同义词降权、弱召回向量扫描封顶 |
 | RAG-PR-016 | IMRaD 切块 + 写作按节取证 | RAG-PR-015 | 0.5d | done | 2026-09-06；`metadata.section`；旧库双读，`--rechunk` 可选迁移，默认不重解析全库 |
+| **Phase RAG-PROP — 中间档检索（影子，未晋级）** |
+| PROP-00 | 队列登记 | — | 0.5h | done | 2026-10-07。计划 `plans/RAG-PROP-middle-tier.md`。不做：全库识图、自建向量、迁 Postgres、回填 `KnowledgeChunk`、改写作图、白天重切、一夜换完全库、无 DOI 猜边、无摘要编代理摘要 |
+| PROP-01 | 主张题库校验 | PROP-00 | 0.5h | done | 缺 `expectSources` 拒绝。假想题 3 条，无生产 PDF |
+| PROP-02 | 快照抽出待标注清单 | PROP-01 | 0.5h | done | `harvest-rag-prop-queries.mjs` 只读 JSON，不写库。命中不是金标 |
+| PROP-03 | recall@10 尺子 | PROP-01 | 0.5h | partial | 假想题单测已绿。真题库基线未跑：白天不打本地索引 |
+| PROP-10～13 | 横带分栏 + 页眉 | PROP-01 | 1d | done | 影子函数。线上 `extractPageText` 仍是 Y 再 X |
+| PROP-14 | 7 篇金句 | PROP-10 | 0.5d | blocked | 对照函数已有。生产 PDF 的 21 句还没抄，不能晋级 |
+| PROP-15 | 失败页深夜补文本 | PROP-14 | 0.5d | partial | 窗口外退出已测。没有失败页清单，未跑解析器 |
+| PROP-20 | 分句函数 | PROP-10 | 0.5h | partial | `Intl.Segmenter` 单测已绿。未接入切块，也不进写作 |
 | **Phase 9 — 研究方向战略规划（ENG-PR-100 系列）** |
 | ENG-PR-100 | 方向基础模块：Direction 表 + CRUD + 页面框架（33 files） | — | 3d | done | 2026-07-04；`d18a7e3` |
 | ENG-PR-110 | Socratic Mentor 预承诺（P0） | 100 | 2d | done | 2026-07-04；`314dd02` / `509a9a3` / `52823df` |
@@ -1483,6 +1492,7 @@ src/app/api/（13）                       src/lib/（6）
 | 2026-09-30 | RAG-CAT-ALIAS | AI | `search_knowledge(category=热解)` 0 命中：别名映射到 `热化学`；索引改走 `GRAINSCRIPT_DATA_ROOT`。 |
 | 2026-10-04 | W3-AP-PHASE-00 | AI | 线上 18 会话扫描：8 个连搜、1 个出图来回 9 张，熔断 0 次触发。出图质检连败 3 次改弹选项卡，由代码决定下一步。Phase 20 计划落 `plans/W3-AP-PHASE-MACHINE.md`。 |
 | 2026-10-04 | W3-AP-PHASE-D1-6 | 维护者 | 阶段制 D1–D6 按建议拍板：蓝图确认并入大纲；综述起草可检索导入、研究型不可；意图明确才临时切阶段否则先问；影子放行须文献 ≥30 轮、误拦 <5%、无阶段算错；墙上限 3/6/6/2；切阶段缓存失效可接受，enforce 后观察一周用量。 |
+| 2026-10-07 | RAG-PROP | AI | 影子阅读顺序与 recall/金句尺子落地，未晋级。线上切块与写作检索不变。重切、补页、reload 只允许北京时间 00:30–05:00，一夜一个分类。 |
 
 ---
 

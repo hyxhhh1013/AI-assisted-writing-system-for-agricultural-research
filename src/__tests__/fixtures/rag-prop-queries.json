@@ -1,0 +1,23 @@
+[
+  {
+    "query": "生物炭提高了土壤 pH。",
+    "title": "假想题",
+    "section": "results",
+    "expectSources": ["hypothetical-biochar.pdf"],
+    "note": "假想题，不对应生产 PDF"
+  },
+  {
+    "query": "Biochar increased soil pH.",
+    "title": "Hypothetical",
+    "section": "results",
+    "expectSources": ["10.0000/hypothetical"],
+    "note": "假想题"
+  },
+  {
+    "query": "产量在第二年没有下降。",
+    "title": "假想题",
+    "section": "discussion",
+    "expectSources": ["hypothetical-yield.pdf", "10.0000/yield"],
+    "note": "假想题"
+  }
+]

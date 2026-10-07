@@ -28,6 +28,7 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import dotenv from "dotenv";
 import { extractDocMetadata } from "./doc-type-registry.mjs";
 import { groupTextContentLines } from "./extractors/header-lines.mjs";
+import { joinLegacyPageText } from "./extractors/legacy-order.mjs";
 import {
   mergeCategoryChunks,
   pruneStage1Orphans,
@@ -134,17 +135,9 @@ function writeCategoryIndex(cat, chunks, opts = {}) {
   });
 }
 
-/** 按 y/x 坐标排序后拼接，比简单 join 更保序 */
-function extractPageText(textContent) {
-  const items = (textContent.items || [])
-    .filter((item) => typeof item.str === "string" && item.str.trim())
-    .sort((a, b) => {
-      const ay = a.transform?.[5] ?? 0;
-      const by = b.transform?.[5] ?? 0;
-      if (Math.abs(ay - by) > 2) return by - ay;
-      return (a.transform?.[4] ?? 0) - (b.transform?.[4] ?? 0);
-    });
-  return items.map((item) => item.str).join(" ").replace(/\s+/g, " ").trim();
+/** 按 y/x 坐标排序后拼接。晋级前保持这条顺序；影子抽取走 reading-order.mjs。 */
+export function extractPageText(textContent) {
+  return joinLegacyPageText(textContent?.items || []);
 }
 
 /** 中文 PDF 首页常较短，单独放宽阈值 */
@@ -940,11 +933,22 @@ async function main() {
   });
 }
 
-main().catch((err) => {
-  console.error(err);
-  emitProgress({
-    type: "error",
-    message: err instanceof Error ? err.message : String(err),
+const ranAsScript = (() => {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return path.resolve(fileURLToPath(import.meta.url)) === path.resolve(entry);
+  } catch {
+    return false;
+  }
+})();
+if (ranAsScript) {
+  main().catch((err) => {
+    console.error(err);
+    emitProgress({
+      type: "error",
+      message: err instanceof Error ? err.message : String(err),
+    });
+    process.exit(1);
   });
-  process.exit(1);
-});
+}
