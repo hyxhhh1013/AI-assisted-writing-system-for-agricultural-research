@@ -210,6 +210,25 @@ function formatEvidence(toolName: string, data: unknown): string {
     }
   }
 
+  if (typeof data === "object" && data !== null && "items" in data) {
+    const items = (data as { items?: unknown }).items;
+    if (Array.isArray(items) && items.length > 0) {
+      const lines = items.slice(0, 10).map((item, i) => {
+        if (!item || typeof item !== "object") return `${i + 1}. ${String(item).slice(0, 200)}`;
+        const row = item as Record<string, unknown>;
+        const title = String(row.title ?? "").trim();
+        if (!title) return "";
+        const year = row.year != null && String(row.year).trim() ? `（${row.year}）` : "";
+        const why = String(row.why ?? "").trim();
+        return `${i + 1}. ${title}${year}${why ? ` — ${why.slice(0, 80)}` : ""}`;
+      }).filter(Boolean);
+      if (lines.length > 0) {
+        const more = items.length > 10 ? `\n…共 ${items.length} 篇，以上为前 10 篇完整题名` : "";
+        return truncate(`${lines.join("\n")}${more}`, MAX_EVIDENCE_CHARS);
+      }
+    }
+  }
+
   if (typeof data === "string") return truncate(data, MAX_EVIDENCE_CHARS);
   try {
     return truncate(JSON.stringify(data, null, 0), MAX_EVIDENCE_CHARS);

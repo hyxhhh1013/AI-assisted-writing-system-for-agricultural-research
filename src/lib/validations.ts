@@ -157,6 +157,8 @@ export const retrievePreviewSchema = z
     researchDirection: z.string().optional(),
     retrievalMode: z.enum(["balanced", "precise", "extensive"]).optional().default("balanced"),
     projectMode: z.enum(["review", "research"]).optional(),
+    claims: z.array(z.string().max(400)).max(3).optional(),
+    subsectionTitle: z.string().max(200).optional(),
   })
   .superRefine((data, ctx) => {
     if (!isSectionValidForMode(data.section, data.projectMode)) {
@@ -724,12 +726,18 @@ export const adminKnowledgeReindexSchema = z.object({
 });
 export type AdminKnowledgeReindexInput = z.infer<typeof adminKnowledgeReindexSchema>;
 
-/** Admin：深夜影子重建，只写 data/shadow */
+/** Admin：影子重建，只写 data/shadow */
 export const adminShadowReindexSchema = z.object({
   category: z.string().trim().min(1, "请先选择一个分类").max(80),
   resume: z.boolean().optional(),
 });
 export type AdminShadowReindexInput = z.infer<typeof adminShadowReindexSchema>;
+
+export const adminShadowStatusQuerySchema = z.object({
+  category: z.string().trim().min(1, "请先选择一个分类").max(80),
+  file: z.string().trim().max(240).optional(),
+});
+export type AdminShadowStatusQuery = z.infer<typeof adminShadowStatusQuerySchema>;
 
 /** Admin：补建外部摘要索引并自动归类 */
 export const adminRebuildExternalAbstractsSchema = z.object({

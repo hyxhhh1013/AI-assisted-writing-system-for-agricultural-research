@@ -25,6 +25,7 @@ export function checkAgentToolPhaseGate(
   toolName: string,
   params: Record<string, unknown>,
   project: AgentProjectSnapshot | null | undefined,
+  opts?: { configApproved?: boolean },
 ): PhaseGateResult {
   const structureTools = new Set([
     "generate_outline",
@@ -35,6 +36,13 @@ export function checkAgentToolPhaseGate(
       return {
         ok: false,
         error: `${toolName} 需要绑定论文项目；请先打开工作台项目后再试`,
+      };
+    }
+    if (!project.hasPaperConfig && !opts?.configApproved) {
+      return {
+        ok: false,
+        error:
+          "论文配置还没确认。请先让用户完成配置问答（题目、类型、语言、引用格式、篇幅），不要生成大纲或写作蓝图。",
       };
     }
     if (toolName === "generate_writing_blueprint" && !outlineReady(project)) {
@@ -111,7 +119,8 @@ export function checkAgentToolPhaseGate(
 export function phaseGatePromptRules(): string {
   return `阶段策略（缺信息就问用户；每轮只交付一个可见结果）：
 - 用 inspect_project 了解当前阶段与空白章节，再决定工具
-- 主路径：配置 → 大纲（写回后等人批准）→ 写作蓝图（写回后等人批准）→ 一次写一节 → 摘要/核查
+- 主路径：论文配置确认 → 大纲（写回后等人批准）→ 写作蓝图（写回后等人批准）→ 一次写一节 → 摘要/核查
+- 论文配置没确认时，禁止 generate_outline / generate_writing_blueprint
 - 写章节若缺大纲：先问用户「出一版」还是贴骨架，不要静默生成
 - 无正文时不要写摘要 / write_bilingual_abstract
 - 引用以 validate_citations 为准；不编造文献

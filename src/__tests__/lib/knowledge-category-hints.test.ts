@@ -26,6 +26,16 @@ describe("inferCategoriesFromTitle", () => {
     expect(inferCategoriesFromTitle("绿茶香气挥发性成分")).toEqual(["茶学"]);
   });
 
+  it("does not lock a farmland heavy-metal title to 热化学 just because it says 生物炭", () => {
+    expect(
+      inferCategoriesFromTitle("生物炭对农田土壤重金属钝化的研究进展"),
+    ).not.toContain("热化学");
+  });
+
+  it("still maps an explicit pyrolysis title to 热化学", () => {
+    expect(inferCategoriesFromTitle("热解温度对稻秆生物炭孔隙的影响")).toContain("热化学");
+  });
+
   it("does not map carbon coating to 控释肥类", () => {
     expect(inferCategoriesFromQuery("carbon coating on nanocarbon")).not.toContain("控释肥类");
   });

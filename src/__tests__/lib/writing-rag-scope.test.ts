@@ -120,7 +120,14 @@ describe("stripDisallowedCitations / grounded allow-list", () => {
   it("keeps only grounded indices", () => {
     const allowed = resolveAllowedCitationIndices(5, [1, 3]);
     const out = stripDisallowedCitations("据报道[1]与[2]及[3-4]。", allowed);
-    expect(out).toBe("据报道[1]与及。");
+    expect(out).toBe("据报道[1]与及[3]。");
+  });
+
+  it("splits a range and drops numbers that are not allow-listed", () => {
+    const allowed = resolveAllowedCitationIndices(5, [1, 3]);
+    expect(stripDisallowedCitations("差异显著[1-3]，指标[4]。", allowed)).toBe(
+      "差异显著[1, 3]，指标。",
+    );
   });
 
   it("empty grounded array disallows all citations", () => {

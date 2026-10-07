@@ -524,6 +524,21 @@ export function countProjectFigures(
  * - 未渲染的 LaTeX 标记碎片
  * - "Lab Member" 等占位署名
  */
+/** 预览和 Word 不用占位署名。中文稿空着时显示「作者姓名」。 */
+export function displayAuthorLine(authors: string | undefined, chinese: boolean): string {
+  const t = (authors ?? "").trim();
+  if (
+    !t
+    || /lab\s*member/i.test(t)
+    || t === "【请填写作者姓名】"
+    || t === "【作者信息待填写】"
+    || t === "Author Name Not Set"
+  ) {
+    return chinese ? "作者姓名" : "";
+  }
+  return t;
+}
+
 export function cleanDraftArtifacts(text: string): string {
   let cleaned = text;
   // 移除系统生成的插图占位提示（含多行变体）

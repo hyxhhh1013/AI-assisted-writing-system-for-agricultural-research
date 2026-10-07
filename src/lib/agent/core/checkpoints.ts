@@ -40,27 +40,46 @@ export function revokeApprovedKind(
   return approved.filter((k) => k !== kind);
 }
 
+/** 配置已写全，或用户在配置问答里明确跳过。两种都算「配置这一关过了」。 */
+export function paperConfigSettled(input: {
+  hasPaperConfig: boolean;
+  approvedKinds: readonly AgentCheckpointKind[];
+}): boolean {
+  return input.hasPaperConfig || input.approvedKinds.includes("config_confirm");
+}
+
+const CONFIG_EXEMPT_INTENTS = new Set([
+  "diagnose",
+  "literature",
+  "citation",
+  "citation_apply",
+  "classify",
+  "review_request",
+]);
+
 export function shouldPauseForConfigConfirm(input: {
   goal: string;
   intentKind?: import("@/contracts/agent-intent").IntentKind | null;
   hasPaperConfig: boolean;
   approvedKinds: readonly AgentCheckpointKind[];
 }): boolean {
-  if (input.hasPaperConfig) return false;
-  if (input.approvedKinds.includes("config_confirm")) return false;
-  // 仅「从零写整篇 / academic-paper 流程 / 起草某节」等写作目标需要先做论文配置问答；
-  // 诊断 / 检索 / 引用核查 / 审查 / 分类编码等与论文配置无关的目标不应被配置问答拦一道。
-  if (input.intentKind !== undefined) {
-    return (
-      input.intentKind === "ap_full"
-      || input.intentKind === "draft"
-      || input.intentKind === "review_write"
-    );
+  if (paperConfigSettled(input)) return false;
+  // 诊断 / 检索 / 引用核查 / 审查 / 分类编码不拦配置问答。
+  // intent 为 null 时不能当成「已分类」，否则「生成大纲」会直接跳过配置。
+  if (input.intentKind && CONFIG_EXEMPT_INTENTS.has(input.intentKind)) return false;
+  if (
+    input.intentKind === "ap_full"
+    || input.intentKind === "draft"
+    || input.intentKind === "review_write"
+    || input.intentKind === "abstract_finish"
+  ) {
+    return true;
   }
   return (
     isApFullStyleGoal(input.goal)
     || isAcademicPaperPipelineGoal(input.goal)
     || isSectionDraftGoal(input.goal)
+    || /大纲|提纲|蓝图/.test(input.goal)
   );
 }
 
@@ -140,7 +159,7 @@ export function decisionMessage(
   }
   if (kind === "blueprint_approve") {
     if (decision === "approve") {
-      return "【检查点】用户已批准写作蓝图。请只写用户点名的那一节；没点名就按蓝图写作顺序写第一节。写回后停下来汇报，并询问要不要写下一节。不要在同一轮连续写多节，也不要偏离蓝图结构。";
+      return "【检查点】用户已批准写作蓝图。页面上的点击就是确认，禁止再要求用户输入「确认蓝图」。按蓝图写作顺序写下一个还没写完的小节，write_section 必须带 subsectionTitle，正文里保留该小标题。这一节若规划了示意图、流程图或对比表，写完立刻插入，不要等试验数据或 CSV。写完这一节再停，不要一次写完全文，也不要改问 A/B/C。";
     }
     return `【检查点】用户要求修改写作蓝图。${note?.trim() ? `意见：${note.trim()}。` : ""}请先沟通或重新 generate_writing_blueprint，改完再请用户确认。`;
   }

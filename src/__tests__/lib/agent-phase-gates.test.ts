@@ -81,6 +81,24 @@ describe("checkAgentToolPhaseGate", () => {
     expect(checkAgentToolPhaseGate("generate_outline", {}, snap()).ok).toBe(true);
   });
 
+  it("blocks generate_outline until paper config is confirmed", () => {
+    const blocked = checkAgentToolPhaseGate(
+      "generate_outline",
+      {},
+      snap({ hasPaperConfig: false }),
+    );
+    expect(blocked.ok).toBe(false);
+    if (!blocked.ok) expect(blocked.error).toMatch(/论文配置/);
+    expect(
+      checkAgentToolPhaseGate(
+        "generate_outline",
+        {},
+        snap({ hasPaperConfig: false }),
+        { configApproved: true },
+      ).ok,
+    ).toBe(true);
+  });
+
   it("blocks generate_writing_blueprint without outline", () => {
     const r = checkAgentToolPhaseGate("generate_writing_blueprint", {}, snap());
     expect(r.ok).toBe(false);

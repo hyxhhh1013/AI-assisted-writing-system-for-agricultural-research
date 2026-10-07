@@ -51,6 +51,12 @@ export function inferCategoriesFromTitle(...texts: Array<string | undefined>): s
   for (const { pattern, category } of TITLE_CATEGORY_HINTS) {
     if (pattern.test(blob)) cats.add(category);
   }
+  // 「生物炭」会命中热化学。农田重金属钝化并不因此锁进热解库。
+  const soilHeavyMetal = /农田|土壤|重金属|镉|铅|砷|钝化|稻田|水稻/;
+  const explicitPyrolysis = /热解|共热解|裂解|气化|合成气|生物油|碳纳米|pyrolysis|pyrolytic|torrefaction|gasification/i;
+  if (cats.has("热化学") && soilHeavyMetal.test(blob) && !explicitPyrolysis.test(blob)) {
+    cats.delete("热化学");
+  }
   return Array.from(cats);
 }
 

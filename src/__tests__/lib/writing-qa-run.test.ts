@@ -64,6 +64,12 @@ describe("evaluateSectionWritingQa", () => {
     });
     expect(md.findings.some((f) => f.code === "md_heading")).toBe(true);
 
+    const review = evaluateSectionWritingQa({
+      sectionKey: "literature_body",
+      text: "### 改性材料对比\n铁改性生物炭在酸性土中更稳[1]。",
+    });
+    expect(review.findings.some((f) => f.code === "md_heading")).toBe(false);
+
     const bib = evaluateSectionWritingQa({
       sectionKey: "introduction",
       text: "前文已述研究缺口。\n\n## 参考文献\n[1] Zhang 2020.\n",

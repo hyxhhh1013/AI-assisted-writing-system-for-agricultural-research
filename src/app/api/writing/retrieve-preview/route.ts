@@ -27,6 +27,8 @@ export async function POST(req: NextRequest) {
       researchDirection: data.researchDirection,
       retrievalMode: data.retrievalMode,
       projectMode: data.projectMode,
+      claims: data.claims,
+      subsectionTitle: data.subsectionTitle,
     });
 
     return successResponse(preview);

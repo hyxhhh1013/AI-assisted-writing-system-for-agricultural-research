@@ -81,7 +81,7 @@ describe("applyWritingPatches", () => {
     expect(patched.draft).toBe(sentences);
   });
 
-  it("strips hanging [n] when claims are unbound", () => {
+  it("keeps sentence-end citations when no claim is bound", () => {
     const draft = "热解温度升高使孔隙增加[1]。该趋势与田间试验一致。";
     const patched = applyWritingPatches(
       draft,
@@ -95,8 +95,26 @@ describe("applyWritingPatches", () => {
       ],
       { allowedCiteNs: [] },
     );
-    expect(patched.draft).not.toContain("[1]");
+    expect(patched.draft).toContain("[1]");
     expect(patched.draft).toContain("热解温度升高使孔隙增加");
+  });
+
+  it("drops the unbound middle of a citation range", () => {
+    const patched = applyWritingPatches(
+      "组合差异显著[1-3]，单一指标[4]。",
+      [
+        {
+          code: "evidence_unbound",
+          layer: "L0",
+          action: "repair",
+          message: "未绑却硬挂",
+        },
+      ],
+      { allowedCiteNs: [1, 3] },
+    );
+    expect(patched.draft).toContain("[1, 3]");
+    expect(patched.draft).not.toContain("[1-3]");
+    expect(patched.draft).not.toContain("[4]");
   });
 });
 

@@ -82,6 +82,8 @@ export async function prepareWritingContext(
             projectMode,
             selectedSourceIds: data.selectedSourceIds,
             referenceEvidence: data.referenceEvidence,
+            subsectionTitle,
+            globalContext,
           },
           existingReferences,
         ),

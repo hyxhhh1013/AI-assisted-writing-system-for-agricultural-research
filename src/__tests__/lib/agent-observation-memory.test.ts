@@ -18,6 +18,22 @@ describe("formatToolObservationForLlm", () => {
     expect(text).toContain("Smith 2020");
   });
 
+  it("lists external search titles in full instead of one clipped title", () => {
+    const text = formatToolObservationForLlm("search_external", {
+      success: true,
+      summary: "外部检索返回 2 篇",
+      data: {
+        items: [
+          { title: "Cadmium Immobilization in the Rice-Paddy Soil with Biochar Additive", year: 2022, why: "稻田镉钝化" },
+          { title: "Five-year field experiment on biochar and heavy metals", year: 2016, why: "五年田间" },
+        ],
+      },
+    });
+    expect(text).toContain("Cadmium Immobilization in the Rice-Paddy Soil with Biochar Additive");
+    expect(text).toContain("（2022）");
+    expect(text).toContain("Five-year field experiment on biochar and heavy metals");
+  });
+
   it("formats failures without inventing evidence", () => {
     const text = formatToolObservationForLlm("write_section", {
       success: false,

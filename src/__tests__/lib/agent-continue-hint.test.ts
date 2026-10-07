@@ -101,6 +101,17 @@ describe("resolveAgentContinueHint", () => {
     expect(hint.eyebrow).toBe("这一轮已写回");
   });
 
+  it("ignores a stale plan that the latest reply does not mention", () => {
+    const hint = resolveAgentContinueHint({
+      lastAssistantText: "结论已写回。请看下一节要不要写摘要。",
+      planSubtasks: [
+        { title: "再导入外部文献并分类到热化学", status: "pending" },
+      ],
+    });
+    expect(hint.title).not.toContain("再导入");
+    expect(hint.eyebrow).not.toContain("计划");
+  });
+
   it("falls back to open plan task", () => {
     const hint = resolveAgentContinueHint({
       planSubtasks: [

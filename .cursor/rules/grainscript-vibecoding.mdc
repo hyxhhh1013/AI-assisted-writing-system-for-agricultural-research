@@ -7,6 +7,8 @@ alwaysApply: true
 
 完整模板与队列：@docs/VIBECODING.md、@AGENTS.md S0～S5。
 
+新功能或改流程且范围未钉死时，先读并遵循 @.cursor/skills/grainscript-feature/SKILL.md，再按本规则实现。范围已钉死的修 bug、改文案、调样式可跳过。
+
 ## 禁止
 
 - 组件内直接 `fetch('/api/...')` → 用 `src/services/`
@@ -23,6 +25,8 @@ alwaysApply: true
 ## 验证
 
 改后运行 `npm run check`，或至少 `npx tsc --noEmit` + 相关 `vitest`。
+
+实现之后、提交之前停在本地验证。只有用户明确说提交或上线，才读 @.cursor/skills/grainscript-playbook/SKILL.md。
 
 ## 文档
 

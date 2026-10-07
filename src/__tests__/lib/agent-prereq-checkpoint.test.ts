@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPrereqCheckpoint } from "@/lib/agent/langgraph/nodes";
+import { buildPrereqCheckpoint, countsAsLandedMutation } from "@/lib/agent/langgraph/nodes";
 import type { AgentGraphStateType } from "@/lib/agent/langgraph/state";
 
 function baseState(overrides: Partial<AgentGraphStateType> = {}): AgentGraphStateType {
@@ -122,5 +122,27 @@ describe("buildPrereqCheckpoint（自动补齐批准检查点）", () => {
       },
     );
     expect(cp).toBeNull();
+  });
+});
+
+describe("countsAsLandedMutation", () => {
+  it("treats a QA-blocked write_section as settled", () => {
+    expect(
+      countsAsLandedMutation({
+        tool: "write_section",
+        success: true,
+        data: { persisted: null, blocked: true },
+      }),
+    ).toBe(true);
+  });
+
+  it("does not treat a chart QA block as landed", () => {
+    expect(
+      countsAsLandedMutation({
+        tool: "generate_chart",
+        success: true,
+        data: { blocked: true, qaReport: { verdict: "block" } },
+      }),
+    ).toBe(false);
   });
 });

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   evaluateCitationGrounding,
+  isFilenameOnlyRef,
+  isPdfPageScrapeRef,
   termOverlapRatio,
   computeSoftGroundPoolStats,
 } from "@/lib/citation-grounding";
@@ -71,6 +73,59 @@ describe("evaluateCitationGrounding", () => {
     expect(report.blocksExport).toBe(false);
   });
 
+  it("does not block export on Elsevier header and reference-list scraps", () => {
+    const scrap = {
+      index: 1,
+      title:
+        "[J] Wei Luo (2022) Bioresource Technology 349 (2022) 126845 Contents lists available at ScienceDirect",
+      abstract:
+        "W. Luo et al. Bioresource Technology 349 (2022) 126845 Persson, H., Duman, I., Wang, S., 2018. Effect of pyrolysis.",
+    };
+    expect(isPdfPageScrapeRef(scrap)).toBe(true);
+    const report = evaluateCitationGrounding({
+      draftText: "热解温度升高通常降低生物炭产率并提高芳香性[1]。",
+      references: [scrap],
+    });
+    expect(report.hits.find((h) => h.number === 1)?.groundable).toBe(false);
+    expect(report.suspiciousCount).toBe(0);
+    expect(report.blocksExport).toBe(false);
+  });
+
+  it("does not remap onto PDF filenames or swap two filename-only refs", () => {
+    const header = {
+      index: 1,
+      title:
+        "[J] 黄升雄 (2022) Science of the Total Environment 802 (2022) 149752 Contents lists available at ScienceDirect",
+      abstract:
+        "Contents lists available at ScienceDirect Science of the Total Environment journal homepage.",
+    };
+    const fileA = {
+      index: 25,
+      title: "",
+      content: "2022-marta-综述-从废物到肥料：通过原始和工程生物炭从废水中回收养分.pdf",
+    };
+    const fileB = {
+      index: 27,
+      title: "",
+      content: "28-2024-董航-油茶壳与聚丙烯共热解过程中热解产物分布的研究.pdf",
+    };
+    expect(isFilenameOnlyRef(fileA)).toBe(true);
+    expect(isFilenameOnlyRef(fileB)).toBe(true);
+    const report = evaluateCitationGrounding({
+      draftText:
+        "湿式烘焙通过溶出碱金属与半纤维素降低灰分含量并改变炭表面官能团[25]；烘焙类预处理研究[1]多以各自参数体系报道。金属改性被认为可能提升吸附能力[27]。",
+      references: [header, fileA, fileB],
+    });
+    for (const n of [1, 25, 27]) {
+      const hit = report.hits.find((h) => h.number === n);
+      expect(hit?.groundable).toBe(false);
+      expect(hit?.suspicious).toBe(false);
+      expect(hit?.betterNumber).toBeUndefined();
+    }
+    expect(report.blocksExport).toBe(false);
+    expect(report.hint).not.toMatch(/→\[/);
+  });
+
   it("marks short refs as ungroundable rather than suspicious", () => {
     const draft = "随便一句话挂上编号[3]。";
     const report = evaluateCitationGrounding({ draftText: draft, references: refs });
@@ -78,6 +133,23 @@ describe("evaluateCitationGrounding", () => {
     const hit = report.hits.find((h) => h.number === 3);
     expect(hit?.groundable).toBe(false);
     expect(hit?.suspicious).toBe(false);
+  });
+
+  it("does not block export when a Chinese sentence cannot be matched to an English abstract", () => {
+    const report = evaluateCitationGrounding({
+      draftText: "油菜秆生物炭在厌氧培养中降低了土壤有效态镉，并生成硫化物与弱结晶铁氧化物[1]。",
+      references: [
+        {
+          index: 1,
+          title: "Rape straw biochar, sulfide and poorly crystallized Fe oxide",
+          abstract:
+            "Rape straw biochar reduced available cadmium under anaerobic incubation and formed sulfide and poorly crystallized iron oxides.",
+        },
+      ],
+    });
+    expect(report.hits.find((h) => h.number === 1)?.suspicious).not.toBe(true);
+    expect(report.blocksExport).toBe(false);
+    expect(report.hint).not.toMatch(/禁止导出/);
   });
 
   it("grounds bilingual citation via synonym expansion instead of skipping", () => {

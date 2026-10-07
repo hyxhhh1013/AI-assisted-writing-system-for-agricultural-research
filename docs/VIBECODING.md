@@ -2,6 +2,8 @@
 
 > 每次让 AI 实现功能时，在任务描述中附带本模板，或引用 `@docs/VIBECODING.md`。
 
+新功能或改流程、且范围尚未钉死时，先走 [`.cursor/skills/grainscript-feature/SKILL.md`](../.cursor/skills/grainscript-feature/SKILL.md)（意图、真伪、原子方案）。本文件只负责范围钉死之后怎么写代码。
+
 ## 标准任务模板
 
 ```

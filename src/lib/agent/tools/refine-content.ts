@@ -37,7 +37,7 @@ async function readStoredSectionContent(
 export const refineContentTool: ToolDefinition = {
   name: "refine_content",
   description:
-    "根据核查意见或人工反馈修正已有正文（Refiner 管线，fix_only 模式）。提供 section 且写回项目时，自动读取项目当前整节内容作为修正底稿，draftText 可省略；Refiner 输出为整节替换文本。",
+    "根据核查意见或人工反馈修正已有正文（Refiner 管线，fix_only 模式）。提供 section 且写回项目时，自动读取项目当前整节内容作为修正底稿，draftText 可省略；Refiner 输出为整节替换文本。用户只要改几处编号时，只改那几句的 [n]，禁止整节重写，禁止删掉其它句末编号。",
   parameters: {
     type: "object",
     properties: {

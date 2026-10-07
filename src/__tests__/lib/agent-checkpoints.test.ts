@@ -118,6 +118,14 @@ describe("agent checkpoints", () => {
         approvedKinds: ["config_confirm"],
       }),
     ).toBe(false);
+    expect(
+      shouldPauseForConfigConfirm({
+        goal: "生成大纲",
+        intentKind: null,
+        hasPaperConfig: false,
+        approvedKinds: [],
+      }),
+    ).toBe(true);
   });
 
   it("keeps a readable outline in the checkpoint instead of clipping at 2000", () => {

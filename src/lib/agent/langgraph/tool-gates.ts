@@ -8,7 +8,7 @@
  *
  * 门禁是纯决策函数：只返回裁决，副作用（推 SSE / 记摘要 / 终止循环）由 toolsNode 编排层处理。
  */
-import type { AgentCheckpointRequest, AgentToolResult } from "@/contracts/agent";
+import type { AgentCheckpointKind, AgentCheckpointRequest, AgentToolResult } from "@/contracts/agent";
 import type { AgentContext, ToolDefinition, ToolObservation } from "@/lib/agent/types";
 import { checkSearchQuota, noteToolProgress } from "@/lib/agent/core/antispam";
 import { checkRepeatCall } from "@/lib/agent/core/safety";
@@ -32,7 +32,9 @@ import {
 import {
   buildBlueprintCheckpoint,
   buildClarifyCheckpoint,
+  buildConfigCheckpoint,
   buildOutlineCheckpoint,
+  paperConfigSettled,
   shouldPauseForBlueprintApprove,
   shouldPauseForOutlineApprove,
 } from "@/lib/agent/core/checkpoints";
@@ -165,8 +167,10 @@ export function evaluatePreGates(input: PreGateInput): GateVerdict {
 }
 
 /** 阶段门禁（写前置自动补齐之后执行） */
-export const phaseGate: PreToolGate = ({ tool, params, agentContext }) => {
-  const gate = checkAgentToolPhaseGate(tool.name, params, agentContext.projectSnapshot);
+export const phaseGate: PreToolGate = ({ tool, params, agentContext, state }) => {
+  const gate = checkAgentToolPhaseGate(tool.name, params, agentContext.projectSnapshot, {
+    configApproved: (state.approvedCheckpointKinds ?? []).includes("config_confirm"),
+  });
   return gate.ok ? { ok: true } : { ok: false, kind: "reject", error: gate.error };
 };
 
@@ -233,8 +237,32 @@ export const clarifyCheckpointGate: PostToolGate = ({ result }) => {
   return { ok: true };
 };
 
-/** 大纲批准检查点：写完待批准章节且未批准过 → 暂停 */
-export const outlineApproveGate: PostToolGate = ({ tool, result, state }) => {
+function structureBlockedByOpenConfig(
+  toolName: string,
+  agentContext: AgentContext,
+  approvedKinds: readonly AgentCheckpointKind[],
+): boolean {
+  if (toolName !== "generate_outline" && toolName !== "generate_writing_blueprint") return false;
+  const snap = agentContext.projectSnapshot;
+  if (!snap) return false;
+  return !paperConfigSettled({
+    hasPaperConfig: snap.hasPaperConfig,
+    approvedKinds,
+  });
+}
+
+/** 大纲批准检查点：写完待批准章节且未批准过 → 暂停。配置没确认时改停在配置问答。 */
+export const outlineApproveGate: PostToolGate = ({ tool, result, state, agentContext }) => {
+  if (
+    result.success
+    && structureBlockedByOpenConfig(
+      tool.name,
+      agentContext,
+      state.approvedCheckpointKinds ?? [],
+    )
+  ) {
+    return { ok: false, kind: "checkpoint", checkpoint: buildConfigCheckpoint() };
+  }
   if (
     !shouldPauseForOutlineApprove({
       goal: state.goal,
@@ -254,8 +282,18 @@ export const outlineApproveGate: PostToolGate = ({ tool, result, state }) => {
   return { ok: false, kind: "checkpoint", checkpoint: buildOutlineCheckpoint(preview), updateFocus: true };
 };
 
-/** 蓝图写回后暂停，等人过目再写正文。 */
-export const blueprintApproveGate: PostToolGate = ({ tool, result, state }) => {
+/** 蓝图写回后暂停，等人过目再写正文。配置没确认时改停在配置问答。 */
+export const blueprintApproveGate: PostToolGate = ({ tool, result, state, agentContext }) => {
+  if (
+    result.success
+    && structureBlockedByOpenConfig(
+      tool.name,
+      agentContext,
+      state.approvedCheckpointKinds ?? [],
+    )
+  ) {
+    return { ok: false, kind: "checkpoint", checkpoint: buildConfigCheckpoint() };
+  }
   if (
     !shouldPauseForBlueprintApprove({
       goal: state.goal,

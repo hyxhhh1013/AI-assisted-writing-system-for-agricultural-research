@@ -262,6 +262,24 @@ describe("evaluatePostGates", () => {
     }
   });
 
+  it("配置未确认时 generate_outline 停在配置问答", () => {
+    const v = evaluatePostGates(
+      makePostInput({
+        tool: makeTool("generate_outline"),
+        state: makeState({ goal: "生成大纲" }),
+        agentContext: {
+          ...makeCtx(),
+          projectSnapshot: { hasPaperConfig: false } as AgentContext["projectSnapshot"],
+        },
+        result: { success: true, data: { persisted: true, preview: "1. 引言" } },
+      }),
+    );
+    expect(v).toMatchObject({ ok: false, kind: "checkpoint" });
+    if (!v.ok && v.kind === "checkpoint") {
+      expect(v.checkpoint.kind).toBe("config_confirm");
+    }
+  });
+
   it("全文目标下未批准的 generate_outline → outline checkpoint", () => {
     const v = evaluatePostGates(
       makePostInput({

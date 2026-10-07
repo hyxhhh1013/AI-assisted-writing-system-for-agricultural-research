@@ -180,7 +180,9 @@ export function applyWritingPatches(
     } else if (finding.code === "embedded_bib") {
       next = stripEmbeddedBibliography(next);
     } else if (finding.code === "md_heading") {
-      next = stripMdHeadings(next);
+      if (opts.sectionKey !== "literature_body" && opts.sectionKey !== "background") {
+        next = stripMdHeadings(next);
+      }
     } else if (finding.code === "overclaim") {
       next = applyReplacements(next, OVERCLAIM_REPLACEMENTS);
       if (OVERCLAIM_PHRASES.includes("绝对") && before.includes("绝对")) {
@@ -191,7 +193,10 @@ export function applyWritingPatches(
     } else if (finding.code === "claim_id_heading") {
       next = stripClaimIdHeadings(next);
     } else if (finding.code === "evidence_unbound") {
-      next = stripDisallowedCitations(next, new Set(opts.allowedCiteNs ?? []));
+      const allowed = opts.allowedCiteNs ?? [];
+      if (allowed.length > 0) {
+        next = stripDisallowedCitations(next, new Set(allowed));
+      }
     }
 
     recordPatch(patches, finding.code, before, next);

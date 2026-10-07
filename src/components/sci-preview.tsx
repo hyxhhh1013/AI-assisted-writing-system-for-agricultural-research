@@ -10,6 +10,7 @@ import { CASPreview } from "@/components/shared/previews/cas";
 import { CitationInspectDialog } from "@/components/shared/citation-inspect-dialog";
 import { fetchReferenceSources } from "@/services/references";
 import type { ReferenceSourceDetail } from "@/contracts/references";
+import { displayAuthorLine } from "@/lib/utils";
 
 interface SCIPreviewProps {
   project: ProjectData;
@@ -45,15 +46,22 @@ export default function SCIPreview({ project }: SCIPreviewProps) {
   }, [citeDialogOpen, selectedCiteNums, project.id]);
 
   const template = project.template || "sci";
-  const previewProps = { project, onCiteClick: handleCiteClick };
+  const chineseChrome = project.language === "zh" && (template === "sci" || template === "gbt7713");
+  const previewProps = {
+    project: {
+      ...project,
+      authors: displayAuthorLine(project.authors, chineseChrome || template === "gbt7713" || template === "cas"),
+    },
+    onCiteClick: handleCiteClick,
+  };
 
   return (
     <>
       <div className="bg-white shadow-inner min-h-full print:shadow-none print:p-0 pdf-export-container">
         {template === "ieee" ? <IEEEPreview {...previewProps} />
-          : template === "gbt7713" ? <GBT7713Preview {...previewProps} />
           : template === "cas" ? <CASPreview {...previewProps} />
           : template === "nature" ? <NaturePreview {...previewProps} />
+          : chineseChrome || template === "gbt7713" ? <GBT7713Preview {...previewProps} />
           : <StandardSCIPreview {...previewProps} />}
       </div>
 

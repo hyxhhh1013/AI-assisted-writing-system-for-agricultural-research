@@ -1,7 +1,8 @@
 /** 写作上下文构建 — RAG 检索、预览与引用映射 */
 
-import { ensureBibMapLoaded, localRAG, formatRagCitation, cleanSourceName, resolveBibEntry } from "@/lib/rag";
+import { ensureBibMapLoaded, localRAG, formatRagCitation, cleanSourceName, resolveBibEntry, rrfMergeChunkLists } from "@/lib/rag";
 import type { RagChunk } from "@/lib/rag";
+import { rerankChunksForClaims } from "@/lib/rag-claim-rerank";
 import type { WritingRequest } from "@/contracts/writing";
 import { resolveWritingDraftContext } from "@/contracts/writing";
 import type {
@@ -13,6 +14,7 @@ import type { SoftReferenceEvidence } from "@/contracts/project";
 import { formatSoftEvidenceBlock, isSoftGroundable } from "@/lib/reference-evidence";
 import { inferCategoriesFromTitle } from "@/lib/knowledge-category-hints";
 import { preferChunksByPaperSection } from "@/lib/paper-section";
+import { collectWritingClaims, writingClaimQueries } from "@/lib/writing-claims";
 
 export { inferCategoriesFromTitle } from "@/lib/knowledge-category-hints";
 
@@ -335,14 +337,29 @@ export async function searchWritingRagChunks(
     researchDirection,
     projectMode,
   });
+  const claimQueries = writingClaimQueries({
+    title,
+    researchDirection,
+    claims: params.claims ?? [],
+  });
 
   const searchLimit = Math.max(ragLimit * 2, ragLimit);
-
-  let chunks = await localRAG.search(enhancedQuery, {
+  const searchOpts = {
     limit: searchLimit,
     maxPerSource: ragMaxPerSource,
+    paperFirst: true,
+    paperLimit: 12,
     ...searchScope,
-  });
+  };
+
+  let chunks = claimQueries.length > 0
+    ? rrfMergeChunkLists(await Promise.all([
+        localRAG.search(enhancedQuery, searchOpts),
+        ...claimQueries.map((query) =>
+          localRAG.search(query, { ...searchOpts, multiQuery: false as const }),
+        ),
+      ]))
+    : await localRAG.search(enhancedQuery, searchOpts);
   let expandedToFullLibrary = false;
 
   // query fallback：仍保留要点语义（draftContext），勿只剩章节词
@@ -357,6 +374,8 @@ export async function searchWritingRagChunks(
     chunks = await localRAG.search(fallbackQuery || enhancedQuery, {
       limit: searchLimit,
       maxPerSource: Math.max(1, Math.floor(ragMaxPerSource / 2)),
+      paperFirst: true,
+      paperLimit: 12,
       ...searchScope,
     });
   }
@@ -366,6 +385,8 @@ export async function searchWritingRagChunks(
     chunks = await localRAG.search(enhancedQuery, {
       limit: searchLimit,
       maxPerSource: ragMaxPerSource,
+      paperFirst: true,
+      paperLimit: 12,
     });
     expandedToFullLibrary = chunks.length > 0;
   }
@@ -377,8 +398,11 @@ export async function searchWritingRagChunks(
     keepAtLeast: Math.min(6, Math.max(3, Math.floor(ragLimit / 3))),
   });
 
+  const sectionPreferred = preferChunksByPaperSection(filtered.chunks, section);
+  const reranked = await rerankChunksForClaims(sectionPreferred, params.claims ?? []);
+
   return {
-    chunks: preferChunksByPaperSection(filtered.chunks, section).slice(0, ragLimit),
+    chunks: reranked.slice(0, ragLimit),
     query: enhancedQuery,
     ragLimit,
     ragMaxPerSource,
@@ -680,6 +704,13 @@ export async function retrieveWritingContext(
       projectMode: params.projectMode,
       existingReferences,
       selectedSourceIds,
+      subsectionTitle: params.subsectionTitle,
+      claims: collectWritingClaims(
+        params.globalContext?.blueprint,
+        params.section,
+        params.projectMode,
+        params.subsectionTitle,
+      ),
     });
     rawChunks = searched.chunks;
     expandedToFullLibrary = searched.expandedToFullLibrary;

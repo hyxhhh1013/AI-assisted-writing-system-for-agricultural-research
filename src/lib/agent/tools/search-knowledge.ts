@@ -114,6 +114,8 @@ export const searchKnowledgeTool: ToolDefinition = {
       limit: chunkLimit,
       maxPerSource: sourceKey ? 8 : KNOWLEDGE_PAPER_MAX_PER_SOURCE,
       multiQuery: sourceKey ? "auto" : true,
+      paperFirst: !sourceKey,
+      paperLimit: 12,
       ...(category ? { category } : {}),
       ...(!category && !sourceKey && projectCats.length > 0
         ? { categories: projectCats }
@@ -129,6 +131,8 @@ export const searchKnowledgeTool: ToolDefinition = {
         limit: chunkLimit,
         maxPerSource: KNOWLEDGE_PAPER_MAX_PER_SOURCE,
         multiQuery: true,
+        paperFirst: true,
+        paperLimit: 12,
       });
       const inScope = full.filter(
         (c) => !isOffTopicLabCategory(c.metadata.category, allowedCats),

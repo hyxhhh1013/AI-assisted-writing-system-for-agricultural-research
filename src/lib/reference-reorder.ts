@@ -411,22 +411,36 @@ export function stripDisallowedCitations(
 
   t = t.replace(/\[([0-9,\s\-–—，、]+)\]/g, (_match: string, nums: string) => {
     const parts = nums.split(/[,，、]\s*/).map((p: string) => p.trim()).filter(Boolean);
-    const validParts: string[] = [];
+    const kept: number[] = [];
+    const seen = new Set<number>();
+    const push = (n: number) => {
+      if (!allowedIndices.has(n) || seen.has(n)) return;
+      seen.add(n);
+      kept.push(n);
+    };
 
     for (const part of parts) {
       const range = part.match(/^(\d+)\s*[-–—]\s*(\d+)$/);
       if (range) {
         const a = parseInt(range[1], 10);
         const b = parseInt(range[2], 10);
-        if (allowedIndices.has(a) && allowedIndices.has(b)) validParts.push(part);
+        const lo = Math.min(a, b);
+        const hi = Math.max(a, b);
+        // 两端都在白名单时旧逻辑会整段保留，中间未绑定的号仍算硬挂。逐号保留。
+        if (hi - lo > 40) {
+          push(a);
+          push(b);
+          continue;
+        }
+        for (let n = lo; n <= hi; n += 1) push(n);
         continue;
       }
       const n = parseInt(part, 10);
-      if (!isNaN(n) && allowedIndices.has(n)) validParts.push(part);
+      if (!isNaN(n)) push(n);
     }
 
-    if (validParts.length === 0) return "";
-    return `[${validParts.join(", ")}]`;
+    if (kept.length === 0) return "";
+    return `[${kept.join(", ")}]`;
   });
 
   return t;

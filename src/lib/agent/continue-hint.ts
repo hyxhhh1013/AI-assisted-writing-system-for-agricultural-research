@@ -190,6 +190,14 @@ export function collectTurnContinueSignals(messages: readonly AgentUiMessage[]):
   return { lastAssistantText, lastSummaryText, observations, writtenSectionKeys };
 }
 
+/** 过期计划不要盖住用户刚说的事。没有新话时仍沿用未完成计划。 */
+function planStillMatchesLatest(title: string, blob: string): boolean {
+  const text = blob.trim();
+  if (!text) return true;
+  const needle = title.trim().slice(0, 4);
+  return needle.length >= 2 && text.includes(needle);
+}
+
 /**
  * 输入区「继续推进」条。
  * 本轮已成功 write_section 时禁止再显示「只宣布了」或重复写同一节。
@@ -245,7 +253,10 @@ export function resolveAgentContinueHint(input: {
     ? null
     : thoughtAnnouncesUnfinishedTool(blob, input.observations ?? []);
   const writeTip = writeTipForHint(input, skipKeys);
-  const planTitle = firstOpenPlanTitle(input.planSubtasks, skipKeys);
+  const openPlanTitle = firstOpenPlanTitle(input.planSubtasks, skipKeys);
+  const planTitle = openPlanTitle && planStillMatchesLatest(openPlanTitle, blob)
+    ? openPlanTitle
+    : null;
   const writeQa = lastWriteQaObservation(input.observations);
   const qaActionable = writeQa?.qaReport
     ? writingQaContinueFindings(writeQa.qaReport).length > 0

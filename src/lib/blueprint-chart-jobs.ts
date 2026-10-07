@@ -189,6 +189,104 @@ export function buildGenerateChartCallsFromJobs(
   return out;
 }
 
+const NARRATIVE_FIGURE_TYPES = new Set(["flow", "schematic", "table", "other"]);
+
+export interface BlueprintNarrativeFigureCall {
+  id: string;
+  name: "draft_mechanism_figure" | "generate_table";
+  args: Record<string, unknown>;
+}
+
+function shortFigureStep(text: string): string {
+  const cut = text.replace(/\s+/g, "").split(/[，。；、]/)[0] ?? "";
+  return cut.slice(0, 16) || "过程";
+}
+
+function guideKeyPointsForItem(
+  blueprint: WritingBlueprint,
+  item: FigurePlanItem,
+): string[] {
+  const guide = blueprint.sectionGuides.find(
+    (g) => g.sectionPath === item.sectionPath || figureBelongsToSection(item.sectionPath, g.sectionPath),
+  );
+  return (guide?.keyPoints ?? []).map((p) => p.trim()).filter(Boolean).slice(0, 4);
+}
+
+/** 综述示意图、流程图、对比表不依赖试验 CSV，写节后直接排队。 */
+export function buildNarrativeFigureCalls(input: {
+  blueprint: WritingBlueprint | null | undefined;
+  sectionKey: string;
+  mode?: ProjectWritingMode;
+  subsectionTitle?: string;
+  draft: string;
+  alreadyQueued: readonly { name: string; args: Record<string, unknown> }[];
+}): BlueprintNarrativeFigureCall[] {
+  const blueprint = input.blueprint;
+  if (!blueprint) return [];
+  const queuedTitles = new Set(
+    input.alreadyQueued
+      .map((c) => String(c.args.title ?? c.args.caption ?? "").trim())
+      .filter(Boolean),
+  );
+  const out: BlueprintNarrativeFigureCall[] = [];
+  for (const item of blueprint.figurePlan.items) {
+    if (item.priority !== "required") continue;
+    const reviewChart = input.mode === "review"
+      && item.type === "chart"
+      && item.dataSource !== "experiment";
+    if (!NARRATIVE_FIGURE_TYPES.has(item.type) && !reviewChart) continue;
+    if (
+      !figurePlanItemMatchesSection(
+        item,
+        input.sectionKey,
+        input.mode,
+        input.subsectionTitle,
+      )
+    ) {
+      continue;
+    }
+    const title = item.suggestedCaption.trim() || item.purpose.trim();
+    if (!title || input.draft.includes(title) || queuedTitles.has(title)) continue;
+    const points = guideKeyPointsForItem(blueprint, item);
+    const steps = points.map(shortFigureStep);
+    while (steps.length < 2) {
+      steps.push(shortFigureStep(steps.length === 0 ? item.purpose : title));
+    }
+    if (item.type === "table") {
+      out.push({
+        id: `bp_table_${item.id}`,
+        name: "generate_table",
+        args: {
+          title,
+          sectionKey: input.sectionKey,
+          rows: [
+            ["要点", "说明"],
+            ...points.map((p) => [shortFigureStep(p), p.slice(0, 80)]),
+            ...(points.length === 0 ? [[shortFigureStep(title), item.purpose.slice(0, 80)]] : []),
+          ],
+        },
+      });
+    } else {
+      out.push({
+        id: `bp_fig_${item.id}`,
+        name: "draft_mechanism_figure",
+        args: {
+          kind: "flow",
+          title,
+          claim: item.purpose.slice(0, 120),
+          flowSteps: steps.slice(0, 6),
+          layout: "chain",
+          sectionKey: input.sectionKey,
+          persistToProject: "true",
+        },
+      });
+    }
+    queuedTitles.add(title);
+    if (out.length >= 2) break;
+  }
+  return out;
+}
+
 export function formatUnboundBlueprintChartsNudge(
   items: FigurePlanItem[],
 ): string | null {

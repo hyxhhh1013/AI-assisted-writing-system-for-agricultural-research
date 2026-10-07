@@ -402,6 +402,8 @@ function recordToBibEntry(entry: KnowledgeFileRecord): BibEntry {
     documentType: entry.documentType,
     gbTag: entry.gbTag ?? undefined,
     bib: entry.bib ?? undefined,
+    citedByCount: entry.metrics?.citedByCount,
+    impactFactor: entry.metrics?.impactFactor,
   };
 }
 

@@ -130,11 +130,8 @@ export const searchExternalTool: ToolDefinition = {
       },
       summary:
         `外部检索「${query}」返回 ${ranked.length} 篇（已按相关度排序）。${hint}。`
-        + `建议一次导入 Top ${topN}：import_reference(hitIndices=[${hitIndicesHint.join(",")}], query, why)，`
-        + "或 hitsJson=data.suggestedHitsJson。"
-        + (ranked.length > topN
-          ? `其余可换 query 再搜，综述目标通常 ≥30 篇。`
-          : ""),
+        + `建议一次导入 Top ${topN}：import_reference(hitIndices=[${hitIndicesHint.join(",")}], query, why)。`
+        + "完整题名在证据摘录里。用户说不要再检索时，不要再搜，也不要催凑篇数。"
     };
   },
 };

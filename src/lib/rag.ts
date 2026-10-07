@@ -23,6 +23,11 @@ import {
   ragListRrfWeight,
 } from "@/lib/rag-chunk-quality";
 import { createLogger } from "@/lib/logger";
+import {
+  cjkPhraseHits,
+  extractCjkPhrases,
+  restrictOrderToTopPapers,
+} from "@/lib/rag-rank";
 
 const log = createLogger("rag");
 
@@ -75,6 +80,9 @@ export interface BibEntry {
     isbn?: string;
     publisher?: string;
   } | null;
+  /** 篇级排序用，来自 KnowledgeFile.metrics，不是正文 */
+  citedByCount?: number;
+  impactFactor?: number;
 }
 
 // ── 二进制 Embedding 存储 ─────────────────────────────────────────────────
@@ -261,7 +269,7 @@ function ragCategoryCacheMax(): number {
 }
 
 /** 多路检索结果 RRF 融合（按 chunk id 去重；纯外部摘要列表降权） */
-function rrfMergeChunkLists(lists: RagChunk[][], k = 60): RagChunk[] {
+export function rrfMergeChunkLists(lists: RagChunk[][], k = 60): RagChunk[] {
   const scores = new Map<string, { chunk: RagChunk; score: number }>();
   for (const list of lists) {
     const listW = ragListRrfWeight(list);
@@ -412,8 +420,24 @@ function applyMetadataBoost(
   applyPhraseBoost(scores, chunks, query);
 }
 
-/** 连续英文实词短语命中正文/题名（补单词语 BM25） */
+/** 连续短语命中正文/题名：中文整词 + 英文实词二元组（补单字/单词 BM25） */
 function applyPhraseBoost(scores: number[], chunks: RagChunk[], query: string): void {
+  const cjkPhrases = extractCjkPhrases(query);
+  if (cjkPhrases.length > 0) {
+    for (let i = 0; i < chunks.length; i++) {
+      const src = path.basename((chunks[i].metadata.source || "").replace(/\\/g, "/"));
+      const bib = resolveBibEntry(chunks[i].metadata.source);
+      const title = bib?.bib?.title || "";
+      const head = (chunks[i].content || "").slice(0, 1600);
+      let extra = 0;
+      for (const phrase of cjkPhrases) {
+        if (title.includes(phrase)) extra += 4;
+        else if (head.includes(phrase) || src.includes(phrase)) extra += 2.5;
+      }
+      if (extra > 0) scores[i] += extra;
+    }
+  }
+
   const words = query.toLowerCase().match(/[a-z][a-z0-9\-]{3,}/g) || [];
   if (words.length < 2) return;
   const phrases: string[] = [];
@@ -438,7 +462,8 @@ function applyPhraseBoost(scores: number[], chunks: RagChunk[], query: string): 
 function lexicalRerank(chunks: RagChunk[], query: string, terms: string[]): RagChunk[] {
   if (chunks.length <= 1) return chunks;
   const meaningful = terms.filter((t) => t.length >= 2).slice(0, 24);
-  if (meaningful.length === 0) return chunks;
+  const phrases = extractCjkPhrases(query);
+  if (meaningful.length === 0 && phrases.length === 0) return chunks;
   const qLower = query.toLowerCase();
 
   const scored = chunks.map((c, idx) => {
@@ -452,6 +477,8 @@ function lexicalRerank(chunks: RagChunk[], query: string, terms: string[]): RagC
       if (src.includes(t)) s += 2;
       if (head.includes(t)) s += 1;
     }
+    s += cjkPhraseHits(title, phrases) * 5;
+    s += cjkPhraseHits(head, phrases) * 3;
     if (qLower.length >= 4 && title.includes(qLower.slice(0, 24))) s += 4;
     if (c.metadata.category === EXTERNAL_ABSTRACT_CATEGORY) s *= 0.7;
     return { c, s, idx };
@@ -568,6 +595,49 @@ function diversifyByCategory(topChunks: RagChunk[], allChunks: RagChunk[]): RagC
   const result = topChunks.slice(0, -1);
   result.push(otherChunks[0]);
   return result;
+}
+
+const DEFAULT_PAPER_LIMIT = 12;
+
+/** 先按篇收窄，再把这些篇的片段交回原来的块排序。 */
+function maybeRestrictToPapers(
+  order: number[],
+  pool: RagChunk[],
+  scores: number[],
+  query: string,
+  enabled: boolean,
+  paperLimit: number,
+): number[] {
+  if (!enabled || order.length === 0) return order;
+  const phrases = extractCjkPhrases(query);
+  const titleHits = new Array<number>(pool.length).fill(0);
+  const bodyHits = new Array<number>(pool.length).fill(0);
+  const year: Array<number | undefined> = new Array(pool.length);
+  const citedBy: Array<number | undefined> = new Array(pool.length);
+  const impactFactor: Array<number | undefined> = new Array(pool.length);
+  const seen = new Map<string, BibEntry | undefined>();
+  for (const i of order) {
+    const src = pool[i]?.metadata.source || "";
+    if (!seen.has(src)) seen.set(src, resolveBibEntry(src));
+    const bib = seen.get(src);
+    const title = bib?.bib?.title || "";
+    titleHits[i] = cjkPhraseHits(title, phrases);
+    bodyHits[i] = cjkPhraseHits((pool[i]?.content || "").slice(0, 1600), phrases);
+    year[i] = bib?.bib?.year;
+    citedBy[i] = bib?.citedByCount;
+    impactFactor[i] = bib?.impactFactor;
+  }
+  return restrictOrderToTopPapers({
+    order,
+    sources: pool.map((c) => c.metadata.source),
+    scores,
+    paperLimit,
+    titlePhraseHits: titleHits,
+    bodyPhraseHits: bodyHits,
+    year,
+    citedBy,
+    impactFactor,
+  });
 }
 
 function diversifyBySource(order: number[], chunks: RagChunk[], limit: number, maxPerSource: number): RagChunk[] {
@@ -1024,6 +1094,9 @@ export class LocalRAG {
           maxPerSource?: number;
           /** 多 query：true=总开；false=关闭；默认 auto（弱召回才开） */
           multiQuery?: boolean | "auto";
+          /** 先按篇保留，再在这些篇里取片段。写作和备文献开启。 */
+          paperFirst?: boolean;
+          paperLimit?: number;
         } = {},
   ): Promise<RagChunk[]> {
     let limit = 8;
@@ -1031,6 +1104,8 @@ export class LocalRAG {
     let categories: string[] | undefined;
     let maxPerSource = DEFAULT_MAX_PER_SOURCE;
     let multiMode: boolean | "auto" = "auto";
+    let paperFirst = false;
+    let paperLimit = DEFAULT_PAPER_LIMIT;
 
     if (typeof options === "number") {
       limit = options;
@@ -1039,6 +1114,8 @@ export class LocalRAG {
       category = options.category;
       categories = options.categories;
       maxPerSource = options.maxPerSource ?? DEFAULT_MAX_PER_SOURCE;
+      paperFirst = options.paperFirst === true;
+      paperLimit = options.paperLimit ?? DEFAULT_PAPER_LIMIT;
       if (options.multiQuery === false) multiMode = false;
       else if (options.multiQuery === true) multiMode = true;
       else multiMode = "auto";
@@ -1057,6 +1134,8 @@ export class LocalRAG {
       category: resolvedCategory,
       categories: resolvedCategories,
       maxPerSource,
+      paperFirst,
+      paperLimit,
     });
 
     const useMulti =
@@ -1076,6 +1155,8 @@ export class LocalRAG {
           category,
           categories,
           maxPerSource,
+          paperFirst,
+          paperLimit,
         }),
       ),
     );
@@ -1098,9 +1179,11 @@ export class LocalRAG {
       categories?: string[];
       maxPerSource: number;
       skipHintScope?: boolean;
+      paperFirst?: boolean;
+      paperLimit?: number;
     },
   ): Promise<RagChunk[]> {
-    const { limit, category, categories, maxPerSource, skipHintScope } = opts;
+    const { limit, category, categories, maxPerSource, skipHintScope, paperFirst, paperLimit } = opts;
     const queryHints = inferCategoriesFromQuery(q);
     const scopeCatsEarly = categories?.filter((c) => c && c !== "全部");
 
@@ -1113,6 +1196,8 @@ export class LocalRAG {
           maxPerSource,
           categories: validHints,
           skipHintScope: true,
+          paperFirst,
+          paperLimit,
         });
         const minScoped = Math.max(3, Math.ceil(limit * 0.5));
         if (scoped.length >= minScoped) {
@@ -1122,6 +1207,8 @@ export class LocalRAG {
           limit: limit * 2,
           maxPerSource,
           skipHintScope: true,
+          paperFirst,
+          paperLimit,
         });
         const merged = rrfMergeChunkLists([scoped, full]);
         return finalizeSearchResults(merged, limit, validHints, q, buildRagSearchTerms(q));
@@ -1134,6 +1221,8 @@ export class LocalRAG {
       categories,
       maxPerSource,
       queryHints,
+      paperFirst,
+      paperLimit,
     });
   }
 
@@ -1145,9 +1234,11 @@ export class LocalRAG {
       categories?: string[];
       maxPerSource: number;
       queryHints: string[];
+      paperFirst?: boolean;
+      paperLimit?: number;
     },
   ): Promise<RagChunk[]> {
-    const { limit, maxPerSource, queryHints } = opts;
+    const { limit, maxPerSource, queryHints, paperFirst, paperLimit } = opts;
     const category = resolveRagCategoryName(opts.category) ?? opts.category;
     const categories = opts.categories
       ?.map((c) => resolveRagCategoryName(c) ?? c)
@@ -1208,7 +1299,15 @@ export class LocalRAG {
       }
     } else {
       // 全库：逐分类打分再 RRF，避免 ensureAllLoaded 常驻双倍倒排索引
-      return this.searchAllCategories(q, { limit, maxPerSource, perf, tStart, queryHints });
+      return this.searchAllCategories(q, {
+        limit,
+        maxPerSource,
+        perf,
+        tStart,
+        queryHints,
+        paperFirst,
+        paperLimit,
+      });
     }
     if (perf) tAfterLoad = Date.now();
 
@@ -1277,7 +1376,15 @@ export class LocalRAG {
 
     const nonZero = order.filter((i) => fused[i] > 0);
     if (nonZero.length === 0) return [];
-    const diversified = diversifyBySource(nonZero, pool, limit * 2, maxPerSource);
+    const narrowed = maybeRestrictToPapers(
+      nonZero,
+      pool,
+      fused,
+      q,
+      paperFirst === true,
+      paperLimit ?? DEFAULT_PAPER_LIMIT,
+    );
+    const diversified = diversifyBySource(narrowed, pool, limit * 2, maxPerSource);
     const catDiversified = diversifyByCategory(diversified, pool);
     return finalizeSearchResults(catDiversified, limit, queryHints, q, terms);
   }
@@ -1288,9 +1395,17 @@ export class LocalRAG {
    */
   private async searchAllCategories(
     q: string,
-    opts: { limit: number; maxPerSource: number; perf: boolean; tStart: number; queryHints: string[] },
+    opts: {
+      limit: number;
+      maxPerSource: number;
+      perf: boolean;
+      tStart: number;
+      queryHints: string[];
+      paperFirst?: boolean;
+      paperLimit?: number;
+    },
   ): Promise<RagChunk[]> {
-    const { limit, maxPerSource, perf, tStart, queryHints } = opts;
+    const { limit, maxPerSource, perf, tStart, queryHints, paperFirst, paperLimit } = opts;
     const cats = await this.getCategories();
     if (cats.length === 0) {
       await this.ensureLoaded();
@@ -1380,8 +1495,16 @@ export class LocalRAG {
 
     if (perCatTop.length === 0) return [];
     const merged = rrfMergeChunkLists(perCatTop);
-    // 跨分类再按来源/分类多样性截断
-    const asPool = merged;
+    const mergedScores = merged.map((_, i) => merged.length - i);
+    const mergedOrder = maybeRestrictToPapers(
+      merged.map((_, i) => i),
+      merged,
+      mergedScores,
+      q,
+      paperFirst === true,
+      paperLimit ?? DEFAULT_PAPER_LIMIT,
+    );
+    const asPool = mergedOrder.map((i) => merged[i]);
     const order = asPool.map((_, i) => i);
     const diversified = diversifyBySource(order, asPool, limit * 2, maxPerSource);
     const catDiversified = diversifyByCategory(diversified, asPool);

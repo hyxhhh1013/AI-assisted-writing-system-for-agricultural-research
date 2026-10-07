@@ -35,6 +35,9 @@ export interface RetrievePreviewRequest {
   researchDirection?: string;
   retrievalMode?: "precise" | "balanced" | "extensive";
   projectMode?: "review" | "research";
+  /** 蓝图本节主张；有则按主张分路检索 */
+  claims?: string[];
+  subsectionTitle?: string;
 }
 
 export interface RetrievePreviewResponse {

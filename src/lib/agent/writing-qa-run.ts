@@ -128,6 +128,7 @@ function hasSentenceMonotone(text: string): boolean {
 function collectSectionFindings(
   text: string,
   register: SectionRegister | null,
+  sectionKey?: string,
 ): WritingQaFinding[] {
   const findings: WritingQaFinding[] = [];
 
@@ -170,7 +171,8 @@ function collectSectionFindings(
     });
   }
 
-  if (MD_HEADING_RE.test(text)) {
+  const keepSubsectionHeadings = sectionKey === "literature_body" || sectionKey === "background";
+  if (!keepSubsectionHeadings && MD_HEADING_RE.test(text)) {
     findings.push({
       code: "md_heading",
       layer: "L1",
@@ -294,7 +296,7 @@ export function evaluateSectionWritingQa(
     charCount: text.length,
   });
   const extras = [
-    ...collectSectionFindings(text, register),
+    ...collectSectionFindings(text, register, input.sectionKey),
     ...collectCiteOobFindings(text, input.maxRefIndex),
     ...collectNumberClaimFindings(text, register, input.dataClaims),
     ...collectSoftPreciseFindings(text, register, input.softRefs),

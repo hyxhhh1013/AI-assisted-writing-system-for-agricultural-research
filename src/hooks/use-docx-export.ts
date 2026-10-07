@@ -11,6 +11,7 @@ import { formatFilenames } from "@/services/references";
 import { assessExportReadiness } from "@/lib/export-readiness";
 import { fetchExportReadiness } from "@/services/export-readiness";
 import { toCitedOnlyManuscript } from "@/lib/reference-reorder";
+import { displayAuthorLine } from "@/lib/utils";
 
 /** 清理文件名用于兜底显示 */
 function cleanRefForDocx(raw: string): string {
@@ -76,7 +77,7 @@ export function useDocxExport({ project, activeSection, editingContent, saveProj
     }
 
     const template = p.template || "sci";
-    const isChinese = template === "gbt7713";
+    const isChinese = template === "gbt7713" || template === "cas" || p.language === "zh";
     const isNature = template === "nature";
     const isIEEE = template === "ieee";
 
@@ -286,7 +287,7 @@ export function useDocxExport({ project, activeSection, editingContent, saveProj
               alignment: AlignmentType.CENTER, spacing: { before: 400, after: 400 },
             }),
             new Paragraph({
-              children: [new TextRun({ text: p.authors || "", size: isChinese ? 28 : 24, font: config.fontMain })],
+              children: [new TextRun({ text: displayAuthorLine(p.authors, isChinese), size: isChinese ? 28 : 24, font: config.fontMain })],
               alignment: AlignmentType.CENTER, spacing: { after: 200 },
             }),
             new Paragraph({

@@ -4,6 +4,7 @@ import type { WritingBlueprint } from "@/contracts/writing-blueprint";
 import {
   boundChartJobToFigureConfig,
   buildGenerateChartCallsFromJobs,
+  buildNarrativeFigureCalls,
   collectBoundChartJobsForSection,
   formatUnboundBlueprintChartsNudge,
   jobAlreadyCoveredByText,
@@ -102,6 +103,33 @@ describe("collectBoundChartJobsForSection", () => {
       chartConfigs: configs,
     });
     expect(jobs).toHaveLength(0);
+  });
+});
+
+describe("buildNarrativeFigureCalls", () => {
+  it("queues a flow figure for the methods section without experiment data", () => {
+    const calls = buildNarrativeFigureCalls({
+      blueprint,
+      sectionKey: "methods",
+      mode: "research",
+      draft: "",
+      alreadyQueued: [],
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.name).toBe("draft_mechanism_figure");
+    expect(calls[0]?.args.title).toBe("图1 流程");
+    expect(calls[0]?.args.sectionKey).toBe("methods");
+  });
+
+  it("skips a figure whose caption is already in the draft", () => {
+    const calls = buildNarrativeFigureCalls({
+      blueprint,
+      sectionKey: "methods",
+      mode: "research",
+      draft: "见图 图1 流程",
+      alreadyQueued: [],
+    });
+    expect(calls).toHaveLength(0);
   });
 });
 

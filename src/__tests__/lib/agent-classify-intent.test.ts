@@ -67,6 +67,11 @@ describe("looksLikeFollowUpUtterance", () => {
 describe("classifyIntentFromRegex", () => {
   it("maps 写引言 to draft", () => {
     expect(classifyIntentFromRegex("写引言")).toBe("draft");
+    expect(
+      classifyIntentFromRegex(
+        "老师使用不同的手机号码入职，重复招聘是要扣除的",
+      ),
+    ).toBeNull();
   });
 
   it("maps 按本题检索并导入相关文献 to literature", () => {

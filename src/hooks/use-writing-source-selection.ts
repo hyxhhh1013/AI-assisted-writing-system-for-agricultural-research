@@ -20,6 +20,9 @@ export interface WritingSourceSelectionParams {
   draftReady: boolean;
   /** 综述模式下，项目是否已从 Direction 预加载了文献（强制要求确认） */
   hasPreloadedReferences?: boolean;
+  /** 蓝图本节主张，预览与正式扩写共用 */
+  claims?: string[];
+  subsectionTitle?: string;
 }
 
 /** 检索范围变更（不含要点/补充说明，避免输入时清空预览） */
@@ -54,6 +57,8 @@ export function useWritingSourceSelection(params: WritingSourceSelectionParams) 
     projectMode,
     draftReady,
     hasPreloadedReferences,
+    claims,
+    subsectionTitle,
   } = params;
 
   const [hits, setHits] = useState<RetrievePreviewHit[]>([]);
@@ -125,6 +130,8 @@ export function useWritingSourceSelection(params: WritingSourceSelectionParams) 
         researchDirection,
         retrievalMode,
         projectMode,
+        claims,
+        subsectionTitle,
       });
       setHits(preview.hits);
       setSelectedSourceIds(preview.defaultSelectedSourceIds);
@@ -163,6 +170,8 @@ export function useWritingSourceSelection(params: WritingSourceSelectionParams) 
     retrievalMode,
     projectMode,
     reviewRequiresConfirmation,
+    claims,
+    subsectionTitle,
   ]);
 
   const toggleSource = useCallback((sourceKey: string, checked: boolean) => {

@@ -22,6 +22,7 @@ import {
   evaluateWriteResume,
 } from "@/lib/agent/write-resume";
 import {
+  bodyCoversSubsectionTitle,
   multiSubsectionWriteError,
   prepareAgentWriteBlueprintContext,
 } from "@/lib/agent/blueprint-write-context";
@@ -618,6 +619,14 @@ export const writeSectionTool: ToolDefinition = {
         subsectionTitle,
         softRefs: softRefsOf(project),
       });
+
+      if (
+        subsectionTitle
+        && !bodyCoversSubsectionTitle(repaired.draft, subsectionTitle)
+      ) {
+        const heading = manuscriptSubsectionTitle(subsectionTitle);
+        repaired.draft = `### ${heading}\n\n${repaired.draft.trim()}`;
+      }
 
       draftAcc.draft = repaired.draft;
       const qaReport = repaired.qaReport;

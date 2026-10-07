@@ -39,6 +39,7 @@ import {
   buildClarifyCheckpoint,
   buildConfigCheckpoint,
   buildOutlineCheckpoint,
+  paperConfigSettled,
   revokeApprovedKind,
   shouldPauseForBlueprintApprove,
   shouldPauseForConfigConfirm,
@@ -122,6 +123,7 @@ import { loadAgentPlotSources } from "@/lib/agent/plot-sources";
 import { collectChartConfigsFromSources } from "@/contracts/figure";
 import {
   buildGenerateChartCallsFromJobs,
+  buildNarrativeFigureCalls,
   collectBoundChartJobsForSection,
   formatUnboundBlueprintChartsNudge,
   jobAlreadyCoveredByText,
@@ -619,6 +621,29 @@ export async function toolsNode(
   let plan = state.plan;
   let grantedConfirm = state.grantedConfirm ?? null;
 
+  const configBlocksStructure = Boolean(agentContext.projectSnapshot)
+    && !paperConfigSettled({
+      hasPaperConfig: Boolean(agentContext.projectSnapshot?.hasPaperConfig),
+      approvedKinds: state.approvedCheckpointKinds ?? [],
+    });
+  const pauseForPaperConfig = (fromIdx: number): Partial<AgentGraphStateType> => {
+    const checkpoint = buildConfigCheckpoint();
+    events.push({ type: "agent/checkpoint", checkpoint });
+    events.push({ type: "agent/status", status: "awaiting_checkpoint" });
+    return {
+      pendingToolCalls: toolQueue.slice(fromIdx),
+      toolCallCount,
+      toolSummaries: newSummaries,
+      observations: newObservations,
+      messages: newMessages,
+      events,
+      plan,
+      toolTrace: newTrace,
+      awaitingCheckpoint: checkpoint,
+      finished: true,
+    };
+  };
+
   /** 门禁失败统一记录：摘要 + LLM 消息 + SSE observation + 计划标记失败 */
   const rejectGate = (toolName: string, error: string) => {
     trace(toolName, false, { reason: error, via: "pre-gate" });
@@ -826,6 +851,12 @@ export async function toolsNode(
 
       while (!prereqPaused) {
         const missing = listMissingWritePrereqs(agentContext.projectSnapshot);
+        if (
+          configBlocksStructure
+          && (missing[0] === "generate_outline" || missing[0] === "generate_writing_blueprint")
+        ) {
+          return pauseForPaperConfig(tcIdx);
+        }
         let outlineExtra: Record<string, unknown> | undefined;
         if (missing[0] === "generate_outline") {
           const currentTitle = agentContext.projectSnapshot?.title ?? "";
@@ -1044,6 +1075,13 @@ export async function toolsNode(
             `【系统】已自动补齐写作前置（${prereqRan.join(" → ")}），继续执行 ${tool.name}。`,
         });
       }
+    }
+
+    if (
+      configBlocksStructure
+      && (tool.name === "generate_outline" || tool.name === "generate_writing_blueprint")
+    ) {
+      return pauseForPaperConfig(tcIdx);
     }
 
     // 阶段门禁在写前置补齐之后执行（原顺序）：与当前项目阶段不匹配 → 拒绝
@@ -1300,6 +1338,26 @@ export async function toolsNode(
           if (unboundNudge) {
             newMessages.push({ role: "user", content: unboundNudge });
             newSummaries.push("[blueprint-chart] 蓝图必需图缺数据绑定，已提示上传");
+          }
+          const figureCalls = buildNarrativeFigureCalls({
+            blueprint: agentContext.projectSnapshot?.globalContext?.blueprint ?? null,
+            sectionKey: section,
+            mode: agentContext.projectSnapshot?.mode,
+            subsectionTitle,
+            draft,
+            alreadyQueued: toolQueue.slice(tcIdx + 1),
+          });
+          if (figureCalls.length > 0) {
+            toolQueue.splice(tcIdx + 1 + chartCalls.length, 0, ...figureCalls);
+            newSummaries.push(
+              `[blueprint-figure] 已自动排队示意图/对比表 × ${figureCalls.length} → ${section}`,
+            );
+            newMessages.push({
+              role: "user",
+              content:
+                `System: 本节蓝图里的示意图或对比表已自动排队 ${figureCalls.length} 项。`
+                + "不要改成上传 CSV。完成后正文里应能看到对应图题或表题。",
+            });
           }
         }
       }

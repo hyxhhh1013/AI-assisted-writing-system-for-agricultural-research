@@ -22,6 +22,7 @@ import { projectStore } from "@/lib/store";
 import { getMinDraftChars, getWritingContextPlaceholder, isWritingDraftReady, contextLinesToBullets, MIN_WRITING_BULLETS, normalizeWritingBullets, shouldUseCollaborativeBulletExpand, type ManualWritingPhase, type WritingFlowMode } from "@/contracts/writing";
 import { resolveProjectLanguage, type ProjectData } from "@/contracts/project";
 import { parseWritingBlueprint } from "@/contracts/writing-blueprint";
+import { collectWritingClaims } from "@/lib/writing-claims";
 import { useWritingStream } from "@/hooks/use-writing-stream";
 import {
   parseOutline,
@@ -246,6 +247,11 @@ export function WritingPanel({
 
   const hasPreloadedReferences = projectMode === "review" && (project.references?.length ?? 0) > 0;
 
+  const writingClaims = useMemo(
+    () => collectWritingClaims(writingBlueprint, targetSectionKey, projectMode, subsectionTitle),
+    [writingBlueprint, targetSectionKey, projectMode, subsectionTitle],
+  );
+
   const sourceSelection = useWritingSourceSelection({
     title,
     section: targetSectionKey,
@@ -258,6 +264,8 @@ export function WritingPanel({
     projectMode,
     draftReady: isWritingDraftReady(context, bullets, targetSectionKey),
     hasPreloadedReferences,
+    claims: writingClaims,
+    subsectionTitle,
   });
 
   const { resultRef, figureAbortRef, writingAbortRef, handleCancel, handleGenerate, handleSubmitAudit, handleApplyFix, syncDraft, bulletExpand } = useWritingPanelGenerate({

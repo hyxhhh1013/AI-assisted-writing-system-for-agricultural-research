@@ -248,6 +248,38 @@ export function buildRagSearchTermWeights(query: string): Map<string, number> {
   return weights;
 }
 
+const EXTRA_GROUNDING_GROUPS: string[][] = [
+  ["镍", "nickel"],
+  ["重整", "reforming"],
+  ["改性", "modification"],
+];
+
+/**
+ * 引用接地用的同义词串。检索只用少量 query 变体；对照中文句和英文摘要时，
+ * 要把同组词都摊开，镍/焦油重整才能对上另一篇，而不是整句判成对不上。
+ */
+function textHasGroundingTerm(lower: string, term: string): boolean {
+  const t = term.toLowerCase();
+  if (t.length < 2) return false;
+  if (/^[a-z0-9]+$/i.test(t) && t.length < 4) {
+    return new RegExp(`(?:^|[^a-z0-9])${t}(?:[^a-z0-9]|$)`, "i").test(lower);
+  }
+  return lower.includes(t);
+}
+
+export function groundingSynonymGloss(text: string): string {
+  const lower = text.toLowerCase();
+  const parts: string[] = [];
+  for (const group of [...SYNONYM_GROUPS, ...EXTRA_GROUNDING_GROUPS]) {
+    if (!group.some((term) => textHasGroundingTerm(lower, term))) continue;
+    for (const term of group) {
+      if (/^[a-z0-9]{1,2}$/i.test(term)) continue;
+      parts.push(term);
+    }
+  }
+  return parts.join(" ");
+}
+
 /** 多 query 变体（RRF 融合）；去重且保留原 query 优先 */
 export function expandRagQueries(query: string): string[] {
   const q = query.trim();

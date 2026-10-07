@@ -22,6 +22,7 @@ import {
 } from "@/lib/reference-evidence";
 import {
   expandRagQueries,
+  groundingSynonymGloss,
   isEnglishStopword,
   isGenericAcademicEnTerm,
 } from "@/lib/rag-query-expand";
@@ -55,7 +56,8 @@ export function extractKeyTerms(text: string): Set<string> {
 /** 中英同义词展开后再抽词，避免中文句对英文摘要被跳过 */
 export function expandGroundingText(text: string): string {
   const variants = expandRagQueries(text);
-  return [text, ...variants].join("\n");
+  const gloss = groundingSynonymGloss(text);
+  return [text, ...variants, gloss].filter((part) => part.length > 0).join("\n");
 }
 
 export function termOverlapRatio(a: string, b: string): number {
@@ -138,8 +140,55 @@ function refCorpus(ref: CitationGroundingRef): string {
     .join("\n");
 }
 
+/**
+ * PDF 首页/参考文献区被截进题录或摘要时，不能当可判定语料。
+ * 否则中文句子对不上页眉碎片，错引硬门会把整次 Word/PDF 导出拦住。
+ * 已补上的 PDF 段落（content）仍可判定。
+ */
+export function isPdfPageScrapeRef(ref: CitationGroundingRef): boolean {
+  const passage = (ref.content ?? "").replace(/\s+/g, "");
+  if (passage.length >= 240) return false;
+  const title = ref.title ?? "";
+  const abs = (ref.abstract ?? "").replace(/\s+/g, " ").trim();
+  const blob = `${title}\n${abs}`;
+  const header = /contents lists available|available online at|journal homepage/i.test(blob);
+  const absCompact = abs.replace(/\s+/g, "");
+  if (header && absCompact.length < 800) return true;
+  if (absCompact.length < 80 || absCompact.length > 1200) return false;
+  if (/[一-龥]{12,}/.test(abs)) return false;
+  const years = abs.match(/\b(?:19|20)\d{2}\b/g)?.length ?? 0;
+  const etal = (abs.match(/et al\.?/gi) ?? []).length;
+  const fig = /\bFig\.\s*\d/i.test(abs);
+  const doi = /doi\.org/i.test(abs);
+  const splits = (abs.match(/[,;]/g) ?? []).length;
+  const startsMidSentence = /^[^A-Z一-龥「」]/.test(abs);
+  return years >= 2
+    || etal >= 2
+    || fig
+    || doi
+    || (startsMidSentence && years >= 1)
+    || (splits >= 4 && years >= 1 && absCompact.length < 600);
+}
+
+/**
+ * 库里只剩 PDF 文件名（无题录、无摘要）时，中文文件名里的「生物炭/热解」
+ * 会比页眉碎片得分更高，改号清单就会把句子挂到文件名上，并在两个文件名之间对翻。
+ * 这种条目不能当可判定语料，也不能当 betterNumber。
+ */
+export function isFilenameOnlyRef(ref: CitationGroundingRef): boolean {
+  const abs = (ref.abstract ?? "").replace(/\s+/g, "");
+  if (abs.length >= MIN_REF_TEXT_CHARS) return false;
+  const content = (ref.content ?? "").trim();
+  if (content.replace(/\s+/g, "").length >= 240) return false;
+  const title = (ref.title ?? "").trim();
+  if (title && !/\.pdf$/i.test(title)) return false;
+  return /\.pdf$/i.test(title) || /\.pdf$/i.test(content);
+}
+
 function isRefGroundable(ref: CitationGroundingRef | undefined): boolean {
   if (!ref) return false;
+  if (isPdfPageScrapeRef(ref)) return false;
+  if (isFilenameOnlyRef(ref)) return false;
   const corpus = refCorpus(ref).replace(/\s+/g, " ").trim();
   if (corpus.length < MIN_REF_TEXT_CHARS) return false;
   return true;
@@ -151,8 +200,9 @@ function collectPerNumberHits(
   refMap: Map<number, CitationGroundingRef>,
   threshold: number,
 ): CitationGroundingHit[] {
+  // 改号候选只在可判定文献里挑。文件名、页眉碎片不进分数池，避免 [25]↔[27] 对翻。
   const refs = [...refMap.entries()]
-    .filter(([idx]) => idx >= 1)
+    .filter(([idx, ref]) => idx >= 1 && isRefGroundable(ref))
     .sort((a, b) => a[0] - b[0]);
   const paperSets = refs.map(([, ref]) =>
     extractKeyTerms(expandGroundingText(refCorpus(ref))),
@@ -210,17 +260,18 @@ function collectPerNumberHits(
           betterPos >= 0
           && bestOtherScore >= BETTER_MATCH_MIN
           && bestOtherScore >= overlap * BETTER_MATCH_RATIO;
-        if (distinctiveMiss || (overlap < threshold && distinctive.length > 0 && distinctiveHits === 0)) {
-          suspicious = true;
-          reason = "该句限定词在被引文献题录/摘要/段落中对不上，属于错引";
-        } else if (betterIsStrong && distinctiveHits === 0) {
+        if (betterIsStrong && (distinctiveHits === 0 || distinctiveMiss || overlap < threshold)) {
           suspicious = true;
           betterNumber = indexByPos[betterPos];
           reason = `句意更接近 [${betterNumber}]，当前 [${num}] 不能支撑该主张`;
+        } else if (
+          distinctiveMiss
+          || (overlap < threshold && distinctiveHits === 0)
+        ) {
+          reason = "这句话和被引文献的用词对不上，判不了，不拦导出";
         } else if (overlap < threshold && distinctive.length === 0) {
-          suspicious = overlap < Math.min(threshold, 0.08);
-          reason = suspicious
-            ? "句意与该条文献几乎无重叠，可能错引或空泛挂靠"
+          reason = overlap < Math.min(threshold, 0.08)
+            ? "句意与该条文献几乎无重叠，判不了，不拦导出"
             : "句意仅为领域套话，集合词可对上该条";
         } else {
           reason = "句意与该条题录/摘要/段落限定词可对上";
