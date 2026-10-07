@@ -21,6 +21,7 @@ import {
   mergeGoalWithIntentHint,
 } from "@/lib/agent/core/goal-intents";
 import { classifyIntent } from "@/lib/agent/core/classify-intent";
+import { loadAgentPhaseMode } from "@/lib/agent/core/phase-flags";
 import { isIntentKind } from "@/contracts/agent-intent";
 import { createRepeatTracker } from "@/lib/agent/core/safety";
 import { getCompiledAgentGraph } from "@/lib/agent/langgraph/graph";
@@ -98,6 +99,7 @@ export async function* runAgentGraphLoop(
   const diagnoseGoal = classified.kind === "diagnose";
   context.goal = goal;
   context.intentKind = classified.kind;
+  await loadAgentPhaseMode(context);
 
   // 跟聊已自带完整消息历史，不必再注入跨会话 prior / 记忆（简报仍可保留）
   const memoryPromise =

@@ -348,7 +348,7 @@
 | W3-AP-PHASE-01 | harvest `--json` / `--compare` / `--since` + 新病码 | 00 | 0.5d | **done** | 2026-10-07；离线 `--sessions` 可自对比。基线文件仍待服务器跑 |
 | W3-AP-PHASE-02 | `resolveAgentPhase` 单一来源（4 处「下一步」合一） | — | 1.5d | **done** | 2026-10-07；特征测试锁文案；不改判断 |
 | W3-AP-PHASE-03 | `PHASE_TOOLSETS` 阶段工具集数据表 | 02 | 0.5d | **done** | 2026-10-07；只定义不使用。大纲包里的 search_knowledge 故意不进工具集 |
-| W3-AP-PHASE-04 | 影子模式：轨迹 `via=phase-shadow` | 01, 03 | 1d | todo | `AGENT_PHASE_MODE=shadow`；不拦 |
+| W3-AP-PHASE-04 | 影子模式：轨迹 `via=phase-shadow` | 01, 03 | 1d | **done** | 2026-10-07；后台开关 `AGENT_PHASE_MODE`，默认 off。不拦 |
 | W3-AP-PHASE-05 | 状态卡通道（替换式，不进 messages） | 02 | 1d | todo | `AGENT_PHASE_CARD`；只新增 |
 | W3-AP-PHASE-06a | 催促迁移 1：出图 / 插入回看 / 文生图 | 05 | 1d | todo | `turnSignals` |
 | W3-AP-PHASE-06b | 催促迁移 2：计划 / 意图 / 宣布 / 熔断 | 06a | 1d | todo | 不改停止判断 |
@@ -1495,6 +1495,7 @@ src/app/api/（13）                       src/lib/（6）
 | 2026-10-04 | W3-AP-PHASE-D1-6 | 维护者 | 阶段制 D1–D6 按建议拍板：蓝图确认并入大纲；综述起草可检索导入、研究型不可；意图明确才临时切阶段否则先问；影子放行须文献 ≥30 轮、误拦 <5%、无阶段算错；墙上限 3/6/6/2；切阶段缓存失效可接受，enforce 后观察一周用量。 |
 | 2026-10-07 | RAG-PROP | AI | 影子阅读顺序与 recall/金句尺子落地，未晋级。线上切块与写作检索不变。重切、补页、reload 只允许北京时间 00:30–05:00，一夜一个分类。 |
 | 2026-10-07 | W3-AP-PHASE-01～03 / WALL-R | AI | 阶段机地基：`resolveAgentPhase` 合一下一步；`PHASE_TOOLSETS` 只定义不拦工具；harvest 可 `--json/--compare/--since`。撞墙可输出 restrict/run，读/搜/门禁墙尚未触发。enforce、删门禁、状态卡未做（须先影子）。 |
+| 2026-10-07 | W3-AP-PHASE-04 | AI | 阶段影子只记不拦。开关在后台运行时设置 `AGENT_PHASE_MODE=shadow`，不读环境变量。下一轮对话生效。 |
 
 ---
 

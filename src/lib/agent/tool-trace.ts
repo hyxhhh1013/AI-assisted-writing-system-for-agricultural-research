@@ -20,7 +20,10 @@ export function makeToolTrace(input: {
   ms?: number;
 }): AgentToolTrace {
   const via = input.via ?? (input.ok ? "ok" : "fail");
-  const reason = input.ok ? undefined : clipToolTraceReason(input.reason);
+  // 成功轨迹一般不留原因。影子标记 ok=true（工具仍会执行），但 harvest 要靠 reason 聚合阶段×工具。
+  const reason = input.ok && via !== "phase-shadow"
+    ? undefined
+    : clipToolTraceReason(input.reason);
   return {
     at: Date.now(),
     tool: input.tool,

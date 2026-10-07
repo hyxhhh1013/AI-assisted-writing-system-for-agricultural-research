@@ -19,6 +19,7 @@
 
 import type { AgentSSEEvent } from "@/contracts/agent";
 import { noteSearchCall, noteToolProgress } from "@/lib/agent/core/antispam";
+import { phaseShadowReason } from "@/lib/agent/core/phase-flags";
 import { findTool, parseToolArgs } from "@/lib/agent/core/tool-registry";
 import { advancePlanAfterTool } from "@/lib/agent/core/plan-progress";
 import { formatToolObservationForLlm } from "@/lib/agent/observation-memory";
@@ -151,6 +152,11 @@ export async function runParallelReads(
       continue;
     }
     const params = parseToolArgs(toolCall.args);
+
+    const shadowReason = phaseShadowReason(tool.name, agentContext);
+    if (shadowReason) {
+      trace(tool.name, true, { via: "phase-shadow", reason: shadowReason });
+    }
 
     const gateInput: PreGateInput = {
       tool,

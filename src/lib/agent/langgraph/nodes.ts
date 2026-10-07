@@ -72,6 +72,7 @@ import {
   shouldInjectVisionFigureQa,
   shouldPauseForFigureBrief,
 } from "@/lib/agent/figure-loop";
+import { phaseShadowReason } from "@/lib/agent/core/phase-flags";
 import { decideAfterWall, resolveLlmToolRequest } from "@/lib/agent/core/wall-policy";
 import { buildToolConfirmMessage } from "@/lib/agent/confirm-message";
 import { isConfirmGranted } from "@/lib/agent/core/confirm-grant";
@@ -714,6 +715,11 @@ export async function toolsNode(
 
     // 前置门禁链（重复 / 检索配额 / 意图+先读后写）：
     // soft → 记 observation 继续下一个工具；reject → 记失败继续；hard → agent/error 停本轮
+    const shadowReason = phaseShadowReason(tool.name, agentContext);
+    if (shadowReason) {
+      trace(tool.name, true, { via: "phase-shadow", reason: shadowReason });
+    }
+
     const gateInput: PreGateInput = {
       tool,
       params,

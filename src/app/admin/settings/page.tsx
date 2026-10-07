@@ -101,6 +101,7 @@ export default function AdminSettingsPage() {
   const [oaAutoImport, setOaAutoImport] = useState(true);
   const [writingMaxConcurrent, setWritingMaxConcurrentUi] = useState("2");
   const [agentWriteAutoFix, setAgentWriteAutoFix] = useState(true);
+  const [phaseShadow, setPhaseShadow] = useState(false);
   const [savingRuntime, setSavingRuntime] = useState(false);
 
   const load = useCallback(async () => {
@@ -124,6 +125,10 @@ export default function AdminSettingsPage() {
       const af = map.get("AGENT_WRITE_AUTO_FIX");
       if (af && af !== "****") {
         setAgentWriteAutoFix(!(af === "0" || af === "false" || af === "off" || af === "no"));
+      }
+      const phaseMode = map.get("AGENT_PHASE_MODE");
+      if (phaseMode && phaseMode !== "****") {
+        setPhaseShadow(phaseMode.trim().toLowerCase() === "shadow");
       }
     } else toast.error("加载设置失败");
     if (st.status === "fulfilled") {
@@ -346,6 +351,7 @@ export default function AdminSettingsPage() {
         ["ENABLE_OA_AUTO_IMPORT", oaAutoImport ? "1" : "0"],
         ["WRITING_MAX_CONCURRENT", String(n)],
         ["AGENT_WRITE_AUTO_FIX", agentWriteAutoFix ? "1" : "0"],
+        ["AGENT_PHASE_MODE", phaseShadow ? "shadow" : "off"],
       ];
       for (const [key, value] of pairs) {
         const d = await saveAdminSetting(key, value);
@@ -542,7 +548,7 @@ export default function AdminSettingsPage() {
         <p className="mt-1 mb-3 text-[10px] text-[#9aa8a0]">
           写入数据库后热加载，无需改服务器环境变量。
         </p>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <label className="flex items-start gap-2 rounded-lg bg-[#faf9f6] px-3 py-2 text-xs">
             <input
               type="checkbox"
@@ -565,6 +571,18 @@ export default function AdminSettingsPage() {
             <span>
               <span className="font-medium text-[#122820]">Agent 写后自动核查修正</span>
               <span className="mt-0.5 block text-[10px] text-[#9aa8a0]">写完一节后自动跑核查并修正</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 rounded-lg bg-[#faf9f6] px-3 py-2 text-xs">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={phaseShadow}
+              onChange={(e) => setPhaseShadow(e.target.checked)}
+            />
+            <span>
+              <span className="font-medium text-[#122820]">阶段影子记录</span>
+              <span className="mt-0.5 block text-[10px] text-[#9aa8a0]">记下阶段制会拦的工具，不拦截。下一轮对话生效</span>
             </span>
           </label>
           <div className="rounded-lg bg-[#faf9f6] px-3 py-2 text-xs">

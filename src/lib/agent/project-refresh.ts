@@ -14,6 +14,7 @@
 
 import type { AgentProjectSnapshot } from "@/lib/agent/project-loader";
 import { loadAgentProject } from "@/lib/agent/project-loader";
+import { rememberAgentPhase } from "@/lib/agent/core/phase-flags";
 import { appendPhasePackToBriefing } from "@/lib/agent/phase-task-pack";
 import { formatAgentProjectBriefing } from "@/lib/agent/project-briefing";
 import { appendMemoryToBriefing } from "@/lib/agent/session-memory";
@@ -94,4 +95,5 @@ export async function refreshAgentProjectContext(
     briefing = appendMemoryToBriefing(briefing, workBlock);
   }
   ctx.projectBriefing = briefing;
+  rememberAgentPhase(ctx);
 }

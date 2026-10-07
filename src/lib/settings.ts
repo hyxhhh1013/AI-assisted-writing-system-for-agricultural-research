@@ -87,7 +87,7 @@ export async function getAllSettings(): Promise<Array<{ key: string; maskedValue
         /_MODEL$/i.test(r.key)
         || r.key.includes("MODEL_NAME")
         || r.key.startsWith("AGENT_ROLE_") // 角色映射值是非敏感 provider 名
-        || /^(ENABLE_|WRITING_|AGENT_WRITE_|JOURNAL_METRICS_)/.test(r.key) // 运维开关/导入摘要明文展示
+        || /^(ENABLE_|WRITING_|AGENT_WRITE_|AGENT_PHASE_|JOURNAL_METRICS_)/.test(r.key) // 运维开关/导入摘要明文展示
         || /_BASE_URL$/i.test(r.key)
       ) {
         masked = decrypted;

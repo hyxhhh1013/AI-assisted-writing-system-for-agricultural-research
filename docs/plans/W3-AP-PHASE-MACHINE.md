@@ -1,6 +1,6 @@
 # W3-AP-PHASE-MACHINE — Agent 阶段制改造（PR 计划表）
 
-> **状态**：规划生效（2026-10-04）；§9 D1–D6 **已拍板**。PHASE-00、01、02、03、WALL-R 已落地（2026-10-07）；enforce / 删门禁 / 状态卡仍待影子期，不得跳过。
+> **状态**：规划生效（2026-10-04）；§9 D1–D6 **已拍板**。PHASE-00、01、02、03、04、WALL-R 已落地（2026-10-07）；enforce / 删门禁 / 状态卡仍待影子期，不得跳过。影子开关在后台，不读环境变量。
 > **挂载**：队列 **Phase 20 `W3-AP-PHASE-*` / `W3-AP-WALL-*`**；实时 status 只看 [`ENGINEERING_OPTIMIZATION_QUEUE.md`](../ENGINEERING_OPTIMIZATION_QUEUE.md) §1。
 > **对照图**：Cursor 画布 `agent-phase-architecture.canvas.tsx`（现在 vs 阶段制、门禁去向、迁移步骤）。
 > **不换** LangGraph，**不加**热路径 LLM 分类/评委，**不推倒重写**。
@@ -134,7 +134,7 @@
 | PHASE-01 | harvest：`--json` 基线 / `--compare` 对比 / 新病码 | 00 | 0.5d | 低 | 否 | — | **done** 2026-10-07 |
 | PHASE-02 | `resolveAgentPhase` 单一来源（4 处「下一步」合一） | — | 1.5d | 低 | 否 | — | **done** 2026-10-07 |
 | PHASE-03 | 阶段工具集数据表 `PHASE_TOOLSETS`（只定义不使用） | 02 | 0.5d | 低 | 否 | — | **done** 2026-10-07 |
-| PHASE-04 | 影子模式：记录「阶段制会不会拦这次调用」 | 01, 03 | 1d | 低 | 否（只记录） | `AGENT_PHASE_MODE=shadow` | todo |
+| PHASE-04 | 影子模式：记录「阶段制会不会拦这次调用」 | 01, 03 | 1d | 低 | 否（只记录） | 后台 `AGENT_PHASE_MODE` | **done** 2026-10-07 |
 | PHASE-05 | 状态卡通道（只新增，不删旧催促） | 02 | 1d | 中 | 轻 | `AGENT_PHASE_CARD` | todo |
 | PHASE-06a | 催促迁移第 1 批：出图 / 插入回看 / 文生图（5 处） | 05 | 1d | 中 | 是 | `AGENT_PHASE_CARD` | todo |
 | PHASE-06b | 催促迁移第 2 批：计划 / 意图 / 口头宣布 / 熔断（4 处） | 06a | 1d | 中 | 是 | `AGENT_PHASE_CARD` | todo |
@@ -308,11 +308,11 @@
 - `phase-flags` 解析单测（含非法值）。
 - `toolsNode` 单测：shadow 时被标记的工具照常执行、轨迹多一条 `phase-shadow`；`off` 时轨迹与改前一致。
 
-**上线**：生产设 `AGENT_PHASE_MODE=shadow`。
+**上线**：后台「运行时开关」打开「阶段影子记录」（写入 `AGENT_PHASE_MODE=shadow`）。不读环境变量。下一轮对话生效。
 
-**验收**：线上跑 1 天后 harvest 能看到 `phase_shadow_block` 分布；无用户可见变化。
+**验收**：打开后跑一轮，harvest 能看到 `phase_shadow_block` 分布；用户看不到拦截。
 
-**回滚**：`AGENT_PHASE_MODE=off`。
+**回滚**：后台关掉该开关（`off`）。
 
 ---
 

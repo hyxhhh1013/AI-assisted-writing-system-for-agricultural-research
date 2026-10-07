@@ -60,6 +60,10 @@ export interface AgentContext {
   goal?: string;
   /** 本轮已分类意图（跟聊继承后的 kind） */
   intentKind?: import("@/contracts/agent-intent").IntentKind | null;
+  /** 本轮阶段（不进会话快照）。每轮开始和项目刷新后重算 */
+  phaseState?: import("@/contracts/agent-phase").AgentPhaseState;
+  /** 后台 AGENT_PHASE_MODE。缺省当 off，不拦工具 */
+  phaseMode?: import("@/lib/agent/core/phase-flags").AgentPhaseMode;
   /** 本会话已精读文献（目录选题后的 read_reference / 全文） */
   readingPack?: import("@/lib/agent/reading-pack").ReadingPackEntry[];
   budget: {
