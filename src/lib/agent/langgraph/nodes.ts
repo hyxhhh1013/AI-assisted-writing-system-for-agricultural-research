@@ -102,6 +102,7 @@ import {
   sumImportedCount,
   type IntentClosureContext,
 } from "@/lib/agent/core/goal-intents";
+import { buildIngestConfirmParams } from "@/lib/agent/data-confirm";
 import { buildImportReferenceConfirmParams } from "@/lib/agent/import-confirm";
 import { analyzeReflection, MAX_REFLECT_ROUNDS } from "@/lib/agent/core/reflect";
 import { compactAgentMessages } from "@/lib/agent/core/context-compact";
@@ -228,6 +229,9 @@ const LANDED_CHANGE_TOOLS = new Set([
   "write_bilingual_abstract",
   "import_reference",
   "generate_chart",
+  "plot_peak_stack",
+  "plot_panel_grid",
+  "plot_curve_overlay",
   "draft_mechanism_figure",
   "illustrate_mechanism_figure",
   "apply_revision_item",
@@ -1107,7 +1111,9 @@ export async function toolsNode(
         const confirmParams =
           tool.name === "import_reference"
             ? await buildImportReferenceConfirmParams(params, agentContext)
-            : params;
+            : tool.name === "ingest_project_data"
+              ? await buildIngestConfirmParams(params, agentContext)
+              : params;
         const { message, preview } = buildToolConfirmMessage(tool.name, confirmParams);
         const confirmReq = {
           tool: tool.name,
@@ -1392,7 +1398,7 @@ export async function toolsNode(
             });
           }
         }
-      } else if (result.success && tool.name === "generate_chart" && isChartQaBlocked(result.data)) {
+      } else if (result.success && (tool.name === "generate_chart" || tool.name === "plot_peak_stack" || tool.name === "plot_panel_grid" || tool.name === "plot_curve_overlay") && isChartQaBlocked(result.data)) {
         const imageUrl = extractFigureImageUrl(result) ?? "";
         newMessages.push({
           role: "user",
@@ -1416,6 +1422,7 @@ export async function toolsNode(
         result.success
         && (tool.name === "generate_table"
           || tool.name === "generate_chart"
+          || tool.name === "plot_peak_stack" || tool.name === "plot_panel_grid" || tool.name === "plot_curve_overlay"
           || tool.name === "draft_mechanism_figure"
           || tool.name === "generate_xrd_analysis"
           || (tool.name === "illustrate_mechanism_figure"
@@ -1434,6 +1441,7 @@ export async function toolsNode(
         result.success
         && (tool.name === "generate_table"
           || tool.name === "generate_chart"
+          || tool.name === "plot_peak_stack" || tool.name === "plot_panel_grid" || tool.name === "plot_curve_overlay"
           || tool.name === "draft_mechanism_figure")
         && assetLandedInBody(result.data)
         && (result.data as { verifiedInBody?: unknown }).verifiedInBody === false
@@ -1468,7 +1476,7 @@ export async function toolsNode(
           content:
             "System: 识图质检未通过（需重生成）。"
             + (failUrl
-              ? `下一轮 draft_mechanism_figure / generate_chart 必须带 replaceImageUrl="${failUrl}" 就地替换；`
+              ? `下一轮 draft_mechanism_figure / generate_chart / plot_peak_stack / plot_panel_grid / plot_curve_overlay 必须带 replaceImageUrl="${failUrl}" 就地替换；`
               : "下一轮出图必须带 replaceImageUrl；")
             + "禁止同标题再 append。也可先 remove_figure。期刊观感请引导用户到 /plot 精修。",
         });

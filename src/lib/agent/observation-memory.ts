@@ -92,6 +92,9 @@ function formatEvidence(toolName: string, data: unknown): string {
   if (
     (toolName === "generate_table"
       || toolName === "generate_chart"
+      || toolName === "plot_peak_stack"
+      || toolName === "plot_panel_grid"
+      || toolName === "plot_curve_overlay"
       || toolName === "draft_mechanism_figure"
       || toolName === "illustrate_mechanism_figure"
       || toolName === "generate_xrd_analysis")

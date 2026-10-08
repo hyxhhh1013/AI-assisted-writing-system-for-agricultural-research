@@ -17,6 +17,9 @@ import { checkPlagiarismTool } from "@/lib/agent/tools/check-plagiarism";
 import { draftMechanismFigureTool } from "@/lib/agent/tools/draft-mechanism-figure";
 import { exportManuscriptMarkdownTool } from "@/lib/agent/tools/export-manuscript-markdown";
 import { generateChartTool } from "@/lib/agent/tools/generate-chart";
+import { plotCurveOverlayTool } from "@/lib/agent/tools/plot-curve-overlay";
+import { plotPanelGridTool } from "@/lib/agent/tools/plot-panel-grid";
+import { plotPeakStackTool } from "@/lib/agent/tools/plot-peak-stack";
 import { generateOutlineTool } from "@/lib/agent/tools/generate-outline";
 import { generateTableTool } from "@/lib/agent/tools/generate-table";
 import { generateWritingBlueprintTool } from "@/lib/agent/tools/generate-writing-blueprint";
@@ -94,6 +97,9 @@ export const WRITE_TOOLS: readonly ToolDefinition[] = [
   importReferenceTool,
   ingestProjectDataTool,
   generateChartTool,
+  plotPeakStackTool,
+  plotPanelGridTool,
+  plotCurveOverlayTool,
   generateXrdAnalysisTool,
   generateTableTool,
   draftMechanismFigureTool,

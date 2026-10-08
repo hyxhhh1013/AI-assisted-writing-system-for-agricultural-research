@@ -198,6 +198,9 @@ export const AgentActionCard = memo(function AgentActionCard({
     Boolean(imageUrl)
     && (tool === "draft_mechanism_figure"
       || tool === "generate_chart"
+      || tool === "plot_peak_stack"
+      || tool === "plot_panel_grid"
+      || tool === "plot_curve_overlay"
       || tool === "illustrate_mechanism_figure"
       || tool === "generate_xrd_analysis");
   const [open, setOpen] = useState(

@@ -364,7 +364,8 @@ export const generateChartTool: ToolDefinition = {
     + "⑤显著性——bar_grouped 对比显著时传 significanceJson=[{\"category\":0,\"series\":0,\"value\":\"**\",\"label\":\"p<0.01\"},{\"fromCategory\":0,\"toCategory\":1,\"value\":\"*\"}]（单柱星号/跨类括号；series 缺省=该类最高柱）。不要传 fig_width/dpi/tight_layout。"
     + "改图务必传 replaceImageUrl（旧图 URL）就地替换，勿再追加一张。"
     + "默认插入正文：省略 sectionKey 时落入已写的 results/methods。"
-    + "无数据不要编造数值",
+    + "无数据不要编造数值。csvData 只能来自用户已在确认卡勾选入库的表，不要把未确认附件里的数字粘进来。已有图片用 ingest_project_data 登记，不要当成数据表重绘，除非用户明确要求重绘。"
+    + "XRD/红外/拉曼特征峰叠谱不要把整条谱贴进来，改用 plot_peak_stack。多格组图用 plot_panel_grid，热重、等温线和孔径分布用 plot_curve_overlay，不要把长曲线塞进 csv。",
   parameters: {
     type: "object",
     properties: {
@@ -425,7 +426,7 @@ export const generateChartTool: ToolDefinition = {
       },
       preset: {
         type: "string",
-        description: "期刊样式预设：nature（通用/Nature 风，单栏 89mm）| agr_journal（农业期刊双栏 170mm，9pt）| print_bw（黑白打印）",
+        description: "期刊样式预设：nature（通用/Nature 风，单栏 89mm）| agr_journal（农业期刊双栏 170mm，9pt）| print_bw（黑白打印）。未传时用项目护照 chartPreset，没有则 nature",
         enum: ["nature", "agr_journal", "print_bw"],
       },
       persistToProject: {
@@ -441,6 +442,10 @@ export const generateChartTool: ToolDefinition = {
       return { success: false, error: "generate_chart 需要关联 projectId" };
     }
 
+    const chartPreset = resolveChartPreset(
+      params.preset,
+      ctx.projectSnapshot?.paperConfig?.chartPreset,
+    );
     const persistToProject = parsePersistToProject(params.persistToProject);
     const resolved = resolveInsertSectionKey(
       params.sectionKey,
@@ -476,7 +481,7 @@ export const generateChartTool: ToolDefinition = {
       }
       const title = String(params.title ?? "").trim() || "复合图";
       const caption = String(params.caption ?? "").trim() || title;
-      const preset = parsePresetParam(params.preset);
+      const preset = chartPreset;
       // 复合图整图暂无独立 plot 编辑器：回放第一面板 CSV，便于进绘图页改数据
       const firstPanel = parsedPanels.panels[0]!;
       const firstFigureId = normalizeChartType(firstPanel.chartType);
@@ -629,7 +634,7 @@ export const generateChartTool: ToolDefinition = {
           captionOverride: String(params.caption ?? "").trim(),
           sectionKey,
           persistToProject,
-          preset: parsePresetParam(params.preset),
+          preset: chartPreset,
           extras,
           inferredSection: resolved.inferred,
           // 批量多图时不套用 replace（避免把同一旧图换掉多次）
@@ -677,7 +682,7 @@ export const generateChartTool: ToolDefinition = {
       caption: String(params.caption ?? "").trim(),
       sectionKey: sectionKey ?? undefined,
       persistToProject,
-      preset: parsePresetParam(params.preset),
+      preset: chartPreset,
       extras,
       replaceImageUrl,
       replaceChartId,
@@ -732,12 +737,17 @@ async function generateFromBundle(input: {
   });
 }
 
-/** 校验期刊预设参数，非法回退 nature */
-function parsePresetParam(
+/** 显式 preset 优先；空则用护照图表预设；都没有则 nature */
+function resolveChartPreset(
   raw: unknown,
+  fallback?: string | null,
 ): "nature" | "agr_journal" | "print_bw" {
-  const v = String(raw ?? "").trim();
-  return v === "agr_journal" || v === "print_bw" ? v : "nature";
+  const pick = (value: unknown): "nature" | "agr_journal" | "print_bw" | null => {
+    const v = String(value ?? "").trim();
+    if (v === "agr_journal" || v === "print_bw" || v === "nature") return v;
+    return null;
+  };
+  return pick(raw) ?? pick(fallback) ?? "nature";
 }
 
 function noteDroppedExtras(summary: string | undefined, dropped: string[]): string | undefined {

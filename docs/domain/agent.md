@@ -7,6 +7,22 @@
 
 Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执行写回项目，结果回喂 LLM，循环直到完成。入口 `POST /api/agent`。
 
+## 写作入口三条路线
+
+新建项目写入 `PaperConfig.agentEntryMode`。阶段机在 `src/lib/agent/entry-route.ts`：未选定和「从零推进」沿用原下一步文案；「已有大纲」「已有数据」按项目现状重算整条路径（材料 → 大纲 → 蓝图 → 起草顺序 → 引用 → 摘要 → 审查）。简报里的「路线」优先于默认主路径。
+
+| 入口 | 整条路径 |
+|------|----------|
+| `full` 从零推进 | 文献够用再出大纲；大纲和蓝图都等人批。综述按引言→现状/综述→结论。研究型起草顺序跟期刊模板（默认 SCI：引言→方法→结果→讨论→结论；Nature 为引言→结果→方法→讨论→结论）。结果章没有证据声明则 `write_section(results)` 被门禁拦住 |
+| `outline_ready` 已有大纲 | 先贴提纲。用户没说重做/大改/生成大纲时，`generate_outline` 被门禁拦住。蓝图沿用一级标题，再按期刊模板章节顺序写 |
+| `data_ready` 已有数据 | 研究型先入库形成证据声明，再按数据出大纲；写作顺序方法→结果→讨论→引言→结论，没写方法/结果前不能写引言。综述仍按综述顺序，空项目先打开实验数据 |
+
+项目设置可改目标期刊、目标字数、期刊格式模板、图表预设和入口，保存走 `PATCH /api/projects/:id/paper-passport`（模板同时写回 `Project.template`）。分节写作的系统提示在护照有期刊或字数时带一句；登记刊的 `writerNote` 追加在这句后面。无 URL `tab` 时，空的已有大纲打开论证提纲，没有证据声明的已有数据打开实验数据。
+
+## 期刊规格
+
+刊名建议在 `src/lib/venues/registry.ts`。精确别名优先，否则按族：汉字 → 国标，Nature 开头 → Nature，IEEE → IEEE，其余英文 → SCI。向导和项目设置只刷新用户还没手改的语言、模板、引用、图表预设。旧项目打开不自动改写；设置里不一致时要点「按该刊规格更新」。加一本和族不同的刊只追加登记行；加新版式先改 `template-sections.ts`。计划见 [`docs/plans/venue-profile.md`](../plans/venue-profile.md)。参考文献条目导出仍是 GB/T 7714。
+
 ```text
 客户端 → POST /api/agent (SSE) → runAgentGraphLoop (AsyncGenerator)
         → graph.stream(initialState, {configurable:{agentRuntime}}) → toolsNode
@@ -266,9 +282,11 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 
 **已落地 DATA-01**：`lib/agent/data-foundation.ts`。研究型 `write_section(results)` 在根基 `empty` 时拒绝；`inspect_project` / 简报 / `list_plot_sources` 共用同一套状态。
 
-**已落地 DATA-02**：`ingest_project_data`（`lib/agent/ingest-project-data.ts`）。附件 `attachmentId`/`fileId` 或粘贴 `csvData`+`fileName` → 复用 `analyzeFile` → 只 PATCH `dataSources`/`dataClaims`（同 fileName 覆盖源，按 sourceId 替换声明）。空表不写库。
+**已落地 DATA-02**：`ingest_project_data`（`lib/agent/data-confirm.ts`）。附件或粘贴 CSV 先拆成数据块（多工作表、空行隔开的多张表、空两列的并排表），确认卡勾选后才 PATCH `dataSources`/`dataClaims`。未确认不写库。单块文件仍用原文件名；多块用 `文件名 · 标签`，避免互相覆盖。
 
-**已落地 HUB-01**：表格附件上传时带 `projectId`；提取成功后自动 ingest（与 DATA-02 同一套）。芯片显示「已入库 · N 条声明」/「分析失败」。`kind` 由扩展名推断，不改 Prisma。
+**数据确认（2026-10-08）**：表格和已有图可以点回形针，也可以直接拖进写作助手整栏（松开后走同一附件流程）。实验数据页的上传区也可以拖入 CSV / Excel。上传表格不再自动入库。写作助手顶栏「数据」按原文件分栏：左侧选块，右侧看表，并给出列的最小–最大、复制、细调（打开绘图页并预填这一块）、交给助手、移出项目。仪器参数和切坏的短块收在文件下面。实验数据页不再展开摘要、证据声明和扩写预览。对话框里的表格不按固定表头自动切块。助手先读带行号的原文，用 `tablesJson` 说明工作表、表头行、列号和含义；确认卡只展示这份读法，勾选后才写入。长曲线不写成均值或趋势声明。XRD / 红外叠谱用 `plot_peak_stack`：按已入库文件名取曲线，峰和虚线只标用户给出的位置和名称；没给峰就只画叠谱并追问。不要把整条谱贴进 `generate_chart`，也不要自己编化学归属。芯片对未确认表格显示「待确认」，已有图显示「待登记」。已有 png/jpg/webp/gif/tiff 经同一确认卡处理。确认前用视觉模型读出图上能看清的点，用户勾选后才写成 `dataClaims`（供写作引用）并登记进 `Project.charts`（`figureId: existing`）。没读出或没勾选的数字不进正文。TIFF 登记时用 Pillow 转成 PNG。只有参数里带了用户指定的 `sectionKey` 才插入正文。
+
+**已落地 HUB-01**：表格附件上传时带 `projectId`。提取成功后只查询是否已确认入库，不再自动写入。芯片显示「待确认」/「已入库 · N 条声明」/「分析失败」。`kind` 由扩展名推断，不改 Prisma。
 
 **已落地 DATA-03**：附件白名单含 `xy/xyd/ras/raw/uxd/dif`（谱文件只做两列预览）。`generate_xrd_analysis` 只吃已入库 `peakTable`（或 `sourceAttachmentId` 对应峰表）；裸 `peaksJson` 拒绝。Scherrer / 相检索成功后回写 `dataClaims`。
 
@@ -326,6 +344,9 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 | 工具 | 作用 |
 |------|------|
 | `draft_mechanism_figure` / `generate_chart` | 出图并写入图表库；**默认插入已写章节**（省略 sectionKey 落入 results/methods）并回看正文是否含 URL。**改图传 `replaceImageUrl`/`replaceChartId` 就地替换**；同标题已有图自动 replace。机理图走 MechanismSpec。数据图走 ChartSpec。 |
+| `plot_peak_stack` | XRD / 红外 / 拉曼 / XPS 原始谱。按已入库文件名读曲线（`kind=xrd\|ir\|raman\|xps`），`peaksJson` / `guidesJson` 只画用户点名的位置。没给峰就只出叠谱。XPS 不自动分峰。改图同样传 `replaceImageUrl`。 |
+| `plot_panel_grid` | 组图。2–6 格已入库的谱拼成 a/b/c 网格（六格 XPS 用 `cols=2`）。每格同样只画入库曲线和用户给出的峰位，不编化学归属，不做自动分峰填充。 |
+| `plot_curve_overlay` | 同一坐标的多条曲线。`kind=tg` 把质量换成起点百分比；`kind=dtg` 对其差分，`ratesJson` 给出 °C/min 后纵轴为 %/min。`kind=bet` 保留吸附—脱附回线，不算比表面积。`kind=pore` 用对数孔径轴；只有 y 确认为 dV/dD 时才传 `yTransform=dv_dlog`。 |
 | `illustrate_mechanism_figure` | 即梦 Seedream 观感候选（智谱备选）。`generate` 不插正文；`adopt` 才插入并回看 |
 | `generate_table` | 三线表默认插入正文并回看表题；未 `insertedSection` 不算交付 |
 | `remove_figure` | 删图表资产 + 默认去掉正文对应 `![](url)`（清重复旧图）；**需用户确认** |

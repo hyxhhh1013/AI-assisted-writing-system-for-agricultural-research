@@ -33,6 +33,9 @@ const VISIBLE_DELIVERABLE_TOOLS = new Set([
   "generate_outline",
   "generate_writing_blueprint",
   "generate_chart",
+  "plot_peak_stack",
+  "plot_panel_grid",
+  "plot_curve_overlay",
   "draft_mechanism_figure",
   "illustrate_mechanism_figure",
   "generate_xrd_analysis",
@@ -46,6 +49,9 @@ const VISIBLE_DELIVERABLE_TOOLS = new Set([
 /** 图表/三线表必须真正进正文，才算对用户可见的论文交付 */
 const BODY_LANDING_TOOLS = new Set([
   "generate_chart",
+  "plot_peak_stack",
+  "plot_panel_grid",
+  "plot_curve_overlay",
   "draft_mechanism_figure",
   "generate_table",
   "generate_xrd_analysis",

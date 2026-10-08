@@ -12,6 +12,9 @@ import { randomUUID } from "crypto";
 export const FIGURE_GENERATE_TOOLS = new Set([
   "draft_mechanism_figure",
   "generate_chart",
+  "plot_peak_stack",
+  "plot_panel_grid",
+  "plot_curve_overlay",
 ]);
 
 /** 仅这些出图工具自动排队视觉识图 QA（FIG-QA-008） */
@@ -226,7 +229,7 @@ export function countFigureQaFailsThisRun(
       continue;
     }
     if (readFigureQaVerdictOf(o) === "pass") break;
-    if (o.tool === "generate_chart" && o.success) break;
+    if ((o.tool === "generate_chart" || o.tool === "plot_peak_stack" || o.tool === "plot_panel_grid" || o.tool === "plot_curve_overlay") && o.success) break;
   }
   return fails;
 }

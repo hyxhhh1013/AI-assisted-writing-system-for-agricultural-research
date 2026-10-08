@@ -28,6 +28,9 @@ const TOOL_LABELS: Record<string, string> = {
   remove_references: "删除文献",
   remove_figure: "删除图表",
   generate_chart: "生成图表",
+  plot_peak_stack: "特征峰叠谱",
+  plot_panel_grid: "组图",
+  plot_curve_overlay: "同轴曲线",
   draft_mechanism_figure: "生成机理图",
   illustrate_mechanism_figure: "即梦示意候选",
   generate_xrd_analysis: "XRD 分析",
@@ -164,6 +167,12 @@ export function formatToolWorkingLine(
       return "正在写双语摘要…";
     case "generate_chart":
       return "正在生成图表…";
+    case "plot_peak_stack":
+      return "正在画特征峰叠谱…";
+    case "plot_panel_grid":
+      return "正在拼组图…";
+    case "plot_curve_overlay":
+      return "正在画同轴曲线…";
     case "generate_xrd_analysis":
       return "正在做 XRD 分析…";
     case "generate_table":
@@ -204,6 +213,20 @@ export function formatToolParamHint(
     case "search_knowledge": {
       const q = String(params.query ?? "").trim();
       return q ? (q.length > 28 ? `${q.slice(0, 28)}…` : q) : null;
+    }
+    case "plot_panel_grid":
+      return "组图";
+    case "plot_curve_overlay": {
+      const kind = String(params.kind ?? "");
+      if (kind === "tg") return "热重";
+      if (kind === "dtg") return "DTG";
+      if (kind === "bet") return "吸附等温线";
+      if (kind === "pore") return "孔径分布";
+      return "同轴曲线";
+    }
+    case "plot_peak_stack": {
+      const kind = String(params.kind ?? "").trim();
+      return kind === "ir" ? "红外叠谱" : kind === "xrd" ? "XRD 叠谱" : "特征峰叠谱";
     }
     case "ingest_project_data": {
       const name = String(params.fileName ?? "").trim();

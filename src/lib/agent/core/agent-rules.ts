@@ -12,6 +12,7 @@ export const AGENT_RULE_IDS = [
   "draft-missing-refs",
   "citation-refine-writeback",
   "results-data-foundation",
+  "data-human-confirm",
   "outline-human-confirm",
   "one-deliverable-turn",
 ] as const;
@@ -69,7 +70,17 @@ export const AGENT_RULES: readonly AgentRule[] = [
   {
     id: "results-data-foundation",
     text:
-      "研究型写 results 必须先有数据根基：对话框上传 CSV/Excel（或仪器数据）后 ingest_project_data；无根基时 write_section 会被拒绝，不要编造实验数值，也不要先写空结果再补数据。",
+      "研究型写 results 必须先有用户确认过的数据根基：对话框上传 CSV/Excel 后 ingest_project_data，等确认卡勾选通过才算入库；无根基时 write_section 会被拒绝，不要编造实验数值，也不要先写空结果再补数据。",
+    appliesTo: ["draft", "ap_full"],
+    severity: "nudge",
+  },
+  {
+    id: "data-human-confirm",
+    text:
+      "实验数据必须先跟用户核对再入库。不要用固定表头去猜文件结构。"
+      + "先 read_attachment 看带行号的原文，再用 ingest_project_data 的 tablesJson 写明读法（哪张表、表头行、哪些列、数值含义）。确认卡只展示这份读法，用户勾选后才写入。未勾选的不写入。"
+      + "已做好的图会先读出图上能看清的数值，放在确认卡上。用户勾选后这些数写成证据声明，写作可以引用；没出现在确认卡上的数字禁止写进正文。未确认不得 write_section(results)。"
+      + "XRD、红外、拉曼叠谱用 plot_peak_stack，按已入库文件名取曲线，不要把整条谱贴进 generate_chart。多格组图（例如 XPS 六格）用 plot_panel_grid。热重、DTG、吸附等温线、孔径分布用 plot_curve_overlay，不要把整条曲线贴进 generate_chart。峰和虚线只标用户说过的位置和名称，没给就不标。禁止自己编化学归属，也不要自动做 XPS 分峰填充。",
     appliesTo: ["draft", "ap_full"],
     severity: "nudge",
   },

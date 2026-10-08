@@ -43,7 +43,7 @@ export function extractChartPersisted(
   tool: string,
   result: { success?: boolean; data?: unknown } | undefined,
 ): AgentChartPersistedInfo | null {
-  if (tool !== "generate_chart" && tool !== "draft_mechanism_figure" && tool !== "illustrate_mechanism_figure") return null;
+  if (tool !== "generate_chart" && tool !== "plot_peak_stack" && tool !== "plot_panel_grid" && tool !== "plot_curve_overlay" && tool !== "draft_mechanism_figure" && tool !== "illustrate_mechanism_figure") return null;
   if (!result?.success || result.data == null || typeof result.data !== "object") {
     return null;
   }

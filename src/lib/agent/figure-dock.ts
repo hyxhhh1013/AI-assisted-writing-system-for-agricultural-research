@@ -138,7 +138,7 @@ export function collectSessionFigureDockItems(
       if (out.length >= limit) break;
       continue;
     }
-    if (m.tool !== "draft_mechanism_figure" && m.tool !== "generate_chart") continue;
+    if (m.tool !== "draft_mechanism_figure" && m.tool !== "generate_chart" && m.tool !== "plot_peak_stack" && m.tool !== "plot_panel_grid" && m.tool !== "plot_curve_overlay") continue;
     if (m.error || !m.imageUrl) continue;
     const title =
       m.summary?.match(/「([^」]+)」/)?.[1]

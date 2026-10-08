@@ -51,7 +51,7 @@ export function buildFigureReviseGoal(
     lines.push("请根据上一轮 QA/常识略作结构优化（至少增加合理分叉或澄清节点文案）。");
   }
   lines.push(
-    `必须调用 draft_mechanism_figure 或 generate_chart，并传 replaceImageUrl="${replaceUrl}" 就地替换；`,
+    `必须调用原来的出图工具（组图用 plot_panel_grid，热重和等温线用 plot_curve_overlay，特征峰叠谱用 plot_peak_stack，其余用 draft_mechanism_figure 或 generate_chart），并传 replaceImageUrl="${replaceUrl}" 就地替换；`,
   );
   lines.push(
     "只改 nodesJson/edgesJson/panelsJson/flowSteps/templateId，禁止无 replace 再 append，不要整章重插。",

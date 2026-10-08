@@ -15,6 +15,7 @@
 > **机理图质量（FIG-MECH-QA-001）**：`draft_mechanism_figure` 先编译 `MechanismSpecV1`（主张进 caption，括号条件上边），确定性质检 + ≤2 次 spec 补丁；`block` 不入库。未指定 layout 且 ≥4 步时额外渲一套 chain/fork 候选，只入库推荐稿。主渲染器仍是 Graphviz / `mechanism_panel`。  
 > **观感层（FIG-MECH-ILLUSTRATE）**：结构过线后可选 `illustrate_mechanism_figure`：即梦 Seedream 以结构 PNG 做图生图（`VOLC_ARK_API_KEY`），智谱 CogView 为备选。候选默认**不插入正文**，配图坞「采用此候选」才 `adopt`。数据柱状/折线仍走 matplotlib，禁止用文生图。  
 > **正文落点（2026-10-01）**：`generate_table` / `generate_chart` / `draft_mechanism_figure` 省略 `sectionKey` 时插入已写章节（优先 results），并回看正文含表题/图片 URL。仅进图表库不算交付，Agent 不得口头收尾。  
+> **已有成图（2026-10-08）**：用户上传的 png/jpg/webp/gif/tiff 经 `ingest_project_data` 确认。确认卡列出视觉模型从图上读出的点，勾选后写成证据声明并登记为 `figureId: existing`。没读出或没勾选的数字不进正文。TIFF 由 `scripts/charts/tiff_to_png.py` 转成 PNG 再入库。未指定章节时只进图表库。  
 > **/plot 回放（FIG-MECH-QA-002）**：`POST /api/flow-diagram` 与 `POST /api/mechanism-panel` 出图前走同一套 `refinePlotFlow` / `refinePlotPanelConfig`（保留用户拓扑，只上边条件、改英文占位）。回传 `qaReport` + 修补后的 nodes/panels；`/plot` 画布同步并显示质检条。不因 QA 拒绝出图。  
 > **刊规包 / 导出清单（009 done）**：`src/contracts/chart-export.ts`（栏宽 mm 与 Python 对齐）。出图后写 `{uuid}.csv` + `{uuid}.json`；`POST /api/chart` / `generate_chart` 回传 `exportManifest`。`GET /api/charts/:file` 可取 csv/json。  
 > **三件套收口（010 done）**：`bar_grouped` / `line` / `heatmap` 为质量剖面。热力不再按矩阵长宽比撑刊宽；折线先 `set_xticks`；显著性读 `chartSpec.annotations`。`test:figures` 含 agr_journal 双栏 ±8% + svg/pdf、误差折线、热力刊宽。其余类型仍禁止扩新。
@@ -37,7 +38,7 @@
 | area | 顶线误差带（show_shadow）+ 标记 |
 | forest | 右侧估计值标注（est [lo, hi]） |
 | radar | 逐系列标记 |
-| stack_offset | 右侧谱线标签（Origin 惯例） |
+| stack_offset | 右侧谱线标签；`peaks` 峰符号、`guides` 竖直参考线、`x_reverse` 红外横轴从高到低。Agent 经 `plot_peak_stack` 从已入库曲线出图，不把整条谱交给模型粘贴 |
 
 **冒烟审计（2026-08-06，19 个特化类型）**：
 - ✅ 全部 14 个 `chart_types` 模块 + flow_diagram / xrd_peakfit / xrd_scherrer / xrd_bragg（需 `crystal_system` 等配置）
@@ -88,6 +89,7 @@
 
 - 流程预设：`nature` / `agr_journal` / `print_bw`；边标签、节点角色（process/decision/start_end）
 - UI：`flow-canvas.tsx` 轻量可拖拽编排；**Mermaid/DOT 导入导出**（`flow-diagram-io.ts`，对照 Kroki 多引擎思路、无服务依赖）
+- **数据组图（2026-10-08）**：绘图页「图表 → 组图」。从项目里能回放数据的图里挑 2～6 张，排顺序、设列数、某一格占两列；点中一格改标题、轴标签、纵轴范围、图例和配色，再重画。`POST /api/chart/composite` 走 `panel_multi.py`。流程图和文生图没有数据快照，不进这张组图。插入论文仍用原来的插入框，可以替换正文旧图。
 - **示意图宽编辑栏（2026-08-10）**：多面板/流程/Mermaid 使用 `PlotWorkspace configSize="wide"`（左侧约半屏编辑整块）；绘图页类型栏收窄为 `w-40`，把宽度留给编辑区
 - 终稿渲染（`flow_diagram_v2.py`）：**禁止 ratio=compress**；白底细线 + 左侧色条 HTML 节点；有边标签时用 polyline；400dpi 后按栏宽等比缩放
 - 农科模板：生物质热解路径、双路径产物等
@@ -121,7 +123,7 @@
 
 ## 前端入口
 
-- `/plot` 独立页（分类含 DFT）
+- `/plot` 独立页（分类含 DFT）。带 `id` 时数据图和三线表都可以点已入库的块预填，不必从空白粘贴；`source` 指定一块并抽稀长谱。对话里仍可让助手出图、用 `replaceImageUrl` 改图。
 - 工作台侧边栏图表按钮
 - 工作台 **Agent Tab**：`list_plot_sources` → `generate_chart`（Wave 3.8：数据主入口改为 Agent 附件，见 [`plans/W3-AP-AGENT-HUB.md`](../plans/W3-AP-AGENT-HUB.md)）
 
@@ -162,7 +164,7 @@ Data Tab / Agent 附件上传 CSV → Project.dataSources（含 chartConfigs）
 
 - 误差列：表头后缀 `_sd` / `_sem` / `_se` / `_err` / `_std` / `_ci` 自动配对
 - 折线：`dual_y`（末列右轴）、`show_trendline`、`show_shadow`
-- 多谱：`stack_offset`（CSV 多列）或 `xrd_stack`（多文件）
+- 多谱：`stack_offset`（CSV 多列）或 `xrd_stack`（多文件）。已入库的 XRD / 红外 / 拉曼 / XPS 原始谱走 Agent `plot_peak_stack`。多格组图走 `plot_panel_grid`（`panel_multi.py`，每格可带 `x_reverse`、`peaks`、`guides`）。热重、DTG、吸附等温线、孔径分布走 `plot_curve_overlay`（折线 `long_xy`，每条曲线自带横轴）。峰位只来自用户给出的参数，XPS 不自动分峰填充
 
 ## 仪器格式（FIG-PR-003）
 

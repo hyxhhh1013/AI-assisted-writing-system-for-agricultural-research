@@ -14,6 +14,9 @@ export const PROJECT_MUTATING_TOOLS = [
   "validate_citations",
   "run_review_rounds",
   "generate_chart",
+  "plot_peak_stack",
+  "plot_panel_grid",
+  "plot_curve_overlay",
   "generate_xrd_analysis",
   "generate_table",
   "draft_mechanism_figure",
@@ -47,6 +50,9 @@ const TOOL_LABELS: Record<string, string> = {
   validate_citations: "引用检查",
   run_review_rounds: "审查轮次",
   generate_chart: "图表",
+  plot_peak_stack: "特征峰叠谱",
+  plot_panel_grid: "组图",
+  plot_curve_overlay: "同轴曲线",
   generate_xrd_analysis: "XRD 分析",
   generate_table: "三线表",
   draft_mechanism_figure: "机理图",
@@ -77,7 +83,7 @@ export function extractProjectMutated(
       return null;
     }
     if (
-      (tool === "draft_mechanism_figure" || tool === "generate_chart" || tool === "illustrate_mechanism_figure")
+      (tool === "draft_mechanism_figure" || tool === "generate_chart" || tool === "plot_peak_stack" || tool === "plot_panel_grid" || tool === "plot_curve_overlay" || tool === "illustrate_mechanism_figure")
       && data.blocked === true
     ) {
       return null;

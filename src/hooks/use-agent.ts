@@ -356,6 +356,9 @@ export function useAgent(options: UseAgentOptions = {}) {
           && (event.tool === "validate_citations"
             || event.tool === "draft_mechanism_figure"
             || event.tool === "generate_chart"
+            || event.tool === "plot_peak_stack"
+            || event.tool === "plot_panel_grid"
+            || event.tool === "plot_curve_overlay"
             || event.tool === "illustrate_mechanism_figure"
             || event.tool === "generate_xrd_analysis");
         const qaSlim = event.tool === "write_section"
