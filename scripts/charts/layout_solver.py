@@ -126,7 +126,21 @@ def _expand_ylim(ax, factor: float = 1.12) -> None:
 
 
 def _apply_margins(fig, style: dict[str, Any]) -> None:
-    right = 0.78 if style.get("_need_right_margin") else 0.96
+    if style.get("_series_label_margin"):
+        right = 0.58
+    elif style.get("_need_right_margin"):
+        longest = 0
+        for ax in getattr(fig, "axes", []):
+            legend = ax.get_legend()
+            if legend is None:
+                continue
+            for text in legend.get_texts():
+                longest = max(longest, len(text.get_text()))
+        # 窄栏图例外置时，长名字（如 Mo/HZSM-5）会在 0.78 处被裁掉
+        pad = 0.24 + max(0, longest - 8) * 0.022
+        right = max(0.52, min(0.78, 1 - pad))
+    else:
+        right = 0.96
     bottom = 0.30 if style.get("_need_bottom_margin") else (0.22 if style.get("_rotated_ticks") else 0.16)
     top = 0.88
     left = 0.16
@@ -208,6 +222,8 @@ def solve_layout(fig, style: dict[str, Any], config: dict[str, Any] | None = Non
                 })
 
         sides = _clip_sides(fig, renderer)
+        if style.get("_series_label_margin") and "x" in sides:
+            sides.discard("x")
         if "top" in sides:
             _expand_ylim(ax, 1.12)
             findings.append({

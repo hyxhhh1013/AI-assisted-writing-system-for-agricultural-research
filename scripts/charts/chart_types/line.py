@@ -24,6 +24,10 @@ class LineChart(ChartModule):
         except (ValueError, TypeError):
             numeric_x = None
 
+        if config.get("long_xy") in (True, "true", "1", 1):
+            self._plot_long(labels, datasets, config, output_path, style)
+            return
+
         fig, ax = self.new_figure(style)
         ax2 = ax.twinx() if dual_y else None
         colors = self.colors(style, len(datasets))
@@ -86,7 +90,7 @@ class LineChart(ChartModule):
         if numeric_x is None:
             ax.set_xticks(range(len(labels)))
             ax.set_xticklabels(labels_display)
-        else:
+        elif len(numeric_x) <= 24:
             ax.set_xticks(numeric_x)
             ax.set_xticklabels(labels_display)
 
@@ -104,6 +108,56 @@ class LineChart(ChartModule):
             h2, l2 = ax2.get_legend_handles_labels()
             if h1 or h2:
                 ax.legend(h1 + h2, l1 + l2, frameon=bool(style.get("legend_frame")), fontsize=float(style.get("font_size", 8)))
+        self.save(fig, output_path, style)
+
+    def _plot_long(self, labels, datasets, config, output_path, style):
+        """每条曲线自带 x、y，不要求横轴对齐。吸附回线因此不会被压成一条。"""
+        if len(datasets) < 2:
+            raise ValueError("long_xy 需要 x 和 y 两列")
+        xs = list(datasets[0].get("data", []))
+        ys = list(datasets[1].get("data", []))
+        groups: list[list] = []
+        current = None
+        for name, x, y in zip(labels, xs, ys):
+            try:
+                xf = float(x)
+                yf = float(y)
+            except (TypeError, ValueError):
+                continue
+            label = str(name)
+            if current is None or current[0] != label:
+                current = [label, [], []]
+                groups.append(current)
+            current[1].append(xf)
+            current[2].append(yf)
+        if not groups:
+            raise ValueError("没有可画的曲线")
+        if config.get("use_markers") in (True, "true", "1", 1):
+            style["use_markers"] = True
+        fig, ax = self.new_figure(style)
+        if config.get("x_log") in (True, "true", "1", 1):
+            ax.set_xscale("log")
+        colors = self.colors(style, len(groups))
+        markers = self.markers(style, len(groups))
+        lw = max(float(style.get("axes_linewidth", 0.8)) * 1.6, 1.2)
+        ms = max(float(style.get("font_size", 8)) * 0.5, 3.2)
+        mark = style.get("use_markers") in (True, "true", "1", 1)
+        for i, (name, x, y) in enumerate(groups):
+            ax.plot(x, y, color=colors[i], linewidth=lw, label=name, zorder=3)
+            if mark:
+                stride = max(1, len(x) // 36) if len(x) > 70 else 1
+                ax.plot(
+                    x[::stride], y[::stride],
+                    linestyle="none", marker=markers[i], color=colors[i],
+                    markersize=ms, zorder=4,
+                )
+        self.finalize_axes(
+            ax, style, config=config,
+            title=str(config.get("title", "") or ""),
+            x_label=str(config.get("x_label", "") or ""),
+            y_label=str(config.get("y_label", "") or ""),
+            has_legend=len(groups) > 1,
+        )
         self.save(fig, output_path, style)
 
     def _draw_significance(self, ax, series_tops, config, style):
