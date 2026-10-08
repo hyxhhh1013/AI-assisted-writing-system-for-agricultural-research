@@ -13,6 +13,10 @@ export interface WritingGlobalContext {
   sectionBodies?: Record<string, string>;
   analysisResults?: string[];
   blueprint?: WritingBlueprint | null;
+  /** 护照里的目标期刊，扩写时写入系统提示 */
+  targetJournal?: string;
+  /** 护照里的目标字数，如 8000-12000 */
+  targetWordCount?: string;
 }
 
 export interface PreparedWritingContext {

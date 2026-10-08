@@ -168,6 +168,8 @@ export function DirectionRoadmapTimeline({
         paperType: config.paperType,
         language: config.language,
         citationStyle: config.citationStyle,
+        ...(config.template ? { template: config.template } : {}),
+        ...(config.chartPreset ? { chartPreset: config.chartPreset } : {}),
         wordCount: config.wordCount,
         targetJournal: config.targetJournal || candidate?.suggestedJournal,
         pendingExperiments:

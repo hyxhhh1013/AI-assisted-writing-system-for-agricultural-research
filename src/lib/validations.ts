@@ -206,6 +206,9 @@ export const paperPassportConfigSchema = z.object({
   wordCount: z.string().min(1),
   language: z.enum(["zh", "en"]),
   citationStyle: z.enum(["gbt7714", "vancouver", "apa7", "ieee"]),
+  agentEntryMode: z.enum(["full", "outline_ready", "data_ready"]).optional(),
+  template: z.enum(["sci", "ieee", "gbt7713", "nature", "cas"]).optional(),
+  chartPreset: z.enum(["nature", "agr_journal", "print_bw"]).optional(),
 });
 export type PaperPassportConfigInput = z.infer<typeof paperPassportConfigSchema>;
 
@@ -777,6 +780,26 @@ export type AdminIllustrationTestInput = z.infer<typeof adminIllustrationTestSch
 
 // === Chart / Table / XRD ===
 export const chartModeSchema = z.enum(["generic", "crd"]).default("generic");
+
+export const compositePanelSchema = z.object({
+  chartType: z.string().min(1),
+  csv: z.string().min(1),
+  title: z.string().optional(),
+  xLabel: z.string().optional(),
+  yLabel: z.string().optional(),
+  yMin: z.string().optional(),
+  yMax: z.string().optional(),
+  showLegend: z.boolean().optional(),
+  palette: z.enum(["nature", "agr", "tol"]).optional(),
+  span: z.union([z.literal(1), z.literal(2)]).optional(),
+});
+
+export const compositeFigureSchema = z.object({
+  title: z.string().min(1, "请填写组图标题"),
+  preset: z.enum(["nature", "agr_journal", "print_bw"]).optional(),
+  cols: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
+  panels: z.array(compositePanelSchema).min(2, "组图至少两张").max(6, "组图最多六张"),
+});
 
 export const jsonObjectSchema = z.record(z.string(), z.unknown());
 

@@ -1,4 +1,5 @@
 import type { ProjectWritingMode } from "@/contracts/writing-mode";
+import { venueWriterNote } from "@/lib/venues/registry";
 import { buildDomainExpertise } from "./domain";
 import { REVIEW_SECTION_PROMPTS } from "./review-writing";
 import {
@@ -204,8 +205,14 @@ export function buildWriterSystemPrompt(params: {
   projectMode?: "review" | "research";
   sectionNumber?: number;
   citationStyle?: string;
+  targetJournal?: string;
+  targetWordCount?: string;
 }): string {
-  const { section, domainExpertise, globalReferenceInfo, template, language, contextText, sectionInstruction, figureStart = 1, evidenceSummary, projectMode, sectionNumber, citationStyle = "gbt7714" } = params;
+  const { section, domainExpertise, globalReferenceInfo, template, language, contextText, sectionInstruction, figureStart = 1, evidenceSummary, projectMode, sectionNumber, citationStyle = "gbt7714", targetJournal, targetWordCount } = params;
+  const writerNote = venueWriterNote(targetJournal);
+  const venueLine = (targetJournal?.trim() || targetWordCount?.trim())
+    ? `目标期刊：${targetJournal?.trim() || "未定"}。目标字数：${targetWordCount?.trim() || "未定"}。本节深度和篇幅按此收着写。${writerNote ? `${writerNote}` : ""}\n`
+    : "";
   const isGBT = template === "gbt7713";
   const isChinese = language !== "en";
   const isAbstract = section === "abstract";
@@ -218,7 +225,7 @@ export function buildWriterSystemPrompt(params: {
   if (isAbstract) {
     return `${domainExpertise}
 你的任务是撰写论文摘要（Abstract）。模板：${isGBT ? "GB/T 7713 国标" : "SCI 国际期刊"}。输出语言：${isChinese ? "中文" : "英文"}。
-${globalReferenceInfo}
+${venueLine}${globalReferenceInfo}
 
 —— 摘要写作铁律 ——
 · 摘要必须基于上方「已完成正文」综合提炼；正文未写到的结论/数据不得编造
@@ -245,7 +252,7 @@ ${sectionInstruction}
 
   return `${domainExpertise}
 你的任务是协助撰写论文「${section}」章节。模板：${isGBT ? "GB/T 7713 国标" : "SCI 国际期刊"}。输出语言：${isChinese ? "中文" : "英文"}。
-${globalReferenceInfo}
+${venueLine}${globalReferenceInfo}
 
 —— 可供引用的文献库 ——
 ${contextText}

@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,12 +15,24 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { DIALOG_FULL } from "@/components/ui/dialog-sizes";
+import type { AgentEntryModeId } from "@/contracts/paper-passport";
+import { parsePaperPassport } from "@/contracts/paper-passport";
+import { AGENT_ENTRY_MODES } from "@/lib/agent/entry-mode";
 import type { ProjectData, ProjectLanguage } from "@/contracts/project";
 import { resolveProjectLanguage } from "@/contracts/project";
 import { getWritingModeMeta } from "@/contracts/writing-mode";
 import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
 import { BilingualAbstractControls } from "@/components/shared/bilingual-abstract-controls";
 import { cn } from "@/lib/utils";
+import { VenueJournalField, VenueSpecUpdateBanner } from "@/components/shared/venue-journal-field";
+import { useVenueAlign } from "@/hooks/use-venue-align";
+import {
+  CHART_PRESET_OPTIONS,
+  TEMPLATE_CITATION_MAP,
+  isChartPresetId,
+  isPaperTemplateId,
+  type ChartPresetId,
+} from "@/lib/venues/registry";
 
 interface ProjectMetaDraft {
   title: string;
@@ -35,6 +47,10 @@ interface ProjectMetaDraft {
   referencesText: string;
   citationStyle?: "gbt7714" | "vancouver" | "apa7" | "ieee";
   language: ProjectLanguage;
+  targetJournal: string;
+  wordCount: string;
+  agentEntryMode: AgentEntryModeId | "";
+  chartPreset: ChartPresetId;
 }
 
 interface WorkbenchMetaDialogProps {
@@ -45,13 +61,23 @@ interface WorkbenchMetaDialogProps {
 }
 
 /** 模板 → 引用格式的默认映射 */
-const TEMPLATE_CITATION_MAP: Record<string, "gbt7714" | "vancouver" | "apa7" | "ieee"> = {
-  gbt7713: "gbt7714",
-  ieee: "ieee",
-  sci: "vancouver",
-  nature: "vancouver",
-  cas: "gbt7714",
-};
+const WORD_COUNT_PRESETS = [
+  { value: "4000-6000", label: "4,000–6,000 字" },
+  { value: "6000-8000", label: "6,000–8,000 字" },
+  { value: "8000-12000", label: "8,000–12,000 字" },
+  { value: "12000-20000", label: "12,000–20,000 字" },
+];
+
+function passportDraft(project: ProjectData): Pick<ProjectMetaDraft, "targetJournal" | "wordCount" | "agentEntryMode" | "chartPreset"> {
+  const cfg = parsePaperPassport(project.paperPassport ?? null)?.config;
+  const mode = cfg?.agentEntryMode;
+  return {
+    targetJournal: cfg?.targetJournal ?? "",
+    wordCount: cfg?.wordCount || "8000-12000",
+    agentEntryMode: mode === "full" || mode === "outline_ready" || mode === "data_ready" ? mode : "",
+    chartPreset: cfg?.chartPreset && isChartPresetId(cfg.chartPreset) ? cfg.chartPreset : "nature",
+  };
+}
 
 export function WorkbenchMetaDialog({ open, onClose, project, onSave }: WorkbenchMetaDialogProps) {
   const [tempMeta, setTempMeta] = useState<ProjectMetaDraft>({
@@ -67,10 +93,13 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
     referencesText: (project.references || []).join("\n"),
     citationStyle: project.citationStyle || "gbt7714",
     language: resolveProjectLanguage(project),
+    ...passportDraft(project),
   });
+  const venue = useVenueAlign();
 
   useEffect(() => {
     if (open) {
+      venue.clear();
       setTempMeta({
         title: project.title || "",
         authors: project.authors || "",
@@ -84,9 +113,12 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
         referencesText: (project.references || []).join("\n"),
         citationStyle: project.citationStyle || "gbt7714",
         language: resolveProjectLanguage(project),
+        ...passportDraft(project),
       });
     }
-  }, [open, project.id]);
+    // 只在打开或护照变化时回填，避免项目对象每次渲染冲掉正在编辑的规格
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, project.id, project.paperPassport]);
 
   const handleSave = () => {
     onSave(tempMeta);
@@ -119,9 +151,10 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
                 <div className="grid gap-2">
                   <Label htmlFor="meta-template">期刊格式模板</Label>
                   <Select value={tempMeta.template} onValueChange={(val) => {
-                    const tpl = val || "sci";
-                    const cit = TEMPLATE_CITATION_MAP[tpl] || "vancouver";
-                    setTempMeta({ ...tempMeta, template: tpl, citationStyle: cit });
+                    const tpl = val && isPaperTemplateId(val) ? val : "sci";
+                    venue.mark("template");
+                    venue.mark("citationStyle");
+                    setTempMeta({ ...tempMeta, template: tpl, citationStyle: TEMPLATE_CITATION_MAP[tpl] });
                   }}>
                     <SelectTrigger id="meta-template">
                       <SelectValue placeholder="选择期刊格式" />
@@ -156,7 +189,7 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
                         ? "bg-primary text-primary-foreground"
                         : "bg-background hover:bg-muted/60",
                     )}
-                    onClick={() => setTempMeta({ ...tempMeta, language: "zh" })}
+                    onClick={() => { venue.mark("language"); setTempMeta({ ...tempMeta, language: "zh" }); }}
                   >
                     中文
                   </button>
@@ -168,7 +201,7 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
                         ? "bg-primary text-primary-foreground"
                         : "bg-background hover:bg-muted/60",
                     )}
-                    onClick={() => setTempMeta({ ...tempMeta, language: "en" })}
+                    onClick={() => { venue.mark("language"); setTempMeta({ ...tempMeta, language: "en" }); }}
                   >
                     English
                   </button>
@@ -180,7 +213,11 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
                 <Label htmlFor="meta-citation-style">引用格式标准</Label>
                 <Select
                   value={tempMeta.citationStyle || "gbt7714"}
-                  onValueChange={(val) => setTempMeta({ ...tempMeta, citationStyle: val as "gbt7714" | "vancouver" | "apa7" | "ieee" })}
+                  onValueChange={(val) => {
+                    if (val !== "gbt7714" && val !== "vancouver" && val !== "apa7" && val !== "ieee") return;
+                    venue.mark("citationStyle");
+                    setTempMeta({ ...tempMeta, citationStyle: val });
+                  }}
                 >
                   <SelectTrigger id="meta-citation-style">
                     <SelectValue placeholder="选择引用格式" />
@@ -193,6 +230,116 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
                   </SelectContent>
                 </Select>
                 <p className="text-[10px] text-muted-foreground">随期刊模板自动选定，也可独立覆盖。影响 AI 生成的参考文献条目格式</p>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="meta-journal">目标期刊</Label>
+                  <VenueJournalField
+                    id="meta-journal"
+                    value={tempMeta.targetJournal}
+                    placeholder="如 Applied Soil Ecology"
+                    onChange={(value) => {
+                      setTempMeta((prev) => {
+                        const next = venue.align({
+                          language: prev.language,
+                          template: prev.template,
+                          citationStyle: prev.citationStyle || "gbt7714",
+                          chartPreset: prev.chartPreset,
+                        }, value);
+                        return {
+                          ...prev,
+                          targetJournal: value,
+                          language: next.language,
+                          template: next.template,
+                          citationStyle: next.citationStyle,
+                          chartPreset: next.chartPreset,
+                        };
+                      });
+                    }}
+                  />
+                  <VenueSpecUpdateBanner
+                    journal={tempMeta.targetJournal}
+                    current={{
+                      language: tempMeta.language,
+                      template: tempMeta.template,
+                      citationStyle: tempMeta.citationStyle || "gbt7714",
+                      chartPreset: tempMeta.chartPreset,
+                    }}
+                    onApply={(suggestion) => {
+                      venue.clear();
+                      setTempMeta((prev) => ({
+                        ...prev,
+                        language: suggestion.language,
+                        template: suggestion.template,
+                        citationStyle: suggestion.citationStyle,
+                        chartPreset: suggestion.chartPreset,
+                      }));
+                    }}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="meta-words">目标字数</Label>
+                  <Select
+                    value={tempMeta.wordCount}
+                    onValueChange={(val) => val && setTempMeta({ ...tempMeta, wordCount: val })}
+                  >
+                    <SelectTrigger id="meta-words">
+                      <SelectValue placeholder="选择篇幅" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {WORD_COUNT_PRESETS.map((p) => (
+                        <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                      ))}
+                      {tempMeta.wordCount && !WORD_COUNT_PRESETS.some((p) => p.value === tempMeta.wordCount) ? (
+                        <SelectItem value={tempMeta.wordCount}>{tempMeta.wordCount}</SelectItem>
+                      ) : null}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="meta-chart-preset">图表预设</Label>
+                <Select
+                  value={tempMeta.chartPreset}
+                  onValueChange={(val) => {
+                    if (val !== "nature" && val !== "agr_journal" && val !== "print_bw") return;
+                    venue.mark("chartPreset");
+                    setTempMeta({ ...tempMeta, chartPreset: val });
+                  }}
+                >
+                  <SelectTrigger id="meta-chart-preset">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CHART_PRESET_OPTIONS.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="meta-entry">写作入口</Label>
+                <Select
+                  value={tempMeta.agentEntryMode || "unset"}
+                  onValueChange={(val) => setTempMeta({
+                    ...tempMeta,
+                    agentEntryMode: val === "unset" ? "" : val as AgentEntryModeId,
+                  })}
+                >
+                  <SelectTrigger id="meta-entry">
+                    <SelectValue placeholder="选择写作入口" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unset">未选定</SelectItem>
+                    {AGENT_ENTRY_MODES.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>{m.label} · {m.hint}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground">决定文献、大纲、数据和分节写作的顺序。改完后下一步建议会跟着变。</p>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">

@@ -259,6 +259,7 @@ export async function updateProjectPaperPassportConfig(
         mode: config.paperType,
         language: config.language,
         citationStyle: config.citationStyle,
+        ...(config.template ? { template: config.template } : {}),
       },
     });
 

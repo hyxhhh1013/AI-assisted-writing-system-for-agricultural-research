@@ -1,6 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { VenueJournalField } from "@/components/shared/venue-journal-field";
+import { useVenueAlign } from "@/hooks/use-venue-align";
+import {
+  CHART_PRESET_OPTIONS,
+  TEMPLATE_CITATION_MAP,
+  TEMPLATE_OPTIONS,
+  isPaperTemplateId,
+  type ChartPresetId,
+  type PaperTemplateId,
+} from "@/lib/venues/registry";
 import { BookOpen, FlaskConical, Loader2, ChevronRight, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,7 +83,10 @@ export function CreateProjectWizard({
   const [wordCount, setWordCount] = useState("8000-12000");
   const [citationStyle, setCitationStyle] =
     useState<(typeof CITATION_STYLES)[number]["value"]>("gbt7714");
+  const [template, setTemplate] = useState<PaperTemplateId>("sci");
+  const [chartPreset, setChartPreset] = useState<ChartPresetId>("nature");
   const [entryMode, setEntryMode] = useState<AgentEntryModeId | null>("full");
+  const venue = useVenueAlign();
 
   const reset = () => {
     setStep(1);
@@ -83,7 +96,10 @@ export function CreateProjectWizard({
     setTargetJournal("");
     setWordCount("8000-12000");
     setCitationStyle("gbt7714");
+    setTemplate("sci");
+    setChartPreset("nature");
     setEntryMode("full");
+    venue.clear();
   };
 
   const handleOpenChange = (next: boolean) => {
@@ -104,6 +120,8 @@ export function CreateProjectWizard({
         wordCount,
         citationStyle,
         entryMode ?? undefined,
+        template,
+        chartPreset,
       );
 
       // 创建即进工作台：文献不再强制在向导里导入，随时可在工作台「文献」栏补充
@@ -186,7 +204,7 @@ export function CreateProjectWizard({
                       size="sm"
                       variant={language === lang ? "default" : "outline"}
                       className="h-8 flex-1 text-xs"
-                      onClick={() => setLanguage(lang)}
+                      onClick={() => { venue.mark("language"); setLanguage(lang); }}
                     >
                       {lang === "zh" ? "中文" : "English"}
                     </Button>
@@ -238,11 +256,22 @@ export function CreateProjectWizard({
 
               <div className="space-y-1.5">
                 <Label className="text-xs">目标期刊（可选）</Label>
-                <Input
+                <VenueJournalField
+                  id="wiz-journal"
                   className="h-8 text-xs"
                   value={targetJournal}
-                  onChange={(e) => setTargetJournal(e.target.value)}
                   placeholder="如 Applied Soil Ecology"
+                  onChange={(value) => {
+                    setTargetJournal(value);
+                    const next = venue.align(
+                      { language, template, citationStyle, chartPreset },
+                      value,
+                    );
+                    setLanguage(next.language);
+                    if (isPaperTemplateId(next.template)) setTemplate(next.template);
+                    setCitationStyle(next.citationStyle);
+                    setChartPreset(next.chartPreset);
+                  }}
                 />
               </div>
               <div className="space-y-1.5">
@@ -260,12 +289,54 @@ export function CreateProjectWizard({
                 <Label className="text-xs">引用格式</Label>
                 <Select
                   value={citationStyle}
-                  onValueChange={(v) => v && setCitationStyle(v as typeof citationStyle)}
+                  onValueChange={(v) => {
+                    if (!v) return;
+                    venue.mark("citationStyle");
+                    setCitationStyle(v as typeof citationStyle);
+                  }}
                 >
                   <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {CITATION_STYLES.map((s) => (
                       <SelectItem key={s.value} value={s.value} className="text-xs">{s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">期刊格式模板</Label>
+                <Select
+                  value={template}
+                  onValueChange={(val) => {
+                    if (!val || !isPaperTemplateId(val)) return;
+                    venue.mark("template");
+                    venue.mark("citationStyle");
+                    setTemplate(val);
+                    setCitationStyle(TEMPLATE_CITATION_MAP[val]);
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {TEMPLATE_OPTIONS.map((item) => (
+                      <SelectItem key={item.value} value={item.value} className="text-xs">{item.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">图表预设</Label>
+                <Select
+                  value={chartPreset}
+                  onValueChange={(val) => {
+                    if (val !== "nature" && val !== "agr_journal" && val !== "print_bw") return;
+                    venue.mark("chartPreset");
+                    setChartPreset(val);
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CHART_PRESET_OPTIONS.map((item) => (
+                      <SelectItem key={item.value} value={item.value} className="text-xs">{item.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

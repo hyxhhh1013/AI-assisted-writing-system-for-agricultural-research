@@ -18,7 +18,7 @@ KnowledgeFile 1──* KnowledgeChunk
 
 | 字段 | 说明 |
 |------|------|
-| `template` | `sci` \| `ieee` \| `gbt7713` \| `nature` |
+| `template` | `sci` \| `ieee` \| `gbt7713` \| `nature` \| `cas`。护照 `config.template` 保存时同步写回此列 |
 | `mode` | `review` \| `research`（证据包口径） |
 | `language` | `zh` \| `en`（写作/大纲/扩写输出语言，创建时选定） |
 | `citationStyle` | `gbt7714` \| `vancouver` \| `apa7` \| `ieee` |
@@ -28,7 +28,7 @@ KnowledgeFile 1──* KnowledgeChunk
 | `expandedOutlineSections` | JSON `string[]`，大纲扩写已完成任务 id（`stableHash(fullPath)`）；整章扩写时同 `sectionKey` 下子节一并标记 |
 | `writingBlueprint` | JSON `WritingBlueprint`（`src/contracts/writing-blueprint.ts`），扩写前唯一计划：叙事、配图、各节要点 + **主张/证据/推理**（`sectionGuides.claim` 等） |
 | `argumentBlueprint` | JSON `ArgumentBlueprint`（遗留）。**主路径已弃用**：论证并入 `writingBlueprint`；列可仍存在供旧数据只读 |
-| `paperPassport` | JSON `PaperPassport`（`src/contracts/paper-passport.ts`）：8 阶段 + `config` / `literature` / `draftProgress` / `abstractSnapshot` / `reviewRound` 快照 |
+| `paperPassport` | JSON `PaperPassport`（`src/contracts/paper-passport.ts`）：8 阶段 + `config` / `literature` / `draftProgress` / `abstractSnapshot` / `reviewRound` 快照。`config` 可含可选 `template`、`chartPreset`（`nature` \| `agr_journal` \| `print_bw`） |
 | `qualitySession` | JSON 质量中心会话快照（查重配置、审查展开状态、降重采纳记录），刷新/切项目恢复 |
 
 ## Agent 会话（AgentSession · W2-CHECKPOINT）

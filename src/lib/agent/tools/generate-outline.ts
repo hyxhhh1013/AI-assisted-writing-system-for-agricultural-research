@@ -17,6 +17,7 @@ import {
   getDefaultUserSkeleton,
   scrubForbiddenReviewHeadings,
 } from "@/lib/outline-skeleton";
+import { outlineRouteHint } from "@/lib/agent/entry-route";
 import { buildOutlinePrompt } from "@/lib/prompts";
 import prisma from "@/lib/prisma";
 import { syncProjectPaperPassport } from "@/lib/project-paper-passport-sync";
@@ -176,6 +177,7 @@ export const generateOutlineTool: ToolDefinition = {
       userSkeleton: skeleton,
       skeletonFromAttachment: lockedByAttachment,
       frameworkBlock: framework ? buildFrameworkPromptBlock(framework) : undefined,
+      routeHint: outlineRouteHint(project.agentEntryMode, project.mode),
     });
 
     const userPayload = [

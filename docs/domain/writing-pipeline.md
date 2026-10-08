@@ -88,6 +88,7 @@ route.ts               SSE 外壳
 - Verifier 检查 overclaim、Results/Discussion 混淆，不只查引用真假。
 - Prompt 已注入 nature-polishing 原则（见 `prompts.ts` 注释）。
 - 农业场景：GB/T 7713 与 SCI 双轨、`domain.ts` 术语适配。
+- **期刊规格**：目标期刊不直接改版式。语言、模板、引用、图表预设由 `src/lib/venues/registry.ts` 建议，用户确认后写入项目。登记刊的 `writerNote` 追加在扩写和蓝图的期刊句后。加刊改登记表，加版式改 `template-sections.ts`。详见 [`plans/venue-profile.md`](../plans/venue-profile.md)。
 - **大纲骨架**：综述默认含「研究现状与问题」；生成后按骨架纠偏一级标题，禁止误出「材料与方法」（`outline-skeleton.ts`）。
 - **摘要**：建议正文完成后再写；注入 `sectionBodies` 全文；跳过 RAG；禁止文内 `[n]`（落库前 `stripInlineCitations`）。
 - **RAG scope**：分类范围 = 已有参考文献 ∪ 用户勾选文献；范围空命中自动扩全库（`writing-context.ts`）。

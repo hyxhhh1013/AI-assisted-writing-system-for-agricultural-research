@@ -2,6 +2,7 @@
 
 import { useRef, useCallback, type Dispatch, type SetStateAction } from "react";
 import { toast } from "sonner";
+import { parsePaperPassport } from "@/contracts/paper-passport";
 import { parseDataSources, type ProjectData } from "@/contracts/project";
 import { parseWritingBlueprint } from "@/contracts/writing-blueprint";
 import type { OutlineTask } from "@/lib/utils";
@@ -189,6 +190,8 @@ export function useWritingPanelGenerate(params: UseWritingPanelGenerateParams) {
             : {}),
           analysisResults: project.analysisResults || [],
           blueprint,
+          targetJournal: parsePaperPassport(project.paperPassport ?? null)?.config?.targetJournal,
+          targetWordCount: parsePaperPassport(project.paperPassport ?? null)?.config?.wordCount,
         },
         ...(selectedSourceIds !== undefined ? { selectedSourceIds } : {}),
       };

@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -20,6 +19,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { FileText, BookOpen, Hash, Globe, Quote } from "lucide-react";
+import { VenueJournalField } from "@/components/shared/venue-journal-field";
+import { useVenueAlign } from "@/hooks/use-venue-align";
+import {
+  CHART_PRESET_OPTIONS,
+  TEMPLATE_CITATION_MAP,
+  TEMPLATE_OPTIONS,
+  isPaperTemplateId,
+  type ChartPresetId,
+} from "@/lib/venues/registry";
 
 // ==================== 预设选项 ====================
 
@@ -46,6 +54,8 @@ export interface PaperConfig {
   wordCount: string;
   language: "zh" | "en";
   citationStyle: "gbt7714" | "vancouver" | "apa7" | "ieee";
+  template?: "sci" | "ieee" | "gbt7713" | "nature" | "cas";
+  chartPreset?: "nature" | "agr_journal" | "print_bw";
 }
 
 interface PaperConfigDialogProps {
@@ -79,6 +89,22 @@ export function PaperConfigDialog({
   const [wordCount, setWordCount] = useState("8000-12000");
   const [language, setLanguage] = useState<"zh" | "en">("zh");
   const [citationStyle, setCitationStyle] = useState<"gbt7714" | "vancouver" | "apa7" | "ieee">("gbt7714");
+  const [template, setTemplate] = useState<PaperConfig["template"]>("sci");
+  const [chartPreset, setChartPreset] = useState<ChartPresetId>("nature");
+  const venue = useVenueAlign();
+
+  useEffect(() => {
+    const next = venue.align(
+      { language, template: template || "sci", citationStyle, chartPreset },
+      targetJournal,
+    );
+    if (next.language !== language) setLanguage(next.language);
+    if (next.template !== template) setTemplate(isPaperTemplateId(next.template) ? next.template : "sci");
+    if (next.citationStyle !== citationStyle) setCitationStyle(next.citationStyle);
+    if (next.chartPreset !== chartPreset) setChartPreset(next.chartPreset);
+    // 只在刊名变化时对齐尚未手改的字段
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetJournal]);
 
   const handleConfirm = () => {
     onConfirm({
@@ -88,6 +114,8 @@ export function PaperConfigDialog({
       wordCount,
       language,
       citationStyle,
+      template,
+      chartPreset,
     });
   };
 
@@ -153,10 +181,10 @@ export function PaperConfigDialog({
               <Hash className="h-3.5 w-3.5 text-[#9aa8a0]" />
               目标期刊
             </Label>
-            <Input
+            <VenueJournalField
               id="cfg-journal"
               value={targetJournal}
-              onChange={(e) => setTargetJournal(e.target.value)}
+              onChange={setTargetJournal}
               placeholder="如：Soil Biology & Biochemistry"
               className="h-8 text-xs"
             />
@@ -211,7 +239,7 @@ export function PaperConfigDialog({
                     ? "h-8 text-xs bg-[#1a5632] hover:bg-[#1a5632]/90"
                     : "h-8 text-xs"
                 }
-                onClick={() => setLanguage("zh")}
+                onClick={() => { venue.mark("language"); setLanguage("zh"); }}
               >
                 中文
               </Button>
@@ -223,7 +251,7 @@ export function PaperConfigDialog({
                     ? "h-8 text-xs bg-[#1a5632] hover:bg-[#1a5632]/90"
                     : "h-8 text-xs"
                 }
-                onClick={() => setLanguage("en")}
+                onClick={() => { venue.mark("language"); setLanguage("en"); }}
               >
                 英文
               </Button>
@@ -238,7 +266,11 @@ export function PaperConfigDialog({
             </Label>
             <Select
               value={citationStyle}
-              onValueChange={(v) => setCitationStyle(v as typeof citationStyle)}
+              onValueChange={(v) => {
+                if (!v) return;
+                venue.mark("citationStyle");
+                setCitationStyle(v as typeof citationStyle);
+              }}
             >
               <SelectTrigger className="h-8 text-xs">
                 <SelectValue />
@@ -248,6 +280,46 @@ export function PaperConfigDialog({
                   <SelectItem key={s.value} value={s.value} className="text-xs">
                     {s.label}
                   </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">期刊格式模板</Label>
+            <Select
+              value={template || "sci"}
+              onValueChange={(val) => {
+                if (!val || !isPaperTemplateId(val)) return;
+                venue.mark("template");
+                venue.mark("citationStyle");
+                setTemplate(val);
+                setCitationStyle(TEMPLATE_CITATION_MAP[val]);
+              }}
+            >
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {TEMPLATE_OPTIONS.map((item) => (
+                  <SelectItem key={item.value} value={item.value} className="text-xs">{item.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">图表预设</Label>
+            <Select
+              value={chartPreset}
+              onValueChange={(val) => {
+                if (val !== "nature" && val !== "agr_journal" && val !== "print_bw") return;
+                venue.mark("chartPreset");
+                setChartPreset(val);
+              }}
+            >
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {CHART_PRESET_OPTIONS.map((item) => (
+                  <SelectItem key={item.value} value={item.value} className="text-xs">{item.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

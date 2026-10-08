@@ -5,6 +5,7 @@
  */
 
 import type { ProjectWritingMode } from "@/contracts/writing-mode";
+import { venueWriterNote } from "@/lib/venues/registry";
 import type { SectionPromptParams } from "@/lib/prompts/writing-types";
 
 export const SLIM_WRITER_PROFILE = "slim" as const;
@@ -100,6 +101,8 @@ export interface SlimWriterSystemPromptParams {
   sectionInstruction: string;
   evidenceSummary?: string;
   projectMode?: ProjectWritingMode;
+  targetJournal?: string;
+  targetWordCount?: string;
 }
 
 /** 短系统提示：文献池 + 证据卡 + 语域，不写 FIGURE JSON / 书目格式 / 空话长禁令。 */
@@ -111,12 +114,18 @@ export function buildSlimWriterSystemPrompt(params: SlimWriterSystemPromptParams
   const data = params.evidenceSummary
     ? `\n—— 数据声明（定量结论只许用这里的数） ——\n${params.evidenceSummary}\n`
     : "";
+  const journal = params.targetJournal?.trim();
+  const words = params.targetWordCount?.trim();
+  const note = venueWriterNote(journal);
+  const venue = journal || words
+    ? `\n面向${journal ? `期刊 ${journal}` : "目标期刊未定"}${words ? `，全文字数约 ${words}` : ""}。本节深度和篇幅按此收着写。${note ? `${note}` : ""}\n`
+    : "";
 
   if (isChinese) {
     return `${params.domainExpertise}
 撰写「${params.section}」。只输出正文。
 ${global}
-${pool}${data}
+${pool}${data}${venue}
 ${params.sectionInstruction}
 
 —— 证据卡 ——
@@ -135,7 +144,7 @@ ${QA_CODES}
   return `${params.domainExpertise}
 Write the "${params.section}" section. Output body text only.
 ${global}
-${pool}${data}
+${pool}${data}${venue}
 ${params.sectionInstruction}
 
 —— Evidence cards ——

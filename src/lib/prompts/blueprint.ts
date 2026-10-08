@@ -1,4 +1,5 @@
 import { buildDomainExpertise } from "./domain";
+import { venueWriterNote } from "@/lib/venues/registry";
 import type { ProjectWritingMode } from "@/contracts/writing-mode";
 import type { BlueprintChartCatalogEntry } from "@/lib/blueprint-utils";
 
@@ -19,8 +20,10 @@ export function buildBlueprintPrompt(params: {
   pendingExperiments?: string[];
   /** 项目已导入参考文献目录；主张/证据只能点这些篇 */
   bibliographyBlock?: string;
+  /** 写作入口对蓝图的约束 */
+  routeHint?: string;
 }): string {
-  const { title, researchDirection, outline, language, projectMode, chartCatalog, motivationFromGap, targetJournal, targetWordCount, pendingExperiments, bibliographyBlock } = params;
+  const { title, researchDirection, outline, language, projectMode, chartCatalog, motivationFromGap, targetJournal, targetWordCount, pendingExperiments, bibliographyBlock, routeHint } = params;
   const domainExpertise = buildDomainExpertise(researchDirection);
   const isResearch = projectMode === "research";
   const langLabel = language === "en" ? "English" : "Chinese";
@@ -30,13 +33,16 @@ export function buildBlueprintPrompt(params: {
   // Direction 战略上下文（仅当有值时才注入）
   const directionContext = [
     motivationFromGap ? `- 写作动机：${motivationFromGap}` : "",
-    targetJournal ? `- 目标期刊：${targetJournal}（请据此调整蓝图的深度与配图标准）` : "",
+    targetJournal
+      ? `- 目标期刊：${targetJournal}（请据此调整蓝图的深度与配图标准）${venueWriterNote(targetJournal) ? ` ${venueWriterNote(targetJournal)}` : ""}`
+      : "",
     targetWordCount
       ? `- 用户确认的目标字数：${targetWordCount}（estimatedWordCount.min/max 必须落在此区间，禁止改用默认 6000–12000）`
       : "",
     pendingExperiments && pendingExperiments.length > 0
       ? `- 待补实验：${pendingExperiments.join("、")}（在蓝图中标注这些缺口，提醒作者补充数据后再写对应章节）`
       : "",
+    routeHint ? `- 写作路线：${routeHint}` : "",
   ].filter(Boolean).join("\n");
 
   const figureRules = isResearch

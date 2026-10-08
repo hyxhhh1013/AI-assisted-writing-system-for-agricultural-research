@@ -1,6 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { VenueJournalField, VenueSpecUpdateBanner } from "@/components/shared/venue-journal-field";
+import { useVenueAlign } from "@/hooks/use-venue-align";
+import {
+  CHART_PRESET_OPTIONS,
+  TEMPLATE_CITATION_MAP,
+  TEMPLATE_OPTIONS,
+  isChartPresetId,
+  isPaperTemplateId,
+} from "@/lib/venues/registry";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -40,6 +49,8 @@ function configFromProject(project: ProjectData, existing?: PaperConfigRecord): 
     wordCount: existing?.wordCount || "8000-12000",
     language: existing?.language || (project.language === "en" ? "en" : "zh"),
     citationStyle: existing?.citationStyle || project.citationStyle || "gbt7714",
+    template: existing?.template || (isPaperTemplateId(project.template || "") ? project.template as PaperConfig["template"] : "sci"),
+    chartPreset: existing?.chartPreset && isChartPresetId(existing.chartPreset) ? existing.chartPreset : "nature",
   };
 }
 
@@ -64,10 +75,13 @@ export function PaperConfigPanel({
   onSave,
 }: PaperConfigPanelProps) {
   const [draft, setDraft] = useState(() => configFromProject(project, existing));
+  const venue = useVenueAlign();
 
   useEffect(() => {
     setDraft(configFromProject(project, existing));
-  }, [project.id, project.title, project.mode, project.language, project.citationStyle, existing]);
+    // 按字段回填。把整个 project 放进依赖会在父组件每次渲染时冲掉未保存编辑
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id, project.title, project.mode, project.language, project.citationStyle, project.template, existing]);
 
   const handleSave = async () => {
     if (!draft.paperTitle.trim()) {
@@ -121,12 +135,49 @@ export function PaperConfigPanel({
 
       <div className="space-y-1.5">
         <Label className="text-[10px] text-muted-foreground">目标期刊</Label>
-        <Input
+        <VenueJournalField
+          id={`paper-config-journal-${project.id}`}
           className="h-8 text-xs"
           value={draft.targetJournal}
           disabled={readOnly}
-          onChange={(e) => setDraft((d) => ({ ...d, targetJournal: e.target.value }))}
           placeholder="如：Applied Soil Ecology"
+          onChange={(value) => {
+            setDraft((d) => {
+              const next = venue.align({
+                language: d.language,
+                template: d.template || "sci",
+                citationStyle: d.citationStyle,
+                chartPreset: d.chartPreset && isChartPresetId(d.chartPreset) ? d.chartPreset : "nature",
+              }, value);
+              return {
+                ...d,
+                targetJournal: value,
+                language: next.language,
+                template: isPaperTemplateId(next.template) ? next.template : d.template,
+                citationStyle: next.citationStyle,
+                chartPreset: next.chartPreset,
+              };
+            });
+          }}
+        />
+        <VenueSpecUpdateBanner
+          journal={draft.targetJournal}
+          current={{
+            language: draft.language,
+            template: draft.template || "sci",
+            citationStyle: draft.citationStyle,
+            chartPreset: draft.chartPreset && isChartPresetId(draft.chartPreset) ? draft.chartPreset : "nature",
+          }}
+          onApply={(suggestion) => {
+            venue.clear();
+            setDraft((d) => ({
+              ...d,
+              language: suggestion.language,
+              template: suggestion.template,
+              citationStyle: suggestion.citationStyle,
+              chartPreset: suggestion.chartPreset,
+            }));
+          }}
         />
       </div>
 
@@ -163,7 +214,7 @@ export function PaperConfigPanel({
                 size="sm"
                 className="h-7 text-[10px] flex-1"
                 disabled={readOnly}
-                onClick={() => setDraft((d) => ({ ...d, language: lang }))}
+                onClick={() => { venue.mark("language"); setDraft((d) => ({ ...d, language: lang })); }}
               >
                 {lang === "zh" ? "中文" : "英文"}
               </Button>
@@ -175,12 +226,58 @@ export function PaperConfigPanel({
           <Select
             value={draft.citationStyle}
             disabled={readOnly}
-            onValueChange={(v) => v && setDraft((d) => ({ ...d, citationStyle: v as PaperConfig["citationStyle"] }))}
+            onValueChange={(v) => {
+              if (v !== "gbt7714" && v !== "vancouver" && v !== "apa7" && v !== "ieee") return;
+              venue.mark("citationStyle");
+              setDraft((d) => ({ ...d, citationStyle: v }));
+            }}
           >
             <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
               {CITATION_STYLES.map((s) => (
                 <SelectItem key={s.value} value={s.value} className="text-xs">{s.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1.5">
+          <Label className="text-[10px] text-muted-foreground">期刊格式模板</Label>
+          <Select
+            value={draft.template || "sci"}
+            disabled={readOnly}
+            onValueChange={(val) => {
+              if (!val || !isPaperTemplateId(val)) return;
+              venue.mark("template");
+              venue.mark("citationStyle");
+              setDraft((d) => ({ ...d, template: val, citationStyle: TEMPLATE_CITATION_MAP[val] }));
+            }}
+          >
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {TEMPLATE_OPTIONS.map((item) => (
+                <SelectItem key={item.value} value={item.value} className="text-xs">{item.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-[10px] text-muted-foreground">图表预设</Label>
+          <Select
+            value={draft.chartPreset || "nature"}
+            disabled={readOnly}
+            onValueChange={(val) => {
+              if (!val || !isChartPresetId(val)) return;
+              venue.mark("chartPreset");
+              setDraft((d) => ({ ...d, chartPreset: val }));
+            }}
+          >
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {CHART_PRESET_OPTIONS.map((item) => (
+                <SelectItem key={item.value} value={item.value} className="text-xs">{item.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>

@@ -476,6 +476,10 @@ export interface RoadmapProjectContext {
   language?: "zh" | "en";
   /** 引用格式（覆盖默认 gbt7714） */
   citationStyle?: "gbt7714" | "vancouver" | "apa7" | "ieee";
+  /** 期刊格式模板 */
+  template?: "sci" | "ieee" | "gbt7713" | "nature" | "cas";
+  /** 图表预设 */
+  chartPreset?: "nature" | "agr_journal" | "print_bw";
   /** 从 corpus 勾选的文献 id（空 = 全部） */
   selectedLiteratureIds?: string[];
 }
@@ -536,6 +540,8 @@ export async function createProjectFromRoadmap(
         wordCount,
         language,
         citationStyle,
+        ...(context?.template ? { template: context.template } : {}),
+        ...(context?.chartPreset ? { chartPreset: context.chartPreset } : {}),
       }),
       {
         directionSlug,
@@ -554,6 +560,7 @@ export async function createProjectFromRoadmap(
       mode: paperType,
       language,
       citationStyle,
+      ...(context?.template ? { template: context.template } : {}),
       paperPassport,
     }),
   });

@@ -160,12 +160,16 @@ export async function loadAgentProject(
     .filter((c): c is string => Boolean(c));
 
   // WritingBlueprint 必须嵌套在 globalContext.blueprint（勿把蓝图 JSON 整坨当作 WritingGlobalContext）
+  const targetJournal = paperConfig?.targetJournal?.trim() || undefined;
+  const targetWordCount = paperConfig?.wordCount?.trim() || undefined;
   const globalContext: WritingGlobalContext | undefined =
     blueprint
     || abstractText
     || project.outline
     || Object.keys(sectionPreviews).length > 0
     || analysisResults.length > 0
+    || targetJournal
+    || targetWordCount
       ? {
           abstract: abstractText || undefined,
           outline: project.outline || undefined,
@@ -174,6 +178,8 @@ export async function loadAgentProject(
           analysisResults:
             analysisResults.length > 0 ? analysisResults : undefined,
           blueprint: blueprint ?? null,
+          targetJournal,
+          targetWordCount,
         }
       : undefined;
 

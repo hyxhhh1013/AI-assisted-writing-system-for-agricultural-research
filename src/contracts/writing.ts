@@ -138,6 +138,8 @@ export interface WritingRequest {
     sectionBodies?: Record<string, string>;
     analysisResults?: string[];
     blueprint?: import("./writing-blueprint").WritingBlueprint | null;
+    targetJournal?: string;
+    targetWordCount?: string;
   };
   verificationFeedback?: string;
   /** 写作模式：review=综述 research=研究论文 */

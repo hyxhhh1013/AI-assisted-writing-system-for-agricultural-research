@@ -158,9 +158,11 @@ export function buildOutlinePrompt(params: {
   userSkeleton?: string[];
   skeletonFromAttachment?: boolean;
   frameworkBlock?: string;
+  routeHint?: string;
 }): string {
-  if (params.projectMode === "research") {
-    return buildResearchOutlinePrompt(params);
-  }
-  return buildReviewOutlinePrompt(params);
+  const base = params.projectMode === "research"
+    ? buildResearchOutlinePrompt(params)
+    : buildReviewOutlinePrompt(params);
+  const hint = params.routeHint?.trim();
+  return hint ? `${base}\n\n【写作路线】\n${hint}` : base;
 }

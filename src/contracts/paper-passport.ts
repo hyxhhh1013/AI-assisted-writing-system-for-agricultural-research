@@ -20,6 +20,12 @@ export const PAPER_PHASE_LABELS: readonly string[] = [
 /** Agent 写作入口（对齐 academic-paper 常用场景，新建项目时选定） */
 export type AgentEntryModeId = "full" | "outline_ready" | "data_ready";
 
+/** 与 template-sections 的 TemplateId 对齐。旧护照可以没有。 */
+export type PaperTemplateId = "sci" | "ieee" | "gbt7713" | "nature" | "cas";
+
+/** Agent 画图三档。未写入时画图仍回退 nature。 */
+export type ChartPresetId = "nature" | "agr_journal" | "print_bw";
+
 export interface PaperConfigRecord {
   paperTitle: string;
   paperType: "review" | "research";
@@ -29,6 +35,10 @@ export interface PaperConfigRecord {
   citationStyle: "gbt7714" | "vancouver" | "apa7" | "ieee";
   /** 可选：写作入口；旧项目可能没有 */
   agentEntryMode?: AgentEntryModeId;
+  /** 可选：期刊格式模板，与 Project.template 同步 */
+  template?: PaperTemplateId;
+  /** 可选：图表栏宽预设。Agent 未指定 preset 时使用 */
+  chartPreset?: ChartPresetId;
 }
 
 export interface PaperPassportSource {
@@ -128,6 +138,18 @@ function isPaperConfigRecord(value: unknown): value is PaperConfigRecord {
       typeof value.agentEntryMode === "string"
       && AGENT_ENTRY_MODE_IDS.has(value.agentEntryMode as AgentEntryModeId)
     );
+  const templateOk =
+    value.template === undefined
+    || value.template === "sci"
+    || value.template === "ieee"
+    || value.template === "gbt7713"
+    || value.template === "nature"
+    || value.template === "cas";
+  const chartOk =
+    value.chartPreset === undefined
+    || value.chartPreset === "nature"
+    || value.chartPreset === "agr_journal"
+    || value.chartPreset === "print_bw";
   return (
     typeof value.paperTitle === "string"
     && (value.paperType === "review" || value.paperType === "research")
@@ -137,6 +159,8 @@ function isPaperConfigRecord(value: unknown): value is PaperConfigRecord {
     && typeof value.citationStyle === "string"
     && CITATION_STYLES.has(value.citationStyle as PaperConfigRecord["citationStyle"])
     && entryOk
+    && templateOk
+    && chartOk
   );
 }
 
@@ -321,12 +345,26 @@ export function paperConfigToRecord(config: {
   language: "zh" | "en";
   citationStyle: "gbt7714" | "vancouver" | "apa7" | "ieee";
   agentEntryMode?: AgentEntryModeId;
+  template?: string;
+  chartPreset?: string;
 }): PaperConfigRecord {
-  const { agentEntryMode, ...rest } = config;
+  const { agentEntryMode, template, chartPreset, ...rest } = config;
+  const templateOk =
+    template === "sci"
+    || template === "ieee"
+    || template === "gbt7713"
+    || template === "nature"
+    || template === "cas";
+  const chartOk =
+    chartPreset === "nature"
+    || chartPreset === "agr_journal"
+    || chartPreset === "print_bw";
   return {
     ...rest,
     ...(agentEntryMode && AGENT_ENTRY_MODE_IDS.has(agentEntryMode)
       ? { agentEntryMode }
       : {}),
+    ...(templateOk ? { template } : {}),
+    ...(chartOk ? { chartPreset } : {}),
   };
 }

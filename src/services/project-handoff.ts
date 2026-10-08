@@ -34,6 +34,7 @@ export async function createProjectWithHandoff(
       mode: config.paperType,
       language: config.language,
       citationStyle: config.citationStyle,
+      ...(config.template ? { template: config.template } : {}),
       paperPassport,
     }),
   });
@@ -66,6 +67,8 @@ export function buildConfigFromWizard(
   wordCount: string,
   citationStyle: PaperConfigRecord["citationStyle"],
   agentEntryMode?: PaperConfigRecord["agentEntryMode"],
+  template?: PaperConfigRecord["template"],
+  chartPreset?: PaperConfigRecord["chartPreset"],
 ): PaperConfigRecord {
   return paperConfigToRecord({
     paperTitle: paperTitle.trim() || "未命名项目",
@@ -75,5 +78,7 @@ export function buildConfigFromWizard(
     language,
     citationStyle,
     ...(agentEntryMode ? { agentEntryMode } : {}),
+    ...(template ? { template } : {}),
+    ...(chartPreset ? { chartPreset } : {}),
   });
 }

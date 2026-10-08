@@ -12,7 +12,7 @@ const STYLES = new Set(["gbt7714", "vancouver", "apa7", "ieee"]);
 export const updatePaperConfigTool: ToolDefinition = {
   name: "update_paper_config",
   description:
-    "更新 PaperPassport 配置（题目、综述/研究、语言、引用格式、目标期刊、词数）。用户确认题目/体例后调用；会同步写回 Project 元数据",
+    "更新 PaperPassport 配置（题目、综述/研究、语言、引用格式、目标期刊、词数、模板、图表预设）。用户确认后调用；会同步写回 Project 元数据。不要根据刊名自行推断模板或图表预设",
   parameters: {
     type: "object",
     properties: {
@@ -34,6 +34,16 @@ export const updatePaperConfigTool: ToolDefinition = {
       },
       targetJournal: { type: "string", description: "目标期刊（可空字符串）" },
       wordCount: { type: "string", description: "目标词数/字数说明，如 8000" },
+      template: {
+        type: "string",
+        description: "期刊格式模板。未传则保留原值，不要按刊名猜测",
+        enum: ["sci", "nature", "ieee", "gbt7713", "cas"],
+      },
+      chartPreset: {
+        type: "string",
+        description: "图表预设。未传则保留原值",
+        enum: ["nature", "agr_journal", "print_bw"],
+      },
       agentEntryMode: {
         type: "string",
         description: "写作入口：full / outline_ready / data_ready",
@@ -83,6 +93,19 @@ export const updatePaperConfigTool: ToolDefinition = {
         ? entryRaw
         : undefined;
 
+    const templateRaw = String(params.template ?? prev?.template ?? "");
+    const template = (
+      templateRaw === "sci"
+      || templateRaw === "nature"
+      || templateRaw === "ieee"
+      || templateRaw === "gbt7713"
+      || templateRaw === "cas"
+    ) ? templateRaw : undefined;
+    const presetRaw = String(params.chartPreset ?? prev?.chartPreset ?? "");
+    const chartPreset = (
+      presetRaw === "nature" || presetRaw === "agr_journal" || presetRaw === "print_bw"
+    ) ? presetRaw : undefined;
+
     const config: PaperConfigRecord = {
       paperTitle:
         String(params.paperTitle ?? prev?.paperTitle ?? project.title).trim() || project.title,
@@ -96,6 +119,8 @@ export const updatePaperConfigTool: ToolDefinition = {
       wordCount:
         String(params.wordCount ?? prev?.wordCount ?? "").trim() || "未定",
       ...(agentEntryMode ? { agentEntryMode } : {}),
+      ...(template ? { template } : {}),
+      ...(chartPreset ? { chartPreset } : {}),
     };
 
     if (!config.paperTitle.trim()) {

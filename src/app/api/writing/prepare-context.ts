@@ -225,6 +225,8 @@ ${globalContext.blueprint
         sectionInstruction: resolvedSectionPrompt,
         evidenceSummary,
         projectMode,
+        targetJournal: globalContext?.targetJournal,
+        targetWordCount: globalContext?.targetWordCount,
       })
     : buildWriterSystemPrompt({
         section,
@@ -241,6 +243,8 @@ ${globalContext.blueprint
           getSectionNumberForMode(section, projectMode) ??
           getTemplateSectionNumber(template || "sci", section, projectMode),
         citationStyle: typeof citationStyle === "string" ? citationStyle : "gbt7714",
+        targetJournal: globalContext?.targetJournal,
+        targetWordCount: globalContext?.targetWordCount,
       });
 
   return {

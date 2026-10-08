@@ -10,6 +10,7 @@ import {
   formatBlueprintValidationError,
 } from "@/lib/blueprint-coerce";
 import { computeOutlineHash } from "@/lib/blueprint-utils";
+import { blueprintRouteHint } from "@/lib/agent/entry-route";
 import { buildBlueprintPrompt } from "@/lib/prompts/blueprint";
 import { syncProjectPaperPassport } from "@/lib/project-paper-passport-sync";
 import { writeWritingBlueprint } from "@/lib/project-writing-blueprint-db";
@@ -86,6 +87,7 @@ export const generateWritingBlueprintTool: ToolDefinition = {
       projectMode: project.mode,
       targetJournal: project.paperConfig?.targetJournal?.trim() || undefined,
       targetWordCount: targetWordCount || undefined,
+      routeHint: blueprintRouteHint(project.agentEntryMode, project.mode),
       bibliographyBlock: formatProjectBibliographyBlock({
         references: project.references,
         evidence: project.referenceEvidence,
