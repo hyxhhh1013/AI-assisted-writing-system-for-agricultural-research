@@ -81,14 +81,36 @@ def _panel_label(i: int) -> str:
     return chr(ord("a") + i)
 
 
-def _composite(images, config):
+def _place_panels(spans, cols):
+    """按列数和跨列摆面板。span=2 只在 cols>=2 且当前行放得下时生效。"""
+    positions = []
+    row, col = 0, 0
+    for span in spans:
+        width = 2 if cols >= 2 and span == 2 else 1
+        if col + width > cols:
+            row += 1
+            col = 0
+        positions.append((row, col, width))
+        col += width
+        if col >= cols:
+            row += 1
+            col = 0
+    rows = row if col == 0 else row + 1
+    return positions, rows
+
+
+def _composite(images, config, spans):
     """把子图按网格拼合成期刊复合图，左上角加 a/b/c 标号。"""
     from PIL import Image, ImageDraw, ImageFont
     from matplotlib import font_manager
 
     n = len(images)
-    cols = 3 if n >= 4 else (2 if n >= 2 else 1)
-    rows = (n + cols - 1) // cols
+    raw_cols = config.get("cols")
+    if raw_cols in (1, 2, 3, "1", "2", "3"):
+        cols = int(raw_cols)
+    else:
+        cols = 3 if n >= 4 else (2 if n >= 2 else 1)
+    positions, rows = _place_panels(spans, cols)
     CELL_W = 1000
     gap = 44
     pad = 26
@@ -99,24 +121,31 @@ def _composite(images, config):
     label_font = ImageFont.truetype(font_path, 46)
     title_font = ImageFont.truetype(font_path, 40)
 
-    cells = []
-    for img in images:
+    scaled = []
+    for img, (_row, _col, width) in zip(images, positions):
+        target_w = width * CELL_W + (width - 1) * gap
         w, h = img.size
-        scale = CELL_W / w
-        cells.append(img.resize((CELL_W, max(int(h * scale), 1)), Image.LANCZOS))
-    cell_h = max(c.size[1] for c in cells)
+        scale = target_w / max(w, 1)
+        scaled.append(img.resize((target_w, max(int(h * scale), 1)), Image.LANCZOS))
+
+    row_h = [1] * max(rows, 1)
+    for cell, (row, _col, _width) in zip(scaled, positions):
+        row_h[row] = max(row_h[row], cell.size[1])
 
     W = cols * CELL_W + (cols - 1) * gap + 2 * pad
-    H = rows * cell_h + (rows - 1) * gap + 2 * pad + title_h
+    H = sum(row_h) + max(rows - 1, 0) * gap + 2 * pad + title_h
     canvas = Image.new("RGB", (W, H), "white")
     draw = ImageDraw.Draw(canvas)
     if title:
         draw.text((pad, 12), title, fill="#111111", font=title_font)
 
-    for i, cell in enumerate(cells):
-        r, c = divmod(i, cols)
-        x = pad + c * (CELL_W + gap)
-        y = pad + title_h + r * (cell_h + gap)
+    y_cursor = [pad + title_h]
+    for r in range(1, rows):
+        y_cursor.append(y_cursor[-1] + row_h[r - 1] + gap)
+
+    for i, (cell, (row, col, _width)) in enumerate(zip(scaled, positions)):
+        x = pad + col * (CELL_W + gap)
+        y = y_cursor[row]
         canvas.paste(cell, (x, y))
         draw.text((x + 8, y + 6), _panel_label(i), fill="#111111", font=label_font)
 
@@ -157,14 +186,33 @@ def main():
                 if not labels or not datasets:
                     raise ValueError(f"面板 {i + 1}（{chart_id}）数据解析失败")
 
+                style = {}
+                palette = str(p.get("palette") or "").strip()
+                if palette:
+                    style["palette"] = palette
+                is_stack = chart_id == "stack_offset"
                 sub_cfg = {
                     "title": str(p.get("title", "") or ""),
-                    "x_label": str(p.get("x_label", "") or ""),
-                    "y_label": str(p.get("y_label", "") or ""),
+                    "x_label": str(p.get("x_label") or p.get("xLabel") or ""),
+                    "y_label": str(p.get("y_label") or p.get("yLabel") or ""),
                     "preset": preset,
-                    "show_values": True,
+                    "show_values": False if is_stack else True,
                     "columns": 1,
+                    "y_min": p.get("y_min", p.get("yMin")),
+                    "y_max": p.get("y_max", p.get("yMax")),
+                    "show_legend": p.get("show_legend", p.get("showLegend", not is_stack)),
                 }
+                if is_stack:
+                    sub_cfg["offset"] = p.get("offset", 0.9)
+                    sub_cfg["normalize"] = p.get("normalize", True)
+                    sub_cfg["series_labels"] = p.get("series_labels", p.get("seriesLabels", False))
+                    sub_cfg["x_reverse"] = p.get("x_reverse", p.get("xReverse", False))
+                    if p.get("peaks"):
+                        sub_cfg["peaks"] = p.get("peaks")
+                    if p.get("guides"):
+                        sub_cfg["guides"] = p.get("guides")
+                if style:
+                    sub_cfg["style"] = style
                 out = os.path.join(tmp, f"panel_{i}.png")
                 _dispatch_chart(chart_id, labels, datasets, sub_cfg, out)
 
@@ -175,7 +223,11 @@ def main():
         if not images:
             raise ValueError("没有可拼合的面板")
 
-        composite = _composite(images, cfg)
+        spans = [
+            2 if isinstance(p, dict) and p.get("span") in (2, "2") else 1
+            for p in panels
+        ]
+        composite = _composite(images, cfg, spans)
         composite.save(args.output)
 
         print(json.dumps(

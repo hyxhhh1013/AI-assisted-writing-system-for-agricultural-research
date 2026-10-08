@@ -13,7 +13,7 @@
 <!-- API_INDEX:AUTO:START -->
 ## 路由表（自动生成）
 
-> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-10-07 15:31:09**（共 **113** 个 route 文件，validateBody **55**，SSE **11**，requireAdmin **28**）。
+> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-10-08 07:50:55**（共 **115** 个 route 文件，validateBody **56**，SSE **11**，requireAdmin **28**）。
 
 图例：zod = 使用 validateBody；SSE = 含 text/event-stream / ReadableStream；admin = 含 requireAdmin。
 
@@ -33,6 +33,7 @@
 | GET, POST, PATCH, DELETE | `/api/projects` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/analysis-results` | ✓ | — | — |
 | GET, PATCH | `/api/projects/[id]/charts` | ✓ | — | — |
+| GET | `/api/projects/[id]/data-preview` | — | — | — |
 | PATCH | `/api/projects/[id]/meta` | ✓ | — | — |
 | PATCH | `/api/projects/[id]/paper-passport` | ✓ | — | — |
 | POST | `/api/projects/[id]/paper-passport/sync` | — | — | — |
@@ -133,6 +134,7 @@
 | 方法 | 路径 | zod | SSE | admin |
 |------|------|-----|-----|-------|
 | POST | `/api/chart` | — | — | — |
+| POST | `/api/chart/composite` | ✓ | — | — |
 
 ### 三线表
 
@@ -281,6 +283,10 @@
 ### 查重 v2 SSE
 
 `Accept: text/event-stream` 时事件：`progress` | `done` | `error`（非 WritingSSE 联合类型）。
+
+### POST /api/chart/composite
+
+把 2～6 张已有数据图拼成 a/b/c 组图。Body：`title`、`preset`、`cols`（1–3）、`panels[]`（`chartType`、`csv`、轴标签、`yMin`/`yMax`、`showLegend`、`palette`、`span`）。返回 `imageUrl`。不直接写正文。
 
 ### POST /api/chart（FIG-QA）
 

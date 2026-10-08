@@ -19,11 +19,26 @@ export interface PanelSpec {
   title?: string;
   xLabel?: string;
   yLabel?: string;
+  yMin?: string;
+  yMax?: string;
+  showLegend?: boolean;
+  palette?: string;
+  /** 1 或 2。2 只在列数 ≥ 2 时占满两列 */
+  span?: 1 | 2;
+  /** 谱图面板：横轴从高到低（红外、XPS） */
+  xReverse?: boolean;
+  offset?: number;
+  normalize?: boolean;
+  seriesLabels?: boolean;
+  peaks?: { x: number; label: string; marker?: string; series?: string }[];
+  guides?: { x: number; label: string }[];
 }
 
 export interface RunPanelInput {
   title: string;
   preset?: "nature" | "agr_journal" | "print_bw";
+  /** 不传则沿用脚本里的自动列数 */
+  cols?: 1 | 2 | 3;
   panels: PanelSpec[];
 }
 
@@ -44,7 +59,25 @@ export async function runPanelGeneration(
   const pyConfig = {
     title: input.title,
     preset: input.preset ?? "nature",
-    panels: input.panels,
+    ...(input.cols ? { cols: input.cols } : {}),
+    panels: input.panels.map((panel) => ({
+      chartType: panel.chartType,
+      csv: panel.csv,
+      title: panel.title ?? "",
+      x_label: panel.xLabel ?? "",
+      y_label: panel.yLabel ?? "",
+      ...(panel.yMin?.trim() ? { y_min: panel.yMin.trim() } : {}),
+      ...(panel.yMax?.trim() ? { y_max: panel.yMax.trim() } : {}),
+      ...(panel.showLegend === false ? { show_legend: false } : {}),
+      ...(panel.palette?.trim() ? { palette: panel.palette.trim() } : {}),
+      ...(panel.span === 2 ? { span: 2 } : {}),
+      ...(panel.xReverse ? { x_reverse: true } : {}),
+      ...(panel.offset != null ? { offset: panel.offset } : {}),
+      ...(panel.normalize != null ? { normalize: panel.normalize } : {}),
+      ...(panel.seriesLabels != null ? { series_labels: panel.seriesLabels } : {}),
+      ...(panel.peaks && panel.peaks.length > 0 ? { peaks: panel.peaks } : {}),
+      ...(panel.guides && panel.guides.length > 0 ? { guides: panel.guides } : {}),
+    })),
   };
   fs.writeFileSync(configPath, JSON.stringify(pyConfig), "utf-8");
 
