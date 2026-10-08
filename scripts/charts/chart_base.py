@@ -9,6 +9,14 @@ import os
 import sys
 from typing import Any
 
+def _optional_float(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
 import matplotlib
 matplotlib.use("Agg")
 
@@ -116,6 +124,11 @@ class ChartModule:
                 ax.tick_params(axis="x", labelrotation=float(config["x_tick_rotation"]))
             except (TypeError, ValueError):
                 pass
+        lo = _optional_float(config.get("y_min"))
+        hi = _optional_float(config.get("y_max"))
+        if lo is not None or hi is not None:
+            cur_lo, cur_hi = ax.get_ylim()
+            ax.set_ylim(cur_lo if lo is None else lo, cur_hi if hi is None else hi)
 
     def finalize_axes(
         self,
@@ -140,6 +153,11 @@ class ChartModule:
         style_axes(ax, style, grid_axis=grid_axis)
         if config:
             self.apply_axis_extras(ax, config, style)
+            if config.get("show_legend") in (False, "false", "0", 0):
+                has_legend = False
+                existing = ax.get_legend()
+                if existing is not None:
+                    existing.remove()
         apply_legend(ax, style, has_legend)
 
     def save(self, fig, output_path: str, style: dict[str, Any]) -> list[str]:

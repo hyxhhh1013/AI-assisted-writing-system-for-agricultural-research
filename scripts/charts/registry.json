@@ -676,6 +676,25 @@
           "type": "boolean",
           "group": "chart_specific",
           "default": true
+        },
+        {
+          "key": "x_reverse",
+          "label": "横轴从高到低（红外）",
+          "type": "boolean",
+          "group": "chart_specific",
+          "default": false
+        },
+        {
+          "key": "peaks",
+          "label": "峰标记 JSON（仅用户给出的 x、名称、符号）",
+          "type": "text",
+          "group": "chart_specific"
+        },
+        {
+          "key": "guides",
+          "label": "参考线 JSON（仅用户给出的 x、名称）",
+          "type": "text",
+          "group": "chart_specific"
         }
       ]
     },
