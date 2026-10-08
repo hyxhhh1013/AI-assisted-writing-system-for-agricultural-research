@@ -1,3 +1,4 @@
+import { userAskedToRegenerateOutline } from "@/lib/agent/entry-route";
 import type { AgentProjectSnapshot } from "@/lib/agent/project-loader";
 import { isOutlineReady } from "@/lib/outline-threshold";
 
@@ -25,7 +26,7 @@ export function checkAgentToolPhaseGate(
   toolName: string,
   params: Record<string, unknown>,
   project: AgentProjectSnapshot | null | undefined,
-  opts?: { configApproved?: boolean },
+  opts?: { configApproved?: boolean; userGoal?: string },
 ): PhaseGateResult {
   const structureTools = new Set([
     "generate_outline",
@@ -43,6 +44,17 @@ export function checkAgentToolPhaseGate(
         ok: false,
         error:
           "论文配置还没确认。请先让用户完成配置问答（题目、类型、语言、引用格式、篇幅），不要生成大纲或写作蓝图。",
+      };
+    }
+    if (
+      toolName === "generate_outline"
+      && project.agentEntryMode === "outline_ready"
+      && !userAskedToRegenerateOutline(opts?.userGoal ?? "")
+    ) {
+      return {
+        ok: false,
+        error:
+          "已有大纲入口：用户没要求重做、大改或生成大纲时不要 generate_outline。请让用户把提纲贴进项目，或 read_project_asset(outline)；缺蓝图再 generate_writing_blueprint。",
       };
     }
     if (toolName === "generate_writing_blueprint" && !outlineReady(project)) {
@@ -85,6 +97,13 @@ export function checkAgentToolPhaseGate(
 
   if (toolName === "write_section" || toolName === "refine_content") {
     if (!outlineReady(project)) {
+      if (project.agentEntryMode === "outline_ready") {
+        return {
+          ok: false,
+          error:
+            "尚未有可用大纲。请让用户把已有提纲贴进项目后再写。用户没要求重做时不要 generate_outline。",
+        };
+      }
       return {
         ok: false,
         error:
@@ -101,6 +120,34 @@ export function checkAgentToolPhaseGate(
     }
 
     const section = String(params.section ?? "").trim();
+    if (
+      toolName === "write_section"
+      && section === "results"
+      && project.mode === "research"
+      && project.dataClaims.length === 0
+    ) {
+      return {
+        ok: false,
+        error:
+          "结果章需要证据声明。请先 ingest_project_data 导入表格，或请用户明确本稿先不写定量结果。不要编造数值。",
+      };
+    }
+    if (
+      toolName === "write_section"
+      && section === "introduction"
+      && project.agentEntryMode === "data_ready"
+      && project.mode === "research"
+    ) {
+      const charsOf = (key: string) =>
+        project.sectionFills.find((s) => s.key === key)?.chars ?? 0;
+      if (charsOf("methods") < 80 && charsOf("results") < 80) {
+        return {
+          ok: false,
+          error:
+            "已有数据入口要先写方法与结果，再写引言。请 write_section(section=methods)。",
+        };
+      }
+    }
     if (toolName === "write_section" && section === "abstract" && !hasBodyDraft(project)) {
       return {
         ok: false,
@@ -124,5 +171,6 @@ export function phaseGatePromptRules(): string {
 - 写章节若缺大纲：先问用户「出一版」还是贴骨架，不要静默生成
 - 无正文时不要写摘要 / write_bilingual_abstract
 - 引用以 validate_citations 为准；不编造文献
-- 审查最多 2 轮；满轮后总结问题并征求用户是否继续改`;
+- 审查最多 2 轮；满轮后总结问题并征求用户是否继续改
+- 项目简报里的「路线」优先于上面的默认主路径`;
 }

@@ -24,7 +24,7 @@ export const AGENT_ENTRY_MODES: AgentEntryModeOption[] = [
     label: "从零推进",
     hint: "配置 → 文献 → 大纲 → 分节写",
     goalPrefix:
-      "【写作入口=full｜对齐 academic-paper full】按需补配置/文献/大纲后再写。缺大纲先问用户出一版或贴骨架；大纲和写作蓝图写回后都要等用户批准。每轮只写一节或导入一批，然后停下来问下一步。",
+      "【写作入口=full】按路线走完：文献够用再出大纲；大纲和写作蓝图都要等人批；然后按文稿顺序一节一节写。研究型结果章没有证据声明就停。目标期刊和字数贯彻到每一节。每轮只交付一步。",
   },
   {
     id: "outline_ready",
@@ -32,8 +32,7 @@ export const AGENT_ENTRY_MODES: AgentEntryModeOption[] = [
     label: "已有大纲",
     hint: "按现有大纲写，不主动重做结构",
     goalPrefix:
-      "【写作入口=outline_ready｜用户已有大纲】优先 read_project_asset(outline)；除非用户明确要求重做/大改，不要 generate_outline。"
-      + "缺文献再 search/import；然后按大纲 write_section。",
+      "【写作入口=outline_ready】用户已有大纲。没要求重做或大改就不要 generate_outline。先读或请用户贴提纲，再沿用标题出蓝图并等人批，然后按提纲顺序写。缺文献只补当前节。",
   },
   {
     id: "data_ready",
@@ -41,9 +40,9 @@ export const AGENT_ENTRY_MODES: AgentEntryModeOption[] = [
     label: "已有数据",
     hint: "先看数据/图表，再写方法与结果",
     goalPrefix:
-      "【写作入口=data_ready｜用户已有实验/分析数据】先 list_plot_sources / read_project_asset(analysis_notes)；"
-      + "若还没有数据源，用 ingest_project_data（附件或粘贴 CSV）入库。"
-      + "优先 methods/results 与配图（generate_chart / generate_xrd_analysis）；引言综述可后置。禁止编造数值。",
+      "【写作入口=data_ready】先核对附件里的数据块和已有图，ingest_project_data 等用户在确认卡勾选后再形成证据声明。"
+      + "没有声明不要出大纲、不要写结果。研究型写作顺序：方法 → 结果 → 讨论 → 引言 → 结论。"
+      + "图上数值必须出现在确认卡并经用户勾选后才能当证据。禁止把没确认的读图数字写进正文，禁止先写引言。综述的图表可选，起草仍按综述顺序。",
   },
 ];
 

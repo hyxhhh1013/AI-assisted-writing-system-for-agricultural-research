@@ -170,6 +170,7 @@ export function evaluatePreGates(input: PreGateInput): GateVerdict {
 export const phaseGate: PreToolGate = ({ tool, params, agentContext, state }) => {
   const gate = checkAgentToolPhaseGate(tool.name, params, agentContext.projectSnapshot, {
     configApproved: (state.approvedCheckpointKinds ?? []).includes("config_confirm"),
+    userGoal: state.goal,
   });
   return gate.ok ? { ok: true } : { ok: false, kind: "reject", error: gate.error };
 };

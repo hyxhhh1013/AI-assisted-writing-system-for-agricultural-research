@@ -1,4 +1,6 @@
 import { assessDataFoundation } from "@/lib/agent/data-foundation";
+import { formatEntryRouteBrief } from "@/lib/agent/entry-route";
+import { suggestVenueProfile } from "@/lib/venues/registry";
 import type { AgentProjectSnapshot } from "@/lib/agent/project-loader";
 import { formatLabScopeBlock } from "@/lib/agent/lab-scope";
 import {
@@ -85,6 +87,17 @@ export function formatAgentProjectBriefing(
     `PaperConfig：${project.hasPaperConfig ? "已填写" : "未填写（可用 update_paper_config）"}`,
     `目标字数：${project.paperConfig?.wordCount?.trim() || "（未填）"}`,
     `目标期刊：${project.paperConfig?.targetJournal?.trim() || "（未定刊）"}`,
+    ...(() => {
+      const journal = project.paperConfig?.targetJournal?.trim() ?? "";
+      const suggestion = suggestVenueProfile(journal);
+      if (!suggestion) return [];
+      const template = project.template || "sci";
+      if (suggestion.language === project.language && suggestion.template === template) return [];
+      const languageLabel = suggestion.language === "en" ? "英文" : "中文";
+      return [
+        `刊名与规格不一致：按「${journal}」应为${languageLabel}、模板 ${suggestion.template}，当前是${project.language === "en" ? "英文" : "中文"}、模板 ${template}。不要自行改配置，等用户在项目设置里确认。`,
+      ];
+    })(),
     `写作入口：${
       project.agentEntryMode === "outline_ready"
         ? "已有大纲（勿主动 generate_outline）"
@@ -94,6 +107,14 @@ export function formatAgentProjectBriefing(
             ? "从零推进（配置→文献→大纲→分节写）"
             : "未选定（新建项目时可设；或 update_paper_config）"
     }`,
+    ...(() => {
+      const route = formatEntryRouteBrief(
+        project.agentEntryMode,
+        project.mode === "research" ? "research" : "review",
+        project.template,
+      );
+      return route ? [route] : [];
+    })(),
     `文献条数：${project.references.length}`,
     assessDataFoundation({
       claimCount: project.dataClaims.length,

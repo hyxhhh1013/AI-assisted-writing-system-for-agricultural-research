@@ -54,7 +54,10 @@ import type { ParagraphSelectionAction } from "@/components/shared/writing/parag
 import { WorkbenchEditorArea } from "@/components/shared/workbench-editor-area";
 import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
 import { ProjectHandoffBanner } from "@/components/shared/project/project-handoff-banner";
-import { parsePaperPassport } from "@/contracts/paper-passport";
+import { paperConfigToRecord, parsePaperPassport } from "@/contracts/paper-passport";
+import { parseDataClaims } from "@/contracts/project";
+import { openingWorkbenchTab } from "@/lib/agent/entry-route";
+import { patchPaperPassportConfig } from "@/services/project";
 import { getModeAccent, getStructurePanelTitle, getStructurePanelHint } from "@/lib/mode-theme";
 import { siteTheme } from "@/lib/site-theme";
 import { cn } from "@/lib/utils";
@@ -439,6 +442,22 @@ function WorkbenchContent() {
     }
   }, [projectId, searchParams]);
 
+  const entryRoutedIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!project.id || project.id !== projectId) return;
+    if (searchParams.get("tab")) return;
+    if (entryRoutedIdRef.current === project.id) return;
+    entryRoutedIdRef.current = project.id;
+    const cfg = parsePaperPassport(project.paperPassport ?? null)?.config;
+    const tab = openingWorkbenchTab({
+      entryMode: cfg?.agentEntryMode ?? null,
+      outlineChars: (project.outline ?? "").trim().length,
+      claimCount: parseDataClaims(project).length,
+      paperMode: project.mode === "research" ? "research" : "review",
+    });
+    if (tab) setActiveTab(tab);
+  }, [project.id, project.paperPassport, project.outline, project.dataClaims, project.mode, projectId, searchParams]);
+
   // 当切换章节或项目内容被 Agent/导入刷新时同步编辑器
   useEffect(() => {
     if (activeSection === "abstract") {
@@ -556,6 +575,9 @@ function WorkbenchContent() {
         || info.tool === "apply_revision_item"
         || info.tool === "write_bilingual_abstract"
         || info.tool === "generate_chart"
+        || info.tool === "plot_peak_stack"
+        || info.tool === "plot_panel_grid"
+        || info.tool === "plot_curve_overlay"
         || info.tool === "draft_mechanism_figure"
         || info.tool === "illustrate_mechanism_figure"
         || info.tool === "remove_figure"
@@ -668,6 +690,10 @@ function WorkbenchContent() {
     referencesText: string;
     citationStyle?: "gbt7714" | "vancouver" | "apa7" | "ieee";
     language: ProjectLanguage;
+    targetJournal: string;
+    wordCount: string;
+    agentEntryMode: import("@/contracts/paper-passport").AgentEntryModeId | "";
+    chartPreset: import("@/contracts/paper-passport").ChartPresetId;
   }) => {
     const updated: ProjectData = {
       ...project,
@@ -690,6 +716,29 @@ function WorkbenchContent() {
       await projectStore.replaceReferences(project.id, refLines);
     }
     await projectStore.save(updated);
+    if (project.id) {
+      try {
+        const prevCfg = parsePaperPassport(project.paperPassport ?? null)?.config;
+        const config = paperConfigToRecord({
+          paperTitle: draft.title.trim() || prevCfg?.paperTitle || "未命名项目",
+          paperType: project.mode === "research" ? "research" : "review",
+          targetJournal: draft.targetJournal.trim(),
+          wordCount: draft.wordCount || prevCfg?.wordCount || "8000-12000",
+          language: draft.language,
+          citationStyle: draft.citationStyle || "gbt7714",
+          template: draft.template,
+          chartPreset: draft.chartPreset,
+          ...(draft.agentEntryMode
+            ? { agentEntryMode: draft.agentEntryMode }
+            : {}),
+        });
+        const saved = await patchPaperPassportConfig(project.id, config);
+        setProject((prev) => prev ? { ...prev, ...updated, paperPassport: saved.paperPassport } : updated);
+      } catch (error: unknown) {
+        toast.error(error instanceof Error ? error.message : "目标期刊和写作入口没写入");
+        return;
+      }
+    }
     setIsMetaDialogOpen(false);
     toast.success("项目信息已更新");
   };

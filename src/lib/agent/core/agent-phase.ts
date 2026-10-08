@@ -5,6 +5,8 @@
 
 import type { IntentKind } from "@/contracts/agent-intent";
 import type { AgentPhaseId, AgentPhaseState } from "@/contracts/agent-phase";
+import type { AgentEntryModeId } from "@/contracts/paper-passport";
+import { nextResearchTemplateSection, resolveEntryRoutePhase } from "@/lib/agent/entry-route";
 import type { AgentProjectSnapshot } from "@/lib/agent/project-loader";
 import {
   evaluateDraftCoverage,
@@ -23,6 +25,13 @@ export interface SuggestNextAgentActionsInput {
   referenceCount?: number;
   nextSectionKey?: string | null;
   thinOrGapSections?: string[];
+  /** 未选定 / full 时不改原下一步文案 */
+  entryMode?: AgentEntryModeId | null;
+  paperMode?: "review" | "research";
+  claimCount?: number;
+  sectionChars?: Record<string, number>;
+  /** 研究型起草顺序。缺省按 sci */
+  template?: string;
 }
 
 export interface ResolveAgentPhaseInput {
@@ -112,8 +121,38 @@ export function resolveAgentPhaseFromSignals(
   const phase = input.currentPhase;
   const hasOutline = input.hasOutline;
   const writeEnabled = input.writeEnabled;
-  const writeTarget = writeTargetOf(input);
+  const templateWrite = input.sectionChars
+    ? nextResearchTemplateSection({
+      entryMode: input.entryMode,
+      template: input.template,
+      sectionChars: input.sectionChars,
+      thinKeys: input.thinOrGapSections,
+    })
+    : null;
+  const writeTarget = input.paperMode === "research"
+    ? (templateWrite ?? writeTargetOf(input))
+    : writeTargetOf(input);
   const refN = input.referenceCount ?? 0;
+
+  const routed = resolveEntryRoutePhase({
+    entryMode: input.entryMode ?? null,
+    paperMode: input.paperMode === "research" ? "research" : "review",
+    hasOutline,
+    hasWritingBlueprint: Boolean(input.hasWritingBlueprint),
+    referenceCount: refN,
+    claimCount: input.claimCount ?? 0,
+    currentPhase: phase ?? null,
+    sectionChars: input.sectionChars ?? {},
+    thinKeys: input.thinOrGapSections,
+    writeEnabled,
+    template: input.template,
+  });
+  if (routed) {
+    return phaseState(routed.phase, routed.packPhase, routed.nextAction, {
+      ...(routed.subStep ? { subStep: routed.subStep } : {}),
+      ...(routed.nextSectionKey ? { nextSectionKey: routed.nextSectionKey } : {}),
+    });
+  }
 
   if ((phase ?? 0) >= 7) {
     return phaseState("review", 7, "运行下一轮论文审查");
@@ -189,6 +228,13 @@ function signalsFromSnapshot(input: ResolveAgentPhaseInput): SuggestNextAgentAct
       .filter((s) => s.chars === 0 && s.key !== "abstract")
       .map((s) => s.key),
     referenceCount: snapshot?.references.length ?? 0,
+    entryMode: snapshot?.agentEntryMode ?? null,
+    paperMode: snapshot?.mode === "research" ? "research" : "review",
+    template: snapshot?.template || "sci",
+    claimCount: snapshot?.dataClaims.length ?? 0,
+    sectionChars: Object.fromEntries(
+      (snapshot?.sectionFills ?? []).map((s) => [s.key, s.chars]),
+    ),
     nextSectionKey: coverage?.nextSectionKey,
     thinOrGapSections: coverage
       ? [...coverage.requiredGaps, ...coverage.thinKeys]

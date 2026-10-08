@@ -341,7 +341,7 @@ export async function* runAgentGraphLoop(
     };
     // importItems 可能含大段摘要：只供 execute 用，不塞进 action 事件 / uiTranscript，避免快照膨胀
     const displayParams: Record<string, unknown> = Object.fromEntries(
-      Object.entries(trustedParams).filter(([k]) => k !== "importItems"),
+      Object.entries(trustedParams).filter(([k]) => k !== "importItems" && k !== "dataItems"),
     );
     yield { type: "agent/status", status: "executing" };
     const actionEvent: AgentSSEEvent = {
