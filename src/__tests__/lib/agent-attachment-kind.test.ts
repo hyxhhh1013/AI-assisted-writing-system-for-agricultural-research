@@ -14,6 +14,8 @@ describe("inferAttachmentKind", () => {
     expect(inferAttachmentKind("sample.xy")).toBe("instrument");
     expect(inferAttachmentKind("scan.ras")).toBe("instrument");
     expect(inferAttachmentKind("fig.png")).toBe("image");
+    expect(inferAttachmentKind("scan.TIFF")).toBe("image");
+    expect(inferAttachmentKind("plate.tif")).toBe("image");
     expect(inferAttachmentKind("paper.pdf")).toBe("document");
   });
 });
@@ -39,7 +41,17 @@ describe("formatAttachmentChipBadge", () => {
     ).toBe("分析失败");
   });
 
-  it("文献/图片不显示入库徽章", () => {
+  it("未确认的表格显示待确认", () => {
+    expect(
+      formatAttachmentChipBadge({
+        kind: "tabular",
+        extractStatus: "ready",
+        ingest: { status: "pending" },
+      }),
+    ).toBe("待确认");
+  });
+
+  it("文献不显示入库徽章，已有图显示待登记", () => {
     expect(
       formatAttachmentChipBadge({
         kind: "document",
@@ -47,6 +59,12 @@ describe("formatAttachmentChipBadge", () => {
         ingest: { status: "skipped" },
       }),
     ).toBeNull();
+    expect(
+      formatAttachmentChipBadge({
+        kind: "image",
+        extractStatus: "ready",
+      }),
+    ).toBe("待登记");
   });
 });
 

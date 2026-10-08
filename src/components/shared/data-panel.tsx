@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,11 +16,19 @@ import { getDataPanelTitle } from "@/lib/mode-theme";
 import { getModuleHref, listModules } from "@/lib/module-registry";
 import { RegisteredChartsCard } from "@/components/shared/plot/registered-charts-card";
 import { useEvidence } from "@/hooks/use-evidence";
-import { parseDataFileToSummary } from "@/lib/parse-data-file";
+import {
+  inventorySheetGrids,
+  loadTabularGrids,
+  sliceTableBlock,
+  withoutCurveStatistics,
+  type SheetGrid,
+  type TableBlock,
+} from "@/lib/data-block-inventory";
 import { streamDataAnalysis } from "@/services/analysis";
+import { analyzeData } from "@/services/data-analysis";
 import { getProject } from "@/services/project";
 import { projectStore } from "@/lib/store";
-import { EvidenceHubSections } from "@/components/shared/evidence-hub-sections";
+import { withStoredPreview } from "@/lib/data-table-snapshot";
 import { TabPanelShell } from "@/components/shared/tab-panel-shell";
 import { AiResultDisclaimer } from "@/components/shared/ai-result-disclaimer";
 import {
@@ -36,6 +45,20 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+function summarizeBlocks(blocks: TableBlock[], selected: Set<number>): string {
+  const picked = blocks.filter((_, i) => selected.has(i));
+  return JSON.stringify(
+    picked.map((block) => ({
+      label: block.label,
+      sheet: block.sheetName,
+      headers: block.headers,
+      preview: block.preview,
+    })),
+    null,
+    2,
+  );
+}
+
 interface DataPanelProps {
   projectId: string;
   project: ProjectData;
@@ -48,16 +71,19 @@ export function DataPanel({
   projectId,
   project,
   onSave,
-  onInsertClaim,
   onOpenProjectSettings,
 }: DataPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState("");
+  const [fileDragOver, setFileDragOver] = useState(false);
   const [dataSummary, setDataSummary] = useState("");
   const [researchDirection, setResearchDirection] = useState(project.researchDirection || "");
   const [narrativeResult, setNarrativeResult] = useState("");
   const [isGeneratingNarrative, setIsGeneratingNarrative] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [sheets, setSheets] = useState<SheetGrid[]>([]);
+  const [blocks, setBlocks] = useState<TableBlock[]>([]);
+  const [selectedBlocks, setSelectedBlocks] = useState<Set<number>>(new Set());
 
   const evidence = useEvidence({
     projectId,
@@ -131,20 +157,45 @@ export function DataPanel({
     );
   }
 
+  const loadSpreadsheet = async (file: File) => {
+    const name = file.name.toLowerCase();
+    if (!/\.(csv|xlsx|xls|tsv)$/.test(name)) {
+      toast.error("这里请拖入 CSV 或 Excel。已有图请拖到写作助手。");
+      return;
+    }
+    try {
+      const grids = await loadTabularGrids(await file.arrayBuffer(), file.name);
+      const found = inventorySheetGrids(grids, file.name);
+      setSheets(grids);
+      setBlocks(found);
+      setSelectedBlocks(new Set(found.map((_, i) => i)));
+      setFileName(file.name);
+      setPendingFile(file);
+      setDataSummary(summarizeBlocks(found, new Set(found.map((_, i) => i))));
+      if (found.length === 0) {
+        toast.error("没有识别到可入库的数据表，请检查表头和至少一行数据");
+      } else {
+        toast.success(`识别到 ${found.length} 块数据。请勾选要对上的块，再提取。`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "文件解析失败");
+    }
+  };
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
+    await loadSpreadsheet(file);
+  };
 
-    try {
-      const parsed = await parseDataFileToSummary(file);
-      setFileName(parsed.fileName);
-      setDataSummary(parsed.dataSummary);
-      setPendingFile(file);
-      toast.success(`已加载 ${parsed.fileName}，可提取证据或生成文字描述`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "文件解析失败");
-    }
+  const onSpreadsheetDrop = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setFileDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    void loadSpreadsheet(file);
   };
 
   const handleExtractEvidence = async () => {
@@ -152,12 +203,47 @@ export function DataPanel({
       fileInputRef.current?.click();
       return;
     }
+    const picked = blocks.filter((_, i) => selectedBlocks.has(i));
+    if (picked.length === 0) {
+      toast.error("请至少勾选一块数据。不对的块不要入库。");
+      return;
+    }
     try {
-      await evidence.uploadAndAnalyze(pendingFile);
-      toast.success("已提取并保存结构化证据");
+      const results = picked.flatMap((block) => {
+        const sheet = sheets.find((s) => s.sheetName === block.locator.sheetName) ?? sheets[0];
+        if (!sheet) return [];
+        const { headers, rows } = sliceTableBlock(sheet.grid, block.locator);
+        if (headers.length === 0 || rows.length === 0) return [];
+        const analyzed = withoutCurveStatistics(
+          analyzeData(headers, rows, block.sourceFileName),
+          headers,
+          rows,
+          block.label,
+        );
+        return [{
+          ...analyzed,
+          analysis: withStoredPreview(analyzed.analysis, headers, rows, { sheetName: block.sheetName }),
+        }];
+      });
+      if (results.length === 0) {
+        toast.error("勾选的块没有有效数据行");
+        return;
+      }
+      await evidence.saveAnalyzedBatch(results);
+      toast.success(`已按勾选提取 ${results.length} 块数据`);
     } catch {
       toast.error("证据提取失败");
     }
+  };
+
+  const toggleBlock = (index: number, checked: boolean) => {
+    setSelectedBlocks((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(index);
+      else next.delete(index);
+      setDataSummary(summarizeBlocks(blocks, next));
+      return next;
+    });
   };
 
   const saveNarrativeToProject = async (text: string) => {
@@ -201,7 +287,7 @@ export function DataPanel({
               实验数据
             </CardTitle>
             <CardDescription className="text-xs">
-              上传一次，分别提取可引用证据（扩写用）与 AI 趋势描述（Results 草稿）。
+              一个文件里的多个工作表、空行隔开的多张表会分开列出。勾选并核对含义后再提取，未勾选的不入库。
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -214,17 +300,57 @@ export function DataPanel({
             />
             <button
               type="button"
-              className="flex flex-col items-center justify-center w-full h-20 border-2 border-dashed rounded-lg cursor-pointer bg-muted/50 hover:bg-muted transition-colors"
+              className={`flex flex-col items-center justify-center w-full h-20 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
+                fileDragOver ? "border-primary bg-primary/10" : "bg-muted/50 hover:bg-muted"
+              }`}
               onClick={() => fileInputRef.current?.click()}
+              onDragEnter={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setFileDragOver(true);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                e.dataTransfer.dropEffect = "copy";
+                setFileDragOver(true);
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setFileDragOver(false);
+              }}
+              onDrop={onSpreadsheetDrop}
             >
               <Upload className="w-5 h-5 mb-1 text-muted-foreground" />
-              <p className="text-[10px] text-muted-foreground">点击上传 CSV / Excel</p>
+              <p className="text-[10px] text-muted-foreground">点击或拖入 CSV / Excel</p>
             </button>
             {fileName && (
               <div className="flex items-center p-2 text-[10px] bg-primary/10 text-primary rounded-md truncate">
                 <FileSpreadsheet className="mr-1 h-3 w-3 shrink-0" />
                 {fileName}
               </div>
+            )}
+            {blocks.length > 0 && (
+              <ul className="max-h-48 space-y-1.5 overflow-y-auto">
+                {blocks.map((block, index) => (
+                  <li key={block.id} className="rounded-md border px-2 py-1.5">
+                    <label className="flex items-start gap-2 text-[11px]">
+                      <Checkbox
+                        className="mt-0.5"
+                        checked={selectedBlocks.has(index)}
+                        onCheckedChange={(value) => toggleBlock(index, value === true)}
+                      />
+                      <span className="min-w-0">
+                        <span className="font-medium">{block.label}</span>
+                        <span className="mt-0.5 block text-muted-foreground">
+                          {block.sheetName} · {block.rowCount} 行 · {block.headers.filter(Boolean).slice(0, 4).join(" / ")}
+                        </span>
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
             )}
 
             <div className="space-y-1.5">
@@ -241,7 +367,7 @@ export function DataPanel({
               <Button
                 size="sm"
                 className="w-full text-xs"
-                disabled={!pendingFile || evidence.isAnalyzing || evidence.isSaving}
+                disabled={!pendingFile || selectedBlocks.size === 0 || evidence.isAnalyzing || evidence.isSaving}
                 onClick={() => void handleExtractEvidence()}
               >
                 {evidence.isAnalyzing ? (
@@ -329,18 +455,21 @@ export function DataPanel({
           </Card>
         )}
 
-        <EvidenceHubSections
-          claims={evidence.claims}
-          summaries={evidence.summaries}
-          injectionPreview={evidence.injectionPreview}
-          chartConfigs={evidence.chartConfigs}
-          projectCharts={parseProjectCharts(project.charts)}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">已入库的数据</CardTitle>
+            <CardDescription className="text-xs">
+              {evidence.sources.length > 0
+                ? `已有 ${evidence.sources.length} 块。在写作助手顶栏点「数据」，逐条打开看原表。这一页不再展开摘要和证据。`
+                : "确认入库之后，在写作助手顶栏点「数据」逐条查看。"}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+
+        <RegisteredChartsCard
           projectId={projectId}
-          isSaving={evidence.isSaving}
-          onUpdateClaim={evidence.updateClaim}
-          onRemoveClaim={evidence.removeClaim}
-          onInsertClaim={onInsertClaim}
-          onChartInserted={handleChartInserted}
+          charts={parseProjectCharts(project.charts)}
+          onInserted={handleChartInserted}
         />
 
         {fileName && (

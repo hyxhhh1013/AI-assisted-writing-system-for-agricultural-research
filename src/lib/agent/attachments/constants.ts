@@ -13,8 +13,8 @@ export const ATTACHMENT_ROOT = "data/attachments";
 /** 允许的扩展名（小写，不含点） */
 export const ATTACHMENT_ALLOWED_EXTENSIONS = new Set([
   "pdf", "docx", "txt", "md", "tex", "ris", "bib",
-  "csv", "xlsx", "xls",
+  "csv", "xlsx", "xls", "dpt",
   "xy", "xyd", "ras", "raw", "uxd", "dif",
-  "png", "jpg", "jpeg", "webp", "gif",
+  "png", "jpg", "jpeg", "webp", "gif", "tif", "tiff",
 ]);
-export const ATTACHMENT_IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "gif"]);
+export const ATTACHMENT_IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "gif", "tif", "tiff"]);

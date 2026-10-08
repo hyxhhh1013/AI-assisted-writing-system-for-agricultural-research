@@ -23,7 +23,8 @@ import {
   AgentSummaryContent,
   AgentWorkingIndicator,
 } from "@/components/shared/agent/agent-thought";
-import { AgentInputBar } from "@/components/shared/agent/agent-input";
+import { AgentInputBar, type AgentInputBarHandle } from "@/components/shared/agent/agent-input";
+import { ProjectDataButton } from "@/components/shared/agent/project-data-button";
 import {
   collectTurnContinueSignals,
   INSPECT_GOAL,
@@ -42,10 +43,10 @@ import { AgentCitationReportCard } from "@/components/shared/agent/agent-citatio
 import { AgentPlanCard } from "@/components/shared/agent/agent-plan";
 import { WritingStatusCard } from "@/components/shared/agent/writing-status-card";
 import { isWriteStatusLive } from "@/lib/agent/write-status";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { getProject, patchPaperPassportConfig } from "@/services/project";
 import { projectStore } from "@/lib/store";
-import type { ProjectData } from "@/contracts/project";
+import { parseDataClaims, parseDataSources, type ProjectData } from "@/contracts/project";
 import { parsePaperPassport, type PaperConfigRecord } from "@/contracts/paper-passport";
 import { formatConfigQaSummary, hasCompletePaperConfig } from "@/lib/agent/config-qa";
 import {
@@ -67,6 +68,7 @@ import type { FigureReviseFormValue, FigureReviseTarget } from "@/contracts/figu
 import { parseProjectCharts } from "@/contracts/figure";
 import { getProjectWritingMode, getSectionLabelForMode } from "@/lib/section-registry";
 import { AgentFigureDock } from "@/components/shared/agent/agent-figure-dock";
+import { parseDataConfirmItems } from "@/lib/agent/data-confirm-view";
 import { parseImportConfirmItems } from "@/lib/agent/import-confirm-view";
 
 const easeOut = [0.22, 1, 0.36, 1] as const;
@@ -152,6 +154,9 @@ export function AgentPanel({
     onProjectMutated,
   });
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputBarRef = useRef<AgentInputBarHandle>(null);
+  const fileDragDepth = useRef(0);
+  const [fileDragOver, setFileDragOver] = useState(false);
   const [project, setProject] = useState<ProjectData | null>(null);
   const [quickPrompts, setQuickPrompts] = useState<string[]>([]);
   const [thinOrGapSections, setThinOrGapSections] = useState<string[]>([]);
@@ -492,8 +497,17 @@ export function AgentPanel({
     if (atBottom) el.scrollTop = el.scrollHeight;
   }, [agent.messages, agent.status, agent.streamingText, agent.pendingCheckpoint, agent.pendingConfirm, agent.writeStatus, atBottom]);
 
-  /** import_reference 确认卡候选变化时重置勾选：默认只勾本次请求的篇（defaultSelectedIndices） */
+  /** 确认卡候选变化时重置勾选。文献默认只勾本次请求的篇；数据块默认全选，由用户取消不对的块。 */
   useEffect(() => {
+    if (agent.pendingConfirm?.tool === "ingest_project_data") {
+      const items = agent.pendingConfirm.params?.dataItems;
+      if (!Array.isArray(items) || items.length === 0) {
+        setImportSelection(null);
+        return;
+      }
+      setImportSelection(new Set(items.map((_, i) => i)));
+      return;
+    }
     const items = agent.pendingConfirm?.params?.importItems;
     if (!Array.isArray(items)) {
       setImportSelection(null);
@@ -611,9 +625,17 @@ export function AgentPanel({
     () => parseImportConfirmItems(agent.pendingConfirm?.params?.importItems),
     [agent.pendingConfirm],
   );
+  const confirmDataItems = useMemo(
+    () => parseDataConfirmItems(agent.pendingConfirm?.params?.dataItems),
+    [agent.pendingConfirm],
+  );
   const isImportBatchConfirm =
     agent.pendingConfirm?.tool === "import_reference" && confirmImportItems.length > 0;
-  const importSelectedCount = isImportBatchConfirm ? (importSelection?.size ?? 0) : 0;
+  const isDataBatchConfirm =
+    agent.pendingConfirm?.tool === "ingest_project_data" && confirmDataItems.length > 0;
+  const importSelectedCount = (isImportBatchConfirm || isDataBatchConfirm)
+    ? (importSelection?.size ?? 0)
+    : 0;
   const importProgressPct =
     agent.importProgress && agent.importProgress.total > 0
       ? Math.min(100, Math.round((agent.importProgress.done / agent.importProgress.total) * 100))
@@ -634,12 +656,14 @@ export function AgentPanel({
         setImportSelection(new Set());
         return;
       }
-      const items = agent.pendingConfirm?.params?.importItems;
+      const items = isDataBatchConfirm
+        ? agent.pendingConfirm?.params?.dataItems
+        : agent.pendingConfirm?.params?.importItems;
       if (Array.isArray(items)) {
         setImportSelection(new Set(items.map((_, i) => i)));
       }
     },
-    [agent.pendingConfirm],
+    [agent.pendingConfirm, isDataBatchConfirm],
   );
 
   /** 确认导入：记住候选标题列表（进度卡渲染逐篇状态），再触发批量导入 */
@@ -649,11 +673,12 @@ export function AgentPanel({
         confirmImportItems.map((x) => x.title || "(无标题)"),
       );
     }
+    const passSelection = isImportBatchConfirm || isDataBatchConfirm;
     void agent.resolveConfirm(
       true,
-      isImportBatchConfirm ? [...(importSelection ?? [])] : undefined,
+      passSelection ? [...(importSelection ?? [])] : undefined,
     );
-  }, [isImportBatchConfirm, confirmImportItems, importSelection, agent]);
+  }, [isImportBatchConfirm, isDataBatchConfirm, confirmImportItems, importSelection, agent]);
 
   /** 配图结果卡「按意见改」：结构化表单 → 强制 replace */
   const handleReviseFigure = useCallback(
@@ -700,8 +725,48 @@ export function AgentPanel({
     return mergeProjectChartsIntoDock(fromSession, charts, 6, projectId);
   }, [agent.messages, project, projectId]);
 
+  const dragHasFiles = (e: DragEvent) =>
+    Array.from(e.dataTransfer.types).includes("Files");
+
+  const onPanelDragEnter = (e: DragEvent) => {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    fileDragDepth.current += 1;
+    setFileDragOver(true);
+  };
+
+  const onPanelDragOver = (e: DragEvent) => {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = projectId && !agent.isRunning ? "copy" : "none";
+  };
+
+  const onPanelDragLeave = (e: DragEvent) => {
+    if (!dragHasFiles(e)) return;
+    fileDragDepth.current = Math.max(0, fileDragDepth.current - 1);
+    if (fileDragDepth.current === 0) setFileDragOver(false);
+  };
+
+  const onPanelDrop = (e: DragEvent) => {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    fileDragDepth.current = 0;
+    setFileDragOver(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+    if (!projectId) return;
+    if (agent.isRunning) return;
+    inputBarRef.current?.addFiles(files);
+  };
+
   return (
-    <div className={cn("flex h-full min-h-0 flex-col overflow-hidden bg-[#fafaf8]", className)}>
+    <div
+      className={cn("relative flex h-full min-h-0 flex-col overflow-hidden bg-[#fafaf8]", className)}
+      onDragEnter={onPanelDragEnter}
+      onDragOver={onPanelDragOver}
+      onDragLeave={onPanelDragLeave}
+      onDrop={onPanelDrop}
+    >
       {/* 顶栏：标题 + 状态 + 操作 */}
       <header className="shrink-0 border-b border-border/50 bg-white/90 px-4 py-2.5">
         <div className="flex items-center gap-2">
@@ -732,6 +797,19 @@ export function AgentPanel({
             )}
           </span>
           <div className="ml-auto flex items-center gap-0.5">
+            <ProjectDataButton
+              projectId={projectId}
+              sources={project ? parseDataSources(project) : []}
+              claims={project ? parseDataClaims(project) : []}
+              askDisabled={agent.isRunning}
+              onAsk={(goal) => { void agent.sendGoal(goal); }}
+              onChanged={() => {
+                if (!projectId) return;
+                void getProject(projectId).then((next) => {
+                  if (next) applyProjectSnapshot(next);
+                });
+              }}
+            />
             {onOpenBlueprint ? (
               <Button
                 type="button"
@@ -854,7 +932,7 @@ export function AgentPanel({
               >
                 {configComplete
                   ? entryModeLabel
-                    ? `改配置（${entryModeLabel}）`
+                    ? `改配置（${entryModeLabel}${paperConfig?.targetJournal?.trim() ? ` · ${paperConfig.targetJournal.trim()}` : ""}）`
                     : "改论文信息"
                   : "填写论文信息"}
               </button>
@@ -1429,6 +1507,7 @@ export function AgentPanel({
               open={hitlPageOpen}
               onOpenChange={handleHitlOpenChange}
               importItems={isImportBatchConfirm ? confirmImportItems : []}
+              dataItems={isDataBatchConfirm ? confirmDataItems : []}
               importSelected={importSelection}
               onToggleImport={toggleImportItem}
               onSetAllImport={setAllImport}
@@ -1494,7 +1573,21 @@ export function AgentPanel({
       ) : null}
 
       {/* 输入始终可见 */}
+      {fileDragOver ? (
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-[#f6f8f6]/92">
+          <div className="rounded-2xl border-2 border-dashed border-[#1a5632] bg-white px-8 py-6 text-center shadow-sm">
+            <p className="text-sm font-medium text-[#122820]">
+              {agent.isRunning ? "助手正在处理，稍后再拖入" : "松开即可加入"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              表格、已有图（含 TIFF）会先列出，核对后再写入
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       <AgentInputBar
+        ref={inputBarRef}
         disabled={!projectId}
         isRunning={agent.isRunning}
         writeEnabled={WRITE_PUBLIC}

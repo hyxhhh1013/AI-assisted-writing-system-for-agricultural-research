@@ -8,10 +8,14 @@ export const runtime = "nodejs";
 const PUBLIC_CHARTS_DIR = path.join(process.cwd(), "public", "charts");
 
 const SAFE_FILENAME =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|svg|pdf|tiff?|csv|json)$/i;
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|jpe?g|webp|gif|svg|pdf|tiff?|csv|json)$/i;
 
 const MIME: Record<string, string> = {
   png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
   svg: "image/svg+xml",
   pdf: "application/pdf",
   tif: "image/tiff",

@@ -1,7 +1,14 @@
 "use client";
 
 import { Loader2, Paperclip, Send, Square, X } from "lucide-react";
-import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -40,6 +47,10 @@ const FALLBACK_READ = [
 /** 附件-only 发送（无文本）时的默认 goal */
 const ATTACHMENT_DEFAULT_GOAL = "请基于我上传的附件帮我处理";
 
+export interface AgentInputBarHandle {
+  addFiles: (files: File[]) => void;
+}
+
 interface AgentInputBarProps {
   disabled?: boolean;
   isRunning?: boolean;
@@ -65,18 +76,22 @@ type Chip = {
   pinning?: boolean;
 };
 
-export function AgentInputBar({
-  disabled,
-  isRunning,
-  writeEnabled,
-  prompts,
-  sessionId,
-  projectId,
-  continueHint,
-  onSend,
-  onCancel,
-  onJumpToSection,
-}: AgentInputBarProps) {
+export const AgentInputBar = forwardRef<AgentInputBarHandle, AgentInputBarProps>(
+  function AgentInputBar(
+    {
+      disabled,
+      isRunning,
+      writeEnabled,
+      prompts,
+      sessionId,
+      projectId,
+      continueHint,
+      onSend,
+      onCancel,
+      onJumpToSection,
+    },
+    ref,
+  ) {
   const [value, setValue] = useState("");
   const [chips, setChips] = useState<Chip[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -204,21 +219,14 @@ export function AgentInputBar({
     }
   };
 
+  useImperativeHandle(ref, () => ({ addFiles: enqueueFiles }));
+
   const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files) {
       enqueueFiles(Array.from(files));
     }
     e.target.value = "";
-  };
-
-  const onDrop = (e: DragEvent) => {
-    e.preventDefault();
-    if (disabled || isRunning) return;
-    const files = e.dataTransfer.files;
-    if (files) {
-      enqueueFiles(Array.from(files));
-    }
   };
 
   const removeChip = (chip: Chip) => {
@@ -365,15 +373,11 @@ export function AgentInputBar({
           })}
         </div>
       ) : null}
-      <div
-        className="flex items-end gap-2"
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={onDrop}
-      >
+      <div className="flex items-end gap-2">
         <input
           ref={inputRef}
           type="file"
-          accept=".pdf,.docx,.txt,.md,.tex,.ris,.bib,.csv,.xlsx,.xls,.xy,.xyd,.ras,.raw,.uxd,.dif,.png,.jpg,.jpeg,.webp,.gif"
+          accept=".pdf,.docx,.txt,.md,.tex,.ris,.bib,.csv,.xlsx,.xls,.dpt,.xy,.xyd,.ras,.raw,.uxd,.dif,.png,.jpg,.jpeg,.webp,.gif,.tif,.tiff"
           multiple
           className="hidden"
           onChange={onFileChange}
@@ -392,7 +396,7 @@ export function AgentInputBar({
         <Textarea
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder="跟助手说你想做什么…（Enter 发送，Shift+Enter 换行）"
+          placeholder="跟助手说你想做什么，或把表格、已有图拖进来…（Enter 发送，Shift+Enter 换行）"
           className="min-h-[48px] max-h-36 flex-1 resize-none rounded-xl border-border/60 bg-[#fafaf8] text-[13.5px] leading-relaxed"
           rows={2}
           disabled={disabled || isRunning}
@@ -429,4 +433,4 @@ export function AgentInputBar({
       </div>
     </div>
   );
-}
+});

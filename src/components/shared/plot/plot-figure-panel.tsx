@@ -105,6 +105,7 @@ export interface PlotFigurePanelProps {
   toolPrefill?: PlotToolPrefill | null;
   onInsertToPaper: (imageUrl: string, caption: string, replay?: PlotInsertReplay) => void;
   onInsertTable?: (caption: string, html: string, statsText: string) => void;
+  onUseProjectPrefill?: (prefill: ChartPanelPrefill) => void;
 }
 
 /** 按 registry 条目渲染作图主内容区（替代 plot-page-client 内大 switch） */
@@ -118,6 +119,7 @@ export function PlotFigurePanel({
   toolPrefill,
   onInsertToPaper,
   onInsertTable,
+  onUseProjectPrefill,
 }: PlotFigurePanelProps) {
   if (figure.category === "dft") {
     const dftRender = DFT_PANELS[figure.id];
@@ -136,6 +138,7 @@ export function PlotFigurePanel({
         registryEntry={figure}
         globalStyleFields={registry.global_style_fields as ChartRegistryField[] | undefined}
         prefill={activePrefill}
+        onUseProjectPrefill={onUseProjectPrefill}
       />
     );
   }
@@ -151,12 +154,20 @@ export function PlotFigurePanel({
         registryEntry={figure}
         globalStyleFields={registry.global_style_fields as ChartRegistryField[] | undefined}
         prefill={activePrefill}
+        onUseProjectPrefill={onUseProjectPrefill}
       />
     );
   }
 
   if (figure.category === "table") {
-    return <TablePanel key={figure.id} {...toolProps} onInsertTable={onInsertTable} />;
+    return (
+      <TablePanel
+        key={figure.id}
+        {...toolProps}
+        projectId={projectId !== "default" ? projectId : undefined}
+        onInsertTable={onInsertTable}
+      />
+    );
   }
 
   const diagramRender = DIAGRAM_PANELS[figure.id];

@@ -12,6 +12,7 @@ import { sanitizeHtml } from "@/lib/sanitize-html";
 import { getErrorMessage } from "@/lib/error-utils";
 import { PlotWorkspace } from "@/components/shared/plot/plot-workspace";
 import { PlotPreviewPane } from "@/components/shared/plot/plot-preview-pane";
+import { ProjectTableStarter } from "@/components/shared/plot/project-data-starter";
 import type { PlotToolProps } from "@/components/shared/plot/plot-tool-props";
 
 interface GroupInput {
@@ -27,7 +28,12 @@ interface PosthocInput {
   p: string;
 }
 
-export function TablePanel({ title: toolTitle, description, onInsertTable }: PlotToolProps) {
+export function TablePanel({
+  title: toolTitle,
+  description,
+  onInsertTable,
+  projectId,
+}: PlotToolProps & { projectId?: string }) {
   const [title, setTitle] = useState("表1 ");
   const [columnHeader, setColumnHeader] = useState("指标");
   const [groups, setGroups] = useState<GroupInput[]>([
@@ -117,6 +123,19 @@ export function TablePanel({ title: toolTitle, description, onInsertTable }: Plo
       config={
         <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-4 px-4 pb-5 pt-3">
+            <ProjectTableStarter
+              projectId={projectId}
+              onPick={(seeds, variable) => {
+                setGroups(seeds.map((seed) => ({
+                  label: seed.label,
+                  n: seed.n,
+                  mean: seed.mean,
+                  sd: seed.sd,
+                })));
+                setColumnHeader(variable);
+                toast.message("已填入分组均值，改完再生成。");
+              }}
+            />
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <Label className="text-xs">表标题</Label>

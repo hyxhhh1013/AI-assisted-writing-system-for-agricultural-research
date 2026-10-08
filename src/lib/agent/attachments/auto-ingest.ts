@@ -1,20 +1,14 @@
 /**
- * 表格附件自动入库：与 ingest_project_data 同一套 analyzeFile + persist。
- * 幂等：同 fileName 覆盖。
+ * 表格附件不再自动写入项目。
+ * 这里只查询「这个文件（或它拆出的数据块）是否已经由用户确认入库」。
  */
 
-import { analyzeFile } from "@/services/data-analysis";
 import { parseDataClaims, parseDataSources } from "@/contracts/project";
-import { readAttachmentFile } from "@/lib/agent/attachments/storage";
 import {
   inferAttachmentKind,
   type AttachmentIngestView,
 } from "@/lib/agent/attachments/kind";
-import {
-  persistIngestedAnalysis,
-  normalizeIngestSourceId,
-} from "@/lib/agent/ingest-project-data";
-import { enrichAnalysisWithPeakTable } from "@/lib/agent/xrd-ingested-peaks";
+import { normalizeIngestSourceId } from "@/lib/agent/ingest-project-data";
 import prisma from "@/lib/prisma";
 
 function countClaimsForFile(
@@ -26,29 +20,28 @@ function countClaimsForFile(
   return claims.filter((c) => c.sourceId === id || (stem.length > 0 && c.sourceId.includes(stem))).length;
 }
 
-function bufferToAnalyzeInput(buf: Buffer, fileName: string): string | ArrayBuffer {
-  const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
-  if (ext === "xlsx" || ext === "xls") {
-    const copy = new ArrayBuffer(buf.byteLength);
-    new Uint8Array(copy).set(buf);
-    return copy;
-  }
-  return buf.toString("utf8");
-}
-
 export function lookupIngestView(
   fileName: string,
   dataSourcesJson: string | null | undefined,
   dataClaimsJson: string | null | undefined,
 ): AttachmentIngestView | null {
   const sources = parseDataSources({ dataSources: dataSourcesJson ?? undefined });
-  const hit = sources.find((s) => s.fileName === fileName);
+  const hits = sources.filter((s) => sourceBelongsToUpload(s.fileName, fileName));
+  const hit = hits[0];
   if (!hit) return null;
   const claims = parseDataClaims({ dataClaims: dataClaimsJson ?? undefined });
+  const claimCount = hits.reduce(
+    (n, source) => n + countClaimsForFile(source.fileName, claims),
+    0,
+  );
   return {
     status: "ingested",
-    claimCount: countClaimsForFile(fileName, claims),
+    claimCount,
   };
+}
+
+function sourceBelongsToUpload(sourceFileName: string, uploadedName: string): boolean {
+  return sourceFileName === uploadedName || sourceFileName.startsWith(`${uploadedName} · `);
 }
 
 export async function maybeAutoIngestTabularAttachment(opts: {
@@ -74,35 +67,10 @@ export async function maybeAutoIngestTabularAttachment(opts: {
     existing.dataClaims,
   );
   if (already) return already;
-
-  let buf: Buffer;
-  try {
-    buf = readAttachmentFile(opts.userId, opts.attachmentId);
-  } catch {
-    return { status: "failed", error: "附件文件缺失" };
-  }
-
-  try {
-    const input = bufferToAnalyzeInput(buf, opts.fileName);
-    const { analysis: rawAnalysis, claims } = await analyzeFile(input, opts.fileName);
-    const analysis = await enrichAnalysisWithPeakTable(rawAnalysis, input, opts.fileName);
-    if (analysis.rowCount <= 0) {
-      return { status: "failed", error: "没有有效数据行" };
-    }
-    await persistIngestedAnalysis({
-      userId: opts.userId,
-      projectId: opts.projectId,
-      analysis,
-      claims,
-    });
-    return { status: "ingested", claimCount: claims.length };
-  } catch (err) {
-    const error = err instanceof Error ? err.message : "入库失败";
-    return { status: "failed", error };
-  }
+  return { status: "pending" };
 }
 
-/** 提取完成后：有 projectId 的表格自动入库，失败不回滚提取 */
+/** 提取完成后：只标记待确认，不把表格写入项目。 */
 export async function autoIngestAfterExtract(opts: {
   userId: string;
   projectId: string | null | undefined;

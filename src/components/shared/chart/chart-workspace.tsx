@@ -14,7 +14,9 @@ import {
   ClipboardPaste, Upload, Table2, Palette, Sparkles, BookmarkPlus,
   ChevronDown, ChevronRight,
 } from "lucide-react";
+import { toast } from "sonner";
 import type { ChartPanelPrefill } from "@/contracts/figure";
+import { ProjectChartStarter } from "@/components/shared/plot/project-data-starter";
 import {
   buildChartReplayFigureSpec,
   encodeChartAssetReplay,
@@ -31,6 +33,8 @@ interface ChartWorkspaceProps {
   prefill?: ChartPanelPrefill | null;
   projectId?: string;
   onInsertToPaper: (imageUrl: string, caption: string, replay?: PlotInsertReplay) => void;
+  /** 点已入库数据时切换到对应图种并预填 */
+  onUseProjectPrefill?: (prefill: ChartPanelPrefill) => void;
 }
 
 /** DPI 选项的人话标签 */
@@ -101,6 +105,7 @@ export function ChartWorkspace({
   prefill,
   projectId,
   onInsertToPaper,
+  onUseProjectPrefill,
 }: ChartWorkspaceProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
@@ -217,6 +222,21 @@ export function ChartWorkspace({
                     </div>
                   )}
 
+                  <ProjectChartStarter
+                    projectId={projectId}
+                    onPick={(next, note) => {
+                      toast.message(note);
+                      if (onUseProjectPrefill) {
+                        onUseProjectPrefill(next);
+                        return;
+                      }
+                      updatePasteText(next.pasteText);
+                      if (next.title) onFieldChange("title", next.title);
+                      if (next.xLabel) onFieldChange("x_label", next.xLabel);
+                      if (next.yLabel) onFieldChange("y_label", next.yLabel);
+                    }}
+                  />
+
                   <div className="flex gap-1 rounded-lg bg-[#1a5632]/6 p-0.5">
                     <Button
                       variant={inputMode === "paste" ? "default" : "ghost"}
@@ -257,6 +277,7 @@ export function ChartWorkspace({
                       </div>
                       <Textarea
                         className="min-h-[160px] font-mono text-xs leading-relaxed"
+                        placeholder="或把 CSV 贴在这里。首行是列名。"
                         value={pasteText}
                         onChange={(e) => {
                           updatePasteText(e.target.value);

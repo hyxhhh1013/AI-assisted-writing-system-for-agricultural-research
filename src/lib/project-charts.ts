@@ -11,7 +11,7 @@ function deleteChartFiles(urls: Array<string | undefined>): void {
   for (const url of urls) {
     if (!url) continue;
     const name = url.split("/").pop();
-    if (!name || !/^[0-9a-f-]{8,}\.(png|svg|pdf)$/i.test(name)) continue;
+    if (!name || !/^[0-9a-f-]{8,}\.(png|jpe?g|webp|gif|svg|pdf)$/i.test(name)) continue;
     const fp = path.join(getChartsDir(), name);
     try {
       if (fs.existsSync(fp)) fs.unlinkSync(fp);
@@ -105,7 +105,7 @@ export async function cleanupOrphanCharts(): Promise<number> {
   const chartsDir = getChartsDir();
   if (!fs.existsSync(chartsDir)) return 0;
   for (const f of fs.readdirSync(chartsDir)) {
-    if (!referenced.has(f) && /^[0-9a-f-]{8,}\.(png|svg|pdf)$/i.test(f)) {
+    if (!referenced.has(f) && /^[0-9a-f-]{8,}\.(png|jpe?g|webp|gif|svg|pdf)$/i.test(f)) {
       try {
         fs.unlinkSync(path.join(chartsDir, f));
         removed++;

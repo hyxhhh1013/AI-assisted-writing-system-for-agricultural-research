@@ -41,6 +41,15 @@ describe("extractAttachmentText", () => {
     expect(r.source).toBe("csv");
   });
 
+  it("keeps blank-row separated tables as separate blocks", async () => {
+    const csv = "group,yield\nA,1\n\n处理,株高\nCK,10\n";
+    const r = await extractAttachmentText(tmpFile("combo.csv", csv), "combo.csv");
+    expect(r.status).toBe("ready");
+    expect(r.text).toContain("yield");
+    expect(r.text).toContain("株高");
+    expect(r.text?.match(/### /g)?.length).toBe(2);
+  });
+
   it("extracts instrument xy as spectrum preview", async () => {
     const r = await extractAttachmentText(tmpFile("s.xy", "20.0 100\n21.0 110\n"), "s.xy");
     expect(r.status).toBe("ready");

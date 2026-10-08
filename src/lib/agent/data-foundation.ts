@@ -58,7 +58,7 @@ export function assessDataFoundation(input: DataFoundationInput): DataFoundation
 
 function formatDataFoundationBrief(f: Omit<DataFoundation, "brief">): string {
   if (f.status === "empty") {
-    return "数据根基：无。研究型写结果前请在 Agent 对话框上传 CSV/Excel（或仪器数据），不要编造数值。";
+    return "数据根基：无。研究型写结果前请上传 CSV/Excel，并在确认卡勾选数据块后再入库。不要编造数值，不要从已有图里读数字。";
   }
   if (f.status === "claims_only") {
     return `数据根基：仅有 ${f.claimCount} 条证据声明，尚无结构化表。写结果须引用这些声明；出图请先入库表格。`;

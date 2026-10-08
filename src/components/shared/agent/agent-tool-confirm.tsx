@@ -9,7 +9,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { AgentHitlBanner } from "@/components/shared/agent/agent-hitl-banner";
+import { DataConfirmList } from "@/components/shared/agent/data-confirm-list";
 import { ImportConfirmList } from "@/components/shared/agent/import-confirm-list";
+import type { DataConfirmItem } from "@/lib/agent/data-confirm-view";
 import type { ImportConfirmItem } from "@/lib/agent/import-confirm-view";
 import {
   confirmToolDetail,
@@ -25,6 +27,7 @@ interface AgentToolConfirmProps {
   open: boolean;
   onOpenChange: (open: boolean, details?: { reason?: string }) => void;
   importItems?: ImportConfirmItem[];
+  dataItems?: DataConfirmItem[];
   importSelected?: Set<number> | null;
   onToggleImport?: (idx: number, checked: boolean) => void;
   onSetAllImport?: (checked: boolean) => void;
@@ -40,6 +43,7 @@ export function AgentToolConfirm({
   open,
   onOpenChange,
   importItems = [],
+  dataItems = [],
   importSelected,
   onToggleImport,
   onSetAllImport,
@@ -49,11 +53,17 @@ export function AgentToolConfirm({
 }: AgentToolConfirmProps) {
   const danger = isDestructiveConfirmTool(tool);
   const isImport = tool === "import_reference" && importItems.length > 0;
+  const isData = tool === "ingest_project_data" && dataItems.length > 0;
   const title = confirmToolTitle(tool);
-  const detail = confirmToolDetail(tool, isImport ? importSelectedCount : undefined);
-  const confirmDisabled = isImport && importSelectedCount === 0;
+  const detail = confirmToolDetail(
+    tool,
+    isImport || isData ? importSelectedCount : undefined,
+  );
+  const confirmDisabled = (isImport || isData) && importSelectedCount === 0;
   const confirmLabel = isImport
     ? `确认导入 ${importSelectedCount} 篇`
+    : isData
+      ? `确认写入 ${importSelectedCount} 项`
     : danger
       ? "确认删除"
       : tool === "import_reference"
@@ -131,6 +141,14 @@ export function AgentToolConfirm({
                 onToggle={onToggleImport}
                 onSetAll={onSetAllImport}
                 className="mt-0"
+                listClassName="max-h-[min(48vh,22rem)]"
+              />
+            ) : isData && onToggleImport && onSetAllImport ? (
+              <DataConfirmList
+                items={dataItems}
+                selected={importSelected ?? null}
+                onToggle={onToggleImport}
+                onSetAll={onSetAllImport}
                 listClassName="max-h-[min(48vh,22rem)]"
               />
             ) : preview?.trim() ? (

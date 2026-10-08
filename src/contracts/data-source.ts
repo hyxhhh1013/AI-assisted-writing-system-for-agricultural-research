@@ -43,6 +43,13 @@ export interface DataSourceAnalysis {
   columns: ColumnInfo[];
   stats: VariableStats[];
   generatedAt: number;
+  /** 入库时留下的前若干行，供对话里点开查看。不是全表。 */
+  preview?: string[][];
+  previewTail?: string[][];
+  previewHeaders?: string[];
+  sheetName?: string;
+  note?: string;
+  attachmentId?: string;
   /** 分析时生成的推荐图表（随 dataSources JSON 持久化） */
   chartConfigs?: ChartConfig[];
   /** 峰表（two_theta + fwhm）；有则 XRD 可引用，禁止模型手填 peaksJson */

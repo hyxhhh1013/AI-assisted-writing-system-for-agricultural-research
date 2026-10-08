@@ -4,6 +4,10 @@ import {
 } from "@/lib/agent/literature-relevance";
 import { formatExternalLiteratureHit } from "@/lib/external-literature-format";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 /** 为人在环确认卡生成可读说明（含文献导入预览） */
 export function buildToolConfirmMessage(
   toolName: string,
@@ -120,6 +124,36 @@ export function buildToolConfirmMessage(
           + "批准后将按最近一次检索结果的对应编号导入。",
       };
     }
+  }
+
+  if (toolName === "ingest_project_data") {
+    const items = Array.isArray(params.dataItems) ? params.dataItems : [];
+    const tables = items.filter((item) => isRecord(item) && item.kind === "table").length;
+    const figures = items.filter((item) => isRecord(item) && item.kind === "figure").length;
+    const sectionKey = String(params.sectionKey ?? "").trim();
+    const lines = items.slice(0, 8).map((item) => {
+      if (!isRecord(item)) return "";
+      if (item.kind === "figure") {
+        const n = Array.isArray(item.readings) ? item.readings.length : 0;
+        return `图 · ${String(item.label ?? item.fileName ?? "")}${n > 0 ? `（读出 ${n} 个数值）` : "（没读出数值）"}`;
+      }
+      const headers = Array.isArray(item.headers)
+        ? item.headers.map((h) => String(h)).filter(Boolean).slice(0, 4).join(", ")
+        : "";
+      const rows = Number(item.rowCount ?? 0);
+      return `表 · ${String(item.label ?? "")}（${rows} 行${headers ? `：${headers}` : ""}）`;
+    }).filter(Boolean);
+    const err = String(params.inventoryError ?? "").trim();
+    return {
+      message:
+        (err
+          ? `还不能入库：${err}`
+          : `请核对助手给出的读法后再写入。表 ${tables} 块、已有图 ${figures} 张。`)
+        + "不对的取消勾选，并在对话里改正数值、单位和实验含义。"
+        + "已有图上读出的数只有勾选确认后才写成证据，写作才能引用；没读出的数不会进正文。"
+        + (sectionKey ? `\n已有图将插入章节 ${sectionKey}。` : "\n未指定章节时，已有图只登记，不自动插入正文。"),
+      preview: lines.join("\n"),
+    };
   }
 
   if (toolName === "remove_figure") {

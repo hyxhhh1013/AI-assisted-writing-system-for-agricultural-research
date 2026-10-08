@@ -64,6 +64,19 @@ describe("buildAttachmentManifest", () => {
     expect(text).toMatch(/不必再 ingest_project_data/);
   });
 
+  it("ready tabular stays unconfirmed until the user checks blocks", () => {
+    const info: AgentAttachmentInfo[] = [{
+      id: "a7", originalName: "combo.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      size: 200, status: "ready", extractSource: "excel", charCount: 80, truncated: false,
+      kind: "tabular", ingest: { status: "pending" },
+      pinned: false, createdAt: "2026-10-08T00:00:00Z",
+    }];
+    const text = buildAttachmentManifest(info);
+    expect(text).toContain("tablesJson");
+    expect(text).toContain("ingest_project_data");
+    expect(text).not.toMatch(/不必再 ingest_project_data/);
+  });
+
   it("empty returns empty string", () => {
     expect(buildAttachmentManifest([])).toBe("");
   });

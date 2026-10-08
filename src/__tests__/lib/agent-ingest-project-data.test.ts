@@ -28,7 +28,16 @@ vi.mock("@/lib/agent/attachments/storage", () => ({
   readAttachmentFile: vi.fn(),
 }));
 
+vi.mock("@/lib/agent/register-existing-figure", () => ({
+  isExistingFigureName: (name: string) => /\.(png|jpe?g|webp|gif|tiff?)$/i.test(name),
+  registerExistingFigure: vi.fn(async () => ({
+    imageUrl: "/api/charts/existing.png",
+    chartId: "chart-1",
+  })),
+}));
+
 import { readAttachmentFile } from "@/lib/agent/attachments/storage";
+import { registerExistingFigure } from "@/lib/agent/register-existing-figure";
 
 const mockReadFile = readAttachmentFile as unknown as ReturnType<typeof vi.fn>;
 
@@ -108,9 +117,19 @@ describe("ingest_project_data tool", () => {
     updateProject.mockResolvedValue({});
   });
 
-  it("粘贴 CSV 分析后只 PATCH dataSources/dataClaims", async () => {
+  it("未确认不写库", async () => {
     const r = await ingestProjectDataTool.execute(
       { csvData: CSV, fileName: "yield.csv" },
+      ctx(),
+    );
+    expect(r.success).toBe(false);
+    expect(r.error).toMatch(/确认/);
+    expect(updateProject).not.toHaveBeenCalled();
+  });
+
+  it("粘贴 CSV 分析后只 PATCH dataSources/dataClaims", async () => {
+    const r = await ingestProjectDataTool.execute(
+      { csvData: CSV, fileName: "yield.csv", userConfirmed: true },
       ctx(),
     );
     expect(r.success).toBe(true);
@@ -131,16 +150,16 @@ describe("ingest_project_data tool", () => {
 
   it("空表不写库", async () => {
     const r = await ingestProjectDataTool.execute(
-      { csvData: "a,b\n", fileName: "empty.csv" },
+      { csvData: "a,b\n", fileName: "empty.csv", userConfirmed: true },
       ctx(),
     );
     expect(r.success).toBe(false);
-    expect(r.error).toMatch(/没有有效数据行/);
+    expect(r.error).toMatch(/没有识别到/);
     expect(updateProject).not.toHaveBeenCalled();
   });
 
   it("缺参失败", async () => {
-    const r = await ingestProjectDataTool.execute({}, ctx());
+    const r = await ingestProjectDataTool.execute({ userConfirmed: true }, ctx());
     expect(r.success).toBe(false);
     expect(r.error).toMatch(/attachmentId|csvData/);
     expect(updateProject).not.toHaveBeenCalled();
@@ -165,7 +184,20 @@ describe("ingest_project_data tool", () => {
       originalName: "trial.csv",
     });
     mockReadFile.mockReturnValue(Buffer.from(CSV, "utf8"));
-    const r = await ingestProjectDataTool.execute({ attachmentId: "att1" }, ctx());
+    const r = await ingestProjectDataTool.execute(
+      {
+        attachmentId: "att1",
+        userConfirmed: true,
+        tablesJson: JSON.stringify([{
+          label: "产量",
+          note: "处理与产量",
+          sheet: "CSV",
+          headerRow: 1,
+          columns: [1, 2],
+        }]),
+      },
+      ctx(),
+    );
     expect(r.success).toBe(true);
     expect(mockReadFile).toHaveBeenCalledWith("u1", "att1");
     expect(updateProject).toHaveBeenCalled();
@@ -180,9 +212,82 @@ describe("ingest_project_data tool", () => {
       pinned: false,
       originalName: "paper.pdf",
     });
-    const r = await ingestProjectDataTool.execute({ fileId: "att1" }, ctx());
+    const r = await ingestProjectDataTool.execute(
+      { fileId: "att1", userConfirmed: true },
+      ctx(),
+    );
     expect(r.success).toBe(false);
-    expect(r.error).toMatch(/不是表格/);
+    expect(r.error).toMatch(/不是表格或图片/);
     expect(updateProject).not.toHaveBeenCalled();
+  });
+
+  it("组合表只写入勾选的那一块", async () => {
+    const csv = "group,yield\nA,1\n\n处理,株高\nCK,10\nT,12\n";
+    const r = await ingestProjectDataTool.execute(
+      { csvData: csv, fileName: "combo.csv", userConfirmed: true, selectedIndices: [0] },
+      ctx(),
+    );
+    expect(r.success).toBe(true);
+    expect(updateProject).toHaveBeenCalledTimes(1);
+    const data = updateProject.mock.calls[0][0].data as { dataSources: string };
+    const sources = JSON.parse(data.dataSources) as DataSourceAnalysis[];
+    expect(sources).toHaveLength(1);
+    expect(sources[0]?.fileName).toContain("combo.csv ·");
+    expect(sources[0]?.columns.some((c) => c.name === "yield")).toBe(true);
+    expect(sources[0]?.columns.some((c) => c.name === "株高")).toBe(false);
+  });
+
+  it("已有图只登记，不写数据声明", async () => {
+    findAttachment.mockResolvedValue({
+      id: "fig1",
+      userId: "u1",
+      sessionId: "s1",
+      projectId: "p1",
+      pinned: false,
+      originalName: "结果图.png",
+    });
+    mockReadFile.mockReturnValue(Buffer.from("png"));
+    const r = await ingestProjectDataTool.execute(
+      { attachmentId: "fig1", userConfirmed: true },
+      ctx(),
+    );
+    expect(r.success).toBe(true);
+    expect(registerExistingFigure).toHaveBeenCalled();
+    expect(updateProject).not.toHaveBeenCalled();
+    expect(r.summary).toMatch(/没有可核对的数值/);
+  });
+
+  it("已确认的读图数值写成证据声明", async () => {
+    findAttachment.mockResolvedValue({
+      id: "fig1",
+      userId: "u1",
+      sessionId: "s1",
+      projectId: "p1",
+      pinned: false,
+      originalName: "结果图.png",
+    });
+    mockReadFile.mockReturnValue(Buffer.from("png"));
+    const r = await ingestProjectDataTool.execute(
+      {
+        attachmentId: "fig1",
+        userConfirmed: true,
+        dataItems: [{
+          index: 0,
+          kind: "figure",
+          label: "结果图.png",
+          fileName: "结果图.png",
+          attachmentId: "fig1",
+          readings: [{ series: "CK", y: "10.2", unit: "t/ha" }],
+        }],
+      },
+      ctx(),
+    );
+    expect(r.success).toBe(true);
+    expect(registerExistingFigure).toHaveBeenCalled();
+    expect(updateProject).toHaveBeenCalled();
+    const data = updateProject.mock.calls.at(-1)?.[0].data as { dataClaims: string };
+    expect(data.dataClaims).toContain("10.2");
+    expect(data.dataClaims).toContain("CK");
+    expect(r.summary).toMatch(/1 条已核对数值/);
   });
 });

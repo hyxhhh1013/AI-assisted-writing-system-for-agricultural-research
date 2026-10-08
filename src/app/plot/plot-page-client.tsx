@@ -20,6 +20,7 @@ import {
 import { takePlotPrefill } from "@/lib/plot-prefill-stash";
 import { toast } from "sonner";
 import { parseDataSources } from "@/contracts/project";
+import { prefillFromSource } from "@/lib/plot-source-prefill";
 import { Button } from "@/components/ui/button";
 import {
   ArrowLeft,
@@ -38,6 +39,7 @@ import {
   GitBranch as ForestIcon,
 } from "lucide-react";
 import type { ElementType } from "react";
+import { CompositeFigureEditor } from "@/components/shared/plot/composite-figure-editor";
 import { PlotFigurePanel } from "@/components/shared/plot/plot-figure-panel";
 import { PlotInsertDialog } from "@/components/shared/plot-insert-dialog";
 import { useGoBack } from "@/contexts/navigation-history";
@@ -109,6 +111,7 @@ function PlotContent() {
   const figureSpecParam = searchParams.get("figureSpec");
   const chartAssetIdParam = searchParams.get("chartAssetId");
   const replaceImageUrlParam = searchParams.get("replaceImageUrl") || undefined;
+  const sourceParam = searchParams.get("source");
   const chartIdx =
     chartIdxParam !== null && chartIdxParam !== "" ? Number.parseInt(chartIdxParam, 10) : null;
   const projectId = routeProjectId || "default";
@@ -118,6 +121,7 @@ function PlotContent() {
   const [activeCategory, setActiveCategory] = useState(categoryParam || "chart");
   const [selectedFigure, setSelectedFigure] = useState<FigureDef | null>(null);
   const [xrdAdvancedOpen, setXrdAdvancedOpen] = useState(false);
+  const [compositeMode, setCompositeMode] = useState(false);
   const [chartPrefill, setChartPrefill] = useState<ChartPanelPrefill | null>(null);
   const [flowPrefill, setFlowPrefill] = useState<FlowPanelPrefill | null>(null);
   const [toolPrefill, setToolPrefill] = useState<PlotToolPrefill | null>(null);
@@ -262,11 +266,23 @@ function PlotContent() {
     }
 
     if (!routeProjectId) return;
-    if (figureParam === null && chartIdxParam === null) return;
+    if (figureParam === null && chartIdxParam === null && !sourceParam) return;
 
     void getProject(routeProjectId).then((project) => {
       if (!project) return;
-      const configs = collectChartConfigsFromSources(parseDataSources(project));
+      const sources = parseDataSources(project);
+      if (sourceParam) {
+        const hit = sources.find((item) => item.fileName === sourceParam);
+        const built = hit ? prefillFromSource(hit) : null;
+        if (built) {
+          applyFigureSelection(built.prefill.figureId || "line");
+          setChartPrefill(built.prefill);
+          setPrefillApplied(true);
+          toast.message(built.note);
+          return;
+        }
+      }
+      const configs = collectChartConfigsFromSources(sources);
       let targetFigureId = figureParam ?? undefined;
       let prefill: ChartPanelPrefill | null = null;
 
@@ -289,8 +305,24 @@ function PlotContent() {
     figureSpecParam,
     chartAssetIdParam,
     replaceImageUrlParam,
+    sourceParam,
     prefillApplied,
   ]);
+
+  const openWithPrefill = useCallback((prefill: ChartPanelPrefill) => {
+    const fig = registry?.figures.find((item) => item.id === (prefill.figureId || "line"));
+    if (fig) {
+      setActiveCategory(fig.category);
+      setSelectedFigure(fig);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("category", fig.category);
+      params.set("figure", fig.id);
+      router.replace(`/plot?${params.toString()}`, { scroll: false });
+    }
+    setChartPrefill(prefill);
+    setPrefillApplied(true);
+    setCompositeMode(false);
+  }, [registry, router, searchParams]);
 
   useEffect(() => {
     if (prefillApplied) return;
@@ -350,6 +382,7 @@ function PlotContent() {
       const params = new URLSearchParams(searchParams.toString());
       params.set("category", fig.category);
       params.set("figure", fig.id);
+      setCompositeMode(false);
       router.replace(`/plot?${params.toString()}`, { scroll: false });
     },
     [router, searchParams],
@@ -357,7 +390,7 @@ function PlotContent() {
 
   const renderFigureButton = (fig: FigureDef) => {
     const Icon = FIGURE_ICONS[fig.id] ?? BarChart3;
-    const active = selectedFigure?.id === fig.id;
+    const active = !compositeMode && selectedFigure?.id === fig.id;
     return (
       <button
         key={fig.id}
@@ -486,12 +519,33 @@ function PlotContent() {
                 {xrdGroups.other.map(renderFigureButton)}
               </>
             ) : (
-              categoryFigures.map(renderFigureButton)
+              <>
+                {activeCategory === "chart" ? (
+                  <button
+                    type="button"
+                    onClick={() => setCompositeMode(true)}
+                    className={`mb-1 w-full rounded-lg px-2.5 py-2 text-left text-xs font-medium ${
+                      compositeMode
+                        ? "bg-[#1a5632] text-white"
+                        : "text-[#3d4f46] hover:bg-[#1a5632]/8"
+                    }`}
+                  >
+                    组图
+                  </button>
+                ) : null}
+                {categoryFigures.map(renderFigureButton)}
+              </>
             )}
           </div>
         </aside>
 
         <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+          {compositeMode && activeCategory === "chart" ? (
+            <CompositeFigureEditor
+              projectId={routeProjectId}
+              onInsert={handleInsertToPaper}
+            />
+          ) : (
           <PlotFigurePanel
             figure={selectedFigure}
             registry={registry}
@@ -502,7 +556,9 @@ function PlotContent() {
             toolPrefill={toolPrefill}
             onInsertToPaper={handleInsertToPaper}
             onInsertTable={handleInsertTable}
+            onUseProjectPrefill={openWithPrefill}
           />
+          )}
         </main>
       </div>
 

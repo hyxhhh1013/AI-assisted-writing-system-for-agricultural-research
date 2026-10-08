@@ -2,9 +2,9 @@
 
 export type AttachmentKind = "tabular" | "instrument" | "document" | "image";
 
-const TABULAR_EXTS = new Set(["csv", "tsv", "xlsx", "xls"]);
+const TABULAR_EXTS = new Set(["csv", "tsv", "xlsx", "xls", "dpt"]);
 const INSTRUMENT_EXTS = new Set(["xy", "xyd", "ras", "raw", "uxd", "dif"]);
-const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "webp", "gif"]);
+const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "webp", "gif", "tif", "tiff"]);
 
 export function extOfFileName(fileName: string): string {
   const i = fileName.lastIndexOf(".");
@@ -33,13 +33,14 @@ export function formatAttachmentChipBadge(input: {
   extractStatus: "uploading" | "extracting" | "ready" | "failed";
   ingest?: AttachmentIngestView | null;
 }): string | null {
+  if (input.kind === "image" && input.extractStatus === "ready") return "待登记";
   if (input.kind !== "tabular") return null;
   if (input.extractStatus === "uploading" || input.extractStatus === "extracting") {
     return null;
   }
   if (input.extractStatus === "failed") return "分析失败";
   const ingest = input.ingest;
-  if (!ingest || ingest.status === "pending") return "入库中…";
+  if (!ingest || ingest.status === "pending") return "待确认";
   if (ingest.status === "failed") return "分析失败";
   if (ingest.status === "ingested") {
     const n = ingest.claimCount ?? 0;

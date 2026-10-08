@@ -10,7 +10,7 @@ import type {
 import { collectChartConfigsFromSources } from "@/contracts/figure";
 import { parseDataClaims, parseDataSources, serializeDataClaims, serializeDataSources } from "@/contracts/project";
 import type { ProjectData } from "@/contracts/project";
-import { analyzeDataFile } from "@/services/data-source";
+import { analyzeDataFile, type DataAnalyzeResult } from "@/services/data-source";
 import { buildEvidencePack } from "@/services/evidence-pack";
 import { patchProjectFields } from "@/services/project";
 
@@ -35,6 +35,7 @@ export interface UseEvidenceReturn {
   updateClaim: (id: string, patch: Partial<EvidenceClaim>) => Promise<void>;
   removeClaim: (id: string) => Promise<void>;
   uploadAndAnalyze: (file: File) => Promise<void>;
+  saveAnalyzedBatch: (results: DataAnalyzeResult[]) => Promise<void>;
 }
 
 function normalizeSourceId(fileName: string): string {
@@ -178,6 +179,25 @@ export function useEvidence({
     [claims, persist, sources],
   );
 
+  const saveAnalyzedBatch = useCallback(
+    async (results: DataAnalyzeResult[]) => {
+      let nextSources = sources;
+      let nextClaims = claims;
+      for (const result of results) {
+        const sourceId = normalizeSourceId(result.analysis.fileName);
+        const incoming = result.claims.map((claim, i) => ({
+          ...claim,
+          sourceId,
+          id: `${sourceId}-C${i + 1}`,
+        }));
+        nextSources = mergeSources(nextSources, result.analysis);
+        nextClaims = mergeClaimsForSource(nextClaims, incoming, sourceId);
+      }
+      await persist(nextClaims, nextSources);
+    },
+    [claims, persist, sources],
+  );
+
   const summaries = useMemo(
     () => buildSummaries(sources, claims),
     [sources, claims],
@@ -211,5 +231,6 @@ export function useEvidence({
     updateClaim,
     removeClaim,
     uploadAndAnalyze,
+    saveAnalyzedBatch,
   };
 }

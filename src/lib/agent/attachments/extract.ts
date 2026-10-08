@@ -1,9 +1,11 @@
 import fs from "fs";
 import path from "path";
 import { PDFParse } from "pdf-parse";
-import papa from "papaparse";
-import * as XLSX from "xlsx";
 import mammoth from "mammoth";
+import {
+  formatGridPreview,
+  loadTabularGrids,
+} from "@/lib/data-block-inventory";
 import { describeImage } from "@/lib/agent/attachments/describe-image";
 import { describePdfPages } from "@/lib/agent/attachments/describe-pdf";
 import {
@@ -23,6 +25,22 @@ export interface ExtractResult {
   error?: string;
 }
 
+function bufferToArrayBuffer(buf: Buffer): ArrayBuffer {
+  const copy = new ArrayBuffer(buf.byteLength);
+  new Uint8Array(copy).set(buf);
+  return copy;
+}
+
+/** 带行号列号的原文，供助手自己判断读法，不在这里决定哪一块是数据。 */
+async function tabularInventoryText(filePath: string, originalName: string): Promise<string> {
+  const grids = await loadTabularGrids(bufferToArrayBuffer(fs.readFileSync(filePath)), originalName);
+  if (grids.length === 0) return "(空文件)";
+  return [
+    "以下是原文行列，不是已经分好的数据表。读完后用 tablesJson 说明：哪张表、表头在第几行、取哪些列、这些数是什么意思。用户确认后才入库。",
+    ...grids.map((sheet) => formatGridPreview(sheet.grid, sheet.sheetName)),
+  ].join("\n\n");
+}
+
 function extOf(filePath: string): string {
   return path.extname(filePath).toLowerCase().replace(/^\./, "");
 }
@@ -35,23 +53,6 @@ function truncateTo(text: string): { text: string; truncated: boolean } {
     return { text: clean, truncated: false };
   }
   return { text: clean.slice(0, MAX_ATTACHMENT_TEXT_CHARS), truncated: true };
-}
-
-/** CSV / Excel → Markdown 表格 */
-function toMarkdownTable(rows: unknown[][]): string {
-  if (rows.length === 0) return "";
-  const header = rows[0].map((c) => String(c ?? ""));
-  const body = rows.slice(1);
-  const esc = (s: string) => s.replace(/\|/g, "\\|").replace(/\n/g, " ").trim();
-  const headLine = `| ${header.map(esc).join(" | ")} |`;
-  const sepLine = `| ${header.map(() => "---").join(" | ")} |`;
-  const bodyLines = body
-    .filter((r) => r.some((c) => String(c ?? "").trim() !== ""))
-    .slice(0, 500)
-    .map((r) => `| ${r.map((c) => esc(String(c ?? ""))).join(" | ")} |`);
-  const parts = [headLine, sepLine, ...bodyLines];
-  if (body.length > 500) parts.push("...（仅展示前 500 行）");
-  return parts.join("\n");
 }
 
 export async function extractAttachmentText(
@@ -67,25 +68,13 @@ export async function extractAttachmentText(
       const text = fs.readFileSync(filePath, "utf8");
       return { status: "ready", ...truncateTo(text), source: "text" };
     }
-    if (ext === "csv") {
-      const raw = fs.readFileSync(filePath, "utf8");
-      const parsed = papa.parse<string[]>(raw, { skipEmptyLines: true }) as {
-        data: string[][];
+    if (ext === "csv" || ext === "tsv" || ext === "xlsx" || ext === "xls" || ext === "dpt" || ext === "xy") {
+      const text = await tabularInventoryText(filePath, originalName);
+      return {
+        status: "ready",
+        ...truncateTo(text),
+        source: ext === "xlsx" || ext === "xls" ? "excel" : "csv",
       };
-      const text = toMarkdownTable(parsed.data);
-      return { status: "ready", ...truncateTo(text || "(空表格)"), source: "csv" };
-    }
-    if (ext === "xlsx" || ext === "xls") {
-      // 用 fs 读 buffer 再 XLSX.read()：绕开 SheetJS 内部 `_fs`（Turbopack 下 require('fs')
-      // 可能为 undefined，导致 XLSX.readFile 报 "Cannot access file"，即使文件存在）
-      const buf = fs.readFileSync(filePath);
-      const wb = XLSX.read(buf);
-      const parts: string[] = [];
-      for (const sheetName of wb.SheetNames.slice(0, 5)) {
-        const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheetName], { header: 1 });
-        parts.push(`### ${sheetName}\n${toMarkdownTable(rows)}`);
-      }
-      return { status: "ready", ...truncateTo(parts.join("\n\n") || "(空表格)"), source: "excel" };
     }
     if (ext === "pdf") {
       // 文字层：pdf-parse v2 为类 API；用后 destroy 释放 pdfjs 文档对象。
@@ -122,6 +111,13 @@ export async function extractAttachmentText(
     if (ext === "docx") {
       const result = await mammoth.extractRawText({ path: filePath });
       return { status: "ready", ...truncateTo(result.value.trim() || "(空文档)"), source: "docx" };
+    }
+    if (ext === "tif" || ext === "tiff") {
+      return {
+        status: "ready",
+        ...truncateTo("【已有 TIFF 图】确认登记后会转成 PNG 放进图表库，便于插入正文。不从图片读取数值。"),
+        source: "text",
+      };
     }
     if (ATTACHMENT_IMAGE_EXTENSIONS.has(ext)) {
       return await describeImage(filePath);
