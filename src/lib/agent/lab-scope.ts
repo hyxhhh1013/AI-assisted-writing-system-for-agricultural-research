@@ -5,7 +5,11 @@
  */
 
 import type { AgentPlan } from "@/contracts/agent";
-import { inferCategoriesFromTitle } from "@/lib/knowledge-category-hints";
+import {
+  categoriesMentionedInText,
+  inferCategoriesFromTitle,
+  unionSearchCategories,
+} from "@/lib/knowledge-category-hints";
 
 export interface LabDirectionScope {
   slug: string;
@@ -72,18 +76,23 @@ export function resolveProjectSearchCategories(opts: {
   title?: string;
   researchDirection?: string;
   directionSlug?: string;
+  /** 库里的真实分类名。题目或方向里写到的新分类会并进允许范围。 */
+  libraryCategories?: readonly string[];
 }): string[] {
+  const blob = `${opts.researchDirection ?? ""} ${opts.title ?? ""}`.trim();
+  const mentioned = categoriesMentionedInText(blob, opts.libraryCategories ?? []);
+  const withMentions = (cats: readonly string[]) => unionSearchCategories(cats, mentioned);
+
   const fromSlug = categoriesForDirectionSlug(opts.directionSlug);
-  if (fromSlug.length > 0) return fromSlug;
+  if (fromSlug.length > 0) return withMentions(fromSlug);
 
   const inferred = inferCategoriesFromTitle(opts.title, opts.researchDirection);
-  if (inferred.length === 1) return inferred;
+  if (inferred.length === 1) return withMentions(inferred);
 
-  const blob = `${opts.researchDirection ?? ""} ${opts.title ?? ""}`.trim();
   if (blob) {
     for (const d of LAB_DIRECTIONS) {
       if (blob.includes(d.name) || new RegExp(`\\b${d.slug}\\b`, "i").test(blob)) {
-        return [...d.categories];
+        return withMentions(d.categories);
       }
     }
   }
@@ -92,10 +101,10 @@ export function resolveProjectSearchCategories(opts: {
     const thermo = inferred.includes("热化学");
     const tea = inferred.includes("茶学");
     if (thermo && tea && !/茶|tea/i.test(`${opts.title ?? ""} ${opts.researchDirection ?? ""}`)) {
-      return inferred.filter((c) => c !== "茶学");
+      return withMentions(inferred.filter((c) => c !== "茶学"));
     }
   }
-  return inferred;
+  return withMentions(inferred);
 }
 
 /** 命中片段是否属于实验室其它方向（相对本篇允许分类） */
@@ -136,7 +145,12 @@ export function sanitizePlanAgainstLabScope(
 
 /** 注入系统提示 / 项目简报：实验室范围 */
 export function formatLabScopeBlock(input: LabScopeBlockInput = {}): string {
-  const searchCats = resolveProjectSearchCategories(input);
+  const searchCats = resolveProjectSearchCategories({
+    title: input.title,
+    researchDirection: input.researchDirection,
+    directionSlug: input.directionSlug,
+    libraryCategories: input.knowledgeCategories,
+  });
   const otherDirs = LAB_DIRECTIONS
     .filter((d) => !d.categories.some((c) => searchCats.includes(c)))
     .map((d) => d.name);

@@ -9,6 +9,7 @@ import { localRAG, invalidateBibCache } from "@/lib/rag";
 import type { ReindexProgressEvent } from "@/contracts/reindex";
 import { validateBody } from "@/lib/api-validate";
 import { reindexRequestSchema, type ReindexRequestInput } from "@/lib/validations";
+import { reindexAdmission } from "@/lib/knowledge-reindex-gate";
 
 const PROGRESS_PREFIX = "__INDEX_PROGRESS__";
 const PROGRESS_FILE = path.join(process.cwd(), "data", "_reindex_progress.jsonl");
@@ -76,19 +77,26 @@ export async function POST(req: NextRequest) {
   }
 
   // 客户端上次收到的 event 索引（断线重连时传递）
+  const hasReconnectCursor = req.headers.has("x-reindex-cursor");
   const cursorHeader = req.headers.get("x-reindex-cursor");
-  const cursor = cursorHeader ? parseInt(cursorHeader, 10) : 0;
+  const parsedCursor = cursorHeader ? parseInt(cursorHeader, 10) : 0;
+  const cursor = Number.isFinite(parsedCursor) ? parsedCursor : 0;
 
-  // ── 情况 1: 已有 reindex 在后台运行 ──
-  if (activeChild && !activeChild.killed) {
+  const admission = reindexAdmission({
+    childAlive: Boolean(activeChild && !activeChild.killed),
+    taskComplete: activeTaskComplete,
+    hasReconnectCursor,
+  });
+
+  // 进行中：附着到现有子进程。已完成且带重连游标：只补发剩余事件。
+  // 没有游标的新请求必须另开任务，否则上传后的第二次索引入库会被上一次 complete 吞掉。
+  if (admission === "attach") {
     log.info("检测到已有 reindex 在运行，复用现有进程");
     return streamExistingTask(cursor);
   }
-
-  // ── 情况 2: 之前的 reindex 已完成但客户端还没收到 complete ──
-  if (activeTaskComplete) {
+  if (admission === "replay") {
     const events = readProgressFromFile(cursor);
-    return streamReplayOnly(events, activeTaskComplete);
+    return streamReplayOnly(events, true);
   }
 
   // ── 情况 3: 启动新的 reindex ──

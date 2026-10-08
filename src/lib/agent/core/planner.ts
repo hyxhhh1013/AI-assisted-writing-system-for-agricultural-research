@@ -7,6 +7,7 @@ import {
   resolveProjectSearchCategories,
   sanitizePlanAgainstLabScope,
 } from "@/lib/agent/lab-scope";
+import { listKnowledgeCategories } from "@/lib/knowledge-metadata";
 import type { AgentContext } from "@/lib/agent/types";
 
 export async function createPlan(
@@ -14,10 +15,12 @@ export async function createPlan(
   context: AgentContext,
   projectBriefing?: string,
 ): Promise<AgentPlan> {
+  const libraryCategories = await listKnowledgeCategories(true).catch(() => [] as string[]);
   const allowed = resolveProjectSearchCategories({
     title: context.projectSnapshot?.title,
     researchDirection: context.projectSnapshot?.researchDirection,
     directionSlug: context.directionSlug,
+    libraryCategories,
   });
   const refN = context.projectSnapshot?.references.length ?? 0;
   const target = parseLiteratureImportTarget(goal);

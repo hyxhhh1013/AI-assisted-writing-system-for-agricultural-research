@@ -60,6 +60,18 @@ describe("inferCategoriesFromTitle", () => {
       }),
     ).toEqual({ category: "茶学" });
   });
+
+  it("adds a new indexed category named in the title", async () => {
+    const { resolveWritingSearchScope } = await import("@/services/writing-context");
+    expect(resolveWritingSearchScope({
+      title: "Cr3+掺杂近红外荧光粉研究进展",
+      libraryCategories: ["茶学", "荧光粉"],
+    })).toEqual({ category: "荧光粉" });
+    expect(resolveWritingSearchScope({
+      title: "荧光粉与茶叶光质",
+      libraryCategories: ["荧光粉", "茶学"],
+    })).toEqual({ categories: ["茶学", "荧光粉"] });
+  });
 });
 
 describe("topic relevance filter", () => {

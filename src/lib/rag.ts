@@ -17,6 +17,7 @@ import { parseLabPdfFilename } from "@/lib/lab-pdf-filename";
 import { resolveProjectRuntimePath } from "@/lib/runtime-paths";
 import { cosineSimilarity } from "./similarity";
 import { buildRagSearchTerms, buildRagSearchTermWeights, expandRagQueries, inferCategoriesFromQuery, collectIndexTermTf, shouldUseMultiQuery } from "@/lib/rag-query-expand";
+import { categoriesMentionedInText, unionSearchCategories } from "@/lib/knowledge-category-hints";
 import {
   referencesScoreMultiplier,
   externalAbstractScoreMultiplier,
@@ -1187,9 +1188,13 @@ export class LocalRAG {
     const queryHints = inferCategoriesFromQuery(q);
     const scopeCatsEarly = categories?.filter((c) => c && c !== "全部");
 
-    if (!skipHintScope && !category && (!scopeCatsEarly || scopeCatsEarly.length === 0) && queryHints.length > 0) {
+    if (!skipHintScope && !category && (!scopeCatsEarly || scopeCatsEarly.length === 0)) {
       const available = await this.getCategories();
-      const validHints = queryHints.filter((h) => available.includes(h));
+      const named = categoriesMentionedInText(q, available);
+      const validHints = unionSearchCategories(
+        queryHints.filter((h) => available.includes(h)),
+        named.filter((h) => available.includes(h)),
+      );
       if (validHints.length > 0) {
         const scoped = await this.searchOnce(q, {
           limit: limit * 2,

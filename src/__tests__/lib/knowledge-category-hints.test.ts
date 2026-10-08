@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { resolveRagCategoryName, inferCategoriesFromTitle, inferCategoriesFromQuery } from "@/lib/knowledge-category-hints";
+import {
+  categoriesMentionedInText,
+  resolveRagCategoryName,
+  inferCategoriesFromTitle,
+  inferCategoriesFromQuery,
+} from "@/lib/knowledge-category-hints";
 
 describe("resolveRagCategoryName", () => {
   it("maps 热解 to the on-disk 热化学 index", () => {
@@ -34,6 +39,13 @@ describe("inferCategoriesFromTitle", () => {
 
   it("still maps an explicit pyrolysis title to 热化学", () => {
     expect(inferCategoriesFromTitle("热解温度对稻秆生物炭孔隙的影响")).toContain("热化学");
+  });
+
+  it("picks a new library category when the title names it", () => {
+    expect(categoriesMentionedInText(
+      "近红外荧光粉的热稳定性",
+      ["茶学", "荧光粉", "未分类", "外部摘要"],
+    )).toEqual(["荧光粉"]);
   });
 
   it("does not map carbon coating to 控释肥类", () => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { getErrorMessage } from "@/lib/error-utils";
 import {
@@ -27,16 +28,26 @@ import {
 import {
   filterKnowledgeFiles,
   hasActiveKnowledgeListFilters,
-  type KnowledgeDoiFilter,
-  type KnowledgeIndexStatusFilter,
   type KnowledgeListFilters,
 } from "@/contracts/knowledge";
+import {
+  applyKnowledgeListUrl,
+  knowledgeListFilterKey,
+  knowledgeListHasBibFilters,
+  readKnowledgeListUrl,
+} from "@/lib/knowledge-list-url";
 
 const PAGE_SIZE = 10;
 /** 书目筛选需客户端过滤时一次拉取上限（过大时会明显变慢） */
 const FILTER_FETCH_CAP = 500;
 
 export function useKnowledgeList() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const initialList = useRef(readKnowledgeListUrl(searchParams));
+  const list = initialList.current;
+
   const [files, setFiles] = useState<KnowledgeFile[]>([]);
   const [categories, setCategories] = useState<string[]>(["全部"]);
   const [isLoading, setIsLoading] = useState(true);
@@ -44,15 +55,15 @@ export function useKnowledgeList() {
   const [indexPanelOpen, setIndexPanelOpen] = useState(false);
   const [indexProgress, setIndexProgress] = useState<ReindexProgressState>(INITIAL_REINDEX_PROGRESS);
   const reindexAbortRef = useRef<AbortController | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("全部");
-  const [searchType, setSearchType] = useState<"name" | "semantic">("name");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState(list.q);
+  const [selectedCategory, setSelectedCategory] = useState(list.category);
+  const [searchType, setSearchType] = useState<"name" | "semantic">(list.searchType);
+  const [currentPage, setCurrentPage] = useState(list.page);
   const [totalFiles, setTotalFiles] = useState(0);
-  const [journalFilter, setJournalFilter] = useState("");
-  const [indexStatusFilter, setIndexStatusFilter] = useState<KnowledgeIndexStatusFilter>("all");
-  const [doiFilter, setDoiFilter] = useState<KnowledgeDoiFilter>("all");
-  const [bibFiltersOpen, setBibFiltersOpen] = useState(false);
+  const [journalFilter, setJournalFilter] = useState(list.journal);
+  const [indexStatusFilter, setIndexStatusFilter] = useState(list.indexStatus);
+  const [doiFilter, setDoiFilter] = useState(list.doi);
+  const [bibFiltersOpen, setBibFiltersOpen] = useState(knowledgeListHasBibFilters(list));
   const [allFilesForFilter, setAllFilesForFilter] = useState<KnowledgeFile[]>([]);
 
   const [selectedFiles, setSelectedFiles] = useState<KnowledgeFile[]>([]);
@@ -112,9 +123,12 @@ export function useKnowledgeList() {
           pageSize: FILTER_FETCH_CAP,
         });
         const filtered = filterKnowledgeFiles(data.files ?? [], listFilters);
-        const start = (currentPage - 1) * PAGE_SIZE;
+        const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+        const page = Math.min(currentPage, pages);
+        const pageStart = (page - 1) * PAGE_SIZE;
+        if (page !== currentPage) setCurrentPage(page);
         setAllFilesForFilter(filtered);
-        setFiles(filtered.slice(start, start + PAGE_SIZE));
+        setFiles(filtered.slice(pageStart, pageStart + PAGE_SIZE));
         setTotalFiles(filtered.length);
         if (data.categories) setCategories(data.categories);
       } else {
@@ -127,7 +141,11 @@ export function useKnowledgeList() {
           pageSize: PAGE_SIZE,
         });
         if (data.files) setFiles(data.files);
-        if (data.total !== undefined) setTotalFiles(data.total);
+        if (data.total !== undefined) {
+          setTotalFiles(data.total);
+          const pages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
+          if (currentPage > pages) setCurrentPage(pages);
+        }
         if (data.categories) setCategories(data.categories);
       }
       setSelectedFiles([]);
@@ -156,9 +174,49 @@ export function useKnowledgeList() {
     return () => clearTimeout(timer);
   }, [fetchFiles]);
 
+  const filterKey = knowledgeListFilterKey({
+    q: searchQuery,
+    category: selectedCategory,
+    searchType,
+    journal: journalFilter,
+    indexStatus: indexStatusFilter,
+    doi: doiFilter,
+  });
+  const filterKeyRef = useRef(filterKey);
   useEffect(() => {
+    if (filterKeyRef.current === filterKey) return;
+    filterKeyRef.current = filterKey;
     setCurrentPage(1);
-  }, [searchQuery, selectedCategory, searchType, journalFilter, indexStatusFilter, doiFilter]);
+  }, [filterKey]);
+
+  useEffect(() => {
+    const qs = applyKnowledgeListUrl(searchParams, {
+      page: currentPage,
+      q: searchQuery,
+      category: selectedCategory,
+      searchType,
+      journal: journalFilter,
+      indexStatus: indexStatusFilter,
+      doi: doiFilter,
+    });
+    const target = qs ? `${pathname}?${qs}` : pathname;
+    const currentQs = searchParams.toString();
+    const currentTarget = currentQs ? `${pathname}?${currentQs}` : pathname;
+    if (target !== currentTarget) {
+      router.replace(target, { scroll: false });
+    }
+  }, [
+    currentPage,
+    searchQuery,
+    selectedCategory,
+    searchType,
+    journalFilter,
+    indexStatusFilter,
+    doiFilter,
+    pathname,
+    router,
+    searchParams,
+  ]);
 
   const runReindex = useCallback(
     async (options?: ReindexKnowledgeOptions, startMessage?: string) => {

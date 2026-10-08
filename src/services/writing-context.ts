@@ -12,7 +12,12 @@ import type {
 } from "@/contracts/writing-retrieve-preview";
 import type { SoftReferenceEvidence } from "@/contracts/project";
 import { formatSoftEvidenceBlock, isSoftGroundable } from "@/lib/reference-evidence";
-import { inferCategoriesFromTitle } from "@/lib/knowledge-category-hints";
+import {
+  categoriesMentionedInText,
+  inferCategoriesFromTitle,
+  unionSearchCategories,
+} from "@/lib/knowledge-category-hints";
+import { listKnowledgeCategories } from "@/lib/knowledge-metadata";
 import { preferChunksByPaperSection } from "@/lib/paper-section";
 import { collectWritingClaims, writingClaimQueries } from "@/lib/writing-claims";
 
@@ -135,12 +140,19 @@ export function resolveWritingSearchScope(opts: {
   title?: string;
   researchDirection?: string;
   context?: string;
+  /** 磁盘 / 书目里的真实分类。题目里写出的新分类会并进范围。 */
+  libraryCategories?: readonly string[];
 }): { category?: string; categories?: string[] } {
   const sources = mergeScopeSourceKeys(opts.existingReferences, opts.selectedSourceIds);
   const fromSources = collectCategoriesFromSources(sources);
-  if (fromSources.length > 0) return toRagSearchScope(fromSources);
-  const hinted = inferCategoriesFromTitle(opts.title, opts.researchDirection, opts.context);
-  return toRagSearchScope(hinted);
+  const hinted = fromSources.length > 0
+    ? fromSources
+    : inferCategoriesFromTitle(opts.title, opts.researchDirection, opts.context);
+  const mentioned = categoriesMentionedInText(
+    [opts.title, opts.researchDirection, opts.context].filter(Boolean).join("\n"),
+    opts.libraryCategories ?? [],
+  );
+  return toRagSearchScope(unionSearchCategories(hinted, mentioned));
 }
 
 function hasActiveScope(scope: { category?: string; categories?: string[] }): boolean {
@@ -319,6 +331,7 @@ export async function searchWritingRagChunks(
   const { limit: ragLimit, maxPerSource: ragMaxPerSource } = getRetrievalConfig(retrievalMode);
 
   await ensureBibMapLoaded();
+  const libraryCategories = await listKnowledgeCategories(true);
 
   const searchScope = resolveWritingSearchScope({
     existingReferences: params.existingReferences,
@@ -326,6 +339,7 @@ export async function searchWritingRagChunks(
     title,
     researchDirection,
     context,
+    libraryCategories,
   });
   const scoped = hasActiveScope(searchScope);
 

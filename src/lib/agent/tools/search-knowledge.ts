@@ -1,4 +1,5 @@
 import { localRAG, formatRagCitation, type RagChunk } from "@/lib/rag";
+import { listKnowledgeCategories } from "@/lib/knowledge-metadata";
 import { resolveRagCategoryName } from "@/lib/knowledge-category-hints";
 import {
   isOffTopicLabCategory,
@@ -65,10 +66,12 @@ export const searchKnowledgeTool: ToolDefinition = {
     const category = resolveRagCategoryName(
       params.category ? String(params.category).trim() : undefined,
     );
+    const libraryCategories = await listKnowledgeCategories(true);
     const projectCats = resolveProjectSearchCategories({
       title: ctx.projectSnapshot?.title,
       researchDirection: ctx.projectSnapshot?.researchDirection,
       directionSlug: ctx.directionSlug,
+      libraryCategories,
     });
     const allowedCats = category
       ? [...new Set([category, ...projectCats])]

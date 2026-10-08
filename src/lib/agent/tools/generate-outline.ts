@@ -10,7 +10,8 @@ import {
   type OutlineAttachmentCandidate,
 } from "@/lib/agent/outline-from-attachment";
 import { callAI, getAgentModelConfig } from "@/lib/ai";
-import { matchCategoryFromDirection } from "@/lib/knowledge-metadata";
+import { listKnowledgeCategories } from "@/lib/knowledge-metadata";
+import { resolveWritingSearchScope } from "@/services/writing-context";
 import {
   enforceOutlineAgainstSkeleton,
   getDefaultUserSkeleton,
@@ -135,10 +136,15 @@ export const generateOutlineTool: ToolDefinition = {
     const title = confirmedTitle || project.title.trim() || "未命名论文";
     const researchDirection =
       project.researchDirection.trim() || title;
-    const targetCategory = await matchCategoryFromDirection(researchDirection);
+    const libraryCategories = await listKnowledgeCategories(true);
+    const autoScope = resolveWritingSearchScope({
+      title,
+      researchDirection,
+      libraryCategories,
+    });
     const contextChunks = await localRAG.search(`${title} ${researchDirection}`, {
       limit: 10,
-      category: targetCategory || undefined,
+      ...autoScope,
     });
     const ragText = contextChunks
       .map((c) => {

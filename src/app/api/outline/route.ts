@@ -1,7 +1,8 @@
 import { logger } from "@/lib/logger";
 import { NextRequest } from "next/server";
-import { matchCategoryFromDirection } from "@/lib/knowledge-metadata";
+import { listKnowledgeCategories } from "@/lib/knowledge-metadata";
 import { formatRagCitation, localRAG } from "@/lib/rag";
+import { resolveWritingSearchScope } from "@/services/writing-context";
 import { callAI, getAgentModelConfig, streamAIResponse } from "@/lib/ai";
 import { buildOutlinePrompt } from "@/lib/prompts";
 import { validateBody } from "@/lib/api-validate";
@@ -25,14 +26,16 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: keyError }), { status: 500 });
     }
 
-    // 手动指定分类优先，否则自动匹配研究方向到知识库分类
-    const targetCategory =
-      category && category !== "全部"
-        ? category
-        : await matchCategoryFromDirection(researchDirection);
+    const libraryCategories = await listKnowledgeCategories(true);
+    const manualCategory = category && category !== "全部" ? category : undefined;
+    const autoScope = resolveWritingSearchScope({
+      title,
+      researchDirection,
+      libraryCategories,
+    });
     const contextChunks = await localRAG.search(`${title} ${researchDirection}`, {
       limit: 10,
-      category: targetCategory || undefined,
+      ...(manualCategory ? { category: manualCategory } : autoScope),
     });
     const contextText = contextChunks
       .map((c) => {

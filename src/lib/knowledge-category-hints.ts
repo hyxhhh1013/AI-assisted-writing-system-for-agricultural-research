@@ -64,6 +64,44 @@ export function inferCategoriesFromQuery(query: string): string[] {
   return inferCategoriesFromTitle(query);
 }
 
+const LIBRARY_CATEGORY_SKIP = new Set(["全部", "未分类", "外部摘要"]);
+
+/**
+ * 文本里出现的知识库分类实名（如新建的「荧光粉」）。
+ * 不靠写死词表。短于 2 字或「未分类 / 外部摘要」不记。
+ */
+export function categoriesMentionedInText(
+  text: string,
+  categoryNames: readonly string[],
+): string[] {
+  const blob = text.trim();
+  if (!blob) return [];
+  const found: string[] = [];
+  const seen = new Set<string>();
+  const names = [...categoryNames].sort((a, b) => b.trim().length - a.trim().length);
+  for (const raw of names) {
+    const name = raw.trim();
+    if (name.length < 2 || LIBRARY_CATEGORY_SKIP.has(name) || seen.has(name)) continue;
+    if (!blob.includes(name)) continue;
+    seen.add(name);
+    found.push(name);
+  }
+  return found;
+}
+
+/** 保留原顺序，把文本里点名的库分类补进去。 */
+export function unionSearchCategories(base: readonly string[], extra: readonly string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of [...base, ...extra]) {
+    const name = raw.trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    out.push(name);
+  }
+  return out;
+}
+
 /** 取第一个命中分类（入库自动归类用） */
 export function inferPrimaryCategoryFromText(...texts: Array<string | undefined>): string | null {
   return inferCategoriesFromTitle(...texts)[0] ?? null;

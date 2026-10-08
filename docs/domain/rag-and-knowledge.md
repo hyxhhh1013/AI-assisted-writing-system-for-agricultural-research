@@ -129,7 +129,7 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 
 - **两阶段检索**：先 BM25（含同义词扩展词项）召回候选；向量在候选集上精排。**BM25 弱命中**（候选过少或最高分偏低）时对该分类**全池向量扫描**，避免语义相关但被 lexical 挡住的片段。
 - **多 query RRF**：`expandRagQueries` 自动生成 2～4 个变体（如 `biochar` ↔ `生物炭`），分路检索再 RRF 合并（默认开启，`multiQuery: false` 可关）。
-- **查询分类提示**：`inferCategoriesFromQuery` 从 query 推断分类（茶/热解/biochar 等）；**不用「挥发性/香气/coating」当茶学或控释肥开关**。全库检索时**优先在相关分类子集检索**，避免大块分类（如控释肥类）压制 Top1；命中不足再与全库 RRF 合并。`resolveRagCategoryName` 把口语别名「热解」映射到磁盘实名「热化学」（没有 `index_热解.json`）。索引路径走 `resolveProjectRuntimePath("data")`，不跟 `process.cwd()`。
+- **查询分类提示**：`inferCategoriesFromQuery` 从 query 推断分类（茶/热解/biochar 等）；**不用「挥发性/香气/coating」当茶学或控释肥开关**。题目或查询里写出的**真实分类名**（含新建分类，如「荧光粉」）并进同一范围，不再只认写死的五个实验室分类。全库检索时**优先在相关分类子集检索**，避免大块分类（如控释肥类）压制 Top1；命中不足再与全库 RRF 合并。`resolveRagCategoryName` 把口语别名「热解」映射到磁盘实名「热化学」（没有 `index_热解.json`）。索引路径走 `resolveProjectRuntimePath("data")`，不跟 `process.cwd()`。
 - **索引 n-gram 对齐（RAG-PR-013）**：倒排写入 CJK char + bigram（短段补 trigram），与 query 分词一致；否则「热解」「生物炭」等词在 BM25 侧几乎失联。
 - **提质减负（RAG-PR-015）**：
   - CJK 功能单字（的/了/是…）与英文停用词不入倒排/查询，缩小 posting、减少假命中。
@@ -195,6 +195,7 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 |------|----------|------|
 | 「索引流意外结束」 | Stage 2/3 脚本崩溃，未 emit `complete` | 终端跑 `node scripts/index-pdfs.mjs --progress` 看 stderr；修复后重跑 |
 | 新上传文献一直「未索引 / 0 块」 | 旧版增量会超时读全库向量，或 `--files` 找不到 PDF | 确认 `papers/<分类>/` 下文件名与列表一致；重新上传（会自动增量索引）或行菜单「强制重解析」 |
+| 第一批能进索引，同一次进程里后面的上传马上显示完成但仍是 0 块 | 上一次索引的 `complete` 被当成新请求的回放，没有再跑 `index-pdfs` | 新请求不带 `x-reindex-cursor` 时另开任务；已落盘的 PDF 再点一次「更新索引」 |
 | 全部「未索引 / 0 块」 | 上次索引中断，Prisma 未同步 | 页头「更新索引」跑到 `complete`；仍异常再用「强制重解析 PDF」 |
 | 单篇 0 块 + parseWarning | 扫描版 PDF，无文本层 | 换 OCR 版或手动填书目 |
 | 书目缺字段 | 首页版式特殊 / 无 DOI | `--force-stage1`；有 DOI 时确认未设 `DISABLE_CROSSREF_ENRICH` |
@@ -249,7 +250,7 @@ Stage 2 结束必须发出 `type: "complete"` 事件；若脚本异常退出且�
 
 ## UI
 
-- `src/app/knowledge/page.tsx` — 搜索、分类 Tab、语义/文件名模式
+- `src/app/knowledge/page.tsx` — 搜索、分类 Tab、语义/文件名模式。列表页码、关键词、分类和书目筛选写在地址栏（`page` / `q` / `category` 等）；换筛选才回到第 1 页，打开阅读器再返回停在原页。刷新列表、改书目、删除、索引不改页码。
 - `knowledge-reindex-progress.tsx` — SSE 进度：三阶段步进（解析 / 写入 / 向量化），百分比只增不减；完成后面板保留到「关闭」
 - `knowledge-reindex-menu.tsx` — 页头「更新索引」+ 下拉（按章节重切 / 强制重解析 / 仅重算向量）；已选文献工具栏「索引所选」
 

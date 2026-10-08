@@ -17,6 +17,7 @@ import { loadAgentProject } from "@/lib/agent/project-loader";
 import { rememberAgentPhase } from "@/lib/agent/core/phase-flags";
 import { appendPhasePackToBriefing } from "@/lib/agent/phase-task-pack";
 import { formatAgentProjectBriefing } from "@/lib/agent/project-briefing";
+import { listKnowledgeCategories } from "@/lib/knowledge-metadata";
 import { appendMemoryToBriefing } from "@/lib/agent/session-memory";
 import { buildRecentAgentMemoryBlock } from "@/lib/agent/session-memory";
 import { formatWorkMemoryBlock } from "@/lib/agent/work-memory";
@@ -74,8 +75,12 @@ export async function refreshAgentProjectContext(
   }
   ctx.projectSnapshot = snap;
   ctx.projectDirty = false;
+  const knowledgeCategories = await listKnowledgeCategories(true).catch(() => [] as string[]);
   let briefing = appendPhasePackToBriefing(
-    formatAgentProjectBriefing(snap, { directionSlug: ctx.directionSlug }),
+    formatAgentProjectBriefing(snap, {
+      directionSlug: ctx.directionSlug,
+      knowledgeCategories,
+    }),
     snap,
   );
   // withMemory=false（前导/confirm 用）：跨会话记忆由 run-graph 主流程按门禁+软超时拼一次，

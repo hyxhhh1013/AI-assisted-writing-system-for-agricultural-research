@@ -59,6 +59,14 @@ describe("lab-scope", () => {
     expect(block).not.toMatch(/只允许：.*茶学/);
   });
 
+  it("keeps a new library category named in the title", () => {
+    expect(resolveProjectSearchCategories({
+      title: "近红外荧光粉热稳定性",
+      directionSlug: "thermochemistry",
+      libraryCategories: ["荧光粉", "热化学"],
+    })).toEqual(["热化学", "荧光粉"]);
+  });
+
   it("does not treat 挥发性产物 as tea", () => {
     expect(
       resolveProjectSearchCategories({
