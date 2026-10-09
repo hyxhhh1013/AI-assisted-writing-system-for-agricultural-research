@@ -35,6 +35,7 @@ import {
   blueprintFigureDataBindingLabel,
   blueprintFigureToPlotHref,
   buildBlueprintChartCatalog,
+  figureDataBindings,
   figureTypeLabel,
   groupSectionGuides,
 } from "@/lib/blueprint-utils";
@@ -117,28 +118,34 @@ export function BlueprintWorkspace({
     }));
   };
 
-  const bindFigureChart = (figureId: string, chartIndex: number | null) => {
+  const setFigureBindings = (figureId: string, indexes: number[]) => {
     updateDraft((prev) => ({
       ...prev,
       figurePlan: {
         ...prev.figurePlan,
         items: prev.figurePlan.items.map((item) => {
-          if (item.id !== figureId || item.type !== "chart") return item;
-          if (chartIndex === null) {
-            const { dataBinding: _removed, ...rest } = item;
+          if (item.id !== figureId) return item;
+          const bindings = indexes
+            .map((chartIndex) => {
+              const entry = chartCatalog[chartIndex];
+              if (!entry) return null;
+              return {
+                kind: "chartConfig" as const,
+                chartConfigIndex: chartIndex,
+                sourceFileName: entry.sourceFileName,
+                variable: entry.variable,
+                chartTitle: entry.title,
+              };
+            })
+            .filter((binding): binding is NonNullable<typeof binding> => binding !== null);
+          if (bindings.length === 0) {
+            const { dataBinding: _binding, dataBindings: _bindings, ...rest } = item;
             return rest;
           }
-          const entry = chartCatalog[chartIndex];
-          if (!entry) return item;
           return {
             ...item,
-            dataBinding: {
-              kind: "chartConfig",
-              chartConfigIndex: chartIndex,
-              sourceFileName: entry.sourceFileName,
-              variable: entry.variable,
-              chartTitle: entry.title,
-            },
+            dataBindings: bindings,
+            dataBinding: bindings[0],
           };
         }),
       },
@@ -538,43 +545,56 @@ export function BlueprintWorkspace({
                           }
                           placeholder="用途说明"
                         />
-                        {item.type === "chart" ? (
-                          <div className="mt-2">
+                        {item.type === "chart" || item.type === "xrd" ? (
+                          <div className="mt-2 space-y-1.5">
                             {chartCatalog.length === 0 ? (
                               <p className="text-[10.5px] text-[#5a6b63]">
                                 请先上传实验数据后再绑定
                               </p>
                             ) : (
-                              <Select
-                                value={
-                                  item.dataBinding?.kind === "chartConfig"
-                                    ? String(item.dataBinding.chartConfigIndex)
-                                    : "none"
-                                }
-                                onValueChange={(v) => {
-                                  if (!v || v === "none") {
-                                    bindFigureChart(item.id, null);
-                                    return;
-                                  }
-                                  bindFigureChart(item.id, Number.parseInt(v, 10));
-                                }}
-                              >
-                                <SelectTrigger className="h-7 w-full max-w-xs border-0 bg-white text-[10.5px] shadow-sm">
-                                  <SelectValue placeholder="绑定数据" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="none">不绑定</SelectItem>
-                                  {chartCatalog.map((c) => (
-                                    <SelectItem key={c.index} value={String(c.index)}>
-                                      [{c.index}] {c.title}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <div className="max-h-36 space-y-1 overflow-y-auto rounded-md bg-white px-2 py-1.5">
+                                {chartCatalog.map((c) => {
+                                  const selected = figureDataBindings(item).some(
+                                    (binding) => binding.chartConfigIndex === c.index,
+                                  );
+                                  return (
+                                    <label
+                                      key={c.index}
+                                      className="flex items-start gap-2 text-[10.5px] leading-snug text-[#122820]"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        className="mt-0.5"
+                                        checked={selected}
+                                        onChange={(event) => {
+                                          const current = figureDataBindings(item).map(
+                                            (binding) => binding.chartConfigIndex,
+                                          );
+                                          const next = event.target.checked
+                                            ? [...current, c.index]
+                                            : current.filter((index) => index !== c.index);
+                                          setFigureBindings(item.id, next);
+                                        }}
+                                      />
+                                      <span>[{c.index}] {c.title}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
                             )}
+                            <Input
+                              className="h-7 border-0 bg-white px-2 text-[10.5px] shadow-sm"
+                              value={item.dataGap ?? ""}
+                              placeholder="对不上或还没有的数据，写一句提示"
+                              onChange={(event) =>
+                                updateFigure(item.id, {
+                                  dataGap: event.target.value.slice(0, 200) || undefined,
+                                })
+                              }
+                            />
                             {bindingLabel ? (
-                              <p className="mt-1 text-[10px] text-[#1a5632]/80">
-                                {bindingLabel}
+                              <p className="text-[10px] text-[#1a5632]/80">
+                                已绑定：{bindingLabel}
                               </p>
                             ) : null}
                           </div>

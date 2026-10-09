@@ -1,5 +1,4 @@
 import { callAI } from "@/lib/ai";
-import { resolveDecisionModel } from "@/lib/models";
 import {
   applyWorkMemoryOp,
   type AgentWorkMemory,
@@ -254,10 +253,8 @@ function decisionUserText(input: TurnDecisionInput): string {
 export async function requestTurnDecision(input: TurnDecisionInput): Promise<TurnDecision> {
   const fallback = fallbackTurnDecision(input);
   try {
-    const model = await resolveDecisionModel();
     const response = await callAI({
       provider: "zhipu",
-      model,
       stream: false,
       timeoutMs: 20_000,
       temperature: 0.2,

@@ -233,6 +233,8 @@ const figurePlanItemSchema = z.object({
   priority: z.enum(["required", "optional"]),
   dataSource: z.enum(["experiment", "literature", "synthesis"]).optional(),
   dataBinding: figureDataBindingSchema.optional(),
+  dataBindings: z.array(figureDataBindingSchema).max(12).optional(),
+  dataGap: z.string().max(200).optional(),
 });
 
 const sectionGuideSchema = z.object({
@@ -289,7 +291,7 @@ export const blueprintSchema = z.object({
   researchDirection: z.string().optional(),
   language: z.enum(["zh", "en"]).optional().default("zh"),
   projectMode: z.enum(["review", "research"]).optional(),
-  /** 项目已分析图表目录，供 AI 绑定 dataBinding.chartConfigIndex */
+  /** 项目已分析图表目录，供 AI 绑定 dataBindings[].chartConfigIndex */
   chartCatalog: z.array(blueprintChartCatalogEntrySchema).optional(),
   /** 从 Direction 分析带入：为什么写这篇论文 */
   motivationFromGap: z.string().optional(),

@@ -88,7 +88,7 @@ describe("resolveEntryRoutePhase", () => {
     });
   });
 
-  it("已有数据：没有声明先入库", () => {
+  it("已有数据：没有声明时留在对话，并提示先形成证据声明", () => {
     const state = resolveAgentPhase({
       snapshot: snap({ agentEntryMode: "data_ready" }),
       writeEnabled: true,
@@ -97,9 +97,7 @@ describe("resolveEntryRoutePhase", () => {
     expect(openingWorkbenchTab({
       entryMode: "data_ready",
       outlineChars: 0,
-      claimCount: 0,
-      paperMode: "research",
-    })).toBe("data");
+    })).toBeNull();
   });
 
   it("已有数据：有声明后出对得上数据的大纲", () => {

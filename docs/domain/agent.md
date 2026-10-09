@@ -15,9 +15,9 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 |------|----------|
 | `full` 从零推进 | 文献够用再出大纲；大纲和蓝图都等人批。期刊模板只在生成蓝图时给建议顺序。批准后下一节只取蓝图 `writingOrder` 里第一个还没写完的路径，同一章子节写完再换章；用户点名某一节可以破例。结果章没有证据声明则 `write_section(results)` 被门禁拦住 |
 | `outline_ready` 已有大纲 | 先贴提纲。用户没说重做/大改/生成大纲时，`generate_outline` 被门禁拦住。蓝图沿用一级标题。批准后按蓝图顺序写，不按期刊模板另排 |
-| `data_ready` 已有数据 | 研究型先入库形成证据声明，再按数据出大纲。蓝图建议顺序是方法→结果→讨论→引言→结论，用户确认时可以改。批准后按蓝图顺序写。综述建议顺序仍可从引言起，空项目先打开实验数据 |
+| `data_ready` 已有数据 | 研究型先入库形成证据声明，再按数据出大纲。蓝图建议顺序是方法→结果→讨论→引言→结论，用户确认时可以改。批准后按蓝图顺序写。新建后留在对话，不自动打开实验数据 |
 
-项目设置可改目标期刊、目标字数、期刊格式模板、图表预设和入口，保存走 `PATCH /api/projects/:id/paper-passport`（模板同时写回 `Project.template`）。分节写作的系统提示在护照有期刊或字数时带一句；登记刊的 `writerNote` 追加在这句后面。无 URL `tab` 时，空的已有大纲打开论证提纲，没有证据声明的已有数据打开实验数据。
+项目设置可改目标期刊、目标字数、期刊格式模板、图表预设和入口，保存走 `PATCH /api/projects/:id/paper-passport`（模板同时写回 `Project.template`）。分节写作的系统提示在护照有期刊或字数时带一句；登记刊的 `writerNote` 追加在这句后面。无 URL `tab` 时，空的已有大纲打开论证提纲。新建的研究型项目留在对话，不自动打开实验数据。
 
 ## 期刊规格
 
@@ -39,9 +39,9 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 - **writer**：Agent 主推理循环 + 写作管道主模型（默认 DeepSeek `deepseek-v4-flash`）
 - **verifier**：一致性 / 引用审查（默认智谱，模型名是共用的 `ZHIPU_MODEL`）
 - **refiner**：写作后润色（默认 DeepSeek）
-- **决策卡**：每轮用户消息调用一次智谱，只返回一张任务卡（写一节、改配置、检索、出大纲或蓝图、或追问）。模型名单独存在 `AGENT_DECISION_MODEL`，默认 `glm-4-plus`，与审查共用的 `ZHIPU_MODEL` 分开。决策原文不进写作对话。写作仍走 DeepSeek。
+- **决策卡**：每轮用户消息调用一次智谱，只返回一张任务卡（写一节、改配置、检索、出大纲或蓝图、或追问）。模型名与智谱卡片相同，读 `ZHIPU_MODEL`（可在「配置模型」里自定义，例如 GLM-5.3-Flash）。决策原文不进写作对话。写作仍走 DeepSeek。
 - **planner**：角色厂商映射仍保留。图入口不再把多步 `Plan:` 写进 `messages`。
-- 调用侧：写作循环 `callAINonStreamingWithTools` / `callAIStreamingWithTools` 接受 `role`（默认 writer）。决策卡走 `requestTurnDecision`，`callAI` 可传 `model` 覆盖厂商默认模型名。
+- 调用侧：写作循环 `callAINonStreamingWithTools` / `callAIStreamingWithTools` 接受 `role`（默认 writer）。决策卡走 `requestTurnDecision`，不另传模型名，因此与智谱卡片当前模型一致。
 - **DeepSeek V4 + tools**：`buildChatCompletionsBody` 关闭 thinking。V4 默认 thinking 开着时，带 tools 的后续请求必须回传上一轮 `reasoning_content`；本仓库把 Plan/工具观察写成普通 assistant/user，回传不了，会 400（`reasoning_content in the thinking mode must be passed back`）。无 tools 的写节/审查不受影响。
 
 ## 关键文件
@@ -188,7 +188,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **配置先于大纲（2026-10-05）**：论文配置没写全、用户也没在配置问答里跳过时，不生成大纲、不弹出确认大纲。写作或「生成大纲」会先停在配置问答。检索、诊断、引用核查、审查仍不拦这一步。
 - **走查后的写回与配图（2026-10-05）**：外部检索 observation 列出前 10 篇完整题名，不再只留第一篇前 40 字，也不再每次催「凑到约 30 篇」。引用硬门只在「这句明显更像另一篇」时拦导出；中文句子对不上英文摘要标成判不了。主张未绑定时不再剥掉句末 `[n]`。综述的研究现状和综述正文保留 Markdown 小标题；`subsectionTitle` 没写进正文时写回前补上。页面批准蓝图即确认，禁止再要求用户打「确认蓝图」。写节后文字对比表（`generate_table` 的 `rows`）仍可排队。流程图和机理图不自动画，等用户点名再调用 `draft_mechanism_figure`。题名是农田重金属、又没有写明热解时，本地库不锁热化学。「继续推进」不执行最新回复里没提到的过期计划。中文项目（`language=zh`）的预览和 Word 用「摘要」和作者名，占位署名 Lab Member 显示为「作者姓名」。
 - **蓝图真正驱动 Writer（2026-08-09）**：修复「批准蓝图后正文仍不按蓝图生成」。根因：①`loadAgentProject` 曾把 `WritingBlueprint` JSON 误 `as WritingGlobalContext`，`prepare-context` 读 `globalContext.blueprint` 恒为 undefined，【写作蓝图摘要】不进 Writer；②`write_section` 未调用工作台同款的本节蓝图注入（purpose/keyPoints/配图）。现：loader 用 `parseWritingBlueprint` 正确嵌套 `globalContext.blueprint` 并附 outline/sectionPreviews；`lib/agent/blueprint-write-context.ts` 将英文 section key 映射到大纲/蓝图中文路径，聚合本节 guides 注入 `【写作蓝图（本节）】`；简报补 keyPoints + 配图计划；system prompt / 工具说明要求对齐蓝图。
-- **蓝图配图在写节后真正出图（2026-10-01）**：此前 figurePlan 只进 Writer 提示（规划配图文案），Agent slim Writer 还禁止 【FIGURE】JSON，所以段落扩写不会画图。现 `write_section` 落库后 `toolsNode` 按 `figurePlan.dataBinding` / 试验表目录自动排队 `generate_chart(chartIndex, sectionKey)`；专家工具扩写同样用绑定数据走 `generateFigure`。流程图仍须 `draft_mechanism_figure`。无绑定数据的必需图会提示上传 CSV/Excel。实现：`lib/blueprint-chart-jobs.ts`。
+- **蓝图配图在写节后真正出图（2026-10-01）**：此前 figurePlan 只进 Writer 提示（规划配图文案），Agent slim Writer 还禁止 【FIGURE】JSON，所以段落扩写不会画图。现 `write_section` 落库后 `toolsNode` 按 `figurePlan.dataBindings`（旧稿仍读单条 `dataBinding`）自动排队 `generate_chart`，一张图可对应多条已经对上的试验数据；对不上或还没上传的留空，并用 `dataGap` 写一句提示。`generate_writing_blueprint` 会带上项目图表目录，只让模型绑定测量种类对得上的行。流程图仍须 `draft_mechanism_figure`。无绑定数据的必需图会提示上传 CSV/Excel。实现：`lib/blueprint-chart-jobs.ts`、`lib/blueprint-utils.ts`。
 - **综述正文禁止一次写整章（2026-08-09）**：Agent 曾把 phase 文案「一次任务可连续写多节」理解成对 `literature_body` 一次写出 5–7k 字（UI 可达万字+），导致超时/质量塌陷。现：① phase-pack / planner / review_write nudge / system prompt 明确「按蓝图子节 + subsectionTitle 逐节写」；② `write_section` 在 `literature_body` 无 `subsectionTitle` 且蓝图有 ≥2 子节路径时 soft-gate 拒绝并列出建议标题。
 - **子节标题不要蓝图路径（2026-10-02）**：`subsectionTitle` 若带「父 > 子」，模型会把路径粘在段首。写回用叶子标题并剥段首面包屑；Writer/简报禁止把路径写进正文。
 - **写节事实门（2026-10-02）**：`cite_semantic_mismatch`（句内精确数据/温度对不上摘要）、未绑主张却硬挂 `[n]`、`overclaim` 在修补后仍在则 **不 persist**。未绑引用确定性剥掉；区间 `[1-3]` 按每个编号过滤，两端在白名单而中间不在时不再整段保留。质检已拦住的 `write_section`（`blocked`）算本轮收口，不再追加「还没落地，请再写」。Agent 同名子节覆盖旧稿，工作台扩写仍可追加。
@@ -285,7 +285,7 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 
 **已落地 DATA-01**：`lib/agent/data-foundation.ts`。研究型 `write_section(results)` 在根基 `empty` 时拒绝；`inspect_project` / 简报 / `list_plot_sources` 共用同一套状态。
 
-**已落地 DATA-02**：`ingest_project_data`（`lib/agent/data-confirm.ts`）。附件或粘贴 CSV 先拆成数据块（多工作表、空行隔开的多张表、空两列的并排表），确认卡勾选后才 PATCH `dataSources`/`dataClaims`。未确认不写库。单块文件仍用原文件名；多块用 `文件名 · 标签`，避免互相覆盖。样品名里未加引号的逗号并回第一列，避免共掺样品被拆掉。元素或组分列只记组成，不做「A 较 B 提高百分之几」的组间对比。
+**已落地 DATA-02**：`ingest_project_data`（`lib/agent/data-confirm.ts`）。附件或粘贴 CSV 先拆成数据块（多工作表、空行隔开的多张表、空两列的并排表、数字段中间重新出现的表头），确认卡勾选后才 PATCH `dataSources`/`dataClaims`。未确认不写库。单块文件仍用原文件名；多块用 `文件名 · 标签`，避免互相覆盖。样品名里未加引号的逗号并回第一列，避免共掺样品被拆掉。元素或组分列只记组成，不做「A 较 B 提高百分之几」的组间对比。已入库窗口可切到「按主题」：孔结构、XRD、FT-IR、XPS 至少两份文件表头对得上才出现建议，对不上的留在未归入。主题只是看法，不改原文件，未确认不进蓝图。
 
 **数据确认（2026-10-08）**：表格和已有图可以点回形针，也可以直接拖进写作助手整栏（松开后走同一附件流程）。实验数据页的上传区也可以拖入 CSV / Excel。上传表格不再自动入库。写作助手顶栏「数据」按原文件分栏：左侧选块，右侧看表，并给出列的最小–最大、复制、细调（打开绘图页并预填这一块）、交给助手、移出项目。仪器参数和切坏的短块收在文件下面。实验数据页不再展开摘要、证据声明和扩写预览。对话框里的表格不按固定表头自动切块。助手先读带行号的原文，用 `tablesJson` 说明工作表、表头行、列号和含义；确认卡只展示这份读法，勾选后才写入。长曲线不写成均值或趋势声明。XRD / 红外叠谱用 `plot_peak_stack`：按已入库文件名取曲线，峰和虚线只标用户给出的位置和名称；没给峰就只画叠谱并追问。不要把整条谱贴进 `generate_chart`，也不要自己编化学归属。芯片对未确认表格显示「待确认」，已有图显示「待登记」。已有 png/jpg/webp/gif/tiff，以及单页成图 PDF，经同一确认卡处理。确认前用视觉模型读出图上能看清的点，用户勾选后才写成 `dataClaims`（供写作引用）并登记进 `Project.charts`（`figureId: existing`）。没读出或没勾选的数字不进正文。TIFF 登记时用 Pillow 转成 PNG。单页 PDF 把第一页渲成 PNG 入库并保留原 PDF。一页里有多张图时，确认卡按空白拆开列出，默认登记拆开的图，整页可再勾。多页 PDF 仍当文献，不进图表库。只有参数里带了用户指定的 `sectionKey` 才插入正文。
 

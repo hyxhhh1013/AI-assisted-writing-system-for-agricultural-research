@@ -12,8 +12,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { DataSourceAnalysis, EvidenceClaim } from "@/contracts/data-source";
+import type { DataThemeProposal, DataThemeUnassigned } from "@/lib/data-themes";
 import { fetchStoredTablePreview } from "@/services/data-preview";
 import { patchProjectFields } from "@/services/project";
+import { proposeDataThemes } from "@/lib/data-themes";
 import {
   storedTableDetail,
   type TableSnapshot,
@@ -236,24 +238,97 @@ function BlockButton({
   source,
   active,
   onSelect,
+  caption,
+  hint,
 }: {
   source: DataSourceAnalysis;
   active: boolean;
   onSelect: () => void;
+  caption?: string;
+  hint?: string;
 }) {
   const { label } = splitStoredName(source.fileName);
   return (
     <button
       type="button"
       onClick={onSelect}
+      title={hint}
       className={cn(
         "flex w-full items-baseline justify-between gap-2 rounded-md px-2 py-1.5 text-left",
         active ? "bg-white text-[#1a5632] shadow-sm ring-1 ring-[#1a5632]/15" : "text-[#122820] hover:bg-white/70",
       )}
     >
-      <span className="min-w-0 truncate text-[12px]">{label}</span>
+      <span className="min-w-0 truncate text-[12px]">{caption || label}</span>
       <span className="shrink-0 text-[10px] tabular-nums text-[#8aa090]">{source.rowCount} 行</span>
     </button>
+  );
+}
+
+function ThemeList({
+  themes,
+  unassigned,
+  sources,
+  selectedName,
+  onSelect,
+}: {
+  themes: DataThemeProposal[];
+  unassigned: DataThemeUnassigned[];
+  sources: DataSourceAnalysis[];
+  selectedName: string | null;
+  onSelect: (fileName: string) => void;
+}) {
+  if (themes.length === 0 && unassigned.length === 0) {
+    return <p className="px-1 py-4 text-[12px] text-[#8aa090]">没有对得上的主题</p>;
+  }
+  return (
+    <>
+      {themes.map((theme) => (
+        <section key={theme.id} className="mb-3">
+          <div className="px-1 py-1">
+            <p className="text-[12px] font-medium text-[#122820]">{theme.title}</p>
+            <p className="text-[10px] leading-4 text-[#5a7a68]">
+              {new Set(theme.members.map((member) => member.file)).size} 个文件 · {theme.evidence}
+            </p>
+          </div>
+          <div className="space-y-0.5">
+            {theme.members.map((member) => {
+              const source = sources.find((item) => item.fileName === member.fileName);
+              if (!source) return null;
+              return (
+                <BlockButton
+                  key={member.fileName}
+                  source={source}
+                  active={source.fileName === selectedName}
+                  onSelect={() => onSelect(source.fileName)}
+                  caption={member.sample}
+                />
+              );
+            })}
+          </div>
+        </section>
+      ))}
+      {unassigned.length > 0 ? (
+        <section className="mb-3">
+          <p className="px-1 py-1 text-[11px] text-[#8a5a20]">未归入</p>
+          <div className="space-y-0.5">
+            {unassigned.map((item) => {
+              const source = sources.find((entry) => entry.fileName === item.fileName);
+              if (!source) return null;
+              return (
+                <BlockButton
+                  key={item.fileName}
+                  source={source}
+                  active={source.fileName === selectedName}
+                  onSelect={() => onSelect(source.fileName)}
+                  caption={splitStoredName(source.fileName).file}
+                  hint={item.reason}
+                />
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+    </>
   );
 }
 
@@ -274,6 +349,7 @@ export function ProjectDataButton({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [view, setView] = useState<"file" | "theme">("file");
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [notesOpen, setNotesOpen] = useState<Record<string, boolean>>({});
   const [loaded, setLoaded] = useState<Record<string, TableSnapshot | null>>({});
@@ -282,6 +358,22 @@ export function ProjectDataButton({
   const [removing, setRemoving] = useState(false);
 
   const groups = useMemo(() => groupSources(sources, query), [sources, query]);
+  const themeReport = useMemo(
+    () => proposeDataThemes(sources.filter((source) => !isSideNote(source))),
+    [sources],
+  );
+  const q = query.trim().toLowerCase();
+  const visibleThemes = themeReport.themes
+    .map((theme) => ({
+      ...theme,
+      members: theme.members.filter((member) =>
+        !q || `${theme.title} ${member.file} ${member.sample} ${member.label}`.toLowerCase().includes(q),
+      ),
+    }))
+    .filter((theme) => theme.members.length > 0);
+  const visibleUnassigned = themeReport.unassigned.filter((item) =>
+    !q || `${item.file} ${item.label} ${item.reason}`.toLowerCase().includes(q),
+  );
   const sourcesRef = useRef(sources);
   sourcesRef.current = sources;
   const selected = sources.find((source) => source.fileName === selectedName) ?? null;
@@ -343,7 +435,16 @@ export function ProjectDataButton({
       toast.message("请等当前任务结束后再交给助手");
       return;
     }
-    onAsk(askText(selected, snapshot, selectedLabel));
+    const theme = themeReport.themes.find((item) =>
+      item.members.some((member) => member.fileName === selected.fileName),
+    );
+    const samples = theme
+      ? [...new Set(theme.members.map((member) => member.sample))].join("、")
+      : "";
+    const note = theme
+      ? `\n这一块可以和这些样品看成同一个主题「${theme.title}」：${samples}。只根据表里出现的内容说，不要把对不上的数字并进去。`
+      : "";
+    onAsk(askText(selected, snapshot, selectedLabel) + note);
     setOpen(false);
   };
 
@@ -390,7 +491,9 @@ export function ProjectDataButton({
               <DialogDescription className="mt-1 text-[12px]">
                 {sources.length === 0
                   ? "确认入库之后会出现在这里。"
-                  : `${fileCount} 个文件 · ${sources.length} 块`}
+                  : view === "theme"
+                    ? `${themeReport.themes.length} 个主题建议 · 未确认，不改原文件`
+                    : `${fileCount} 个文件 · ${sources.length} 块`}
               </DialogDescription>
             </div>
           </div>
@@ -405,12 +508,36 @@ export function ProjectDataButton({
                   <Input
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder="搜索文件或列"
+                    placeholder={view === "theme" ? "搜索主题或样品" : "搜索文件或列"}
                     className="h-8 bg-white text-[12px]"
                   />
+                  <div className="mt-2 flex rounded-md bg-white p-0.5 text-[11px] ring-1 ring-[#1a5632]/15">
+                    <button
+                      type="button"
+                      className={cn("flex-1 rounded px-2 py-1", view === "file" ? "bg-[#1a5632] text-white" : "text-[#3d4f46]")}
+                      onClick={() => setView("file")}
+                    >
+                      按文件
+                    </button>
+                    <button
+                      type="button"
+                      className={cn("flex-1 rounded px-2 py-1", view === "theme" ? "bg-[#1a5632] text-white" : "text-[#3d4f46]")}
+                      onClick={() => setView("theme")}
+                    >
+                      按主题
+                    </button>
+                  </div>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-                  {groups.length === 0 ? (
+                  {view === "theme" ? (
+                    <ThemeList
+                      themes={visibleThemes}
+                      unassigned={visibleUnassigned}
+                      sources={sources}
+                      selectedName={selectedName}
+                      onSelect={setSelectedName}
+                    />
+                  ) : groups.length === 0 ? (
                     <p className="px-1 py-4 text-[12px] text-[#8aa090]">没有匹配的表</p>
                   ) : groups.map((group) => (
                     <section key={group.file} className="mb-3">

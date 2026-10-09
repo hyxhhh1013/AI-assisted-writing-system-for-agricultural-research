@@ -89,8 +89,8 @@ export function validateProviderKey(provider: ModelProviderKey): string | null {
 // ==================== Agent 角色模型映射 ====================
 // Writer / Verifier / Refiner / Planner 可独立配置使用不同模型提供者
 // 当 Verifier 使用与 Writer 不同的模型时，实现真正的独立验证。
-// 决策卡固定走智谱，模型名单独存在 AGENT_DECISION_MODEL（默认 glm-4-plus），
-// 与审查共用的 ZHIPU_MODEL 分开。写作仍走 DeepSeek。
+// 决策卡走智谱，模型名与智谱卡片相同（ZHIPU_MODEL，可自定义，如 GLM-5.3-Flash）。
+// 写作仍走 DeepSeek。
 // 默认值硬编码；Admin 保存 AGENT_ROLE_* 设置后由 loadAgentRoleProviders() 刷新内存缓存，
 // 保持 getAgentProvider 同步——全库有 27+ 处同步调用，不能改成 async。
 
@@ -132,28 +132,6 @@ export async function loadAgentRoleProviders(): Promise<void> {
 
 export function getAgentProvider(role: AgentRole): ModelProviderKey {
   return agentRoleProviders[role];
-}
-
-/** 决策卡专用智谱模型名，与审查共用的 ZHIPU_MODEL 分开 */
-export const AGENT_DECISION_MODEL_KEY = "AGENT_DECISION_MODEL";
-export const DEFAULT_AGENT_DECISION_MODEL = "glm-4-plus";
-
-export function normalizeDecisionModel(name: string | null | undefined): string {
-  const trimmed = name?.trim() ?? "";
-  return (ZHIPU_MODEL_OPTIONS as readonly string[]).includes(trimmed)
-    ? trimmed
-    : DEFAULT_AGENT_DECISION_MODEL;
-}
-
-export async function resolveDecisionModel(): Promise<string> {
-  try {
-    const { getSetting } = await import("./settings");
-    const fromDb = await getSetting(AGENT_DECISION_MODEL_KEY);
-    if (fromDb?.trim()) return normalizeDecisionModel(fromDb);
-  } catch {
-    /* DB 失败则回退 */
-  }
-  return normalizeDecisionModel(process.env.AGENT_DECISION_MODEL);
 }
 
 /** 获取某 agent 角色的模型配置，含 key 有效性检查 */

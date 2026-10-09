@@ -185,6 +185,25 @@ describe("buildBlueprintPrompt — 不再诱导非法枚举", () => {
     expect(p).toContain('"language": "en"');
     expect(p).toContain('"projectMode": "research"');
     expect(p).toContain('"dataSource": "experiment"');
+    expect(p).toContain("dataGap");
+  });
+
+  it("with a chart catalog, tells the model to bind only matching rows", () => {
+    const p = buildBlueprintPrompt({
+      title: "t",
+      researchDirection: "d",
+      outline: "## 结果与分析\nFT-IR",
+      language: "zh",
+      projectMode: "research",
+      chartCatalog: [
+        { index: 0, title: "FT-IR 600", sourceFileName: "ir.csv", variable: "FT-IR" },
+        { index: 1, title: "Cu-BC 孔结构标量", sourceFileName: "pore.csv", variable: "孔" },
+      ],
+    });
+    expect(p).toContain("[0] FT-IR 600");
+    expect(p).toContain("dataBindings");
+    expect(p).toContain("dataGap");
+    expect(p).toContain("不要为了填满而绑错行");
   });
 });
 

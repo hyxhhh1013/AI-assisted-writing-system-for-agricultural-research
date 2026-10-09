@@ -95,6 +95,39 @@ describe("collectBoundChartJobsForSection", () => {
     expect(jobs[0]?.figurePlanId).toBe("fig-yield");
   });
 
+  it("emits one job per explicit binding on the same figure", () => {
+    const multi: WritingBlueprint = {
+      ...blueprint,
+      figurePlan: {
+        ...blueprint.figurePlan,
+        items: [
+          {
+            id: "fig-pore",
+            sectionPath: "结果与分析 > 孔结构",
+            type: "chart",
+            purpose: "孔结构标量",
+            suggestedCaption: "图4 孔结构",
+            priority: "required",
+            dataBindings: [
+              { kind: "chartConfig", chartConfigIndex: 0 },
+              { kind: "chartConfig", chartConfigIndex: 1 },
+            ],
+            dataGap: "BET 曲线还没上传",
+          },
+        ],
+      },
+    };
+    const { jobs, unboundRequired } = collectBoundChartJobsForSection({
+      blueprint: multi,
+      sectionKey: "results",
+      mode: "research",
+      subsectionTitle: "孔结构",
+      chartConfigs: configs,
+    });
+    expect(jobs.map((job) => job.chartIndex)).toEqual([0, 1]);
+    expect(unboundRequired).toHaveLength(0);
+  });
+
   it("skips flow/schematic (need draft_mechanism_figure)", () => {
     const { jobs } = collectBoundChartJobsForSection({
       blueprint,

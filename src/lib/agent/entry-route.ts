@@ -111,14 +111,12 @@ export function blueprintRouteHint(
   return undefined;
 }
 
+/** 已有大纲且提纲还空时打开提纲。研究型空项目留在对话，不自动打开实验数据。 */
 export function openingWorkbenchTab(input: {
   entryMode: AgentEntryModeId | null | undefined;
   outlineChars: number;
-  claimCount: number;
-  paperMode: "review" | "research";
-}): "outline" | "data" | null {
+}): "outline" | null {
   if (input.entryMode === "outline_ready" && input.outlineChars < 20) return "outline";
-  if (input.entryMode === "data_ready" && input.claimCount === 0) return "data";
   return null;
 }
 

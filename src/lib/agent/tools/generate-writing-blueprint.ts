@@ -9,11 +9,13 @@ import {
   coerceWritingBlueprintPayload,
   formatBlueprintValidationError,
 } from "@/lib/blueprint-coerce";
-import { computeOutlineHash } from "@/lib/blueprint-utils";
+import { computeOutlineHash, buildBlueprintChartCatalog, enrichBlueprintChartBindingsFromCatalog } from "@/lib/blueprint-utils";
 import { blueprintRouteHint } from "@/lib/agent/entry-route";
 import { buildBlueprintPrompt } from "@/lib/prompts/blueprint";
 import { syncProjectPaperPassport } from "@/lib/project-paper-passport-sync";
 import { writeWritingBlueprint } from "@/lib/project-writing-blueprint-db";
+import { parseDataSources } from "@/contracts/project";
+import prisma from "@/lib/prisma";
 import { writingBlueprintPayloadSchema } from "@/lib/validations";
 
 function extractJsonObject(rawText: string): unknown {
@@ -79,6 +81,14 @@ export const generateWritingBlueprintTool: ToolDefinition = {
     const targetWordCount = project.paperConfig?.wordCount?.trim() || "";
     const targetRange = parsePaperConfigWordRange(targetWordCount);
 
+    const owned = await prisma.project.findFirst({
+      where: { id: ctx.projectId, userId: ctx.userId },
+      select: { dataSources: true },
+    });
+    const chartCatalog = buildBlueprintChartCatalog(
+      parseDataSources({ dataSources: owned?.dataSources ?? undefined }),
+    );
+
     const systemPrompt = buildBlueprintPrompt({
       title: project.title,
       researchDirection: project.researchDirection || project.title,
@@ -88,6 +98,7 @@ export const generateWritingBlueprintTool: ToolDefinition = {
       targetJournal: project.paperConfig?.targetJournal?.trim() || undefined,
       targetWordCount: targetWordCount || undefined,
       routeHint: blueprintRouteHint(project.agentEntryMode, project.mode),
+      chartCatalog,
       bibliographyBlock: formatProjectBibliographyBlock({
         references: project.references,
         evidence: project.referenceEvidence,
@@ -143,7 +154,7 @@ export const generateWritingBlueprintTool: ToolDefinition = {
       ...item,
       id: item.id?.trim() || `fig-${index + 1}`,
     }));
-    const blueprint: WritingBlueprint = {
+    const blueprint: WritingBlueprint = enrichBlueprintChartBindingsFromCatalog({
       ...checked.data,
       version: 1,
       projectMode:
@@ -158,7 +169,7 @@ export const generateWritingBlueprintTool: ToolDefinition = {
         totalMax: Math.max(checked.data.figurePlan.totalMax, totalMin),
         items,
       },
-    };
+    }, chartCatalog);
 
     if (persist) {
       await writeWritingBlueprint(ctx.projectId, JSON.stringify(blueprint));

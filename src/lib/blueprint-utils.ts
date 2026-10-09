@@ -1,4 +1,5 @@
 import type {
+  FigureDataBinding,
   FigurePlanItem,
   FigurePlanType,
   SectionGuide,
@@ -106,15 +107,59 @@ function chartConfigsEqual(a: ChartConfig, b: ChartConfig): boolean {
   return a.title === b.title && a.type === b.type && a.yLabel === b.yLabel;
 }
 
-/** 为 chart 项解析 chartConfig 全局下标 */
+/** 一张图上已确定的数据绑定。多条优先，否则退回旧的单条。 */
+export function figureDataBindings(item: FigurePlanItem): FigureDataBinding[] {
+  const list = (item.dataBindings ?? []).filter(
+    (binding) => binding.kind === "chartConfig" && binding.chartConfigIndex >= 0,
+  );
+  if (list.length > 0) return dedupeBindings(list);
+  if (item.dataBinding?.kind === "chartConfig" && item.dataBinding.chartConfigIndex >= 0) {
+    return [item.dataBinding];
+  }
+  return [];
+}
+
+function dedupeBindings(list: FigureDataBinding[]): FigureDataBinding[] {
+  const seen = new Set<number>();
+  const out: FigureDataBinding[] = [];
+  for (const binding of list) {
+    if (seen.has(binding.chartConfigIndex)) continue;
+    seen.add(binding.chartConfigIndex);
+    out.push(binding);
+  }
+  return out;
+}
+
+function fillBindingFromCatalog(
+  binding: FigureDataBinding,
+  catalog: BlueprintChartCatalogEntry[],
+): FigureDataBinding | null {
+  const entry = catalog[binding.chartConfigIndex];
+  if (!entry || entry.index !== binding.chartConfigIndex) {
+    const found = catalog.find((item) => item.index === binding.chartConfigIndex);
+    if (!found) return null;
+    return {
+      ...binding,
+      sourceFileName: found.sourceFileName,
+      variable: found.variable,
+      chartTitle: found.title,
+    };
+  }
+  return {
+    ...binding,
+    sourceFileName: entry.sourceFileName,
+    variable: entry.variable,
+    chartTitle: entry.title,
+  };
+}
 export function resolveChartConfigIndex(
   item: FigurePlanItem,
   chartConfigs: ChartConfig[],
 ): number | null {
   if (chartConfigs.length === 0) return null;
 
-  const bound = item.dataBinding;
-  if (bound?.kind === "chartConfig") {
+  const bound = figureDataBindings(item)[0];
+  if (bound) {
     const idx = bound.chartConfigIndex;
     if (idx >= 0 && idx < chartConfigs.length) return idx;
   }
@@ -164,20 +209,34 @@ export function enrichBlueprintChartBindingsFromCatalog(
   }));
 
   const items = blueprint.figurePlan.items.map((item) => {
+    if (item.type !== "chart" && item.type !== "xrd") return item;
+    const explicit = figureDataBindings(item)
+      .map((binding) => fillBindingFromCatalog(binding, catalog))
+      .filter((binding): binding is FigureDataBinding => binding !== null);
+    if (explicit.length > 0) {
+      return {
+        ...item,
+        dataBindings: explicit,
+        dataBinding: explicit[0],
+      };
+    }
+    if (item.dataGap?.trim()) return item;
     if (item.type !== "chart") return item;
     const idx = resolveChartConfigIndex(item, chartConfigs);
     if (idx === null) return item;
-    const entry = catalog[idx];
+    const entry = catalog.find((row) => row.index === idx) ?? catalog[idx];
     if (!entry) return item;
+    const binding: FigureDataBinding = {
+      kind: "chartConfig",
+      chartConfigIndex: entry.index,
+      sourceFileName: entry.sourceFileName,
+      variable: entry.variable,
+      chartTitle: entry.title,
+    };
     return {
       ...item,
-      dataBinding: {
-        kind: "chartConfig" as const,
-        chartConfigIndex: idx,
-        sourceFileName: entry.sourceFileName,
-        variable: entry.variable,
-        chartTitle: entry.title,
-      },
+      dataBinding: binding,
+      dataBindings: [binding],
     };
   });
 
@@ -188,10 +247,12 @@ export function enrichBlueprintChartBindingsFromCatalog(
 }
 
 export function blueprintFigureDataBindingLabel(item: FigurePlanItem): string | null {
-  const b = item.dataBinding;
-  if (b?.kind !== "chartConfig") return null;
-  const parts = [b.chartTitle, b.variable, b.sourceFileName].filter(Boolean);
-  return parts.length > 0 ? parts.join(" · ") : `推荐图表 #${b.chartConfigIndex + 1}`;
+  const list = figureDataBindings(item);
+  if (list.length === 0) return null;
+  return list.map((binding) => {
+    const parts = [binding.chartTitle, binding.variable, binding.sourceFileName].filter(Boolean);
+    return parts.length > 0 ? parts.join(" · ") : `推荐图表 #${binding.chartConfigIndex + 1}`;
+  }).join("；");
 }
 
 /** 蓝图配图项 → /plot 深链（chart 类优先 chartIdx 载入项目试验数据） */

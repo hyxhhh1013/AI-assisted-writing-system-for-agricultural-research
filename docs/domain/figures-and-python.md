@@ -131,7 +131,7 @@
 
 ```text
 Data Tab / Agent 附件上传 CSV → Project.dataSources（含 chartConfigs）
-    → 写作蓝图 type=chart 填 dataBinding.chartConfigIndex
+    → 写作蓝图 type=chart / xrd 可填多条 dataBindings[].chartConfigIndex；对不上的写 dataGap，不猜测绑定
     → write_section 落库后自动 generate_chart(chartIndex, sectionKey)
       （blueprint-chart-jobs.ts；专家工具扩写走 generateFigure）
     或 list_plot_sources → 手调 generate_chart(chartIndex / csvData+chartType)

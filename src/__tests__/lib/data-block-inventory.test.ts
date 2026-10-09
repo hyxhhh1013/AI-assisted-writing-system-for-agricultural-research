@@ -161,4 +161,21 @@ describe("data block inventory", () => {
   it("sourceFileNames 单块不改名", () => {
     expect(sourceFileNames("a.csv", ["产量"])).toEqual(["a.csv"]);
   });
+
+  it("数字段中间的表头另成一块，前面的数字保留", () => {
+    const grid = [
+      ["1316.4271", "0.003272", "0.003215", "1243.1376"],
+      ["1356.3315", "0.00004", "0.000024", "0.998287"],
+      ["539.486", "0.999971", "0.998275", "0.031009"],
+      ["9.015", "相对压力 P/Po", "log(Po/P)^2", "Harkins and Jura"],
+      ["1321.2981", "0.857808", "0.011952", "49.156597"],
+      ["", "0.880833", "0.072808", "49.151604"],
+    ];
+    const blocks = inventorySheetGrids([{ sheetName: "Sheet1", grid }], "Mo-BC.XLSX");
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]?.locator.headerless).toBe(true);
+    expect(blocks[0]?.rowCount).toBe(3);
+    expect(blocks[1]?.headers.some((header) => header.includes("相对压力"))).toBe(true);
+    expect(blocks[1]?.preview[0]?.some((cell) => cell.includes("0.857808"))).toBe(true);
+  });
 });

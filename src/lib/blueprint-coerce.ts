@@ -89,6 +89,39 @@ function coerceDataSource(v: unknown): string | undefined {
   return undefined; // 非法值直接丢弃，避免 zod enum 失败
 }
 
+function coerceOneBinding(raw: unknown): Record<string, unknown> | null {
+  const binding = asRecord(raw);
+  if (!binding) return null;
+  const kind = String(binding.kind ?? "chartConfig").trim();
+  if (kind !== "chartConfig") return null;
+  const chartConfigIndex = coerceInt(binding.chartConfigIndex ?? binding.index, -1);
+  if (chartConfigIndex < 0) return null;
+  return {
+    kind: "chartConfig",
+    chartConfigIndex,
+    sourceFileName: binding.sourceFileName,
+    variable: binding.variable,
+    chartTitle: binding.chartTitle,
+  };
+}
+
+function coerceFigureBindings(o: Record<string, unknown>): Record<string, unknown>[] {
+  const fromList = Array.isArray(o.dataBindings)
+    ? o.dataBindings.map(coerceOneBinding).filter((item): item is Record<string, unknown> => item !== null)
+    : [];
+  const single = coerceOneBinding(o.dataBinding);
+  const merged = single ? [single, ...fromList] : fromList;
+  const seen = new Set<number>();
+  const out: Record<string, unknown>[] = [];
+  for (const item of merged) {
+    const index = item.chartConfigIndex;
+    if (typeof index !== "number" || seen.has(index)) continue;
+    seen.add(index);
+    out.push(item);
+  }
+  return out.slice(0, 12);
+}
+
 function coerceFigureItem(raw: unknown, index: number): Record<string, unknown> | null {
   const o = asRecord(raw);
   if (!o) return null;
@@ -124,22 +157,13 @@ function coerceFigureItem(raw: unknown, index: number): Record<string, unknown> 
   };
   const ds = coerceDataSource(o.dataSource);
   if (ds) out.dataSource = ds;
-  const binding = asRecord(o.dataBinding);
-  if (binding) {
-    const kind = String(binding.kind ?? "chartConfig").trim();
-    if (kind === "chartConfig") {
-      out.dataBinding = {
-        kind: "chartConfig",
-        chartConfigIndex: coerceInt(
-          binding.chartConfigIndex ?? binding.index,
-          0,
-        ),
-        sourceFileName: binding.sourceFileName,
-        variable: binding.variable,
-        chartTitle: binding.chartTitle,
-      };
-    }
+  const bindings = coerceFigureBindings(o);
+  if (bindings.length > 0) {
+    out.dataBindings = bindings;
+    out.dataBinding = bindings[0];
   }
+  const gap = String(o.dataGap ?? "").trim();
+  if (gap) out.dataGap = gap.slice(0, 200);
   return out;
 }
 

@@ -10,6 +10,7 @@ import type { FigurePlanItem, WritingBlueprint } from "@/contracts/writing-bluep
 import { chartTypeToFigureId } from "@/contracts/figure";
 import {
   figureBelongsToSection,
+  figureDataBindings,
   resolveChartConfigIndex,
 } from "@/lib/blueprint-utils";
 import { mapToSectionForMode } from "@/lib/utils";
@@ -91,29 +92,35 @@ export function collectBoundChartJobsForSection(input: {
       continue;
     }
 
-    const idx = resolveChartConfigIndex(item, input.chartConfigs);
-    if (idx === null || usedIndex.has(idx)) {
-      if (item.priority === "required") unboundRequired.push(item);
-      continue;
+    const explicit = figureDataBindings(item).map((binding) => binding.chartConfigIndex);
+    const indexes = explicit.length > 0
+      ? explicit
+      : (() => {
+        const idx = resolveChartConfigIndex(item, input.chartConfigs);
+        return idx === null ? [] : [idx];
+      })();
+    let added = 0;
+    for (const idx of indexes) {
+      if (usedIndex.has(idx)) continue;
+      const cfg = input.chartConfigs[idx];
+      if (!cfg || cfg.labels.length === 0 || cfg.datasets.length === 0) continue;
+      usedIndex.add(idx);
+      added += 1;
+      jobs.push({
+        figurePlanId: item.id,
+        chartIndex: idx,
+        caption: item.suggestedCaption.trim() || cfg.title,
+        title: cfg.title || item.suggestedCaption,
+        chartType: cfg.type,
+        figureId: chartTypeToFigureId(cfg.type),
+        xLabel: cfg.xLabel,
+        yLabel: cfg.yLabel,
+        labels: cfg.labels,
+        datasets: cfg.datasets,
+      });
+      if (jobs.length >= cap) break;
     }
-    const cfg = input.chartConfigs[idx];
-    if (!cfg || cfg.labels.length === 0 || cfg.datasets.length === 0) {
-      if (item.priority === "required") unboundRequired.push(item);
-      continue;
-    }
-    usedIndex.add(idx);
-    jobs.push({
-      figurePlanId: item.id,
-      chartIndex: idx,
-      caption: item.suggestedCaption.trim() || cfg.title,
-      title: cfg.title || item.suggestedCaption,
-      chartType: cfg.type,
-      figureId: chartTypeToFigureId(cfg.type),
-      xLabel: cfg.xLabel,
-      yLabel: cfg.yLabel,
-      labels: cfg.labels,
-      datasets: cfg.datasets,
-    });
+    if (added === 0 && item.priority === "required") unboundRequired.push(item);
     if (jobs.length >= cap) break;
   }
 

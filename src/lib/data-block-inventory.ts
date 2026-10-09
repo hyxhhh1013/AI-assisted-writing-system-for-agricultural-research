@@ -2,7 +2,8 @@ import type { ChartConfig, DataSourceAnalysis, EvidenceClaim } from "@/contracts
 
 /**
  * 把一个表格文件拆成多块可核对的数据。
- * 常见实验表：多个工作表，或同一表里用空行隔开的几张表，或中间空两列的并排表。
+ * 常见实验表：多个工作表，或同一表里用空行隔开的几张表，或中间空两列的并排表，
+ * 或数字段中间重新出现的表头。
  * 只产出定位与预览，不写项目。
  */
 
@@ -162,6 +163,20 @@ function rowMostlyNumeric(row: string[]): boolean {
   return nums >= 1 && nums / values.length >= 0.5;
 }
 
+function isLabelCell(value: string): boolean {
+  const text = value.trim();
+  if (!text || isNumericCell(text)) return false;
+  return /[A-Za-z\u4e00-\u9fff]/.test(text);
+}
+
+/** 数字段中间重新出现的表头。文字要占非空格的多数，避免把「样品名 + 数字」切成新表。 */
+function isHeaderRestart(row: string[]): boolean {
+  const values = row.map((cell) => cell.trim()).filter(Boolean);
+  if (values.length < 2) return false;
+  const labels = values.filter((cell) => isLabelCell(cell));
+  return labels.length >= 2 && labels.length > values.length / 2;
+}
+
 /** 表头必须紧挨着数字行。上面的谱名、仪器参数行不会被当成表头。 */
 function findHeaderRow(grid: string[][], start: number, end: number): number {
   let best = -1;
@@ -294,62 +309,117 @@ function pushSliced(
   });
 }
 
+function pushHeaderless(
+  blocks: Omit<TableBlock, "id" | "sourceFileName">[],
+  grid: string[][],
+  start: number,
+  end: number,
+  sheetName: string,
+  fileName: string,
+  label: string,
+) {
+  if (end - start < 2 || numericRowShare(grid, start, end) < 0.85) return;
+  let colStart = -1;
+  let colEnd = -1;
+  for (let r = start; r < end; r++) {
+    const row = grid[r] ?? [];
+    for (let c = 0; c < row.length; c++) {
+      if (!row[c]?.trim()) continue;
+      if (colStart < 0 || c < colStart) colStart = c;
+      if (c + 1 > colEnd) colEnd = c + 1;
+    }
+  }
+  if (colStart < 0 || colEnd - colStart < 2) return;
+  pushSliced(blocks, grid, {
+    sheetName,
+    headerRow: start,
+    dataStart: start,
+    dataEnd: end,
+    colStart,
+    colEnd,
+    headerless: true,
+  }, label, fileName, sheetName);
+}
+
+function pushHeadered(
+  blocks: Omit<TableBlock, "id" | "sourceFileName">[],
+  grid: string[][],
+  bannerStart: number,
+  headerIdx: number,
+  dataEnd: number,
+  sheetName: string,
+  fileName: string,
+  sheetLabel: string,
+) {
+  const header = grid[headerIdx] ?? [];
+  const bannerRow = headerIdx > 0 ? (grid[headerIdx - 1] ?? []) : [];
+  const groups = headerGroups(header);
+  const banner = bannerLabel(grid, bannerStart, headerIdx);
+  groups.forEach((group, groupIdx) => {
+    const names = columnNames(header.slice(group.start, group.end), bannerRow.slice(group.start, group.end));
+    const headLabel = names.filter((name) => name && !isNumericCell(name)).slice(0, 3).join("、");
+    let label = banner || headLabel || sheetLabel;
+    if (!banner && sheetName !== "CSV") {
+      label = headLabel && headLabel.length <= 28 && !headLabel.startsWith(sheetName)
+        ? `${sheetName} · ${headLabel}`
+        : sheetName;
+    }
+    if (groups.length > 1) {
+      label = banner
+        ? `${banner} · ${headLabel || `表${groupIdx + 1}`}`
+        : (headLabel || `${sheetLabel} · 表${groupIdx + 1}`);
+    }
+    pushSliced(blocks, grid, {
+      sheetName,
+      headerRow: headerIdx,
+      dataStart: headerIdx + 1,
+      dataEnd,
+      colStart: group.start,
+      colEnd: group.end,
+    }, label, fileName, sheetName);
+  });
+}
+
 export function splitSheetGrid(gridIn: string[][], sheetName: string, fileName: string): Omit<TableBlock, "id" | "sourceFileName">[] {
   const grid = padGrid(gridIn);
   const blocks: Omit<TableBlock, "id" | "sourceFileName">[] = [];
   const sheetLabel = sheetLabelOf(sheetName, fileName);
   for (const region of regionsOf(grid)) {
-    const headerIdx = findHeaderRow(grid, region.start, region.end);
-    if (headerIdx < 0) {
-      if (numericRowShare(grid, region.start, region.end) < 0.85) continue;
-      let colStart = -1;
-      let colEnd = -1;
-      for (let r = region.start; r < region.end; r++) {
-        const row = grid[r] ?? [];
-        for (let c = 0; c < row.length; c++) {
-          if (!row[c]?.trim()) continue;
-          if (colStart < 0 || c < colStart) colStart = c;
-          if (c + 1 > colEnd) colEnd = c + 1;
-        }
+    const cuts: number[] = [];
+    for (let r = region.start; r < region.end - 1; r++) {
+      if (!isHeaderRestart(grid[r] ?? [])) continue;
+      let cursor = r + 1;
+      while (cursor < region.end && isBlankRow(grid[cursor] ?? [])) cursor += 1;
+      if (cursor >= region.end || !rowMostlyNumeric(grid[cursor] ?? [])) continue;
+      cuts.push(r);
+    }
+    if (cuts.length === 0) {
+      const headerIdx = findHeaderRow(grid, region.start, region.end);
+      if (headerIdx < 0) {
+        pushHeaderless(blocks, grid, region.start, region.end, sheetName, fileName, sheetLabel);
+        continue;
       }
-      if (colStart < 0 || colEnd - colStart < 2) continue;
-      pushSliced(blocks, grid, {
-        sheetName,
-        headerRow: region.start,
-        dataStart: region.start,
-        dataEnd: region.end,
-        colStart,
-        colEnd,
-        headerless: true,
-      }, sheetLabel, fileName, sheetName);
+      pushHeadered(blocks, grid, region.start, headerIdx, region.end, sheetName, fileName, sheetLabel);
       continue;
     }
-    const header = grid[headerIdx] ?? [];
-    const bannerRow = headerIdx > 0 ? (grid[headerIdx - 1] ?? []) : [];
-    const groups = headerGroups(header);
-    const banner = bannerLabel(grid, region.start, headerIdx);
-    groups.forEach((group, groupIdx) => {
-      const names = columnNames(header.slice(group.start, group.end), bannerRow.slice(group.start, group.end));
-      const headLabel = names.filter(Boolean).slice(0, 3).join("、");
-      let label = banner || headLabel || sheetLabel;
-      if (!banner && sheetName !== "CSV") {
-        label = headLabel && headLabel.length <= 28 && !headLabel.startsWith(sheetName)
-          ? `${sheetName} · ${headLabel}`
-          : sheetName;
+    let from = region.start;
+    cuts.forEach((cut, index) => {
+      const next = cuts[index + 1] ?? region.end;
+      const prefixIsData = cut - from >= 2 && numericRowShare(grid, from, cut) >= 0.85;
+      if (prefixIsData) {
+        pushHeaderless(blocks, grid, from, cut, sheetName, fileName, sheetLabel);
       }
-      if (groups.length > 1) {
-        label = banner
-          ? `${banner} · ${headLabel || `表${groupIdx + 1}`}`
-          : (headLabel || `${sheetLabel} · 表${groupIdx + 1}`);
-      }
-      pushSliced(blocks, grid, {
+      pushHeadered(
+        blocks,
+        grid,
+        prefixIsData ? cut : from,
+        cut,
+        next,
         sheetName,
-        headerRow: headerIdx,
-        dataStart: headerIdx + 1,
-        dataEnd: region.end,
-        colStart: group.start,
-        colEnd: group.end,
-      }, label, fileName, sheetName);
+        fileName,
+        sheetLabel,
+      );
+      from = next;
     });
   }
   return blocks;

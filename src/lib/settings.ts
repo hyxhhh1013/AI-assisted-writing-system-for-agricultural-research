@@ -108,7 +108,6 @@ export async function initDefaultSettings(): Promise<void> {
     ["ZHIPU_API_KEY", process.env.ZHIPU_API_KEY],
     ["DEEPSEEK_MODEL", process.env.DEEPSEEK_MODEL],
     ["ZHIPU_MODEL", process.env.ZHIPU_MODEL],
-    ["AGENT_DECISION_MODEL", process.env.AGENT_DECISION_MODEL],
     ["VOLC_ARK_API_KEY", process.env.VOLC_ARK_API_KEY],
     ["SEEDREAM_MODEL", process.env.SEEDREAM_MODEL],
     ["ZHIPU_IMAGE_MODEL", process.env.ZHIPU_IMAGE_MODEL],

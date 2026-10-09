@@ -4,7 +4,6 @@ const mocks = vi.hoisted(() => ({ callAI: vi.fn() }));
 vi.mock("@/lib/ai", () => ({ callAI: mocks.callAI }));
 vi.mock("@/lib/settings", () => ({ getSetting: async () => null }));
 
-import { normalizeDecisionModel } from "@/lib/models";
 import { snapshotToInitialState } from "@/lib/agent/session-snapshot";
 import { emptyAgentSessionSnapshot } from "@/contracts/agent-session";
 import {
@@ -108,10 +107,8 @@ describe("turn decision", () => {
       hasBlueprint: true,
     });
     expect(searched.action).toBe("search_knowledge");
-    expect(mocks.callAI).toHaveBeenCalledWith(expect.objectContaining({
-      provider: "zhipu",
-      model: "glm-4-plus",
-    }));
+    expect(mocks.callAI.mock.calls[0]?.[0]).toMatchObject({ provider: "zhipu" });
+    expect(mocks.callAI.mock.calls[0]?.[0]).not.toHaveProperty("model");
 
     mocks.callAI.mockResolvedValueOnce({
       json: async () => ({ choices: [{ message: { content: "不是 JSON" } }] }),
@@ -124,10 +121,5 @@ describe("turn decision", () => {
     });
     expect(fallback.action).toBe("write_section");
     expect(fallback.section).toBe("results");
-  });
-
-  it("keeps an unknown decision model name off the call", () => {
-    expect(normalizeDecisionModel("glm-4-plus")).toBe("glm-4-plus");
-    expect(normalizeDecisionModel("not-a-model")).toBe("glm-4-plus");
   });
 });

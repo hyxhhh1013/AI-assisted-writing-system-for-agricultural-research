@@ -55,7 +55,6 @@ import { WorkbenchEditorArea } from "@/components/shared/workbench-editor-area";
 import { ProjectModeBadge } from "@/components/shared/project-mode-badge";
 import { ProjectHandoffBanner } from "@/components/shared/project/project-handoff-banner";
 import { paperConfigToRecord, parsePaperPassport } from "@/contracts/paper-passport";
-import { parseDataClaims } from "@/contracts/project";
 import { openingWorkbenchTab } from "@/lib/agent/entry-route";
 import { patchPaperPassportConfig } from "@/services/project";
 import { getModeAccent, getStructurePanelTitle, getStructurePanelHint } from "@/lib/mode-theme";
@@ -452,11 +451,9 @@ function WorkbenchContent() {
     const tab = openingWorkbenchTab({
       entryMode: cfg?.agentEntryMode ?? null,
       outlineChars: (project.outline ?? "").trim().length,
-      claimCount: parseDataClaims(project).length,
-      paperMode: project.mode === "research" ? "research" : "review",
     });
     if (tab) setActiveTab(tab);
-  }, [project.id, project.paperPassport, project.outline, project.dataClaims, project.mode, projectId, searchParams]);
+  }, [project.id, project.paperPassport, project.outline, projectId, searchParams]);
 
   // 当切换章节或项目内容被 Agent/导入刷新时同步编辑器
   useEffect(() => {

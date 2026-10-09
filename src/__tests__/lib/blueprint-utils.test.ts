@@ -213,5 +213,57 @@ describe("enrichBlueprintChartBindingsFromCatalog", () => {
     ]);
     const chartItem = enriched.figurePlan.items.find((i) => i.type === "chart");
     expect(chartItem?.dataBinding?.chartConfigIndex).toBe(0);
+    expect(chartItem?.dataBindings).toHaveLength(1);
+  });
+
+  it("keeps every explicit binding instead of collapsing to one row", () => {
+    const source = {
+      ...sampleBlueprint,
+      figurePlan: {
+        ...sampleBlueprint.figurePlan,
+        items: sampleBlueprint.figurePlan.items.map((item) =>
+          item.type === "chart"
+            ? {
+              ...item,
+              suggestedCaption: "图3 孔结构",
+              purpose: "孔结构标量",
+              dataBindings: [
+                { kind: "chartConfig" as const, chartConfigIndex: 0 },
+                { kind: "chartConfig" as const, chartConfigIndex: 2 },
+              ],
+            }
+            : item,
+        ),
+      },
+    };
+    const enriched = enrichBlueprintChartBindingsFromCatalog(source, [
+      { index: 0, title: "Cu-BC 孔结构标量", sourceFileName: "a.csv", variable: "孔" },
+      { index: 1, title: "FT-IR", sourceFileName: "b.csv", variable: "FT-IR" },
+      { index: 2, title: "Fe-BC 孔结构标量", sourceFileName: "a.csv", variable: "孔" },
+    ]);
+    const chartItem = enriched.figurePlan.items.find((i) => i.type === "chart");
+    expect(chartItem?.dataBindings?.map((b) => b.chartConfigIndex)).toEqual([0, 2]);
+    expect(chartItem?.dataBinding?.chartTitle).toBe("Cu-BC 孔结构标量");
+    expect(chartItem?.dataBindings?.[1]?.chartTitle).toBe("Fe-BC 孔结构标量");
+  });
+
+  it("does not guess a catalog row when the figure states a data gap", () => {
+    const source = {
+      ...sampleBlueprint,
+      figurePlan: {
+        ...sampleBlueprint.figurePlan,
+        items: sampleBlueprint.figurePlan.items.map((item) =>
+          item.type === "chart"
+            ? { ...item, dataGap: "还没有对得上的产量表" }
+            : item,
+        ),
+      },
+    };
+    const enriched = enrichBlueprintChartBindingsFromCatalog(source, [
+      { index: 0, title: "各处理产量对比", sourceFileName: "data.xlsx", variable: "产量" },
+    ]);
+    const chartItem = enriched.figurePlan.items.find((i) => i.type === "chart");
+    expect(chartItem?.dataBinding).toBeUndefined();
+    expect(chartItem?.dataGap).toContain("产量");
   });
 });

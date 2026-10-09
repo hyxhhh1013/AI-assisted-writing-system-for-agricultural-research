@@ -12,7 +12,7 @@ export type FigurePlanPriority = "required" | "optional";
 
 export type FigureDataSource = "experiment" | "literature" | "synthesis";
 
-/** 配图与项目实验数据的绑定（作图页 chartIdx 预填） */
+/** 配图与项目实验数据的绑定（作图页 chartIdx 预填）。一张图可有多条。 */
 export interface FigureDataBinding {
   kind: "chartConfig";
   chartConfigIndex: number;
@@ -29,7 +29,12 @@ export interface FigurePlanItem {
   suggestedCaption: string;
   priority: FigurePlanPriority;
   dataSource?: FigureDataSource;
+  /** 第一条绑定，与 dataBindings[0] 保持一致，兼容旧读写 */
   dataBinding?: FigureDataBinding;
+  /** 一张图可绑定多条已确定的数据；不确定的不放进来 */
+  dataBindings?: FigureDataBinding[];
+  /** 对不上或还没上传的数据，给人看的一句提示 */
+  dataGap?: string;
 }
 
 /** 本节预期反驳与回应（原 ArgumentBlueprint.rebuttals 并入） */
@@ -164,7 +169,10 @@ function isFigurePlanItem(value: unknown): value is FigurePlanItem {
     typeof v.suggestedCaption === "string" &&
     typeof v.priority === "string" &&
     priorities.has(v.priority) &&
-    (v.dataBinding === undefined || isFigureDataBinding(v.dataBinding))
+    (v.dataBinding === undefined || isFigureDataBinding(v.dataBinding)) &&
+    (v.dataBindings === undefined ||
+      (Array.isArray(v.dataBindings) && v.dataBindings.every(isFigureDataBinding))) &&
+    (v.dataGap === undefined || typeof v.dataGap === "string")
   );
 }
 

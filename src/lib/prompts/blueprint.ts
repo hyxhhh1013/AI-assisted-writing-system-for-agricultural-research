@@ -78,11 +78,12 @@ ${figureRules}
 - 每项配图须有清晰 purpose 与 suggestedCaption（图题草案）
 ${chartCatalog && chartCatalog.length > 0 ? `
 【项目已有试验数据图表】
-以下为已上传/分析得到的推荐图表（chartConfigIndex 从 0 起，与下表 index 一致）。
-type=chart 且 dataSource=experiment 的配图项，必须填写 dataBinding，指向最匹配的一行：
+以下为已上传的推荐图表（chartConfigIndex 从 0 起，与下表 index 一致）。
+一张图可以绑定多条已经对得上的数据，写入 dataBindings 数组。只有测量种类对得上才绑：FT-IR 图只绑 FT-IR 行，XRD 图只绑 XRD 行，孔结构图可以同时绑多条孔结构标量。
+对不上、还没上传、或只是猜测的行不要放进 dataBindings。缺的那一部分用 dataGap 写一句中文；已经对上的行仍要绑定。不要为了填满而绑错行。
 ${chartCatalog.map((c) => `- [${c.index}] ${c.title}${c.variable ? `（${c.variable}）` : ""} ← ${c.sourceFileName}`).join("\n")}
-- dataBinding 格式：{ "kind": "chartConfig", "chartConfigIndex": 0, "sourceFileName": "...", "variable": "...", "chartTitle": "..." }
-- 无合适数据时勿虚构 binding，可标 optional 并在 purpose 说明需补数据` : ""}
+- dataBindings 的每一项：{ "kind": "chartConfig", "chartConfigIndex": 0, "sourceFileName": "...", "variable": "...", "chartTitle": "..." }
+` : ""}
 
 【输出要求】
 - 仅输出一个 JSON 对象，不要 markdown 代码块，不要其他文字。
@@ -123,7 +124,11 @@ ${isResearch
         "purpose": "各处理产量对比",
         "suggestedCaption": "图2 各处理产量对比",
         "priority": "required",
-        "dataSource": "experiment"
+        "dataSource": "experiment"${chartCatalog && chartCatalog.length > 0 ? `,
+        "dataBindings": [
+          { "kind": "chartConfig", "chartConfigIndex": 0, "chartTitle": "${chartCatalog[0]?.title.replace(/"/g, "") ?? ""}" }
+        ]` : `,
+        "dataGap": "目录里没有对得上的产量数据"`}
       },
       {
         "id": "fig-3",
@@ -132,7 +137,8 @@ ${isResearch
         "purpose": "机理示意",
         "suggestedCaption": "图3 作用机理示意",
         "priority": "optional",
-        "dataSource": "synthesis"
+        "dataSource": "synthesis",
+        "dataGap": "尚无对应实测图，上传后再绑"
       }
     ]
   },
