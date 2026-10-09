@@ -21,6 +21,8 @@ import { parseDataConfirmItems, type DataConfirmItem } from "@/lib/agent/data-co
 import { readAttachmentFile } from "@/lib/agent/attachments/storage";
 import { inferAttachmentKind } from "@/lib/agent/attachments/kind";
 import { normalizeIngestSourceId, persistIngestedAnalysis } from "@/lib/agent/ingest-project-data";
+import { cropPng, panelLetter, splitPngPanelCrops, type NormCrop } from "@/lib/agent/figure-panels";
+import { countPdfPages, renderPdfFirstPagePng } from "@/lib/agent/pdf-page";
 import { isExistingFigureName, registerExistingFigure } from "@/lib/agent/register-existing-figure";
 import { proposeFigureReadings } from "@/lib/agent/figure-readings";
 import {
@@ -77,14 +79,42 @@ function tableItem(block: TableBlock, attachmentId?: string): DataConfirmItem {
   };
 }
 
-function figureItem(fileName: string, attachmentId: string, label?: string): DataConfirmItem {
+function figureItem(
+  fileName: string,
+  attachmentId: string,
+  label?: string,
+  extra?: { crop?: NormCrop; defaultSelected?: boolean },
+): DataConfirmItem {
   return {
     index: 0,
     kind: "figure",
     label: (label || fileName).slice(0, 80),
     fileName,
     attachmentId,
+    crop: extra?.crop,
+    defaultSelected: extra?.defaultSelected,
   };
+}
+
+async function expandPdfFigure(row: { id: string; originalName: string; userId: string }): Promise<DataConfirmItem[]> {
+  const whole = figureItem(row.originalName, row.id);
+  try {
+    const png = await renderPdfFirstPagePng(readAttachmentFile(row.userId, row.id));
+    if (!png) return [whole];
+    const crops = await splitPngPanelCrops(png);
+    if (crops.length < 2) return [whole];
+    const stem = row.originalName.replace(/\.pdf$/i, "");
+    const page = figureItem(row.originalName, row.id, `${stem} · 整页`, { defaultSelected: false });
+    const parts = crops.map((crop, index) => figureItem(
+      row.originalName,
+      row.id,
+      `${stem} · ${panelLetter(index)}`,
+      { crop },
+    ));
+    return [page, ...parts];
+  } catch {
+    return [whole];
+  }
 }
 
 interface OwnedAttachment {
@@ -94,6 +124,7 @@ interface OwnedAttachment {
   projectId: string | null;
   pinned: boolean;
   userId: string;
+  extractSource: string | null;
 }
 
 async function loadOwnedAttachment(
@@ -143,12 +174,35 @@ async function sessionFigureItems(
   const items: DataConfirmItem[] = [];
   for (const row of rows) {
     if (skipIds.has(row.id)) continue;
-    if (!isExistingFigureName(row.originalName)) continue;
-    if (inferAttachmentKind(row.originalName) !== "image") continue;
-    items.push(figureItem(row.originalName, row.id));
+    const figurePdf = row.extractSource === "pdf_figure";
+    if (!figurePdf && !isExistingFigureName(row.originalName)) continue;
+    if (!figurePdf && inferAttachmentKind(row.originalName) !== "image") continue;
+    const next = figurePdf ? await expandPdfFigure(row) : [figureItem(row.originalName, row.id)];
+    items.push(...next);
     if (items.length >= 12) break;
   }
   return items;
+}
+
+async function pngForFigureItem(
+  source: Buffer,
+  fileName: string,
+  crop: NormCrop | undefined,
+): Promise<{ data: Buffer; name: string }> {
+  if (extOf(fileName) !== "pdf") return { data: source, name: fileName };
+  const png = await renderPdfFirstPagePng(source);
+  if (!png) throw new Error("单页 PDF 转成 PNG 失败");
+  if (!crop) return { data: png, name: "page.png" };
+  return { data: await cropPng(png, crop), name: "panel.png" };
+}
+
+async function pdfPageCount(row: OwnedAttachment): Promise<number> {
+  if (row.extractSource === "pdf_figure") return 1;
+  try {
+    return await countPdfPages(readAttachmentFile(row.userId, row.id));
+  } catch {
+    return 0;
+  }
 }
 
 function reindex(items: DataConfirmItem[]): DataConfirmItem[] {
@@ -189,6 +243,19 @@ async function inventoryFromParams(
     if (isExistingFigureName(name)) {
       items.push(figureItem(name, owned.row.id));
       seenFigures.add(owned.row.id);
+    } else if (extOf(name) === "pdf") {
+      const pages = await pdfPageCount(owned.row);
+      if (pages === 1) {
+        items.push(...await expandPdfFigure(owned.row));
+        seenFigures.add(owned.row.id);
+      } else if (pages > 1) {
+        return {
+          ok: false,
+          error: `「${name}」是多页 PDF，按文献阅读。单页成图 PDF 可以登记进图表库。`,
+        };
+      } else {
+        return { ok: false, error: `「${name}」不是表格或图片。请上传 CSV/Excel，或 png/jpg/tiff，或单页成图 PDF。` };
+      }
     } else if (isTabularName(name)) {
       const picks = parseAgentTablePicks(params.tablesJson);
       if (!picks.ok) return picks;
@@ -215,7 +282,7 @@ async function inventoryFromParams(
         items.push(item);
       });
     } else {
-      return { ok: false, error: `「${name}」不是表格或图片。请上传 CSV/Excel，或 png/jpg/tiff 成图。` };
+      return { ok: false, error: `「${name}」不是表格或图片。请上传 CSV/Excel，或 png/jpg/tiff，或单页成图 PDF。` };
     }
   } else if (csvData.trim() && pastedName) {
     if (!isTabularName(pastedName)) {
@@ -239,7 +306,7 @@ async function inventoryFromParams(
   return { ok: true, items: reindex(await attachFigureReadings(items, ctx, params)) };
 }
 
-const MAX_FIGURES_TO_READ = 4;
+const MAX_FIGURES_TO_READ = 6;
 
 function overrideReadings(params: Record<string, unknown>): FigureReading[] {
   const raw = params.readingsJson;
@@ -280,13 +347,20 @@ async function attachFigureReadings(
     }
     try {
       const buf = readAttachmentFile(ctx.userId, owned.row.id);
-      const proposed = await proposeFigureReadings(buf, owned.row.originalName);
+      const panelPng = await pngForFigureItem(buf, owned.row.originalName, item.crop);
+      const proposed = await proposeFigureReadings(panelPng.data, panelPng.name);
+      const hint = item.crop
+        ? "这是本页拆出的一张。"
+        : item.defaultSelected === false
+          ? "整页默认不写入。拆开的图不对时再勾选整页。"
+          : "";
+      const note = proposed.points.length > 0
+        ? proposed.note
+        : (proposed.note || "没有读出可核对的数值。勾选后只登记图片，写作仍不能使用图中数字。");
       next[index] = {
         ...item,
         readings: proposed.points,
-        readingNote: proposed.points.length > 0
-          ? proposed.note
-          : (proposed.note || "没有读出可核对的数值。勾选后只登记图片，写作仍不能使用图中数字。"),
+        readingNote: [hint, note].filter(Boolean).join(""),
       };
     } catch {
       next[index] = { ...item, readingNote: "图片文件缺失，无法读取数值" };
@@ -490,7 +564,8 @@ async function commitFigure(
   if (!item.attachmentId) return { ok: false, error: `「${item.label}」没有附件，无法登记成图` };
   const owned = await loadOwnedAttachment(ctx, item.attachmentId);
   if (!owned.ok) return owned;
-  if (!isExistingFigureName(owned.row.originalName)) {
+  const pdfFigure = owned.row.extractSource === "pdf_figure" || extOf(owned.row.originalName) === "pdf";
+  if (!isExistingFigureName(owned.row.originalName) && !pdfFigure) {
     return { ok: false, error: `「${owned.row.originalName}」不是图片，不能当已有图登记` };
   }
   let buf: Buffer;
@@ -501,11 +576,14 @@ async function commitFigure(
   }
   const sectionKey = typeof params.sectionKey === "string" ? params.sectionKey.trim() : "";
   try {
+    const panel = item.crop
+      ? await pngForFigureItem(buf, owned.row.originalName, item.crop)
+      : { data: buf, name: owned.row.originalName };
     const registered = await registerExistingFigure({
       projectId: ctx.projectId!,
       userId: ctx.userId,
-      source: buf,
-      originalName: owned.row.originalName,
+      source: panel.data,
+      originalName: panel.name,
       caption: item.label || owned.row.originalName,
       sectionKey: sectionKey || undefined,
     });

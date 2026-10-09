@@ -8,6 +8,7 @@ import {
 } from "@/lib/data-block-inventory";
 import { describeImage } from "@/lib/agent/attachments/describe-image";
 import { describePdfPages } from "@/lib/agent/attachments/describe-pdf";
+import { countPdfPages } from "@/lib/agent/pdf-page";
 import {
   ATTACHMENT_ALLOWED_EXTENSIONS,
   ATTACHMENT_IMAGE_EXTENSIONS,
@@ -77,11 +78,20 @@ export async function extractAttachmentText(
       };
     }
     if (ext === "pdf") {
+      const bytes = fs.readFileSync(filePath);
+      const pages = await countPdfPages(bytes);
+      if (pages === 1) {
+        return {
+          status: "ready",
+          ...truncateTo("【已有 PDF 成图】单页 PDF 按成图处理。一页里若有多张图，确认卡会按空白分开列出，默认登记拆开的图；整页可以再勾。图上的数字只有勾选后才写入。"),
+          source: "pdf_figure",
+        };
+      }
       // 文字层：pdf-parse v2 为类 API；用后 destroy 释放 pdfjs 文档对象。
       // 文字层失败不阻断视觉理解（Turbopack 环境或部分 PDF 下 getText 可能抛）。
       let text = "";
       try {
-        const parser = new PDFParse({ data: fs.readFileSync(filePath) });
+        const parser = new PDFParse({ data: bytes });
         try {
           const result = await parser.getText();
           text = (result.text ?? "").replace(/\n{3,}/g, "\n\n").trim();

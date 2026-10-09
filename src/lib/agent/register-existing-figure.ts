@@ -12,6 +12,7 @@ import { parseExplicitInsertSectionKey } from "@/lib/agent/insert-section";
 import { getChartsDir } from "@/lib/charts-dir";
 import { PYTHON_CMD } from "@/lib/python-cmd";
 import { runCommand } from "@/lib/python-runner";
+import { renderPdfFirstPagePng } from "@/lib/agent/pdf-page";
 import { applyChartPatchOps } from "@/lib/project-charts";
 
 const FIGURE_EXT = new Set(["png", "jpg", "jpeg", "webp", "gif", "tif", "tiff"]);
@@ -35,6 +36,11 @@ export async function prepareFigureForVision(
   if (ext === "tif" || ext === "tiff") {
     return { data: await convertTiffToPng(source), mime: "image/png" };
   }
+  if (ext === "pdf") {
+    const png = await renderPdfFirstPagePng(source);
+    if (!png) throw new Error("单页 PDF 转成 PNG 失败");
+    return { data: png, mime: "image/png" };
+  }
   const mime: Record<string, string> = {
     png: "image/png",
     jpg: "image/jpeg",
@@ -54,17 +60,32 @@ export async function registerExistingFigure(opts: {
   sectionKey?: string;
 }): Promise<{ imageUrl: string; chartId: string; insertedSection?: string }> {
   const rawExt = extOf(opts.originalName);
-  if (!FIGURE_EXT.has(rawExt)) {
-    throw new Error(`「${opts.originalName}」不是可登记的图片（png/jpg/webp/gif/tiff）`);
+  const pdfFigure = rawExt === "pdf";
+  if (!FIGURE_EXT.has(rawExt) && !pdfFigure) {
+    throw new Error(`「${opts.originalName}」不是可登记的图片（png/jpg/webp/gif/tiff，或单页 PDF）`);
   }
-  const bytes = rawExt === "tif" || rawExt === "tiff"
-    ? await convertTiffToPng(opts.source)
-    : opts.source;
-  const ext = rawExt === "jpeg" ? "jpg" : rawExt === "tif" || rawExt === "tiff" ? "png" : rawExt;
-  const filename = `${randomUUID()}.${ext}`;
+  let bytes = opts.source;
+  let pdfUrl: string | undefined;
+  if (rawExt === "tif" || rawExt === "tiff") {
+    bytes = await convertTiffToPng(opts.source);
+  } else if (pdfFigure) {
+    const png = await renderPdfFirstPagePng(opts.source);
+    if (!png) {
+      throw new Error("多页 PDF 按文献阅读。只有单页成图 PDF 可以登记进图表库。");
+    }
+    bytes = png;
+  }
+  const ext = rawExt === "jpeg" ? "jpg" : rawExt === "tif" || rawExt === "tiff" || pdfFigure ? "png" : rawExt;
+  const id = randomUUID();
+  const filename = `${id}.${ext}`;
   const dir = getChartsDir();
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, filename), bytes);
+  if (pdfFigure) {
+    const pdfName = `${id}.pdf`;
+    fs.writeFileSync(path.join(dir, pdfName), opts.source);
+    pdfUrl = `/api/charts/${pdfName}`;
+  }
   const imageUrl = `/api/charts/${filename}`;
 
   const explicit = parseExplicitInsertSectionKey(opts.sectionKey);
@@ -76,6 +97,7 @@ export async function registerExistingFigure(opts: {
       figureId: "existing",
       caption: opts.caption.slice(0, 200) || opts.originalName,
       imageUrl,
+      pdfUrl,
       sectionKey,
     },
   }]);

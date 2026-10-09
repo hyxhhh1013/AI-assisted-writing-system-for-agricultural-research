@@ -3,7 +3,7 @@ import { createLogger } from "@/lib/logger";
 import { isAgentEnabled } from "@/lib/agent/core/safety";
 import prisma from "@/lib/prisma";
 import { deleteAttachment } from "@/lib/agent/attachments/service";
-import { inferAttachmentKind } from "@/lib/agent/attachments/kind";
+import { resolveAttachmentKind } from "@/lib/agent/attachments/kind";
 import {
   lookupIngestView,
   maybeAutoIngestTabularAttachment,
@@ -35,7 +35,7 @@ export async function GET(
     });
     if (!row) return NextResponse.json({ error: "附件不存在或无权访问" }, { status: 404 });
     const text = row.extractedText ?? "";
-    const kind = inferAttachmentKind(row.originalName);
+    const kind = resolveAttachmentKind(row.originalName, row.extractSource);
     let ingest = null;
     if (kind === "tabular" && row.status === "ready" && row.projectId) {
       const project = await prisma.project.findFirst({

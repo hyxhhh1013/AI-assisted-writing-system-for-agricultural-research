@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatAttachmentChipBadge,
   inferAttachmentKind,
+  resolveAttachmentKind,
 } from "@/lib/agent/attachments/kind";
 import { lookupIngestView } from "@/lib/agent/attachments/auto-ingest";
 import { serializeDataClaims, serializeDataSources } from "@/contracts/project";
@@ -17,6 +18,9 @@ describe("inferAttachmentKind", () => {
     expect(inferAttachmentKind("scan.TIFF")).toBe("image");
     expect(inferAttachmentKind("plate.tif")).toBe("image");
     expect(inferAttachmentKind("paper.pdf")).toBe("document");
+    expect(resolveAttachmentKind("fig.pdf", "pdf_figure")).toBe("image");
+    expect(resolveAttachmentKind("paper.pdf", "pdf")).toBe("document");
+    expect(resolveAttachmentKind("paper.pdf", "pdf_vision")).toBe("document");
   });
 });
 

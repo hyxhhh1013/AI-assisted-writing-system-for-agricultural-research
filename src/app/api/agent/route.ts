@@ -14,7 +14,7 @@ import type { AgentSSEEvent } from "@/contracts/agent";
 import type { AttachmentExtractSource } from "@/contracts/agent-attachment";
 import { MAX_ATTACHMENT_TEXT_CHARS } from "@/lib/agent/attachments/constants";
 import { maybeAutoIngestTabularAttachment } from "@/lib/agent/attachments/auto-ingest";
-import { inferAttachmentKind } from "@/lib/agent/attachments/kind";
+import { inferAttachmentKind, resolveAttachmentKind } from "@/lib/agent/attachments/kind";
 import { buildAttachmentManifest } from "@/lib/agent/attachments/manifest";
 import { buildFollowUpInitialState } from "@/lib/agent/session-continue";
 import {
@@ -241,7 +241,7 @@ export async function POST(req: NextRequest) {
         attachmentManifest = buildAttachmentManifest(rows.map((r) => ({
           id: r.id, originalName: r.originalName, mimeType: r.mimeType, size: r.size,
           status: r.status, extractSource: r.extractSource as AttachmentExtractSource | null,
-          kind: inferAttachmentKind(r.originalName),
+          kind: resolveAttachmentKind(r.originalName, r.extractSource),
           ingest: ingestById.get(r.id) ?? null,
           charCount: r.extractedText?.length ?? 0,
           truncated: (r.extractedText?.length ?? 0) >= MAX_ATTACHMENT_TEXT_CHARS,

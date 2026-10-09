@@ -505,7 +505,12 @@ export function AgentPanel({
         setImportSelection(null);
         return;
       }
-      setImportSelection(new Set(items.map((_, i) => i)));
+      const selected = new Set<number>();
+      items.forEach((item, index) => {
+        if (item && typeof item === "object" && "defaultSelected" in item && item.defaultSelected === false) return;
+        selected.add(index);
+      });
+      setImportSelection(selected.size > 0 ? selected : new Set(items.map((_, i) => i)));
       return;
     }
     const items = agent.pendingConfirm?.params?.importItems;
@@ -1580,7 +1585,7 @@ export function AgentPanel({
               {agent.isRunning ? "助手正在处理，稍后再拖入" : "松开即可加入"}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              表格、已有图（含 TIFF）会先列出，核对后再写入
+              表格、已有图（含 TIFF、单页 PDF）会先列出，核对后再写入
             </p>
           </div>
         </div>

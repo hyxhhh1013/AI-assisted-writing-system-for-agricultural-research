@@ -25,6 +25,10 @@ export interface DataConfirmItem {
   /** 从图上读出、待用户核对的数值 */
   readings?: FigureReading[];
   readingNote?: string;
+  /** 单页 PDF 里拆出的一块，相对整页 0–1 */
+  crop?: { x: number; y: number; w: number; h: number };
+  /** 确认卡初次勾选。整页在已拆出多张图时为 false */
+  defaultSelected?: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -52,6 +56,18 @@ function parseLocator(raw: unknown): TableBlockLocator | null {
     headerless: raw.headerless === true ? true : undefined,
     columns: parseColumns(raw.columns),
   };
+}
+
+function parseCrop(raw: unknown): { x: number; y: number; w: number; h: number } | undefined {
+  if (!isRecord(raw)) return undefined;
+  const x = Number(raw.x);
+  const y = Number(raw.y);
+  const w = Number(raw.w);
+  const h = Number(raw.h);
+  const nums = [x, y, w, h];
+  if (nums.some((n) => !Number.isFinite(n) || n < 0 || n > 1)) return undefined;
+  if (w < 0.05 || h < 0.05 || x + w > 1.02 || y + h > 1.02) return undefined;
+  return { x, y, w, h };
 }
 
 function parseColumns(raw: unknown): number[] | undefined {
@@ -89,6 +105,8 @@ export function parseDataConfirmItems(raw: unknown): DataConfirmItem[] {
       locator: locator ?? undefined,
       readings: parseFigureReadingList(item.readings),
       readingNote: typeof item.readingNote === "string" ? item.readingNote.slice(0, 200) : undefined,
+      crop: parseCrop(item.crop),
+      defaultSelected: item.defaultSelected === false ? false : undefined,
     });
   }
   return out;

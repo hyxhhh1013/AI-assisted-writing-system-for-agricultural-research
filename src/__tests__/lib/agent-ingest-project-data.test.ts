@@ -237,6 +237,26 @@ describe("ingest_project_data tool", () => {
     expect(sources[0]?.columns.some((c) => c.name === "株高")).toBe(false);
   });
 
+  it("单页成图 PDF 走已有图登记", async () => {
+    findAttachment.mockResolvedValue({
+      id: "figpdf",
+      userId: "u1",
+      sessionId: "s1",
+      projectId: "p1",
+      pinned: false,
+      originalName: "结果.pdf",
+      extractSource: "pdf_figure",
+    });
+    mockReadFile.mockReturnValue(Buffer.from("%PDF-1.1"));
+    const r = await ingestProjectDataTool.execute(
+      { attachmentId: "figpdf", userConfirmed: true },
+      ctx(),
+    );
+    expect(r.success).toBe(true);
+    expect(registerExistingFigure).toHaveBeenCalled();
+    expect(updateProject).not.toHaveBeenCalled();
+  });
+
   it("已有图只登记，不写数据声明", async () => {
     findAttachment.mockResolvedValue({
       id: "fig1",

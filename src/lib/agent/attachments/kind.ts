@@ -19,6 +19,15 @@ export function inferAttachmentKind(fileName: string): AttachmentKind {
   return "document";
 }
 
+/** 单页成图 PDF 在提取后标成 image，多页 PDF 仍是 document。 */
+export function resolveAttachmentKind(
+  fileName: string,
+  extractSource?: string | null,
+): AttachmentKind {
+  if (extractSource === "pdf_figure") return "image";
+  return inferAttachmentKind(fileName);
+}
+
 export type AttachmentIngestStatus = "ingested" | "failed" | "pending" | "skipped";
 
 export interface AttachmentIngestView {

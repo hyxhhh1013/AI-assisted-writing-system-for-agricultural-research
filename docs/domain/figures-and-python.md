@@ -15,7 +15,7 @@
 > **机理图质量（FIG-MECH-QA-001）**：`draft_mechanism_figure` 先编译 `MechanismSpecV1`（主张进 caption，括号条件上边），确定性质检 + ≤2 次 spec 补丁；`block` 不入库。未指定 layout 且 ≥4 步时额外渲一套 chain/fork 候选，只入库推荐稿。主渲染器仍是 Graphviz / `mechanism_panel`。  
 > **观感层（FIG-MECH-ILLUSTRATE）**：结构过线后可选 `illustrate_mechanism_figure`：即梦 Seedream 以结构 PNG 做图生图（`VOLC_ARK_API_KEY`），智谱 CogView 为备选。候选默认**不插入正文**，配图坞「采用此候选」才 `adopt`。数据柱状/折线仍走 matplotlib，禁止用文生图。  
 > **正文落点（2026-10-01）**：`generate_table` / `generate_chart` / `draft_mechanism_figure` 省略 `sectionKey` 时插入已写章节（优先 results），并回看正文含表题/图片 URL。仅进图表库不算交付，Agent 不得口头收尾。  
-> **已有成图（2026-10-08）**：用户上传的 png/jpg/webp/gif/tiff 经 `ingest_project_data` 确认。确认卡列出视觉模型从图上读出的点，勾选后写成证据声明并登记为 `figureId: existing`。没读出或没勾选的数字不进正文。TIFF 由 `scripts/charts/tiff_to_png.py` 转成 PNG 再入库。未指定章节时只进图表库。  
+> **已有成图（2026-10-08）**：用户上传的 png/jpg/webp/gif/tiff，以及单页成图 PDF，经 `ingest_project_data` 确认。确认卡列出视觉模型从图上读出的点，勾选后写成证据声明并登记为 `figureId: existing`。没读出或没勾选的数字不进正文。TIFF 由 `scripts/charts/tiff_to_png.py` 转成 PNG 再入库。单页 PDF 用 pdf.js 把第一页渲成 PNG 入库，原 PDF 记在 `pdfUrl`。一页里能按贯穿空白切开的多张图会在确认卡逐张列出，默认只勾这些拆图，整页需另勾。切不开就整页一张。多页 PDF 仍按文献阅读，不进图表库。未指定章节时只进图表库。  
 > **/plot 回放（FIG-MECH-QA-002）**：`POST /api/flow-diagram` 与 `POST /api/mechanism-panel` 出图前走同一套 `refinePlotFlow` / `refinePlotPanelConfig`（保留用户拓扑，只上边条件、改英文占位）。回传 `qaReport` + 修补后的 nodes/panels；`/plot` 画布同步并显示质检条。不因 QA 拒绝出图。  
 > **刊规包 / 导出清单（009 done）**：`src/contracts/chart-export.ts`（栏宽 mm 与 Python 对齐）。出图后写 `{uuid}.csv` + `{uuid}.json`；`POST /api/chart` / `generate_chart` 回传 `exportManifest`。`GET /api/charts/:file` 可取 csv/json。  
 > **三件套收口（010 done）**：`bar_grouped` / `line` / `heatmap` 为质量剖面。热力不再按矩阵长宽比撑刊宽；折线先 `set_xticks`；显著性读 `chartSpec.annotations`。`test:figures` 含 agr_journal 双栏 ±8% + svg/pdf、误差折线、热力刊宽。其余类型仍禁止扩新。
