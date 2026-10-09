@@ -228,7 +228,7 @@ export function PaperConfigDialog({
           <div className="space-y-1.5">
             <Label className="text-xs flex items-center gap-1.5">
               <Globe className="h-3.5 w-3.5 text-[#9aa8a0]" />
-              写作语言
+              正文语言
             </Label>
             <div className="flex gap-2">
               <Button

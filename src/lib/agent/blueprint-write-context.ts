@@ -179,12 +179,142 @@ export function firstMissingBlueprintSubsection(
 }
 
 const NEXT_WRITE_SECTION_ORDER = ["background", "literature_body"] as const;
+const MIN_SECTION_CHARS = 80;
+
+const SECTION_NAME_ALIASES: Record<string, readonly string[]> = {
+  introduction: ["引言", "introduction"],
+  methods: ["方法", "methods"],
+  results: ["结果", "results"],
+  discussion: ["讨论", "discussion"],
+  conclusion: ["结论", "conclusion"],
+  abstract: ["摘要", "abstract"],
+  literature_body: ["综述正文", "literature"],
+  background: ["研究现状", "background"],
+};
+
+/** 把 writingOrder 展开成要逐个写完的路径。某一项下面有更深的 sectionGuides 时，按那些子路径走。 */
+export function expandBlueprintWritePaths(
+  blueprint: WritingBlueprint | null | undefined,
+): string[] {
+  if (!blueprint || blueprint.writingOrder.length === 0) return [];
+  const guides = blueprint.sectionGuides
+    .map((g) => g.sectionPath.trim())
+    .filter(Boolean);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of blueprint.writingOrder) {
+    const item = raw.trim();
+    if (!item) continue;
+    const deeper = guides.filter(
+      (g) => g.startsWith(`${item} > `) || g.startsWith(`${item}>`),
+    );
+    const paths = deeper.length > 0 ? deeper : [item];
+    for (const path of paths) {
+      if (seen.has(path)) continue;
+      seen.add(path);
+      out.push(path);
+    }
+  }
+  return out;
+}
+
+export function blueprintPathIsWritten(
+  path: string,
+  mode: ProjectWritingMode | undefined,
+  sectionBodies: Record<string, string>,
+): boolean {
+  const key = mapToSectionForMode(path, mode);
+  const body = sectionBodies[key] ?? "";
+  if (path.includes(">")) {
+    return bodyCoversSubsectionTitle(body, subsectionPathLeaf(path));
+  }
+  return body.replace(/\s+/g, "").length >= MIN_SECTION_CHARS;
+}
+
+export function firstUnfinishedBlueprintPath(opts: {
+  mode: ProjectWritingMode | undefined;
+  blueprint: WritingBlueprint | null | undefined;
+  sectionBodies: Record<string, string>;
+}): string | null {
+  for (const path of expandBlueprintWritePaths(opts.blueprint)) {
+    if (!blueprintPathIsWritten(path, opts.mode, opts.sectionBodies)) return path;
+  }
+  return null;
+}
+
+const CONTINUE_ONLY = /^(继续|接着写?|往下写?|好的?|可以|行|嗯|开始写吧?|写吧)[。！!]?$/;
+
+/** 用户这句点了要写的节。单独说「继续」不算点名。 */
+export function userNamedWriteTarget(
+  goal: string,
+  sectionKey: string,
+  subsectionTitle: string,
+  path: string,
+): boolean {
+  const trimmed = goal.trim();
+  if (!trimmed || CONTINUE_ONLY.test(trimmed)) return false;
+  const leaf = manuscriptSubsectionTitle(subsectionTitle || path);
+  if (leaf.length >= 2 && goal.includes(leaf)) return true;
+  if (path && goal.includes(path)) return true;
+  const aliases = SECTION_NAME_ALIASES[sectionKey] ?? [];
+  const lower = goal.toLowerCase();
+  return aliases.some((word) => lower.includes(word.toLowerCase()));
+}
+
+function requestMatchesBlueprintPath(
+  sectionKey: string,
+  subsectionTitle: string,
+  path: string,
+  mode: ProjectWritingMode | undefined,
+): boolean {
+  if (mapToSectionForMode(path, mode) !== sectionKey) return false;
+  if (!path.includes(">")) return true;
+  const leaf = manuscriptSubsectionTitle(path);
+  const sub = manuscriptSubsectionTitle(subsectionTitle);
+  if (!sub) return false;
+  return sub === leaf || sub.includes(leaf) || leaf.includes(sub);
+}
+
+/**
+ * 已有蓝图顺序时，没写完当前路径就不能写后面的。
+ * 用户点名某一节时放行。没有 writingOrder 时不拦。
+ */
+export function blueprintOrderSkipError(opts: {
+  mode: ProjectWritingMode | undefined;
+  blueprint: WritingBlueprint | null | undefined;
+  sectionBodies: Record<string, string>;
+  sectionKey: string;
+  subsectionTitle: string;
+  userGoal: string;
+}): string | null {
+  const next = firstUnfinishedBlueprintPath(opts);
+  if (!next) return null;
+  if (requestMatchesBlueprintPath(opts.sectionKey, opts.subsectionTitle, next, opts.mode)) {
+    return null;
+  }
+  if (userNamedWriteTarget(opts.userGoal, opts.sectionKey, opts.subsectionTitle, opts.subsectionTitle)) {
+    return null;
+  }
+  const asked = opts.subsectionTitle.trim() || opts.sectionKey;
+  return (
+    `蓝图下一节是「${next}」。请先写这一节，不要跳到「${asked}」。`
+    + "用户点名要写别的节时，目标里需要写出该节名称。"
+  );
+}
 
 export function pickNextWriteTarget(opts: {
   mode: ProjectWritingMode | undefined;
   blueprint: WritingBlueprint | null | undefined;
   sectionBodies: Record<string, string>;
 }): { sectionKey: string; subsectionPath: string } | null {
+  const ordered = firstUnfinishedBlueprintPath(opts);
+  if (ordered) {
+    return {
+      sectionKey: mapToSectionForMode(ordered, opts.mode),
+      subsectionPath: ordered,
+    };
+  }
+  if (opts.blueprint && opts.blueprint.writingOrder.length > 0) return null;
   for (const key of NEXT_WRITE_SECTION_ORDER) {
     const missing = firstMissingBlueprintSubsection(
       opts.blueprint,

@@ -74,6 +74,7 @@ ${bibliographyBlock?.trim() ? `\n${bibliographyBlock.trim()}\n` : ""}
 ${figureRules}
 - type 只能是：flow | chart | xrd | table | schematic | other
 - priority：required（强烈建议）或 optional
+- 机理图、示意图（type=schematic）以及方法节的试验流程图标 optional，purpose 写明全文要点定稿后再画。不要标 required，也不要写成写节时必须出图。
 - 每项配图须有清晰 purpose 与 suggestedCaption（图题草案）
 ${chartCatalog && chartCatalog.length > 0 ? `
 【项目已有试验数据图表】
@@ -85,8 +86,8 @@ ${chartCatalog.map((c) => `- [${c.index}] ${c.title}${c.variable ? `（${c.varia
 
 【输出要求】
 - 仅输出一个 JSON 对象，不要 markdown 代码块，不要其他文字。
-- 叙述字段（narrativeSummary / thesis / purpose 等）用 ${langLabel} 撰写。
-- JSON 字段 language 必须是 "${langCode}"（只能是 zh 或 en，禁止 Chinese/English/中文/英文）。
+- 叙述字段（narrativeSummary / thesis / purpose / keyPoints / suggestedCaption / prerequisites）一律用中文，方便用户确认结构和要点。正文语言是 ${langLabel}，不要因此把这些叙述写成英文。
+- JSON 字段 language 必须是 "${langCode}"（只能是 zh 或 en，禁止 Chinese/English/中文/英文）。这是正文语言，叙述用中文时也不要改这个字段。
 - projectMode 必须是 "${isResearch ? "research" : "review"}"（禁止写中文）。
 - dataSource 只能是 experiment | literature | synthesis；type 只能是 flow|chart|xrd|table|schematic|other。
 - keyPoints 必须是字符串数组（不要写成单个字符串）。
@@ -112,7 +113,7 @@ ${isResearch
         "type": "flow",
         "purpose": "展示试验流程",
         "suggestedCaption": "图1 试验流程示意图",
-        "priority": "required",
+        "priority": "optional",
         "dataSource": "experiment"
       },
       {

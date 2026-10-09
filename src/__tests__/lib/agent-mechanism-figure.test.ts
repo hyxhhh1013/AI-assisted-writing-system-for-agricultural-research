@@ -5,6 +5,7 @@ import {
   buildMechanismPanelConfig,
   defaultStepsForPanelTitle,
   pathwayTokensFromTitle,
+  userAskedForMechanismFigure,
 } from "@/lib/agent/tools/draft-mechanism-figure";
 
 describe("draft_mechanism_figure config builders", () => {
@@ -166,5 +167,13 @@ describe("draft_mechanism_figure config builders", () => {
     });
     const panels = cfg.panels as unknown[];
     expect(panels.length).toBe(3);
+  });
+});
+
+describe("userAskedForMechanismFigure", () => {
+  it("allows a named request and a replacement, and blocks a plain write turn", () => {
+    expect(userAskedForMechanismFigure("请画一张机理图", {})).toBe(true);
+    expect(userAskedForMechanismFigure("继续写方法", { replaceImageUrl: "/api/charts/a.png" })).toBe(true);
+    expect(userAskedForMechanismFigure("继续写方法", {})).toBe(false);
   });
 });

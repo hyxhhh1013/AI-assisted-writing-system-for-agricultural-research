@@ -189,11 +189,9 @@ export function buildGenerateChartCallsFromJobs(
   return out;
 }
 
-const NARRATIVE_FIGURE_TYPES = new Set(["flow", "schematic", "table", "other"]);
-
 export interface BlueprintNarrativeFigureCall {
   id: string;
-  name: "draft_mechanism_figure" | "generate_table";
+  name: "generate_table";
   args: Record<string, unknown>;
 }
 
@@ -212,7 +210,7 @@ function guideKeyPointsForItem(
   return (guide?.keyPoints ?? []).map((p) => p.trim()).filter(Boolean).slice(0, 4);
 }
 
-/** 综述示意图、流程图、对比表不依赖试验 CSV，写节后直接排队。 */
+/** 对比表不依赖试验 CSV，写节后可以排队。流程图和机理图不在这里自动画。 */
 export function buildNarrativeFigureCalls(input: {
   blueprint: WritingBlueprint | null | undefined;
   sectionKey: string;
@@ -230,11 +228,7 @@ export function buildNarrativeFigureCalls(input: {
   );
   const out: BlueprintNarrativeFigureCall[] = [];
   for (const item of blueprint.figurePlan.items) {
-    if (item.priority !== "required") continue;
-    const reviewChart = input.mode === "review"
-      && item.type === "chart"
-      && item.dataSource !== "experiment";
-    if (!NARRATIVE_FIGURE_TYPES.has(item.type) && !reviewChart) continue;
+    if (item.priority !== "required" || item.type !== "table") continue;
     if (
       !figurePlanItemMatchesSection(
         item,
@@ -248,39 +242,19 @@ export function buildNarrativeFigureCalls(input: {
     const title = item.suggestedCaption.trim() || item.purpose.trim();
     if (!title || input.draft.includes(title) || queuedTitles.has(title)) continue;
     const points = guideKeyPointsForItem(blueprint, item);
-    const steps = points.map(shortFigureStep);
-    while (steps.length < 2) {
-      steps.push(shortFigureStep(steps.length === 0 ? item.purpose : title));
-    }
-    if (item.type === "table") {
-      out.push({
-        id: `bp_table_${item.id}`,
-        name: "generate_table",
-        args: {
-          title,
-          sectionKey: input.sectionKey,
-          rows: [
-            ["要点", "说明"],
-            ...points.map((p) => [shortFigureStep(p), p.slice(0, 80)]),
-            ...(points.length === 0 ? [[shortFigureStep(title), item.purpose.slice(0, 80)]] : []),
-          ],
-        },
-      });
-    } else {
-      out.push({
-        id: `bp_fig_${item.id}`,
-        name: "draft_mechanism_figure",
-        args: {
-          kind: "flow",
-          title,
-          claim: item.purpose.slice(0, 120),
-          flowSteps: steps.slice(0, 6),
-          layout: "chain",
-          sectionKey: input.sectionKey,
-          persistToProject: "true",
-        },
-      });
-    }
+    out.push({
+      id: `bp_table_${item.id}`,
+      name: "generate_table",
+      args: {
+        title,
+        sectionKey: input.sectionKey,
+        rows: [
+          ["要点", "说明"],
+          ...points.map((p) => [shortFigureStep(p), p.slice(0, 80)]),
+          ...(points.length === 0 ? [[shortFigureStep(title), item.purpose.slice(0, 80)]] : []),
+        ],
+      },
+    });
     queuedTitles.add(title);
     if (out.length >= 2) break;
   }

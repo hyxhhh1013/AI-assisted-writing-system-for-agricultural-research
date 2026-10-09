@@ -47,9 +47,9 @@ export const AGENT_RULES: readonly AgentRule[] = [
   {
     id: "catalog-then-read",
     text:
-      "文献写作：开写前 list_references 一次即可；本会话精读约 4 篇摘要（全文最多 4 篇），后续子节复用阅读包。"
-      + "write_section 每节只带少量摘要。禁止每个小点重读，禁止把整库摘要塞进写作。"
-      + "跟聊「继续」禁止再摸底检索。",
+      "先按蓝图主张和已有数据写节，不要写前精读文献库。写完停下来问要不要配引用。"
+      + "用户要求配引用时，再按这句话找能支撑的几篇，不要把库重读一遍。"
+      + "跟聊「继续」按蓝图下一节写，禁止再摸底检索。",
     appliesTo: ["review_write", "draft", "ap_full"],
     severity: "nudge",
   },

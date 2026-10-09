@@ -95,6 +95,19 @@ function parsePanelSpecs(raw: unknown): MechanismPanelInput[] {
   return out;
 }
 
+const MECHANISM_ASK = /机理图|流程图|示意图|画机理|画流程|mechanism|flowchart|schematic/i;
+
+/** 用户点名要画，或正在替换已有图。写节时顺手调用会被拒绝。 */
+export function userAskedForMechanismFigure(
+  goal: string | undefined,
+  params: Record<string, unknown>,
+): boolean {
+  if (String(params.replaceImageUrl ?? "").trim() || String(params.replaceChartId ?? "").trim()) {
+    return true;
+  }
+  return MECHANISM_ASK.test(goal ?? "");
+}
+
 /**
  * 机理图 / 流程图：能直接出图的（flow / mechanism_panel）当场生成 PNG 并写入项目、
  * 可按 sectionKey 插入章节；mermaid（mechanism）需浏览器渲染，仍返回 /plot 深链。
@@ -103,7 +116,7 @@ function parsePanelSpecs(raw: unknown): MechanismPanelInput[] {
 export const draftMechanismFigureTool: ToolDefinition = {
   name: "draft_mechanism_figure",
   description:
-    "根据文字描述生成期刊级机理图/流程图并写入项目图表库。"
+    "用户明确要求画机理图或流程图时，根据文字描述生成期刊级图并写入项目图表库。写章节时不要主动调用。"
     + "先编译 MechanismSpec：主张进 caption，温度/催化剂等条件上边，节点只留过程短语。"
     + "kind=flow：传 flowSteps（中文，≥2）或 nodesJson+edgesJson；≥4 步默认分叉汇合。"
     + "kind=mechanism_panel：优先 panelsJson=[{title,steps,bullets?,note?},...]（2～3 栏，每栏中文 steps）；"
@@ -209,6 +222,12 @@ export const draftMechanismFigureTool: ToolDefinition = {
   execute: async (params, ctx: AgentContext) => {
     if (!ctx.projectId) {
       return { success: false, error: "draft_mechanism_figure 需要关联 projectId" };
+    }
+    if (!userAskedForMechanismFigure(ctx.goal, params)) {
+      return {
+        success: false,
+        error: "机理图和流程图要等用户点名再画。请先写正文；用户说「画机理图」或「画流程图」后再调用。",
+      };
     }
 
     const template = getMechanismTemplate(String(params.templateId ?? ""));

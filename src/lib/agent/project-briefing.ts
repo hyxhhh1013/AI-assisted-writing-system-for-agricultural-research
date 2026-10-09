@@ -80,6 +80,9 @@ export function formatAgentProjectBriefing(
     .join("\n\n");
 
   const lines = [
+    project.language === "en"
+      ? "【正文语言=英文】大纲、蓝图的叙事和各节要点用中文，方便用户确认。批准蓝图之后，正文、图题、坐标轴、图例、系列名、峰名、图注和机理图文字用英文，不要写汉字。跟用户说话仍用中文。"
+      : "【正文语言=中文】大纲、蓝图、正文和图中文字用中文。",
     `标题：${project.title}`,
     `类型：${project.mode === "research" ? "研究型" : "综述"}；语言：${project.language}；引用：${project.citationStyle}`,
     `研究方向：${project.researchDirection || "（未填）"}`,

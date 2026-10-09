@@ -22,6 +22,7 @@ import {
   evaluateWriteResume,
 } from "@/lib/agent/write-resume";
 import {
+  blueprintOrderSkipError,
   bodyCoversSubsectionTitle,
   multiSubsectionWriteError,
   prepareAgentWriteBlueprintContext,
@@ -68,7 +69,6 @@ import type { WritingInput } from "@/lib/validations";
 import {
   mergePackWithSlimEvidence,
   mergeRagSourceIds,
-  readingPackGateError,
   readingPackIndices,
   readingPackSourceKeys,
 } from "@/lib/agent/reading-pack";
@@ -190,7 +190,7 @@ export const writeSectionTool: ToolDefinition = {
   description:
     "调用 Writer 扩写管道为指定章节生成正文（含 RAG；默认写后自动核查修正一轮，可关）。主路径是 SectionSpec（可传 sectionSpec，或由蓝图/context 编译）。"
     + "context/bullets 只作适配，勿另起炉灶。background / literature_body：蓝图有多个子节时必须带 subsectionTitle 逐节写。"
-    + "文献多时请先 list_references 再 read_reference 精读若干篇，再调用本工具。",
+    + "按本节主张和已有数据落笔，不必先精读文献。写完停下来问要不要配引用。",
   parameters: {
     type: "object",
     properties: {
@@ -284,13 +284,16 @@ export const writeSectionTool: ToolDefinition = {
       return { success: false, error: multiSubErr };
     }
 
-    const packGate = readingPackGateError({
-      section: sectionRaw,
-      withAbstract: (project.referenceEvidence ?? []).length,
-      packCount: readingPackIndices(ctx).size,
+    const orderErr = blueprintOrderSkipError({
+      mode: project.mode,
+      blueprint: project.globalContext?.blueprint ?? null,
+      sectionBodies: project.sectionBodies ?? {},
+      sectionKey: sectionRaw,
+      subsectionTitle: subsectionTitleEarly,
+      userGoal: ctx.goal ?? "",
     });
-    if (packGate) {
-      return { success: false, error: packGate };
+    if (orderErr) {
+      return { success: false, error: orderErr };
     }
 
     let bullets: string[] | undefined;

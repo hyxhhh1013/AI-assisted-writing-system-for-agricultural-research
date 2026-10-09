@@ -1356,12 +1356,12 @@ export async function toolsNode(
           if (figureCalls.length > 0) {
             toolQueue.splice(tcIdx + 1 + chartCalls.length, 0, ...figureCalls);
             newSummaries.push(
-              `[blueprint-figure] 已自动排队示意图/对比表 × ${figureCalls.length} → ${section}`,
+              `[blueprint-figure] 已自动排队对比表 × ${figureCalls.length} → ${section}`,
             );
             newMessages.push({
               role: "user",
               content:
-                `System: 本节蓝图里的示意图或对比表已自动排队 ${figureCalls.length} 项。`
+                `System: 本节蓝图里的对比表已自动排队 ${figureCalls.length} 项。`
                 + "不要改成上传 CSV。完成后正文里应能看到对应图题或表题。",
             });
           }

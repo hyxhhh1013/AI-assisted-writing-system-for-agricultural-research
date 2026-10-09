@@ -314,7 +314,7 @@ describe("writeSectionTool 进度透传", () => {
     expect(input.data.bullets).toBeUndefined();
   });
 
-  it("文献多时未精读则拒绝 write_section", async () => {
+  it("文献多时未精读也可以 write_section", async () => {
     const abs =
       "田间试验表明生物炭施用后土壤有机碳含量显著上升，团聚体稳定性同步改善，对旱地培肥有参考价值。";
     mockedSnapshot.mockResolvedValue({
@@ -330,15 +330,7 @@ describe("writeSectionTool 进度透传", () => {
       { section: "introduction", context: "扩写", pipelineMode: "fast" },
       makeCtx(),
     );
-    expect(result.success).toBe(false);
-    expect(result.error).toContain("read_reference");
-
-    const ctx = makeCtx();
-    ctx.readingPack = [1, 2, 3, 4].map((n) => ({ n, depth: "abstract" as const }));
-    const ok = await writeSectionTool.execute(
-      { section: "introduction", context: "扩写", pipelineMode: "fast" },
-      ctx,
-    );
-    expect(ok.success).toBe(true);
+    expect(result.success).toBe(true);
+    expect(mockedRun).toHaveBeenCalled();
   });
 });

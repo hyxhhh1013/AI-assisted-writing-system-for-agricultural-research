@@ -95,7 +95,7 @@
 - 农科模板：生物质热解路径、双路径产物等
 - 多面板：优先每栏 `flow_subgraph`（中文 steps）；有真实素材时才挂 image。**Agent 默认不再输出「Upload figure asset」空占位**
 - Agent 三层定位：
-  1. **草稿**：`draft_mechanism_figure` 编译 `MechanismSpec`（可 `templateId` 农科模板；`claim` / 边条件 / `preset`）→ Graphviz 或多面板 PNG 入库
+  1. **草稿**：`draft_mechanism_figure` 编译 `MechanismSpec`（可 `templateId` 农科模板；`claim` / 边条件 / `preset`）→ Graphviz 或多面板 PNG 入库。写节不会自动调用；用户点名画机理图/流程图，或带 `replaceImageUrl` 改已有图时才执行。
   2. **硬闭环**：先看 `qaReport`（英文占位 / 空栏 / 节点过载 / 缺边条件）；`block` 不入库。过线后再自动 `read_figure(qa)` 扫残余观感；硬伤必须 `replaceImageUrl`；建议精修不强制重画、引导 `/plot`；同标题防叠图自动 replace；`remove_figure` 清旧图
   3. **观感候选（可选）**：`illustrate_mechanism_figure` 即梦 Seedream 图生图 + 智谱备选；配图坞采用后才进正文
   4. **个性化（Agent 表单为主）**：输入框上方**配图坞**随时「按意见改」；表单快捷项（分叉/三面板/模板）→ `replaceImageUrl` 重画；复杂观感进 `/plot?replaceImageUrl=`，插入对话框默认**就地替换**正文旧图。**插图位置**：默认节末落盘，编辑器「本节插图」条可挪位（不做智能章节锚定）

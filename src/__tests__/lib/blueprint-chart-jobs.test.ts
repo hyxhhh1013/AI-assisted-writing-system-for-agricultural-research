@@ -107,7 +107,7 @@ describe("collectBoundChartJobsForSection", () => {
 });
 
 describe("buildNarrativeFigureCalls", () => {
-  it("queues a flow figure for the methods section without experiment data", () => {
+  it("does not queue a flow figure while writing methods", () => {
     const calls = buildNarrativeFigureCalls({
       blueprint,
       sectionKey: "methods",
@@ -115,10 +115,7 @@ describe("buildNarrativeFigureCalls", () => {
       draft: "",
       alreadyQueued: [],
     });
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.name).toBe("draft_mechanism_figure");
-    expect(calls[0]?.args.title).toBe("图1 流程");
-    expect(calls[0]?.args.sectionKey).toBe("methods");
+    expect(calls).toHaveLength(0);
   });
 
   it("skips a figure whose caption is already in the draft", () => {

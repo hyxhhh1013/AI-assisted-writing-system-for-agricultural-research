@@ -195,7 +195,10 @@ export function CreateProjectWizard({
                 })}
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">写作语言</Label>
+                <Label className="text-xs">正文语言</Label>
+                <p className="text-[10px] text-muted-foreground">
+                  大纲和各节要点用中文确认。这里只决定批准之后的正文、图题和坐标轴。
+                </p>
                 <div className="flex gap-2">
                   {(["zh", "en"] as const).map((lang) => (
                     <Button

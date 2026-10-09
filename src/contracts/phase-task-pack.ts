@@ -105,7 +105,7 @@ export const PHASE_TASK_PACKS: Record<number, PhaseTaskPack> = {
   4: {
     phase: 4,
     title: "起草",
-    goal: "为当前空白的核心章节调用 write_section 写回正文（优先引言或第一个空白节）",
+    goal: "按已批准蓝图的 writingOrder 写第一个还没写完的路径（同一章先写完当前子节）。用户点名某一节时写那一节。",
     preferredTools: [
       "read_section",
       "read_project_asset",
@@ -116,11 +116,13 @@ export const PHASE_TASK_PACKS: Record<number, PhaseTaskPack> = {
     ],
     constraints: [
       "必须已有大纲 + 写作蓝图（含各节论证要点）",
-      "一次只写用户指定的一节或一个子节，写回后停下来问下一节",
+      "一次只写一个路径，写回后停下来问下一节，并问要不要配引用",
+      "不要为了写节去精读文献库；用户要求配引用时再按主张找能支撑的几篇",
+      "不要自动画机理图或流程图",
+      "质检不可写回时，在对话里给出规则名和草稿要点",
       "综述 literature_body：蓝图有多子节时必须带 subsectionTitle 逐节写，禁止一次写完整章万字",
-      "写完说明章节 key 与字数；有数据时可配图",
     ],
-    humanFallback: "章节协作 Tab 人控扩写",
+    humanFallback: "在对话里给出质检规则名和草稿，请用户决定怎么改",
   },
   5: {
     phase: 5,

@@ -133,7 +133,10 @@ export function CreateProjectDialog({
         </div>
 
         <div className="grid gap-2">
-          <Label>写作语言</Label>
+          <Label>正文语言</Label>
+          <p className="text-[10px] text-muted-foreground">
+            大纲和各节要点用中文确认。这里只决定批准之后的正文、图题和坐标轴。
+          </p>
           <div className="flex h-9 border rounded-md overflow-hidden">
             <button
               type="button"

@@ -8,6 +8,7 @@ import {
   firstMissingBlueprintSubsection,
   listBlueprintSubsectionPathsForKey,
   multiSubsectionWriteError,
+  blueprintOrderSkipError,
   pickNextWriteTarget,
   prepareAgentWriteBlueprintContext,
   resolveAssignedSourcesToSelectedIds,
@@ -139,7 +140,7 @@ describe("firstMissingBlueprintSubsection", () => {
 });
 
 describe("pickNextWriteTarget", () => {
-  it("prefers background over literature_body", () => {
+  it("follows writingOrder before other guides", () => {
     const bp: WritingBlueprint = {
       ...sampleBlueprint,
       sectionGuides: [
@@ -165,9 +166,75 @@ describe("pickNextWriteTarget", () => {
       },
     });
     expect(next).toEqual({
-      sectionKey: "background",
-      subsectionPath: "研究现状 > 共性局限",
+      sectionKey: "introduction",
+      subsectionPath: "引言",
     });
+  });
+});
+
+describe("blueprintOrderSkipError", () => {
+  const researchBp: WritingBlueprint = {
+    ...sampleBlueprint,
+    projectMode: "research",
+    writingOrder: ["结果与分析", "讨论", "材料与方法", "引言"],
+    sectionGuides: [
+      { sectionPath: "结果与分析 > 吸附", purpose: "a", keyPoints: ["x"] },
+      { sectionPath: "结果与分析 > 机理", purpose: "b", keyPoints: ["y"] },
+      { sectionPath: "讨论", purpose: "c", keyPoints: ["z"] },
+      { sectionPath: "材料与方法", purpose: "d", keyPoints: ["w"] },
+      { sectionPath: "引言", purpose: "e", keyPoints: ["v"] },
+    ],
+  };
+
+  it("blocks a later section until the blueprint path is written", () => {
+    const error = blueprintOrderSkipError({
+      mode: "research",
+      blueprint: researchBp,
+      sectionBodies: {},
+      sectionKey: "methods",
+      subsectionTitle: "",
+      userGoal: "继续",
+    });
+    expect(error).toContain("结果与分析 > 吸附");
+  });
+
+  it("allows the next subsection and a section the user named", () => {
+    expect(blueprintOrderSkipError({
+      mode: "research",
+      blueprint: researchBp,
+      sectionBodies: {},
+      sectionKey: "results",
+      subsectionTitle: "吸附",
+      userGoal: "继续",
+    })).toBeNull();
+    expect(blueprintOrderSkipError({
+      mode: "research",
+      blueprint: researchBp,
+      sectionBodies: {},
+      sectionKey: "methods",
+      subsectionTitle: "",
+      userGoal: "先写方法",
+    })).toBeNull();
+    expect(blueprintOrderSkipError({
+      mode: "research",
+      blueprint: researchBp,
+      sectionBodies: {},
+      sectionKey: "methods",
+      subsectionTitle: "",
+      userGoal: "写结果与分析 > 吸附",
+    })).toContain("结果与分析 > 吸附");
+  });
+
+  it("moves to the next sibling after the current leaf is in the body", () => {
+    const error = blueprintOrderSkipError({
+      mode: "research",
+      blueprint: researchBp,
+      sectionBodies: { results: "### 吸附\n已写一段结果。\n" },
+      sectionKey: "results",
+      subsectionTitle: "吸附",
+      userGoal: "继续",
+    });
+    expect(error).toContain("结果与分析 > 机理");
   });
 });
 

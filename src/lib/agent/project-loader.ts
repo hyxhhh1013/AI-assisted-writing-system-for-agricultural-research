@@ -53,6 +53,8 @@ export interface AgentProjectSnapshot {
   blueprintFigurePlanSummary?: string | null;
   /** 蓝图下一未写子节（跟聊「继续」直接 write） */
   nextWriteHint?: { sectionKey: string; subsectionPath: string } | null;
+  /** 各节全文，供蓝图顺序判断子节是否已写。不进简报。 */
+  sectionBodies?: Record<string, string>;
   /** 论证蓝图短摘要 */
   argumentBlueprintSummary?: string | null;
   /** Passport 是否已有 config 记录 */
@@ -282,6 +284,7 @@ export async function loadAgentProject(
     blueprintSectionGuides,
     blueprintFigurePlanSummary,
     nextWriteHint,
+    sectionBodies,
     argumentBlueprintSummary,
     hasPaperConfig,
     paperConfig,

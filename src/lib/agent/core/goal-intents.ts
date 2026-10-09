@@ -700,9 +700,9 @@ export function draftGoalNudge(goal = "", intentKind?: IntentKind | null): strin
     const n = parseLiteratureImportTarget(goal);
     return withRule(
       withRule(
-        `【系统】写综述：先 inspect / list_references 拿到目录卡。本会话精读约 4 篇摘要即可（全文最多 4 篇），`
-          + "后续子节复用阅读包，不要每个小点重读。"
-          + `参考文献通常至少约 ${n} 篇；不足则检索导入。达标后 write_section(literature_body, subsectionTitle=…)。`,
+        `【系统】写综述：按蓝图主张写 literature_body 的下一个子节，不必先精读。`
+          + "写完停下来问要不要配引用。用户要求配引用时再找能支撑这句话的几篇。"
+          + `参考文献通常至少约 ${n} 篇；不足且用户要补文献时再检索导入。`,
         "review-subsection",
       ),
       "catalog-then-read",
@@ -711,9 +711,9 @@ export function draftGoalNudge(goal = "", intentKind?: IntentKind | null): strin
   return withRule(
     withRule(
       withRule(
-        "【系统】本轮目标是写章节：先 inspect 或 read_project_asset(outline)/list_references。"
+        "【系统】本轮目标是写章节：按蓝图 writingOrder 写第一个还没写完的路径，用户点名某一节时写那一节。"
         + "缺大纲时系统会先问用户出一版或贴骨架，不要跳过这一问。"
-        + "文献多时按目录选题 read_reference 再 write_section，只写用户指定的一节，写回后停下来汇报。"
+        + "按主张和已有数据落笔，不必先精读。写回后停下来，问要不要配引用。不要自动画机理图。"
         + "除非用户明确要求检索，否则不要先 search_external。",
         "draft-missing-refs",
       ),

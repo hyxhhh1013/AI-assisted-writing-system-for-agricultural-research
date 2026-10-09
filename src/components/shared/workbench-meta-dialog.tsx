@@ -179,7 +179,7 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
               </div>
 
               <div className="grid gap-2">
-                <Label>写作语言</Label>
+                <Label>正文语言</Label>
                 <div className="flex h-9 max-w-xs border rounded-md overflow-hidden">
                   <button
                     type="button"
@@ -206,7 +206,7 @@ export function WorkbenchMetaDialog({ open, onClose, project, onSave }: Workbenc
                     English
                   </button>
                 </div>
-                <p className="text-[10px] text-muted-foreground">影响大纲、写作蓝图与章节扩写的输出语言</p>
+                <p className="text-[10px] text-muted-foreground">大纲和各节要点用中文。这里只决定正文、图题和坐标轴。</p>
               </div>
 
               <div className="grid gap-2">

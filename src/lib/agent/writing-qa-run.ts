@@ -326,7 +326,12 @@ export function evaluateSectionWritingQa(
 export function appendQaNoteToSummary(summary: string, report: WritingQaReport): string {
   if (report.findings.length === 0) return `${summary} · 文风质检通过`;
   if (!shouldPersistWritingDraft(report)) {
-    return `${summary} · 文风质检 ${report.findings.length} 条（${writingQaVerdictLabel(report.verdict)}，未写入章节）`;
+    const codes = report.findings.map((f) => f.code).filter(Boolean).slice(0, 6);
+    const rule = codes.length > 0 ? `规则：${codes.join("、")}。` : "";
+    return (
+      `${summary} · 文风质检 ${report.findings.length} 条（${writingQaVerdictLabel(report.verdict)}，未写入章节）。`
+      + `${rule}草稿留在本条结果的 draft 字段。在对话里说明规则和草稿要点，不要让用户去章节协作。`
+    );
   }
   return `${summary} · 文风质检 ${report.findings.length} 条（${writingQaVerdictLabel(report.verdict)}，不阻断写回）`;
 }
