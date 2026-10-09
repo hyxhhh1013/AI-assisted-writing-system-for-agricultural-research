@@ -1,6 +1,6 @@
 # Agent 编排（写作助手）
 
-> L3 域文档 · 更新：2026-10-09（蓝图顺序为唯一写作顺序；规划用中文；先写后引；机理图点名才画）  
+> L3 域文档 · 更新：2026-10-09（每轮一张决策卡；写作仍走便宜模型；蓝图顺序为芯片与写作顺序）  
 > 契约唯一权威源：`src/contracts/agent.ts`（SSE 事件）、`src/contracts/agent-session.ts`（会话消息）、`src/contracts/agent-intent.ts`（`IntentKind`）。
 
 ## 概览
@@ -23,7 +23,7 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 
 刊名建议在 `src/lib/venues/registry.ts`。精确别名优先，否则按族：汉字 → 国标，Nature 开头 → Nature，IEEE → IEEE，其余英文 → SCI。向导和项目设置只刷新用户还没手改的语言、模板、引用、图表预设。语言是正文语言：大纲和蓝图叙述始终用中文。选英文后，批准蓝图之后的正文、图题、坐标轴、图例和机理图文字用英文；跟用户对话仍用中文。出图参数里若还有汉字，工具会拒绝并要求改成英文。旧项目打开不自动改写；设置里不一致时要点「按该刊规格更新」。加一本和族不同的刊只追加登记行；加新版式先改 `template-sections.ts`。计划见 [`docs/plans/venue-profile.md`](../plans/venue-profile.md)。参考文献条目导出仍是 GB/T 7714。
 
-写节按蓝图主张和已有数据落笔，不再因未精读文献拒绝 `write_section`。写完停下来问要不要配引用。机理图和流程图只有用户点名，或带 `replaceImageUrl` 改已有图时，`draft_mechanism_figure` 才执行。文风质检不可写回时，观察结果里带规则名，草稿留在 `draft` 字段，不指引用户去章节协作。
+写节按蓝图主张和已有数据落笔，不再因未精读文献拒绝 `write_section`。写完停下来问要不要配引用。机理图和流程图只有用户点名，或带 `replaceImageUrl` 改已有图时，`draft_mechanism_figure` 才执行。文风质检不可写回时，观察结果里带规则名，草稿留在 `draft` 字段，不指引用户去章节协作。菜单里的「1」「2」不是「继续写」，不会因此禁止检索或摸底；诊断意图也不继承到单个数字上，避免 `inspect_project` 与 `write_section` 互相拦截。
 
 ```text
 客户端 → POST /api/agent (SSE) → runAgentGraphLoop (AsyncGenerator)
@@ -36,11 +36,12 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 
 `AgentRole = writer | verifier | refiner | planner`（`src/lib/models.ts`），可在 Admin 设置页分别配置 provider（DeepSeek/智谱），存 DB `AGENT_ROLE_*` 键、启动时热加载。
 
-- **writer**：Agent 主推理循环 + 写作管道主模型（默认 DeepSeek）
-- **verifier**：一致性 / 引用审查（默认智谱，若启用）
+- **writer**：Agent 主推理循环 + 写作管道主模型（默认 DeepSeek `deepseek-v4-flash`）
+- **verifier**：一致性 / 引用审查（默认智谱，模型名是共用的 `ZHIPU_MODEL`）
 - **refiner**：写作后润色（默认 DeepSeek）
-- **planner**：规划步骤生成子任务列表（默认智谱，若启用；未配置回落 DeepSeek）。规划是短任务，走便宜模型省成本
-- 调用侧：`callAINonStreamingWithTools` / `callAIStreamingWithTools` 接受 `role` 参数（默认 writer），`planner.ts` 传 `role: "planner"`
+- **决策卡**：每轮用户消息调用一次智谱，只返回一张任务卡（写一节、改配置、检索、出大纲或蓝图、或追问）。模型名单独存在 `AGENT_DECISION_MODEL`，默认 `glm-4-plus`，与审查共用的 `ZHIPU_MODEL` 分开。决策原文不进写作对话。写作仍走 DeepSeek。
+- **planner**：角色厂商映射仍保留。图入口不再把多步 `Plan:` 写进 `messages`。
+- 调用侧：写作循环 `callAINonStreamingWithTools` / `callAIStreamingWithTools` 接受 `role`（默认 writer）。决策卡走 `requestTurnDecision`，`callAI` 可传 `model` 覆盖厂商默认模型名。
 - **DeepSeek V4 + tools**：`buildChatCompletionsBody` 关闭 thinking。V4 默认 thinking 开着时，带 tools 的后续请求必须回传上一轮 `reasoning_content`；本仓库把 Plan/工具观察写成普通 assistant/user，回传不了，会 400（`reasoning_content in the thinking mode must be passed back`）。无 tools 的写节/审查不受影响。
 
 ## 关键文件
@@ -49,7 +50,7 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 |------|------|
 | `src/lib/agent/index.ts` | `runAgentLoop` 公共出口（re-export；实际包装在 `core/agent-loop.ts`） |
 | `src/lib/agent/langgraph/run-graph.ts` | 图循环：状态初始化、`LiveEventQueue`、实时/快照合并、落库 |
-| `src/lib/agent/langgraph/nodes.ts` | `toolsNode` 工具执行 + 门禁 + 并行快路径；`agentNode` LLM 调用 |
+| `src/lib/agent/langgraph/nodes.ts` | `planNode` 每轮要一张决策卡；`toolsNode` 工具执行 + 门禁 + 并行快路径；`agentNode` LLM 调用 |
 | `src/lib/agent/langgraph/parallel-tools.ts` | 只读工具批量并行（`PARALLEL_READ_TOOLS` 白名单） |
 | `src/lib/agent/langgraph/tool-gates.ts` | toolsNode 门禁中间件：前置链（重复/配额/意图+先读后写）+ 阶段 + 后置链（antispam/clarify/outline） |
 | `src/lib/agent/langgraph/graph.ts` | 编译 LangGraph |
@@ -94,7 +95,7 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 
 **计划推进（2026-08-23）**：`advancePlanAfterTool` 有 `toolHints` 时只认 hints，不再用标题里的「大纲/文献」串味。`list_references` / `generate_outline` 不得把「依据大纲生成写作蓝图」标完成。口头宣布要生成蓝图/`write_section` 但未调用工具时注入续跑，禁止空 `agent/complete`。`开始吧` 视为跟聊继承意图；SSE 中途断开不再伪装成「已完成」。`finished=true` 时不得因续跑计数再打回 `agent`（否则 `planContinueCount` 停在 1–2 会自环到 LangGraph 512）。读/检索不清零续跑计数。
 
-**任务结束 vs 续跑条（2026-08-23）**：图循环 `finished=true` → `finalize` → `agent/complete` 才是一轮结束。续跑条只看**本轮**（上一句用户之后）的 thought / observation，禁止拿上一轮「口头未执行」摘要继续推荐同一节。本轮 `write_section` 成功后改为「已写回」并指向下一空节。前端 SSE 已断但 DB 仍 `running` 时，跟聊/续跑先 `interruptRunningSession`（不再等 45s），界面出示「接上进度 / 强制结束」，409 不再叠用户气泡、不当红框失败。收尾「还有未完成步骤」不再举例「先写引言」（会误触发 write_section 宣布）；续跑条有未完成计划时只发「继续」，不改推写另一节。正文已经在请用户「回复 1/2/3」或「回「1 / 2 / 3」」时，不再追加这句，也不再出「继续推进」；顶栏改为「等你回复」，输入框上方 `AgentClarifyCard` 只展示选项（截掉粘在后面的「执行摘要」工具日志），编号列表 + 快捷 1/2/3，回答框固定在卡片底部不被顶没。未完成子任务显示「等你决定」而不是转圈的「执行中」。**提及「已有写作蓝图 / 不会调用」不算口头宣布生成蓝图**（否则诊断会误强制 `generate_writing_blueprint`，续跑条与正文选项不一致）。
+**任务结束 vs 续跑条（2026-08-23；2026-10-09 收尾不再追加未完成步骤）**：图循环 `finished=true` → `finalize` → `agent/complete` 才是一轮结束。续跑条只看**本轮**（上一句用户之后）的 thought / observation，禁止拿上一轮「口头未执行」摘要继续推荐同一节。本轮 `write_section` 成功后改为「已写回」并指向下一空节。前端 SSE 已断但 DB 仍 `running` 时，跟聊/续跑先 `interruptRunningSession`（不再等 45s），界面出示「接上进度 / 强制结束」，409 不再叠用户气泡、不当红框失败。收尾不再追加「还有未完成步骤」；跟聊会剥掉历史里的 `Plan:` 和这句尾巴。正文已经在请用户「回复 1/2/3」或「回「1 / 2 / 3」」时，不再出「继续推进」；顶栏改为「等你回复」，输入框上方 `AgentClarifyCard` 只展示选项（截掉粘在后面的「执行摘要」工具日志），编号列表 + 快捷 1/2/3，回答框固定在卡片底部不被顶没。未完成子任务显示「等你决定」而不是转圈的「执行中」。**提及「已有写作蓝图 / 不会调用」不算口头宣布生成蓝图**（否则诊断会误强制 `generate_writing_blueprint`，续跑条与正文选项不一致）。芯片在有蓝图 `nextWriteHint` 时跟该路径走，不再跟期刊模板顺序。大纲/蓝图批准、配置写回，以及用户明确说的基质、不画机理图、缺数据先不管，由代码写入 `workMemory.decisions`，简报里显示为已确认。连续两次门禁拒绝（换工具也算）停下，并写出拦住的两条规则。
 
 **下一步唯一叙事（2026-10-07）**：`resolveAgentPhase` 是全仓唯一的「现在在哪一步、下一步干什么」。`suggestNextAgentActions` 只是它的薄包装。按阶段互斥（文献 / 大纲 / 蓝图小步 / 写节），禁止同时抛「检索文献」和「写引言」。蓝图确认不是独立阶段，`phase` 只有 `outline`，`packPhase` 仍可以是 2 或 3。`resolvePhaseTaskPack.goal`、`inspect_project` 主建议、工作台芯片和续跑条的下一空节都读这份结果。有续跑条时输入区不再铺阶段芯片；空闲空对话的「建议」按钮走同一条主建议。阶段工具集在 `PHASE_TOOLSETS`（综述起草可检索导入，研究型不加）。后台「运行时开关」里的「阶段影子记录」打开后，不在本阶段集合里的工具会记一条 `phase=literature 不含 write_section` 这种轨迹（`via=phase-shadow`），然后照旧执行。默认关闭。`enforce` 还不拦。
 
@@ -284,7 +285,7 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 
 **已落地 DATA-01**：`lib/agent/data-foundation.ts`。研究型 `write_section(results)` 在根基 `empty` 时拒绝；`inspect_project` / 简报 / `list_plot_sources` 共用同一套状态。
 
-**已落地 DATA-02**：`ingest_project_data`（`lib/agent/data-confirm.ts`）。附件或粘贴 CSV 先拆成数据块（多工作表、空行隔开的多张表、空两列的并排表），确认卡勾选后才 PATCH `dataSources`/`dataClaims`。未确认不写库。单块文件仍用原文件名；多块用 `文件名 · 标签`，避免互相覆盖。
+**已落地 DATA-02**：`ingest_project_data`（`lib/agent/data-confirm.ts`）。附件或粘贴 CSV 先拆成数据块（多工作表、空行隔开的多张表、空两列的并排表），确认卡勾选后才 PATCH `dataSources`/`dataClaims`。未确认不写库。单块文件仍用原文件名；多块用 `文件名 · 标签`，避免互相覆盖。样品名里未加引号的逗号并回第一列，避免共掺样品被拆掉。元素或组分列只记组成，不做「A 较 B 提高百分之几」的组间对比。
 
 **数据确认（2026-10-08）**：表格和已有图可以点回形针，也可以直接拖进写作助手整栏（松开后走同一附件流程）。实验数据页的上传区也可以拖入 CSV / Excel。上传表格不再自动入库。写作助手顶栏「数据」按原文件分栏：左侧选块，右侧看表，并给出列的最小–最大、复制、细调（打开绘图页并预填这一块）、交给助手、移出项目。仪器参数和切坏的短块收在文件下面。实验数据页不再展开摘要、证据声明和扩写预览。对话框里的表格不按固定表头自动切块。助手先读带行号的原文，用 `tablesJson` 说明工作表、表头行、列号和含义；确认卡只展示这份读法，勾选后才写入。长曲线不写成均值或趋势声明。XRD / 红外叠谱用 `plot_peak_stack`：按已入库文件名取曲线，峰和虚线只标用户给出的位置和名称；没给峰就只画叠谱并追问。不要把整条谱贴进 `generate_chart`，也不要自己编化学归属。芯片对未确认表格显示「待确认」，已有图显示「待登记」。已有 png/jpg/webp/gif/tiff，以及单页成图 PDF，经同一确认卡处理。确认前用视觉模型读出图上能看清的点，用户勾选后才写成 `dataClaims`（供写作引用）并登记进 `Project.charts`（`figureId: existing`）。没读出或没勾选的数字不进正文。TIFF 登记时用 Pillow 转成 PNG。单页 PDF 把第一页渲成 PNG 入库并保留原 PDF。一页里有多张图时，确认卡按空白拆开列出，默认登记拆开的图，整页可再勾。多页 PDF 仍当文献，不进图表库。只有参数里带了用户指定的 `sectionKey` 才插入正文。
 
@@ -292,7 +293,7 @@ resume → 恢复 activeWrite；若 pending 无写节则 ensurePendingWriteFromA
 
 **已落地 DATA-03**：附件白名单含 `xy/xyd/ras/raw/uxd/dif`（谱文件只做两列预览）。`generate_xrd_analysis` 只吃已入库 `peakTable`（或 `sourceAttachmentId` 对应峰表）；裸 `peaksJson` 拒绝。Scherrer / 相检索成功后回写 `dataClaims`。
 
-**已落地 DATA-04**：`write_section(results)` 写回前对账精确小数 ⊆ `dataClaims`（`results-number-reconcile.ts`）。约/数量级不拦。
+**已落地 DATA-04**：`write_section(results)` 写回前对账精确小数 ⊆ `dataClaims`（`results-number-reconcile.ts`）。约/数量级不拦。化学式系数（如 `Ba0.79`）、离子半径、行首或括号里的小节号（如 `3.1`）不参与对账。
 
 **已落地 HUB-02**：工作台主栏默认 Agent + 结构；data/xrd/outline/writing 收进「专家工具」。`NEXT_PUBLIC_WORKBENCH_EXPERT_TABS=1` 恢复旧布局；`?tab=data` 仍可用。
 

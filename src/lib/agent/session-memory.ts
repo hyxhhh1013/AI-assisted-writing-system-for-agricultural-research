@@ -89,6 +89,17 @@ export function appendMemoryToBriefing(
   return base ? `${base}\n\n${mem}` : mem;
 }
 
+/** 换掉简报末尾已有的工作记忆，避免同一段「已拍板」叠两次 */
+export function syncWorkMemoryBriefing(
+  briefing: string,
+  memoryBlock: string,
+): string {
+  const stripped = briefing.replace(/\n*【本会话工作记忆】[\s\S]*$/, "").trim();
+  const mem = memoryBlock.trim();
+  if (!mem) return stripped;
+  return appendMemoryToBriefing(stripped, mem);
+}
+
 function summarizeTools(snap: AgentSessionSnapshot): string {
   const names = snap.toolSummaries
     .map((line) => {

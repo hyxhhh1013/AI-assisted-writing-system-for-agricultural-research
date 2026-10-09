@@ -25,6 +25,8 @@ import {
   DEEPSEEK_MODEL_OPTIONS,
   DEEPSEEK_VISION_MODEL_OPTIONS,
   ZHIPU_MODEL_OPTIONS,
+  AGENT_DECISION_MODEL_KEY,
+  DEFAULT_AGENT_DECISION_MODEL,
 } from "@/lib/models";
 import {
   DEFAULT_ARK_BASE_URL,
@@ -66,7 +68,7 @@ const ROLE_LABELS: { role: keyof AdminAiRoles; label: string; desc: string }[] =
   { role: "writer", label: "Writer（写作）", desc: "Agent / 写作管线主模型" },
   { role: "verifier", label: "Verifier（审查）", desc: "一致性 / 引用审查" },
   { role: "refiner", label: "Refiner（润色）", desc: "写作后润色" },
-  { role: "planner", label: "Planner（规划）", desc: "Agent 规划步骤（便宜模型优先）" },
+  { role: "planner", label: "Planner（规划）", desc: "厂商映射。每轮决策卡用下方智谱模型" },
 ];
 
 const SOURCE_LABEL: Record<string, string> = { db: "DB", env: "env", default: "默认" };
@@ -95,6 +97,7 @@ export default function AdminSettingsPage() {
   const [testing, setTesting] = useState(false);
 
   const [savingRoles, setSavingRoles] = useState(false);
+  const [decisionModel, setDecisionModel] = useState(DEFAULT_AGENT_DECISION_MODEL);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   /** ADMIN-040 运行时开关（明文 SystemSetting） */
@@ -129,6 +132,14 @@ export default function AdminSettingsPage() {
       const phaseMode = map.get("AGENT_PHASE_MODE");
       if (phaseMode && phaseMode !== "****") {
         setPhaseShadow(phaseMode.trim().toLowerCase() === "shadow");
+      }
+      const decision = map.get(AGENT_DECISION_MODEL_KEY);
+      if (decision && decision !== "****") {
+        setDecisionModel(
+          (ZHIPU_MODEL_OPTIONS as readonly string[]).includes(decision)
+            ? decision
+            : DEFAULT_AGENT_DECISION_MODEL,
+        );
       }
     } else toast.error("加载设置失败");
     if (st.status === "fulfilled") {
@@ -330,6 +341,8 @@ export default function AdminSettingsPage() {
         const d = await saveAdminSetting(`AGENT_ROLE_${role.toUpperCase()}`, roles[role]);
         if (!d.ok) { toast.error(d.error || `保存 ${role} 失败`); return; }
       }
+      const modelSaved = await saveAdminSetting(AGENT_DECISION_MODEL_KEY, decisionModel);
+      if (!modelSaved.ok) { toast.error(modelSaved.error || "保存决策模型失败"); return; }
       toast.success("角色映射已保存，立即生效");
       await load();
     } catch (e) {
@@ -628,6 +641,19 @@ export default function AdminSettingsPage() {
               </select>
             </div>
           ))}
+        </div>
+        <div className="mt-3 rounded-lg bg-[#faf9f6] px-3 py-2">
+          <div className="text-xs font-medium text-[#122820]">决策卡模型（智谱）</div>
+          <div className="mb-1 text-[10px] text-[#9aa8a0]">每轮只出一张任务卡。写作仍走 DeepSeek。与审查共用的智谱模型分开。</div>
+          <select
+            className="h-8 w-full max-w-xs rounded-md border border-input bg-white px-2 text-xs"
+            value={decisionModel}
+            onChange={(e) => setDecisionModel(e.target.value)}
+          >
+            {ZHIPU_MODEL_OPTIONS.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
         </div>
         <div className="mt-3">
           <Button size="sm" className="gap-1" onClick={() => void handleSaveRoles()} disabled={savingRoles}>

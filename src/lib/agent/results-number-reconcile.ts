@@ -10,6 +10,23 @@ const HEDGE_RE = /约|大约|近|左右|数量级|~|≈/;
 /** 图/表号、p 值、相关系数：不是新编造的试验结果 */
 const STRUCTURAL_NUMBER_RE =
   /图\s*|表\s*|Fig(?:ure)?\.?\s*|Tab(?:le)?\.?\s*|式\s*|附录|[Pp]\s*[=<>＜＞≤≥]|[Rr]²|[Rr]\s*=/;
+/** 化学式系数前的元素符号，如 Ba0.79 */
+const FORMULA_PREFIX = /[A-Za-z\u0370-\u03FF]/;
+const RADIUS_RE = /半径|Å|Å|CN\s*=/;
+const UNIT_AFTER =
+  /^\s*(?:%|％|eV|keV|nm|mm|cm|µm|μm|um|ms|μs|µs|us|mA|mW|℃|°C|wt%|at%|mol|g(?:\s|\/|$|[^a-zA-Z]))/;
+
+function skipNonMeasurement(text: string, start: number, raw: string): boolean {
+  const prev = text[start - 1] ?? "";
+  if (FORMULA_PREFIX.test(prev)) return true;
+  const before = text.slice(Math.max(0, start - 12), start);
+  const after = text.slice(start + raw.length, start + raw.length + 12);
+  if (RADIUS_RE.test(before + after)) return true;
+  if (!/^[1-9]\.\d$/.test(raw) || UNIT_AFTER.test(after)) return false;
+  if (/节|章|Section|subsection/.test(before.slice(-8) + after.slice(0, 6))) return true;
+  if (start === 0 || text[start - 1] === "\n") return true;
+  return /[（(]\s*$/.test(before) && /^\s*[）)]/.test(after);
+}
 
 export interface ResultNumberHit {
   raw: string;
@@ -42,6 +59,7 @@ export function extractPreciseResultNumbers(text: string): ResultNumberHit[] {
     const start = m.index;
     const window = text.slice(Math.max(0, start - 8), start + raw.length + 8);
     if (HEDGE_RE.test(window) || STRUCTURAL_NUMBER_RE.test(window)) continue;
+    if (skipNonMeasurement(text, start, raw)) continue;
     hits.push({ raw, value, index: start });
   }
   return hits;

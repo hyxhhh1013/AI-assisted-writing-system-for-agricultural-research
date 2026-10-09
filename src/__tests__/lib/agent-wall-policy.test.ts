@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   AGENT_WALL_LIMITS,
   decideAfterWall,
+  gateBounceQuestion,
   resolveLlmToolRequest,
   toolsUnderRestrict,
 } from "@/lib/agent/core/wall-policy";
@@ -62,6 +63,20 @@ describe("decideAfterWall", () => {
     expect(AGENT_WALL_LIMITS.read_spam).toBe(6);
     expect(AGENT_WALL_LIMITS.search_storm).toBe(6);
     expect(AGENT_WALL_LIMITS.gate_bounce).toBe(2);
+    expect(decideAfterWall({ kind: "gate_bounce", hits: 1 }).kind).toBe("hint");
+    const bounced = decideAfterWall({
+      kind: "gate_bounce",
+      hits: 2,
+      question: gateBounceQuestion([
+        "inspect_project: 诊断轮不能写",
+        "write_section: 还没读本节",
+      ]),
+    });
+    expect(bounced.kind).toBe("ask");
+    if (bounced.kind === "ask") {
+      expect(bounced.question).toContain("inspect_project");
+      expect(bounced.question).toContain("write_section");
+    }
     expect(decideAfterWall({ kind: "read_spam", hits: 5 }).kind).toBe("hint");
     const restricted = decideAfterWall({
       kind: "read_spam",

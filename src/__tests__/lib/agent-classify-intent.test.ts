@@ -21,6 +21,13 @@ describe("classifyIntent", () => {
     });
   });
 
+  it("does not inherit diagnose on a menu digit", () => {
+    expect(classifyIntent({ goal: "1", previousKind: "diagnose" })).toEqual({
+      kind: null,
+      source: "regex",
+    });
+  });
+
   it("inherits on 继续 / 好 / 开始吧", () => {
     expect(classifyIntent({ goal: "继续", previousKind: "citation" }).source).toBe(
       "inherit",

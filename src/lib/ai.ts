@@ -44,6 +44,8 @@ export interface AICallOptions {
   tools?: AIToolSchema[];
   tool_choice?: "auto" | "none" | "required";
   temperature?: number;
+  /** 覆盖 Admin 里该厂商的默认模型名。决策卡用它单独指定智谱模型。 */
+  model?: string;
 }
 
 export class AIError extends Error {
@@ -215,7 +217,7 @@ export function buildChatCompletionsBody(
 export async function callAI(options: AICallOptions): Promise<Response> {
   const config = getModelConfig(options.provider);
   const apiKey = await pickApiKey(options.provider);
-  const model = await resolveProviderModel(options.provider);
+  const model = options.model?.trim() || await resolveProviderModel(options.provider);
 
   const keyError = validateProviderKey(options.provider);
   if (keyError) {

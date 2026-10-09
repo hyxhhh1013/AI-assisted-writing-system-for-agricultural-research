@@ -4,7 +4,13 @@ import {
   buildAgentBriefingMessage,
   buildAgentSystemPrompt,
 } from "@/lib/agent/core/prompts";
-import { createPlan } from "@/lib/agent/core/planner";
+import {
+  appendGoalDecisions,
+  formatTurnTask,
+  requestTurnDecision,
+} from "@/lib/agent/core/turn-decision";
+import { syncWorkMemoryBriefing } from "@/lib/agent/session-memory";
+import { applyWorkMemoryOp, formatWorkMemoryBlock } from "@/lib/agent/work-memory";
 import {
   callAINonStreamingWithTools,
   callAIStreamingWithTools,
@@ -30,8 +36,6 @@ import {
   buildContinueNudge,
   getFocusSubtask,
   markFocusRunning,
-  extractUserChoicePrompt,
-  planHasPendingWork,
   shouldResetPlanContinueCount,
 } from "@/lib/agent/core/plan-progress";
 import {
@@ -74,7 +78,7 @@ import {
   shouldPauseForFigureBrief,
 } from "@/lib/agent/figure-loop";
 import { phaseShadowReason } from "@/lib/agent/core/phase-flags";
-import { decideAfterWall, resolveLlmToolRequest } from "@/lib/agent/core/wall-policy";
+import { decideAfterWall, gateBounceQuestion, resolveLlmToolRequest } from "@/lib/agent/core/wall-policy";
 import { buildToolConfirmMessage } from "@/lib/agent/confirm-message";
 import { isConfirmGranted } from "@/lib/agent/core/confirm-grant";
 import {
@@ -98,7 +102,6 @@ import {
   parseLiteratureImportTarget,
   pickIntentNudge,
   pickIntentStopAsk,
-  shouldSkipPlanner,
   sumImportedCount,
   type IntentClosureContext,
 } from "@/lib/agent/core/goal-intents";
@@ -186,31 +189,28 @@ export async function planNode(
       };
     }
 
-    // 续跑：已有 plan 则跳过重新规划
-    if (state.plan && state.messages.length > 0) {
-      events.push({ type: "agent/status", status: "thinking" });
-      return { events };
+    const recorded = appendGoalDecisions(agentContext.workMemory, state.goal);
+    if (recorded.changed && recorded.memory) {
+      agentContext.workMemory = recorded.memory;
+      agentContext.projectBriefing = syncWorkMemoryBriefing(
+        agentContext.projectBriefing ?? "",
+        formatWorkMemoryBlock(recorded.memory),
+      );
     }
-
-    // 诊断 / 单节起草 / 引用核查·修正：跳过 Planner LLM，直接对话
-    if (shouldSkipPlanner(state.goal, state.observations ?? [], state.intentKind)) {
-      events.push({ type: "agent/status", status: "thinking" });
-      return { events, plan: null };
-    }
-
-    const rawPlan = await createPlan(state.goal, agentContext, agentContext.projectBriefing);
-    const plan = markFocusRunning(rawPlan);
-    const focus = getFocusSubtask(plan);
-    events.push({ type: "agent/plan", plan });
+    const snap = agentContext.projectSnapshot;
+    const decision = await requestTurnDecision({
+      goal: state.goal,
+      decisions: (agentContext.workMemory?.decisions ?? []).map((item) => item.text),
+      nextSection: snap?.nextWriteHint?.sectionKey ?? null,
+      nextPath: snap?.nextWriteHint?.subsectionPath ?? null,
+      hasOutline: (snap?.outline?.trim().length ?? 0) >= 20,
+      hasBlueprint: Boolean(snap?.hasWritingBlueprint),
+    });
+    events.push({ type: "agent/status", status: "thinking" });
     return {
-      plan: { ...plan, focusSubtaskId: focus?.id ?? null },
+      plan: null,
       events,
-      messages: [
-        {
-          role: "assistant",
-          content: `Plan:\n${plan.subtasks.map((s, i) => `${i + 1}. [${s.status}] ${s.title}`).join("\n")}`,
-        },
-      ],
+      messages: [{ role: "user", content: formatTurnTask(decision) }],
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "规划失败";
@@ -470,22 +470,7 @@ export async function agentNode(
         ];
       } else {
       updates.finished = true;
-      // 对话式收尾：意图未完成 → 问用户；有未完成计划 → 提醒可继续（引用修正跟聊不提示旧 plan）
       let hint = pickIntentStopAsk(intentCtx);
-      const suppressPlanHint =
-        state.intentKind === "ap_full"
-        || state.intentKind === "citation_apply"
-        || state.intentKind === "citation"
-        || state.intentKind === "draft"
-        || state.intentKind === "review_write";
-      const alreadyAsking = Boolean(extractUserChoicePrompt(updates.finalThought));
-      if (!hint && !alreadyAsking && !suppressPlanHint && planHasPendingWork(plan) && plan) {
-        const left = plan.subtasks
-          .filter((s) => s.status === "pending" || s.status === "running")
-          .map((s) => s.title);
-        hint =
-          `\n\n——\n还有未完成步骤：${left.join("；")}。可以说「继续」接着做「${left[0]}」，或指定下一步。`;
-      }
       // 收尾兜底：执行型指令（用户要实际改动）但整轮无落地写操作 → 引导 Agent 用 ask_user 确认，
       // 避免「分析完就当完成」——这是 ask_user 澄清链路的关键触发点
       const execWords =
@@ -648,21 +633,48 @@ export async function toolsNode(
     };
   };
 
-  /** 门禁失败统一记录：摘要 + LLM 消息 + SSE observation + 计划标记失败 */
-  const rejectGate = (toolName: string, error: string) => {
-    trace(toolName, false, { reason: error, via: "pre-gate" });
-    newSummaries.push(`[${toolName}] 失败: ${error}`);
+  let consecutiveGateRejects = 0;
+  const recentGateReasons: string[] = [];
+
+  /** 门禁失败统一记录：摘要 + LLM 消息 + SSE observation + 计划标记失败。连续两次停下。 */
+  const rejectGate = (toolName: string, gateError: string): Partial<AgentGraphStateType> | null => {
+    trace(toolName, false, { reason: gateError, via: "pre-gate" });
+    newSummaries.push(`[${toolName}] 失败: ${gateError}`);
     newMessages.push({
       role: "user",
-      content: `Tool result (${toolName}):\n${error}`,
+      content: `Tool result (${toolName}):\n${gateError}`,
     });
     events.push({
       type: "agent/observation",
       tool: toolName,
-      result: { success: false, error },
-      error,
+      result: { success: false, error: gateError },
+      error: gateError,
     });
     plan = advancePlanAfterTool(plan, toolName, false);
+    consecutiveGateRejects += 1;
+    recentGateReasons.push(`${toolName}: ${gateError}`.slice(0, 240));
+    const wall = decideAfterWall({
+      kind: "gate_bounce",
+      hits: consecutiveGateRejects,
+      question: gateBounceQuestion(recentGateReasons),
+    });
+    if (wall.kind !== "ask") return null;
+    trace("gate_bounce", false, { reason: wall.reason, via: "pre-gate" });
+    const checkpoint = buildClarifyCheckpoint(wall.question);
+    events.push({ type: "agent/checkpoint", checkpoint });
+    events.push({ type: "agent/status", status: "awaiting_checkpoint" });
+    return {
+      pendingToolCalls: [],
+      toolCallCount,
+      toolSummaries: newSummaries,
+      observations: newObservations,
+      messages: newMessages,
+      events,
+      plan,
+      toolTrace: newTrace,
+      awaitingCheckpoint: checkpoint,
+      finished: true,
+    };
   };
 
   // 可变队列：出图成功后可 splice 注入 read_figure(qa)
@@ -782,7 +794,8 @@ export async function toolsNode(
         });
         continue;
       }
-      rejectGate(tool.name, gateVerdict.error);
+      const blocked = rejectGate(tool.name, gateVerdict.error);
+      if (blocked) return blocked;
       continue;
     }
 
@@ -1091,7 +1104,8 @@ export async function toolsNode(
     // 阶段门禁在写前置补齐之后执行（原顺序）：与当前项目阶段不匹配 → 拒绝
     const phaseVerdict = evaluatePhaseGate(gateInput);
     if (!phaseVerdict.ok) {
-      rejectGate(tool.name, phaseVerdict.error);
+      const blocked = rejectGate(tool.name, phaseVerdict.error);
+      if (blocked) return blocked;
       continue;
     }
 
@@ -1156,6 +1170,8 @@ export async function toolsNode(
       grantedConfirm = null;
     }
 
+    consecutiveGateRejects = 0;
+    recentGateReasons.length = 0;
     agentContext.budget.toolCallCount += 1;
     toolCallCount += 1;
     noteSearchCall(antispamTracker, tool.name);
@@ -1191,6 +1207,16 @@ export async function toolsNode(
         data: result.data,
       });
       if (result.success && tool.name === "write_section") reflectReset = true;
+      if (result.success && tool.name === "update_paper_config" && result.summary?.trim()) {
+        agentContext.workMemory = applyWorkMemoryOp(agentContext.workMemory, {
+          op: "add_decision",
+          text: `配置已更新：${result.summary.trim()}`.slice(0, 200),
+        });
+        agentContext.projectBriefing = syncWorkMemoryBriefing(
+          agentContext.projectBriefing ?? "",
+          formatWorkMemoryBlock(agentContext.workMemory),
+        );
+      }
       plan = advancePlanAfterTool(plan, tool.name, result.success);
       if (result.success && isProjectMutatingTool(tool.name)) {
         markAgentProjectDirty(agentContext);

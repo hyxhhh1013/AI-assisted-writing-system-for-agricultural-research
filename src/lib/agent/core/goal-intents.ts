@@ -628,10 +628,12 @@ export function diagnoseGoalNudge(): string {
   );
 }
 
-/** 跟聊短确认（继续/好/A），对齐 classify-intent FOLLOW_UP_RE */
+/**
+ * 跟聊短确认（继续/好/A）。
+ * 单个数字是菜单选项，不是「继续写」：选项 1 可能是补文献。
+ */
 export function isShortContinueGoal(goal: string): boolean {
   const g = goal.trim();
-  if (/^[1-9]$/.test(g) || /^[１-９]$/.test(g)) return true;
   return /^(好|好的|可以|行|开始吧?|开始写|动手|写吧|执行|确认|同意|继续|按方案|就这样|嗯|哦|是的|对|A|a|ok|OK|yes)[。!！?？\s]*$/.test(
     g,
   );

@@ -7,6 +7,7 @@ import {
 import type { AgentGraphStateType } from "@/lib/agent/langgraph/state";
 import { normalizeWorkMemory } from "@/lib/agent/work-memory";
 import { normalizeReadingPack } from "@/lib/agent/reading-pack";
+import { stripStaleTurnMessages } from "@/lib/agent/core/turn-decision";
 
 export { emptyAgentSessionSnapshot, isAgentSessionSnapshot };
 
@@ -52,9 +53,10 @@ export function snapshotToInitialState(
 ): Partial<AgentGraphStateType> {
   return {
     goal,
-    messages: snapshot.messages.length > 0
-      ? snapshot.messages
-      : [{ role: "user", content: goal }],
+    messages: (() => {
+      const stripped = stripStaleTurnMessages(snapshot.messages);
+      return stripped.length > 0 ? stripped : [{ role: "user", content: goal }];
+    })(),
     plan: snapshot.plan,
     iteration: snapshot.iteration,
     toolCallCount: snapshot.toolCallCount,

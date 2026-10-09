@@ -32,6 +32,9 @@ export interface SuggestNextAgentActionsInput {
   sectionChars?: Record<string, number>;
   /** 研究型起草顺序。缺省按 sci */
   template?: string;
+  /** 蓝图下一未写路径。有它时芯片跟蓝图走，不再跟期刊模板顺序。 */
+  blueprintNextSection?: string | null;
+  blueprintNextPath?: string | null;
 }
 
 export interface ResolveAgentPhaseInput {
@@ -81,6 +84,9 @@ function writeTargetOf(input: SuggestNextAgentActionsInput): string | null {
 }
 
 function writeSectionTip(input: SuggestNextAgentActionsInput, target: string): string {
+  if (input.blueprintNextPath && target === input.blueprintNextSection) {
+    return `写 ${input.blueprintNextPath} 并保存到当前项目`;
+  }
   const thinHint =
     input.thinOrGapSections?.includes(target)
     && !input.emptySections.includes(target)
@@ -129,9 +135,11 @@ export function resolveAgentPhaseFromSignals(
       thinKeys: input.thinOrGapSections,
     })
     : null;
-  const writeTarget = input.paperMode === "research"
-    ? (templateWrite ?? writeTargetOf(input))
-    : writeTargetOf(input);
+  const writeTarget = input.blueprintNextSection
+    ? input.blueprintNextSection
+    : input.paperMode === "research"
+      ? (templateWrite ?? writeTargetOf(input))
+      : writeTargetOf(input);
   const refN = input.referenceCount ?? 0;
 
   const routed = resolveEntryRoutePhase({
@@ -148,6 +156,18 @@ export function resolveAgentPhaseFromSignals(
     template: input.template,
   });
   if (routed) {
+    if (
+      input.blueprintNextSection
+      && routed.phase === "draft"
+      && input.hasWritingBlueprint
+    ) {
+      return phaseState(
+        "draft",
+        routed.packPhase,
+        writeSectionTip(input, input.blueprintNextSection),
+        { nextSectionKey: input.blueprintNextSection },
+      );
+    }
     return phaseState(routed.phase, routed.packPhase, routed.nextAction, {
       ...(routed.subStep ? { subStep: routed.subStep } : {}),
       ...(routed.nextSectionKey ? { nextSectionKey: routed.nextSectionKey } : {}),
@@ -231,6 +251,8 @@ function signalsFromSnapshot(input: ResolveAgentPhaseInput): SuggestNextAgentAct
     entryMode: snapshot?.agentEntryMode ?? null,
     paperMode: snapshot?.mode === "research" ? "research" : "review",
     template: snapshot?.template || "sci",
+    blueprintNextSection: snapshot?.nextWriteHint?.sectionKey ?? null,
+    blueprintNextPath: snapshot?.nextWriteHint?.subsectionPath ?? null,
     claimCount: snapshot?.dataClaims.length ?? 0,
     sectionChars: Object.fromEntries(
       (snapshot?.sectionFills ?? []).map((s) => [s.key, s.chars]),

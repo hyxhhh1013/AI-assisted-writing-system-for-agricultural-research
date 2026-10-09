@@ -36,11 +36,13 @@ import {
 import {
   appendMemoryToBriefing,
   buildRecentAgentMemoryBlock,
+  syncWorkMemoryBriefing,
 } from "@/lib/agent/session-memory";
 import {
   graphStateToSnapshot,
 } from "@/lib/agent/session-snapshot";
 import {
+  applyWorkMemoryOp,
   formatWorkMemoryBlock,
   normalizeWorkMemory,
 } from "@/lib/agent/work-memory";
@@ -289,6 +291,33 @@ export async function* runAgentGraphLoop(
       checkpointDecision,
       pendingCheckpointKind,
     );
+    const kind = resolveCheckpointKind(checkpointDecision, pendingCheckpointKind);
+    const note = checkpointDecision.note?.trim() ?? "";
+    const approvedText =
+      checkpointDecision.decision === "approve" && kind === "outline_approve"
+        ? "用户已批准大纲"
+        : checkpointDecision.decision === "approve" && kind === "blueprint_approve"
+          ? "用户已批准写作蓝图，按蓝图顺序写下一节"
+          : checkpointDecision.decision === "approve" && kind === "config_confirm"
+            ? "用户已确认论文配置"
+            : "";
+    const reviseText =
+      checkpointDecision.decision === "revise" && note
+        ? `用户修改意见：${note.slice(0, 160)}`
+        : "";
+    const decisionText = approvedText
+      ? (note ? `${approvedText}（${note.slice(0, 80)}）` : approvedText)
+      : reviseText;
+    if (decisionText) {
+      context.workMemory = applyWorkMemoryOp(context.workMemory, {
+        op: "add_decision",
+        text: decisionText,
+      });
+      context.projectBriefing = syncWorkMemoryBriefing(
+        context.projectBriefing ?? "",
+        formatWorkMemoryBlock(context.workMemory),
+      );
+    }
   }
 
   // 确认批准：优先 DB awaitingConfirm；若竞态丢失则回退客户端带回的 params（同源于 agent/confirm）

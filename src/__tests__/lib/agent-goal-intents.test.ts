@@ -569,6 +569,12 @@ describe("intent continuation pickers", () => {
     ).toBe(true);
   });
 
+  it("menu digit is not continue-write, so search and inspect stay open", () => {
+    expect(checkContinueWriteSpinGate("1", "search_knowledge", [], "diagnose").ok).toBe(true);
+    expect(checkContinueWriteSpinGate("1", "inspect_project", [], "diagnose").ok).toBe(true);
+    expect(checkContinueWriteSpinGate("2", "list_references", [], "draft").ok).toBe(true);
+  });
+
   it("nudge order and stop-ask order diverge for AP pipeline + literature", () => {
     // 同一组合 goal：引用修正未写回（pipeline_fix）+ 文献未足（literature）同时成立。
     // NUDGE_ORDER 先 AP 流程 → nudge 应提 refine_content；

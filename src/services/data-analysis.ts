@@ -50,8 +50,32 @@ function parseDelimited(text: string, delimiter: string): { headers: string[]; r
   const headers = parseLine(lines[0]);
   const rows = lines.slice(1)
     .map(parseLine)
-    .filter(r => r.length === headers.length && r.some(c => c));
+    .map(cells => alignRowToHeaders(cells, headers.length))
+    .filter((r): r is string[] => r != null && r.some(c => c));
   return { headers, rows };
+}
+
+/**
+ * 样品名里未加引号的逗号会把一行拆成多列。
+ * 多出来的前几格并回第一列，保留末尾与表头对齐的数值列。
+ */
+function alignRowToHeaders(cells: string[], width: number): string[] | null {
+  if (cells.length === width) return cells;
+  if (width < 2 || cells.length <= width || cells.length - width > 4) return null;
+  const tailCount = width - 1;
+  const tail = cells.slice(cells.length - tailCount);
+  const head = cells.slice(0, cells.length - tailCount);
+  if (head.length < 2) return null;
+  const last = tail[tail.length - 1] ?? "";
+  if (last !== "" && Number.isNaN(Number(last))) return null;
+  return [head.join(","), ...tail];
+}
+
+const ELEMENT_SYMBOL = /^(H|He|Li|Be|B|C|N|O|F|Ne|Na|Mg|Al|Si|P|S|Cl|K|Ca|Sc|Ti|V|Cr|Mn|Fe|Co|Ni|Cu|Zn|Ga|Ge|As|Se|Br|Rb|Sr|Y|Zr|Nb|Mo|Ru|Rh|Pd|Ag|Cd|In|Sn|Sb|Te|I|Cs|Ba|La|Ce|Pr|Nd|Sm|Eu|Gd|Tb|Dy|Ho|Er|Tm|Yb|Lu|Hf|Ta|W|Re|Os|Ir|Pt|Au|Hg|Tl|Pb|Bi|Th|U)$/i;
+
+function isCompositionSeries(columnName: string, labels: string[]): boolean {
+  if (/元素|组分|成分|element|ion/i.test(columnName)) return true;
+  return labels.length >= 3 && labels.every(label => ELEMENT_SYMBOL.test(label.trim()));
 }
 
 // === XLSX 解析 ===
@@ -269,6 +293,34 @@ export function analyzeData(headers: string[], rows: string[][], fileName: strin
         return { label: g, mean: round(mean(vals)), sd: round(std(vals, mean(vals))), n: vals.length };
       });
       stat.groups = groupStats;
+
+      if (isCompositionSeries(groupCol.name, groupNames)) {
+        claimIdx++;
+        const values: Record<string, number> = {};
+        for (const g of groupStats) values[g.label] = g.mean;
+        claims.push({
+          id: `${sourceId}-C${claimIdx}`,
+          sourceId,
+          sourceType: "data",
+          type: "mean",
+          text: `${stat.variable}组成：${groupStats.map(g => `${g.label} ${g.mean}`).join("、")}`,
+          values,
+          variables: [stat.variable],
+          tolerance: 5,
+        });
+        if (groupStats.length >= 2 && groupStats.length <= 12) {
+          chartConfigs.push({
+            type: "bar",
+            title: `${stat.variable}组成`,
+            xLabel: groupCol.name,
+            yLabel: stat.variable,
+            labels: groupStats.map(g => g.label),
+            datasets: [{ label: stat.variable, data: groupStats.map(g => round(g.mean)) }],
+          });
+        }
+        stats.push(stat);
+        continue;
+      }
 
       // 生成 comparison claims（组间对比）
       const comparisons: ComparisonClaim[] = [];

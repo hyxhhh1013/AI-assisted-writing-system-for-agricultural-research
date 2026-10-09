@@ -149,6 +149,26 @@ describe("resolveEntryRoutePhase", () => {
     expect(dataReady.nextSectionKey).toBe("methods");
   });
 
+  it("有蓝图下一节时，芯片跟这条路径，不跟期刊模板", () => {
+    const state = resolveAgentPhase({
+      snapshot: snap({
+        template: "nature",
+        agentEntryMode: "outline_ready",
+        outline: OUTLINE,
+        hasWritingBlueprint: true,
+        nextWriteHint: { sectionKey: "methods", subsectionPath: "2.1 样品制备" },
+        sectionFills: [
+          { key: "introduction", chars: 2000 },
+          { key: "methods", chars: 0 },
+          { key: "results", chars: 0 },
+        ],
+      }),
+      writeEnabled: true,
+    });
+    expect(state.nextSectionKey).toBe("methods");
+    expect(state.nextAction).toContain("2.1 样品制备");
+  });
+
   it("已有数据：有蓝图后先写方法，不写引言", () => {
     const state = resolveAgentPhase({
       snapshot: snap({

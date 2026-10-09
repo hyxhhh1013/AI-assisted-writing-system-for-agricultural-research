@@ -96,6 +96,11 @@ export function classifyIntent(input: ClassifyIntentInput): IntentClassification
     return { kind: "review_write", source: "regex" };
   }
 
+  // 「1」是菜单选项。继承诊断会要求先 inspect，继续写门禁又会在数字被误判时禁掉 inspect。
+  if (previousKind === "diagnose" && /^[1-9１-９]$/.test(goal)) {
+    return { kind: null, source: "regex" };
+  }
+
   if (previousKind && looksLikeFollowUpUtterance(goal)) {
     const switchKind = classifyIntentFromRegex(goal, []);
     if (switchKind == null || switchKind === previousKind) {

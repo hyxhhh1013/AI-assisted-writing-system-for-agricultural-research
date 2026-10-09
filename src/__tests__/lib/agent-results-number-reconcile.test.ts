@@ -41,4 +41,22 @@ describe("reconcileResultsNumbers", () => {
     expect(reconcileResultsNumbers("见图 2.1 与表 3.2。", [claim34]).ok).toBe(true);
     expect(reconcileResultsNumbers("差异显著（p = 0.05）。", [claim34]).ok).toBe(true);
   });
+
+  it("化学式系数、离子半径和小节号不拦", () => {
+    expect(
+      reconcileResultsNumbers("基质为 Ba0.79Al11O17。", [claim34]).ok,
+    ).toBe(true);
+    expect(
+      reconcileResultsNumbers("Cr³⁺ 半径 0.535 Å（CN=6）。", [claim34]).ok,
+    ).toBe(true);
+    expect(
+      reconcileResultsNumbers("3.1 Phase purity\n见（3.3）节。", [claim34]).ok,
+    ).toBe(true);
+  });
+
+  it("带单位的一位小数仍要对上声明", () => {
+    expect(reconcileResultsNumbers("产量为 3.4 g。", [claim34]).ok).toBe(true);
+    const missed = reconcileResultsNumbers("产量为 9.9 g。", [claim34]);
+    expect(missed.ok).toBe(false);
+  });
 });

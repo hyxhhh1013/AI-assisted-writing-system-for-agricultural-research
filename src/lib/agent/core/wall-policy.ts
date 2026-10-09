@@ -66,6 +66,16 @@ function defaultAsk(kind: AgentWallKind): string {
   }
 }
 
+/** 连续门禁拒绝（换工具也算同一次撞墙）停下来时给用户看的两句话 */
+export function gateBounceQuestion(reasons: readonly string[]): string {
+  const lines = reasons.slice(-2).map((line, index) => `${index + 1}. ${line}`);
+  return [
+    "连续被规则拦住，已停下，不再换工具重试。",
+    ...lines,
+    "请直接说下一步。",
+  ].join("\n");
+}
+
 export function decideAfterWall(input: AgentWallInput): AgentWallDecision {
   if (!isAgentWallReached(input.kind, input.hits)) return { kind: "hint" };
   if (input.kind === "figure_qa") {
