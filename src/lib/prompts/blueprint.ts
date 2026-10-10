@@ -65,7 +65,7 @@ export function buildBlueprintPrompt(params: {
   }
 3. 规划配图：先估总量（totalMin/totalMax），再分配到具体大纲节点（sectionPath 必须与大纲中的「完整路径」一致，用 " > " 连接层级，如 "结果与分析 > 产量变化"）。
 4. 为重要章节写 sectionGuides：purpose + keyPoints，并尽量填写论证字段 claim / evidenceHint / warrant（必要时 rebuttal）。evidenceHint 只写项目参考文献里有的篇，禁止点名表外作者。
-5. 给出建议写作顺序 writingOrder（sectionPath 数组）。
+5. 给出建议写作顺序 writingOrder（sectionPath 数组），以及等长的 writingPace。每一项只能是 "step"（写完停）或 "together"（连着写）。相邻的 together 会在同一轮连着写完再停。研究型默认：材料与方法、结果、讨论为 step；引言和结论为 together。综述默认：研究现状和综述正文为 step；引言和结论为 together。
 6. 列出 prerequisites（如需先备实验数据、先画流程图等）；可选 argumentGaps（证据缺口）。
 7. 论证不再单独成文件：主张—证据—推理写进各节 sectionGuides，全文缺口进 argumentGaps。
 ${bibliographyBlock?.trim() ? `\n${bibliographyBlock.trim()}\n` : ""}
@@ -163,7 +163,8 @@ ${isResearch
       "keyPoints": ["主要结果", "与文献对照"]
     }
   ],
-  "writingOrder": ["材料与方法", "结果与分析", "引言", "结论"],
+  "writingOrder": ["材料与方法", "结果与分析", "讨论", "引言", "结论"],
+  "writingPace": ["step", "step", "step", "together", "together"],
   "prerequisites": ["备齐试验数据"],
   "researchQuestion": "可选",
   "argumentGaps": [],
@@ -222,6 +223,7 @@ ${isResearch
     }
   ],
   "writingOrder": ["研究现状与问题", "研究进展综述", "引言", "结论与展望"],
+  "writingPace": ["step", "step", "together", "together"],
   "prerequisites": ["确认综述范围与核心文献"],
   "researchQuestion": "可选",
   "argumentGaps": [],

@@ -159,7 +159,7 @@ export function decisionMessage(
   }
   if (kind === "blueprint_approve") {
     if (decision === "approve") {
-      return "【检查点】用户已批准写作蓝图。页面上的点击就是确认，禁止再要求用户输入「确认蓝图」。按蓝图写作顺序写下一个还没写完的小节，write_section 必须带 subsectionTitle，正文里保留该小标题。这一节若规划了示意图、流程图或对比表，写完立刻插入，不要等试验数据或 CSV。写完这一节再停，不要一次写完全文，也不要改问 A/B/C。";
+      return "【检查点】用户已批准写作蓝图。页面上的点击就是确认，禁止再要求用户输入「确认蓝图」。按蓝图这一批写：相邻且标成「连着写」的路径在这一轮里依次 write_section，都落库后再停；标成「写完停」的只写那一节再停。write_section 必须带 subsectionTitle，正文里保留该小标题。用户点名某一节时只写那一节。这一节若规划了示意图、流程图或对比表，写完立刻插入，不要等试验数据或 CSV。这一批写完就停，不要接着写下一批，也不要改问 A/B/C。方法节里用户和已确认数据都没给过的温度、配比、负载量不要编。";
     }
     return `【检查点】用户要求修改写作蓝图。${note?.trim() ? `意见：${note.trim()}。` : ""}请先沟通或重新 generate_writing_blueprint，改完再请用户确认。`;
   }

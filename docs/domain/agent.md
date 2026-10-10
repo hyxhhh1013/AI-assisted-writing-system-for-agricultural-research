@@ -1,6 +1,6 @@
 # Agent 编排（写作助手）
 
-> L3 域文档 · 更新：2026-10-09（每轮一张决策卡；写作仍走便宜模型；蓝图顺序为芯片与写作顺序）  
+> L3 域文档 · 更新：2026-10-10（蓝图每行可标连着写 / 写完停；批准后按这一批写）  
 > 契约唯一权威源：`src/contracts/agent.ts`（SSE 事件）、`src/contracts/agent-session.ts`（会话消息）、`src/contracts/agent-intent.ts`（`IntentKind`）。
 
 ## 概览
@@ -13,9 +13,9 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 
 | 入口 | 整条路径 |
 |------|----------|
-| `full` 从零推进 | 文献够用再出大纲；大纲和蓝图都等人批。期刊模板只在生成蓝图时给建议顺序。批准后下一节只取蓝图 `writingOrder` 里第一个还没写完的路径，同一章子节写完再换章；用户点名某一节可以破例。结果章没有证据声明则 `write_section(results)` 被门禁拦住 |
+| `full` 从零推进 | 文献够用再出大纲；大纲和蓝图都等人批。期刊模板只在生成蓝图时给建议顺序。批准后按蓝图当前一批写：`writingPace` 为 step 的只写该路径，相邻 together 同一轮写完再停。用户点名某一节可以破例。结果章没有证据声明则 `write_section(results)` 被门禁拦住 |
 | `outline_ready` 已有大纲 | 先贴提纲。用户没说重做/大改/生成大纲时，`generate_outline` 被门禁拦住。蓝图沿用一级标题。批准后按蓝图顺序写，不按期刊模板另排 |
-| `data_ready` 已有数据 | 研究型先入库形成证据声明，再按数据出大纲。蓝图建议顺序是方法→结果→讨论→引言→结论，用户确认时可以改。批准后按蓝图顺序写。新建后留在对话，不自动打开实验数据 |
+| `data_ready` 已有数据 | 研究型先入库形成证据声明，再按数据出大纲。蓝图建议顺序是方法→结果→讨论→引言→结论，用户确认时可以改。方法、结果、讨论默认写完停，引言和结论默认连着写。批准后按这一批写。新建后留在对话，不自动打开实验数据 |
 
 项目设置可改目标期刊、目标字数、期刊格式模板、图表预设和入口，保存走 `PATCH /api/projects/:id/paper-passport`（模板同时写回 `Project.template`）。分节写作的系统提示在护照有期刊或字数时带一句；登记刊的 `writerNote` 追加在这句后面。无 URL `tab` 时，空的已有大纲打开论证提纲。新建的研究型项目留在对话，不自动打开实验数据。
 
@@ -184,6 +184,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **查看/编辑完整蓝图**：`agent-panel` 的 `onOpenBlueprint`，由 workbench 接 `handleOpenBlueprintDialog`。
 - **对话里「看看蓝图」调出工作台（2026-08-07）**：只读工具 `open_blueprint_workspace`。仅当用户明确要求打开/编辑时调用；**禁止**在 `generate_writing_blueprint` 后自动调用。前端仅对本轮**新追加**的成功 observation 自动打开（`blueprint-open-guard`）；会话恢复/面板重挂载不因历史记录误弹。observation 卡另有「打开蓝图工作台」按钮可手点。
 - **工作台随内容自适应（2026-08-07）**：蓝图 schema 新增可选 `projectMode`/`language`（生成时用项目兜底填充）；工作台按顶层章节把 `sectionGuides` 树形分组（`" > "` 层级，顶层可折叠）、按论文类型显示徽标与配图提示（综述→概念图/对比表，研究→方法流程图/结果数据图）、空区块（前置条件/配图/章节导览/写作顺序）自动隐藏。分组纯函数 `groupSectionGuides` 在 `lib/blueprint-utils.ts`。
+- **蓝图档位（2026-10-10）**：`WritingBlueprint.writingPace` 与 `writingOrder` 等长，`step` 写完停，`together` 与相邻 together 合成一批。顺序页可点选，生成时缺省：引言/结论 together，其余 step。Agent 简报、芯片和批准检查点都按当前一批停笔。用户点名某一节时只写那一节。方法节的温度、配比、负载量没有用户原文或已确认数据时不写进正文。
 - **蓝图顺序注入 Agent 简报（2026-08-08）**：修复「蓝图建议写作顺序与实际写作顺序不一致」——此前 `project-briefing` 只给 LLM「写作蓝图：有 + thesis 摘要」，`writingOrder` 与 `sectionGuides` 未进 Agent 决策输入，Agent 靠直觉/大纲顺序写。现在 `loadAgentProject` 额外提取 `blueprintWritingOrder`/`blueprintSectionGuides`（`project-loader.ts`），简报注入「建议写作顺序（蓝图）：1. x → 2. y → …」+「各节写作要点（蓝图）」区块（`project-briefing.ts`）。Agent 写作前即可见蓝图建议顺序并按序推进。
 - **配置先于大纲（2026-10-05）**：论文配置没写全、用户也没在配置问答里跳过时，不生成大纲、不弹出确认大纲。写作或「生成大纲」会先停在配置问答。检索、诊断、引用核查、审查仍不拦这一步。
 - **走查后的写回与配图（2026-10-05）**：外部检索 observation 列出前 10 篇完整题名，不再只留第一篇前 40 字，也不再每次催「凑到约 30 篇」。引用硬门只在「这句明显更像另一篇」时拦导出；中文句子对不上英文摘要标成判不了。主张未绑定时不再剥掉句末 `[n]`。综述的研究现状和综述正文保留 Markdown 小标题；`subsectionTitle` 没写进正文时写回前补上。页面批准蓝图即确认，禁止再要求用户打「确认蓝图」。写节后文字对比表（`generate_table` 的 `rows`）仍可排队。流程图和机理图不自动画，等用户点名再调用 `draft_mechanism_figure`。题名是农田重金属、又没有写明热解时，本地库不锁热化学。「继续推进」不执行最新回复里没提到的过期计划。中文项目（`language=zh`）的预览和 Word 用「摘要」和作者名，占位署名 Lab Member 显示为「作者姓名」。

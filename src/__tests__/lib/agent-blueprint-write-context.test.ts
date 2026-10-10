@@ -9,6 +9,7 @@ import {
   listBlueprintSubsectionPathsForKey,
   multiSubsectionWriteError,
   blueprintOrderSkipError,
+  nextWritingBatch,
   pickNextWriteTarget,
   prepareAgentWriteBlueprintContext,
   resolveAssignedSourcesToSelectedIds,
@@ -196,6 +197,44 @@ describe("blueprintOrderSkipError", () => {
       userGoal: "继续",
     });
     expect(error).toContain("结果与分析 > 吸附");
+  });
+
+  it("writes adjacent together paths in one batch and keeps step paths alone", () => {
+    const bp: WritingBlueprint = {
+      ...researchBp,
+      writingOrder: ["结果与分析", "讨论", "引言", "结论"],
+      writingPace: ["step", "step", "together", "together"],
+      sectionGuides: [
+        { sectionPath: "结果与分析 > 吸附", purpose: "a", keyPoints: ["x"] },
+        { sectionPath: "讨论", purpose: "c", keyPoints: ["z"] },
+        { sectionPath: "引言", purpose: "e", keyPoints: ["v"] },
+        { sectionPath: "结论", purpose: "f", keyPoints: ["u"] },
+      ],
+    };
+    expect(nextWritingBatch({
+      mode: "research",
+      blueprint: bp,
+      sectionBodies: {},
+    })).toEqual(["结果与分析 > 吸附"]);
+    expect(nextWritingBatch({
+      mode: "research",
+      blueprint: bp,
+      sectionBodies: {
+        results: "吸附\n已写满这一小节的正文，用来跨过字数门槛。",
+        discussion: "讨论已经写过。".repeat(20),
+      },
+    })).toEqual(["引言", "结论"]);
+    expect(blueprintOrderSkipError({
+      mode: "research",
+      blueprint: bp,
+      sectionBodies: {
+        results: "吸附\n已写满这一小节的正文，用来跨过字数门槛。",
+        discussion: "讨论已经写过。".repeat(20),
+      },
+      sectionKey: "conclusion",
+      subsectionTitle: "结论",
+      userGoal: "继续",
+    })).toBeNull();
   });
 
   it("allows the next subsection and a section the user named", () => {

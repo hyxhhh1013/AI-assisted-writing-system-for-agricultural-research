@@ -40,6 +40,7 @@ import {
   groupSectionGuides,
 } from "@/lib/blueprint-utils";
 import { cn } from "@/lib/utils";
+import { alignWritingPace, writingPaceLabel, type WritingPace } from "@/lib/writing-pace";
 
 const FIGURE_TYPES: FigurePlanType[] = [
   "flow",
@@ -164,10 +165,20 @@ export function BlueprintWorkspace({
   const moveWritingOrder = (index: number, direction: -1 | 1) => {
     updateDraft((prev) => {
       const order = [...prev.writingOrder];
+      const pace = alignWritingPace(order, prev.writingPace, paperMode);
       const target = index + direction;
       if (target < 0 || target >= order.length) return prev;
       [order[index], order[target]] = [order[target], order[index]];
-      return { ...prev, writingOrder: order };
+      [pace[index], pace[target]] = [pace[target], pace[index]];
+      return { ...prev, writingOrder: order, writingPace: pace };
+    });
+  };
+
+  const setWritingPace = (index: number, pace: WritingPace) => {
+    updateDraft((prev) => {
+      const writingPace = alignWritingPace(prev.writingOrder, prev.writingPace, paperMode);
+      writingPace[index] = pace;
+      return { ...prev, writingPace };
     });
   };
 
@@ -353,8 +364,17 @@ export function BlueprintWorkspace({
                 <p className="text-[10px] font-semibold tracking-[0.08em] text-[#1a5632]/75 uppercase">
                   写作顺序
                 </p>
+                <p className="mt-1 text-[10.5px] leading-relaxed text-[#5a6b63]">
+                  点档位切换。相邻的「连着写」同一轮写完；「写完停」写完这一节就停。
+                </p>
                 <ol className="mt-3 space-y-1.5">
-                  {draft.writingOrder.map((path, index) => (
+                  {draft.writingOrder.map((path, index) => {
+                    const pace = alignWritingPace(
+                      draft.writingOrder,
+                      draft.writingPace,
+                      paperMode,
+                    )[index] ?? "step";
+                    return (
                     <li
                       key={`${path}-${index}`}
                       className="group flex items-center gap-1.5 rounded-lg py-0.5"
@@ -365,6 +385,18 @@ export function BlueprintWorkspace({
                       <span className="min-w-0 flex-1 truncate text-[11.5px] text-[#122820]">
                         {path}
                       </span>
+                      <button
+                        type="button"
+                        className={cn(
+                          "shrink-0 rounded-md px-1.5 py-0.5 text-[10px]",
+                          pace === "together"
+                            ? "bg-[#1a5632]/10 font-medium text-[#1a5632]"
+                            : "text-[#5a6b63] hover:bg-[#eef1ee]",
+                        )}
+                        onClick={() => setWritingPace(index, pace === "together" ? "step" : "together")}
+                      >
+                        {writingPaceLabel(pace)}
+                      </button>
                       <span className="flex opacity-0 transition-opacity group-hover:opacity-100">
                         <button
                           type="button"
@@ -386,7 +418,8 @@ export function BlueprintWorkspace({
                         </button>
                       </span>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ol>
               </div>
             ) : null}

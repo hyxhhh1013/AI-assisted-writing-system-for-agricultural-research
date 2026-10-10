@@ -3,6 +3,8 @@
  * 目标：常见模型偏差不应再落到「写作蓝图结构无效」。
  */
 
+import { alignWritingPace } from "@/lib/writing-pace";
+
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v !== null && typeof v === "object" && !Array.isArray(v)
     ? (v as Record<string, unknown>)
@@ -343,6 +345,10 @@ export function coerceWritingBlueprintPayload(raw: unknown): unknown {
 
   next.sectionGuides = guides;
   next.writingOrder = writingOrder;
+  const paceMode = next.projectMode === "review" || next.projectMode === "research"
+    ? next.projectMode
+    : undefined;
+  next.writingPace = alignWritingPace(writingOrder, next.writingPace, paceMode);
   next.prerequisites = prerequisites;
 
   if (next.argumentGaps !== undefined) {

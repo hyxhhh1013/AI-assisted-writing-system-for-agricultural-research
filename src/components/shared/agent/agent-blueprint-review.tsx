@@ -17,6 +17,7 @@ import {
   BLUEPRINT_REVISE_CHIPS,
   pickBlueprint,
 } from "@/lib/agent/blueprint-review";
+import { alignWritingPace, writingPaceLabel } from "@/lib/writing-pace";
 
 interface AgentBlueprintReviewProps {
   preview?: string;
@@ -241,7 +242,16 @@ function BlueprintBody({ blueprint }: { blueprint: WritingBlueprint }) {
         <section>
           <h3 className="text-[11px] font-medium tracking-wide text-[#1a5632]">建议写作顺序</h3>
           <p className="mt-1 text-[13px] leading-6 text-[#3d4f46]">
-            {blueprint.writingOrder.join(" → ")}
+            {blueprint.writingOrder
+              .map((path, index) => {
+                const pace = alignWritingPace(
+                  blueprint.writingOrder,
+                  blueprint.writingPace,
+                  blueprint.projectMode,
+                )[index];
+                return `${path}（${writingPaceLabel(pace ?? "step")}）`;
+              })
+              .join(" → ")}
           </p>
         </section>
       ) : null}

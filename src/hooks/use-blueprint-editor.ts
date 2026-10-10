@@ -34,12 +34,13 @@ export function useBlueprintEditor(
 
   const save = useCallback((): boolean => {
     if (!draft) return false;
-    const raw = serializeWritingBlueprint(draft);
+    const normalized = normalizeBlueprintDraft(draft);
+    const raw = serializeWritingBlueprint(normalized);
     if (!parseWritingBlueprint(raw)) {
       toast.error("蓝图格式无效，请检查必填项");
       return false;
     }
-    onPersist(draft);
+    onPersist(normalized);
     setIsDirty(false);
     toast.success("写作蓝图已保存");
     return true;

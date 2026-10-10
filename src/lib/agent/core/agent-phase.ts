@@ -35,6 +35,8 @@ export interface SuggestNextAgentActionsInput {
   /** 蓝图下一未写路径。有它时芯片跟蓝图走，不再跟期刊模板顺序。 */
   blueprintNextSection?: string | null;
   blueprintNextPath?: string | null;
+  /** 当前这一批的路径。多于一条时芯片写成「连着写」。 */
+  blueprintNextBatch?: string[] | null;
 }
 
 export interface ResolveAgentPhaseInput {
@@ -84,6 +86,10 @@ function writeTargetOf(input: SuggestNextAgentActionsInput): string | null {
 }
 
 function writeSectionTip(input: SuggestNextAgentActionsInput, target: string): string {
+  const batch = input.blueprintNextBatch ?? [];
+  if (batch.length > 1 && target === input.blueprintNextSection) {
+    return `连着写 ${batch.join("、")} 并保存到当前项目`;
+  }
   if (input.blueprintNextPath && target === input.blueprintNextSection) {
     return `写 ${input.blueprintNextPath} 并保存到当前项目`;
   }
@@ -253,6 +259,7 @@ function signalsFromSnapshot(input: ResolveAgentPhaseInput): SuggestNextAgentAct
     template: snapshot?.template || "sci",
     blueprintNextSection: snapshot?.nextWriteHint?.sectionKey ?? null,
     blueprintNextPath: snapshot?.nextWriteHint?.subsectionPath ?? null,
+    blueprintNextBatch: snapshot?.nextWriteHint?.batchPaths ?? null,
     claimCount: snapshot?.dataClaims.length ?? 0,
     sectionChars: Object.fromEntries(
       (snapshot?.sectionFills ?? []).map((s) => [s.key, s.chars]),

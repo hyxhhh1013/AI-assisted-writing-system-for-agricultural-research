@@ -12,6 +12,9 @@ export type FigurePlanPriority = "required" | "optional";
 
 export type FigureDataSource = "experiment" | "literature" | "synthesis";
 
+/** 与 writingOrder 逐行对齐。together = 与相邻 together 同一轮写完；step = 写完这一节就停。 */
+export type WritingPace = "together" | "step";
+
 /** 配图与项目实验数据的绑定（作图页 chartIdx 预填）。一张图可有多条。 */
 export interface FigureDataBinding {
   kind: "chartConfig";
@@ -73,6 +76,8 @@ export interface WritingBlueprint {
   };
   sectionGuides: SectionGuide[];
   writingOrder: string[];
+  /** 与 writingOrder 等长。缺省时按路径默认：引言/结论 together，其余 step。 */
+  writingPace?: WritingPace[];
   prerequisites: string[];
   /** 论文类型（研究/综述），UI 据此切换显示区块与提示 */
   projectMode?: "research" | "review";
@@ -126,6 +131,15 @@ function isWritingBlueprint(value: unknown): value is WritingBlueprint {
   if (!isFigurePlan(v.figurePlan)) return false;
   if (!Array.isArray(v.sectionGuides) || !v.sectionGuides.every(isSectionGuide)) return false;
   if (!Array.isArray(v.writingOrder) || !v.writingOrder.every((s) => typeof s === "string")) return false;
+  if (
+    v.writingPace !== undefined
+    && (
+      !Array.isArray(v.writingPace)
+      || !v.writingPace.every((p) => p === "together" || p === "step")
+    )
+  ) {
+    return false;
+  }
   if (!Array.isArray(v.prerequisites) || !v.prerequisites.every((s) => typeof s === "string")) return false;
   return true;
 }

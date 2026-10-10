@@ -78,6 +78,7 @@ describe("coerceWritingBlueprintPayload — 真实模型偏差", () => {
     expect(data.figurePlan.items[0]?.dataSource).toBe("experiment");
     expect(data.sectionGuides[0]?.keyPoints).toEqual(["单句要点"]);
     expect(data.writingOrder).toEqual(["引言"]);
+    expect(data.writingPace).toEqual(["together"]);
     expect(data.prerequisites).toEqual([]);
   });
 

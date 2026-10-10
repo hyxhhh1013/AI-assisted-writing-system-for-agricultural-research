@@ -8,6 +8,8 @@ import {
   sectionCharsFromFills,
 } from "@/lib/draft-coverage";
 import { manuscriptSubsectionTitle } from "@/lib/writing-merge";
+import { writingPaceLabel } from "@/lib/writing-pace";
+import { mapToSectionForMode } from "@/lib/utils";
 
 const PHASE_LABELS: Record<number, string> = {
   0: "配置",
@@ -23,6 +25,26 @@ const PHASE_LABELS: Record<number, string> = {
 const OUTLINE_BRIEF_CHARS = 3500;
 const REF_BRIEF_COUNT = 12;
 const REF_LINE_CHARS = 160;
+
+function formatNextWriteBatchLine(project: AgentProjectSnapshot): string {
+  const hint = project.nextWriteHint;
+  if (!hint) return "";
+  const mode = project.mode === "research" ? "research" : "review";
+  const paths = hint.batchPaths?.length ? hint.batchPaths : [hint.subsectionPath];
+  const calls = paths.map((path) => {
+    const key = mapToSectionForMode(path, mode);
+    const title = manuscriptSubsectionTitle(path);
+    return `write_section(section=${key}, subsectionTitle="${title}")`;
+  });
+  const methodsNote = paths.some((path) => mapToSectionForMode(path, mode) === "methods")
+    ? "方法里的温度、升温速率、保温时间、负载量、配比，只写用户说过或已确认数据里有的；没有就不要写进正文，写完这一批后用中文列出缺的条件。"
+    : "";
+  const tail = "用户说「继续」时禁止再 list_references / read_section / 检索。用户点名某一节时只写那一节。正文禁止粘贴「父节 > 子节」路径。";
+  if (paths.length === 1) {
+    return `这一批只写一节（写完停）：立刻 ${calls[0]}。写完再停，不要改写别的节。${tail}${methodsNote}`;
+  }
+  return `这一批连着写，都落库后再停：${calls.join("；")}。不要写这一批以外的节。${tail}${methodsNote}`;
+}
 
 /** 压缩项目快照为 Agent 系统提示中的「当前项目」简报（尽量多上下文） */
 export function formatAgentProjectBriefing(
@@ -134,7 +156,11 @@ export function formatAgentProjectBriefing(
     ...(project.blueprintWritingOrder?.length
       ? [
           `建议写作顺序（蓝图）：${project.blueprintWritingOrder
-            .map((p, i) => `${i + 1}. ${p}`)
+            .map((p, i) => {
+              const pace = project.blueprintWritingPace?.[i];
+              const mark = pace ? `（${writingPaceLabel(pace)}）` : "";
+              return `${i + 1}. ${p}${mark}`;
+            })
             .join(" → ")}`,
         ]
       : []),
@@ -161,9 +187,7 @@ export function formatAgentProjectBriefing(
     }`,
     `已有正文：${filled || "无"}`,
     ...(project.nextWriteHint
-      ? [
-          `下一未写子节：立刻 write_section(section=${project.nextWriteHint.sectionKey}, subsectionTitle="${manuscriptSubsectionTitle(project.nextWriteHint.subsectionPath)}")；用户说「继续」时禁止再 list_references / read_section / 检索。正文禁止粘贴「父节 > 子节」路径。`,
-        ]
+      ? [formatNextWriteBatchLine(project)]
       : []),
     `空白章节：${empty || "无"}`,
     `分节完整度：必写 ${coverage.okRequiredCount}/${coverage.requiredCount}；${coverage.hint}`,

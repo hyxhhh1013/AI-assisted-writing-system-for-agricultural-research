@@ -11,6 +11,7 @@ import {
   chartTypeToFigureId,
   collectChartConfigsFromSources,
 } from "@/contracts/figure";
+import { alignWritingPace } from "@/lib/writing-pace";
 
 export interface GuideGroup {
   top: string;
@@ -448,6 +449,11 @@ export function normalizeBlueprintDraft(blueprint: WritingBlueprint): WritingBlu
   const totalMax = Math.max(totalMin, required + optional);
   return {
     ...blueprint,
+    writingPace: alignWritingPace(
+      blueprint.writingOrder,
+      blueprint.writingPace,
+      blueprint.projectMode,
+    ),
     figurePlan: {
       ...blueprint.figurePlan,
       totalMin,

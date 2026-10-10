@@ -105,7 +105,7 @@ export const PHASE_TASK_PACKS: Record<number, PhaseTaskPack> = {
   4: {
     phase: 4,
     title: "起草",
-    goal: "按已批准蓝图的 writingOrder 写第一个还没写完的路径（同一章先写完当前子节）。用户点名某一节时写那一节。",
+    goal: "按已批准蓝图的当前一批写。相邻「连着写」同一轮写完再停；「写完停」只写该路径。用户点名某一节时只写那一节。",
     preferredTools: [
       "read_section",
       "read_project_asset",
@@ -116,7 +116,7 @@ export const PHASE_TASK_PACKS: Record<number, PhaseTaskPack> = {
     ],
     constraints: [
       "必须已有大纲 + 写作蓝图（含各节论证要点）",
-      "一次只写一个路径，写回后停下来问下一节，并问要不要配引用",
+      "按蓝图档位写完当前一批再停。写完停只写一节；相邻连着写在同一轮都落库后再停。写回后问要不要配引用",
       "不要为了写节去精读文献库；用户要求配引用时再按主张找能支撑的几篇",
       "不要自动画机理图或流程图",
       "质检不可写回时，在对话里给出规则名和草稿要点",

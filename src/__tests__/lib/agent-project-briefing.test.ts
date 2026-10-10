@@ -56,7 +56,7 @@ describe("agent project briefing", () => {
     expect(text).toContain("烟草");
     expect(text).toContain("只允许：热化学");
     expect(text).toContain("禁止规划「按实验室四方向检索」");
-    expect(text).toContain("下一未写子节");
+    expect(text).toContain("写完停");
     expect(text).toContain("write_section(section=literature_body");
   });
 

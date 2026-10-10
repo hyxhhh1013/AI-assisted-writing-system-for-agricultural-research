@@ -1,13 +1,15 @@
 import type { EvidenceClaim } from "@/contracts/data-source";
 import type { WritingGlobalContext } from "@/app/api/writing/types";
-import { parseWritingBlueprint } from "@/contracts/writing-blueprint";
+import { parseWritingBlueprint, type WritingPace } from "@/contracts/writing-blueprint";
 import {
   extractPaperConfigFromUnknown,
   parsePaperPassport,
   type PaperConfigRecord,
 } from "@/contracts/paper-passport";
 import { hasCompletePaperConfig } from "@/lib/agent/config-qa";
-import { pickNextWriteTarget } from "@/lib/agent/blueprint-write-context";
+import { nextWritingBatch, pickNextWriteTarget } from "@/lib/agent/blueprint-write-context";
+import { alignWritingPace } from "@/lib/writing-pace";
+import { mapToSectionForMode } from "@/lib/utils";
 import { readWritingBlueprint } from "@/lib/project-writing-blueprint-db";
 import { rowsToSoftReferenceEvidence } from "@/lib/reference-evidence";
 import prisma from "@/lib/prisma";
@@ -43,6 +45,8 @@ export interface AgentProjectSnapshot {
   writingBlueprintSummary?: string | null;
   /** 写作蓝图建议写作顺序（sectionPath 数组，注入 Agent 简报引导写作顺序） */
   blueprintWritingOrder?: string[];
+  /** 与 blueprintWritingOrder 等长的档位 */
+  blueprintWritingPace?: WritingPace[];
   /** 写作蓝图各节引导（path + purpose + keyPoints，注入简报供 Agent 按节推进） */
   blueprintSectionGuides?: {
     path: string;
@@ -51,8 +55,12 @@ export interface AgentProjectSnapshot {
   }[];
   /** 写作蓝图配图计划短摘要（注入简报） */
   blueprintFigurePlanSummary?: string | null;
-  /** 蓝图下一未写子节（跟聊「继续」直接 write） */
-  nextWriteHint?: { sectionKey: string; subsectionPath: string } | null;
+  /** 蓝图下一批没写完的路径（跟聊「继续」按这一批 write） */
+  nextWriteHint?: {
+    sectionKey: string;
+    subsectionPath: string;
+    batchPaths?: string[];
+  } | null;
   /** 各节全文，供蓝图顺序判断子节是否已写。不进简报。 */
   sectionBodies?: Record<string, string>;
   /** 论证蓝图短摘要 */
@@ -187,6 +195,7 @@ export async function loadAgentProject(
 
   let writingBlueprintSummary: string | null = null;
   let blueprintWritingOrder: string[] | undefined;
+  let blueprintWritingPace: WritingPace[] | undefined;
   let blueprintSectionGuides:
     | { path: string; purpose: string; keyPoints?: string[] }[]
     | undefined;
@@ -198,6 +207,11 @@ export async function loadAgentProject(
       || "（已有写作蓝图）";
     if (blueprint.writingOrder.length > 0) {
       blueprintWritingOrder = [...blueprint.writingOrder];
+      blueprintWritingPace = alignWritingPace(
+        blueprint.writingOrder,
+        blueprint.writingPace,
+        project.mode === "research" ? "research" : "review",
+      );
     }
     if (blueprint.sectionGuides.length > 0) {
       blueprintSectionGuides = blueprint.sectionGuides.map((g) => ({
@@ -247,11 +261,28 @@ export async function loadAgentProject(
     sectionBodies[s.key] = s.content ?? "";
   }
   sectionBodies.abstract = abstractText;
-  const nextWriteHint = pickNextWriteTarget({
-    mode: project.mode === "research" ? "research" : "review",
+  const writingMode = project.mode === "research" ? "research" : "review";
+  const batch = nextWritingBatch({
+    mode: writingMode,
     blueprint,
     sectionBodies,
   });
+  const picked = batch.length > 0
+    ? null
+    : pickNextWriteTarget({
+      mode: writingMode,
+      blueprint,
+      sectionBodies,
+    });
+  const nextWriteHint = batch.length > 0
+    ? {
+      sectionKey: mapToSectionForMode(batch[0], writingMode),
+      subsectionPath: batch[0],
+      batchPaths: batch,
+    }
+    : picked
+      ? { ...picked, batchPaths: [picked.subsectionPath] }
+      : null;
 
   const referenceSourceNames = project.referenceSources
     .filter((s) => s.sourceName?.trim())
@@ -281,6 +312,7 @@ export async function loadAgentProject(
     sectionFills,
     writingBlueprintSummary,
     blueprintWritingOrder,
+    blueprintWritingPace,
     blueprintSectionGuides,
     blueprintFigurePlanSummary,
     nextWriteHint,

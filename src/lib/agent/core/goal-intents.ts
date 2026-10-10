@@ -713,7 +713,7 @@ export function draftGoalNudge(goal = "", intentKind?: IntentKind | null): strin
   return withRule(
     withRule(
       withRule(
-        "【系统】本轮目标是写章节：按蓝图 writingOrder 写第一个还没写完的路径，用户点名某一节时写那一节。"
+        "【系统】本轮目标是写章节：按蓝图当前这一批写。相邻「连着写」同一轮都写完再停，「写完停」只写一节。用户点名某一节时只写那一节。"
         + "缺大纲时系统会先问用户出一版或贴骨架，不要跳过这一问。"
         + "按主张和已有数据落笔，不必先精读。写回后停下来，问要不要配引用。不要自动画机理图。"
         + "除非用户明确要求检索，否则不要先 search_external。",

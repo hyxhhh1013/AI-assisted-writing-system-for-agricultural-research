@@ -18,6 +18,7 @@ import {
   manuscriptSubsectionTitle,
   subsectionHeadingPattern,
 } from "@/lib/writing-merge";
+import { alignWritingPace, defaultWritingPace, type WritingPace } from "@/lib/writing-pace";
 
 const BLUEPRINT_SECTION_HINT_HEAD = "【写作蓝图（本节）】";
 
@@ -111,6 +112,11 @@ export function formatBlueprintSectionHintForKey(
       );
       pushGuideArgs(g, "    ");
     }
+  }
+  if (sectionKey === "methods") {
+    parts.push(
+      "- 制备条件：温度、升温速率、保温时间、负载量、配比只写用户原文或已确认数据里有的。没有的不要写进正文。",
+    );
   }
   if (figures.length > 0) {
     parts.push("- 规划配图：");
@@ -242,6 +248,48 @@ export function firstUnfinishedBlueprintPath(opts: {
   return null;
 }
 
+function paceOfExpandedPath(
+  blueprint: WritingBlueprint,
+  expandedPath: string,
+): WritingPace {
+  const order = blueprint.writingOrder.map((item) => item.trim()).filter(Boolean);
+  const paces = alignWritingPace(order, blueprint.writingPace, blueprint.projectMode);
+  const index = order.findIndex(
+    (item) =>
+      expandedPath === item
+      || expandedPath.startsWith(`${item} > `)
+      || expandedPath.startsWith(`${item}>`),
+  );
+  if (index >= 0) return paces[index] ?? "step";
+  return defaultWritingPace(expandedPath, blueprint.projectMode);
+}
+
+/**
+ * 当前这一批：从第一个没写完的路径起。
+ * 该行是写完停，就只有它；是连着写，就带上后面紧挨着的连着写。
+ */
+export function nextWritingBatch(opts: {
+  mode: ProjectWritingMode | undefined;
+  blueprint: WritingBlueprint | null | undefined;
+  sectionBodies: Record<string, string>;
+}): string[] {
+  if (!opts.blueprint) return [];
+  const paths = expandBlueprintWritePaths(opts.blueprint);
+  const start = paths.findIndex(
+    (path) => !blueprintPathIsWritten(path, opts.mode, opts.sectionBodies),
+  );
+  if (start < 0) return [];
+  const batch = [paths[start]];
+  if (paceOfExpandedPath(opts.blueprint, paths[start]) === "step") return batch;
+  for (let i = start + 1; i < paths.length; i++) {
+    const path = paths[i];
+    if (blueprintPathIsWritten(path, opts.mode, opts.sectionBodies)) continue;
+    if (paceOfExpandedPath(opts.blueprint, path) !== "together") break;
+    batch.push(path);
+  }
+  return batch;
+}
+
 const CONTINUE_ONLY = /^(继续|接着写?|往下写?|好的?|可以|行|嗯|开始写吧?|写吧)[。！!]?$/;
 
 /** 用户这句点了要写的节。单独说「继续」不算点名。 */
@@ -287,17 +335,23 @@ export function blueprintOrderSkipError(opts: {
   subsectionTitle: string;
   userGoal: string;
 }): string | null {
-  const next = firstUnfinishedBlueprintPath(opts);
-  if (!next) return null;
-  if (requestMatchesBlueprintPath(opts.sectionKey, opts.subsectionTitle, next, opts.mode)) {
+  const batch = nextWritingBatch(opts);
+  if (batch.length === 0) return null;
+  if (
+    batch.some((path) =>
+      requestMatchesBlueprintPath(opts.sectionKey, opts.subsectionTitle, path, opts.mode),
+    )
+  ) {
     return null;
   }
   if (userNamedWriteTarget(opts.userGoal, opts.sectionKey, opts.subsectionTitle, opts.subsectionTitle)) {
     return null;
   }
   const asked = opts.subsectionTitle.trim() || opts.sectionKey;
+  const label = batch.join("、");
+  const scope = batch.length > 1 ? "这一批" : "下一节";
   return (
-    `蓝图下一节是「${next}」。请先写这一节，不要跳到「${asked}」。`
+    `蓝图${scope}是「${label}」。请先写完，不要跳到「${asked}」。`
     + "用户点名要写别的节时，目标里需要写出该节名称。"
   );
 }
