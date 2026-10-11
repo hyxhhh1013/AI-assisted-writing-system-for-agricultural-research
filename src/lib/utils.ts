@@ -116,15 +116,28 @@ function extractMajorNumber(titleOrPath: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
-/** 将大纲标题映射到 IMRaD 节 key（研究论文） */
-export function mapToIMRADSection(titleOrPath: string): string {
+function matchImradKeyword(titleOrPath: string): string | null {
   const lower = titleOrPath.toLowerCase();
   for (const group of IMRAD_KEYWORDS) {
     for (const pat of group.patterns) {
       if (pat.test(lower)) return group.key;
     }
   }
-  return "introduction";
+  return null;
+}
+
+/** 「父节 > 子节」只留父节。子节标题不参与归章。 */
+function chapterHeading(titleOrPath: string): string {
+  const head = titleOrPath.split(">")[0]?.trim();
+  return head || titleOrPath.trim();
+}
+
+/**
+ * 将大纲标题映射到 IMRaD 节 key（研究论文）。
+ * 有父节时只认父节。子节里的「制备 / 表征 / 讨论」不能改父节的归属。
+ */
+export function mapToIMRADSection(titleOrPath: string): string {
+  return matchImradKeyword(chapterHeading(titleOrPath)) ?? "introduction";
 }
 
 /**
@@ -140,10 +153,11 @@ export function mapToSectionForMode(
   titleOrPath: string,
   mode?: ProjectWritingMode,
 ): string {
-  if (mode === "research") return mapToIMRADSection(titleOrPath);
+  const heading = chapterHeading(titleOrPath);
+  if (mode === "research") return mapToIMRADSection(heading);
 
-  const lower = titleOrPath.toLowerCase();
-  const firstSeg = (titleOrPath.split(">")[0] || titleOrPath).trim();
+  const lower = heading.toLowerCase();
+  const firstSeg = heading;
 
   // 0. 误生成的 IMRaD 试验章名 → 按综述结构纠偏（勿落到 introduction）
   if (/材料与方法|materials\s*and\s*methods|试验设计|实验部分/i.test(firstSeg)) {

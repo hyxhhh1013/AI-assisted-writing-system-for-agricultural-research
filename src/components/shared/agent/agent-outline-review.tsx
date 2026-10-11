@@ -18,7 +18,6 @@ import {
   blueprintCitesFromJson,
   outlineHeadingChips,
   outlineHeadingCoverage,
-  outlineLevelLabel,
   pickOutlineBody,
   splitOutlineBlocks,
 } from "@/lib/agent/outline-review";
@@ -62,6 +61,14 @@ export function AgentOutlineReview({
 
   const liveMarkdown = mode === "edit" ? draft : markdown;
   const blocks = useMemo(() => splitOutlineBlocks(liveMarkdown), [liveMarkdown]);
+  const blockDepths = useMemo(
+    () => blocks.reduce<number[]>((depths, block) => {
+      const previous = depths.length > 0 ? depths[depths.length - 1] : 0;
+      const depth = block.type === "heading" ? block.level : previous;
+      return [...depths, depth];
+    }, []),
+    [blocks],
+  );
   const chips = useMemo(() => outlineHeadingChips(blocks), [blocks]);
   const blueprintCites = useMemo(() => blueprintCitesFromJson(blueprintJson), [blueprintJson]);
   const coverageById = useMemo(() => {
@@ -159,7 +166,7 @@ export function AgentOutlineReview({
               一起确认大纲
             </DialogTitle>
             <DialogDescription className="text-[12px] leading-relaxed text-[#5a7a68]">
-              这里确认的是章节目录（一级 / 二级标题）。可直接改 Markdown，也可以让我按意见重排。
+              过目章节和要点。可直接改文字，也可以让我按意见重排。
               批准后会生成写作蓝图，并再请你确认蓝图。
             </DialogDescription>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[#5a7a68]">
@@ -186,9 +193,9 @@ export function AgentOutlineReview({
             </div>
           </DialogHeader>
 
-          {mode !== "edit" && chips.length > 0 ? (
+          {mode !== "edit" && chips.some((chip) => chip.level <= 1) ? (
             <div className="flex shrink-0 gap-1.5 overflow-x-auto border-b border-[#1a5632]/8 bg-white px-4 py-2">
-              {chips.map((chip) => (
+              {chips.filter((chip) => chip.level <= 1).map((chip) => (
                 <button
                   key={chip.id}
                   type="button"
@@ -196,9 +203,7 @@ export function AgentOutlineReview({
                     "shrink-0 rounded-full px-2.5 py-1 text-[11px] ring-1 ring-[#1a5632]/12",
                     chip.level === 1
                       ? "bg-[#1a5632] text-white ring-[#1a5632]"
-                      : chip.level === 2
-                        ? "bg-[#f6f8f6] text-[#122820]"
-                        : "bg-white text-[#5a7a68]",
+                      : "bg-white text-[#5a7a68]",
                   )}
                   onClick={() => {
                     document.getElementById(chip.id)?.scrollIntoView?.({
@@ -207,7 +212,6 @@ export function AgentOutlineReview({
                     });
                   }}
                 >
-                  <span className="mr-1 opacity-70">{outlineLevelLabel(chip.level)}</span>
                   {chip.title}
                   {(coverageById.get(chip.id)?.length ?? 0) > 0 ? (
                     <span className="ml-1 opacity-80">
@@ -235,30 +239,25 @@ export function AgentOutlineReview({
                       key={block.id}
                       id={block.id}
                       className="scroll-mt-2"
-                      style={{ paddingLeft: Math.max(0, block.level - 1) * 14 }}
+                      style={{ paddingLeft: Math.max(0, block.level - 1) * 16 }}
                     >
-                      <span
-                        className={cn(
-                          "mb-0.5 inline-block rounded px-1.5 py-px text-[10px] font-medium tracking-wide",
-                          block.level === 1
-                            ? "bg-[#1a5632] text-white"
-                            : block.level === 2
-                              ? "bg-[#1a5632]/12 text-[#1a5632]"
-                              : "bg-[#eef2ef] text-[#5a7a68]",
-                        )}
-                      >
-                        {outlineLevelLabel(block.level)}
-                      </span>
-                      {block.level <= 1 ? (
-                        <h2 className="mt-1 text-[16px] font-semibold leading-snug text-[#122820]">
+                      {block.level <= 0 ? (
+                        <h2 className="text-[17px] font-semibold leading-snug text-[#122820]">
+                          {block.title}
+                        </h2>
+                      ) : block.level === 1 ? (
+                        <h2 className={cn(
+                          "text-[15.5px] font-semibold leading-snug text-[#122820]",
+                          i > 0 && "border-t border-[#1a5632]/10 pt-3",
+                        )}>
                           {block.title}
                         </h2>
                       ) : block.level === 2 ? (
-                        <h3 className="mt-1 text-[14.5px] font-semibold leading-snug text-[#122820]">
+                        <h3 className="text-[14px] font-semibold leading-snug text-[#1a3d28]">
                           {block.title}
                         </h3>
                       ) : (
-                        <h4 className="mt-1 text-[13px] font-medium leading-snug text-[#3d4f46]">
+                        <h4 className="text-[13px] font-medium leading-snug text-[#3d4f46]">
                           {block.title}
                         </h4>
                       )}
@@ -274,7 +273,7 @@ export function AgentOutlineReview({
                     <p
                       key={`b-${i}`}
                       className="whitespace-pre-wrap text-[13px] leading-7 text-[#3d4f46]"
-                      style={{ paddingLeft: 14 }}
+                      style={{ paddingLeft: Math.max(0, blockDepths[i] - 1) * 16 }}
                     >
                       {block.text}
                     </p>
@@ -329,7 +328,7 @@ export function AgentOutlineReview({
               <div className="space-y-2">
                 {saveError ? <p className="text-[11px] text-red-700">{saveError}</p> : null}
                 <p className="text-[11px] text-[#5a7a68]">
-                  用 # / ## / ### 区分一、二、三级标题。保存后会写回项目，再点批准即可。
+                  井号越多，标题越小。保存后会写回项目，再点批准即可。
                 </p>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Button

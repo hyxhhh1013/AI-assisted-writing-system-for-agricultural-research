@@ -460,8 +460,8 @@ export function DataPanel({
             <CardTitle className="text-sm">已入库的数据</CardTitle>
             <CardDescription className="text-xs">
               {evidence.sources.length > 0
-                ? `已有 ${evidence.sources.length} 块。在写作助手顶栏点「数据」，逐条打开看原表。这一页不再展开摘要和证据。`
-                : "确认入库之后，在写作助手顶栏点「数据」逐条查看。"}
+                ? `已有 ${evidence.sources.length} 块表。在写作助手顶栏点「数据」看原表；成品图和电镜图在同一窗口的「图」。`
+                : "确认入库之后，在写作助手顶栏点「数据」。表格在「按文件」，成品图和电镜图在「图」。"}
             </CardDescription>
           </CardHeader>
         </Card>

@@ -121,6 +121,13 @@ describe("mapToIMRADSection", () => {
     expect(mapToIMRADSection("Discussion")).toBe("discussion");
   });
 
+  it("keeps a results child on results when the leaf says 制备", () => {
+    expect(mapToIMRADSection("结果与分析 > 催化剂基础理化性质与制备重复性")).toBe("results");
+    expect(mapToIMRADSection("材料与方法 > 催化剂制备")).toBe("methods");
+    expect(mapToIMRADSection("讨论 > 制备条件对性能的影响")).toBe("discussion");
+    expect(mapToIMRADSection("第三章 > 催化剂制备")).toBe("introduction");
+  });
+
   it("maps 结论/总结/展望 to conclusion", () => {
     expect(mapToIMRADSection("结论")).toBe("conclusion");
     expect(mapToIMRADSection("总结与展望")).toBe("conclusion");

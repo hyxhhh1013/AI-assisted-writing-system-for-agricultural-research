@@ -9,6 +9,7 @@ import {
   listBlueprintSubsectionPathsForKey,
   multiSubsectionWriteError,
   blueprintOrderSkipError,
+  coerceBlueprintSectionKey,
   nextWritingBatch,
   pickNextWriteTarget,
   prepareAgentWriteBlueprintContext,
@@ -262,6 +263,58 @@ describe("blueprintOrderSkipError", () => {
       subsectionTitle: "",
       userGoal: "写结果与分析 > 吸附",
     })).toContain("结果与分析 > 吸附");
+  });
+
+  it("allows the next results subsection when its title contains 制备", () => {
+    const bp: WritingBlueprint = {
+      ...researchBp,
+      writingOrder: ["结果与分析", "讨论"],
+      sectionGuides: [
+        {
+          sectionPath: "结果与分析 > 催化剂基础理化性质与制备重复性",
+          purpose: "a",
+          keyPoints: ["x"],
+        },
+        { sectionPath: "结果与分析 > XRD 晶相与金属物种", purpose: "b", keyPoints: ["y"] },
+      ],
+    };
+    const base = {
+      mode: "research" as const,
+      blueprint: bp,
+      sectionBodies: {},
+      sectionKey: "results",
+      userGoal: "继续",
+    };
+    expect(blueprintOrderSkipError({
+      ...base,
+      subsectionTitle: "催化剂基础理化性质与制备重复性",
+    })).toBeNull();
+    expect(blueprintOrderSkipError({
+      ...base,
+      subsectionTitle: "结果与分析 > 催化剂基础理化性质与制备重复性",
+    })).toBeNull();
+    expect(pickNextWriteTarget({
+      mode: "research",
+      blueprint: bp,
+      sectionBodies: {},
+    })).toEqual({
+      sectionKey: "results",
+      subsectionPath: "结果与分析 > 催化剂基础理化性质与制备重复性",
+    });
+    expect(blueprintOrderSkipError({
+      ...base,
+      subsectionTitle: "XRD 晶相与金属物种",
+    })).toContain("催化剂基础理化性质与制备重复性");
+    expect(coerceBlueprintSectionKey({
+      ...base,
+      sectionKey: "methods",
+      subsectionTitle: "催化剂基础理化性质与制备重复性",
+    })).toBe("results");
+    expect(blueprintOrderSkipError({
+      ...base,
+      sectionKey: "methods",
+      subsectionTitle: "催化剂基础理化性质与制备重复性",
+    })).toBeNull();
   });
 
   it("moves to the next sibling after the current leaf is in the body", () => {

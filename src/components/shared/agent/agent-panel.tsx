@@ -805,6 +805,7 @@ export function AgentPanel({
             <ProjectDataButton
               projectId={projectId}
               sources={project ? parseDataSources(project) : []}
+              charts={project ? parseProjectCharts(project.charts) : []}
               claims={project ? parseDataClaims(project) : []}
               askDisabled={agent.isRunning}
               onAsk={(goal) => { void agent.sendGoal(goal); }}

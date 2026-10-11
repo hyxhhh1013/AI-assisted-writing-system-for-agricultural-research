@@ -89,6 +89,9 @@ describe("review dual-track", () => {
     expect(mapToSectionForMode("研究进展综述 > 机理研究", "review")).toBe(
       "literature_body",
     );
+    expect(mapToSectionForMode("研究进展 > 引言所述制备方法", "review")).toBe(
+      "literature_body",
+    );
     expect(mapToSectionForMode("研究现状与问题", "review")).toBe("background");
     expect(mapToSectionForMode("材料与方法", "review")).toBe("background");
     expect(mapToSectionForMode("结果与分析", "review")).toBe("literature_body");

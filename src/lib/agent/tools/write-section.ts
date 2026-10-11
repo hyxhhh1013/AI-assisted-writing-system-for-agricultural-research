@@ -24,6 +24,7 @@ import {
 import {
   blueprintOrderSkipError,
   bodyCoversSubsectionTitle,
+  coerceBlueprintSectionKey,
   multiSubsectionWriteError,
   prepareAgentWriteBlueprintContext,
 } from "@/lib/agent/blueprint-write-context";
@@ -240,7 +241,7 @@ export const writeSectionTool: ToolDefinition = {
       return { success: false, error: "write_section 需要关联 projectId" };
     }
 
-    const sectionRaw = String(params.section ?? "").trim();
+    let sectionRaw = String(params.section ?? "").trim();
     if (!isAgentWritingSectionKey(sectionRaw)) {
       return { success: false, error: `无效章节: ${sectionRaw}` };
     }
@@ -250,6 +251,20 @@ export const writeSectionTool: ToolDefinition = {
     const project = await getAgentProjectSnapshot(ctx);
     if (!project) {
       return { success: false, error: "项目不存在或无权访问" };
+    }
+
+    const subsectionTitleEarly = params.subsectionTitle
+      ? String(params.subsectionTitle).trim()
+      : "";
+    sectionRaw = coerceBlueprintSectionKey({
+      mode: project.mode,
+      blueprint: project.globalContext?.blueprint ?? null,
+      sectionBodies: project.sectionBodies ?? {},
+      sectionKey: sectionRaw,
+      subsectionTitle: subsectionTitleEarly,
+    });
+    if (!isAgentWritingSectionKey(sectionRaw)) {
+      return { success: false, error: `无效章节: ${sectionRaw}` };
     }
 
     if (!isSectionValidForMode(sectionRaw, project.mode)) {
@@ -271,9 +286,6 @@ export const writeSectionTool: ToolDefinition = {
       }
     }
 
-    const subsectionTitleEarly = params.subsectionTitle
-      ? String(params.subsectionTitle).trim()
-      : "";
     const multiSubErr = multiSubsectionWriteError(
       sectionRaw,
       subsectionTitleEarly,

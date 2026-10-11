@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Copy, Database, FileSpreadsheet, Trash2 } from "lucide-react";
+import { Copy, Database, FileSpreadsheet, ImageIcon, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { DataSourceAnalysis, EvidenceClaim } from "@/contracts/data-source";
+import type { ProjectChartAsset } from "@/contracts/figure";
 import type { DataThemeProposal, DataThemeUnassigned } from "@/lib/data-themes";
 import { fetchStoredTablePreview } from "@/services/data-preview";
 import { patchProjectFields } from "@/services/project";
@@ -332,8 +333,23 @@ function ThemeList({
   );
 }
 
+function isUploadedFigure(asset: ProjectChartAsset): boolean {
+  return asset.figureId === "existing" || !asset.figureSpecEnc;
+}
+
+function figureAskText(asset: ProjectChartAsset): string {
+  return [
+    `看一下已登记的图「${asset.caption}」。`,
+    isUploadedFigure(asset)
+      ? "这是上传的成品图或电镜图，按图片使用，不是数据表。"
+      : "这是由已入库数据画出的图。",
+    "不要把图上没经确认的标尺、倍数或读数写进正文。",
+  ].join("");
+}
+
 export function ProjectDataButton({
   sources,
+  charts = [],
   claims = [],
   projectId,
   askDisabled,
@@ -341,6 +357,7 @@ export function ProjectDataButton({
   onChanged,
 }: {
   sources: DataSourceAnalysis[];
+  charts?: ProjectChartAsset[];
   claims?: EvidenceClaim[];
   projectId?: string;
   askDisabled?: boolean;
@@ -349,7 +366,8 @@ export function ProjectDataButton({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [view, setView] = useState<"file" | "theme">("file");
+  const [view, setView] = useState<"file" | "theme" | "figure">("file");
+  const [selectedChartId, setSelectedChartId] = useState<string | null>(null);
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [notesOpen, setNotesOpen] = useState<Record<string, boolean>>({});
   const [loaded, setLoaded] = useState<Record<string, TableSnapshot | null>>({});
@@ -378,6 +396,23 @@ export function ProjectDataButton({
   sourcesRef.current = sources;
   const selected = sources.find((source) => source.fileName === selectedName) ?? null;
   const fileCount = new Set(sources.map((source) => splitStoredName(source.fileName).file)).size;
+  const visibleCharts = useMemo(() => charts.filter((asset) => {
+    if (!q) return true;
+    return `${asset.caption} ${asset.figureId} ${asset.sectionKey ?? ""}`.toLowerCase().includes(q);
+  }), [charts, q]);
+  const selectedChart = charts.find((asset) => asset.id === selectedChartId) ?? null;
+  const itemCount = sources.length + charts.length;
+
+  useEffect(() => {
+    if (!open) return;
+    if (sources.length === 0 && charts.length > 0) setView("figure");
+  }, [open, sources.length, charts.length]);
+
+  useEffect(() => {
+    if (!open || view !== "figure") return;
+    if (selectedChartId && charts.some((asset) => asset.id === selectedChartId)) return;
+    setSelectedChartId(visibleCharts[0]?.id ?? charts[0]?.id ?? null);
+  }, [open, view, charts, selectedChartId, visibleCharts]);
 
   useEffect(() => {
     if (!open) return;
@@ -478,7 +513,7 @@ export function ProjectDataButton({
         onClick={() => setOpen(true)}
       >
         <Database className="mr-1 h-3.5 w-3.5" />
-        数据{sources.length > 0 ? ` ${sources.length}` : ""}
+        数据{itemCount > 0 ? ` ${itemCount}` : ""}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="flex h-[min(82vh,720px)] w-[min(1040px,calc(100%-1.5rem))] max-w-none flex-col gap-0 overflow-hidden bg-[#f4f7f4] p-0 sm:max-w-[1040px]">
@@ -489,17 +524,19 @@ export function ProjectDataButton({
             <div className="min-w-0">
               <DialogTitle>已入库的数据</DialogTitle>
               <DialogDescription className="mt-1 text-[12px]">
-                {sources.length === 0
+                {itemCount === 0
                   ? "确认入库之后会出现在这里。"
-                  : view === "theme"
-                    ? `${themeReport.themes.length} 个主题建议 · 未确认，不改原文件`
-                    : `${fileCount} 个文件 · ${sources.length} 块`}
+                  : view === "figure"
+                    ? `${charts.length} 张图 · 成品图和电镜图按图片看`
+                    : view === "theme"
+                      ? `${themeReport.themes.length} 个主题建议 · 未确认，不改原文件`
+                      : `${fileCount} 个文件 · ${sources.length} 块表${charts.length > 0 ? ` · ${charts.length} 张图` : ""}`}
               </DialogDescription>
             </div>
           </div>
-          {sources.length === 0 ? (
+          {itemCount === 0 ? (
             <p className="px-4 py-8 text-[13px] leading-6 text-[#5a7a68]">
-              还没有确认入库的数据。在对话里上传后，助手给出读法，你勾选才会出现在这里。
+              还没有确认入库的内容。表格勾选后出现在「按文件」。成品图和电镜图（png、jpg、tif）确认登记后出现在「图」，按图片看，不拆成行列。
             </p>
           ) : (
             <div className="flex min-h-0 flex-1">
@@ -526,10 +563,46 @@ export function ProjectDataButton({
                     >
                       按主题
                     </button>
+                    <button
+                      type="button"
+                      className={cn("flex-1 rounded px-2 py-1", view === "figure" ? "bg-[#1a5632] text-white" : "text-[#3d4f46]")}
+                      onClick={() => setView("figure")}
+                    >
+                      图{charts.length > 0 ? ` ${charts.length}` : ""}
+                    </button>
                   </div>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-                  {view === "theme" ? (
+                  {view === "figure" ? (
+                    visibleCharts.length === 0 ? (
+                      <p className="px-1 py-4 text-[12px] leading-5 text-[#8aa090]">
+                        {charts.length === 0
+                          ? "还没有登记图片。上传 png、jpg 或 tif 电镜图后，在确认卡里勾选「已有图」。"
+                          : "没有匹配的图"}
+                      </p>
+                    ) : visibleCharts.map((asset) => (
+                      <button
+                        key={asset.id}
+                        type="button"
+                        onClick={() => setSelectedChartId(asset.id)}
+                        className={cn(
+                          "mb-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left",
+                          asset.id === selectedChartId
+                            ? "bg-white text-[#1a5632] shadow-sm ring-1 ring-[#1a5632]/15"
+                            : "text-[#122820] hover:bg-white/70",
+                        )}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={asset.imageUrl} alt="" className="h-8 w-8 shrink-0 rounded bg-white object-cover" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[12px]">{asset.caption}</span>
+                          <span className="block text-[10px] text-[#8aa090]">
+                            {isUploadedFigure(asset) ? "成品图" : "数据图"}
+                          </span>
+                        </span>
+                      </button>
+                    ))
+                  ) : view === "theme" ? (
                     <ThemeList
                       themes={visibleThemes}
                       unassigned={visibleUnassigned}
@@ -587,7 +660,53 @@ export function ProjectDataButton({
                 </div>
               </aside>
               <section className="flex min-w-0 flex-1 flex-col bg-[#f7faf8] p-3">
-                {selected && selectedLabel ? (
+                {view === "figure" ? (
+                  selectedChart ? (
+                    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-[#1a5632]/14 bg-white">
+                      <div className="border-b border-[#1a5632]/10 px-3 py-2.5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h3 className="truncate text-[13px] font-medium text-[#122820]">{selectedChart.caption}</h3>
+                            <p className="mt-0.5 text-[11px] leading-5 text-[#5a7a68]">
+                              {isUploadedFigure(selectedChart)
+                                ? "上传的成品图或电镜图。按图片使用，不拆成表格。图上的标尺和读数未经确认，不能写进正文。"
+                                : "由已入库数据画出的图。"}
+                              {selectedChart.sectionKey ? ` 已插入 ${selectedChart.sectionKey}。` : ""}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            size="xs"
+                            disabled={!onAsk}
+                            onClick={() => {
+                              if (askDisabled) {
+                                toast.message("请等当前任务结束后再交给助手");
+                                return;
+                              }
+                              onAsk?.(figureAskText(selectedChart));
+                              setOpen(false);
+                            }}
+                          >
+                            <ImageIcon className="size-3" />
+                            交给助手
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[#f4f7f4] p-3">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={selectedChart.imageUrl}
+                          alt={selectedChart.caption}
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="px-1 py-8 text-[13px] leading-6 text-[#5a7a68]">
+                      成品图和电镜图确认登记后显示在这里。
+                    </p>
+                  )
+                ) : selected && selectedLabel ? (
                   <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-[#1a5632]/14 bg-white shadow-[0_1px_0_rgba(18,40,32,0.04)]">
                     <div className="border-b border-[#1a5632]/10 px-3 py-2.5">
                       <div className="flex items-start justify-between gap-3">

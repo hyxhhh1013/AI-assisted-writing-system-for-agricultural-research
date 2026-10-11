@@ -101,7 +101,7 @@ Agent 写作助手基于 LangGraph 编排：LLM 决定调用工具，工具执�
 
 **确认/检查点不是孤儿会话（2026-08-23）**：`import_reference` 等人勾选、以及 `outline_approve` 等检查点期间，SSE 会按终态结束（`inFlight=false`）但 DB session 仍 `running`。不得把「接上进度 / 强制结束」叠在确认卡上。`shouldShowOrphanedSession`：有 `pendingConfirm` / `pendingCheckpoint` 或 `status=awaiting_checkpoint` 时隐藏孤儿条。项目打开时若最近会话仍 `running` 且快照带 `awaitingCheckpoint` / `awaitingConfirm`，历史接口随 transcript 一并返回，前端直接恢复确认卡，不必先点「接上进度」。
 
-**大纲人控（2026-08-23；过目页 2026-09-03；手改 + 一二级 2026-09-30）**：`generate_outline` 一旦 `persistToProject` 写回，**一律**弹 `outline_approve`。过目页区分一级 / 二级 / 三级标题，可直接改 Markdown 写回项目，或让 Agent 按意见重排。批准后再生成写作蓝图，并弹 `blueprint_approve`。实现：`lib/agent/outline-review.ts` + `core/checkpoints.ts` + `components/shared/agent/agent-outline-review.tsx`。弹层用 `disablePointerDismissal`，并忽略 `focus-out`：自动打开时焦点进入对话框会被 Base UI 当成外部失焦立刻关掉。
+**大纲人控（2026-08-23；过目页 2026-09-03；手改 + 一二级 2026-09-30）**：`generate_outline` 一旦 `persistToProject` 写回，**一律**弹 `outline_approve`。过目页按标题深浅排版（字号与缩进），不印「一级 / 二级 / 三级」。`#` 为题名，`##` 为章，`###` / `####` 逐级缩小。可直接改 Markdown 写回项目，或让 Agent 按意见重排。批准后再生成写作蓝图，并弹 `blueprint_approve`。实现：`lib/agent/outline-review.ts` + `core/checkpoints.ts` + `components/shared/agent/agent-outline-review.tsx`。弹层用 `disablePointerDismissal`，并忽略 `focus-out`：自动打开时焦点进入对话框会被 Base UI 当成外部失焦立刻关掉。
 
 **人控过目页家族（2026-09-03）**：所有「等人拍板」不再用 96px `<pre>` + 批准/需修改。共用 `AgentHitlBanner`（需要你拍板 · 已暂停），自动打开 Dialog 通读后再点 CTA：
 
@@ -184,7 +184,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 - **查看/编辑完整蓝图**：`agent-panel` 的 `onOpenBlueprint`，由 workbench 接 `handleOpenBlueprintDialog`。
 - **对话里「看看蓝图」调出工作台（2026-08-07）**：只读工具 `open_blueprint_workspace`。仅当用户明确要求打开/编辑时调用；**禁止**在 `generate_writing_blueprint` 后自动调用。前端仅对本轮**新追加**的成功 observation 自动打开（`blueprint-open-guard`）；会话恢复/面板重挂载不因历史记录误弹。observation 卡另有「打开蓝图工作台」按钮可手点。
 - **工作台随内容自适应（2026-08-07）**：蓝图 schema 新增可选 `projectMode`/`language`（生成时用项目兜底填充）；工作台按顶层章节把 `sectionGuides` 树形分组（`" > "` 层级，顶层可折叠）、按论文类型显示徽标与配图提示（综述→概念图/对比表，研究→方法流程图/结果数据图）、空区块（前置条件/配图/章节导览/写作顺序）自动隐藏。分组纯函数 `groupSectionGuides` 在 `lib/blueprint-utils.ts`。
-- **蓝图档位（2026-10-10）**：`WritingBlueprint.writingPace` 与 `writingOrder` 等长，`step` 写完停，`together` 与相邻 together 合成一批。顺序页可点选，生成时缺省：引言/结论 together，其余 step。Agent 简报、芯片和批准检查点都按当前一批停笔。用户点名某一节时只写那一节。方法节的温度、配比、负载量没有用户原文或已确认数据时不写进正文。
+- **蓝图档位（2026-10-10）**：`WritingBlueprint.writingPace` 与 `writingOrder` 等长，`step` 写完停，`together` 与相邻 together 合成一批。顺序页可点选，生成时缺省：引言/结论 together，其余 step。Agent 简报、芯片和批准检查点都按当前一批停笔。用户点名某一节时只写那一节。方法节的温度、配比、负载量没有用户原文或已确认数据时不写进正文。嵌套路径只认父节标题，子节里的「制备 / 表征 / 讨论 / 引言」不参与归章。写节时若标题对上当前这一批，章节 key 以父节为准，不再把正在写的下一节报成跳节。
 - **蓝图顺序注入 Agent 简报（2026-08-08）**：修复「蓝图建议写作顺序与实际写作顺序不一致」——此前 `project-briefing` 只给 LLM「写作蓝图：有 + thesis 摘要」，`writingOrder` 与 `sectionGuides` 未进 Agent 决策输入，Agent 靠直觉/大纲顺序写。现在 `loadAgentProject` 额外提取 `blueprintWritingOrder`/`blueprintSectionGuides`（`project-loader.ts`），简报注入「建议写作顺序（蓝图）：1. x → 2. y → …」+「各节写作要点（蓝图）」区块（`project-briefing.ts`）。Agent 写作前即可见蓝图建议顺序并按序推进。
 - **配置先于大纲（2026-10-05）**：论文配置没写全、用户也没在配置问答里跳过时，不生成大纲、不弹出确认大纲。写作或「生成大纲」会先停在配置问答。检索、诊断、引用核查、审查仍不拦这一步。
 - **走查后的写回与配图（2026-10-05）**：外部检索 observation 列出前 10 篇完整题名，不再只留第一篇前 40 字，也不再每次催「凑到约 30 篇」。引用硬门只在「这句明显更像另一篇」时拦导出；中文句子对不上英文摘要标成判不了。主张未绑定时不再剥掉句末 `[n]`。综述的研究现状和综述正文保留 Markdown 小标题；`subsectionTitle` 没写进正文时写回前补上。页面批准蓝图即确认，禁止再要求用户打「确认蓝图」。写节后文字对比表（`generate_table` 的 `rows`）仍可排队。流程图和机理图不自动画，等用户点名再调用 `draft_mechanism_figure`。题名是农田重金属、又没有写明热解时，本地库不锁热化学。「继续推进」不执行最新回复里没提到的过期计划。中文项目（`language=zh`）的预览和 Word 用「摘要」和作者名，占位署名 Lab Member 显示为「作者姓名」。

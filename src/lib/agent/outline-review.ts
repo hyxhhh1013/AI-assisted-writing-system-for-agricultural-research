@@ -74,7 +74,7 @@ export function splitOutlineBlocks(markdown: string): OutlineReviewBlock[] {
   };
 
   for (const line of lines) {
-    const m = line.trim().match(/^(#{1,3})\s+(.+)$/);
+    const m = line.trim().match(/^(#{1,6})\s+(.+)$/);
     if (!m) {
       body.push(line);
       continue;
@@ -86,7 +86,7 @@ export function splitOutlineBlocks(markdown: string): OutlineReviewBlock[] {
     blocks.push({
       type: "heading",
       id: `outline-h-${headingCount}`,
-      level: m[1].length,
+      level: outlineDisplayLevel(m[1].length),
       title,
     });
   }
@@ -94,8 +94,18 @@ export function splitOutlineBlocks(markdown: string): OutlineReviewBlock[] {
   return blocks;
 }
 
+/**
+ * 产品大纲记号：`#` 题目，`##` 一级，`###` 二级，`####` 及更深为三级。
+ * 不要把井号个数直接当成「一级 / 二级 / 三级」。
+ */
+export function outlineDisplayLevel(hashLevel: number): number {
+  if (hashLevel <= 1) return 0;
+  return Math.min(hashLevel - 1, 3);
+}
+
 export function outlineLevelLabel(level: number): string {
-  if (level <= 1) return "一级";
+  if (level <= 0) return "题目";
+  if (level === 1) return "一级";
   if (level === 2) return "二级";
   return "三级";
 }

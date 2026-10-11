@@ -125,7 +125,7 @@
 
 - `/plot` 独立页（分类含 DFT）。带 `id` 时数据图和三线表都可以点已入库的块预填，不必从空白粘贴；`source` 指定一块并抽稀长谱。对话里仍可让助手出图、用 `replaceImageUrl` 改图。
 - 工作台侧边栏图表按钮
-- 工作台 **Agent Tab**：`list_plot_sources` → `generate_chart`（Wave 3.8：数据主入口改为 Agent 附件，见 [`plans/W3-AP-AGENT-HUB.md`](../plans/W3-AP-AGENT-HUB.md)）
+- 工作台 **Agent Tab**：`list_plot_sources` → `generate_chart`（Wave 3.8：数据主入口改为 Agent 附件，见 [`plans/W3-AP-AGENT-HUB.md`](../plans/W3-AP-AGENT-HUB.md)）。顶栏「数据」里，表格在「按文件」；已登记的成品图和电镜图（png/jpg/tif，`figureId=existing`）在「图」，按图片预览，不拆成行列，图上未确认的标尺和读数不能当证据。
 
 ## Agent 配图链路（2026-07-25）
 

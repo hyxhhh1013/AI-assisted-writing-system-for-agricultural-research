@@ -309,6 +309,34 @@ export function userNamedWriteTarget(
   return aliases.some((word) => lower.includes(word.toLowerCase()));
 }
 
+/** 请求的标题是否就是这条蓝图路径（完整路径或末级标题）。空标题不算。 */
+function titleMatchesBlueprintPath(subsectionTitle: string, path: string): boolean {
+  const asked = subsectionTitle.trim();
+  if (!asked) return false;
+  if (asked === path.trim()) return true;
+  const leaf = manuscriptSubsectionTitle(path);
+  const sub = manuscriptSubsectionTitle(asked);
+  return Boolean(leaf) && sub === leaf;
+}
+
+/**
+ * 子节标题对上当前这一批时，章节 key 以该路径的父节为准。
+ * 模型若因子标题用词传错 key，仍写入父节，而不是当成跳节拒绝。
+ */
+export function coerceBlueprintSectionKey(opts: {
+  mode: ProjectWritingMode | undefined;
+  blueprint: WritingBlueprint | null | undefined;
+  sectionBodies: Record<string, string>;
+  sectionKey: string;
+  subsectionTitle: string;
+}): string {
+  const hit = nextWritingBatch(opts).find((path) =>
+    titleMatchesBlueprintPath(opts.subsectionTitle, path),
+  );
+  if (!hit) return opts.sectionKey;
+  return mapToSectionForMode(hit, opts.mode);
+}
+
 function requestMatchesBlueprintPath(
   sectionKey: string,
   subsectionTitle: string,
@@ -337,6 +365,9 @@ export function blueprintOrderSkipError(opts: {
 }): string | null {
   const batch = nextWritingBatch(opts);
   if (batch.length === 0) return null;
+  if (batch.some((path) => titleMatchesBlueprintPath(opts.subsectionTitle, path))) {
+    return null;
+  }
   if (
     batch.some((path) =>
       requestMatchesBlueprintPath(opts.sectionKey, opts.subsectionTitle, path, opts.mode),
