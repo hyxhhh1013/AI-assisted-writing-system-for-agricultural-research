@@ -7,6 +7,7 @@ import { CheckCircle2, RefreshCw, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PlagiarismCheckResult, PlagiarismMatchType } from "@/contracts/plagiarism";
 import { MATCH_TYPE_ICONS, MATCH_TYPE_LABELS, riskBadgeClass, riskLabel } from "./constants";
+import { displayedOverlap } from "@/lib/plagiarism-coverage";
 import { PlagiarismMatchRow } from "./match-row";
 import { PlagiarismStatsReport } from "@/components/shared/quality/stats-report";
 import { MatchContentPreview } from "@/components/shared/quality/match-content-preview";
@@ -15,6 +16,7 @@ interface PlagiarismResultViewProps {
   result: PlagiarismCheckResult;
   compact?: boolean;
   sourceContent?: string;
+  previousOverlap?: number | null;
   onRewrite: () => void;
   onReCheck: () => void;
 }
@@ -28,7 +30,7 @@ const FILTERS: Array<{ id: "all" | PlagiarismMatchType; label: string }> = [
   { id: "ai", label: "AI" },
 ];
 
-export function PlagiarismResultView({ result, compact = false, sourceContent, onRewrite, onReCheck }: PlagiarismResultViewProps) {
+export function PlagiarismResultView({ result, compact = false, sourceContent, previousOverlap = null, onRewrite, onReCheck }: PlagiarismResultViewProps) {
   const [typeFilter, setTypeFilter] = useState<"all" | PlagiarismMatchType>("all");
   const matches = result.matches ?? [];
 
@@ -42,7 +44,7 @@ export function PlagiarismResultView({ result, compact = false, sourceContent, o
     [matches, typeFilter],
   );
 
-  const riskCls = riskBadgeClass(result.overallRisk);
+  const overlap = displayedOverlap(result);
   const barColor =
     result.overallRisk === "high" ? "bg-red-500" : result.overallRisk === "medium" ? "bg-amber-500" : "bg-green-500";
   const textColor =
@@ -54,14 +56,20 @@ export function PlagiarismResultView({ result, compact = false, sourceContent, o
         <div className={cn("flex items-center justify-between", compact ? "w-full" : "mb-3")}>
           <div className="flex items-center gap-2 sm:gap-3">
             <span className={cn("font-bold tabular-nums", compact ? "text-lg" : "text-3xl", textColor)}>
-              {(result.maxSimilarity * 100).toFixed(1)}%
+              {(overlap.value * 100).toFixed(1)}%
             </span>
             <div>
-              <Badge variant="secondary" className={cn("text-[10px]", riskCls)}>
+              <Badge variant="secondary" className={cn("text-[10px]", riskBadgeClass(result.overallRisk))}>
                 {riskLabel(result.overallRisk)}
               </Badge>
               {!compact && (
-                <p className="mt-0.5 text-[11px] text-[#6b7c72]">最高相似度 · {result.totalMatches} 处匹配</p>
+                <p className="mt-0.5 text-[11px] text-[#6b7c72]">
+                  {overlap.legacy ? "旧口径 · " : "库内重合 · "}
+                  {result.totalMatches} 处匹配
+                  {typeof previousOverlap === "number" && !overlap.legacy
+                    ? ` · 上次 ${(previousOverlap * 100).toFixed(1)}%`
+                    : ""}
+                </p>
               )}
             </div>
             {compact && <span className="ml-auto text-xs text-muted-foreground">{result.totalMatches} 处匹配</span>}
@@ -86,7 +94,7 @@ export function PlagiarismResultView({ result, compact = false, sourceContent, o
             <div className="mb-3 h-2 overflow-hidden rounded-full bg-[#1a5632]/10">
               <div
                 className={cn("h-full rounded-full transition-all duration-500", barColor)}
-                style={{ width: `${Math.min(100, result.maxSimilarity * 100)}%` }}
+                style={{ width: `${Math.min(100, overlap.value * 100)}%` }}
               />
             </div>
             <div className="flex flex-wrap gap-2 text-[11px] text-[#6b7c72]">
@@ -100,6 +108,12 @@ export function PlagiarismResultView({ result, compact = false, sourceContent, o
                 );
               })}
             </div>
+            {result.aiStatus === "failed" && (
+              <p className="mt-2 text-[11px] text-amber-700">文风未完成，本次覆盖率不含 AI 评估。</p>
+            )}
+            {result.warnings?.map((warning) => (
+              <p key={warning} className="mt-2 text-[11px] text-amber-700">{warning}</p>
+            ))}
             {result.stats && (
               <div className="mt-3 border-t border-[#1a5632]/10 pt-3">
                 <p className="mb-2 text-xs font-medium text-[#122820]">分层检测统计</p>
@@ -114,7 +128,7 @@ export function PlagiarismResultView({ result, compact = false, sourceContent, o
         <div className="h-1 shrink-0 overflow-hidden rounded-full bg-muted">
           <div
             className={cn("h-full rounded-full transition-all duration-500", barColor)}
-            style={{ width: `${Math.min(100, result.maxSimilarity * 100)}%` }}
+            style={{ width: `${Math.min(100, overlap.value * 100)}%` }}
           />
         </div>
       )}

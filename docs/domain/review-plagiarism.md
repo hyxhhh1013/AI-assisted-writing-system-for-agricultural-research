@@ -67,13 +67,18 @@
 
 | 开关 | 说明 |
 |------|------|
-| `selfDuplication` | 文内段落滑动窗口 |
-| `crossProject` | 与同用户其他 `Project` 比对 |
-| `knowledgeBase` | 与 `KnowledgeChunk` / RAG 比对 |
-| `embeddingSemantic` | 向量余弦相似度 |
-| `webSearch` | Semantic Scholar + OpenAlex（默认关，需用户勾选） |
-| `academicCliche` | 学术套话正则 |
-| `aiAssessment` | DeepSeek 结构化评估 |
+| `selfDuplication` | 文内段落包含率，窗口为后 15 段 |
+| `crossProject` | 同用户其他项目拆段后 n-gram 倒排，再算包含率 |
+| `knowledgeBase` | 按章 `localRAG.search`（top-k），再对章内段落做包含率对齐 |
+| `webSearch` | Semantic Scholar + OpenAlex（默认关；全部失败时 `warnings`） |
+| `academicCliche` | 学术套话正则，`matchType: ai`，不进覆盖率 |
+| `aiAssessment` | DeepSeek 文风评估，失败写 `aiStatus: failed`，不进覆盖率 |
+
+主数字是 `overlapCoverage`（非 `ai` 命中字符并集 / 送检字符）。`overallRisk` 只看覆盖率：高 ≥ 0.25，中 ≥ 0.08。`maxSimilarity` 与覆盖率写同一值，兼容旧客户端。`overlapCoverage` 为空的历史记录在 UI 标「旧口径」。
+
+段级包含率阈值：高 ≥ 0.55，中 ≥ 0.30。参考文献表、图题、短于 20 字的行不参与。命中文件名若落在项目参考文献里，`matchedFrom` 加「项目文献」前缀，仍计入覆盖率。
+
+`literalOnly` 只跑自引、知识库、跨项目，供降重写回后按变更章节复检。进度文案带 `recheckLabel`。
 
 ### 响应形式
 
@@ -83,15 +88,15 @@
 ### 数据模型
 
 - `PlagiarismCheck` → `PlagiarismMatch` → `RewriteSuggestion`
-- `matchType`：`local` | `web` | `cross`
+- `matchType`：`local` | `web` | `cross` | `self` | `ai`（`ai` 不进覆盖率）
 
 ### 不变量
 
-- 新查重逻辑只改 **`plagiarism-service.ts`**，勿在 v1/v2 route 里复制业务。
-- `runPlagiarismCheck` 第三参 `signal` 透传到 AI 评估（W4-SEC-04）；路由传 `req.signal`。
-- 从历史恢复查重时 `toCheckResult` 必须把缺失的 `matches` 收成 `[]`，总览/报告/降重不得对 undefined 做 `.map` / `.filter`。
-- `webSearch=true` 时注意超时（`maxDuration = 180`）。
-- 改阈值或层 → `DEFAULT_CONFIG` + 本节 + [`API_INDEX.md`](../API_INDEX.md)。
+- 新查重逻辑只改 **`plagiarism-service.ts`**，字面对齐在 **`lib/text-fingerprint.ts`**，覆盖率在 **`lib/plagiarism-coverage.ts`**。勿在 v1/v2 route 里复制业务。
+- `runPlagiarismCheck` 第三参 `signal` 透传到 AI 评估（W4-SEC-04）；路由传 `req.signal`。取消请求按 AbortError 抛出，不记成文风失败。
+- 从历史恢复查重时 `toCheckResult` 必须把缺失的 `matches` 收成 `[]`，并保留 `overlapCoverage` / `aiStatus`（空覆盖率表示旧口径）。
+- `webSearch=true` 且该层全部失败时，结果带 `warnings`，不得当成 0 命中通过。
+- AI 评估失败写 `aiStatus: failed`，不得把失败或套话 similarity 写进覆盖率。
 
 ---
 
@@ -100,7 +105,7 @@
 | | 写作 `/api/writing` | 审查 | 查重 v2 |
 |--|---------------------|------|---------|
 | 流式 | Writer/Verifier SSE | JSON | 可选 SSE 进度 |
-| 目的 | 生成/修正正文 | 质量评分报告 | 相似度与改写建议 |
+| 目的 | 生成/修正正文 | 质量评分报告 | 库内重合覆盖率与改写建议 |
 | Prompt | `lib/prompts/writing.ts` | `review-*.ts` | service 内嵌 + AI 评估 |
 
 ---

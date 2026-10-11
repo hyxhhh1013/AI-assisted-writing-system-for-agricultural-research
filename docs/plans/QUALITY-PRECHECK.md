@@ -2,6 +2,8 @@
 
 > 2026-09-30。**不是**知网终检。业务仍只进 `plagiarism-service.ts`；页面 `/plagiarism`。
 >
+> 实施切片（2026-10-11 已落地）：[`QUALITY-PRECHECK-SLICE.md`](./QUALITY-PRECHECK-SLICE.md)。波次 A、波次 B 最小可用和降重后按章复检已接入；波次 C 仍不做。
+>
 > 前置：`docs/domain/review-plagiarism.md`、现网七层笛卡尔比对基本不可用。
 
 ## 1. 产品合同

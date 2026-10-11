@@ -7,7 +7,7 @@ const MAX_CONTENT_CHARS = 80_000;
 export const checkPlagiarismTool: ToolDefinition = {
   name: "check_plagiarism",
   description:
-    "对一段正文运行查重（自引/跨项目/知识库/语义等；可选联网比对），返回风险等级与主要匹配项",
+    "对一段正文做库内重合预检（文内重复、同账号其他稿、知识库；可选联网）。返回覆盖率，不是知网总复制比",
   parameters: {
     type: "object",
     properties: {
@@ -70,11 +70,12 @@ export const checkPlagiarismTool: ToolDefinition = {
           checkId: result.checkId,
           overallRisk: result.overallRisk,
           maxSimilarity: result.maxSimilarity,
+          overlapCoverage: result.overlapCoverage,
           totalMatches: result.totalMatches,
           stats: result.stats,
           topMatches,
         },
-        summary: `查重完成：${result.overallRisk} 风险，最高相似度 ${Math.round(result.maxSimilarity * 100)}%，${result.totalMatches} 处匹配`,
+        summary: `库内重合预检：${result.overallRisk} 风险，覆盖率 ${Math.round((result.overlapCoverage ?? result.maxSimilarity) * 1000) / 10}%，${result.totalMatches} 处匹配`,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

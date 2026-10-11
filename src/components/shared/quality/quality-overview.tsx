@@ -10,6 +10,7 @@ import type { PlagiarismCheckResult } from "@/contracts/plagiarism";
 import type { ReviewHistoryItem } from "@/contracts/review";
 import type { QualitySection } from "@/lib/quality-sections";
 import { totalWordCount } from "@/lib/quality-sections";
+import { displayedOverlap } from "@/lib/plagiarism-coverage";
 import { riskBadgeClass, riskLabel } from "@/components/shared/plagiarism/constants";
 import { DetectionScopePanel } from "@/components/shared/quality/detection-scope";
 import type { QualityStation } from "@/components/shared/quality/types";
@@ -31,6 +32,7 @@ interface QualityOverviewProps {
   loadingP: boolean;
   onLoadProject: (id: string) => void;
   onOpenStation: (id: QualityStation) => void;
+  previousOverlap?: number | null;
 }
 
 export function QualityOverview({
@@ -45,10 +47,12 @@ export function QualityOverview({
   loadingP,
   onLoadProject,
   onOpenStation,
+  previousOverlap = null,
 }: QualityOverviewProps) {
   const words = totalWordCount(sections);
-  const pendingRewrite = result?.matches?.filter((m) => m.riskLevel !== "low").length ?? 0;
+  const pendingRewrite = result?.matches?.filter((m) => m.matchType !== "ai" && m.riskLevel !== "low").length ?? 0;
   const projectOptions = plist ?? [];
+  const overlap = result ? displayedOverlap(result) : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -73,7 +77,7 @@ export function QualityOverview({
         </h2>
         <p className="mt-0.5 text-xs text-[#6b7c72]">
           {sections.length > 0
-            ? `${sections.length} 章 · ${words.toLocaleString()} 字 · 查重、降重、审查在同一工作台完成`
+            ? `${sections.length} 章 · ${words.toLocaleString()} 字 · 组内预检，不是知网总复制比`
             : "先选择项目，系统会按章节加载正文"}
         </p>
       </div>
@@ -85,25 +89,33 @@ export function QualityOverview({
           className="rounded-2xl border border-[#1a5632]/10 bg-white p-4 text-left shadow-sm transition-colors hover:border-[#1a5632]/25"
         >
           <p className="text-[10px] font-medium uppercase tracking-wide text-[#9aa8a0]">查重</p>
-          {result ? (
+          {overlap ? (
             <>
               <p className={cn(
                 "mt-1 text-2xl font-bold tabular-nums",
-                result.overallRisk === "high" ? "text-red-600" : result.overallRisk === "medium" ? "text-amber-600" : "text-green-600",
+                result?.overallRisk === "high" ? "text-red-600" : result?.overallRisk === "medium" ? "text-amber-600" : "text-green-600",
               )}>
-                {(result.maxSimilarity * 100).toFixed(1)}%
+                {(overlap.value * 100).toFixed(1)}%
               </p>
               <div className="mt-2 flex items-center gap-2">
-                <Badge className={cn("h-5 px-1.5 text-[10px]", riskBadgeClass(result.overallRisk))}>
-                  {riskLabel(result.overallRisk)}
+                <Badge className={cn("h-5 px-1.5 text-[10px]", riskBadgeClass(result?.overallRisk ?? "low"))}>
+                  {riskLabel(result?.overallRisk ?? "low")}
                 </Badge>
-                <span className="text-[11px] text-[#6b7c72]">{result.totalMatches} 处匹配</span>
+                <span className="text-[11px] text-[#6b7c72]">
+                  {overlap.legacy ? "旧口径" : "库内重合"}
+                  {typeof previousOverlap === "number" && !overlap.legacy
+                    ? ` · 上次 ${(previousOverlap * 100).toFixed(1)}%`
+                    : ""}
+                </span>
               </div>
+              {result?.aiStatus === "failed" && (
+                <p className="mt-1 text-[11px] text-amber-700">文风未完成</p>
+              )}
             </>
           ) : (
             <>
               <p className="mt-1 text-sm font-medium text-[#122820]">尚未检测</p>
-              <p className="mt-1 text-[11px] text-[#6b7c72]">自引 / 知识库 / 语义 / 可选联网</p>
+              <p className="mt-1 text-[11px] text-[#6b7c72]">文内重复 / 文献库 / 跨项目 / 可选联网</p>
             </>
           )}
         </button>

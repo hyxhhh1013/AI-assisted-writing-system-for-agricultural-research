@@ -23,7 +23,7 @@ export function PlagiarismStatsReport({ stats, compact = false }: PlagiarismStat
   return (
     <div className={compact ? "space-y-2" : "space-y-3"}>
       <div className={compact ? "flex flex-wrap gap-2 text-[10px] text-muted-foreground" : "flex flex-wrap gap-3 text-xs text-muted-foreground"}>
-        <span>段落 {stats.sampledParagraphs}/{stats.totalParagraphs}（采样）</span>
+        <span>段落 {stats.sampledParagraphs}/{stats.totalParagraphs}（送检）</span>
         <span>耗时 {(stats.processingTime / 1000).toFixed(1)}s</span>
       </div>
       <div className={compact ? "grid grid-cols-2 gap-1.5 sm:grid-cols-4" : "grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7"}>

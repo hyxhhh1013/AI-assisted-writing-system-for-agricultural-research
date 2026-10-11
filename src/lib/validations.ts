@@ -406,6 +406,14 @@ export const plagiarismCheckSchema = z.object({
   title: z.string().min(1, "标题不能为空"),
   content: z.string().min(50, "内容至少需要50个字符"),
   webSearch: z.boolean().optional().default(false),
+  literalOnly: z.boolean().optional(),
+  recheckLabel: z.string().max(80).optional(),
+  referenceTitles: z.array(z.string().max(500)).max(300).optional(),
+  sections: z.array(z.object({
+    key: z.string().min(1).max(80),
+    title: z.string().min(1).max(80),
+    content: z.string().max(100_000),
+  })).max(40).optional(),
 });
 export type PlagiarismCheckInput = z.infer<typeof plagiarismCheckSchema>;
 

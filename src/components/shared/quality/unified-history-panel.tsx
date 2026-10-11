@@ -6,9 +6,9 @@ import { Loader2, Clock, ClipboardCheck, Search } from "lucide-react";
 import { toast } from "sonner";
 import { listHistory, getCheckDetail, toCheckResult } from "@/services/plagiarism";
 import { getHistory as getReviewHistory } from "@/services/review";
-import type { PlagiarismCheckResult } from "@/contracts/plagiarism";
-import type { ReviewHistoryItem } from "@/contracts/review";
 import { riskDotClass } from "@/components/shared/plagiarism/constants";
+import type { PlagiarismCheckResult, PlagiarismHistoryItem } from "@/contracts/plagiarism";
+import { displayedOverlap, riskFromOverlap } from "@/lib/plagiarism-coverage";
 import { ReviewHistoryList } from "@/components/shared/review/review-history-list";
 
 interface UnifiedHistoryPanelProps {
@@ -16,24 +16,16 @@ interface UnifiedHistoryPanelProps {
   onViewPlagiarism: (result: PlagiarismCheckResult) => void;
 }
 
-interface PlagiarismHistoryRow {
-  id: string;
-  title: string;
-  maxSimilarity: number;
-  createdAt: string;
-  _count?: { matches: number };
-}
-
 export function UnifiedHistoryPanel({ projectId, onViewPlagiarism }: UnifiedHistoryPanelProps) {
   const [subTab, setSubTab] = useState<"plagiarism" | "review">("plagiarism");
-  const [checks, setChecks] = useState<PlagiarismHistoryRow[]>([]);
+  const [checks, setChecks] = useState<PlagiarismHistoryItem[]>([]);
   const [reviewCount, setReviewCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      listHistory({ projectId: projectId || undefined }).then((rows) => setChecks(rows as PlagiarismHistoryRow[])).catch(() => setChecks([])),
+      listHistory({ projectId: projectId || undefined }).then((rows) => setChecks(rows)).catch(() => setChecks([])),
       getReviewHistory(projectId || undefined).then((rows) => setReviewCount(rows.length)).catch(() => setReviewCount(0)),
     ]).finally(() => setLoading(false));
   }, [projectId]);
@@ -85,7 +77,10 @@ export function UnifiedHistoryPanel({ projectId, onViewPlagiarism }: UnifiedHist
         ) : (
           <div className="space-y-2 overflow-y-auto">
             {checks.map((c) => {
-              const risk = c.maxSimilarity > 0.35 ? "high" : c.maxSimilarity > 0.15 ? "medium" : "low";
+              const overlap = displayedOverlap(c);
+              const risk = overlap.legacy
+                ? (overlap.value > 0.35 ? "high" : overlap.value > 0.15 ? "medium" : "low")
+                : riskFromOverlap(overlap.value);
               return (
                 <button
                   key={c.id}
@@ -98,7 +93,9 @@ export function UnifiedHistoryPanel({ projectId, onViewPlagiarism }: UnifiedHist
                     <p className="truncate text-sm font-medium">{c.title}</p>
                     <p className="text-[10px] text-muted-foreground">{new Date(c.createdAt).toLocaleString("zh-CN")}</p>
                   </div>
-                  <Badge variant="outline" className="text-xs tabular-nums">{(c.maxSimilarity * 100).toFixed(1)}%</Badge>
+                  <Badge variant="outline" className="text-xs tabular-nums">
+                    {(overlap.value * 100).toFixed(1)}%{overlap.legacy ? " 旧" : ""}
+                  </Badge>
                   <span className="text-xs text-muted-foreground">{c._count?.matches ?? 0} 处</span>
                 </button>
               );

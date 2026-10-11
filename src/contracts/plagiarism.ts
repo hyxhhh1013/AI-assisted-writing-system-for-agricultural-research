@@ -6,6 +6,7 @@ export interface PlagiarismMatchResult {
   id: string;
   sourceText: string;
   sourceOffset: number;
+  sourceLength?: number;
   matchType: PlagiarismMatchType;
   matchedText: string;
   matchedFrom: string;
@@ -31,13 +32,25 @@ export interface PlagiarismCheckStats {
   processingTime: number;
 }
 
+export type PlagiarismAiStatus = "ok" | "failed" | "skipped";
+
 export interface PlagiarismCheckResult {
   checkId: string;
   totalMatches: number;
   maxSimilarity: number;
+  /** 库内重合覆盖率。缺失表示旧口径记录。 */
+  overlapCoverage?: number | null;
+  aiStatus?: PlagiarismAiStatus | null;
   overallRisk: PlagiarismRiskLevel;
+  warnings?: string[];
   matches: PlagiarismMatchResult[];
   stats?: PlagiarismCheckStats;
+}
+
+export interface PlagiarismCheckSectionInput {
+  key: string;
+  title: string;
+  content: string;
 }
 
 export interface PlagiarismCheckRequest {
@@ -45,6 +58,11 @@ export interface PlagiarismCheckRequest {
   title: string;
   content: string;
   webSearch?: boolean;
+  /** 降重后只重跑字面层 */
+  literalOnly?: boolean;
+  sections?: PlagiarismCheckSectionInput[];
+  referenceTitles?: string[];
+  recheckLabel?: string;
 }
 
 export interface PlagiarismHistoryItem {
@@ -52,6 +70,8 @@ export interface PlagiarismHistoryItem {
   title: string;
   status?: string;
   maxSimilarity: number;
+  overlapCoverage?: number | null;
+  aiStatus?: string | null;
   overallRisk: string;
   createdAt: string;
   _count?: { matches: number };
@@ -63,6 +83,8 @@ export interface PlagiarismCheckDetailRecord {
   content?: string;
   status: string;
   maxSimilarity: number;
+  overlapCoverage?: number | null;
+  aiStatus?: string | null;
   overallRisk: string;
   createdAt: string;
   matches?: PlagiarismMatchResult[];
@@ -93,7 +115,6 @@ export type PlagiarismProgressStage =
   | "self_duplication"
   | "cross_project"
   | "knowledge_base"
-  | "embedding_semantic"
   | "web_search"
   | "academic_cliche"
   | "ai_assessment"

@@ -101,8 +101,8 @@ KnowledgeFile 1──* KnowledgeChunk
 |------|------|
 | `ReviewCheck` | 四维度审查报告（JSON 存 `content` / 维度分） |
 | `ReviewIssue` | 单条审查问题（`dimension`、`severity`、`status`，支持 fix/dismiss） |
-| `PlagiarismCheck` | 查重会话（`status`、`maxSimilarity`、`overallRisk`） |
-| `PlagiarismMatch` | 单条匹配（`matchType`: local / web / cross / self / ai） |
+| `PlagiarismCheck` | 查重会话（`status`、`maxSimilarity`、`overlapCoverage`、`aiStatus`、`overallRisk`）。`overlapCoverage` 为空表示旧口径 |
+| `PlagiarismMatch` | 单条匹配（`matchType`: local / web / cross / self / ai，`sourceLength` 参与覆盖率并集） |
 | `RewriteSuggestion` | 降重建议（`strategy`、`status`、采纳后可写回原文） |
 
 业务说明：[`domain/review-plagiarism.md`](./domain/review-plagiarism.md)。

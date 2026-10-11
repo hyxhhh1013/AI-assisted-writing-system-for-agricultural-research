@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     const { data, errorResponse: ve } = await validateBody(plagiarismCheckSchema, await req.json());
     if (ve) return ve;
 
-    const { projectId, title, content, webSearch } = data;
+    const { projectId, title, content, webSearch, literalOnly, sections, referenceTitles, recheckLabel } = data;
 
     if (projectId) {
       const owned = await assertProjectOwnedByUser(projectId, userId);
@@ -30,7 +30,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const checkInput = { projectId, userId, title, content, webSearch };
+    const checkInput = {
+      projectId,
+      userId,
+      title,
+      content,
+      webSearch,
+      literalOnly,
+      sections,
+      referenceTitles,
+      recheckLabel,
+    };
 
     // 检查是否需要 SSE 进度推送
     const accept = req.headers.get("accept") || "";

@@ -25,7 +25,7 @@ interface PlagiarismRewriteViewProps {
   qualitySections?: QualitySection[];
   onSaveToProject?: (updated: QualitySection[], changedKeys: string[]) => Promise<void>;
   onBack?: () => void;
-  onApplied: (newContent: string) => void;
+  onApplied: (newContent: string, hint?: { sections?: QualitySection[]; label: string }) => void;
 }
 
 export function PlagiarismRewriteView({
@@ -45,7 +45,7 @@ export function PlagiarismRewriteView({
   const [accepted, setAccepted] = useState<Record<string, boolean | undefined>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const highRisk = (matches ?? []).filter((m) => m.riskLevel !== "low");
+  const highRisk = (matches ?? []).filter((m) => m.matchType !== "ai" && m.riskLevel !== "low");
   const hasAccepted = Object.values(accepted).some((v) => v === true);
 
   const doRewrite = async (m: PlagiarismMatchResult) => {
@@ -82,7 +82,7 @@ export function PlagiarismRewriteView({
 
   const applyAndRecheck = () => {
     const next = applyAcceptedRewritesToContent(fullContent, matches, suggestions, accepted);
-    onApplied(next);
+    onApplied(next, { label: "已改写正文" });
   };
 
   const saveToProjectAndRecheck = async () => {
@@ -102,8 +102,10 @@ export function PlagiarismRewriteView({
     }
     setSaving(true);
     try {
-      await onSaveToProject(updated, changedKeys);
-      onApplied(buildCheckContentFromSections(updated, scope));
+    await onSaveToProject(updated, changedKeys);
+    const changed = updated.filter((section) => changedKeys.includes(section.key));
+    const label = changed.length === 1 ? (changed[0]?.title ?? "本章") : `${changed.length}章`;
+    onApplied(buildCheckContentFromSections(updated, scope), { sections: changed, label });
     } catch (err: unknown) {
       toast.error(err instanceof Error ? getErrorMessage(err) : "写回项目失败");
     } finally {

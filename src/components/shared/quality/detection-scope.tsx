@@ -62,7 +62,7 @@ export function DetectionScopePanel({
         })}
       </div>
       <p className={cn("mt-2 text-[#9aa8a0]", compact ? "text-[9px]" : "text-[10px]")}>
-        内部辅助检测，不等同于知网 / Turnitin；提交前请配合正式查重。点击「联网学术」可开关外部检索。
+        组内预检，不是知网总复制比。提交学位或期刊前仍须送正式查重。点击「联网学术」可开关外部检索。
       </p>
     </div>
   );

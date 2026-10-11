@@ -52,6 +52,8 @@ export async function GET(req: NextRequest) {
         status: true,
         createdAt: true,
         maxSimilarity: true,
+        overlapCoverage: true,
+        aiStatus: true,
         overallRisk: true,
         _count: { select: { matches: true } },
       },

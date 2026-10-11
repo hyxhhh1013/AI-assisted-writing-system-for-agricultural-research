@@ -28,6 +28,7 @@ import {
 } from "@/lib/quality-sections";
 import { getProjectWritingMode } from "@/lib/section-registry";
 import { riskBadgeClass, riskLabel } from "@/components/shared/plagiarism/constants";
+import { displayedOverlap } from "@/lib/plagiarism-coverage";
 import { PlagiarismCheckForm } from "@/components/shared/plagiarism/check-form";
 import { PlagiarismResultView } from "@/components/shared/plagiarism/result-view";
 import { PlagiarismRewriteView } from "@/components/shared/plagiarism/rewrite-view";
@@ -76,6 +77,7 @@ export function QualityWorkspace() {
   const [historyResult, setHistoryResult] = useState<PlagiarismCheckResult | null>(null);
   const [savedReviewReport, setSavedReviewReport] = useState<FixableReviewReport | null>(null);
   const [restoringSession, setRestoringSession] = useState(false);
+  const [previousOverlap, setPreviousOverlap] = useState<number | null>(null);
 
   const {
     result: checkResult,
@@ -267,11 +269,18 @@ export function QualityWorkspace() {
       toast.error("请输入内容");
       return;
     }
+    const scoped = scope === "full" ? sections : sections.filter((section) => section.key === scope);
+    const fromSections = scoped.length > 0 ? buildCheckContentFromSections(scoped, "full") : "";
+    setPreviousOverlap(null);
     await doPlagiarismCheck({
       projectId: activeProjectId,
       title: title || "未命名",
       content,
       webSearch: web,
+      sections: fromSections === content
+        ? scoped.map((section) => ({ key: section.key, title: section.title, content: section.content }))
+        : undefined,
+      referenceTitles: project?.references ?? [],
     });
   };
 
@@ -283,13 +292,32 @@ export function QualityWorkspace() {
     toast.success(`已写回 ${changedKeys.length} 个章节到项目`);
   }, [activeProjectId, sections, applyProject]);
 
-  const handleAppliedRewrite = (newContent: string) => {
+  const handleAppliedRewrite = (
+    newContent: string,
+    hint?: { sections?: QualitySection[]; label: string },
+  ) => {
+    const prev = result?.overlapCoverage;
+    setPreviousOverlap(typeof prev === "number" ? prev : null);
     setContent(newContent);
-    resetCheckSession();
     setHistoryResult(null);
     setCheckView("form");
     setTab("check");
-    toast.success("已应用改写，请重新查重验证");
+    const changed = (hint?.sections ?? []).filter((section) => section.content.trim().length > 0);
+    const recheckContent = changed.length > 0
+      ? buildCheckContentFromSections(changed, "full")
+      : newContent;
+    void doPlagiarismCheck({
+      projectId: activeProjectId,
+      title: title || "未命名",
+      content: recheckContent,
+      webSearch: false,
+      literalOnly: true,
+      sections: changed.length > 0
+        ? changed.map((section) => ({ key: section.key, title: section.title, content: section.content }))
+        : undefined,
+      referenceTitles: project?.references ?? [],
+      recheckLabel: hint?.label ?? "已改写正文",
+    });
   };
 
   const openCheckResult = () => {
@@ -358,7 +386,7 @@ export function QualityWorkspace() {
                 className="flex items-center gap-1.5 rounded-lg border border-[#1a5632]/15 bg-[#faf9f6] px-2.5 py-1 text-[10px] hover:bg-[#1a5632]/5"
               >
                 <span className="font-semibold tabular-nums text-[#122820]">
-                  {(result.maxSimilarity * 100).toFixed(1)}%
+                  {(displayedOverlap(result).value * 100).toFixed(1)}%
                 </span>
                 <Badge className={cn("h-4 px-1 text-[9px]", riskBadgeClass(result.overallRisk))}>
                   {riskLabel(result.overallRisk)}
@@ -419,6 +447,7 @@ export function QualityWorkspace() {
                     if (id === "check" && result) setCheckView("result");
                     setTab(id);
                   }}
+                  previousOverlap={previousOverlap}
                 />
               )}
 
@@ -456,6 +485,7 @@ export function QualityWorkspace() {
                     <PlagiarismResultView
                       result={result}
                       sourceContent={content}
+                      previousOverlap={previousOverlap}
                       onRewrite={() => setTab("rewrite")}
                       onReCheck={() => setCheckView("form")}
                     />

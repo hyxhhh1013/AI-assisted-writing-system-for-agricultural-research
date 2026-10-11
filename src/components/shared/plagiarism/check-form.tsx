@@ -117,17 +117,21 @@ export function PlagiarismCheckForm({
       <QualityCheckProgress checking={checking} stage={stage} />
 
       <div className={cn("flex shrink-0 items-center justify-between", compact ? "" : "border-t pt-3")}>
-        <label className={cn("flex cursor-pointer items-center text-muted-foreground", compact ? "gap-1.5 text-xs" : "gap-2 text-sm")}>
-          <input type="checkbox" checked={webSearch} onChange={(e) => setWebSearch(e.target.checked)} className="rounded" />
-          <Globe className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
-          {compact ? "联网" : "联网搜索"}
-        </label>
         <div className="flex items-center gap-2">
+          {compact && (
+            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+              <input type="checkbox" checked={webSearch} onChange={(e) => setWebSearch(e.target.checked)} className="rounded" />
+              <Globe className="h-3 w-3" />
+              联网
+            </label>
+          )}
           {compact && (
             <span className={cn("text-[10px] tabular-nums", overLimit ? "text-red-600" : "text-muted-foreground")}>
               {content.length.toLocaleString()}
             </span>
           )}
+        </div>
+        <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" className={compact ? "h-7 text-xs" : ""} onClick={onClear}>
             清空
           </Button>

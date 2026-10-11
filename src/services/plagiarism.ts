@@ -131,6 +131,10 @@ export function toCheckResult(detail: PlagiarismCheckDetailRecord): PlagiarismCh
     checkId: detail.id,
     totalMatches: detail._count?.matches ?? matches.length,
     maxSimilarity: detail.maxSimilarity ?? 0,
+    overlapCoverage: detail.overlapCoverage,
+    aiStatus: detail.aiStatus === "ok" || detail.aiStatus === "failed" || detail.aiStatus === "skipped"
+      ? detail.aiStatus
+      : undefined,
     overallRisk: (detail.overallRisk || "low") as PlagiarismCheckResult["overallRisk"],
     matches,
   };

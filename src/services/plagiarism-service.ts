@@ -6,9 +6,27 @@
  */
 
 import prisma from "@/lib/prisma";
-import { localRAG } from "@/lib/rag";
+import { localRAG, type RagChunk } from "@/lib/rag";
 import { callAI } from "@/lib/ai";
-import { extractNGrams, jaccardSimilarity, cosineSimilarity } from "@/lib/similarity";
+import {
+  buildPassageIndex,
+  containmentSimilarity,
+  topPassages,
+  type IndexedPassage,
+} from "@/lib/text-fingerprint";
+import {
+  dedupeByOffsetAndType,
+  isSkippedParagraph,
+  isSkippedSectionTitle,
+  labelCorpusSource,
+  locateParagraphs,
+  overlapCoverage,
+  riskFromContainment,
+  riskFromOverlap,
+  splitParagraphs,
+  type CheckedParagraph,
+  type CoverageSection,
+} from "@/lib/plagiarism-coverage";
 
 // ==================== 类型 ====================
 
@@ -19,8 +37,6 @@ export interface PlagiarismConfig {
   crossProject: boolean;
   /** 知识库检测：与 KnowledgeChunk 比对 */
   knowledgeBase: boolean;
-  /** Embedding 语义检测：向量余弦相似度 */
-  embeddingSemantic: boolean;
   /** 联网搜索：Semantic Scholar + OpenAlex */
   webSearch: boolean;
   /** 学术套话检测：正则模式匹配 */
@@ -31,34 +47,27 @@ export interface PlagiarismConfig {
     self: number;
     cross: number;
     knowledge: number;
-    embedding: number;
     web: number;
   };
   maxMatches: number;
-  sampleThreshold: number;
   webSearchLimit: number;
-  embeddingLimit: number;
 }
 
 export const DEFAULT_CONFIG: PlagiarismConfig = {
   selfDuplication: true,
   crossProject: true,
   knowledgeBase: true,
-  embeddingSemantic: true,
   webSearch: false,      // 联网默认关闭，需用户勾选
   academicCliche: true,
   aiAssessment: true,
   thresholds: {
-    self: 0.18,
-    cross: 0.15,
-    knowledge: 0.15,
-    embedding: 0.7,
-    web: 0.18,
+    self: 0.3,
+    cross: 0.3,
+    knowledge: 0.3,
+    web: 0.3,
   },
   maxMatches: 50,
-  sampleThreshold: 60,
   webSearchLimit: 8,
-  embeddingLimit: 10,
 };
 
 export interface CheckInput {
@@ -67,6 +76,12 @@ export interface CheckInput {
   title: string;
   content: string;
   webSearch?: boolean;
+  /** 只跑自引 / 知识库 / 跨项目，供降重后复检 */
+  literalOnly?: boolean;
+  sections?: CoverageSection[];
+  referenceTitles?: string[];
+  /** 进度文案，例如章节名 */
+  recheckLabel?: string;
   config?: Partial<PlagiarismConfig>;
 }
 
@@ -75,7 +90,6 @@ export type ProgressStage =
   | "self_duplication"
   | "cross_project"
   | "knowledge_base"
-  | "embedding_semantic"
   | "web_search"
   | "academic_cliche"
   | "ai_assessment"
@@ -91,8 +105,12 @@ export type ProgressCallback = (event: ProgressEvent) => void;
 export interface CheckResult {
   checkId: string;
   totalMatches: number;
+  /** 与 overlapCoverage 相同，兼容旧客户端 */
   maxSimilarity: number;
+  overlapCoverage: number;
+  aiStatus: "ok" | "failed" | "skipped";
   overallRisk: "high" | "medium" | "low";
+  warnings?: string[];
   matches: PlagiarismMatchResult[];
   stats: {
     totalParagraphs: number;
@@ -112,6 +130,7 @@ export interface PlagiarismMatchResult {
   id: string;
   sourceText: string;
   sourceOffset: number;
+  sourceLength: number;
   matchType: "self" | "cross" | "local" | "web" | "ai";
   matchedText: string;
   matchedFrom: string;
@@ -122,69 +141,28 @@ export interface PlagiarismMatchResult {
 
 // ==================== 工具函数 ====================
 
-/** 分段：按句号/分号/空行分割，过滤过短段落 */
-function splitParagraphs(text: string): { text: string; offset: number }[] {
-  const cleaned = text.replace(/<[^>]+>/g, "").replace(/\r\n/g, "\n").trim();
-  const rawParts = cleaned.split(/\n\s*\n|(?<=[。！？；])\s*/);
-  const result: { text: string; offset: number }[] = [];
-  let offset = 0;
-  for (const part of rawParts) {
-    const t = part.trim();
-    if (t.length >= 8) {
-      result.push({ text: t, offset });
-    }
-    offset += part.length;
-  }
-  return result;
-}
-
-/** 混合相似度：4-gram * 0.6 + 3-gram * 0.4 */
-function calcSimilarity(a: string, b: string): number {
-  const ca = a.replace(/\s+/g, "");
-  const cb = b.replace(/\s+/g, "");
-  if (ca.length < 5 || cb.length < 5) return 0;
-
-  const sim4 = jaccardSimilarity(extractNGrams(ca, 4), extractNGrams(cb, 4));
-  const sim3 = jaccardSimilarity(extractNGrams(ca, 3), extractNGrams(cb, 3));
-  return sim4 * 0.6 + sim3 * 0.4;
-}
-
-/** 风险等级 */
-function riskLevel(sim: number, highThreshold = 0.35, mediumThreshold = 0.12): "high" | "medium" | "low" {
-  if (sim >= highThreshold) return "high";
-  if (sim >= mediumThreshold) return "medium";
-  return "low";
-}
-
-/** 长文本采样 */
-function sampleParagraphs(
-  paragraphs: { text: string; offset: number }[],
-  maxSamples: number
-): { text: string; offset: number }[] {
-  if (paragraphs.length <= maxSamples) return paragraphs;
-  const step = Math.floor(paragraphs.length / maxSamples);
-  const sampled: { text: string; offset: number }[] = [];
-  for (let i = 0; i < paragraphs.length; i += step) {
-    sampled.push(paragraphs[i]);
-    if (sampled.length >= maxSamples) break;
-  }
-  return sampled;
+function blankMatch(partial: Omit<PlagiarismMatchResult, "id" | "sourceLength"> & { sourceLength?: number }): PlagiarismMatchResult {
+  return {
+    id: "",
+    sourceLength: partial.sourceLength ?? partial.sourceText.length,
+    ...partial,
+  };
 }
 
 /** 学术套话检测 */
 const FORMULAIC_PATTERNS = [
   /随着[^。]{5,50}的发展/g,
   /近年来[^。]{3,60}/g,
-  /得到了[^。]{3,50}的[关注|重视|应用]/g,
-  /具有[^。]{3,40}的[意义|价值|作用]/g,
-  /为[^。]{5,60}提供[了]?[^。]{3,40}/g,
+  /得到了[^。]{3,50}的(关注|重视|应用)/g,
+  /具有[^。]{3,40}的(意义|价值|作用)/g,
+  /为[^。]{5,60}提供了?[^。]{3,40}/g,
   /国内外[^。]{5,80}/g,
   /综上所述[^。]{5,60}/g,
-  /[研究|实验|实践]表明[^。]{5,60}/g,
-  /是一种[^。]{3,50}的[方法|技术|途径]/g,
+  /(研究|实验|实践)表明[^。]{5,60}/g,
+  /是一种[^。]{3,50}的(方法|技术|途径)/g,
   /有效地[^。]{3,50}/g,
-  /可以[有效|显著|明显][^。]{3,50}/g,
-  /在[^。]{3,30}中起[着]?[^。]{3,30}作用/g,
+  /可以(有效|显著|明显)[^。]{3,50}/g,
+  /在[^。]{3,30}中起着?[^。]{3,30}作用/g,
   /目前[^。]{5,80}/g,
   /越来越[^。]{5,60}/g,
   /不可忽视[^。]{5,60}/g,
@@ -214,26 +192,34 @@ function reconstructAbstract(inverted: Record<string, number[]>): string {
 
 // ==================== 检测器 ====================
 
-/** 检测 1：自身段落重复 */
-async function detectSelfDuplication(
-  paragraphs: { text: string; offset: number }[],
-  threshold: number
-): Promise<PlagiarismMatchResult[]> {
+function eligibleParagraphs(paragraphs: CheckedParagraph[]): CheckedParagraph[] {
+  return paragraphs.filter((paragraph) => !isSkippedParagraph(paragraph.text));
+}
+
+/** 检测 1：自身段落重复（后 15 段，包含率） */
+function detectSelfDuplication(
+  paragraphs: CheckedParagraph[],
+  threshold: number,
+): PlagiarismMatchResult[] {
+  const eligible = eligibleParagraphs(paragraphs);
   const matches: PlagiarismMatchResult[] = [];
-  for (let i = 0; i < paragraphs.length; i++) {
-    for (let j = i + 1; j < Math.min(i + 15, paragraphs.length); j++) {
-      const sim = calcSimilarity(paragraphs[i].text, paragraphs[j].text);
+  for (let i = 0; i < eligible.length; i++) {
+    for (let j = i + 1; j < Math.min(i + 15, eligible.length); j++) {
+      const sim = Math.max(
+        containmentSimilarity(eligible[i].text, eligible[j].text),
+        containmentSimilarity(eligible[j].text, eligible[i].text),
+      );
       if (sim >= threshold) {
-        matches.push({
-          id: "",
-          sourceText: paragraphs[i].text,
-          sourceOffset: paragraphs[i].offset,
+        matches.push(blankMatch({
+          sourceText: eligible[i].text,
+          sourceOffset: eligible[i].offset,
+          sourceLength: eligible[i].text.length,
           matchType: "self",
-          matchedText: paragraphs[j].text,
+          matchedText: eligible[j].text,
           matchedFrom: "本文内部重复",
           similarity: sim,
-          riskLevel: riskLevel(sim),
-        });
+          riskLevel: riskFromContainment(sim),
+        }));
         break;
       }
     }
@@ -241,155 +227,130 @@ async function detectSelfDuplication(
   return matches;
 }
 
-/** 检测 2：跨项目比对（仅同一用户的其他项目） */
+const CROSS_SECTION_CAP = 500;
+const CROSS_PASSAGE_CAP = 400;
+
+/** 检测 2：跨项目。拆段后做 n-gram 倒排，再算包含率。 */
 async function detectCrossProject(
-  paragraphs: { text: string; offset: number }[],
+  paragraphs: CheckedParagraph[],
   excludeProjectId: string | undefined,
   userId: string | undefined,
-  threshold: number
+  threshold: number,
 ): Promise<PlagiarismMatchResult[]> {
+  if (!userId) return [];
   const otherSections = await prisma.section.findMany({
     where: {
+      project: { userId },
       ...(excludeProjectId ? { projectId: { not: excludeProjectId } } : {}),
-      ...(userId ? { project: { userId } } : {}),
     },
     select: { content: true, project: { select: { title: true } } },
-    take: 300,
+    orderBy: [{ projectId: "asc" }, { key: "asc" }],
+    take: CROSS_SECTION_CAP,
   });
-  if (otherSections.length === 0) return [];
+  const passages: IndexedPassage[] = [];
+  for (const section of otherSections) {
+    if (!section.content) continue;
+    for (const paragraph of splitParagraphs(section.content)) {
+      if (isSkippedParagraph(paragraph.text)) continue;
+      passages.push({
+        text: paragraph.text,
+        from: section.project?.title || "历史项目",
+      });
+      if (passages.length >= CROSS_PASSAGE_CAP) break;
+    }
+    if (passages.length >= CROSS_PASSAGE_CAP) break;
+  }
+  if (passages.length === 0) return [];
 
+  const index = buildPassageIndex(passages);
   const matches: PlagiarismMatchResult[] = [];
-  for (const para of paragraphs) {
+  for (const paragraph of eligibleParagraphs(paragraphs)) {
     let bestSim = 0;
-    let bestSec: (typeof otherSections)[0] | null = null;
-    for (const sec of otherSections) {
-      if (!sec.content || sec.content.length < 20) continue;
-      const sim = calcSimilarity(para.text, sec.content.slice(0, 800));
+    let best: IndexedPassage | null = null;
+    for (const candidate of topPassages(index, paragraph.text, 8)) {
+      const sim = containmentSimilarity(paragraph.text, candidate.text);
       if (sim > bestSim) {
         bestSim = sim;
-        bestSec = sec;
+        best = candidate;
       }
     }
-    if (bestSim >= threshold && bestSec) {
-      matches.push({
-        id: "",
-        sourceText: para.text,
-        sourceOffset: para.offset,
+    if (bestSim >= threshold && best) {
+      matches.push(blankMatch({
+        sourceText: paragraph.text,
+        sourceOffset: paragraph.offset,
+        sourceLength: paragraph.text.length,
         matchType: "cross",
-        matchedText: bestSec.content.slice(0, 300),
-        matchedFrom: bestSec.project?.title || "历史项目",
+        matchedText: best.text.slice(0, 300),
+        matchedFrom: best.from,
         similarity: bestSim,
-        riskLevel: riskLevel(bestSim),
-      });
+        riskLevel: riskFromContainment(bestSim),
+      }));
     }
   }
   return matches;
 }
 
-/** 检测 3：知识库比对 */
+/** 检测 3：按章检索已有 RAG 索引，再对章内段落做包含率对齐。 */
 async function detectKnowledgeBase(
-  paragraphs: { text: string; offset: number }[],
-  threshold: number
-): Promise<PlagiarismMatchResult[]> {
-  const chunks = await prisma.knowledgeChunk.findMany({
-    select: { content: true, file: { select: { name: true } } },
-    take: 300,
-  });
-  if (chunks.length === 0) return [];
-
-  const matches: PlagiarismMatchResult[] = [];
-  for (const para of paragraphs) {
-    let bestSim = 0;
-    let bestChunk: (typeof chunks)[0] | null = null;
-    for (const chunk of chunks) {
-      const sim = calcSimilarity(para.text, chunk.content);
-      if (sim > bestSim) {
-        bestSim = sim;
-        bestChunk = chunk;
-      }
-    }
-    if (bestSim >= threshold && bestChunk) {
-      matches.push({
-        id: "",
-        sourceText: para.text,
-        sourceOffset: para.offset,
-        matchType: "local",
-        matchedText: bestChunk.content.slice(0, 300),
-        matchedFrom: bestChunk.file.name,
-        similarity: bestSim,
-        riskLevel: riskLevel(bestSim),
-      });
-    }
-  }
-  return matches;
-}
-
-/** 检测 4：Embedding 语义比对 */
-async function detectEmbeddingSemantic(
-  paragraphs: { text: string; offset: number }[],
-  chunks: { content: string }[],
+  sections: CoverageSection[],
+  paragraphs: CheckedParagraph[],
   threshold: number,
-  limit: number
+  referenceTitles: string[],
+  onChapter?: (title: string) => void,
 ): Promise<PlagiarismMatchResult[]> {
   const matches: PlagiarismMatchResult[] = [];
-  const candidates = paragraphs.slice(0, limit);
-  if (candidates.length === 0 || chunks.length === 0) return matches;
-
-  // 预计算 chunk embeddings（避免重复计算）
-  const chunkEmbeddings: { content: string; embedding: number[] }[] = [];
-  for (const chunk of chunks.slice(0, 200)) {
+  for (const section of sections) {
+    if (isSkippedSectionTitle(section.title)) continue;
+    const chapterParagraphs = eligibleParagraphs(
+      paragraphs.filter((paragraph) => paragraph.sectionKey === section.key),
+    );
+    if (chapterParagraphs.length === 0) continue;
+    onChapter?.(section.title);
+    const query = chapterParagraphs.slice(0, 3).map((paragraph) => paragraph.text).join(" ").slice(0, 500);
+    let hits: RagChunk[] = [];
     try {
-      const embedding = await localRAG.getEmbedding(chunk.content.slice(0, 300));
-      if (embedding && embedding.length > 0) {
-        chunkEmbeddings.push({ content: chunk.content, embedding });
-      }
+      hits = await localRAG.search(query, { limit: 8, multiQuery: false });
     } catch {
-      // embedding 失败跳过该 chunk
+      continue;
     }
-  }
-
-  for (const para of candidates) {
-    try {
-      const pEmbed = await localRAG.getEmbedding(para.text);
-      if (!pEmbed || pEmbed.length === 0) continue;
-
+    for (const paragraph of chapterParagraphs) {
       let bestSim = 0;
-      let bestChunk = "";
-      for (const ce of chunkEmbeddings) {
-        const sim = cosineSimilarity(pEmbed, ce.embedding);
+      let bestHit: RagChunk | null = null;
+      for (const hit of hits) {
+        if (!hit.content) continue;
+        const sim = containmentSimilarity(paragraph.text, hit.content);
         if (sim > bestSim) {
           bestSim = sim;
-          bestChunk = ce.content.slice(0, 300);
+          bestHit = hit;
         }
       }
-
-      if (bestSim > threshold) {
-        matches.push({
-          id: "",
-          sourceText: para.text,
-          sourceOffset: para.offset,
+      if (bestSim >= threshold && bestHit) {
+        const source = bestHit.metadata.source || "知识库";
+        matches.push(blankMatch({
+          sourceText: paragraph.text,
+          sourceOffset: paragraph.offset,
+          sourceLength: paragraph.text.length,
           matchType: "local",
-          matchedText: bestChunk,
-          matchedFrom: "语义相似",
-          similarity: bestSim * 0.5, // 降权
-          riskLevel: riskLevel(bestSim * 0.5),
-        });
+          matchedText: bestHit.content.slice(0, 300),
+          matchedFrom: labelCorpusSource(source, referenceTitles),
+          similarity: bestSim,
+          riskLevel: riskFromContainment(bestSim),
+        }));
       }
-    } catch {
-      // 单段 embedding 失败不影响整体
     }
   }
   return matches;
 }
 
-/** 检测 5：联网搜索 */
+/** 检测 5：联网搜索。全部失败时由主流程写入 warnings，避免静默变成 0 命中。 */
 async function detectWebSearch(
-  paragraphs: { text: string; offset: number }[],
+  paragraphs: CheckedParagraph[],
   threshold: number,
-  limit: number
-): Promise<PlagiarismMatchResult[]> {
-  const candidates = paragraphs.slice(0, limit);
+  limit: number,
+): Promise<{ matches: PlagiarismMatchResult[]; attempts: number; failures: number }> {
+  const candidates = eligibleParagraphs(paragraphs).slice(0, limit);
   const matches: PlagiarismMatchResult[] = [];
+  let failures = 0;
 
   for (const para of candidates) {
     try {
@@ -401,32 +362,34 @@ async function detectWebSearch(
       ]);
       for (const r of results) {
         if (!r.snippet) continue;
-        const sim = calcSimilarity(para.text, r.snippet);
+        const sim = containmentSimilarity(para.text, r.snippet);
         if (sim >= threshold) {
-          matches.push({
-            id: "",
+          matches.push(blankMatch({
             sourceText: para.text,
             sourceOffset: para.offset,
+            sourceLength: para.text.length,
             matchType: "web",
             matchedText: r.snippet.slice(0, 300),
             matchedFrom: r.title,
             matchedUrl: r.url,
             similarity: sim,
-            riskLevel: riskLevel(sim),
-          });
+            riskLevel: riskFromContainment(sim),
+          }));
           break;
         }
       }
     } catch {
-      // 单段搜索失败不影响整体
+      failures += 1;
     }
   }
-  return matches;
+  return { matches, attempts: candidates.length, failures };
 }
 
 async function searchAcademic(query: string): Promise<{ title: string; snippet: string; url: string }[]> {
   const q = query.replace(/[\s\n]+/g, " ").slice(0, 100);
   const results: { title: string; snippet: string; url: string }[] = [];
+  let scholarOk = false;
+  let openAlexOk = false;
 
   try {
     const res = await fetch(
@@ -434,12 +397,15 @@ async function searchAcademic(query: string): Promise<{ title: string; snippet: 
       { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(5000) }
     );
     if (res.ok) {
+      scholarOk = true;
       const data = await res.json();
       for (const p of data.data ?? []) {
         results.push({ title: p.title ?? "", snippet: p.abstract ?? p.title ?? "", url: p.url ?? "" });
       }
     }
-  } catch {}
+  } catch {
+    scholarOk = false;
+  }
 
   try {
     const res = await fetch(
@@ -447,6 +413,7 @@ async function searchAcademic(query: string): Promise<{ title: string; snippet: 
       { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(5000) }
     );
     if (res.ok) {
+      openAlexOk = true;
       const data = await res.json();
       for (const work of data.results ?? []) {
         const snippet = work.abstract_inverted_index
@@ -455,8 +422,13 @@ async function searchAcademic(query: string): Promise<{ title: string; snippet: 
         results.push({ title: work.title ?? "", snippet, url: work.doi ? `https://doi.org/${work.doi}` : "" });
       }
     }
-  } catch {}
+  } catch {
+    openAlexOk = false;
+  }
 
+  if (!scholarOk && !openAlexOk) {
+    throw new Error("academic search failed");
+  }
   return results;
 }
 
@@ -478,29 +450,29 @@ function detectAcademicCliche(
 
   if (formulaic.length >= 2) {
     const patternTexts = formulaic.map((f) => f.pattern).join("、");
-    matches.push({
-      id: "",
+    matches.push(blankMatch({
       sourceText: `【学术套话】检测到 ${formulaic.length} 类常见学术套话模式（${formulaic.reduce((s, f) => s + f.count, 0)} 处）`,
       sourceOffset: 0,
+      sourceLength: 0,
       matchType: "ai",
       matchedText: formulaic.map((f) => `"${f.pattern}" 出现 ${f.count} 次`).join("；"),
       matchedFrom: `套话分析：${patternTexts}`,
-      similarity: 0.15,
-      riskLevel: "medium",
-    });
+      similarity: 0,
+      riskLevel: "low",
+    }));
   }
 
   if (shortRatio > 0.4 && paragraphs.length > 30) {
-    matches.push({
-      id: "",
+    matches.push(blankMatch({
       sourceText: `【写作风格】短句式占比 ${(shortRatio * 100).toFixed(0)}%，建议增补具体研究细节`,
       sourceOffset: 0,
+      sourceLength: 0,
       matchType: "ai",
       matchedText: "建议增加具体实验参数、数据指标等个性化内容，减少通用句式",
       matchedFrom: "写作风格分析",
-      similarity: 0.12,
+      similarity: 0,
       riskLevel: "low",
-    });
+    }));
   }
 
   return { formulaic, shortRatio, matches };
@@ -511,8 +483,7 @@ async function detectAiAssessment(
   content: string,
   signal?: AbortSignal,
 ): Promise<{
-  score: number;
-  findings: { type: string; detail: string }[];
+  status: "ok" | "failed";
   matches: PlagiarismMatchResult[];
 }> {
   try {
@@ -561,26 +532,23 @@ async function detectAiAssessment(
       }
     }
 
-    const score = typeof parsed.score === "number" ? parsed.score : 0;
     const findings = Array.isArray(parsed.findings) ? parsed.findings : [];
 
-    const matches: PlagiarismMatchResult[] = findings.map((f) => {
-      const sim = f.type === "suspicious" ? 0.4 : f.type === "formulaic" ? 0.2 : 0.1;
-      return {
-        id: "",
-        sourceText: `【AI 评估】${f.detail}`,
-        sourceOffset: 0,
-        matchType: "ai" as const,
-        matchedText: f.detail,
-        matchedFrom: f.type === "suspicious" ? "疑似抄袭风险" : f.type === "formulaic" ? "学术套话检测" : "改进建议",
-        similarity: sim,
-        riskLevel: riskLevel(sim),
-      };
-    });
+    const matches: PlagiarismMatchResult[] = findings.map((f) => blankMatch({
+      sourceText: `【AI 评估】${f.detail}`,
+      sourceOffset: 0,
+      sourceLength: 0,
+      matchType: "ai" as const,
+      matchedText: f.detail,
+      matchedFrom: f.type === "suspicious" ? "疑似抄袭风险" : f.type === "formulaic" ? "学术套话检测" : "改进建议",
+      similarity: 0,
+      riskLevel: "low",
+    }));
 
-    return { score, findings, matches };
-  } catch {
-    return { score: 0, findings: [], matches: [] };
+    return { status: "ok", matches };
+  } catch (err) {
+    if (signal?.aborted || (err instanceof Error && err.name === "AbortError")) throw err;
+    return { status: "failed", matches: [] };
   }
 }
 
@@ -594,138 +562,123 @@ export async function runPlagiarismCheck(
   const startTime = Date.now();
   const config: PlagiarismConfig = { ...DEFAULT_CONFIG, ...input.config };
   if (input.webSearch !== undefined) config.webSearch = input.webSearch;
+  if (input.literalOnly) {
+    config.webSearch = false;
+    config.academicCliche = false;
+    config.aiAssessment = false;
+  }
 
   const progress = (stage: ProgressStage, message: string) => {
     onProgress?.({ stage, message });
   };
 
-  // 1. 创建 DB 记录
-  progress("splitting", "正在分析文本结构...");
+  const sections: CoverageSection[] = input.sections?.filter((section) => section.content.trim()) ?? [];
+  const document = locateParagraphs(
+    sections.length > 0
+      ? sections
+      : [{ key: "body", title: input.title || "正文", content: input.content }],
+  );
+  if (document.paragraphs.length === 0) {
+    throw new Error("未能从内容中提取有效段落，请检查输入");
+  }
+
+  const opening = input.recheckLabel
+    ? `正在复检「${input.recheckLabel}」`
+    : "正在分析文本结构...";
+  progress("splitting", opening);
+
   const check = await prisma.plagiarismCheck.create({
     data: {
       projectId: input.projectId ?? null,
       title: input.title,
-      content: input.content,
+      content: document.canonical,
       status: "processing",
     },
   });
 
   try {
-    // 2. 分段
-    const allParagraphs = splitParagraphs(input.content);
-    if (allParagraphs.length === 0) {
-      throw new Error("未能从内容中提取有效段落，请检查输入");
-    }
+    const paragraphs = document.paragraphs;
+    const eligibleCount = eligibleParagraphs(paragraphs).length;
 
-    // 3. 长文本采样
-    const paragraphs = sampleParagraphs(allParagraphs, config.sampleThreshold);
-
-    // 4. 并行执行本地检测
-    const localTasks: Promise<PlagiarismMatchResult[]>[] = [];
-    const usedTexts = new Set<string>();
-
+    let selfMatches: PlagiarismMatchResult[] = [];
     if (config.selfDuplication) {
-      progress("self_duplication", "正在检测自引重复...");
-      localTasks.push(
-        detectSelfDuplication(paragraphs, config.thresholds.self).then((matches) => {
-          for (const m of matches) usedTexts.add(m.sourceText);
-          return matches;
-        })
-      );
+      progress("self_duplication", input.recheckLabel ? `正在复检「${input.recheckLabel}」的文内重复` : "正在检测自引重复...");
+      selfMatches = detectSelfDuplication(paragraphs, config.thresholds.self);
     }
 
+    let crossMatches: PlagiarismMatchResult[] = [];
     if (config.crossProject) {
       progress("cross_project", "正在跨项目比对...");
-      localTasks.push(
-        detectCrossProject(paragraphs, input.projectId, input.userId, config.thresholds.cross)
+      crossMatches = await detectCrossProject(paragraphs, input.projectId, input.userId, config.thresholds.cross);
+    }
+
+    let knowledgeMatches: PlagiarismMatchResult[] = [];
+    if (config.knowledgeBase) {
+      const chapterSections = sections.length > 0
+        ? sections
+        : [{ key: "body", title: input.title || "正文", content: input.content }];
+      knowledgeMatches = await detectKnowledgeBase(
+        chapterSections,
+        paragraphs,
+        config.thresholds.knowledge,
+        input.referenceTitles ?? [],
+        (title) => {
+          progress(
+            "knowledge_base",
+            input.recheckLabel
+              ? `正在复检「${input.recheckLabel}」的文献重合`
+              : `正在比对文献库（${title}）...`,
+          );
+        },
       );
     }
 
-    if (config.knowledgeBase) {
-      progress("knowledge_base", "正在知识库比对...");
-      localTasks.push(detectKnowledgeBase(paragraphs, config.thresholds.knowledge));
-    }
-
-    const localResults = await Promise.all(localTasks);
-    const allLocalMatches = localResults.flat();
-
-    // 标记已匹配的段落
-    for (const m of allLocalMatches) usedTexts.add(m.sourceText);
-
-    // 5. Embedding 语义检测
-    let embeddingMatches: PlagiarismMatchResult[] = [];
-    if (config.embeddingSemantic) {
-      progress("embedding_semantic", "正在语义分析...");
-      try {
-        const chunks = await prisma.knowledgeChunk.findMany({
-          select: { content: true },
-          take: 200,
-        });
-        const unmatched = paragraphs.filter((p) => !usedTexts.has(p.text));
-        embeddingMatches = await detectEmbeddingSemantic(
-          unmatched,
-          chunks,
-          config.thresholds.embedding,
-          config.embeddingLimit
-        );
-      } catch {
-        // embedding 失败不影响结果
-      }
-    }
-
-    // 6. 联网搜索
+    const warnings: string[] = [];
     let webMatches: PlagiarismMatchResult[] = [];
     if (config.webSearch) {
       progress("web_search", "正在联网搜索...");
-      webMatches = await detectWebSearch(paragraphs, config.thresholds.web, config.webSearchLimit);
-    }
-
-    // 7. 学术套话检测
-    let clicheMatches: PlagiarismMatchResult[] = [];
-    if (config.academicCliche) {
-      progress("academic_cliche", "正在学术套话检测...");
-      const clicheResult = detectAcademicCliche(input.content, paragraphs);
-      clicheMatches = clicheResult.matches;
-    }
-
-    // 8. AI 语义评估
-    let aiResult = { score: 0, findings: [] as { type: string; detail: string }[], matches: [] as PlagiarismMatchResult[] };
-    if (config.aiAssessment) {
-      progress("ai_assessment", "正在 AI 语义评估...");
-      aiResult = await detectAiAssessment(input.content, signal);
-    }
-
-    // 9. 合并去重
-    progress("saving", "正在保存结果...");
-    const allMatches = [
-      ...allLocalMatches,
-      ...embeddingMatches,
-      ...webMatches,
-      ...clicheMatches,
-      ...aiResult.matches,
-    ];
-
-    // 按 sourceText 去重，保留最佳匹配
-    const bestBySource = new Map<string, PlagiarismMatchResult>();
-    for (const m of allMatches) {
-      const key = m.sourceText.slice(0, 100);
-      const existing = bestBySource.get(key);
-      if (!existing || m.similarity > existing.similarity) {
-        bestBySource.set(key, m);
+      const web = await detectWebSearch(paragraphs, config.thresholds.web, config.webSearchLimit);
+      webMatches = web.matches;
+      if (web.attempts > 0 && web.failures === web.attempts) {
+        warnings.push("联网搜索失败，本次没有外部文献命中");
+        progress("web_search", warnings[0]);
       }
     }
 
-    const deduped = Array.from(bestBySource.values())
+    let clicheMatches: PlagiarismMatchResult[] = [];
+    if (config.academicCliche) {
+      progress("academic_cliche", "正在学术套话检测...");
+      clicheMatches = detectAcademicCliche(document.canonical, paragraphs).matches;
+    }
+
+    let aiStatus: CheckResult["aiStatus"] = input.literalOnly ? "skipped" : "skipped";
+    let aiMatches: PlagiarismMatchResult[] = [];
+    if (config.aiAssessment) {
+      progress("ai_assessment", "正在 AI 语义评估...");
+      const aiResult = await detectAiAssessment(document.canonical, signal);
+      aiStatus = aiResult.status;
+      aiMatches = aiResult.matches;
+    }
+
+    progress("saving", "正在保存结果...");
+    const textMatches = dedupeByOffsetAndType([
+      ...selfMatches,
+      ...crossMatches,
+      ...knowledgeMatches,
+      ...webMatches,
+    ])
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, config.maxMatches);
+    const styleMatches = dedupeByOffsetAndType([...clicheMatches, ...aiMatches]);
+    const deduped = [...textMatches, ...styleMatches];
 
-    // 10. 批量写入 DB
     if (deduped.length > 0) {
       await prisma.plagiarismMatch.createMany({
         data: deduped.map((m) => ({
           checkId: check.id,
           sourceText: m.sourceText.slice(0, 500),
           sourceOffset: m.sourceOffset,
+          sourceLength: m.sourceLength,
           matchType: m.matchType,
           matchedText: m.matchedText.slice(0, 500),
           matchedFrom: m.matchedFrom.slice(0, 200),
@@ -736,24 +689,30 @@ export async function runPlagiarismCheck(
       });
     }
 
-    // 11. 计算汇总
-    const maxSim = deduped.length ? Math.max(...deduped.map((m) => m.similarity)) : 0;
-    let overallRisk: "high" | "medium" | "low" = "low";
-    if (maxSim > 0.35 || aiResult.score > 30) overallRisk = "high";
-    else if (maxSim > 0.12 || aiResult.score > 15 || deduped.length >= 5) overallRisk = "medium";
+    const coverage = Math.round(
+      overlapCoverage(
+        textMatches.map((match) => ({
+          offset: match.sourceOffset,
+          length: match.sourceLength,
+          matchType: match.matchType,
+        })),
+        document.eligibleChars,
+      ) * 10000,
+    ) / 10000;
+    const overallRisk = riskFromOverlap(coverage);
 
-    // 12. 更新 DB
     await prisma.plagiarismCheck.update({
       where: { id: check.id },
       data: {
         status: "completed",
         completedAt: new Date(),
-        maxSimilarity: maxSim,
+        maxSimilarity: coverage,
+        overlapCoverage: coverage,
+        aiStatus,
         overallRisk,
       },
     });
 
-    // 13. 构造带 ID 的结果
     const dbMatches = await prisma.plagiarismMatch.findMany({
       where: { checkId: check.id },
       orderBy: { similarity: "desc" },
@@ -762,12 +721,16 @@ export async function runPlagiarismCheck(
     return {
       checkId: check.id,
       totalMatches: dbMatches.length,
-      maxSimilarity: maxSim,
+      maxSimilarity: coverage,
+      overlapCoverage: coverage,
+      aiStatus,
       overallRisk,
+      warnings: warnings.length > 0 ? warnings : undefined,
       matches: dbMatches.map((m) => ({
         id: m.id,
         sourceText: m.sourceText,
         sourceOffset: m.sourceOffset,
+        sourceLength: m.sourceLength,
         matchType: m.matchType as PlagiarismMatchResult["matchType"],
         matchedText: m.matchedText,
         matchedFrom: m.matchedFrom,
@@ -776,15 +739,15 @@ export async function runPlagiarismCheck(
         riskLevel: m.riskLevel as PlagiarismMatchResult["riskLevel"],
       })),
       stats: {
-        totalParagraphs: allParagraphs.length,
-        sampledParagraphs: paragraphs.length,
-        selfMatches: allLocalMatches.filter((m) => m.matchType === "self").length,
-        crossMatches: allLocalMatches.filter((m) => m.matchType === "cross").length,
-        knowledgeMatches: allLocalMatches.filter((m) => m.matchType === "local").length,
-        embeddingMatches: embeddingMatches.length,
+        totalParagraphs: paragraphs.length,
+        sampledParagraphs: eligibleCount,
+        selfMatches: selfMatches.length,
+        crossMatches: crossMatches.length,
+        knowledgeMatches: knowledgeMatches.length,
+        embeddingMatches: 0,
         webMatches: webMatches.length,
         clicheMatches: clicheMatches.length,
-        aiMatches: aiResult.matches.length,
+        aiMatches: aiMatches.length,
         processingTime: Date.now() - startTime,
       },
     };

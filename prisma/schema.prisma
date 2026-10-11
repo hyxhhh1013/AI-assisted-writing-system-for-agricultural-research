@@ -160,6 +160,10 @@ model PlagiarismCheck {
   content       String             // 检测内容全文
   status        String             @default("pending") // pending | processing | completed | failed
   maxSimilarity Float              @default(0)
+  /// 库内重合覆盖率。空值表示旧口径记录，UI 回退 maxSimilarity 并标注「旧口径」。
+  overlapCoverage Float?
+  /// ok | failed | skipped。文风评估失败不得当成 0 分通过。
+  aiStatus      String?
   overallRisk   String             @default("low") // high | medium | low
   createdAt     DateTime           @default(now())
   completedAt   DateTime?
@@ -180,6 +184,7 @@ model PlagiarismMatch {
   // 原文段落
   sourceText   String           // 论文中匹配的原文段落
   sourceOffset Int              // 在原文中的起始位置
+  sourceLength Int              @default(0) // 命中段落字符数，覆盖率按它并集
 
   // 匹配来源
   matchType    String           // local（本地库）| web（联网）| cross（项目间）
