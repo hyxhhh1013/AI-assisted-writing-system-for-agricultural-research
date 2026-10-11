@@ -40,6 +40,35 @@ describe("quality-restore", () => {
     expect(report.dimensions.academic.issues[0].status).toBe("open");
   });
 
+  it("does not restore an unparsed dimension as a perfect score", () => {
+    const detail: ReviewDetailResponse = {
+      check: {
+        id: "rev-2",
+        projectId: "proj-1",
+        title: "测试论文",
+        overallScore: 17,
+        overallGrade: "D",
+        summary: "",
+        synopsis: "",
+        status: "done",
+        createdAt: "2026-06-01T00:00:00.000Z",
+        dimensions: JSON.stringify({
+          academic: { incomplete: true },
+          argument: { incomplete: true },
+          structure: 17,
+          integrity: { incomplete: true },
+        }),
+      },
+      issues: [],
+    };
+
+    const report = buildFixableReportFromDetail(detail);
+    expect(report.dimensions.academic.incomplete).toBe(true);
+    expect(report.dimensions.academic.score).toBe(0);
+    expect(report.dimensions.structure.incomplete).toBeUndefined();
+    expect(report.dimensions.structure.score).toBe(100);
+  });
+
   it("buildRestoredPlagiarismSession maps detail to result and content", () => {
     const detail: PlagiarismCheckDetailRecord = {
       id: "chk-1",

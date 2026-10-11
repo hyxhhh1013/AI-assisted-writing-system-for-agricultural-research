@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyAcceptedRewritesToContent, applyAcceptedRewritesToSections, splitContentByMatches } from "@/lib/plagiarism-utils";
+import { applyAcceptedRewritesToContent, applyAcceptedRewritesToSections, humanizeClichePattern, presentMatchDetail, splitContentByMatches } from "@/lib/plagiarism-utils";
 import type { QualitySection } from "@/lib/quality-sections";
 import type { PlagiarismMatchResult, RewriteSuggestion } from "@/contracts/plagiarism";
 
@@ -61,5 +61,13 @@ describe("splitContentByMatches", () => {
       match({ sourceText: "原文段落A", similarity: 0.8 }),
     ]);
     expect(parts.some((p) => p.match?.sourceText === "原文段落A")).toBe(true);
+  });
+});
+
+describe("humanizeClichePattern", () => {
+  it("turns stored regex fragments into readable phrases", () => {
+    expect(humanizeClichePattern("近年来[^。]{3,60}")).toBe("近年来…");
+    expect(humanizeClichePattern("(研究|实验|实践)表明[^。]{5,60}")).toBe("研究/实验/实践表明…");
+    expect(presentMatchDetail('"近年来[^。]{3,60}" 出现 2 次')).toBe("「近年来…」 出现 2 次");
   });
 });

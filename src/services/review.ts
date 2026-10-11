@@ -68,6 +68,7 @@ export async function runReviewRound(input: {
   title: string;
   sections: Array<{ key: string; content: string }>;
   outline?: string;
+  dimensions?: Array<"academic" | "argument" | "structure" | "integrity">;
   projectMode?: "review" | "research";
   force?: boolean;
 }): Promise<import("@/contracts/review-rounds").ReviewRoundResult> {

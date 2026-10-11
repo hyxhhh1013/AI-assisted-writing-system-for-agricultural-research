@@ -108,6 +108,19 @@ export function calculateDimensionScore(
   };
 }
 
+/** 模型 JSON 解析失败时的维度结果。分数不参与综合分。 */
+export function incompleteDimensionResult(): DimensionResult {
+  return {
+    score: 0,
+    grade: "D",
+    issueCount: 0,
+    breakdown: { high: 0, medium: 0, low: 0 },
+    basis: ["模型返回无法解析，本维未计分"],
+    issues: [],
+    incomplete: true,
+  };
+}
+
 // ==================== 综合评分 ====================
 
 /**
@@ -120,13 +133,16 @@ export function calculateOverallScore(
   grade: "A" | "B" | "C" | "D";
 } {
   let weightedSum = 0;
+  let weightUsed = 0;
 
   for (const [dim, weight] of Object.entries(DIMENSION_WEIGHTS)) {
     const dimension = dim as ReviewDimension;
+    if (dimensions[dimension].incomplete) continue;
     weightedSum += dimensions[dimension].score * weight;
+    weightUsed += weight;
   }
 
-  const score = Math.round(weightedSum);
+  const score = weightUsed > 0 ? Math.round(weightedSum / weightUsed) : 0;
   const grade = getGrade(score);
 
   return { score, grade };

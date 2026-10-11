@@ -13,6 +13,7 @@ import { buildIntegrityReviewPrompt } from "@/lib/prompts/review-integrity";
 import {
   calculateDimensionScore,
   generateReviewReport,
+  incompleteDimensionResult,
 } from "@/lib/review-scoring";
 import type {
   ReviewInput,
@@ -32,22 +33,32 @@ const DEFAULT_CONFIG: Required<ReviewConfig> = {
   projectMode: "review",
 };
 
+/** 丢掉 undefined，避免可选字段把默认维度盖成空值后 `.map` 崩溃。 */
+function definedConfig(config?: ReviewConfig): Partial<ReviewConfig> {
+  if (!config) return {};
+  return Object.fromEntries(
+    Object.entries(config).filter(([, value]) => value !== undefined),
+  ) as Partial<ReviewConfig>;
+}
+
 // ==================== JSON 解析（三层容错）====================
 
 /**
  * 解析 AI 返回的 JSON，三层容错
  */
 function parseAIJson<T>(raw: string): T {
+  const tryParse = (text: string): T => JSON.parse(text.replace(/,\s*([}\]])/g, "$1")) as T;
+
   // 1. 直接解析（AI 直接返回 JSON）
   try {
-    return JSON.parse(raw) as T;
+    return tryParse(raw);
   } catch {}
 
   // 2. 提取 code fence 中的 JSON
   const fenceMatch = raw.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
   if (fenceMatch) {
     try {
-      return JSON.parse(fenceMatch[1]) as T;
+      return tryParse(fenceMatch[1]);
     } catch {}
   }
 
@@ -56,7 +67,7 @@ function parseAIJson<T>(raw: string): T {
   const lastBrace = raw.lastIndexOf("}");
   if (firstBrace !== -1 && lastBrace > firstBrace) {
     try {
-      return JSON.parse(raw.slice(firstBrace, lastBrace + 1)) as T;
+      return tryParse(raw.slice(firstBrace, lastBrace + 1));
     } catch {}
   }
 
@@ -85,7 +96,7 @@ async function reviewDimension(
   references?: string[],
   target?: string,
   projectMode?: "review" | "research",
-): Promise<ReviewIssue[]> {
+): Promise<{ issues: ReviewIssue[]; incomplete: boolean }> {
   let prompt: { system: string; user: string };
 
   switch (dimension) {
@@ -117,21 +128,27 @@ async function reviewDimension(
     const response = parseAIJson<AIReviewResponse>(raw);
 
     // 标准化 issue 格式
-    return (response.issues || []).map((issue, index) => ({
-      id: `${dimension}_${index + 1}`,
-      dimension,
-      type: issue.type as ReviewIssue["type"],
-      severity: issue.severity || "low",
-      location: issue.location || "",
-      evidence: issue.evidence || "",
-      description: issue.description || "",
-      suggestion: issue.suggestion || "",
-      originalText: issue.originalText,
-    }));
+    return {
+      incomplete: false,
+      issues: (response.issues || []).map((issue, index) => ({
+        id: `${dimension}_${index + 1}`,
+        dimension,
+        type: issue.type as ReviewIssue["type"],
+        severity: issue.severity || "low",
+        location: issue.location || "",
+        evidence: issue.evidence || "",
+        description: issue.description || "",
+        suggestion: issue.suggestion || "",
+        originalText: issue.originalText,
+      })),
+    };
   } catch (err) {
     console.error(`[review] dimension=${dimension} parse failed:`, err);
-    // 解析失败时返回空数组，不影响其他维度
-    return [];
+    console.error(
+      `[review] dimension=${dimension} raw preview:`,
+      raw.replace(/\s+/g, " ").slice(0, 160),
+    );
+    return { issues: [], incomplete: true };
   }
 }
 
@@ -144,7 +161,11 @@ export async function runReview(
   input: ReviewInput,
   config?: ReviewConfig
 ): Promise<ReviewReport> {
-  const mergedConfig = { ...DEFAULT_CONFIG, ...config, ...input.config };
+  const mergedConfig: Required<ReviewConfig> = {
+    ...DEFAULT_CONFIG,
+    ...definedConfig(config),
+    ...definedConfig(input.config),
+  };
   const projectMode =
     input.projectMode ?? mergedConfig.projectMode ?? "review";
 
@@ -162,7 +183,7 @@ export async function runReview(
   const dimensionPromises = mergedConfig.dimensions.map(async (dim) => {
     // 学术诚信维度可能需要参考文献列表
     const content = dim === "integrity" ? fullContent : sectionedContent;
-    const issues = await reviewDimension(
+    const reviewed = await reviewDimension(
       dim,
       content,
       fullContent,
@@ -170,15 +191,17 @@ export async function runReview(
       mergedConfig.target,
       projectMode,
     );
-    return { dimension: dim, issues };
+    return { dimension: dim, ...reviewed };
   });
 
   const dimensionResults = await Promise.all(dimensionPromises);
 
-  // 计算各维度分数
+  // 计算各维度分数。解析失败不计满分。
   const dimensions = {} as Record<ReviewDimension, DimensionResult>;
-  for (const { dimension, issues } of dimensionResults) {
-    dimensions[dimension] = calculateDimensionScore(dimension, issues);
+  for (const { dimension, issues, incomplete } of dimensionResults) {
+    dimensions[dimension] = incomplete
+      ? incompleteDimensionResult()
+      : calculateDimensionScore(dimension, issues);
   }
 
   // 如果配置排除了某些维度，填充空结果
@@ -242,6 +265,7 @@ function buildSummaryPrompt(
         structure: "结构规范",
         integrity: "学术诚信",
       };
+      if (result.incomplete) return `${dimNames[dim]}：未完成，不计入综合分`;
       return `${dimNames[dim]}：${result.score}分（${result.grade}），${result.issueCount}个问题`;
     })
     .join("\n");
@@ -282,10 +306,10 @@ async function persistReview(
       summary: report.summary,
       synopsis: report.synopsis,
       dimensions: JSON.stringify({
-        academic: report.dimensions.academic.score,
-        argument: report.dimensions.argument.score,
-        structure: report.dimensions.structure.score,
-        integrity: report.dimensions.integrity.score,
+        academic: report.dimensions.academic.incomplete ? { incomplete: true } : report.dimensions.academic.score,
+        argument: report.dimensions.argument.incomplete ? { incomplete: true } : report.dimensions.argument.score,
+        structure: report.dimensions.structure.incomplete ? { incomplete: true } : report.dimensions.structure.score,
+        integrity: report.dimensions.integrity.incomplete ? { incomplete: true } : report.dimensions.integrity.score,
       }),
     },
   });

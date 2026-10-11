@@ -101,3 +101,23 @@ export function splitContentByMatches(
 
   return parts.filter((p) => p.text.length > 0);
 }
+
+/** 把套话正则收成可读短语，兼容已经落库的 `re.source` 片段。 */
+export function humanizeClichePattern(raw: string): string {
+  const cleaned = raw
+    .replace(/\(\?:/g, "(")
+    .replace(/\(([^()]*)\)/g, (_, inner: string) => inner.split("|").join("/"))
+    .replace(/\[[^\]]*\](?:\{[0-9,]+\})?/g, "…")
+    .replace(/\\./g, "")
+    .replace(/[+*?]/g, "")
+    .replace(/[{}]/g, "")
+    .replace(/…{2,}/g, "…")
+    .replace(/\s+/g, "")
+    .trim();
+  return cleaned || raw;
+}
+
+/** 展示用：去掉引号里的正则，保留「出现 N 次」和例句。 */
+export function presentMatchDetail(text: string): string {
+  return text.replace(/"([^"]*)"/g, (_, inner: string) => `「${humanizeClichePattern(inner)}」`);
+}

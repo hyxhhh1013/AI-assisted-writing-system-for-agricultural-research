@@ -14,6 +14,7 @@ import {
   topPassages,
   type IndexedPassage,
 } from "@/lib/text-fingerprint";
+import { humanizeClichePattern } from "@/lib/plagiarism-utils";
 import {
   dedupeByOffsetAndType,
   isSkippedParagraph,
@@ -168,12 +169,15 @@ const FORMULAIC_PATTERNS = [
   /不可忽视[^。]{5,60}/g,
 ];
 
-function detectFormulaic(text: string): { pattern: string; count: number }[] {
-  const result: { pattern: string; count: number }[] = [];
+function detectFormulaic(text: string): { label: string; count: number; examples: string[] }[] {
+  const result: { label: string; count: number; examples: string[] }[] = [];
   for (const re of FORMULAIC_PATTERNS) {
     const matches = text.match(re);
     if (matches && matches.length >= 2) {
-      result.push({ pattern: re.source.slice(0, 30), count: matches.length });
+      const examples = [...new Set(matches)].slice(0, 2).map((sample) =>
+        sample.length > 36 ? `${sample.slice(0, 36)}…` : sample,
+      );
+      result.push({ label: humanizeClichePattern(re.source), count: matches.length, examples });
     }
   }
   return result;
@@ -436,7 +440,7 @@ async function searchAcademic(query: string): Promise<{ title: string; snippet: 
 function detectAcademicCliche(
   content: string,
   paragraphs: { text: string; offset: number }[]
-): { formulaic: { pattern: string; count: number }[]; shortRatio: number; matches: PlagiarismMatchResult[] } {
+): { formulaic: { label: string; count: number; examples: string[] }[]; shortRatio: number; matches: PlagiarismMatchResult[] } {
   const formulaic = detectFormulaic(content);
 
   // 短句式占比
@@ -449,14 +453,16 @@ function detectAcademicCliche(
   const matches: PlagiarismMatchResult[] = [];
 
   if (formulaic.length >= 2) {
-    const patternTexts = formulaic.map((f) => f.pattern).join("、");
     matches.push(blankMatch({
       sourceText: `【学术套话】检测到 ${formulaic.length} 类常见学术套话模式（${formulaic.reduce((s, f) => s + f.count, 0)} 处）`,
       sourceOffset: 0,
       sourceLength: 0,
       matchType: "ai",
-      matchedText: formulaic.map((f) => `"${f.pattern}" 出现 ${f.count} 次`).join("；"),
-      matchedFrom: `套话分析：${patternTexts}`,
+      matchedText: formulaic.map((item) => {
+        const samples = item.examples.map((example) => `「${example}」`).join("、");
+        return `${item.label} 出现 ${item.count} 次${samples ? `，如 ${samples}` : ""}`;
+      }).join("\n"),
+      matchedFrom: "学术套话检测",
       similarity: 0,
       riskLevel: "low",
     }));

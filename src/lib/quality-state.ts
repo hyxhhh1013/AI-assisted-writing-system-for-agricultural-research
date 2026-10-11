@@ -10,7 +10,7 @@ import type { QualitySection } from "@/lib/quality-sections";
 import type { ReviewDetailResponse } from "@/contracts/review";
 import type { PlagiarismCheckDetailRecord, PlagiarismCheckResult } from "@/contracts/plagiarism";
 import { toCheckResult } from "@/services/plagiarism";
-import { calculateDimensionScore } from "@/lib/review-scoring";
+import { calculateDimensionScore, incompleteDimensionResult } from "@/lib/review-scoring";
 import type {
   FixableReviewReport,
   ReviewDimension,
@@ -45,6 +45,23 @@ export async function persistQualitySections(
 
 const DIMENSIONS: ReviewDimension[] = ["academic", "argument", "structure", "integrity"];
 
+function readIncompleteDimensions(raw: string | null | undefined): Set<ReviewDimension> {
+  const incomplete = new Set<ReviewDimension>();
+  if (!raw) return incomplete;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    for (const dim of DIMENSIONS) {
+      const value = parsed[dim];
+      if (value && typeof value === "object" && (value as { incomplete?: boolean }).incomplete) {
+        incomplete.add(dim);
+      }
+    }
+  } catch {
+    return incomplete;
+  }
+  return incomplete;
+}
+
 function toReviewIssue(row: ReviewDetailResponse["issues"][number]): ReviewIssue {
   return {
     id: row.id,
@@ -73,10 +90,14 @@ export function buildFixableReportFromDetail(detail: ReviewDetailResponse): Fixa
     if (grouped[dim]) grouped[dim].push(toReviewIssue(row));
   }
 
+  const incomplete = readIncompleteDimensions(detail.check.dimensions);
   const dimensions = {} as FixableReviewReport["dimensions"];
   for (const dim of DIMENSIONS) {
+    const scored = incomplete.has(dim)
+      ? incompleteDimensionResult()
+      : calculateDimensionScore(dim, grouped[dim]);
     dimensions[dim] = {
-      ...calculateDimensionScore(dim, grouped[dim]),
+      ...scored,
       issues: grouped[dim].map((issue) => ({ ...issue, status: "open" as const })),
     };
   }

@@ -10,6 +10,8 @@ interface MatchContentPreviewProps {
   matches: PlagiarismMatchResult[];
   compact?: boolean;
   maxHeight?: string;
+  /** 占满父级剩余高度，由内部滚动，避免把命中列表挤到页脚。 */
+  fill?: boolean;
 }
 
 function highlightClass(risk: PlagiarismMatchResult["riskLevel"]): string {
@@ -23,6 +25,7 @@ export function MatchContentPreview({
   matches,
   compact = false,
   maxHeight = "280px",
+  fill = false,
 }: MatchContentPreviewProps) {
   if (!content.trim()) return null;
 
@@ -30,8 +33,12 @@ export function MatchContentPreview({
   const hasHighlight = parts.some((p) => p.match);
 
   return (
-    <div className={cn("rounded-xl border border-[#1a5632]/10 bg-[#faf9f6]", compact ? "p-3" : "p-4")}>
-      <div className="mb-2 flex items-center justify-between gap-2">
+    <div className={cn(
+      "flex flex-col rounded-xl border border-[#1a5632]/10 bg-[#faf9f6]",
+      compact ? "p-3" : "p-4",
+      fill && "h-full min-h-0 max-h-[240px] lg:max-h-none",
+    )}>
+      <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
         <p className={cn("font-medium text-[#122820]", compact ? "text-xs" : "text-sm")}>正文预览</p>
         <div className="flex flex-wrap gap-2 text-[10px] text-[#9aa8a0]">
           <span className="inline-flex items-center gap-1"><span className={cn("h-1.5 w-1.5 rounded-full", riskDotClass("high"))} />高风险</span>
@@ -42,8 +49,9 @@ export function MatchContentPreview({
         className={cn(
           "overflow-y-auto rounded-lg border bg-white p-3 text-[#3d4f46] leading-relaxed whitespace-pre-wrap",
           compact ? "text-xs" : "text-sm",
+          fill && "min-h-0 flex-1",
         )}
-        style={{ maxHeight }}
+        style={fill ? undefined : { maxHeight }}
       >
         {hasHighlight ? (
           parts.map((part, i) =>

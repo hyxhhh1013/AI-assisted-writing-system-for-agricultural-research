@@ -50,9 +50,47 @@ export function PlagiarismResultView({ result, compact = false, sourceContent, p
   const textColor =
     result.overallRisk === "high" ? "text-red-600" : result.overallRisk === "medium" ? "text-amber-600" : "text-green-600";
 
+  const matchList = (
+    <div className={cn(compact ? "min-h-0 flex-1 overflow-y-auto -mx-1 px-1" : "min-h-0 flex-1 overflow-y-auto")}>
+      {filtered.length > 0 ? (
+        <div className={compact ? "space-y-1" : "space-y-2"}>
+          {filtered.map((m, i) => (
+            <PlagiarismMatchRow key={m.id} match={m} index={i} compact={compact} />
+          ))}
+        </div>
+      ) : (
+        <div className={cn("flex flex-col items-center justify-center text-muted-foreground", compact ? "h-full" : "py-10")}>
+          <CheckCircle2 className={cn("mb-1 text-green-500", compact ? "h-6 w-6" : "h-8 w-8 mb-2")} />
+          <p className={compact ? "text-xs" : "text-sm"}>
+            {matches.length === 0 ? "未发现相似内容" : "当前筛选下没有匹配"}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
+  const filters = !compact && matches.length > 0 ? (
+    <div className="flex shrink-0 flex-wrap gap-1.5">
+      {FILTERS.map((f) => (
+        <button
+          key={f.id}
+          type="button"
+          className={cn(
+            "rounded-full px-3 py-1 text-xs transition-colors",
+            typeFilter === f.id ? "bg-[#1a5632] text-white" : "bg-[#f4f1ea] text-[#6b7c72] hover:bg-[#1a5632]/8",
+          )}
+          onClick={() => setTypeFilter(f.id)}
+        >
+          {f.label}
+          {f.id !== "all" && typeStats[f.id] ? ` ${typeStats[f.id]}` : ""}
+        </button>
+      ))}
+    </div>
+  ) : null;
+
   return (
-    <div className={cn("flex flex-col", compact ? "h-full gap-1.5" : "gap-3")}>
-      <div className={cn("rounded-xl border border-[#1a5632]/10 bg-[#faf9f6]", compact ? "flex items-center gap-2 p-2" : "p-4")}>
+    <div className={cn("flex flex-col", compact ? "h-full gap-1.5" : "min-h-0 flex-1 gap-3")}>
+      <div className={cn("shrink-0 rounded-xl border border-[#1a5632]/10 bg-[#faf9f6]", compact ? "flex items-center gap-2 p-2" : "p-4")}>
         <div className={cn("flex items-center justify-between", compact ? "w-full" : "mb-3")}>
           <div className="flex items-center gap-2 sm:gap-3">
             <span className={cn("font-bold tabular-nums", compact ? "text-lg" : "text-3xl", textColor)}>
@@ -133,45 +171,25 @@ export function PlagiarismResultView({ result, compact = false, sourceContent, p
         </div>
       )}
 
-      {!compact && sourceContent && matches.length > 0 && (
-        <MatchContentPreview content={sourceContent} matches={matches} />
-      )}
-
-      {!compact && matches.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {FILTERS.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              className={cn(
-                "rounded-full px-2.5 py-1 text-[11px] transition-colors",
-                typeFilter === f.id ? "bg-[#1a5632] text-white" : "bg-[#faf9f6] text-[#6b7c72] hover:bg-[#1a5632]/8",
-              )}
-              onClick={() => setTypeFilter(f.id)}
-            >
-              {f.label}
-              {f.id !== "all" && typeStats[f.id] ? ` ${typeStats[f.id]}` : ""}
-            </button>
-          ))}
+      {compact ? matchList : (
+        <div className={cn(
+          "grid min-h-[420px] flex-1 gap-3",
+          sourceContent && matches.length > 0 && "lg:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.95fr)]",
+        )}>
+          {sourceContent && matches.length > 0 && (
+            <MatchContentPreview content={sourceContent} matches={matches} fill />
+          )}
+          <section className="flex min-h-[320px] min-w-0 flex-col overflow-hidden rounded-xl border border-[#1a5632]/10 bg-white lg:min-h-0">
+            <div className="flex shrink-0 flex-col gap-2 border-b border-[#1a5632]/10 px-3 py-3">
+              <p className="text-sm font-medium text-[#122820]">命中明细</p>
+              {filters}
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
+              {matchList}
+            </div>
+          </section>
         </div>
       )}
-
-      <div className={cn(compact ? "min-h-0 flex-1 overflow-y-auto -mx-1 px-1" : "")}>
-        {filtered.length > 0 ? (
-          <div className={compact ? "space-y-1" : "space-y-1.5"}>
-            {filtered.map((m, i) => (
-              <PlagiarismMatchRow key={m.id} match={m} index={i} compact={compact} />
-            ))}
-          </div>
-        ) : (
-          <div className={cn("flex flex-col items-center justify-center text-muted-foreground", compact ? "h-full" : "py-16")}>
-            <CheckCircle2 className={cn("mb-1 text-green-500", compact ? "h-6 w-6" : "h-8 w-8 mb-2")} />
-            <p className={compact ? "text-xs" : "text-sm"}>
-              {matches.length === 0 ? "未发现相似内容" : "当前筛选下没有匹配"}
-            </p>
-          </div>
-        )}
-      </div>
 
       {compact && (
         <div className="flex shrink-0 gap-1.5 border-t pt-1.5">

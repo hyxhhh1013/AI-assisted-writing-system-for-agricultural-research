@@ -70,7 +70,7 @@ export interface ReviewIssue {
 // ==================== 维度结果 ====================
 
 export interface DimensionResult {
-  score: number;           // 0-100
+  score: number;           // 0-100；incomplete 时不计入综合分
   grade: "A" | "B" | "C" | "D";
   issueCount: number;
   breakdown: {
@@ -80,6 +80,8 @@ export interface DimensionResult {
   };
   basis: string[];         // 打分依据说明
   issues: ReviewIssue[];
+  /** 模型结果无法解析，不能当成「没问题所以满分」 */
+  incomplete?: boolean;
 }
 
 // ==================== 审查报告 ====================
@@ -186,6 +188,8 @@ export interface ReviewDetailRecord {
   status: string;
   createdAt: string;
   dimensionScores?: string | null;
+  /** ReviewCheck.dimensions：各维分数，或 `{ incomplete: true }` */
+  dimensions?: string | null;
 }
 
 export interface ReviewDetailIssueRecord {

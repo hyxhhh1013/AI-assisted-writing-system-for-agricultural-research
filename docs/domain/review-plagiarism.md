@@ -18,7 +18,7 @@
 
 ### 行为
 
-- **四维度并行**：学术规范、论证逻辑、结构、诚信（`review-academic` 等 prompt 文件）。
+- **四维度并行**：学术规范、论证逻辑、结构、诚信（`review-academic` 等 prompt 文件）。某一维的模型 JSON 解析失败时记为未完成，不计入综合分，也不显示 100 分。
 - **默认模型**：`review-service` 调用智谱（`provider: "zhipu"`）；概要生成同款。
 - 请求经 **`validateBody(reviewSchema)`**；返回 JSON 结构化 `ReviewReport`（非 SSE）。
 - 结果持久化 **`ReviewCheck`**（`prisma/schema.prisma`），含 `overallScore` / `overallGrade`。

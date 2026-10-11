@@ -55,6 +55,14 @@ function getDimensionsForMode(mode?: ProjectWritingMode) {
   return mode === "research" ? RESEARCH_DIMENSIONS : REVIEW_DIMENSIONS;
 }
 
+function dimensionScoreText(
+  result: { incomplete?: boolean; score: number; issueCount?: number },
+  withCount = false,
+): string {
+  if (result.incomplete) return "未完成";
+  return withCount ? `${result.score} 分 · ${result.issueCount ?? 0} 项` : `${result.score} 分`;
+}
+
 const GRADE_CONFIG = {
   A: { color: "text-green-600", label: "优秀" },
   B: { color: "text-blue-600", label: "良好" },
@@ -200,6 +208,7 @@ export function ReviewTab({
         title,
         sections: sections.map((s) => ({ key: s.key, content: s.content })),
         outline,
+        dimensions: selectedDimensions,
         projectMode: projectMode === "review" ? "review" : "research",
       });
       setRoundStatus(result.status);
@@ -426,8 +435,11 @@ export function ReviewTab({
                 <span className="mt-2 text-sm font-semibold text-[#122820]">{dim.name}</span>
                 <span className="mt-1 text-[11px] leading-relaxed text-[#6b7c72]">{dim.description}</span>
                 {dimResult && (
-                  <span className={cn("mt-2 text-xs font-medium", (GRADE_CONFIG[dimResult.grade] ?? GRADE_CONFIG.C).color)}>
-                    {dimResult.score} 分 · {dimResult.issueCount} 项
+                  <span className={cn(
+                    "mt-2 text-xs font-medium",
+                    dimResult.incomplete ? "text-amber-700" : (GRADE_CONFIG[dimResult.grade] ?? GRADE_CONFIG.C).color,
+                  )}>
+                    {dimensionScoreText(dimResult, true)}
                   </span>
                 )}
                 <span
@@ -532,8 +544,8 @@ export function ReviewTab({
                 <Badge variant="secondary">{result.issueCount} 个问题</Badge>
               </CardTitle>
               <div className="flex items-center gap-4">
-                <span className={cn("text-lg font-bold", gradeCls.color)}>
-                  {result.score} 分
+                <span className={cn("text-lg font-bold", result.incomplete ? "text-amber-700" : gradeCls.color)}>
+                  {dimensionScoreText(result)}
                 </span>
                 {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
               </div>
@@ -555,6 +567,8 @@ export function ReviewTab({
                     .filter(({ issue }) => severityFilter === "all" || issue.severity === severityFilter)
                     .map(({ issue, index }) => renderIssue(issue, dim.id, index))}
                 </div>
+              ) : result.incomplete ? (
+                <p className="py-4 text-center text-sm text-amber-700">这一维没有解析成功，不能当成满分。</p>
               ) : (
                 <p className="py-4 text-center text-sm text-muted-foreground">✅ 未发现问题</p>
               )}
@@ -574,6 +588,11 @@ export function ReviewTab({
             </CardHeader>
             <CardContent>
               {renderScoreRing(report.overallScore, report.overallGrade)}
+              {Object.values(report.dimensions).some((item) => item.incomplete) && (
+                <p className="mt-2 text-[11px] leading-relaxed text-amber-700">
+                  有维度的模型结果无法解析，没有计入综合分，也不能当成满分。
+                </p>
+              )}
               {report.synopsis && (
                 <div className="mt-4 border-t border-[#1a5632]/10 pt-3">
                   <h4 className="mb-1 text-xs font-medium text-[#122820]">论文概要</h4>
@@ -598,8 +617,8 @@ export function ReviewTab({
                 return (
                   <li key={dim.id} className="flex items-center justify-between text-[11px]">
                     <span className="text-[#3d4f46]">{dim.name}</span>
-                    <span className={cn("font-semibold tabular-nums", gradeCls.color)}>
-                      {r.score}
+                    <span className={cn("font-semibold tabular-nums", r.incomplete ? "text-amber-700" : gradeCls.color)}>
+                      {r.incomplete ? "未完成" : r.score}
                     </span>
                   </li>
                 );
@@ -634,6 +653,11 @@ export function ReviewTab({
             <div className="flex items-center gap-8">
               {renderScoreRing(report.overallScore, report.overallGrade)}
               <div className="flex-1">
+                {Object.values(report.dimensions).some((item) => item.incomplete) && (
+                  <p className="mb-3 text-sm text-amber-700">
+                    有维度的模型结果无法解析，没有计入综合分，也不能当成满分。
+                  </p>
+                )}
                 {report.synopsis && (
                   <div className="mb-3">
                     <h4 className="mb-1 text-sm font-medium">论文概要</h4>
