@@ -11,6 +11,11 @@ import {
   snapshotToInitialState,
 } from "@/lib/agent/session-snapshot";
 import { normalizeUiTranscript } from "@/lib/agent/ui-transcript";
+import {
+  ADMIN_INTERRUPT_MESSAGE,
+  OPS_INTERRUPT_MESSAGE,
+  isExternalInterruptMessage,
+} from "@/lib/agent/external-interrupt";
 
 export {
   graphStateToSnapshot,
@@ -143,14 +148,45 @@ export async function saveAgentSessionSnapshot(
     errorMessage === undefined || errorMessage === null
       ? errorMessage
       : stripNullBytes(errorMessage);
+  const snapshotJson = stripNullBytes(snapshot) as object;
+  if (status && status !== "interrupted") {
+    const updated = await prisma.agentSession.updateMany({
+      where: {
+        id: sessionId,
+        NOT: {
+          status: "interrupted",
+          errorMessage: { in: [ADMIN_INTERRUPT_MESSAGE, OPS_INTERRUPT_MESSAGE] },
+        },
+      },
+      data: {
+        snapshot: snapshotJson,
+        status,
+        ...(cleanError !== undefined ? { errorMessage: cleanError } : {}),
+      },
+    });
+    if (updated.count > 0) return;
+    await prisma.agentSession.update({
+      where: { id: sessionId },
+      data: { snapshot: snapshotJson },
+    });
+    return;
+  }
   await prisma.agentSession.update({
     where: { id: sessionId },
     data: {
-      snapshot: stripNullBytes(snapshot) as object,
+      snapshot: snapshotJson,
       ...(status ? { status } : {}),
       ...(cleanError !== undefined ? { errorMessage: cleanError } : {}),
     },
   });
+}
+
+export async function isSessionExternallyInterrupted(sessionId: string): Promise<boolean> {
+  const row = await prisma.agentSession.findUnique({
+    where: { id: sessionId },
+    select: { status: true, errorMessage: true },
+  });
+  return row?.status === "interrupted" && isExternalInterruptMessage(row.errorMessage);
 }
 
 export type AgentSessionClaimResult = "acquired" | "conflict" | "not_found";

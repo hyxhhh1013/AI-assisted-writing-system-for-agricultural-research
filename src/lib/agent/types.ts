@@ -72,6 +72,8 @@ export interface AgentContext {
     maxToolCalls: number;
     toolCallCount: number;
   };
+  /** 外部中断时停下本轮。createAgentContext 会接到 signal 上。 */
+  stop?: () => void;
 }
 
 export interface AgentLoopOptions {

@@ -154,7 +154,7 @@ runWritingPipeline emit(status/pipeline_step/delta/bullet_done/verification_prog
 
 ## 会话并发互斥
 
-`tryAcquireAgentSession` 用 Postgres `updateMany` 原子抢占（仅 `status ∈ fromStatuses` 时置 running）。resume（interrupted/error）与跟聊（completed/interrupted/error）路径都走原子抢占；冲突 → HTTP 409「会话仍在执行中」，防止同一会话并发跑图、快照互相覆盖。`reclaimStaleRunningSessions` 回收进程退出遗留的僵尸 running。
+`tryAcquireAgentSession` 用 Postgres `updateMany` 原子抢占（仅 `status ∈ fromStatuses` 时置 running）。resume（interrupted/error）与跟聊（completed/interrupted/error）路径都走原子抢占；冲突 → HTTP 409「会话仍在执行中」，防止同一会话并发跑图、快照互相覆盖。`reclaimStaleRunningSessions` 回收进程退出遗留的僵尸 running。后台「管理员强制中断」和运维 MCP「运维 MCP 强制中断」写入后，回合再保存时不会把状态改回 running / completed / error；图循环发现该标记后会 abort，并向前端发 cancelled。
 
 写入 `goal` / `snapshot` / `errorMessage` 前经 `stripNullBytes` 去掉 U+0000。Postgres 文本与 json 不接受空字节；模型或 PDF 抽取带上 `\u0000` 时，`agentSession.update` 会报 `22P05`，大纲/蓝图检查点随快照一起落库失败。
 

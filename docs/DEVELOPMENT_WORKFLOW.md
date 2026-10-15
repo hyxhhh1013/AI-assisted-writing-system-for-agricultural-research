@@ -208,6 +208,7 @@ VPS 上 docker compose build + up（不拉镜像仓库，零额外费用）
 | 2 | **VPS 上的 `.env`** | SSH 登录，`nano /home/ubuntu/grainscript/.env` | 仅存在于 VPS，不进 Git |
 | 3 | **`JWT_SECRET`** | 随机字符串（见下方命令） | VPS 的 `.env` |
 | 4 | **`DEEPSEEK_API_KEY`** | DeepSeek 控制台申请 | VPS 的 `.env`（本地 `.env` 也要有） |
+| 5 | **`OPS_MCP_TOKEN`** | 至少 24 位随机串。给 Cursor 查线上、并在确认后中断卡住的会话。不是登录密码 | VPS 的 `.env`，以及本机 `%USERPROFILE%\.grainscript\ops.env`（两处相同）。说明见 [DEPLOY.md](./DEPLOY.md) §十一 |
 
 生成 `JWT_SECRET`：
 
@@ -272,6 +273,7 @@ nano /home/ubuntu/grainscript/.env
 - [ ] scp 上传 → ssh nohup `apply.sh` → 轮询 `/tmp/grainscript-deploy.log` 见 `PREFLIGHT PASSED` + HTTP 检查
 - [ ] `curl localhost:3000` 200、`cat .next/BUILD_ID` 与本地一致、grep 新功能字符串命中
 - [ ] 打开 `https://ai4science.hyxhhh.site` 冒烟（登录 → 打开项目 → Agent 扩写/收集文献 → 图表）
+- [ ] 若这次改动包含 `/api/ops`：服务器 `.env` 已有 `OPS_MCP_TOKEN`，本机 `ops.env` 与之相同，Cursor 里 `grainscript-ops` 能叫通 `prod_health`（见 [DEPLOY.md](./DEPLOY.md) §十一）
 
 部署失败（HTTP 500 / 启动报错）时：看 `pm2 logs grainscript --lines 40`，对照 [DEPLOY.md](./DEPLOY.md) §四 踩坑清单（最常见：Turbopack Prisma hash 断裂、打包漏 `.next`、SSH 限流）。
 

@@ -13,7 +13,7 @@
 <!-- API_INDEX:AUTO:START -->
 ## 路由表（自动生成）
 
-> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-10-08 07:50:55**（共 **115** 个 route 文件，validateBody **56**，SSE **11**，requireAdmin **28**）。
+> 由 `npm run docs:api-index` 扫描 `src/app/api` 下全部 `route.ts` 生成。 更新时间：**2026-10-15 05:55:12**（共 **123** 个 route 文件，validateBody **59**，SSE **11**，requireAdmin **28**）。
 
 图例：zod = 使用 validateBody；SSE = 含 text/event-stream / ReadableStream；admin = 含 requireAdmin。
 
@@ -255,10 +255,25 @@
 | POST | `/api/illustrate-mechanism` | ✓ | — | — |
 | POST | `/api/literature/search` | ✓ | — | — |
 | POST | `/api/mechanism-panel` | — | — | — |
+| GET | `/api/ops/health` | — | — | — |
+| GET | `/api/ops/logs` | — | — | — |
+| GET | `/api/ops/loop-scan` | — | — | — |
+| POST | `/api/ops/reindex` | ✓ | — | — |
+| GET | `/api/ops/sessions` | — | — | — |
+| GET, POST | `/api/ops/sessions/[id]` | ✓ | — | — |
+| POST | `/api/ops/sql` | ✓ | — | — |
+| GET | `/api/ops/stats` | — | — | — |
 | GET | `/api/presentation/stats` | — | — | — |
 <!-- API_INDEX:AUTO:END -->
 
 ## 人工备注（不随脚本覆盖）
+
+### 线上运维
+
+- `GET /api/ops/health|stats|sessions|sessions/[id]|loop-scan|logs`：`Authorization: Bearer`，密钥是环境变量 `OPS_MCP_TOKEN`（至少 24 位）。未配置返回 503。不认登录 cookie。`logs` 的 `source` 只能是 `app`、`deploy`、`reindex`。响应不含 API Key 明文和章节正文。
+- `POST /api/ops/sessions/[id]`：body `{ "action": "interrupt", "confirm": true }`。只把仍为 `running` 的会话改为 `interrupted`。正在跑的回合会停下，不再把该状态盖回去。
+- `POST /api/ops/sql`：一条语句。读语句直接执行（最多 200 行）；写语句要 `confirm: true`。拒绝多语句、`DROP DATABASE` / `DROP SCHEMA`、`pg_read_file`、改角色。
+- `POST /api/ops/reindex`：`{ "confirm": true }` 后，仅北京时间 00:30–05:00 启动全库 `--rechunk`。留痕在 `data/ops-audit.jsonl`。见 [`DEPLOY.md`](./DEPLOY.md) §十一。
 
 ### Admin 项目列表
 

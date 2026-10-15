@@ -37,6 +37,19 @@ describe("proxy SEC-02 protected routes", () => {
     expect(res.status).not.toBe(429);
   });
 
+  it("rejects /api/ops without a bearer even when auth bypass is on", async () => {
+    process.env.AUTH_BYPASS = "true";
+    const res = await proxy(req("/api/ops/health"));
+    expect(res.status).toBe(401);
+  });
+
+  it("lets a long bearer through to /api/ops", async () => {
+    const res = await proxy(new NextRequest(new URL("/api/ops/health", "http://localhost:3000"), {
+      headers: { authorization: "Bearer ops-test-token-0123456789abcd" },
+    }));
+    expect(res.status).not.toBe(401);
+  });
+
   it("does not rate-limit GET /api/agent/sessions for authenticated-shaped requests", async () => {
     process.env.AUTH_BYPASS = "true";
     for (let i = 0; i < 25; i++) {

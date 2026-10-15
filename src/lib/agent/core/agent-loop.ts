@@ -22,12 +22,16 @@ export function createAgentContext(params: {
   directionSlug?: string;
   signal: AbortSignal;
 }): AgentContext {
+  const linked = new AbortController();
+  if (params.signal.aborted) linked.abort();
+  else params.signal.addEventListener("abort", () => linked.abort(), { once: true });
   return {
     userId: params.userId,
     sessionId: params.sessionId,
     projectId: params.projectId,
     directionSlug: params.directionSlug,
-    signal: params.signal,
+    signal: linked.signal,
+    stop: () => linked.abort(),
     budget: {
       maxIterations: COST_LIMITS.maxIterations,
       currentIteration: 0,

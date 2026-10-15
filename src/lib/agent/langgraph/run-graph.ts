@@ -48,6 +48,7 @@ import {
 } from "@/lib/agent/work-memory";
 import {
   getAgentSessionForUser,
+  isSessionExternallyInterrupted,
   listAgentSessions,
   saveAgentSessionSnapshot,
 } from "@/lib/agent/session-store";
@@ -531,6 +532,18 @@ export async function* runAgentGraphLoop(
     return persistChain;
   };
 
+  let externalWatch: ReturnType<typeof setInterval> | undefined;
+  let stopped = false;
+  if (sessionId) {
+    externalWatch = setInterval(() => {
+      void isSessionExternallyInterrupted(sessionId)
+        .then((held) => {
+          if (held) context.stop?.();
+        })
+        .catch(() => undefined);
+    }, 2000);
+  }
+
   try {
     if (sessionId) {
       yield {
@@ -603,10 +616,17 @@ export async function* runAgentGraphLoop(
       }
       lastEventCount = state.events.length;
 
-      // running 快照不阻塞 SSE；终态仍 await 确保持久化
-      void persist(state, "running");
-
-      if (context.signal.aborted) {
+      let held = false;
+      if (sessionId) {
+        try {
+          held = await isSessionExternallyInterrupted(sessionId);
+        } catch {
+          held = false;
+        }
+      }
+      if (held) context.stop?.();
+      if (held || context.signal.aborted) {
+        stopped = true;
         await persist(state, "interrupted");
         if (sessionId) {
           yield {
@@ -616,11 +636,14 @@ export async function* runAgentGraphLoop(
             toolSummaries: state.toolSummaries,
           };
         }
-        if (!pending.some((e) => e.type === "agent/status" && e.status === "cancelled")) {
+        if (!pending.some((event) => event.type === "agent/status" && event.status === "cancelled")) {
           yield { type: "agent/status", status: "cancelled" };
         }
         return;
       }
+
+      // running 快照不阻塞 SSE；终态仍 await 确保持久化
+      void persist(state, "running");
     }
 
     if (latestState) {
@@ -649,7 +672,7 @@ export async function* runAgentGraphLoop(
     }
   } catch (error) {
     if (context.signal.aborted) {
-      if (latestState && sessionId) {
+      if (!stopped && latestState && sessionId) {
         await persist(latestState, "interrupted");
         yield {
           type: "agent/session",
@@ -658,7 +681,7 @@ export async function* runAgentGraphLoop(
           toolSummaries: latestState.toolSummaries,
         };
       }
-      yield { type: "agent/status", status: "cancelled" };
+      if (!stopped) yield { type: "agent/status", status: "cancelled" };
       return;
     }
     const message = error instanceof Error ? error.message : "Agent 图执行失败";
@@ -672,6 +695,8 @@ export async function* runAgentGraphLoop(
       };
     }
     yield { type: "agent/error", error: message };
+  } finally {
+    if (externalWatch) clearInterval(externalWatch);
   }
 }
 

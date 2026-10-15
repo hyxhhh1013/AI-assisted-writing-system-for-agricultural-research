@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { success, notFound, badRequest } from "@/lib/admin-response";
 import { isAgentSessionSnapshot } from "@/contracts/agent-session";
 import { normalizeUiTranscript } from "@/lib/agent/ui-transcript";
+import { ADMIN_INTERRUPT_MESSAGE } from "@/lib/agent/external-interrupt";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +68,7 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx) {
 
   const result = await prisma.agentSession.updateMany({
     where: { id, status: "running" },
-    data: { status: "interrupted", errorMessage: "管理员强制中断" },
+    data: { status: "interrupted", errorMessage: ADMIN_INTERRUPT_MESSAGE },
   });
   if (result.count === 0) return badRequest("会话不存在或不在运行中");
   return success(undefined, "已强制中断");

@@ -93,8 +93,8 @@
 
 | 功能 | 页面 | API | 核心代码 |
 |------|------|-----|----------|
-| 统一质量中心 | `src/app/plagiarism/page.tsx` | `/api/plagiarism/v2` SSE | `QualityWorkspace`（总览默认）、`quality-state.ts` |
-| 审查工位 | `/plagiarism?tab=review` | `POST /api/review`；`POST /api/review/rounds` | `review-tab.tsx`、`review-issue-card.tsx`、`review-service.ts` |
+| 统一质量中心 | `src/app/plagiarism/page.tsx` | `/api/plagiarism/v2` SSE | `QualityWorkspace` + `reading-desk.tsx`（左全文；右侧是来源或单条审查意见。句子下划线见 `locateReviewIssue`） |
+| 审查 | `/plagiarism?tab=review` | `POST /api/review`；`POST /api/review/rounds` | `review-tab.tsx` 仍发请求；意见卡 `review-issue-card.tsx` 在阅读桌右侧。`review-service.ts` |
 | 引用硬检 | Passport Phase 5 / PDF 导出 | `GET|POST /api/citations/gate` | `lib/citation-gate.ts`（含 unusedCount）；导出剪枝 `toCitedOnlyManuscript` |
 | 引用语义接地 | Agent `validate_citations` / 导出 | `/api/citations/gate` + `/api/export/readiness` | `lib/citation-grounding.ts`（集合 IDF 错引硬门）、`citation-passage-enrich.ts` |
 | 分节完整度 | Agent inspect / 简报 |（工具内） | `lib/draft-coverage.ts`、`contracts/draft-coverage.ts`（W3-AP-DRAFT-COVER） |
@@ -132,6 +132,7 @@
 | Agent 会话 | `admin/agent-sessions` | `/api/admin/agent-sessions` | 回放 / 中断 / 统计；intentKind、failTool/failVia（失败筛最多扫 400 条）、lastFail |
 | 使用洞察 | `admin/insights` | `GET /api/admin/insights?days=` | 窗口聚合意图词 / 工具榜 / 失败模式 / 失败工具；最多 2000 条 |
 | 系统健康 | `admin/health` | `GET /api/admin/health` | AI Key / Agent 错误 / heap 相对 V8 上限、RSS 相对 PM2 上限、系统 Chromium 探测、PM2 短时反复重启 / 期刊 IF / PDF 漂移（`admin-health-alerts`） |
+| 线上运维 | 无页面。本机 MCP `grainscript-ops`（概念与启用见 [`DEPLOY.md`](./DEPLOY.md) §十一） | `GET /api/ops/health` · `stats` · `sessions` · `sessions/[id]` · `loop-scan` · `logs`；`POST /api/ops/sessions/[id]` · `sql` · `reindex` | `lib/ops-auth.ts` · `ops-queries.ts` · `ops-sql.ts` · `ops-reindex.ts` · `scripts/mcp/prod-ops/server.mjs`。写操作要 `confirm: true`。重切仅北京时间 00:30–05:00 |
 | 设置/Key+模型+开关 | `admin/settings` | `PUT /api/admin/settings` · `GET /api/admin/illustration-status` · `POST /api/admin/illustration-test` | `lib/settings.ts`；`AGENT_ROLE_*`；OA/写并发/auto-fix；机理示意即梦/智谱绘图 |
 
 详见 [`ADMIN_ENHANCEMENT_PLAN.md`](./ADMIN_ENHANCEMENT_PLAN.md)（Phase 5：ADMIN-040～046）。

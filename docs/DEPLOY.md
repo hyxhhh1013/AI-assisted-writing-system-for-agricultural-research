@@ -75,7 +75,7 @@ bash scripts/deploy/package.sh
 tar -tzf deploy.tar.gz | grep -c "\.next/BUILD_ID"   # 必须非 0
 ```
 
-部署包内容：`.next/standalone/.*`（含隐藏 `.next`）+ `.next/static` + `ecosystem.config.cjs` + `package.json` + `prisma/` + `scripts/deploy/` + `scripts/index-pdfs.mjs` 及 `scripts/lib`、`scripts/extractors`（知识库索引 spawn，不进 standalone trace）。**排除**：`node_modules/`、`papers/`、`data/`、`.env`、`package-lock.json`。
+部署包内容：`.next/standalone/.*`（含隐藏 `.next`）+ `.next/static` + `ecosystem.config.cjs` + `package.json` + `prisma/` + `scripts/deploy/` + `scripts/index-pdfs.mjs` 及 `scripts/lib`、`scripts/extractors`（知识库索引 spawn，不进 standalone trace）。**排除**：`node_modules/`、`papers/`、`data/`、`.env`、`package-lock.json`、`.git`、`.cursor`、`tmp-*`。`package.sh` 在包超过 120MB，或 `.next/BUILD_ID` 不是恰好 1 处时直接失败。
 
 ### 3. 上传（scp，单次连接）
 
@@ -142,6 +142,7 @@ pm2 reload grainscript
 | 1 | **bash glob `*` 不匹配隐藏目录** | 打包漏掉 `.next`（点开头），服务器 `server.js` 报 `Could not find a production build in './.next'` → 生产宕机 | 用 `package.sh`（内部 `cp -a .next/standalone/. deploy-pkg/`，`/.` 含隐藏项）；或手动 `cp -a .next/standalone/.` |
 | 2 | **`.next/static` 不在 standalone 内** | 静态资源 404 | `package.sh` 已单独 `cp -a .next/static deploy-pkg/.next/static`（standalone 已含时幂等） |
 | 3 | **standalone 含 692M node_modules** | 复制 + 打包超时（本机 2 分钟卡死） | `package.sh` 用 `tar -C .next/standalone --exclude=node_modules --exclude=papers --exclude=data -cf - . \| tar -C deploy-pkg -xf -` 排除 |
+| 11 | **standalone 追踪进整个仓库** | `deploy.tar.gz` 约 2.4GB（里面有 `.git`），有时还套进上一次的 `deploy-pkg` | `package.sh` 复制时排除 `.git`、`.cursor`、`tmp-*`、`deploy-pkg`、`deploy.tar.gz`；超过 120MB 或 `BUILD_ID` 不是 1 处则失败 |
 | 4 | **SSH 限流（fail2ban）** | `Connection closed by ... port 22`，持续几分钟 | **别硬连/别重试**（每次失败重置计时）；等 ~10 分钟一次性干净上传；部署用 nohup 分离，短连接只负责启动 |
 | 5 | **`pm2 reload` 吃旧 `.env`** | 改服务器 `.env`（如 `WRITING_MAX_CONCURRENT`）后 reload 不生效 | 改 env 必须 `pm2 delete grainscript && pm2 start ecosystem.config.cjs && pm2 save`；纯代码部署（无 env 变更）用 `apply.sh` 的 reload 即可 |
 | 6 | **Turbopack hashed external 断裂** | HTTP 500；日志 `Cannot find module '@prisma/client-<hash>'` 或 `@napi-rs/canvas-<hash>`（Agent/附件 PDF 常见） | `serverExternalPackages` 被 Turbopack 改写成带 hash 的模块名。**`link-hashed-externals.sh`** 扫描并链接；`apply.sh` 解压后 **exec 新脚本**再跑链接（避免 nohup 仍执行旧 apply、只链 prisma） |
@@ -252,3 +253,43 @@ npm run rag:convert-index       # 转换（原文件备份到 data/.backup/）
 6. 生成普通数据图表 + 三线表
 7. 导出 PDF / DOCX
 8. XRD/XPS/分子图按需抽查
+
+---
+
+## 十一、线上运维 MCP
+
+MCP（Model Context Protocol）是 Cursor 和本机一个小程序之间的接口。聊天时模型可以调用这个程序登记过的工具，工具再去访问外部系统，结果回到对话里。它不是网站上的页面，也不替代后台登录。
+
+本仓库里的运维入口是 MCP 服务器 `grainscript-ops`。它跑在你自己的电脑上，由 `.cursor/mcp.json` 启动 `scripts/mcp/prod-ops/server.mjs`。你在对话里说「看一下线上最近的报错会话」时，Cursor 调用它的 `prod_sessions`，它再带令牌请求 `https://ai4science.hyxhhh.site/api/ops/sessions`。数据库连接留在服务器进程里，本机 MCP 没有 shell。
+
+和已经在用的 `persistent-chat` 是同一类东西：都是本机进程、都写在 `.cursor/mcp.json`。那个负责把对话留在侧栏；这个负责查线上，并在你明确确认后做下面列出的写操作。
+
+| 工具 | 线上路径 | 拿回来的内容 |
+|------|----------|----------------|
+| `prod_health` | `GET /api/ops/health` | 数据库是否通、PM2、堆内存、密钥是否在位（只报个数）、会话报错数 |
+| `prod_stats` | `GET /api/ops/stats` | 用户、项目、文献、查重、审查、方向、会话计数 |
+| `prod_sessions` | `GET /api/ops/sessions` | 最近会话。可按 `status`、`q`（目标或会话 id）、`intentKind` 筛 |
+| `prod_session` | `GET /api/ops/sessions/:id` | 一个会话的对话尾部和工具轨迹。章节正文会去掉 |
+| `prod_loop_scan` | `GET /api/ops/loop-scan` | 最近会话的空转病码：连搜、来回调用、门禁回弹、卡住的 running |
+| `prod_logs` | `GET /api/ops/logs?source=` | `app`（PM2 输出和错误）、`deploy`、`reindex` 的日志尾部。密钥和连接串会抹掉 |
+| `prod_interrupt_session` | `POST /api/ops/sessions/:id` | 把仍在 `running` 的会话标为 `interrupted`。必须 `confirm: true`。正在跑的回合发现这个标记后会停下，不再把状态写回 running |
+| `prod_sql` | `POST /api/ops/sql` | 一条 SQL。`SELECT` / `WITH` / `EXPLAIN` 直接查，最多 200 行、8 秒。写语句必须 `confirm: true`。拒绝多语句、`DROP DATABASE`、读服务器文件、改角色 |
+| `prod_reindex` | `POST /api/ops/reindex` | 确认后启动全库 `--rechunk`。只在北京时间 00:30–05:00，且同时只跑一个进程。进度看 `prod_logs` 的 `reindex` |
+
+读工具是 GET。写工具在本机进程里要求 `confirm: true` 才会发出去。每次中断、SQL 和重切会在服务器 `data/ops-audit.jsonl` 追加一行（语句截断，不含查询结果）。停用用户、删除文献、改密钥和部署不在这套工具里。
+
+### 启用
+
+1. 在服务器 `.env`（部署不会覆盖）写入 `OPS_MCP_TOKEN=`，至少 24 位随机串。未配置时 `/api/ops/*` 返回 503。生成示例：`node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"`。
+2. 本机新建 `%USERPROFILE%\.grainscript\ops.env`（不要放进仓库）：
+
+```env
+OPS_MCP_TOKEN=与服务器相同
+OPS_BASE_URL=https://ai4science.hyxhhh.site
+```
+
+3. 改完令牌后在 Cursor 里重载 MCP，使 `grainscript-ops` 重新读取 `ops.env`。
+
+鉴权是请求头 `Authorization: Bearer`。登录 cookie 和开发环境的 `AUTH_BYPASS` 都进不了这些接口。代理会先拒绝短于 24 位的 Bearer。
+
+这几条路由随应用一起部署。令牌没写上服务器，或含 `/api/ops` 的构建还没上线时，工具不会返回线上数据。`data/ops-audit.jsonl` 和 `data/ops-reindex.log` 不进部署包。

@@ -13,6 +13,12 @@
         "merge_conversation",
         "select_conversation"
       ]
+    },
+    "grainscript-ops": {
+      "command": "node",
+      "args": [
+        "d:\\project\\论文助手\\scripts\\mcp\\prod-ops\\server.mjs"
+      ]
     }
   }
 }

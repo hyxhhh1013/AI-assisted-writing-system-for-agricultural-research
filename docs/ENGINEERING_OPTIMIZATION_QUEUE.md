@@ -8,8 +8,8 @@
 > - RAG 索引性能（本队列 Phase 1 对齐）→ [`docs/rag-index-refactor.md`](./rag-index-refactor.md)
 > - 线上阻断项快照 → [`docs/PROJECT_HEALTH.md`](./PROJECT_HEALTH.md)
 > - 工程债全局 → [`CLAUDE.md`](../CLAUDE.md) 待处理技术债表  
-> **最后更新**：2026-10-02（WRITE-QA-011：事实类 repair 不写回）  
-> **实时 status 只看 §1 Phase 13 / Phase 14 / Phase 16 / Phase 17 / Phase 18 与 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
+> **最后更新**：2026-10-15（OPS-MCP 线上只读运维接口）  
+> **实时 status 只看 §1 Phase 13 / Phase 14 / Phase 16 / Phase 17 / Phase 18 / Phase 21 与 Phase 11 / 11b / 11c / 11d / 11e**；Phase 6 旧行已标注归档，避免与 MASTER_PLAN 冲突。
 
 ---
 
@@ -343,7 +343,7 @@
 | **W3-AP-CITE-ATTR** | **错引硬门：句子必须对上该篇；对不上禁导出** | W3-AP-CITE-GROUND | 0.5d | **done** | 2026-10-02；集合 IDF + PDF 段落补语料；validate/export/Word/PDF |
 | — | 任务单细节 | — | — | — | [`plans/W3-AP-QUALITY-NEXT.md`](./plans/W3-AP-QUALITY-NEXT.md) |
 | **Phase 20 — Agent 阶段制（代码定阶段、按阶段给工具、撞墙由代码接手）** |
-| **W3-AP-PHASE** | **主轴：先影子后生效、每阶段独立开关；旧门禁证明不可达才删** | PHASE-00 | 9w | **todo** | 2026-10-04 规划；D1–D6 已拍板（蓝图并入大纲；综述可检索、研究型不可；意图明确才切阶段；影子 ≥30 轮且误拦 <5%；墙 3/6/6/2；缓存失效可接受）。吸收 QNEXT-05/06。不换 LangGraph |
+| **W3-AP-PHASE** | **主轴：先影子后生效、每阶段独立开关；旧门禁证明不可达才删** | PHASE-00 | 9w | **todo** | 2026-10-04 规划；D1–D6 已拍板。2026-10-08：代码 00～04 / WALL-R 已落地；下一步是打开影子开关、留 harvest 基线、验「选 1」。编码从 WALL-02 起。不做后台编排管理。不换 LangGraph |
 | W3-AP-PHASE-00 | 撞墙出口 `wall-policy` + 出图重画上限 3 + harvest 转圈扫描 | — | 0.5d | **done** | 2026-10-04；= WALL-01；待部署后验收「选 1 不再重画」 |
 | W3-AP-PHASE-01 | harvest `--json` / `--compare` / `--since` + 新病码 | 00 | 0.5d | **done** | 2026-10-07；离线 `--sessions` 可自对比。基线文件仍待服务器跑 |
 | W3-AP-PHASE-02 | `resolveAgentPhase` 单一来源（4 处「下一步」合一） | — | 1.5d | **done** | 2026-10-07；特征测试锁文案；不改判断 |
@@ -369,6 +369,20 @@
 | W3-AP-WALL-05 | 空转熔断改选项卡，不再硬停报错 | WALL-R | 0.5d | todo | |
 | W3-AP-WALL-06 | 孤儿 running 会话回收（>15min） | — | 0.5d | todo | 2/18 stuck_running |
 | — | 任务单细节 | — | — | — | [`plans/W3-AP-PHASE-MACHINE.md`](./plans/W3-AP-PHASE-MACHINE.md) |
+| **Phase 21 — 质量中心阅读桌（QUALITY-READ，不联动 Agent）** |
+| **QUALITY-READ** | **主轴：左全文右来源，百分比在页眉；审查意见钉在句旁** | — | 1w | **done** | 2026-10-12：000–008 已落地。审查意见下划线在正文，对不上的进「审查未定位」。详情 [`plans/QUALITY-READING-QUEUE.md`](./plans/QUALITY-READING-QUEUE.md) |
+| QUALITY-READ-000 | 降重路由补归属检查 | — | 0.5d | **done** | 2026-10-12；`rewrite` POST/PATCH 校验用户与记录归属 |
+| QUALITY-READ-001 | 按偏移涂色；零长度文风进未定位 | — | 0.5d | **done** | 2026-10-12；`placeMatchesInContent` |
+| QUALITY-READ-002 | 阅读桌空壳替换三卡片默认页 | 001 | 1d | **done** | 2026-10-12；`reading-desk.tsx` |
+| QUALITY-READ-003 | 点句、滚动、右侧查重来源 | 002 | 1d | **done** | 2026-10-12 |
+| QUALITY-READ-004 | 右侧改写 / 写回 / 字面复检，不跳工位 | 000, 003 | 1.5d | **done** | 2026-10-12；写回失败不标已采纳 |
+| QUALITY-READ-005 | 旧工位退出主路径；旧 URL 进阅读桌 | 004 | 0.5d | **done** | 2026-10-12；旧 URL 进阅读桌 |
+| QUALITY-READ-006 | 审查意见字符区间 | — | 0.5d | **done** | 2026-10-12；`locateReviewIssue`，对不上不涂文首 |
+| QUALITY-READ-007 | 同一正文上的审查标记；写入仍是整章 | 002, 006 | 1.5d | **done** | 2026-10-12；下划线 + 右侧意见，「写入本章」 |
+| QUALITY-READ-008 | 页眉展示本次 stats；文风失败不当 0 | 003 | 0.5d | **done** | 2026-10-12 |
+| — | 任务单细节 | — | — | — | [`plans/QUALITY-READING-QUEUE.md`](./plans/QUALITY-READING-QUEUE.md) |
+| **Phase 22 — 线上只读运维 MCP** |
+| **OPS-MCP** | **本机 MCP：查线上、中断会话、SQL、深夜重切、日志尾** | — | 1d | **done** | 2026-10-15；写操作要 confirm。重切仅 00:30–05:00。外部中断不会被回合盖回 running |
 
 | 来源 | 本队列处理方式 |
 |------|----------------|
@@ -1496,6 +1510,14 @@ src/app/api/（13）                       src/lib/（6）
 | 2026-10-07 | RAG-PROP | AI | 影子阅读顺序与 recall/金句尺子落地，未晋级。线上切块与写作检索不变。重切、补页、reload 只允许北京时间 00:30–05:00，一夜一个分类。 |
 | 2026-10-07 | W3-AP-PHASE-01～03 / WALL-R | AI | 阶段机地基：`resolveAgentPhase` 合一下一步；`PHASE_TOOLSETS` 只定义不拦工具；harvest 可 `--json/--compare/--since`。撞墙可输出 restrict/run，读/搜/门禁墙尚未触发。enforce、删门禁、状态卡未做（须先影子）。 |
 | 2026-10-07 | W3-AP-PHASE-04 | AI | 阶段影子只记不拦。开关在后台运行时设置 `AGENT_PHASE_MODE=shadow`，不读环境变量。下一轮对话生效。 |
+| 2026-10-08 | W3-AP-PHASE | 维护者 | 计划「现在」校准：影子开关仍默认 off，基线未留档，「选 1」未验。编码顺序 WALL-02 → 03 → PHASE-05。不做后台编排编辑器或阶段机观察台。 |
+| 2026-10-11 | QUALITY-READ | AI | 立项阅读桌队列，未改代码。现网仍是 QUALITY-UX 工位。不做 Agent 联动、不做 AIGC 率。 |
+| 2026-10-12 | QUALITY-READ-000～005、008 | AI | 阅读桌落地：降重归属、按偏移涂色、左全文右来源、右侧改写写回。 |
+| 2026-10-12 | QUALITY-READ-006～007 | AI | 审查意见按原文钉到正文下划线；对不上的进「审查未定位」。右侧意见卡写入仍是整章。不改 Agent。 |
+| 2026-10-12 | QUALITY-READ 阅读 | AI | 套话不再涂成重合来源。字面重合为 0 时右侧说明没有对上的句子，文风提示单独列出。 |
+| 2026-10-15 | OPS-MCP | AI | 线上只读运维：Bearer `OPS_MCP_TOKEN` 的 `/api/ops`（健康、计数、会话、空转病码）和本机 MCP。不挂 shell / SQL / 写操作。 |
+| 2026-10-15 | OPS-MCP 写 | AI | 增加 `prod_interrupt_session`：`confirm: true` 才把 running 会话标为 interrupted。与后台强制中断相同。不停用户、不删文献。 |
+| 2026-10-15 | OPS-MCP 扩展 | AI | 中断会停住正在跑的回合。增加日志尾、单条 SQL（写需 confirm）、深夜全库重切，以及 `data/ops-audit.jsonl` 留痕。 |
 
 ---
 
@@ -1514,6 +1536,8 @@ src/app/api/（13）                       src/lib/（6）
 | next | W4-SEC-07 → W4-SEC-08 | 数据完整性。**SEC-08 开工前先决策全量 vs 增量 reindex 的原子化语义**（§3.1） |
 | next | W4-WB-SLIM-A → B | 纯重构，无行为变化，可随时插入；A 完成即可合，B 独立跟 |
 | **blocked** | W4-LATEX | 无交付定义。**先答 §3.1 末尾 5 个问题**，否则不开 PR |
+
+**质量中心**：Phase 21 阅读桌 000–008 已落地。不改 Agent。
 
 **Wave 4 之外**：`MASTER_PLAN.md` §0 曾列「从 Demo→完整产品」见 [`PRODUCT_COMPLETION_PLAN.md`](./PRODUCT_COMPLETION_PLAN.md)（其 Wave P4 的 ENG-PR-094 已 done、workbench 瘦身即本 Phase 16 的 W4-WB-SLIM）。
 

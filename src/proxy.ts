@@ -106,6 +106,16 @@ export async function proxy(request: NextRequest) {
     if (rlResponse) return rlResponse;
   }
 
+  // 运维 MCP：只认 Bearer，不认登录 cookie，也不走 AUTH_BYPASS
+  if (pathname.startsWith("/api/ops")) {
+    const auth = request.headers.get("authorization") ?? "";
+    const presented = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length).trim() : "";
+    if (presented.length < 24) {
+      return NextResponse.json({ success: false, error: "未授权" }, { status: 401 });
+    }
+    return nextWithOptionalUserId(request, userId);
+  }
+
   // 受保护页面 — 未登录重定向到登录页
   if (isProtectedPage && !userId) {
     const loginUrl = new URL("/login", request.url);
@@ -152,5 +162,6 @@ export const config = {
     "/api/figures/:path*",
     "/api/presentation/:path*",
     "/api/agent/:path*",
+    "/api/ops/:path*",
   ],
 };
