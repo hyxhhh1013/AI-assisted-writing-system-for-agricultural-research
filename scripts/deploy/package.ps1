@@ -44,13 +44,14 @@ New-Item -ItemType Directory -Force deploy-pkg | Out-Null
 Copy-Item -Recurse ".next\standalone\*" deploy-pkg/ -ErrorAction SilentlyContinue
 
 # 移除服务器已有 / 不需要的目录
-$skipDirs = @("papers", "node_modules", "data", "deploy-pkg")
+$skipDirs = @("papers", "node_modules", "data", "deploy-pkg", ".git", ".cursor", ".tmp")
 foreach ($d in $skipDirs) {
     Remove-Item -Recurse -Force "deploy-pkg\$d" -ErrorAction SilentlyContinue
 }
+Get-ChildItem -Path deploy-pkg -Force -Filter "tmp-*" -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
 
 # 移除不需要的大文件 + 服务器敏感文件（防止覆盖服务器 .env）
-$skipFiles = @("deploy.tar.gz", "package-lock.json", "tsconfig.tsbuildinfo", ".env")
+$skipFiles = @("deploy.tar.gz", "package-lock.json", "tsconfig.tsbuildinfo", ".env", "grainscript_recover.sql")
 foreach ($f in $skipFiles) {
     Remove-Item "deploy-pkg\$f" -ErrorAction SilentlyContinue
 }
@@ -76,6 +77,7 @@ Write-Host "=== 3/4 压缩 ===" -ForegroundColor Cyan
 tar -czf deploy.tar.gz -C deploy-pkg .
 $sizeMB = [math]::Round((Get-Item deploy.tar.gz).Length / 1MB, 1)
 Write-Host "deploy.tar.gz: $sizeMB MB" -ForegroundColor Green
+if ($sizeMB -gt 120) { throw "deploy.tar.gz is $sizeMB MB; .git was probably packed. Expected about 30 MB." }
 
 Write-Host "=== 4/4 上传 + 部署 ===" -ForegroundColor Cyan
 $server = "ubuntu@159.75.106.21"
