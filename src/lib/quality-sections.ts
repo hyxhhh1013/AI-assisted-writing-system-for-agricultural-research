@@ -64,6 +64,51 @@ export function totalWordCount(sections: QualitySection[]): number {
   return sections.reduce((n, s) => n + s.wordCount, 0);
 }
 
+export interface SectionHitSummary {
+  count: number;
+  worst: "high" | "medium" | "low" | null;
+}
+
+const HIT_RISK_RANK = { high: 3, medium: 2, low: 1 } as const;
+
+/**
+ * 全文检测时，按章节切分统计字面命中。正文不是「标题：\n正文」拼出来的全文时返回 null，避免用错偏移。
+ */
+export function sectionHitCounts(
+  sections: QualitySection[],
+  content: string,
+  matches: Array<{ sourceOffset?: number; matchType: string; riskLevel: "high" | "medium" | "low" }>,
+): Record<string, SectionHitSummary> | null {
+  if (sections.length === 0) return null;
+  if (content !== buildCheckContentFromSections(sections, "full")) return null;
+
+  const ranges: Array<{ key: string; start: number; end: number }> = [];
+  let cursor = 0;
+  sections.forEach((section, index) => {
+    const block = `${section.title}：\n${section.content}`;
+    ranges.push({ key: section.key, start: cursor, end: cursor + block.length });
+    cursor += block.length;
+    if (index < sections.length - 1) cursor += 2;
+  });
+
+  const counts: Record<string, SectionHitSummary> = {};
+  for (const section of sections) counts[section.key] = { count: 0, worst: null };
+  for (const match of matches) {
+    if (match.matchType === "ai") continue;
+    const offset = match.sourceOffset ?? -1;
+    if (offset < 0) continue;
+    const range = ranges.find((item) => offset >= item.start && offset < item.end);
+    if (!range) continue;
+    const row = counts[range.key];
+    if (!row) continue;
+    row.count += 1;
+    if (!row.worst || HIT_RISK_RANK[match.riskLevel] > HIT_RISK_RANK[row.worst]) {
+      row.worst = match.riskLevel;
+    }
+  }
+  return counts;
+}
+
 export interface IssueSectionHint {
   location: string;
   originalText?: string;

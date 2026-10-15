@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCheckContentFromSections, buildQualitySections, locateReviewIssue, resolveIssueSectionKey } from "@/lib/quality-sections";
+import { buildCheckContentFromSections, buildQualitySections, locateReviewIssue, resolveIssueSectionKey, sectionHitCounts } from "@/lib/quality-sections";
 
 describe("quality-sections", () => {
   it("builds sections from project", () => {
@@ -64,6 +64,25 @@ describe("quality-sections", () => {
       sectionKey: "introduction",
       placed: false,
     });
+  });
+
+  it("sectionHitCounts attributes a literal hit to the chapter that contains its offset", () => {
+    const sections = [
+      { key: "a", title: "摘要", content: "AAA", wordCount: 3 },
+      { key: "b", title: "引言", content: "生物炭产率下降", wordCount: 7 },
+    ];
+    const content = buildCheckContentFromSections(sections, "full");
+    const counts = sectionHitCounts(sections, content, [
+      {
+        sourceOffset: content.indexOf("生物炭产率下降"),
+        matchType: "local",
+        riskLevel: "high",
+      },
+      { sourceOffset: 0, matchType: "ai", riskLevel: "low" },
+    ]);
+    expect(counts?.b).toEqual({ count: 1, worst: "high" });
+    expect(counts?.a.count).toBe(0);
+    expect(sectionHitCounts(sections, "不是拼出来的全文", [])).toBeNull();
   });
 
   it("locateReviewIssue returns null when nothing matches", () => {

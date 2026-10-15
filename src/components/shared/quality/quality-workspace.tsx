@@ -22,10 +22,10 @@ import { workbenchFallback } from "@/lib/navigation";
 import {
   buildQualitySections,
   buildCheckContentFromSections,
+  sectionHitCounts,
   type QualitySection,
 } from "@/lib/quality-sections";
 import { getProjectWritingMode } from "@/lib/section-registry";
-import { displayedOverlap } from "@/lib/plagiarism-coverage";
 import { ReviewTab, type ReviewDeskBinding } from "@/components/shared/review-tab";
 import { SectionSidebar } from "@/components/shared/quality/section-sidebar";
 import { UnifiedHistoryPanel } from "@/components/shared/quality/unified-history-panel";
@@ -338,6 +338,11 @@ export function QualityWorkspace() {
     [sections],
   );
 
+  const sectionHits = useMemo(
+    () => (result ? sectionHitCounts(sections, content, result.matches) : null),
+    [result, sections, content],
+  );
+
   const showSectionSidebar = sections.length > 0;
 
   return (
@@ -360,17 +365,6 @@ export function QualityWorkspace() {
             </p>
           </div>
           <div className="hidden items-center gap-2 sm:flex">
-            {result && (
-              <button
-                type="button"
-                onClick={openManuscript}
-                className="flex items-center gap-1.5 rounded-lg border border-[#1a5632]/15 bg-[#faf9f6] px-2.5 py-1 text-[10px] hover:bg-[#1a5632]/5"
-              >
-                <span className="font-semibold tabular-nums text-[#122820]">
-                  字面重合 {(displayedOverlap(result).value * 100).toFixed(1)}%
-                </span>
-              </button>
-            )}
             {tab === "review" ? (
               <button
                 type="button"
@@ -406,7 +400,12 @@ export function QualityWorkspace() {
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-[#1a5632]/10 bg-white shadow-sm">
             {showSectionSidebar && (
-              <SectionSidebar sections={sections} activeScope={scope} onSelectScope={setScope} />
+              <SectionSidebar
+                sections={sections}
+                activeScope={scope}
+                onSelectScope={setScope}
+                hitCounts={sectionHits}
+              />
             )}
 
             <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

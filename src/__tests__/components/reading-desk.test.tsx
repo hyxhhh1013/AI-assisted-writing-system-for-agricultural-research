@@ -79,7 +79,9 @@ describe("ReadingDesk", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "生物炭产率下降" }));
-    expect(screen.getByText("茶枝热解.pdf")).toBeTruthy();
+    expect(screen.getAllByText("茶枝热解.pdf").length).toBeGreaterThan(0);
+    expect(screen.getByText("送检句")).toBeTruthy();
+    expect(screen.getByText("相似片段")).toBeTruthy();
     expect(screen.getByText("产率随温度下降")).toBeTruthy();
     expect(screen.getByText("学术套话检测")).toBeTruthy();
   });
@@ -176,7 +178,7 @@ describe("ReadingDesk", () => {
     expect(screen.queryByText("茶枝热解.pdf")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "生物炭产率下降" }));
-    expect(screen.getByText("茶枝热解.pdf")).toBeTruthy();
+    expect(screen.getAllByText("茶枝热解.pdf").length).toBeGreaterThan(0);
     expect(screen.queryByText("这里缺实验条件")).toBeNull();
   });
 
@@ -224,6 +226,6 @@ describe("ReadingDesk", () => {
     expect(screen.queryByRole("button", { name: "近年来生物质转化效率下降" })).toBeNull();
     expect(screen.getByText(/文献库、文内和跨项目都没有对上的句子/)).toBeTruthy();
     expect(screen.getByText("学术套话检测")).toBeTruthy();
-    expect(screen.queryByText("文献里的句子")).toBeNull();
+    expect(screen.queryByText("送检句")).toBeNull();
   });
 });

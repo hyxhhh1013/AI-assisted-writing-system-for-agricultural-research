@@ -7,13 +7,30 @@ interface SectionSidebarProps {
   sections: QualitySection[];
   activeScope: "full" | string;
   onSelectScope: (scope: "full" | string) => void;
+  hitCounts?: Record<string, { count: number; worst: "high" | "medium" | "low" | null }> | null;
   className?: string;
 }
 
-export function SectionSidebar({ sections, activeScope, onSelectScope, className }: SectionSidebarProps) {
+function hitDot(worst: "high" | "medium" | "low" | null): string {
+  if (worst === "high") return "bg-[#c4453c]";
+  if (worst === "medium") return "bg-[#c4922a]";
+  if (worst === "low") return "bg-[#3d7a52]";
+  return "bg-[#d5ddd4]";
+}
+
+export function SectionSidebar({
+  sections,
+  activeScope,
+  onSelectScope,
+  hitCounts = null,
+  className,
+}: SectionSidebarProps) {
   if (sections.length === 0) return null;
 
   const total = sections.reduce((n, s) => n + s.wordCount, 0);
+  const totalHits = hitCounts
+    ? Object.values(hitCounts).reduce((n, row) => n + row.count, 0)
+    : null;
 
   return (
     <aside className={cn("flex w-56 shrink-0 flex-col border-r border-[#1a5632]/10 bg-[#faf9f6]/80 xl:w-64", className)}>
@@ -34,7 +51,7 @@ export function SectionSidebar({ sections, activeScope, onSelectScope, className
         >
           <span className="font-medium">全文检测</span>
           <span className={cn("mt-0.5 block text-[10px]", activeScope === "full" ? "text-white/80" : "text-[#9aa8a0]")}>
-            所有章节合并
+            {totalHits == null ? "所有章节合并" : `${totalHits} 处重合`}
           </span>
         </button>
         {sections.map((s) => (
@@ -50,8 +67,12 @@ export function SectionSidebar({ sections, activeScope, onSelectScope, className
             )}
           >
             <span className="font-medium truncate block">{s.title}</span>
-            <span className={cn("mt-0.5 block text-[10px] tabular-nums", activeScope === s.key ? "text-white/80" : "text-[#9aa8a0]")}>
+            <span className={cn("mt-0.5 flex items-center gap-1.5 text-[10px] tabular-nums", activeScope === s.key ? "text-white/80" : "text-[#9aa8a0]")}>
+              {hitCounts?.[s.key] && (
+                <span className={cn("h-1.5 w-1.5 rounded-full", activeScope === s.key ? "bg-white/80" : hitDot(hitCounts[s.key]?.worst ?? null))} />
+              )}
               {s.wordCount.toLocaleString()} 字
+              {hitCounts?.[s.key] ? ` · ${hitCounts[s.key]?.count ?? 0} 处` : ""}
             </span>
           </button>
         ))}

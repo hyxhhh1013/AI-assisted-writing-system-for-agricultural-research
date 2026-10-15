@@ -52,7 +52,7 @@
 
 | 层 | 路径 |
 |----|------|
-| 页面 | `src/app/plagiarism/page.tsx` → `QualityWorkspace`（阅读桌：左全文、右来源。字面重合单独标在页眉。文风提示列在右侧，不涂进正文，也不算进重合率。能对上原文的审查意见用下划线；对不上的在「审查未定位」。写入按钮为「写入本章」，仍替换整章） |
+| 页面 | `src/app/plagiarism/page.tsx` → `QualityWorkspace`（阅读桌：左章节及本章命中数，中文正文按高/中/低上色并编号，右来源列表。点中后对照「送检句 / 相似片段」。字面重合只在阅读桌顶栏。文风提示列在右侧，不涂进正文，也不算进重合率。能对上原文的审查意见用下划线；对不上的在「审查未定位」。写入按钮为「写入本章」，仍替换整章） |
 | 审查（兼容） | `/review` 重定向至 `/plagiarism?tab=review` |
 | API（主） | `POST /api/plagiarism/v2` — 统一 service 薄壳 |
 | 兼容 | `POST /api/plagiarism/check` |

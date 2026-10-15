@@ -175,8 +175,19 @@ export function ReadingDesk({
   );
   const placedReviews = reviewAnchors.filter((item) => item.placed && typeof item.offset === "number");
   const unplacedReviews = reviewAnchors.filter((item) => !item.placed);
-  const selected = literalMatches.find((match) => match.id === selectedId) ?? null;
-  const selectedIndex = selected ? literalMatches.findIndex((match) => match.id === selected.id) : -1;
+  const orderedMatches = useMemo(() => {
+    const rank = new Map<string, number>();
+    let cursor = 0;
+    for (const part of placed.parts) {
+      if (part.match && !rank.has(part.match.id)) rank.set(part.match.id, cursor++);
+    }
+    for (const match of placed.unplaced) {
+      if (!rank.has(match.id)) rank.set(match.id, cursor++);
+    }
+    return [...literalMatches].sort((left, right) => (rank.get(left.id) ?? 0) - (rank.get(right.id) ?? 0));
+  }, [literalMatches, placed]);
+  const selected = orderedMatches.find((match) => match.id === selectedId) ?? null;
+  const selectedIndex = selected ? orderedMatches.findIndex((match) => match.id === selected.id) : -1;
   const selectedReview = reviewAnchors.find((item) => item.id === selectedReviewId) ?? null;
   const overlap = result ? displayedOverlap(result) : null;
   const canRewrite = Boolean(
@@ -295,20 +306,28 @@ export function ReadingDesk({
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-[#1a5632]/10 px-4 py-2.5">
         {overlap ? (
-          <p className="text-sm text-[#122820]">
-            字面重合{" "}
+          <div className="flex items-baseline gap-2">
             <span className={cn(
-              "font-semibold tabular-nums",
+              "text-2xl font-semibold tabular-nums leading-none",
               result?.overallRisk === "high" ? "text-red-700" : result?.overallRisk === "medium" ? "text-amber-700" : "text-[#1a5632]",
             )}>
               {(overlap.value * 100).toFixed(1)}%
             </span>
-            <span className="text-[#6b7c72]">
+            <span className="text-xs text-[#6b7c72]">
+              字面重合
               {literalMatches.length === 0 ? " · 没有对上的句子" : ` · ${literalMatches.length} 处`}
             </span>
-          </p>
+          </div>
         ) : (
           <span className="text-sm font-medium text-[#122820]">尚未检测</span>
+        )}
+        {overlap && (
+          <span className="flex items-center gap-2 text-[10px] text-[#6b7c72]">
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[#f4b4ae]" />高</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[#f3d98a]" />中</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[#d5e6cf]" />低</span>
+            <span className="inline-flex items-center gap-1"><span className="h-0 w-3 border-b-2 border-[#2457c5]" />审查</span>
+          </span>
         )}
         {overlap?.legacy && <span className="text-[11px] text-[#9aa8a0]">旧口径</span>}
         {typeof previousOverlap === "number" && overlap && !overlap.legacy && (
@@ -380,10 +399,12 @@ export function ReadingDesk({
                       return;
                     }
                     const reviewSelected = piece.reviewId != null && piece.reviewId === selectedReviewId;
+                    const matchIndex = piece.match ? orderedMatches.findIndex((match) => match.id === piece.match?.id) : -1;
                     nodes.push(
                       <button
                         key={key}
                         type="button"
+                        aria-label={piece.text}
                         data-match-id={piece.match?.id}
                         data-review-id={piece.reviewId}
                         className={cn(
@@ -399,6 +420,9 @@ export function ReadingDesk({
                           if (piece.match) choose(piece.match.id, true);
                         }}
                       >
+                        {piece.match && pieceIndex === 0 && matchIndex >= 0 ? (
+                          <sup className="mr-0.5 font-semibold tabular-nums text-[10px]">{matchIndex + 1}</sup>
+                        ) : null}
                         {piece.text}
                       </button>,
                     );
@@ -415,7 +439,7 @@ export function ReadingDesk({
           )}
         </div>
 
-        <aside className="flex max-h-[46vh] min-h-0 w-full shrink-0 flex-col overflow-y-auto border-t border-[#1a5632]/10 lg:max-h-none lg:w-[360px] lg:border-l lg:border-t-0">
+        <aside className="flex max-h-[46vh] min-h-0 w-full shrink-0 flex-col overflow-y-auto border-t border-[#1a5632]/10 lg:max-h-none lg:w-[400px] lg:border-l lg:border-t-0">
           {checking && (
             <div className="p-3">
               <QualityCheckProgress checking={checking} stage={stage} />
@@ -439,9 +463,9 @@ export function ReadingDesk({
               />
             </div>
           ) : selected ? (
-            <div className="flex flex-col gap-4 p-4">
+            <div className="flex flex-col gap-3 border-b border-[#1a5632]/10 p-4">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] text-[#6b7c72]">第 {selectedIndex + 1} 处，共 {literalMatches.length} 处</p>
+                <p className="text-[11px] text-[#6b7c72]">第 {selectedIndex + 1} 处，共 {orderedMatches.length} 处</p>
                 <div className="flex gap-1">
                   <Button
                     type="button"
@@ -450,7 +474,7 @@ export function ReadingDesk({
                     className="h-7 text-xs"
                     disabled={selectedIndex <= 0}
                     onClick={() => {
-                      const prev = literalMatches[selectedIndex - 1];
+                      const prev = orderedMatches[selectedIndex - 1];
                       if (prev) choose(prev.id, true);
                     }}
                   >
@@ -461,9 +485,9 @@ export function ReadingDesk({
                     size="sm"
                     variant="outline"
                     className="h-7 text-xs"
-                    disabled={selectedIndex < 0 || selectedIndex >= literalMatches.length - 1}
+                    disabled={selectedIndex < 0 || selectedIndex >= orderedMatches.length - 1}
                     onClick={() => {
-                      const next = literalMatches[selectedIndex + 1];
+                      const next = orderedMatches[selectedIndex + 1];
                       if (next) choose(next.id, true);
                     }}
                   >
@@ -471,23 +495,29 @@ export function ReadingDesk({
                   </Button>
                 </div>
               </div>
-              <div>
-                <p className="text-[11px] text-[#6b7c72]">{MATCH_TYPE_LABELS[selected.matchType]} · 和这篇的重合 {(selected.similarity * 100).toFixed(0)}%</p>
-                {selected.matchedUrl ? (
-                  <a href={selected.matchedUrl} target="_blank" rel="noreferrer" className="mt-1 block text-base font-medium text-[#1a5632] underline">
-                    {selected.matchedFrom}
-                  </a>
-                ) : (
-                  <p className="mt-1 text-base font-medium text-[#122820]">{selected.matchedFrom}</p>
-                )}
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] text-[#6b7c72]">{MATCH_TYPE_LABELS[selected.matchType]}</p>
+                  {selected.matchedUrl ? (
+                    <a href={selected.matchedUrl} target="_blank" rel="noreferrer" className="mt-1 block truncate text-sm font-medium text-[#1a5632] underline">
+                      {selected.matchedFrom}
+                    </a>
+                  ) : (
+                    <p className="mt-1 truncate text-sm font-medium text-[#122820]">{selected.matchedFrom}</p>
+                  )}
+                </div>
+                <p className="shrink-0 text-right">
+                  <span className="block text-lg font-semibold tabular-nums leading-none text-[#122820]">{(selected.similarity * 100).toFixed(0)}%</span>
+                  <span className="text-[10px] text-[#9aa8a0]">和这篇</span>
+                </p>
               </div>
-              <div>
-                <p className="text-[11px] text-[#9aa8a0]">文献里的句子</p>
-                <p className="mt-1 text-sm leading-7 text-[#3d4f46]">{selected.matchedText}</p>
-              </div>
-              <div>
-                <p className="text-[11px] text-[#9aa8a0]">你的句子</p>
+              <div className="rounded-lg bg-[#faf9f6] px-3 py-2">
+                <p className="text-[10px] font-medium text-[#9aa8a0]">送检句</p>
                 <p className="mt-1 text-sm leading-7 text-[#122820]">{selected.sourceText}</p>
+              </div>
+              <div className="rounded-lg border border-[#1a5632]/10 px-3 py-2">
+                <p className="text-[10px] font-medium text-[#9aa8a0]">相似片段</p>
+                <p className="mt-1 text-sm leading-7 text-[#3d4f46]">{selected.matchedText}</p>
               </div>
               {canRewrite && (
                 <div className="flex gap-2">
@@ -524,7 +554,7 @@ export function ReadingDesk({
               {result && literalMatches.length === 0 ? (
                 <p className="text-[#122820]">文献库、文内和跨项目都没有对上的句子。百分比只统计这些。</p>
               ) : (
-                <p>{reviewOpen ? "点一句带下划线的审查意见。" : "点一句带颜色的文字，右侧显示来源。"}</p>
+                <p>{reviewOpen ? "点一句带下划线的审查意见。" : "点正文里的色块，或从下面的来源列表点开。"}</p>
               )}
               {reviewOpen && onRunReview && (
                 <Button
@@ -554,25 +584,54 @@ export function ReadingDesk({
             </div>
           )}
 
-          {placed.unplaced.length > 0 && (
-            <div className="border-t border-[#1a5632]/10 p-3">
-              <p className="mb-2 text-[10px] font-medium text-[#9aa8a0]">未定位</p>
-              <ul className="flex flex-col gap-1.5">
-                {placed.unplaced.map((match) => (
-                  <li key={match.id}>
-                    <button
-                      type="button"
-                      className={cn(
-                        "w-full rounded-md px-2 py-1.5 text-left text-xs",
-                        match.id === selectedId ? "bg-[#1a5632]/10" : "hover:bg-[#f6f5f1]",
+          {literalTypeCount > 1 && (
+            <div className="flex flex-wrap gap-1 border-b border-[#1a5632]/10 px-3 py-2">
+              {FILTERS.map((filter) => (
+                <button
+                  key={filter.id}
+                  type="button"
+                  className={cn(
+                    "rounded-full px-2.5 py-1 text-[10px]",
+                    typeFilter === filter.id ? "bg-[#1a5632] text-white" : "bg-[#f4f1ea] text-[#6b7c72]",
+                  )}
+                  onClick={() => setTypeFilter(filter.id)}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {orderedMatches.length > 0 && !selectedReview && (
+            <div className="border-b border-[#1a5632]/10 p-3">
+              <p className="mb-2 text-[10px] font-medium text-[#9aa8a0]">来源</p>
+              <ul className="flex flex-col gap-1">
+                {orderedMatches.map((match, index) => {
+                  const unplaced = placed.unplaced.some((item) => item.id === match.id);
+                  return (
+                    <li key={match.id}>
+                      <button
+                        type="button"
+                        className={cn(
+                          "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs",
+                          match.id === selectedId ? "bg-[#1a5632]/10" : "hover:bg-[#f6f5f1]",
+                        )}
+                        onClick={() => choose(match.id, !unplaced)}
+                      >
+                        <span className="w-4 shrink-0 tabular-nums text-[#9aa8a0]">{index + 1}</span>
+                        <span className={cn(
+                          "h-2 w-2 shrink-0 rounded-sm",
+                          match.riskLevel === "high" ? "bg-[#f4b4ae]" : match.riskLevel === "medium" ? "bg-[#f3d98a]" : "bg-[#d5e6cf]",
+                        )} />
+                        <span className="min-w-0 flex-1 truncate text-[#122820]">{match.matchedFrom}</span>
+                        <span className="shrink-0 tabular-nums text-[#6b7c72]">{(match.similarity * 100).toFixed(0)}%</span>
+                      </button>
+                      {unplaced && match.id === selectedId && (
+                        <p className="px-2 pb-1 text-[10px] text-[#9aa8a0]">这段没有落在当前正文上</p>
                       )}
-                      onClick={() => choose(match.id, false)}
-                    >
-                      <span className="text-[#9aa8a0]">{MATCH_TYPE_LABELS[match.matchType]} · </span>
-                      {match.matchedFrom}
-                    </button>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}
@@ -619,23 +678,6 @@ export function ReadingDesk({
             </div>
           )}
 
-          {literalTypeCount > 1 && (
-            <div className="mt-auto flex flex-wrap gap-1 border-t border-[#1a5632]/10 p-3">
-              {FILTERS.map((filter) => (
-                <button
-                  key={filter.id}
-                  type="button"
-                  className={cn(
-                    "rounded-full px-2.5 py-1 text-[10px]",
-                    typeFilter === filter.id ? "bg-[#1a5632] text-white" : "bg-[#f4f1ea] text-[#6b7c72]",
-                  )}
-                  onClick={() => setTypeFilter(filter.id)}
-                >
-                  {filter.label}
-                </button>
-              ))}
-            </div>
-          )}
         </aside>
       </div>
     </div>
