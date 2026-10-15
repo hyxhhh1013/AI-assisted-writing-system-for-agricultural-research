@@ -13,6 +13,7 @@ import {
   removeAgentChart,
 } from "@/lib/agent/chart-persist";
 import { resolveReplaceForAntiStack } from "@/lib/agent/figure-loop";
+import { englishFigureTextError } from "@/lib/agent/figure-language";
 import {
   loadAgentPlotSources,
   resolvePlotCandidate,
@@ -195,8 +196,18 @@ async function generateOneChart(input: {
     return { success: false, error: `csvData 过长（>${MAX_CSV_CHARS} 字符）` };
   }
 
-  const title = input.title || "图表";
+  const english = input.ctx.projectSnapshot?.language === "en";
+  const title = input.title || (english ? "Figure" : "图表");
   const caption = input.caption || title;
+  if (english) {
+    const langError = englishFigureTextError({
+      title,
+      caption,
+      xLabel: input.xLabel,
+      yLabel: input.yLabel,
+    });
+    if (langError) return { success: false, error: langError };
+  }
   const compiled = compileChartSpec({
     chartType,
     csv: input.csvData,
@@ -479,8 +490,19 @@ export const generateChartTool: ToolDefinition = {
       if ("error" in parsedPanels) {
         return { success: false, error: parsedPanels.error };
       }
-      const title = String(params.title ?? "").trim() || "复合图";
+      const english = ctx.projectSnapshot?.language === "en";
+      const title = String(params.title ?? "").trim() || (english ? "Panels" : "复合图");
       const caption = String(params.caption ?? "").trim() || title;
+      if (english) {
+        const fields: Record<string, string | undefined> = { title, caption };
+        parsedPanels.panels.forEach((panel, index) => {
+          fields[`panel ${index + 1} title`] = panel.title;
+          fields[`panel ${index + 1} x`] = panel.xLabel;
+          fields[`panel ${index + 1} y`] = panel.yLabel;
+        });
+        const langError = englishFigureTextError(fields);
+        if (langError) return { success: false, error: langError };
+      }
       const preset = chartPreset;
       // 复合图整图暂无独立 plot 编辑器：回放第一面板 CSV，便于进绘图页改数据
       const firstPanel = parsedPanels.panels[0]!;

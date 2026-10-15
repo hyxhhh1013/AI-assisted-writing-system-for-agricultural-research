@@ -25,6 +25,7 @@ export interface PanelRequest {
   xMax?: number;
   peaks: PeakMark[];
   guides: GuideMark[];
+  seriesLabels: string[];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -76,6 +77,7 @@ function onePanel(raw: unknown, index: number): PanelRequest | { error: string }
     sourceFileNames,
     kind,
     title: String(raw.title ?? "").trim(),
+    seriesLabels: namesOf(raw.seriesLabels),
     ...(String(raw.xLabel ?? raw.x_label ?? "").trim()
       ? { xLabel: String(raw.xLabel ?? raw.x_label).trim() }
       : {}),

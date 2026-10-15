@@ -36,6 +36,18 @@ describe("WRITE-QA-007 slim writer prompt", () => {
     expect(slim).not.toContain("GB/T 7714-2015");
   });
 
+  it("英文稿不把中文期刊说明写进系统提示", () => {
+    const slim = buildSlimWriterSystemPrompt({
+      ...shared,
+      language: "en",
+      targetJournal: "Nature",
+      targetWordCount: "4000",
+    });
+    expect(slim).toContain("Do not use Chinese characters");
+    expect(slim).toContain("Target journal: Nature");
+    expect(slim).not.toContain("面向");
+  });
+
   it("keeps register craft without long 禁止 lists", () => {
     const results = resolveSlimSectionPrompt("results", "research", {
       isGBT: false,

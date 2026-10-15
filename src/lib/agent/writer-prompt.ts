@@ -110,15 +110,23 @@ export function buildSlimWriterSystemPrompt(params: SlimWriterSystemPromptParams
   const isChinese = params.language !== "en";
   const isAbstract = params.section === "abstract";
   const global = clipGlobal(params.globalReferenceInfo, 900);
-  const pool = isAbstract ? "" : `\n—— 可供引用的文献 ——\n${params.contextText}\n`;
+  const pool = isAbstract
+    ? ""
+    : isChinese
+      ? `\n—— 可供引用的文献 ——\n${params.contextText}\n`
+      : `\n—— References you may cite ——\n${params.contextText}\n`;
   const data = params.evidenceSummary
-    ? `\n—— 数据声明（定量结论只许用这里的数） ——\n${params.evidenceSummary}\n`
+    ? isChinese
+      ? `\n—— 数据声明（定量结论只许用这里的数） ——\n${params.evidenceSummary}\n`
+      : `\n—— Data claims (quantitative statements may use only these numbers) ——\n${params.evidenceSummary}\n`
     : "";
   const journal = params.targetJournal?.trim();
   const words = params.targetWordCount?.trim();
   const note = venueWriterNote(journal);
   const venue = journal || words
-    ? `\n面向${journal ? `期刊 ${journal}` : "目标期刊未定"}${words ? `，全文字数约 ${words}` : ""}。本节深度和篇幅按此收着写。${note ? `${note}` : ""}\n`
+    ? isChinese
+      ? `\n面向${journal ? `期刊 ${journal}` : "目标期刊未定"}${words ? `，全文字数约 ${words}` : ""}。本节深度和篇幅按此收着写。${note ? `${note}` : ""}\n`
+      : `\nTarget journal: ${journal || "unspecified"}${words ? `; about ${words} words for the whole paper` : ""}. Match that depth.${note ? ` ${note}` : ""}\n`
     : "";
 
   if (isChinese) {
@@ -142,7 +150,8 @@ ${QA_CODES}
   }
 
   return `${params.domainExpertise}
-Write the "${params.section}" section. Output body text only.
+Write the "${params.section}" section in English. Output body text only.
+Do not use Chinese characters. If the notes or blueprint below are in Chinese, translate them into English prose.
 ${global}
 ${pool}${data}${venue}
 ${params.sectionInstruction}

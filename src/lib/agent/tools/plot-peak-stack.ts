@@ -6,6 +6,7 @@ import {
   persistAgentChart,
 } from "@/lib/agent/chart-persist";
 import { resolveReplaceForAntiStack } from "@/lib/agent/figure-loop";
+import { englishFigureTextError, parseDisplayNames } from "@/lib/agent/figure-language";
 import {
   formatInsertSummary,
   resolveInsertSectionKey,
@@ -42,6 +43,7 @@ export const plotPeakStackTool: ToolDefinition = {
     + "peaksJson 只标用户说过的位置：[{x, label, marker?, series?}]，marker 用 diamond/triangle/star/circle。"
     + "guidesJson 只画用户说过的虚线：[{x, label}]。没给峰就只画叠谱，然后问用户要标哪里。"
     + "禁止自己编 Fe2+、O-H 这类归属，也不要把峰标写进证据声明。"
+    + "论文语言是英文时，图题、坐标轴、系列名和峰名必须是英文；中文文件名要另传 seriesLabels。"
     + "改图传 replaceImageUrl 就地替换。文件名对不上已入库的块时会失败并指出缺哪一块。",
   parameters: {
     type: "object",
@@ -54,7 +56,11 @@ export const plotPeakStackTool: ToolDefinition = {
         type: "string",
         description: "xrd、ir、raman 或 xps。只决定默认坐标轴，不决定峰的化学归属。",
       },
-      title: { type: "string", description: "图题，可空" },
+      seriesLabels: {
+        type: "string",
+        description: "与 sourceFileNames 等长的英文或显示名，JSON 数组。英文论文不要用中文文件名当图例。",
+      },
+      title: { type: "string", description: "图题，可空。英文论文用英文。" },
       caption: { type: "string", description: "图注，默认同图题" },
       xLabel: { type: "string", description: "覆盖默认横轴标题" },
       yLabel: { type: "string", description: "覆盖默认纵轴标题" },
@@ -112,6 +118,15 @@ export const plotPeakStackTool: ToolDefinition = {
         error: "这些文件里没有完整曲线。请先确认入库，让曲线留在项目里，再画叠谱。",
       };
     }
+    const displayNames = parseDisplayNames(params.seriesLabels);
+    if (displayNames.length > 0 && displayNames.length !== collected.series.length) {
+      return { success: false, error: "seriesLabels 必须和谱的条数一样多" };
+    }
+    if (displayNames.length === collected.series.length) {
+      collected.series.forEach((item, index) => {
+        item.name = displayNames[index] || item.name;
+      });
+    }
 
     const xMin = asNumber(params.xMin);
     const xMax = asNumber(params.xMax);
@@ -126,6 +141,25 @@ export const plotPeakStackTool: ToolDefinition = {
       kindRaw === "ir" ? "FTIR" : kindRaw === "raman" ? "Raman" : kindRaw === "xps" ? "XPS" : "XRD"
     );
     const caption = String(params.caption ?? "").trim() || title;
+    if (ctx.projectSnapshot?.language === "en") {
+      const fields: Record<string, string | undefined> = {
+        title,
+        caption,
+        xLabel: axis.xLabel,
+        yLabel: axis.yLabel,
+      };
+      collected.series.forEach((item, index) => {
+        fields[`series ${index + 1}`] = item.name;
+      });
+      peaks.peaks.forEach((peak, index) => {
+        fields[`peak ${index + 1}`] = peak.label;
+      });
+      guides.guides.forEach((guide, index) => {
+        fields[`guide ${index + 1}`] = guide.label;
+      });
+      const langError = englishFigureTextError(fields);
+      if (langError) return { success: false, error: langError };
+    }
     const resolved = resolveInsertSectionKey(params.sectionKey, ctx.projectSnapshot);
     if ("error" in resolved) return { success: false, error: resolved.error };
 

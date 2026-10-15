@@ -15,6 +15,7 @@ import {
   listMechanismTemplateIds,
   resolveReplaceForAntiStack,
 } from "@/lib/agent/figure-loop";
+import { englishFigureTextError } from "@/lib/agent/figure-language";
 import { runMechanismGeneration } from "@/lib/agent/mechanism-runner";
 import {
   AGENT_WRITING_SECTIONS,
@@ -118,8 +119,9 @@ export const draftMechanismFigureTool: ToolDefinition = {
   description:
     "用户明确要求画机理图或流程图时，根据文字描述生成期刊级图并写入项目图表库。写章节时不要主动调用。"
     + "先编译 MechanismSpec：主张进 caption，温度/催化剂等条件上边，节点只留过程短语。"
-    + "kind=flow：传 flowSteps（中文，≥2）或 nodesJson+edgesJson；≥4 步默认分叉汇合。"
-    + "kind=mechanism_panel：优先 panelsJson=[{title,steps,bullets?,note?},...]（2～3 栏，每栏中文 steps）；"
+    + "kind=flow：传 flowSteps（≥2）或 nodesJson+edgesJson；≥4 步默认分叉汇合。"
+    + "kind=mechanism_panel：优先 panelsJson=[{title,steps,bullets?,note?},...]（2～3 栏，每栏至少 2 个步骤）。"
+    + "节点、图题的语言跟项目：英文项目禁止汉字。"
     + "禁止依赖 Upload 占位或英文 Pathway 模板。"
     + "未指定 layout 且 ≥4 步时会额外出一套版式候选（chain/fork），只入库推荐稿。"
     + "qaReport.block 不入库、不插章节；按 findings 改 Spec 再出，不要整图重掷。"
@@ -139,7 +141,7 @@ export const draftMechanismFigureTool: ToolDefinition = {
         enum: ["mechanism_panel", "flow", "mechanism"],
         description: "mechanism_panel=多栏合成；flow=Graphviz 流程；mechanism=Mermaid 草图",
       },
-      title: { type: "string", description: "图标题（中文）" },
+      title: { type: "string", description: "图标题。英文论文用英文，中文论文用中文。" },
       claim: {
         type: "string",
         description: "这张图要辩护的一句话，写入 caption，不要画进节点",
@@ -198,7 +200,7 @@ export const draftMechanismFigureTool: ToolDefinition = {
       },
       mermaid: {
         type: "string",
-        description: "若 kind=mechanism，可直接给 Mermaid 源码（节点用中文）",
+        description: "若 kind=mechanism，可直接给 Mermaid 源码。英文论文节点用英文。",
       },
       sectionKey: {
         type: "string",
@@ -239,8 +241,10 @@ export const draftMechanismFigureTool: ToolDefinition = {
       kindRaw === "flow" || kindRaw === "mechanism" || kindRaw === "mechanism_panel"
         ? kindRaw
         : "mechanism_panel";
+    const english = ctx.projectSnapshot?.language === "en";
     const title =
-      String(params.title || template?.title || "机理示意图").trim() || "机理示意图";
+      String(params.title || template?.title || (english ? "Mechanism" : "机理示意图")).trim()
+      || (english ? "Mechanism" : "机理示意图");
     const notes =
       String(params.pathwayNotes || template?.pathwayNotes || "").trim();
     const panelTitles = Array.isArray(params.panelTitles)
@@ -278,11 +282,33 @@ export const draftMechanismFigureTool: ToolDefinition = {
     const replaceChartId = String(anti.params.replaceChartId ?? "").trim();
     const autoReplaced = anti.autoReplaced;
 
+    if (english) {
+      const rawSteps = Array.isArray(params.flowSteps) ? params.flowSteps.map((step) => String(step)) : [];
+      const langError = englishFigureTextError({
+        title,
+        notes,
+        claim: String(params.claim ?? ""),
+        steps: rawSteps.join("\n"),
+        panels: panelSpecs.map((panel) => `${panel.title} ${(panel.steps ?? []).join(" ")}`).join("\n"),
+        nodes: typeof params.nodesJson === "string" ? params.nodesJson : JSON.stringify(params.nodesJson ?? ""),
+        edges: typeof params.edgesJson === "string" ? params.edgesJson : JSON.stringify(params.edgesJson ?? ""),
+        mermaid: typeof params.mermaid === "string" ? params.mermaid : "",
+      });
+      if (langError) return { success: false, error: langError };
+    }
+
     if (kind === "mechanism") {
       const mermaid =
         typeof params.mermaid === "string" && params.mermaid.trim()
           ? params.mermaid.trim()
-          : `graph TD
+          : english
+            ? `graph TD
+    A[Feed] --> B{Key step}
+    B -->|path 1| C[Product A]
+    B -->|path 2| D[Product B]
+    C --> E[Target]
+    D --> E`
+            : `graph TD
     A[原料输入] --> B{关键步骤}
     B -->|路径1| C[产物A]
     B -->|路径2| D[产物B]
@@ -298,7 +324,9 @@ export const draftMechanismFigureTool: ToolDefinition = {
       return {
         success: true,
         data: { kind, title, config, href, figureSpecEnc, imageUrl: undefined },
-        summary: `已草稿 Mermaid 机理图「${title}」。打开 ${href} 渲染并导出；节点请用中文。`,
+        summary: english
+          ? `已草稿 Mermaid 机理图「${title}」。打开 ${href} 渲染并导出；节点请用英文。`
+          : `已草稿 Mermaid 机理图「${title}」。打开 ${href} 渲染并导出；节点请用中文。`,
       };
     }
 

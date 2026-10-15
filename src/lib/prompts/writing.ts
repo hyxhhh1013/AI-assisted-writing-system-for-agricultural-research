@@ -225,6 +225,7 @@ export function buildWriterSystemPrompt(params: {
   if (isAbstract) {
     return `${domainExpertise}
 你的任务是撰写论文摘要（Abstract）。模板：${isGBT ? "GB/T 7713 国标" : "SCI 国际期刊"}。输出语言：${isChinese ? "中文" : "英文"}。
+${isChinese ? "" : "The abstract must be English. Do not output Chinese characters, even if the notes are in Chinese.\n"}
 ${venueLine}${globalReferenceInfo}
 
 —— 摘要写作铁律 ——
@@ -252,6 +253,7 @@ ${sectionInstruction}
 
   return `${domainExpertise}
 你的任务是协助撰写论文「${section}」章节。模板：${isGBT ? "GB/T 7713 国标" : "SCI 国际期刊"}。输出语言：${isChinese ? "中文" : "英文"}。
+${isChinese ? "" : "Write this section in English. Do not output Chinese characters, even if the notes or blueprint are in Chinese.\n"}
 ${venueLine}${globalReferenceInfo}
 
 —— 可供引用的文献库 ——

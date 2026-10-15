@@ -4,6 +4,7 @@ import {
   persistAgentChart,
 } from "@/lib/agent/chart-persist";
 import { resolveReplaceForAntiStack } from "@/lib/agent/figure-loop";
+import { englishFigureTextError } from "@/lib/agent/figure-language";
 import {
   formatInsertSummary,
   resolveInsertSectionKey,
@@ -64,6 +65,7 @@ export const plotPanelGridTool: ToolDefinition = {
     const sources = parseStoredSources(project.dataSources ?? "");
 
     const panels: PanelSpec[] = [];
+    const figureText: Record<string, string | undefined> = {};
     for (let i = 0; i < parsed.panels.length; i++) {
       const panel = parsed.panels[i];
       if (!panel) continue;
@@ -74,9 +76,26 @@ export const plotPanelGridTool: ToolDefinition = {
           error: `第 ${i + 1} 格对不上已入库的谱：${collected.missing.join("、")}`,
         };
       }
+      if (panel.seriesLabels.length > 0 && panel.seriesLabels.length !== collected.series.length) {
+        return { success: false, error: `第 ${i + 1} 格的 seriesLabels 必须和谱的条数一样多` };
+      }
+      if (panel.seriesLabels.length === collected.series.length) {
+        collected.series.forEach((item, index) => {
+          item.name = panel.seriesLabels[index] || item.name;
+        });
+      }
       const aligned = alignPeakStack(collected.series, { xMin: panel.xMin, xMax: panel.xMax });
       if ("error" in aligned) return { success: false, error: `第 ${i + 1} 格：${aligned.error}` };
       const axis = axisForKind(panel.kind, { xLabel: panel.xLabel, yLabel: panel.yLabel });
+      figureText[`panel ${i + 1}`] = panel.title;
+      figureText[`panel ${i + 1} x`] = axis.xLabel;
+      figureText[`panel ${i + 1} y`] = axis.yLabel;
+      collected.series.forEach((item, index) => {
+        figureText[`panel ${i + 1} series ${index + 1}`] = item.name;
+      });
+      panel.peaks.forEach((peak, index) => {
+        figureText[`panel ${i + 1} peak ${index + 1}`] = peak.label;
+      });
       const multi = collected.series.length > 1;
       panels.push({
         chartType: "stack_offset",
@@ -94,8 +113,13 @@ export const plotPanelGridTool: ToolDefinition = {
       });
     }
 
-    const title = String(params.title ?? "").trim() || "组图";
+    const english = ctx.projectSnapshot?.language === "en";
+    const title = String(params.title ?? "").trim() || (english ? "Panels" : "组图");
     const caption = String(params.caption ?? "").trim() || title;
+    if (english) {
+      const langError = englishFigureTextError({ title, caption, ...figureText });
+      if (langError) return { success: false, error: langError };
+    }
     const colsParam = Number(params.cols);
     const cols = colsParam === 1 || colsParam === 2 || colsParam === 3
       ? colsParam

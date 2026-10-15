@@ -6,6 +6,7 @@ import {
 import { chartSpecToFigureSpec } from "@/contracts/chart-spec";
 import { encodeChartAssetReplay } from "@/contracts/figure";
 import { resolveReplaceForAntiStack } from "@/lib/agent/figure-loop";
+import { englishFigureTextError } from "@/lib/agent/figure-language";
 import {
   formatInsertSummary,
   resolveInsertSectionKey,
@@ -80,7 +81,8 @@ export const plotCurveOverlayTool: ToolDefinition = {
     + "kind=tg 默认把质量换成起点的百分比；kind=dtg 对这条百分比做差分。要纵轴变成 %/min，用 ratesJson 给出每个文件的升温速率（°C/min），没给就标成 %/°C。"
     + "kind=bet 按入库的相对压力和吸附量画，保留吸附—脱附回线，不计算比表面积。"
     + "kind=pore 用对数孔径轴。y 默认原样；只有确认入库的 y 是 dV/dD 时才传 yTransform=dv_dlog。"
-    + "按 sourceFileNames 读已确认的文件，不要把整条曲线贴进 csv。纵向叠谱用 plot_peak_stack，多格组图用 plot_panel_grid。改图传 replaceImageUrl。",
+    + "按 sourceFileNames 读已确认的文件，不要把整条曲线贴进 csv。纵向叠谱用 plot_peak_stack，多格组图用 plot_panel_grid。改图传 replaceImageUrl。"
+    + "论文语言是英文时，图题、坐标轴和 labelsJson 必须是英文。",
   parameters: {
     type: "object",
     properties: {
@@ -164,6 +166,14 @@ export const plotCurveOverlayTool: ToolDefinition = {
       kindRaw === "tg" ? "TG" : kindRaw === "dtg" ? "DTG" : kindRaw === "pore" ? "Pore size" : "Isotherm"
     );
     const caption = String(params.caption ?? "").trim() || title;
+    if (ctx.projectSnapshot?.language === "en") {
+      const fields: Record<string, string | undefined> = { title, caption, xLabel, yLabel };
+      cropped.forEach((item, index) => {
+        fields[`series ${index + 1}`] = item.name;
+      });
+      const langError = englishFigureTextError(fields);
+      if (langError) return { success: false, error: langError };
+    }
     const csv = overlayLongCsv(cropped);
     const config = {
       chart_type: "line",
