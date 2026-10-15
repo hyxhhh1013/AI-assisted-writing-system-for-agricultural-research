@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -85,6 +85,23 @@ interface ReviewTabProps {
   /** 从 DB 恢复的审查报告 */
   initialReport?: FixableReviewReport | null;
   onReportSaved?: (reviewId: string) => void;
+  /** 阅读桌订阅当前报告和写回动作，不另开一套审查请求 */
+  onDeskState?: (state: ReviewDeskBinding) => void;
+}
+
+export interface ReviewDeskBinding {
+  report: FixableReviewReport | null;
+  isReviewing: boolean;
+  progress: string;
+  run: () => void;
+  fixIssue: (
+    dimension: ReviewDimension,
+    issueIndex: number,
+    sectionContents: Record<string, string>,
+    title: string,
+  ) => Promise<string | null>;
+  dismissIssue: (dimension: ReviewDimension, issueIndex: number) => void;
+  applyFix: (dimension: ReviewDimension, issueIndex: number) => void;
 }
 
 // ==================== 组件 ====================
@@ -99,6 +116,7 @@ export function ReviewTab({
   variant = "default",
   initialReport,
   onReportSaved,
+  onDeskState,
 }: ReviewTabProps) {
   const isWorkspace = variant === "workspace";
   const dimensions = useMemo(() => getDimensionsForMode(projectMode), [projectMode]);
@@ -257,6 +275,21 @@ export function ReviewTab({
       applyReportToUi(result);
     }
   };
+
+  const runRef = useRef(handleReview);
+  runRef.current = handleReview;
+
+  useEffect(() => {
+    onDeskState?.({
+      report,
+      isReviewing: isReviewing || isRoundRunning,
+      progress,
+      run: () => { void runRef.current(); },
+      fixIssue,
+      dismissIssue,
+      applyFix,
+    });
+  }, [report, isReviewing, isRoundRunning, progress, fixIssue, dismissIssue, applyFix, onDeskState]);
 
   // 切换维度展开
   const toggleDimension = (dim: ReviewDimension) => {

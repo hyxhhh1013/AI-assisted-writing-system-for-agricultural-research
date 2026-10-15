@@ -3,12 +3,10 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
   ArrowLeft, Clock, Loader2,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { projectStore } from "@/lib/store";
 import type { ProjectData } from "@/contracts/project";
 import type { PlagiarismCheckResult } from "@/contracts/plagiarism";
@@ -27,31 +25,23 @@ import {
   type QualitySection,
 } from "@/lib/quality-sections";
 import { getProjectWritingMode } from "@/lib/section-registry";
-import { riskBadgeClass, riskLabel } from "@/components/shared/plagiarism/constants";
 import { displayedOverlap } from "@/lib/plagiarism-coverage";
-import { PlagiarismCheckForm } from "@/components/shared/plagiarism/check-form";
-import { PlagiarismResultView } from "@/components/shared/plagiarism/result-view";
-import { PlagiarismRewriteView } from "@/components/shared/plagiarism/rewrite-view";
-import { ReviewTab } from "@/components/shared/review-tab";
+import { ReviewTab, type ReviewDeskBinding } from "@/components/shared/review-tab";
 import { SectionSidebar } from "@/components/shared/quality/section-sidebar";
 import { UnifiedHistoryPanel } from "@/components/shared/quality/unified-history-panel";
 import { persistQualitySections } from "@/lib/quality-state";
 import {
   isHistoryTab,
   parseQualityTab,
-  shouldOpenCheckResult,
   type QualityStation,
 } from "@/components/shared/quality/types";
-import { QualityStationNav } from "@/components/shared/quality/quality-station-nav";
-import { QualityOverview } from "@/components/shared/quality/quality-overview";
+import { ReadingDesk } from "@/components/shared/quality/reading-desk";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
-type CheckView = "form" | "result";
 
 export function QualityWorkspace() {
   const router = useRouter();
@@ -62,9 +52,6 @@ export function QualityWorkspace() {
   const initialTab = parseQualityTab(searchParams.get("tab"));
   const [tab, setTabState] = useState<QualityStation>(initialTab);
   const [historyOpen, setHistoryOpen] = useState(() => isHistoryTab(searchParams.get("tab")));
-  const [checkView, setCheckView] = useState<CheckView>(() =>
-    shouldOpenCheckResult(searchParams.get("tab")) ? "result" : "form",
-  );
   const [project, setProject] = useState<ProjectData | null>(null);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -76,6 +63,7 @@ export function QualityWorkspace() {
   const [lastReview, setLastReview] = useState<ReviewHistoryItem | null>(null);
   const [historyResult, setHistoryResult] = useState<PlagiarismCheckResult | null>(null);
   const [savedReviewReport, setSavedReviewReport] = useState<FixableReviewReport | null>(null);
+  const [reviewDesk, setReviewDesk] = useState<ReviewDeskBinding | null>(null);
   const [restoringSession, setRestoringSession] = useState(false);
   const [previousOverlap, setPreviousOverlap] = useState<number | null>(null);
 
@@ -92,6 +80,11 @@ export function QualityWorkspace() {
 
   const result = checkResult ?? historyResult;
   const activeProjectId = selPid || pid || undefined;
+  const reviewDeskProjectRef = useRef<string | undefined>(undefined);
+  if (reviewDeskProjectRef.current !== activeProjectId) {
+    reviewDeskProjectRef.current = activeProjectId;
+    setReviewDesk(null);
+  }
 
   const sections = useMemo<QualitySection[]>(
     () => (project ? buildQualitySections(project) : []),
@@ -122,10 +115,7 @@ export function QualityWorkspace() {
     const nextTab = parseQualityTab(searchParams.get("tab"));
     setTabState(nextTab);
     if (isHistoryTab(searchParams.get("tab"))) setHistoryOpen(true);
-    if (shouldOpenCheckResult(searchParams.get("tab")) && result) {
-      setCheckView("result");
-    }
-  }, [searchParams, result]);
+  }, [searchParams]);
 
   useEffect(() => {
     listProjects().then((d) => { if (Array.isArray(d)) setPlist(d); }).catch(() => {});
@@ -194,9 +184,6 @@ export function QualityWorkspace() {
             setContent(session.content);
             setTitle(session.title);
           }
-          if (shouldOpenCheckResult(searchParams.get("tab"))) {
-            setCheckView("result");
-          }
           syncSessionParams({ checkId });
         }
 
@@ -233,7 +220,6 @@ export function QualityWorkspace() {
     lastToastCheckIdRef.current = checkResult.checkId;
     setHistoryResult(null);
     setTabState("check");
-    setCheckView("result");
     syncSessionParams({ tab: "check", checkId: checkResult.checkId });
     toast.success(`检测完成，${checkResult.totalMatches} 处匹配`);
   }, [checkResult, checking, syncSessionParams]);
@@ -254,7 +240,6 @@ export function QualityWorkspace() {
       applyProject(d, id);
       resetCheckSession();
       setHistoryResult(null);
-      setCheckView("form");
       setTab("overview");
       toast.success(`已加载「${d.title}」`);
     } catch {
@@ -300,8 +285,6 @@ export function QualityWorkspace() {
     setPreviousOverlap(typeof prev === "number" ? prev : null);
     setContent(newContent);
     setHistoryResult(null);
-    setCheckView("form");
-    setTab("check");
     const changed = (hint?.sections ?? []).filter((section) => section.content.trim().length > 0);
     const recheckContent = changed.length > 0
       ? buildCheckContentFromSections(changed, "full")
@@ -320,9 +303,8 @@ export function QualityWorkspace() {
     });
   };
 
-  const openCheckResult = () => {
-    setTab("check");
-    setCheckView("result");
+  const openManuscript = () => {
+    setTab("overview");
   };
 
   const handleReportSaved = useCallback((reviewId: string) => {
@@ -347,7 +329,6 @@ export function QualityWorkspace() {
     } catch {
       setHistoryResult(r);
     }
-    setCheckView("result");
     setTab("check");
     syncSessionParams({ tab: "check", checkId: r.checkId });
   }, [restoreResult, setTab, syncSessionParams]);
@@ -357,7 +338,7 @@ export function QualityWorkspace() {
     [sections],
   );
 
-  const showSectionSidebar = sections.length > 0 && tab !== "overview";
+  const showSectionSidebar = sections.length > 0;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#f6f5f1]">
@@ -379,29 +360,34 @@ export function QualityWorkspace() {
             </p>
           </div>
           <div className="hidden items-center gap-2 sm:flex">
-            {result && tab !== "check" && (
+            {result && (
               <button
                 type="button"
-                onClick={openCheckResult}
+                onClick={openManuscript}
                 className="flex items-center gap-1.5 rounded-lg border border-[#1a5632]/15 bg-[#faf9f6] px-2.5 py-1 text-[10px] hover:bg-[#1a5632]/5"
               >
                 <span className="font-semibold tabular-nums text-[#122820]">
-                  {(displayedOverlap(result).value * 100).toFixed(1)}%
+                  字面重合 {(displayedOverlap(result).value * 100).toFixed(1)}%
                 </span>
-                <Badge className={cn("h-4 px-1 text-[9px]", riskBadgeClass(result.overallRisk))}>
-                  {riskLabel(result.overallRisk)}
-                </Badge>
               </button>
             )}
-            {lastReview && tab !== "review" && (
+            {tab === "review" ? (
+              <button
+                type="button"
+                onClick={openManuscript}
+                className="rounded-lg border border-[#1a5632]/15 bg-[#faf9f6] px-2.5 py-1 text-[10px] text-[#3d4f46] hover:bg-[#1a5632]/5"
+              >
+                返回正文
+              </button>
+            ) : (reviewDesk?.report || lastReview) ? (
               <button
                 type="button"
                 onClick={() => setTab("review")}
                 className="rounded-lg border border-[#1a5632]/15 bg-[#faf9f6] px-2.5 py-1 text-[10px] text-[#3d4f46] hover:bg-[#1a5632]/5"
               >
-                审查 {lastReview.overallScore ?? "—"} 分
+                审查 {reviewDesk?.report?.overallScore ?? lastReview?.overallScore ?? "—"} 分
               </button>
-            )}
+            ) : null}
             <Button
               variant="ghost"
               size="sm"
@@ -418,147 +404,70 @@ export function QualityWorkspace() {
 
       <div className="flex min-h-0 w-full flex-1 px-3 py-3 sm:px-4 lg:px-6 xl:px-8">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <QualityStationNav
-            station={tab}
-            hasResult={Boolean(result)}
-            hasProject={reviewSections.length > 0}
-            onSelect={setTab}
-          />
-
           <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-[#1a5632]/10 bg-white shadow-sm">
             {showSectionSidebar && (
               <SectionSidebar sections={sections} activeScope={scope} onSelectScope={setScope} />
             )}
 
-            <main className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
-              {tab === "overview" && (
-                <QualityOverview
-                  projectTitle={project?.title ?? ""}
-                  sections={sections}
-                  result={result}
-                  lastReview={lastReview}
-                  webSearch={web}
-                  setWebSearch={setWeb}
-                  plist={plist}
-                  selPid={selPid}
-                  loadingP={loadingP}
-                  onLoadProject={loadP}
-                  onOpenStation={(id) => {
-                    if (id === "check" && result) setCheckView("result");
-                    setTab(id);
-                  }}
-                  previousOverlap={previousOverlap}
-                />
-              )}
-
-              {tab === "check" && (
-                <div className="flex h-full min-h-0 flex-col gap-3">
-                  {result && (
-                    <div className="flex shrink-0 gap-1 rounded-lg bg-[#faf9f6] p-1">
-                      <button
-                        type="button"
-                        className={cn(
-                          "flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                          checkView === "form" ? "bg-white text-[#122820] shadow-sm" : "text-[#6b7c72] hover:text-[#122820]",
-                        )}
-                        onClick={() => setCheckView("form")}
-                      >
-                        检测配置
-                      </button>
-                      <button
-                        type="button"
-                        className={cn(
-                          "flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                          checkView === "result" ? "bg-white text-[#122820] shadow-sm" : "text-[#6b7c72] hover:text-[#122820]",
-                        )}
-                        onClick={() => setCheckView("result")}
-                      >
-                        查重报告
-                        {result.totalMatches > 0 && (
-                          <span className="ml-1 tabular-nums text-[#1a5632]">{result.totalMatches}</span>
-                        )}
-                      </button>
-                    </div>
-                  )}
-
-                  {checkView === "result" && result ? (
-                    <PlagiarismResultView
-                      result={result}
-                      sourceContent={content}
-                      previousOverlap={previousOverlap}
-                      onRewrite={() => setTab("rewrite")}
-                      onReCheck={() => setCheckView("form")}
-                    />
-                  ) : (
-                    <PlagiarismCheckForm
-                      title={title}
-                      setTitle={setTitle}
-                      content={content}
-                      setContent={setContent}
-                      webSearch={web}
-                      setWebSearch={setWeb}
-                      checking={checking}
-                      stage={stage}
-                      error={error}
-                      onCheck={doCheck}
-                      onCancel={cancel}
-                      onClear={() => {
-                        setContent(sections.length ? buildCheckContentFromSections(sections, scope) : "");
-                        resetCheckSession();
-                        setHistoryResult(null);
-                        setCheckView("form");
-                      }}
-                      plist={plist}
-                      selPid={selPid}
-                      loadingP={loadingP}
-                      onLoadProject={loadP}
-                    />
-                  )}
-                </div>
-              )}
-
-              {tab === "rewrite" && result && (
-                <PlagiarismRewriteView
-                  checkId={result.checkId}
-                  matches={result.matches ?? []}
-                  fullContent={content}
-                  scope={scope}
-                  qualitySections={sections.length > 0 ? sections : undefined}
-                  onSaveToProject={activeProjectId ? handleSaveToProject : undefined}
-                  onApplied={handleAppliedRewrite}
-                />
-              )}
-
-              {tab === "review" && (
-                project && reviewSections.length > 0 ? (
-                  <ReviewTab
-                    key={activeProjectId}
-                    variant="workspace"
-                    title={project.title || "未命名论文"}
-                    sections={reviewSections}
-                    outline={project.outline}
-                    references={project.references || []}
-                    projectId={activeProjectId}
-                    projectMode={getProjectWritingMode(project.mode)}
-                    initialReport={savedReviewReport}
-                    onReportSaved={handleReportSaved}
-                  />
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <p className="text-sm font-medium text-[#122820]">审查需要绑定项目章节</p>
-                    <p className="mt-1 max-w-sm text-xs text-[#6b7c72]">
-                      请在总览选择项目，系统会按 IMRAD / 综述结构加载各章正文。
-                    </p>
-                    <Button className="mt-4 bg-[#1a5632] hover:bg-[#144a2a]" onClick={() => setTab("overview")}>
-                      回总览选项目
-                    </Button>
-                  </div>
-                )
-              )}
+            <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              <ReadingDesk
+                hasProject={Boolean(activeProjectId && project)}
+                content={content}
+                result={result}
+                previousOverlap={previousOverlap}
+                checking={checking}
+                stage={stage}
+                error={error}
+                webSearch={web}
+                onWebSearch={setWeb}
+                projects={plist}
+                selectedProjectId={selPid}
+                loadingProject={loadingP}
+                onLoadProject={(id) => { void loadP(id); }}
+                onCheck={() => { void doCheck(); }}
+                onCancel={cancel}
+                sections={sections}
+                scope={scope}
+                onSaveToProject={activeProjectId ? handleSaveToProject : undefined}
+                onApplied={handleAppliedRewrite}
+                reviewOpen={tab === "review"}
+                onOpenReview={() => setTab("review")}
+                onCloseReview={openManuscript}
+                reviewReport={reviewDesk?.report ?? savedReviewReport}
+                reviewRunning={reviewDesk?.isReviewing ?? false}
+                reviewProgress={reviewDesk?.progress ?? ""}
+                onRunReview={reviewDesk ? () => { reviewDesk.run(); } : undefined}
+                projectId={activeProjectId}
+                onFixReviewIssue={(dimension, index) => {
+                  if (!reviewDesk) return;
+                  const sectionContents = Object.fromEntries(sections.map((section) => [section.key, section.content]));
+                  void reviewDesk.fixIssue(dimension, index, sectionContents, project?.title || title);
+                }}
+                onDismissReviewIssue={(dimension, index) => reviewDesk?.dismissIssue(dimension, index)}
+                onApplyReviewIssue={(dimension, index) => reviewDesk?.applyFix(dimension, index)}
+              />
             </main>
           </div>
         </div>
       </div>
+
+      {project && reviewSections.length > 0 && (
+        <div className="hidden" aria-hidden="true">
+          <ReviewTab
+            key={activeProjectId}
+            variant="workspace"
+            title={project.title || "未命名论文"}
+            sections={reviewSections}
+            outline={project.outline}
+            references={project.references || []}
+            projectId={activeProjectId}
+            projectMode={getProjectWritingMode(project.mode)}
+            initialReport={savedReviewReport}
+            onReportSaved={handleReportSaved}
+            onDeskState={setReviewDesk}
+          />
+        </div>
+      )}
 
       <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
         <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-2xl">

@@ -1,6 +1,7 @@
 # 论文质量中心 UX 重做（QUALITY-UX）
 
-> 状态：done（2026-09-08）  
+> 状态：done（2026-09-08）。工位布局已被阅读桌取代（2026-10-12，QUALITY-READ-005）。本文只作当时的记录。  
+> 现网：[`QUALITY-READING-QUEUE.md`](./QUALITY-READING-QUEUE.md)。审查意见下划线已落地（006 / 007）。  
 > 范围：提交前查重 / 降重 / 审查。**不改**查重算法与审查 prompt。
 
 ## 诊断（一句话）

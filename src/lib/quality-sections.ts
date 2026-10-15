@@ -1,4 +1,5 @@
 import type { ProjectData } from "@/contracts/project";
+import type { FixableReviewIssue, FixableReviewReport, ReviewDimension } from "@/contracts/review";
 import {
   getProjectWritingMode,
   getSectionKeysForMode,
@@ -99,4 +100,96 @@ export function resolveIssueSectionKey(
   }
 
   return null;
+}
+
+export type ReviewIssueAnchor =
+  | { sectionKey: string; placed: true; offset: number; length: number }
+  | { sectionKey: string; placed: false };
+
+const REVIEW_DIMENSIONS: ReviewDimension[] = ["academic", "argument", "structure", "integrity"];
+
+function sectionKeyAtOffset(
+  content: string,
+  sections: Array<{ key: string; title: string; content: string }>,
+  offset: number,
+): string | null {
+  let cursor = 0;
+  for (let index = 0; index < sections.length; index += 1) {
+    const section = sections[index];
+    if (!section) continue;
+    if (index > 0) cursor += 2;
+    const block = `${section.title}：\n${section.content}`;
+    const start = content.startsWith(block, cursor) ? cursor : content.indexOf(block, cursor);
+    if (start < 0) continue;
+    if (offset >= start && offset < start + block.length) return section.key;
+    cursor = start + block.length;
+  }
+  return null;
+}
+
+/**
+ * 把一条审查意见对到阅读桌左侧那篇正文上。
+ * 原文至少 6 字且能在正文里找到时给出偏移；只知道章节则 placed 为 false；都没有则 null。
+ */
+export function locateReviewIssue(
+  content: string,
+  sections: Array<{ key: string; title: string; content: string }>,
+  issue: { location?: string; originalText?: string },
+): ReviewIssueAnchor | null {
+  const needle = issue.originalText?.trim() ?? "";
+  const snippet = needle.length >= 6 ? needle.slice(0, 80) : "";
+  if (snippet) {
+    const at = content.indexOf(snippet);
+    if (at >= 0) {
+      const sectionKey = sectionKeyAtOffset(content, sections, at)
+        ?? resolveIssueSectionKey({ location: issue.location ?? "", originalText: snippet }, sections);
+      if (sectionKey) {
+        return { sectionKey, placed: true, offset: at, length: snippet.length };
+      }
+    }
+  }
+
+  const sectionKey = resolveIssueSectionKey(
+    { location: issue.location ?? "", originalText: snippet || undefined },
+    sections,
+  );
+  if (sectionKey) return { sectionKey, placed: false };
+  return null;
+}
+
+export interface AnchoredReviewIssue {
+  id: string;
+  dimension: ReviewDimension;
+  index: number;
+  sectionKey: string | null;
+  placed: boolean;
+  offset?: number;
+  length?: number;
+  issue: FixableReviewIssue;
+}
+
+/** 把一份审查报告里的问题分成可涂色和未定位。 */
+export function anchorReviewReport(
+  content: string,
+  sections: Array<{ key: string; title: string; content: string }>,
+  report: FixableReviewReport,
+): AnchoredReviewIssue[] {
+  const anchored: AnchoredReviewIssue[] = [];
+  for (const dimension of REVIEW_DIMENSIONS) {
+    const issues = report.dimensions[dimension]?.issues ?? [];
+    issues.forEach((issue, index) => {
+      const hit = locateReviewIssue(content, sections, issue);
+      anchored.push({
+        id: issue.id,
+        dimension,
+        index,
+        issue: issue as FixableReviewIssue,
+        sectionKey: hit?.sectionKey ?? null,
+        placed: Boolean(hit?.placed),
+        offset: hit?.placed ? hit.offset : undefined,
+        length: hit?.placed ? hit.length : undefined,
+      });
+    });
+  }
+  return anchored;
 }

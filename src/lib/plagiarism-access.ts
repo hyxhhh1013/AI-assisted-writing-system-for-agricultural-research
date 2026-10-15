@@ -17,3 +17,18 @@ export async function assertPlagiarismCheckOwnedByUser(checkId: string, userId: 
   });
   return check != null;
 }
+
+/** 校验降重建议属于当前用户名下、且挂在其项目上的查重记录 */
+export async function assertRewriteSuggestionOwnedByUser(
+  suggestionId: string,
+  userId: string,
+): Promise<boolean> {
+  const row = await prisma.rewriteSuggestion.findFirst({
+    where: {
+      id: suggestionId,
+      check: { project: { userId } },
+    },
+    select: { id: true },
+  });
+  return row != null;
+}

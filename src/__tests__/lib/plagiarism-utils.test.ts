@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyAcceptedRewritesToContent, applyAcceptedRewritesToSections, humanizeClichePattern, presentMatchDetail, splitContentByMatches } from "@/lib/plagiarism-utils";
+import { applyAcceptedRewritesToContent, applyAcceptedRewritesToSections, humanizeClichePattern, placeMatchesInContent, presentMatchDetail, splitContentByMatches } from "@/lib/plagiarism-utils";
 import type { QualitySection } from "@/lib/quality-sections";
 import type { PlagiarismMatchResult, RewriteSuggestion } from "@/contracts/plagiarism";
 
@@ -61,6 +61,86 @@ describe("splitContentByMatches", () => {
       match({ sourceText: "原文段落A", similarity: 0.8 }),
     ]);
     expect(parts.some((p) => p.match?.sourceText === "原文段落A")).toBe(true);
+  });
+});
+
+describe("placeMatchesInContent", () => {
+  it("paints the offset occurrence when the same sentence appears twice", () => {
+    const sentence = "同一句。";
+    const content = `${sentence}中间。${sentence}`;
+    const offset = content.lastIndexOf(sentence);
+    const placed = placeMatchesInContent(content, [
+      match({
+        sourceText: sentence,
+        sourceOffset: offset,
+        sourceLength: sentence.length,
+      }),
+    ]);
+    expect(placed.unplaced).toHaveLength(0);
+    const marked = placed.parts.filter((part) => part.match);
+    expect(marked).toHaveLength(1);
+    expect(marked[0]?.text).toBe(sentence);
+    const before = placed.parts.slice(0, placed.parts.findIndex((part) => part.match)).map((part) => part.text).join("");
+    expect(before.startsWith(sentence)).toBe(true);
+    expect(before.endsWith("中间。")).toBe(true);
+  });
+
+  it("puts zero-length style comments that are absent from the text into unplaced", () => {
+    const placed = placeMatchesInContent("正文开头是实验描述。", [
+      match({
+        id: "ai-1",
+        matchType: "ai",
+        sourceText: "【AI 评估】套话偏多",
+        sourceOffset: 0,
+        sourceLength: 0,
+        riskLevel: "low",
+      }),
+    ]);
+    expect(placed.unplaced.map((item) => item.id)).toEqual(["ai-1"]);
+    expect(placed.parts.some((part) => part.match)).toBe(false);
+    expect(placed.parts.map((part) => part.text).join("")).toBe("正文开头是实验描述。");
+  });
+
+  it("does not throw when the offset is outside the text", () => {
+    const content = "这里有正确原句。";
+    expect(() => placeMatchesInContent(content, [
+      match({
+        sourceText: "正确原句",
+        sourceOffset: 9999,
+        sourceLength: 8,
+      }),
+    ])).not.toThrow();
+    const placed = placeMatchesInContent(content, [
+      match({
+        sourceText: "正确原句",
+        sourceOffset: 9999,
+        sourceLength: 8,
+      }),
+    ]);
+    expect(placed.parts.some((part) => part.text === "正确原句" && part.match)).toBe(true);
+  });
+
+  it("falls back to text search when the offset slice disagrees with the source", () => {
+    const content = "AAA正确原句BBB";
+    const placed = placeMatchesInContent(content, [
+      match({
+        sourceText: "正确原句",
+        sourceOffset: 0,
+        sourceLength: 3,
+      }),
+    ]);
+    expect(placed.parts.find((part) => part.match)?.text).toBe("正确原句");
+    expect(placed.parts[0]?.text).toBe("AAA");
+  });
+
+  it("lets the higher-risk span keep the color when two hits overlap", () => {
+    const content = "重复的原句在这里";
+    const placed = placeMatchesInContent(content, [
+      match({ id: "low", sourceText: "重复的原句", sourceOffset: 0, sourceLength: 5, riskLevel: "low", similarity: 0.9 }),
+      match({ id: "high", sourceText: "重复的原句", sourceOffset: 0, sourceLength: 5, riskLevel: "high", similarity: 0.4 }),
+    ]);
+    expect(placed.parts.find((part) => part.match)?.match?.id).toBe("high");
+    expect(placed.unplaced).toHaveLength(0);
   });
 });
 

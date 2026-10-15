@@ -24,6 +24,8 @@ interface ReviewIssueCardProps {
   onFix: () => void;
   onDismiss: () => void;
   onApply: () => void;
+  /** 阅读桌里写明这是整章替换 */
+  applyLabel?: string;
 }
 
 export function ReviewIssueCard({
@@ -35,6 +37,7 @@ export function ReviewIssueCard({
   onFix,
   onDismiss,
   onApply,
+  applyLabel = "接受并写回章节",
 }: ReviewIssueCardProps) {
   const severityConfig = SEVERITY_CONFIG[issue.severity] ?? SEVERITY_CONFIG.medium;
   const SeverityIcon = severityConfig.icon;
@@ -116,7 +119,7 @@ export function ReviewIssueCard({
       {issueStatus === "open" && fixedContent && (
         <div className="mt-2 flex gap-2">
           <Button size="sm" className="bg-[#1a5632] hover:bg-[#144a2a]" onClick={handleApply}>
-            接受并写回章节
+            {applyLabel}
           </Button>
         </div>
       )}
