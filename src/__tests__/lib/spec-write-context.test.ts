@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { SectionSpecV1 } from "@/contracts/section-spec";
 import {
   buildSpecWriterDraft,
+  describeSectionSpecRejection,
   parseWriteSectionSpec,
 } from "@/lib/agent/spec-write-context";
 
@@ -26,6 +27,20 @@ describe("WRITE-QA-009 spec writer context", () => {
     expect(parseWriteSectionSpec(JSON.stringify(spec))?.sectionKey).toBe("introduction");
     expect(parseWriteSectionSpec("{nope}")).toBeNull();
     expect(parseWriteSectionSpec("")).toBeNull();
+  });
+
+  it("names missing SectionSpec fields when the model sends a blueprint guide", () => {
+    const raw = JSON.stringify({
+      sectionPath: "研究现状与问题",
+      claim: "接口缺失",
+      keyPoints: ["跨尺度"],
+      evidenceHint: "泛化表述",
+    });
+    expect(parseWriteSectionSpec(raw)).toBeNull();
+    const message = describeSectionSpecRejection(raw);
+    expect(message).toContain("蓝图节字段");
+    expect(message).toContain("claimCards");
+    expect(message).toContain("sectionKey");
   });
 
   it("builds Writer draft from spec, not raw context", () => {

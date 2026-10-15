@@ -102,6 +102,7 @@ import {
   parseLiteratureImportTarget,
   pickIntentNudge,
   pickIntentStopAsk,
+  runLandedSectionWrite,
   sumImportedCount,
   type IntentClosureContext,
 } from "@/lib/agent/core/goal-intents";
@@ -127,7 +128,7 @@ import { loadAgentPlotSources } from "@/lib/agent/plot-sources";
 import { collectChartConfigsFromSources } from "@/contracts/figure";
 import {
   buildGenerateChartCallsFromJobs,
-  buildNarrativeFigureCalls,
+  narrativeTablesAwaitingRows,
   collectBoundChartJobsForSection,
   formatUnboundBlueprintChartsNudge,
   jobAlreadyCoveredByText,
@@ -405,12 +406,7 @@ export async function agentNode(
     const importCount = sumImportedCount(thisRun);
     const importTarget = parseLiteratureImportTarget(state.goal);
     const refTotal = agentContext.projectSnapshot?.references?.length ?? 0;
-    const wroteOk = thisRun.some(
-      (o) =>
-        o.tool === "write_section"
-        && o.success
-        && isWriteSectionSettled(o.data),
-    );
+    const wroteOk = runLandedSectionWrite(thisRun);
 
     // 意图收尾续跑 / 停下问用户：由 goal-intents 的意图表统一驱动（见 pickIntentNudge / pickIntentStopAsk）
     const intentCtx: IntentClosureContext = {
@@ -1371,24 +1367,23 @@ export async function toolsNode(
             newMessages.push({ role: "user", content: unboundNudge });
             newSummaries.push("[blueprint-chart] 蓝图必需图缺数据绑定，已提示上传");
           }
-          const figureCalls = buildNarrativeFigureCalls({
+          const awaitingTables = narrativeTablesAwaitingRows({
             blueprint: agentContext.projectSnapshot?.globalContext?.blueprint ?? null,
             sectionKey: section,
             mode: agentContext.projectSnapshot?.mode,
             subsectionTitle,
             draft,
-            alreadyQueued: toolQueue.slice(tcIdx + 1),
           });
-          if (figureCalls.length > 0) {
-            toolQueue.splice(tcIdx + 1 + chartCalls.length, 0, ...figureCalls);
+          if (awaitingTables.length > 0) {
             newSummaries.push(
-              `[blueprint-figure] 已自动排队对比表 × ${figureCalls.length} → ${section}`,
+              `[blueprint-figure] 对比表缺行列，未自动插入：${awaitingTables.join("、")}`,
             );
             newMessages.push({
               role: "user",
               content:
-                `System: 本节蓝图里的对比表已自动排队 ${figureCalls.length} 项。`
-                + "不要改成上传 CSV。完成后正文里应能看到对应图题或表题。",
+                `System: 本节蓝图有对比表（${awaitingTables.join("、")}），但没有可填的行列。`
+                + "不要生成「要点 / 说明」占位表，也不要把要点截断后塞进 generate_table。"
+                + "等用户给出表内容再插。",
             });
           }
         }

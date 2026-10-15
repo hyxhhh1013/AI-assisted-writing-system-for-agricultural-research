@@ -6,6 +6,7 @@
  */
 
 import type { IntentClosureKind, IntentKind } from "@/contracts/agent-intent";
+import { isWriteSectionSettled } from "@/contracts/writing-qa";
 import { withRule } from "@/lib/agent/core/agent-rules";
 import type { ToolObservation } from "@/lib/agent/types";
 import { validateHasHardIssues } from "@/lib/agent/core/reflect";
@@ -362,6 +363,52 @@ export function parseLiteratureImportTarget(goal: string): number {
   return 15;
 }
 
+const NAMED_DRAFT_SECTIONS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/研究现状|background/i, "background"],
+  [/综述正文|literature_body/i, "literature_body"],
+  [/引言|introduction/i, "introduction"],
+  [/方法|methods/i, "methods"],
+  [/结果|results/i, "results"],
+  [/讨论|discussion/i, "discussion"],
+  [/结论|conclusion/i, "conclusion"],
+  [/摘要|abstract/i, "abstract"],
+];
+
+/** 用户这句话点名的章节 key。没点名则 null，续跑仍按蓝图下一节。 */
+export function namedDraftSectionKey(goal: string): string | null {
+  for (const [re, key] of NAMED_DRAFT_SECTIONS) {
+    if (re.test(goal)) return key;
+  }
+  return null;
+}
+
+/** refine_content 已把整节写回时返回章节 key。只返回修正稿不算。 */
+export function persistedRefineSectionKey(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const row = data as { persisted?: unknown; section?: unknown };
+  if (row.persisted == null || row.persisted === false) return null;
+  if (typeof row.section === "string" && row.section.trim()) return row.section.trim();
+  if (typeof row.persisted === "object") {
+    const key = (row.persisted as { sectionKey?: unknown }).sectionKey;
+    if (typeof key === "string" && key.trim()) return key.trim();
+  }
+  return null;
+}
+
+/**
+ * 本轮起草是否已经落稿。
+ * write_section 收口（含质检拦截）或 refine_content 已 persist 都算，
+ * 避免偏薄扩写成功后被当成「还没 write_section」再去写下一节。
+ */
+export function runLandedSectionWrite(observations: readonly ToolObservation[]): boolean {
+  return observations.some((o) => {
+    if (!o.success) return false;
+    if (o.tool === "write_section") return isWriteSectionSettled(o.data);
+    if (o.tool === "refine_content") return persistedRefineSectionKey(o.data) != null;
+    return false;
+  });
+}
+
 /** 起草某一节（引言/讨论/综述等），非检索任务。仅供 classifyIntent 使用。 */
 export function isSectionDraftGoal(goal: string): boolean {
   if (isEvidenceUnboundRepairGoal(goal) || /修补已写/.test(goal)) return true;
@@ -413,6 +460,50 @@ export function checkDiagnoseInspectGate(
     };
   }
   return { ok: true };
+}
+
+const BLUEPRINT_REVISE_BLOCKED = new Set([
+  "write_section",
+  "refine_content",
+  "generate_table",
+  "generate_chart",
+  "draft_mechanism_figure",
+  "illustrate_mechanism_figure",
+  "plot_peak_stack",
+  "plot_panel_grid",
+  "plot_curve_overlay",
+  "generate_xrd_analysis",
+]);
+
+/**
+ * 最近一条用户检查点若是「修改写作蓝图」且之后还没批准，禁止写节和插表。
+ * 机器注入的【本轮任务】/ Tool result 跳过，继续往前找检查点原文。
+ */
+export function blueprintReviseStillOpen(
+  messages: readonly { role: string; content: string }[],
+): boolean {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message?.role !== "user") continue;
+    const text = message.content;
+    if (/用户已批准写作蓝图/.test(text)) return false;
+    if (/用户要求修改写作蓝图/.test(text)) return true;
+  }
+  return false;
+}
+
+export function checkBlueprintReviseGate(
+  messages: readonly { role: string; content: string }[],
+  toolName: string,
+): GoalIntentGateResult {
+  if (!blueprintReviseStillOpen(messages)) return { ok: true };
+  if (!BLUEPRINT_REVISE_BLOCKED.has(toolName)) return { ok: true };
+  return {
+    ok: false,
+    error:
+      "用户要求先改写作蓝图。请 generate_writing_blueprint 写回后再请用户确认，"
+      + "不要在这一轮 write_section、refine_content 或生成占位表。",
+  };
 }
 
 /** 补引用：禁止再检索/导入，逼写回正文 */
@@ -1420,12 +1511,16 @@ const INTENT_CLOSURES: Record<IntentClosureKind, IntentClosureEntry> = {
         ["draft", "ap_full"],
         () => isSectionDraftGoal(ctx.goal) && !isReviewWritingGoal(ctx.goal),
       ) && !ctx.wroteOk,
-    nudge: () =>
-      withRule(
-        "【系统】用户要写章节，但本轮尚未成功 write_section 写回。"
-          + "请立刻 write_section 只写下一未写子节（多子节必须带 subsectionTitle）。禁止再 list_references / 检索。",
-        "draft-missing-refs",
-      ),
+    nudge: (ctx) => {
+      const named = namedDraftSectionKey(ctx.goal);
+      const body = named
+        ? `【系统】用户点名了 ${named}，本轮尚未写回这一节。`
+          + `已有正文要扩写时用 refine_content(section=${named}, persistToProject=true)；`
+          + `空白节用 write_section(section=${named})。不要写其它节。禁止再 list_references / 检索。`
+        : "【系统】用户要写章节，但本轮尚未成功 write_section 写回。"
+          + "请立刻 write_section 只写下一未写子节（多子节必须带 subsectionTitle）。禁止再 list_references / 检索。";
+      return withRule(body, "draft-missing-refs");
+    },
     stopAsk: (ctx) =>
       buildIntentStopAskUser({ kind: "draft", ...stopAskOpts(ctx) }),
   },

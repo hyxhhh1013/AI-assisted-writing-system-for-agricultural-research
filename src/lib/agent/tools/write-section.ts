@@ -60,6 +60,7 @@ import {
 } from "@/lib/agent/writing-patch-run";
 import {
   buildSpecWriterDraft,
+  describeSectionSpecRejection,
   parseWriteSectionSpec,
   type WriteSpecSource,
 } from "@/lib/agent/spec-write-context";
@@ -202,7 +203,8 @@ export const writeSectionTool: ToolDefinition = {
       },
       sectionSpec: {
         type: "string",
-        description: "SectionSpecV1 JSON。有则作为写节合同；context/bullets 只作补充",
+        description:
+          "可选 SectionSpecV1 JSON：version=1、sectionKey、claimCards。没有合同时省略。不要传蓝图的 sectionPath/keyPoints",
       },
       context: {
         type: "string",
@@ -323,7 +325,7 @@ export const writeSectionTool: ToolDefinition = {
     const context = String(params.context ?? "").trim();
     const providedSpec = parseWriteSectionSpec(params.sectionSpec);
     if (params.sectionSpec != null && String(params.sectionSpec).trim() && !providedSpec) {
-      return { success: false, error: "sectionSpec 不是合法 SectionSpecV1 JSON" };
+      return { success: false, error: describeSectionSpecRejection(params.sectionSpec) };
     }
     const draftContext = resolveWritingDraftContext(context, bullets);
 

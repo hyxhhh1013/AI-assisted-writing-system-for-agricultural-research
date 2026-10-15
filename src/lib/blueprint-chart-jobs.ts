@@ -202,38 +202,20 @@ export interface BlueprintNarrativeFigureCall {
   args: Record<string, unknown>;
 }
 
-function shortFigureStep(text: string): string {
-  const cut = text.replace(/\s+/g, "").split(/[，。；、]/)[0] ?? "";
-  return cut.slice(0, 16) || "过程";
-}
-
-function guideKeyPointsForItem(
-  blueprint: WritingBlueprint,
-  item: FigurePlanItem,
-): string[] {
-  const guide = blueprint.sectionGuides.find(
-    (g) => g.sectionPath === item.sectionPath || figureBelongsToSection(item.sectionPath, g.sectionPath),
-  );
-  return (guide?.keyPoints ?? []).map((p) => p.trim()).filter(Boolean).slice(0, 4);
-}
-
-/** 对比表不依赖试验 CSV，写节后可以排队。流程图和机理图不在这里自动画。 */
-export function buildNarrativeFigureCalls(input: {
+/**
+ * 必需对比表还没有行列数据。不要把要点截成「要点 / 说明」自动插入。
+ * 流程图和机理图也不在这里画。
+ */
+export function narrativeTablesAwaitingRows(input: {
   blueprint: WritingBlueprint | null | undefined;
   sectionKey: string;
   mode?: ProjectWritingMode;
   subsectionTitle?: string;
   draft: string;
-  alreadyQueued: readonly { name: string; args: Record<string, unknown> }[];
-}): BlueprintNarrativeFigureCall[] {
+}): string[] {
   const blueprint = input.blueprint;
   if (!blueprint) return [];
-  const queuedTitles = new Set(
-    input.alreadyQueued
-      .map((c) => String(c.args.title ?? c.args.caption ?? "").trim())
-      .filter(Boolean),
-  );
-  const out: BlueprintNarrativeFigureCall[] = [];
+  const out: string[] = [];
   for (const item of blueprint.figurePlan.items) {
     if (item.priority !== "required" || item.type !== "table") continue;
     if (
@@ -247,25 +229,24 @@ export function buildNarrativeFigureCalls(input: {
       continue;
     }
     const title = item.suggestedCaption.trim() || item.purpose.trim();
-    if (!title || input.draft.includes(title) || queuedTitles.has(title)) continue;
-    const points = guideKeyPointsForItem(blueprint, item);
-    out.push({
-      id: `bp_table_${item.id}`,
-      name: "generate_table",
-      args: {
-        title,
-        sectionKey: input.sectionKey,
-        rows: [
-          ["要点", "说明"],
-          ...points.map((p) => [shortFigureStep(p), p.slice(0, 80)]),
-          ...(points.length === 0 ? [[shortFigureStep(title), item.purpose.slice(0, 80)]] : []),
-        ],
-      },
-    });
-    queuedTitles.add(title);
-    if (out.length >= 2) break;
+    if (!title || input.draft.includes(title)) continue;
+    out.push(title);
+    if (out.length >= 4) break;
   }
   return out;
+}
+
+/** 对比表没有可填行列时不排队。流程图和机理图不在这里自动画。 */
+export function buildNarrativeFigureCalls(input: {
+  blueprint: WritingBlueprint | null | undefined;
+  sectionKey: string;
+  mode?: ProjectWritingMode;
+  subsectionTitle?: string;
+  draft: string;
+  alreadyQueued: readonly { name: string; args: Record<string, unknown> }[];
+}): BlueprintNarrativeFigureCall[] {
+  void input;
+  return [];
 }
 
 export function formatUnboundBlueprintChartsNudge(

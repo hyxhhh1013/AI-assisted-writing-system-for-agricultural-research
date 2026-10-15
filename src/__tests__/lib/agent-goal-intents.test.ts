@@ -30,8 +30,10 @@ import {
   isReferenceClassificationGoal,
   referenceClassificationNudge,
   parseLiteratureImportTarget,
+  namedDraftSectionKey,
   pickIntentNudge,
   pickIntentStopAsk,
+  runLandedSectionWrite,
   resolveApPipelineStep,
   shouldSkipPlanner,
 } from "@/lib/agent/core/goal-intents";
@@ -509,14 +511,38 @@ describe("intent continuation pickers", () => {
   it("stops to ask user for draft when write_section not persisted", () => {
     const nudge = pickIntentNudge(ctx({ goal: "写引言", refTotal: 5 }));
     expect(nudge).toContain("write_section");
+    expect(nudge).toContain("introduction");
+    expect(nudge).not.toContain("下一未写子节");
     const stop = pickIntentStopAsk(ctx({ goal: "写引言", refTotal: 5 }));
     expect(stop).toContain("继续写");
     expect(
       pickIntentNudge(ctx({ goal: "A", intentKind: "draft", refTotal: 5 })),
-    ).toContain("write_section");
+    ).toContain("下一未写子节");
     expect(
       pickIntentNudge(ctx({ goal: "开始吧", intentKind: "ap_full", refTotal: 5 })),
     ).toContain("write_section");
+  });
+
+  it("treats a persisted refine of the named section as the draft landing", () => {
+    const goal = "写引言并保存到当前项目（当前偏薄，建议扩写/补强）";
+    expect(namedDraftSectionKey(goal)).toBe("introduction");
+    const landed = runLandedSectionWrite([
+      ok("refine_content", {
+        section: "introduction",
+        persisted: { sectionKey: "introduction", referencesAdded: 0 },
+        charCount: 2069,
+      }),
+    ]);
+    expect(landed).toBe(true);
+    expect(
+      pickIntentNudge(ctx({ goal, intentKind: "draft", wroteOk: landed })),
+    ).toBeNull();
+    expect(runLandedSectionWrite([
+      ok("refine_content", { section: "introduction", persisted: null, charCount: 2069 }),
+    ])).toBe(false);
+    const retry = pickIntentNudge(ctx({ goal, intentKind: "draft", wroteOk: false }));
+    expect(retry).toContain("refine_content(section=introduction");
+    expect(retry).not.toContain("下一未写子节");
   });
 
   it("prioritizes review_write over nothing when refs enough but body missing", () => {

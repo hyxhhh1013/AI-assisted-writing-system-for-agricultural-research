@@ -16,6 +16,7 @@ import { checkAgentToolPhaseGate } from "@/lib/agent/core/phase-gates";
 import { checkReadBeforeWrite } from "@/lib/agent/core/read-before-write";
 import {
   checkAbstractFinishGate,
+  checkBlueprintReviseGate,
   checkCitationCheckGate,
   checkCitationSpinGate,
   checkCitationSideTripGate,
@@ -114,6 +115,7 @@ export const intentGate: PreToolGate = ({
 }) => {
   const thisRun = observationsThisRun(recentObservations, state.intentObsOffset);
   const gates: Array<() => { ok: boolean; error?: string }> = [
+    () => checkBlueprintReviseGate(state.messages ?? [], tool.name),
     () => checkContinueWriteSpinGate(state.goal, tool.name, thisRun, state.intentKind),
     () => checkCiteExistingGate(state.goal, tool.name),
     () => checkDiagnoseInspectGate(state.goal, tool.name, recentObservations, state.intentKind),

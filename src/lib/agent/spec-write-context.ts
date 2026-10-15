@@ -25,6 +25,38 @@ export function parseWriteSectionSpec(raw: unknown): SectionSpecV1 | null {
   return parseSectionSpec(raw);
 }
 
+const SECTION_SPEC_HINT =
+  "需要 version=1、sectionKey（如 background）、claimCards（每项含 claim）。"
+  + "没有合同时省略 sectionSpec，用 bullets。不要传蓝图节的 sectionPath / keyPoints。";
+
+/** 解析失败时说明缺什么。蓝图节形状（sectionPath/keyPoints）会点名。 */
+export function describeSectionSpecRejection(raw: unknown): string {
+  let value: unknown = raw;
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return `sectionSpec 为空。${SECTION_SPEC_HINT}`;
+    try {
+      value = JSON.parse(trimmed);
+    } catch {
+      return `sectionSpec 不是 JSON。${SECTION_SPEC_HINT}`;
+    }
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return `sectionSpec 不是对象。${SECTION_SPEC_HINT}`;
+  }
+  const row = value as Record<string, unknown>;
+  const missing: string[] = [];
+  if (row.version !== 1) missing.push("version=1");
+  if (typeof row.sectionKey !== "string") missing.push("sectionKey");
+  if (!Array.isArray(row.claimCards)) missing.push("claimCards");
+  const lookedLikeGuide = "sectionPath" in row || "keyPoints" in row || "evidenceHint" in row;
+  const prefix = lookedLikeGuide
+    ? "这是蓝图节字段，不是 SectionSpecV1。"
+    : "sectionSpec 不是合法 SectionSpecV1。";
+  const miss = missing.length > 0 ? `缺少 ${missing.join("、")}。` : "";
+  return `${prefix}${miss}${SECTION_SPEC_HINT}`;
+}
+
 /** 主张表 + 字数带 + 配图槽。证据行由 bind 后的 spec 自带。 */
 export function formatWriterContextFromSpec(spec: SectionSpecV1): string {
   const cards = spec.claimCards.map((card) => {

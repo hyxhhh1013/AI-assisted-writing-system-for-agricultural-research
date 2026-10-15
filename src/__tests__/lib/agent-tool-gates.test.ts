@@ -65,6 +65,41 @@ describe("evaluatePreGates", () => {
     expect(evaluatePreGates(makePreInput())).toEqual({ ok: true });
   });
 
+  it("修改蓝图期间拒绝 write_section，批准后放行", () => {
+    const revise = evaluatePreGates(makePreInput({
+      tool: makeTool("write_section", "write"),
+      state: makeState({
+        messages: [
+          { role: "user", content: "【检查点】用户要求修改写作蓝图。意见：配图精简。请先沟通或重新 generate_writing_blueprint，改完再请用户确认。" },
+          { role: "user", content: "【本轮任务】只做这一件事，做完停下。\n写一节：background。" },
+        ],
+      }),
+    }));
+    expect(revise.ok).toBe(false);
+    if (!revise.ok) expect(revise.error).toContain("generate_writing_blueprint");
+
+    const regen = evaluatePreGates(makePreInput({
+      tool: makeTool("generate_writing_blueprint", "write"),
+      state: makeState({
+        messages: [
+          { role: "user", content: "【检查点】用户要求修改写作蓝图。请先沟通或重新 generate_writing_blueprint。" },
+        ],
+      }),
+    }));
+    expect(regen.ok).toBe(true);
+
+    const approved = evaluatePreGates(makePreInput({
+      tool: makeTool("write_section", "write"),
+      state: makeState({
+        messages: [
+          { role: "user", content: "【检查点】用户要求修改写作蓝图。" },
+          { role: "user", content: "【检查点】用户已批准写作蓝图。按蓝图这一批写。" },
+        ],
+      }),
+    }));
+    expect(approved.ok).toBe(true);
+  });
+
   it("重复软工具（read_section）→ soft 裁决", () => {
     // 预置重复状态：read_section 已连调 3 次（maxConsecutiveSameTool=3），下次命中 → 4 次
     const tracker = createRepeatTracker();

@@ -6,6 +6,7 @@ import {
   buildGenerateChartCallsFromJobs,
   buildNarrativeFigureCalls,
   collectBoundChartJobsForSection,
+  narrativeTablesAwaitingRows,
   formatUnboundBlueprintChartsNudge,
   jobAlreadyCoveredByText,
 } from "@/lib/blueprint-chart-jobs";
@@ -160,6 +161,51 @@ describe("buildNarrativeFigureCalls", () => {
       alreadyQueued: [],
     });
     expect(calls).toHaveLength(0);
+  });
+
+  it("does not turn key points into a chopped 要点/说明 table", () => {
+    const withTable: WritingBlueprint = {
+      ...blueprint,
+      sectionGuides: [
+        {
+          sectionPath: "研究现状与问题",
+          purpose: "框架",
+          keyPoints: [
+            "概念与框架：材料性能各层级（分子结构—晶体与颗粒—配方与界面—器件）与燃放各阶段的对应关系",
+          ],
+        },
+      ],
+      figurePlan: {
+        ...blueprint.figurePlan,
+        items: [
+          ...blueprint.figurePlan.items,
+          {
+            id: "tbl-1",
+            sectionPath: "研究现状与问题",
+            type: "table",
+            purpose: "对应关系",
+            suggestedCaption: "表1 材料性能层级与燃放阶段的对应关系及研究覆盖现状",
+            priority: "required",
+          },
+        ],
+      },
+    };
+    const calls = buildNarrativeFigureCalls({
+      blueprint: withTable,
+      sectionKey: "background",
+      mode: "review",
+      subsectionTitle: "研究现状与问题",
+      draft: "",
+      alreadyQueued: [],
+    });
+    expect(calls).toHaveLength(0);
+    expect(narrativeTablesAwaitingRows({
+      blueprint: withTable,
+      sectionKey: "background",
+      mode: "review",
+      subsectionTitle: "研究现状与问题",
+      draft: "",
+    })).toEqual(["表1 材料性能层级与燃放阶段的对应关系及研究覆盖现状"]);
   });
 });
 
